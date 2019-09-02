@@ -7,30 +7,30 @@ use std::process::{ChildStdout, Command, Stdio};
 use crate::completions::*;
 use crate::script::*;
 
-enum EvalOut {
+enum EvalSource {
     String(String),
     Stdout(ChildStdout),
     Empty,
 }
 
-impl EvalOut {
-    fn to_string(&mut self) -> io::Result<String> {
+impl EvalSource {
+    fn make_string(&mut self) -> io::Result<String> {
         match self {
-            EvalOut::String(s) => Ok(s.clone()),
-            EvalOut::Stdout(out) => {
+            EvalSource::String(s) => Ok(s.clone()),
+            EvalSource::Stdout(out) => {
                 let mut buffer = String::new();
                 out.read_to_string(&mut buffer)?;
                 Ok(buffer)
             }
-            EvalOut::Empty => Ok("".to_string()),
+            EvalSource::Empty => Ok("".to_string()),
         }
     }
 
     fn write(self) -> io::Result<()> {
         match self {
-            EvalOut::String(s) => print!("{}", s),
-            EvalOut::Empty => {}
-            EvalOut::Stdout(mut out) => {
+            EvalSource::String(s) => print!("{}", s),
+            EvalSource::Empty => {}
+            EvalSource::Stdout(mut out) => {
                 let mut buf = [0; 1024];
                 let stdout = io::stdout();
                 let mut handle = stdout.lock();
@@ -49,15 +49,15 @@ impl EvalOut {
 
 fn run_command(
     command: &str,
-    args: &mut Vec<EvalOut>,
+    args: &mut Vec<EvalSource>,
     stdin: Stdio,
     stdout: Stdio,
     data_in: Option<String>,
     wait: bool,
-) -> io::Result<EvalOut> {
+) -> io::Result<EvalSource> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
-        new_args.push(a.to_string()?);
+        new_args.push(a.make_string()?);
     }
     let output = Command::new(command)
         .args(new_args)
@@ -65,7 +65,7 @@ fn run_command(
         .stdout(stdout)
         .spawn();
 
-    let mut result = EvalOut::Empty;
+    let mut result = EvalSource::Empty;
     match output {
         Ok(mut output) => {
             if wait {
@@ -79,7 +79,7 @@ fn run_command(
                 }
             }
             if let Some(out) = output.stdout {
-                result = EvalOut::Stdout(out);
+                result = EvalSource::Stdout(out);
             }
         }
         Err(e) => {
@@ -89,20 +89,20 @@ fn run_command(
     Ok(result)
 }
 
-fn print(args: Vec<EvalOut>, add_newline: bool) -> io::Result<EvalOut> {
+fn print(args: Vec<EvalSource>, add_newline: bool) -> io::Result<EvalSource> {
     for a in args {
         a.write()?;
     }
     if add_newline {
-        println!("");
+        println!();
     }
-    Ok(EvalOut::String("".to_string()))
+    Ok(EvalSource::String("".to_string()))
 }
 
-fn to_args(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<EvalOut>> {
-    let mut args: Vec<EvalOut> = Vec::new();
+fn to_args(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<EvalSource>> {
+    let mut args: Vec<EvalSource> = Vec::new();
     for a in parts {
-        args.push(eval(a, EvalOut::Empty, use_stdout)?);
+        args.push(eval(a, EvalSource::Empty, use_stdout)?);
     }
     Ok(args)
 }
@@ -110,16 +110,16 @@ fn to_args(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<EvalOut>> {
 fn to_args_str(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::new();
     for a in parts {
-        args.push(eval(a, EvalOut::Empty, use_stdout)?.to_string()?);
+        args.push(eval(a, EvalSource::Empty, use_stdout)?.make_string()?);
     }
     Ok(args)
 }
 
-fn eval(expression: &Expression, data_in: EvalOut, use_stdout: bool) -> io::Result<EvalOut> {
+fn eval(expression: &Expression, data_in: EvalSource, use_stdout: bool) -> io::Result<EvalSource> {
     match expression {
         Expression::List(parts) => {
             let (command, parts) = match parts.split_first() {
-                Some((c, p)) => (eval(c, EvalOut::Empty, false)?.to_string()?, p),
+                Some((c, p)) => (eval(c, EvalSource::Empty, false)?.make_string()?, p),
                 None => {
                     eprintln!("No valid command.");
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
@@ -140,15 +140,15 @@ fn eval(expression: &Expression, data_in: EvalOut, use_stdout: bool) -> io::Resu
                         eprintln!("{}", e);
                     }
 
-                    Ok(EvalOut::String("".to_string()))
+                    Ok(EvalSource::String("".to_string()))
                 }
                 "print" => print(to_args(parts, false)?, false),
                 "println" => print(to_args(parts, false)?, true),
                 "use-stdout" => {
                     for a in parts {
-                        eval(a, EvalOut::Empty, true)?;
+                        eval(a, EvalSource::Empty, true)?;
                     }
-                    Ok(EvalOut::String("".to_string()))
+                    Ok(EvalSource::String("".to_string()))
                 }
                 "|" | "pipe" => {
                     let mut out = data_in;
@@ -157,7 +157,7 @@ fn eval(expression: &Expression, data_in: EvalOut, use_stdout: bool) -> io::Resu
                     }
                     if use_stdout {
                         out.write()?;
-                        Ok(EvalOut::Empty)
+                        Ok(EvalSource::Empty)
                     //print!("{}", out.to_string()?);
                     } else {
                         Ok(out)
@@ -167,12 +167,12 @@ fn eval(expression: &Expression, data_in: EvalOut, use_stdout: bool) -> io::Resu
                 command => {
                     let mut data = None;
                     let stdin = match data_in {
-                        EvalOut::String(s) => {
+                        EvalSource::String(s) => {
                             data = Some(s);
                             Stdio::piped()
                         }
-                        EvalOut::Stdout(out) => Stdio::from(out),
-                        EvalOut::Empty => Stdio::inherit(),
+                        EvalSource::Stdout(out) => Stdio::from(out),
+                        EvalSource::Empty => Stdio::inherit(),
                     };
                     let stdout = if use_stdout {
                         Stdio::inherit()
@@ -184,11 +184,11 @@ fn eval(expression: &Expression, data_in: EvalOut, use_stdout: bool) -> io::Resu
                 }
             }
         }
-        Expression::Number(Number::Int(i)) => Ok(EvalOut::String(format!("{}", i))),
-        Expression::Number(Number::Float(f)) => Ok(EvalOut::String(format!("{}", f))),
-        Expression::String(s) => Ok(EvalOut::String(s.clone())),
-        Expression::Symbol(s) => Ok(EvalOut::String(s.clone())),
-        Expression::Nil => Ok(EvalOut::String("".to_string())),
+        Expression::Number(Number::Int(i)) => Ok(EvalSource::String(format!("{}", i))),
+        Expression::Number(Number::Float(f)) => Ok(EvalSource::String(format!("{}", f))),
+        Expression::String(s) => Ok(EvalSource::String(s.clone())),
+        Expression::Symbol(s) => Ok(EvalSource::String(s.clone())),
+        Expression::Nil => Ok(EvalSource::String("".to_string())),
     }
 }
 
@@ -230,7 +230,7 @@ pub fn start_interactive() {
                 let ast = parse(&tokens);
                 //println!("{:?}", ast);
                 match ast {
-                    Ok(ast) => match eval(&ast, EvalOut::Empty, true) {
+                    Ok(ast) => match eval(&ast, EvalSource::Empty, true) {
                         Ok(_) => {
                             //println!("{}", s);
                             if !input.is_empty() {
