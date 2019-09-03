@@ -134,6 +134,7 @@ pub fn eval(
                 Ok(EvalResult::Atom(Atom::String(s.clone())))
             }
         }
+        // Handle lambda here
         Expression::Atom(atom) => Ok(EvalResult::Atom(atom.clone())),
         Expression::Func(_) => Ok(EvalResult::Empty),
     }

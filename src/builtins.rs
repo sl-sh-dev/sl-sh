@@ -126,6 +126,24 @@ fn builtin_let(environment: &mut Environment, parts: &[Expression]) -> io::Resul
     }
 }
 
+fn builtin_fn(_environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    if parts.len() != 2 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "fn can only have two forms",
+        ))
+    } else {
+        let mut parts = parts.iter();
+        let params = parts.next().unwrap();
+        let body = parts.next().unwrap();
+        //Ok(EvalResult::Atom(Atom::Lambda(Lambda{params: params.clone(), body: body.clone()})))
+        Ok(EvalResult::Atom(Atom::Lambda(Lambda {
+            params: Box::new(params.clone()),
+            body: Box::new(body.clone()),
+        })))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -174,6 +192,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     );
     data.insert("export".to_string(), Expression::Func(builtin_export));
     data.insert("let".to_string(), Expression::Func(builtin_let));
+    data.insert("fn".to_string(), Expression::Func(builtin_fn));
 
     data.insert(
         "=".to_string(),

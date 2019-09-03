@@ -4,6 +4,12 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::ChildStdout;
 
 #[derive(Clone)]
+pub struct Lambda {
+    pub params: Box<Expression>,
+    pub body: Box<Expression>,
+}
+
+#[derive(Clone)]
 pub enum Atom {
     Nil,
     True,
@@ -13,6 +19,7 @@ pub enum Atom {
     Symbol(String),
     String(String),
     Quote(String),
+    Lambda(Lambda),
 }
 
 impl Atom {
@@ -26,6 +33,7 @@ impl Atom {
             Atom::Symbol(s) => s.clone(),
             Atom::String(s) => s.clone(),
             Atom::Quote(q) => q.clone(),
+            Atom::Lambda(_) => "lambda".to_string(),
         }
     }
 }
