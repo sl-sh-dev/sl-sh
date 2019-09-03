@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 
 use crate::shell::*;
@@ -59,4 +60,22 @@ pub fn parse_list_of_strings(args: &mut [EvalResult]) -> io::Result<Vec<String>>
         list.push(arg.make_string()?);
     }
     Ok(list)
+}
+
+pub fn get_expression(environment: &Environment, key: &str) -> Option<Expression> {
+    match environment.data.get(key) {
+        Some(exp) => Some(exp.clone()),
+        None => match environment.outer {
+            Some(outer) => get_expression(outer, key),
+            None => None,
+        },
+    }
+}
+
+pub fn build_new_scope<'a>(environment: &'a Environment) -> Environment<'a> {
+    let data: HashMap<String, Expression> = HashMap::new();
+    Environment {
+        data,
+        outer: Some(environment),
+    }
 }

@@ -117,6 +117,8 @@ impl EvalResult {
     }
 }
 
-pub struct Environment {
-    pub global: HashMap<String, Expression>,
+#[derive(Clone)]
+pub struct Environment<'a> {
+    pub data: HashMap<String, Expression>,
+    pub outer: Option<&'a Environment<'a>>,
 }

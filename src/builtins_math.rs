@@ -5,8 +5,8 @@ use std::io;
 use crate::builtins_util::*;
 use crate::types::*;
 
-pub fn add_math_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression, S>) {
-    global.insert(
+pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
+    data.insert(
         "+".to_string(),
         Expression::Func(
             |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
@@ -23,7 +23,7 @@ pub fn add_math_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression
         ),
     );
 
-    global.insert(
+    data.insert(
         "*".to_string(),
         Expression::Func(
             |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
@@ -39,7 +39,7 @@ pub fn add_math_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression
         ),
     );
 
-    global.insert(
+    data.insert(
         "-".to_string(),
         Expression::Func(
             |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
@@ -70,7 +70,7 @@ pub fn add_math_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression
         ),
     );
 
-    global.insert(
+    data.insert(
         "/".to_string(),
         Expression::Func(
             |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {

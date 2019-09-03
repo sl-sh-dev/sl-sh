@@ -8,12 +8,12 @@ use crate::builtins_util::*;
 use crate::shell::*;
 use crate::types::*;
 
-fn builtin_cd(env: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
     let home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => "/".to_string(),
     };
-    let args = to_args_str(env, args, false)?;
+    let args = to_args_str(environment, args, false)?;
     let args = args.iter();
     let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
     let root = Path::new(new_dir);
@@ -24,7 +24,7 @@ fn builtin_cd(env: &mut Environment, args: &[Expression]) -> io::Result<EvalResu
     Ok(EvalResult::Empty)
 }
 
-fn builtin_if(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
     let plen = parts.len();
     if plen != 2 && plen != 3 {
         Err(io::Error::new(
@@ -33,14 +33,14 @@ fn builtin_if(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalRes
         ))
     } else {
         let mut parts = parts.iter();
-        match eval(env, parts.next().unwrap(), EvalResult::Empty, false)? {
+        match eval(environment, parts.next().unwrap(), EvalResult::Empty, false)? {
             EvalResult::Atom(Atom::True) => {
-                eval(env, parts.next().unwrap(), EvalResult::Empty, false)
+                eval(environment, parts.next().unwrap(), EvalResult::Empty, false)
             }
             EvalResult::Atom(Atom::False) => {
                 if plen == 3 {
                     parts.next().unwrap();
-                    eval(env, parts.next().unwrap(), EvalResult::Empty, false)
+                    eval(environment, parts.next().unwrap(), EvalResult::Empty, false)
                 } else {
                     Ok(EvalResult::Empty)
                 }
@@ -53,25 +53,28 @@ fn builtin_if(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalRes
     }
 }
 
-fn builtin_print(env: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
-    let args: Vec<EvalResult> = to_args(env, args, false)?;
+fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let args: Vec<EvalResult> = to_args(environment, args, false)?;
     print(args, false)
 }
 
-fn builtin_println(env: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
-    let args: Vec<EvalResult> = to_args(env, args, false)?;
+fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let args: Vec<EvalResult> = to_args(environment, args, false)?;
     print(args, true)
 }
 
-fn builtin_use_stdout(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+fn builtin_use_stdout(
+    environment: &mut Environment,
+    parts: &[Expression],
+) -> io::Result<EvalResult> {
     for a in parts {
-        eval(env, a, EvalResult::Empty, true)?;
+        eval(environment, a, EvalResult::Empty, true)?;
     }
     Ok(EvalResult::Empty)
 }
 
-fn builtin_export(env: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
-    let mut args: Vec<EvalResult> = to_args(env, &args, false)?;
+fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let mut args: Vec<EvalResult> = to_args(environment, &args, false)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -90,7 +93,7 @@ fn builtin_export(env: &mut Environment, args: &[Expression]) -> io::Result<Eval
     }
 }
 
-fn builtin_let(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+fn builtin_let(environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
     if parts.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -111,11 +114,12 @@ fn builtin_let(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalRe
                 "use export to set environment variables",
             ));
         }
-        let mut val = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?;
+        let mut val = eval(environment, parts.next().unwrap(), EvalResult::Empty, false)?;
         if let EvalResult::Atom(atom) = val {
-            env.global.insert(key, Expression::Atom(atom));
+            environment.data.insert(key, Expression::Atom(atom));
         } else {
-            env.global
+            environment
+                .data
                 .insert(key, Expression::Atom(Atom::String(val.make_string()?)));
         }
         Ok(EvalResult::Empty)
@@ -145,8 +149,8 @@ macro_rules! ensure_tonicity {
 
 macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
-        |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-            let mut args: Vec<EvalResult> = to_args(env, args, false)?;
+        |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
+            let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
             if let Ok(ints) = parse_list_of_ints(&mut args) {
                 ensure_tonicity!($check_fn, ints, &i64, i64)
             } else if let Ok(floats) = parse_list_of_floats(&mut args) {
@@ -159,23 +163,23 @@ macro_rules! ensure_tonicity_all {
     }};
 }
 
-pub fn add_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression, S>) {
-    global.insert("cd".to_string(), Expression::Func(builtin_cd));
-    global.insert("if".to_string(), Expression::Func(builtin_if));
-    global.insert("print".to_string(), Expression::Func(builtin_print));
-    global.insert("println".to_string(), Expression::Func(builtin_println));
-    global.insert(
+pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
+    data.insert("cd".to_string(), Expression::Func(builtin_cd));
+    data.insert("if".to_string(), Expression::Func(builtin_if));
+    data.insert("print".to_string(), Expression::Func(builtin_print));
+    data.insert("println".to_string(), Expression::Func(builtin_println));
+    data.insert(
         "use-stdout".to_string(),
         Expression::Func(builtin_use_stdout),
     );
-    global.insert("export".to_string(), Expression::Func(builtin_export));
-    global.insert("let".to_string(), Expression::Func(builtin_let));
+    data.insert("export".to_string(), Expression::Func(builtin_export));
+    data.insert("let".to_string(), Expression::Func(builtin_let));
 
-    global.insert(
+    data.insert(
         "=".to_string(),
         Expression::Func(
-            |env: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-                let mut args: Vec<EvalResult> = to_args(env, args, false)?;
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
+                let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
                 if let Ok(ints) = parse_list_of_ints(&mut args) {
                     ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
                 } else if let Ok(floats) = parse_list_of_floats(&mut args) {
@@ -187,19 +191,19 @@ pub fn add_builtins<S: BuildHasher>(global: &mut HashMap<String, Expression, S>)
             },
         ),
     );
-    global.insert(
+    data.insert(
         ">".to_string(),
         Expression::Func(ensure_tonicity_all!(|a, b| a > b)),
     );
-    global.insert(
+    data.insert(
         ">=".to_string(),
         Expression::Func(ensure_tonicity_all!(|a, b| a >= b)),
     );
-    global.insert(
+    data.insert(
         "<".to_string(),
         Expression::Func(ensure_tonicity_all!(|a, b| a < b)),
     );
-    global.insert(
+    data.insert(
         "<=".to_string(),
         Expression::Func(ensure_tonicity_all!(|a, b| a <= b)),
     );

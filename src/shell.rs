@@ -55,7 +55,7 @@ fn run_command(
 }
 
 pub fn eval(
-    env: &mut Environment,
+    environment: &mut Environment,
     expression: &Expression,
     data_in: EvalResult,
     use_stdout: bool,
@@ -63,27 +63,29 @@ pub fn eval(
     match expression {
         Expression::List(parts) => {
             let (command, parts) = match parts.split_first() {
-                Some((c, p)) => (eval(env, c, EvalResult::Empty, false)?.make_string()?, p),
+                Some((c, p)) => (
+                    eval(environment, c, EvalResult::Empty, false)?.make_string()?,
+                    p,
+                ),
                 None => {
                     eprintln!("No valid command.");
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
 
-            if env.global.contains_key(&command) {
-                let exp = env.global.get(&command).unwrap();
+            if let Some(exp) = get_expression(environment, &command) {
                 if let Expression::Func(f) = exp {
-                    f(env, &parts)
+                    f(environment, &parts)
                 } else {
                     let exp = exp.clone();
-                    eval(env, &exp, data_in, use_stdout)
+                    eval(environment, &exp, data_in, use_stdout)
                 }
             } else {
                 match &command[..] {
                     "|" | "pipe" => {
                         let mut out = data_in;
                         for p in parts {
-                            out = eval(env, p, out, false)?;
+                            out = eval(environment, p, out, false)?;
                         }
                         if use_stdout {
                             out.write()?;
@@ -109,7 +111,7 @@ pub fn eval(
                         } else {
                             Stdio::piped()
                         };
-                        let mut args = to_args(env, parts, false)?;
+                        let mut args = to_args(environment, parts, false)?;
                         run_command(command, &mut args, stdin, stdout, data, use_stdout)
                     }
                 }
@@ -121,13 +123,12 @@ pub fn eval(
                     Ok(val) => Ok(EvalResult::Atom(Atom::String(val))),
                     Err(_) => Ok(EvalResult::Atom(Atom::String("".to_string()))),
                 }
-            } else if env.global.contains_key(&s[..]) {
-                let exp = env.global.get(&s[..]).unwrap();
+            } else if let Some(exp) = get_expression(environment, &s[..]) {
                 if let Expression::Func(_) = exp {
                     Ok(EvalResult::Atom(Atom::String(s.clone())))
                 } else {
                     let exp = exp.clone();
-                    eval(env, &exp, data_in, use_stdout)
+                    eval(environment, &exp, data_in, use_stdout)
                 }
             } else {
                 Ok(EvalResult::Atom(Atom::String(s.clone())))
@@ -138,11 +139,11 @@ pub fn eval(
     }
 }
 
-fn build_env() -> Environment {
-    let mut global: HashMap<String, Expression> = HashMap::new();
-    add_builtins(&mut global);
-    add_math_builtins(&mut global);
-    Environment { global }
+fn build_default_environment<'a>() -> Environment<'a> {
+    let mut data: HashMap<String, Expression> = HashMap::new();
+    add_builtins(&mut data);
+    add_math_builtins(&mut data);
+    Environment { data, outer: None }
 }
 
 pub fn start_interactive() {
@@ -153,7 +154,7 @@ pub fn start_interactive() {
     if let Err(err) = con.history.set_file_name_and_load_history("tmp_history") {
         eprintln!("Error loading history: {}", err);
     }
-    let mut env = build_env();
+    let mut environment = build_default_environment();
 
     loop {
         let hostname = match env::var("HOSTNAME") {
@@ -184,7 +185,7 @@ pub fn start_interactive() {
                 let ast = parse(&tokens);
                 //println!("{:?}", ast);
                 match ast {
-                    Ok(ast) => match eval(&mut env, &ast, EvalResult::Empty, true) {
+                    Ok(ast) => match eval(&mut environment, &ast, EvalResult::Empty, true) {
                         Ok(_) => {
                             //println!("{}", s);
                             if !input.is_empty() {
