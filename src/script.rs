@@ -1,24 +1,6 @@
 use std::num::{ParseFloatError, ParseIntError};
 
-#[derive(Clone, Copy, Debug)]
-pub enum Number {
-    Float(f64),
-    Int(i64),
-}
-
-#[derive(Clone, Debug)]
-pub enum Expression {
-    Nil,
-    Symbol(String),
-    Number(Number),
-    String(String),
-    List(Vec<Expression>),
-}
-
-#[derive(Clone, Debug)]
-pub struct ParseError {
-    reason: String,
-}
+use crate::types::*;
 
 pub fn is_whitespace(ch: char) -> bool {
     match ch {
@@ -31,10 +13,22 @@ pub fn is_whitespace(ch: char) -> bool {
 pub fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
+    let mut in_quote = false;
+    let mut quote_level = 0;
     let mut token = String::new();
     let mut last_ch = ' ';
     for ch in text.chars() {
-        if ch == '\"' && last_ch != '\\' {
+        if in_quote && ch == '(' {
+            quote_level += 1;
+        }
+        if in_quote && ch == ')' {
+            quote_level -= 1;
+        }
+        if !in_string && !in_quote && ch == '(' && last_ch == '\'' {
+            quote_level = 1;
+            in_quote = true;
+        }
+        if !in_quote && ch == '\"' && last_ch != '\\' {
             // Kakoune bug "
             in_string = !in_string;
             token.push(ch);
@@ -45,8 +39,11 @@ pub fn tokenize(text: &str) -> Vec<String> {
             last_ch = ch;
             continue;
         }
-        if in_string {
+        if in_string || in_quote {
             token.push(ch);
+            if in_quote && quote_level == 0 {
+                in_quote = false;
+            }
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.
@@ -80,21 +77,30 @@ pub fn tokenize(text: &str) -> Vec<String> {
 
 fn parse_atom(token: &str) -> Expression {
     if token.is_empty() {
-        return Expression::Nil;
+        return Expression::Atom(Atom::Nil);
     }
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
         // Kakoune bug "
-        return Expression::String(token[1..token.len() - 1].to_string());
+        return Expression::Atom(Atom::String(token[1..token.len() - 1].to_string()));
+    }
+    if token.len() > 1 && token.starts_with('\'') {
+        return Expression::Atom(Atom::Quote(token[1..].to_string()));
     }
 
-    let potential_int: Result<i64, ParseIntError> = token.parse();
-    match potential_int {
-        Ok(v) => Expression::Number(Number::Int(v)),
-        Err(_) => {
-            let potential_float: Result<f64, ParseFloatError> = token.parse();
-            match potential_float {
-                Ok(v) => Expression::Number(Number::Float(v)),
-                Err(_) => Expression::Symbol(token.to_string().clone()),
+    if token == "true" {
+        Expression::Atom(Atom::True)
+    } else if token == "false" {
+        Expression::Atom(Atom::False)
+    } else {
+        let potential_int: Result<i64, ParseIntError> = token.parse();
+        match potential_int {
+            Ok(v) => Expression::Atom(Atom::Int(v)),
+            Err(_) => {
+                let potential_float: Result<f64, ParseFloatError> = token.parse();
+                match potential_float {
+                    Ok(v) => Expression::Atom(Atom::Float(v)),
+                    Err(_) => Expression::Atom(Atom::Symbol(token.to_string().clone())),
+                }
             }
         }
     }

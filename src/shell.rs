@@ -1,60 +1,22 @@
 use liner::Context;
+use std::collections::HashMap;
 use std::env;
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::{Command, Stdio};
 
 use crate::completions::*;
 use crate::script::*;
-
-enum EvalSource {
-    String(String),
-    Stdout(ChildStdout),
-    Empty,
-}
-
-impl EvalSource {
-    fn make_string(&mut self) -> io::Result<String> {
-        match self {
-            EvalSource::String(s) => Ok(s.clone()),
-            EvalSource::Stdout(out) => {
-                let mut buffer = String::new();
-                out.read_to_string(&mut buffer)?;
-                Ok(buffer)
-            }
-            EvalSource::Empty => Ok("".to_string()),
-        }
-    }
-
-    fn write(self) -> io::Result<()> {
-        match self {
-            EvalSource::String(s) => print!("{}", s),
-            EvalSource::Empty => {}
-            EvalSource::Stdout(mut out) => {
-                let mut buf = [0; 1024];
-                let stdout = io::stdout();
-                let mut handle = stdout.lock();
-                loop {
-                    match out.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(_) => handle.write_all(&buf)?,
-                        Err(err) => return Err(err),
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
+use crate::types::*;
 
 fn run_command(
     command: &str,
-    args: &mut Vec<EvalSource>,
+    args: &mut Vec<EvalResult>,
     stdin: Stdio,
     stdout: Stdio,
-    data_in: Option<String>,
+    data_in: Option<Atom>,
     wait: bool,
-) -> io::Result<EvalSource> {
+) -> io::Result<EvalResult> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
         new_args.push(a.make_string()?);
@@ -65,7 +27,7 @@ fn run_command(
         .stdout(stdout)
         .spawn();
 
-    let mut result = EvalSource::Empty;
+    let mut result = EvalResult::Empty;
     match output {
         Ok(mut output) => {
             if wait {
@@ -75,11 +37,11 @@ fn run_command(
             }
             if let Some(data_in) = data_in {
                 if let Some(mut input) = output.stdin {
-                    input.write_all(data_in.as_bytes())?;
+                    input.write_all(data_in.to_string().as_bytes())?;
                 }
             }
             if let Some(out) = output.stdout {
-                result = EvalSource::Stdout(out);
+                result = EvalResult::Stdout(out);
             }
         }
         Err(e) => {
@@ -89,107 +51,218 @@ fn run_command(
     Ok(result)
 }
 
-fn print(args: Vec<EvalSource>, add_newline: bool) -> io::Result<EvalSource> {
+fn print(args: Vec<EvalResult>, add_newline: bool) -> io::Result<EvalResult> {
     for a in args {
         a.write()?;
     }
     if add_newline {
         println!();
     }
-    Ok(EvalSource::String("".to_string()))
+    Ok(EvalResult::Empty)
 }
 
-fn to_args(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<EvalSource>> {
-    let mut args: Vec<EvalSource> = Vec::new();
+fn to_args(
+    env: &mut Environment,
+    parts: &[Expression],
+    use_stdout: bool,
+) -> io::Result<Vec<EvalResult>> {
+    let mut args: Vec<EvalResult> = Vec::new();
     for a in parts {
-        args.push(eval(a, EvalSource::Empty, use_stdout)?);
+        args.push(eval(env, a, EvalResult::Empty, use_stdout)?);
     }
     Ok(args)
 }
 
-fn to_args_str(parts: &[Expression], use_stdout: bool) -> io::Result<Vec<String>> {
+fn to_args_str(
+    env: &mut Environment,
+    parts: &[Expression],
+    use_stdout: bool,
+) -> io::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::new();
     for a in parts {
-        args.push(eval(a, EvalSource::Empty, use_stdout)?.make_string()?);
+        args.push(eval(env, a, EvalResult::Empty, use_stdout)?.make_string()?);
     }
     Ok(args)
 }
 
-fn eval(expression: &Expression, data_in: EvalSource, use_stdout: bool) -> io::Result<EvalSource> {
+fn builtin_cd(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    let home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => "/".to_string(),
+    };
+    let args = to_args_str(env, parts, false)?;
+    let args = args.iter();
+    let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
+    let root = Path::new(new_dir);
+    if let Err(e) = env::set_current_dir(&root) {
+        eprintln!("{}", e);
+    }
+
+    Ok(EvalResult::Empty)
+}
+
+fn builtin_print(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    print(to_args(env, parts, false)?, false)
+}
+
+fn builtin_println(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    print(to_args(env, parts, false)?, true)
+}
+
+fn builtin_use_stdout(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    for a in parts {
+        eval(env, a, EvalResult::Empty, true)?;
+    }
+    Ok(EvalResult::Empty)
+}
+
+fn builtin_export(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    if parts.len() != 2 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "export can only have two expressions",
+        ))
+    } else {
+        let mut parts = parts.iter();
+        let key = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?.make_string()?;
+        let val = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?.make_string()?;
+        if !val.is_empty() {
+            env::set_var(key, val);
+        } else {
+            env::remove_var(key);
+        }
+        Ok(EvalResult::Empty)
+    }
+}
+
+fn builtin_let(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+    if parts.len() != 2 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "let can only have two expressions",
+        ))
+    } else {
+        let mut parts = parts.iter();
+        let key = parts.next().unwrap();
+        let key = match key {
+            Expression::Atom(Atom::Symbol(s)) => s.clone(),
+            _ => {
+                return Err(io::Error::new(io::ErrorKind::Other, "invalid lvalue"));
+            }
+        };
+        if key.starts_with('$') {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "use export to set environment variables",
+            ));
+        }
+        let mut val = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?;
+        if let EvalResult::Atom(atom) = val {
+            env.global.insert(key, Expression::Atom(atom));
+        } else {
+            env.global
+                .insert(key, Expression::Atom(Atom::String(val.make_string()?)));
+        }
+        Ok(EvalResult::Empty)
+    }
+}
+
+fn eval(
+    env: &mut Environment,
+    expression: &Expression,
+    data_in: EvalResult,
+    use_stdout: bool,
+) -> io::Result<EvalResult> {
     match expression {
         Expression::List(parts) => {
             let (command, parts) = match parts.split_first() {
-                Some((c, p)) => (eval(c, EvalSource::Empty, false)?.make_string()?, p),
+                Some((c, p)) => (eval(env, c, EvalResult::Empty, false)?.make_string()?, p),
                 None => {
                     eprintln!("No valid command.");
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
 
-            let home = match env::var("HOME") {
-                Ok(val) => val,
-                Err(_) => "/".to_string(),
-            };
-            match &command[..] {
-                "cd" => {
-                    let args = to_args_str(parts, false)?;
-                    let args = args.iter();
-                    let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
-                    let root = Path::new(new_dir);
-                    if let Err(e) = env::set_current_dir(&root) {
-                        eprintln!("{}", e);
-                    }
-
-                    Ok(EvalSource::String("".to_string()))
+            if env.global.contains_key(&command) {
+                let exp = env.global.get(&command).unwrap();
+                if let Expression::Func(f) = exp {
+                    f(env, parts)
+                } else {
+                    let exp = exp.clone();
+                    eval(env, &exp, data_in, use_stdout)
                 }
-                "print" => print(to_args(parts, false)?, false),
-                "println" => print(to_args(parts, false)?, true),
-                "use-stdout" => {
-                    for a in parts {
-                        eval(a, EvalSource::Empty, true)?;
-                    }
-                    Ok(EvalSource::String("".to_string()))
-                }
-                "|" | "pipe" => {
-                    let mut out = data_in;
-                    for p in parts {
-                        out = eval(p, out, false)?;
-                    }
-                    if use_stdout {
-                        out.write()?;
-                        Ok(EvalSource::Empty)
-                    //print!("{}", out.to_string()?);
-                    } else {
-                        Ok(out)
-                    }
-                }
-                //"exit" => return,
-                command => {
-                    let mut data = None;
-                    let stdin = match data_in {
-                        EvalSource::String(s) => {
-                            data = Some(s);
-                            Stdio::piped()
+            } else {
+                match &command[..] {
+                    "|" | "pipe" => {
+                        let mut out = data_in;
+                        for p in parts {
+                            out = eval(env, p, out, false)?;
                         }
-                        EvalSource::Stdout(out) => Stdio::from(out),
-                        EvalSource::Empty => Stdio::inherit(),
-                    };
-                    let stdout = if use_stdout {
-                        Stdio::inherit()
-                    } else {
-                        Stdio::piped()
-                    };
-                    let mut args = to_args(parts, false)?;
-                    run_command(command, &mut args, stdin, stdout, data, use_stdout)
+                        if use_stdout {
+                            out.write()?;
+                            Ok(EvalResult::Empty)
+                        //print!("{}", out.to_string()?);
+                        } else {
+                            Ok(out)
+                        }
+                    }
+                    //"exit" => return,
+                    command => {
+                        let mut data = None;
+                        let stdin = match data_in {
+                            EvalResult::Atom(atom) => {
+                                data = Some(atom);
+                                Stdio::piped()
+                            }
+                            EvalResult::Stdout(out) => Stdio::from(out),
+                            EvalResult::Empty => Stdio::inherit(),
+                        };
+                        let stdout = if use_stdout {
+                            Stdio::inherit()
+                        } else {
+                            Stdio::piped()
+                        };
+                        let mut args = to_args(env, parts, false)?;
+                        run_command(command, &mut args, stdin, stdout, data, use_stdout)
+                    }
                 }
             }
         }
-        Expression::Number(Number::Int(i)) => Ok(EvalSource::String(format!("{}", i))),
-        Expression::Number(Number::Float(f)) => Ok(EvalSource::String(format!("{}", f))),
-        Expression::String(s) => Ok(EvalSource::String(s.clone())),
-        Expression::Symbol(s) => Ok(EvalSource::String(s.clone())),
-        Expression::Nil => Ok(EvalSource::String("".to_string())),
+        Expression::Atom(Atom::Symbol(s)) => {
+            if s.starts_with('$') {
+                match env::var(&s[1..]) {
+                    Ok(val) => Ok(EvalResult::Atom(Atom::String(val))),
+                    Err(_) => Ok(EvalResult::Atom(Atom::String("".to_string()))),
+                }
+            } else if env.global.contains_key(&s[..]) {
+                let exp = env.global.get(&s[..]).unwrap();
+                if let Expression::Func(_) = exp {
+                    Ok(EvalResult::Atom(Atom::String(s.clone())))
+                } else {
+                    let exp = exp.clone();
+                    eval(env, &exp, data_in, use_stdout)
+                }
+            } else {
+                Ok(EvalResult::Atom(Atom::String(s.clone())))
+            }
+        }
+        Expression::Atom(atom) => Ok(EvalResult::Atom(atom.clone())),
+        Expression::Func(_) => Ok(EvalResult::Empty),
     }
+}
+
+fn build_env() -> Environment {
+    let mut global: HashMap<String, Expression> = HashMap::new();
+    global.insert("cd".to_string(), Expression::Func(builtin_cd));
+    global.insert("print".to_string(), Expression::Func(builtin_print));
+    global.insert("println".to_string(), Expression::Func(builtin_println));
+    global.insert(
+        "use-stdout".to_string(),
+        Expression::Func(builtin_use_stdout),
+    );
+    global.insert("export".to_string(), Expression::Func(builtin_export));
+    global.insert("let".to_string(), Expression::Func(builtin_let));
+    Environment { global }
 }
 
 pub fn start_interactive() {
@@ -200,6 +273,7 @@ pub fn start_interactive() {
     if let Err(err) = con.history.set_file_name_and_load_history("tmp_history") {
         eprintln!("Error loading history: {}", err);
     }
+    let mut env = build_env();
 
     loop {
         let hostname = match env::var("HOSTNAME") {
@@ -230,7 +304,7 @@ pub fn start_interactive() {
                 let ast = parse(&tokens);
                 //println!("{:?}", ast);
                 match ast {
-                    Ok(ast) => match eval(&ast, EvalSource::Empty, true) {
+                    Ok(ast) => match eval(&mut env, &ast, EvalResult::Empty, true) {
                         Ok(_) => {
                             //println!("{}", s);
                             if !input.is_empty() {

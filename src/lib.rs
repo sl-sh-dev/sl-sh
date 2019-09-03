@@ -1,6 +1,9 @@
 extern crate glob;
 extern crate liner;
 
+pub mod types;
+pub use crate::types::*;
+
 pub mod shell;
 pub use crate::shell::*;
 
