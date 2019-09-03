@@ -2,9 +2,12 @@ use liner::Context;
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+use crate::builtins::*;
+use crate::builtins_math::*;
+use crate::builtins_util::*;
 use crate::completions::*;
 use crate::script::*;
 use crate::types::*;
@@ -51,123 +54,7 @@ fn run_command(
     Ok(result)
 }
 
-fn print(args: Vec<EvalResult>, add_newline: bool) -> io::Result<EvalResult> {
-    for a in args {
-        a.write()?;
-    }
-    if add_newline {
-        println!();
-    }
-    Ok(EvalResult::Empty)
-}
-
-fn to_args(
-    env: &mut Environment,
-    parts: &[Expression],
-    use_stdout: bool,
-) -> io::Result<Vec<EvalResult>> {
-    let mut args: Vec<EvalResult> = Vec::new();
-    for a in parts {
-        args.push(eval(env, a, EvalResult::Empty, use_stdout)?);
-    }
-    Ok(args)
-}
-
-fn to_args_str(
-    env: &mut Environment,
-    parts: &[Expression],
-    use_stdout: bool,
-) -> io::Result<Vec<String>> {
-    let mut args: Vec<String> = Vec::new();
-    for a in parts {
-        args.push(eval(env, a, EvalResult::Empty, use_stdout)?.make_string()?);
-    }
-    Ok(args)
-}
-
-fn builtin_cd(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    let home = match env::var("HOME") {
-        Ok(val) => val,
-        Err(_) => "/".to_string(),
-    };
-    let args = to_args_str(env, parts, false)?;
-    let args = args.iter();
-    let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
-    let root = Path::new(new_dir);
-    if let Err(e) = env::set_current_dir(&root) {
-        eprintln!("{}", e);
-    }
-
-    Ok(EvalResult::Empty)
-}
-
-fn builtin_print(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    print(to_args(env, parts, false)?, false)
-}
-
-fn builtin_println(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    print(to_args(env, parts, false)?, true)
-}
-
-fn builtin_use_stdout(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    for a in parts {
-        eval(env, a, EvalResult::Empty, true)?;
-    }
-    Ok(EvalResult::Empty)
-}
-
-fn builtin_export(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    if parts.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "export can only have two expressions",
-        ))
-    } else {
-        let mut parts = parts.iter();
-        let key = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?.make_string()?;
-        let val = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?.make_string()?;
-        if !val.is_empty() {
-            env::set_var(key, val);
-        } else {
-            env::remove_var(key);
-        }
-        Ok(EvalResult::Empty)
-    }
-}
-
-fn builtin_let(env: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
-    if parts.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "let can only have two expressions",
-        ))
-    } else {
-        let mut parts = parts.iter();
-        let key = parts.next().unwrap();
-        let key = match key {
-            Expression::Atom(Atom::Symbol(s)) => s.clone(),
-            _ => {
-                return Err(io::Error::new(io::ErrorKind::Other, "invalid lvalue"));
-            }
-        };
-        if key.starts_with('$') {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "use export to set environment variables",
-            ));
-        }
-        let mut val = eval(env, parts.next().unwrap(), EvalResult::Empty, false)?;
-        if let EvalResult::Atom(atom) = val {
-            env.global.insert(key, Expression::Atom(atom));
-        } else {
-            env.global
-                .insert(key, Expression::Atom(Atom::String(val.make_string()?)));
-        }
-        Ok(EvalResult::Empty)
-    }
-}
-
-fn eval(
+pub fn eval(
     env: &mut Environment,
     expression: &Expression,
     data_in: EvalResult,
@@ -186,7 +73,7 @@ fn eval(
             if env.global.contains_key(&command) {
                 let exp = env.global.get(&command).unwrap();
                 if let Expression::Func(f) = exp {
-                    f(env, parts)
+                    f(env, &parts)
                 } else {
                     let exp = exp.clone();
                     eval(env, &exp, data_in, use_stdout)
@@ -253,15 +140,8 @@ fn eval(
 
 fn build_env() -> Environment {
     let mut global: HashMap<String, Expression> = HashMap::new();
-    global.insert("cd".to_string(), Expression::Func(builtin_cd));
-    global.insert("print".to_string(), Expression::Func(builtin_print));
-    global.insert("println".to_string(), Expression::Func(builtin_println));
-    global.insert(
-        "use-stdout".to_string(),
-        Expression::Func(builtin_use_stdout),
-    );
-    global.insert("export".to_string(), Expression::Func(builtin_export));
-    global.insert("let".to_string(), Expression::Func(builtin_let));
+    add_builtins(&mut global);
+    add_math_builtins(&mut global);
     Environment { global }
 }
 

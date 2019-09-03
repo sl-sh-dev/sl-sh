@@ -15,3 +15,12 @@ pub use crate::completions::*;
 
 pub mod script;
 pub use crate::script::*;
+
+pub mod builtins_math;
+pub use crate::builtins_math::*;
+
+pub mod builtins;
+pub use crate::builtins::*;
+
+pub mod builtins_util;
+pub use crate::builtins_util::*;

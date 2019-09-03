@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
+use std::num::{ParseFloatError, ParseIntError};
 use std::process::ChildStdout;
 
 #[derive(Clone)]
@@ -57,6 +58,41 @@ impl EvalResult {
                 Ok(buffer)
             }
             EvalResult::Empty => Ok("".to_string()),
+        }
+    }
+
+    pub fn make_float(&mut self) -> io::Result<f64> {
+        match self {
+            EvalResult::Atom(Atom::Float(f)) => Ok(*f),
+            EvalResult::Atom(Atom::Int(i)) => Ok(*i as f64),
+            EvalResult::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            EvalResult::Stdout(out) => {
+                let mut buffer = String::new();
+                out.read_to_string(&mut buffer)?;
+                let potential_float: Result<f64, ParseFloatError> = buffer.parse();
+                match potential_float {
+                    Ok(v) => Ok(v),
+                    Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+                }
+            }
+            EvalResult::Empty => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+        }
+    }
+
+    pub fn make_int(&mut self) -> io::Result<i64> {
+        match self {
+            EvalResult::Atom(Atom::Int(i)) => Ok(*i),
+            EvalResult::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            EvalResult::Stdout(out) => {
+                let mut buffer = String::new();
+                out.read_to_string(&mut buffer)?;
+                let potential_int: Result<i64, ParseIntError> = buffer.parse();
+                match potential_int {
+                    Ok(v) => Ok(v),
+                    Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+                }
+            }
+            EvalResult::Empty => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
 
