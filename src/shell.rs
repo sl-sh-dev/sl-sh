@@ -62,9 +62,9 @@ pub fn eval(
 ) -> io::Result<EvalResult> {
     match expression {
         Expression::List(parts) => {
-            let (command, parts) = match parts.split_first() {
+            let (mut command, parts) = match parts.split_first() {
                 Some((c, p)) => (
-                    eval(environment, c, EvalResult::Empty, false)?.make_string()?,
+                    eval(environment, c, EvalResult::Empty, false)?, //.make_string()?,
                     p,
                 ),
                 None => {
@@ -72,50 +72,71 @@ pub fn eval(
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            if command.is_empty() {
-                return Ok(EvalResult::Empty);
-            }
-
-            if let Some(exp) = get_expression(environment, &command) {
-                if let Expression::Func(f) = exp {
-                    f(environment, &parts)
+            if let EvalResult::Atom(Atom::Lambda(f)) = command {
+                let mut new_environment = build_new_scope(environment);
+                if let Expression::List(l) = *f.params {
+                    let var_names = to_args_str(&mut new_environment, &l, false)?;
+                    let mut vars = to_args(&mut new_environment, parts, false)?;
+                    if var_names.len() != vars.len() {
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "wrong number of parameters",
+                        ))
+                    } else {
+                        for (k, v) in var_names.iter().zip(vars.iter_mut()) {
+                            new_environment.data.insert(k.clone(), v.make_expression()?);
+                        }
+                        eval(&mut new_environment, &f.body, EvalResult::Empty, false)
+                    }
                 } else {
-                    let exp = exp.clone();
-                    eval(environment, &exp, data_in, use_stdout)
+                    eval(&mut new_environment, &f.body, EvalResult::Empty, false)
                 }
             } else {
-                match &command[..] {
-                    "|" | "pipe" => {
-                        let mut out = data_in;
-                        for p in parts {
-                            out = eval(environment, p, out, false)?;
-                        }
-                        if use_stdout {
-                            out.write()?;
-                            Ok(EvalResult::Empty)
-                        //print!("{}", out.to_string()?);
-                        } else {
-                            Ok(out)
-                        }
+                let command = command.make_string()?;
+                if command.is_empty() {
+                    return Ok(EvalResult::Empty);
+                }
+
+                if let Some(exp) = get_expression(environment, &command) {
+                    if let Expression::Func(f) = exp {
+                        f(environment, &parts)
+                    } else {
+                        let exp = exp.clone();
+                        eval(environment, &exp, data_in, use_stdout)
                     }
-                    //"exit" => return,
-                    command => {
-                        let mut data = None;
-                        let stdin = match data_in {
-                            EvalResult::Atom(atom) => {
-                                data = Some(atom);
-                                Stdio::piped()
+                } else {
+                    match &command[..] {
+                        "|" | "pipe" => {
+                            let mut out = data_in;
+                            for p in parts {
+                                out = eval(environment, p, out, false)?;
                             }
-                            EvalResult::Stdout(out) => Stdio::from(out),
-                            EvalResult::Empty => Stdio::inherit(),
-                        };
-                        let stdout = if use_stdout {
-                            Stdio::inherit()
-                        } else {
-                            Stdio::piped()
-                        };
-                        let mut args = to_args(environment, parts, false)?;
-                        run_command(command, &mut args, stdin, stdout, data, use_stdout)
+                            if use_stdout {
+                                out.write()?;
+                                Ok(EvalResult::Empty)
+                            } else {
+                                Ok(out)
+                            }
+                        }
+                        //"exit" => return,
+                        command => {
+                            let mut data = None;
+                            let stdin = match data_in {
+                                EvalResult::Atom(atom) => {
+                                    data = Some(atom);
+                                    Stdio::piped()
+                                }
+                                EvalResult::Stdout(out) => Stdio::from(out),
+                                EvalResult::Empty => Stdio::inherit(),
+                            };
+                            let stdout = if use_stdout {
+                                Stdio::inherit()
+                            } else {
+                                Stdio::piped()
+                            };
+                            let mut args = to_args(environment, parts, false)?;
+                            run_command(command, &mut args, stdin, stdout, data, use_stdout)
+                        }
                     }
                 }
             }
@@ -136,10 +157,6 @@ pub fn eval(
             } else {
                 Ok(EvalResult::Atom(Atom::String(s.clone())))
             }
-        }
-        Expression::Atom(Atom::Lambda(f)) => {
-            let mut new_environment = build_new_scope(environment);
-            eval(&mut new_environment, &f.body, EvalResult::Empty, false)
         }
         Expression::Atom(atom) => Ok(EvalResult::Atom(atom.clone())),
         Expression::Func(_) => Ok(EvalResult::Empty),

@@ -68,6 +68,13 @@ pub enum EvalResult {
 }
 
 impl EvalResult {
+    pub fn make_expression(&mut self) -> io::Result<Expression> {
+        match self {
+            EvalResult::Atom(a) => Ok(Expression::Atom(a.clone())),
+            _ => Ok(Expression::Atom(Atom::String(self.make_string()?))),
+        }
+    }
+
     pub fn make_string(&mut self) -> io::Result<String> {
         match self {
             EvalResult::Atom(a) => Ok(a.to_string()),
