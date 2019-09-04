@@ -63,6 +63,15 @@ fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Re
     print(args, true)
 }
 
+fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let args = to_args_str(environment, args, false)?;
+    let mut res = String::new();
+    for a in args {
+        res.push_str(&a);
+    }
+    Ok(EvalResult::Atom(Atom::String(res)))
+}
+
 fn builtin_use_stdout(
     environment: &mut Environment,
     parts: &[Expression],
@@ -185,6 +194,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("if".to_string(), Expression::Func(builtin_if));
     data.insert("print".to_string(), Expression::Func(builtin_print));
     data.insert("println".to_string(), Expression::Func(builtin_println));
+    data.insert("format".to_string(), Expression::Func(builtin_format));
     data.insert(
         "use-stdout".to_string(),
         Expression::Func(builtin_use_stdout),

@@ -61,6 +61,7 @@ pub struct ParseError {
     pub reason: String,
 }
 
+#[derive(Debug)]
 pub enum EvalResult {
     Atom(Atom),
     Stdout(ChildStdout),

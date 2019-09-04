@@ -61,6 +61,22 @@ pub fn eval(
     use_stdout: bool,
 ) -> io::Result<EvalResult> {
     match expression {
+        Expression::Atom(Atom::Lambda(f)) => {
+            let mut new_environment = build_new_scope(environment);
+            if let Expression::List(l) = &*f.params {
+                let var_names = to_args_str(&mut new_environment, &l, false)?;
+                if !var_names.is_empty() {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "wrong number of parameters",
+                    ))
+                } else {
+                    eval(&mut new_environment, &f.body, EvalResult::Empty, false)
+                }
+            } else {
+                eval(&mut new_environment, &f.body, EvalResult::Empty, false)
+            }
+        }
         Expression::List(parts) => {
             let (mut command, parts) = match parts.split_first() {
                 Some((c, p)) => (
@@ -106,6 +122,7 @@ pub fn eval(
                     }
                 } else {
                     match &command[..] {
+                        "nil" => Ok(EvalResult::Empty),
                         "|" | "pipe" => {
                             let mut out = data_in;
                             for p in parts {
@@ -193,13 +210,24 @@ pub fn start_interactive() {
                 p
             }
         };
-        let prompt = format!(
-            "\x1b[32m{}:\x1b[34m{}\x1b[37m(TEST SHELL)\x1b[32m>\x1b[39m ",
-            hostname,
-            pwd.display()
-        );
+        let prompt = if environment.data.contains_key("__prompt") {
+            let exp = environment.data.get("__prompt").unwrap().clone();
+            let res = eval(&mut environment, &exp, EvalResult::Empty, false);
+            res.unwrap_or_else(|_| EvalResult::Atom(Atom::String("ERROR".to_string())))
+                .make_string()
+                .unwrap_or_else(|_| "ERROR".to_string())
+        } else {
+            format!(
+                "\x1b[32m{}:\x1b[34m{}\x1b[37m(TEST SHELL)\x1b[32m>\x1b[39m ",
+                hostname,
+                pwd.display()
+            )
+        };
         match con.read_line(prompt, None, &mut ShellCompleter) {
             Ok(input) => {
+                if input.is_empty() {
+                    continue;
+                }
                 let mod_input = if input.starts_with('(') {
                     format!("(use-stdout {})", input)
                 } else {
