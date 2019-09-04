@@ -72,6 +72,9 @@ pub fn eval(
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
+            if command.is_empty() {
+                return Ok(EvalResult::Empty);
+            }
 
             if let Some(exp) = get_expression(environment, &command) {
                 if let Expression::Func(f) = exp {
@@ -134,7 +137,10 @@ pub fn eval(
                 Ok(EvalResult::Atom(Atom::String(s.clone())))
             }
         }
-        // Handle lambda here
+        Expression::Atom(Atom::Lambda(f)) => {
+            let mut new_environment = build_new_scope(environment);
+            eval(&mut new_environment, &f.body, EvalResult::Empty, false)
+        }
         Expression::Atom(atom) => Ok(EvalResult::Atom(atom.clone())),
         Expression::Func(_) => Ok(EvalResult::Empty),
     }

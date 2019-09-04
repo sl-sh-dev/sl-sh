@@ -136,7 +136,6 @@ fn builtin_fn(_environment: &mut Environment, parts: &[Expression]) -> io::Resul
         let mut parts = parts.iter();
         let params = parts.next().unwrap();
         let body = parts.next().unwrap();
-        //Ok(EvalResult::Atom(Atom::Lambda(Lambda{params: params.clone(), body: body.clone()})))
         Ok(EvalResult::Atom(Atom::Lambda(Lambda {
             params: Box::new(params.clone()),
             body: Box::new(body.clone()),

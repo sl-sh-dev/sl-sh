@@ -1,15 +1,16 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::io::{self, Read, Write};
 use std::num::{ParseFloatError, ParseIntError};
 use std::process::ChildStdout;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Box<Expression>,
     pub body: Box<Expression>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Atom {
     Nil,
     True,
@@ -43,6 +44,16 @@ pub enum Expression {
     Atom(Atom),
     List(Vec<Expression>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<EvalResult>),
+}
+
+impl fmt::Debug for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expression::Atom(a) => write!(f, "Expression ( Atom: {:?} )", a),
+            Expression::List(l) => write!(f, "Expression ( List: {:?} )", l),
+            Expression::Func(_) => write!(f, "Expression ( Func )"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
