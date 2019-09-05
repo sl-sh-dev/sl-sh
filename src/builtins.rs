@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::hash::BuildHasher;
 use std::io;
 use std::path::Path;
 
 use crate::builtins_util::*;
+use crate::script::*;
 use crate::shell::*;
 use crate::types::*;
 
@@ -19,9 +21,52 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
     let root = Path::new(new_dir);
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("{}", e);
+        Ok(EvalResult::Atom(Atom::False))
+    } else {
+        Ok(EvalResult::Atom(Atom::True))
     }
+}
 
-    Ok(EvalResult::Empty)
+//fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {}
+
+fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "load needs one argument",
+        ))
+    } else {
+        let contents = fs::read_to_string(args.pop().unwrap().make_string()?)?;
+        let tokens = tokenize(&contents);
+        let ast = parse(&tokens);
+        match ast {
+            Ok(ast) => {
+                let ast = match ast {
+                    Expression::List(list) => {
+                        if let Some(first) = list.get(0) {
+                            match first {
+                                Expression::List(_) => {
+                                    let mut v = Vec::with_capacity(list.len() + 1);
+                                    v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                    for l in list {
+                                        v.push(l);
+                                    }
+                                    Expression::List(v)
+                                }
+                                _ => Expression::List(list),
+                            }
+                        } else {
+                            Expression::List(list)
+                        }
+                    }
+                    _ => ast,
+                };
+                eval(environment, &ast, EvalResult::Atom(Atom::Nil), false)
+            }
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+        }
+    }
 }
 
 fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
@@ -33,16 +78,29 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
         ))
     } else {
         let mut parts = parts.iter();
-        match eval(environment, parts.next().unwrap(), EvalResult::Empty, false)? {
-            EvalResult::Atom(Atom::True) => {
-                eval(environment, parts.next().unwrap(), EvalResult::Empty, false)
-            }
+        match eval(
+            environment,
+            parts.next().unwrap(),
+            EvalResult::Atom(Atom::Nil),
+            false,
+        )? {
+            EvalResult::Atom(Atom::True) => eval(
+                environment,
+                parts.next().unwrap(),
+                EvalResult::Atom(Atom::Nil),
+                false,
+            ),
             EvalResult::Atom(Atom::False) => {
                 if plen == 3 {
                     parts.next().unwrap();
-                    eval(environment, parts.next().unwrap(), EvalResult::Empty, false)
+                    eval(
+                        environment,
+                        parts.next().unwrap(),
+                        EvalResult::Atom(Atom::Nil),
+                        false,
+                    )
                 } else {
-                    Ok(EvalResult::Empty)
+                    Ok(EvalResult::Atom(Atom::Nil))
                 }
             }
             _ => Err(io::Error::new(
@@ -77,9 +135,17 @@ fn builtin_use_stdout(
     parts: &[Expression],
 ) -> io::Result<EvalResult> {
     for a in parts {
-        eval(environment, a, EvalResult::Empty, true)?;
+        eval(environment, a, EvalResult::Atom(Atom::Nil), true)?;
     }
-    Ok(EvalResult::Empty)
+    Ok(EvalResult::Atom(Atom::Nil))
+}
+
+fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
+    let mut args = to_args(environment, args, false)?;
+    match args.pop() {
+        Some(a) => Ok(a),
+        None => Ok(EvalResult::Atom(Atom::Nil)),
+    }
 }
 
 fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
@@ -98,15 +164,15 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
         } else {
             env::remove_var(key);
         }
-        Ok(EvalResult::Empty)
+        Ok(EvalResult::Atom(Atom::Nil))
     }
 }
 
-fn builtin_let(environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
+fn builtin_set(environment: &mut Environment, parts: &[Expression]) -> io::Result<EvalResult> {
     if parts.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "let can only have two expressions",
+            "set can only have two expressions",
         ))
     } else {
         let mut parts = parts.iter();
@@ -123,7 +189,12 @@ fn builtin_let(environment: &mut Environment, parts: &[Expression]) -> io::Resul
                 "use export to set environment variables",
             ));
         }
-        let mut val = eval(environment, parts.next().unwrap(), EvalResult::Empty, false)?;
+        let mut val = eval(
+            environment,
+            parts.next().unwrap(),
+            EvalResult::Atom(Atom::Nil),
+            false,
+        )?;
         if let EvalResult::Atom(atom) = val {
             environment.data.insert(key, Expression::Atom(atom));
         } else {
@@ -131,7 +202,7 @@ fn builtin_let(environment: &mut Environment, parts: &[Expression]) -> io::Resul
                 .data
                 .insert(key, Expression::Atom(Atom::String(val.make_string()?)));
         }
-        Ok(EvalResult::Empty)
+        Ok(EvalResult::Atom(Atom::Nil))
     }
 }
 
@@ -191,6 +262,7 @@ macro_rules! ensure_tonicity_all {
 
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("cd".to_string(), Expression::Func(builtin_cd));
+    data.insert("load".to_string(), Expression::Func(builtin_load));
     data.insert("if".to_string(), Expression::Func(builtin_if));
     data.insert("print".to_string(), Expression::Func(builtin_print));
     data.insert("println".to_string(), Expression::Func(builtin_println));
@@ -199,8 +271,9 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
         "use-stdout".to_string(),
         Expression::Func(builtin_use_stdout),
     );
+    data.insert("progn".to_string(), Expression::Func(builtin_progn));
     data.insert("export".to_string(), Expression::Func(builtin_export));
-    data.insert("let".to_string(), Expression::Func(builtin_let));
+    data.insert("set".to_string(), Expression::Func(builtin_set));
     data.insert("fn".to_string(), Expression::Func(builtin_fn));
 
     data.insert(

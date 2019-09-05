@@ -11,7 +11,7 @@ pub fn to_args(
 ) -> io::Result<Vec<EvalResult>> {
     let mut args: Vec<EvalResult> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(eval(env, a, EvalResult::Empty, use_stdout)?);
+        args.push(eval(env, a, EvalResult::Atom(Atom::Nil), use_stdout)?);
     }
     Ok(args)
 }
@@ -23,7 +23,7 @@ pub fn to_args_str(
 ) -> io::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(eval(env, a, EvalResult::Empty, use_stdout)?.make_string()?);
+        args.push(eval(env, a, EvalResult::Atom(Atom::Nil), use_stdout)?.make_string()?);
     }
     Ok(args)
 }
@@ -35,7 +35,7 @@ pub fn print(args: Vec<EvalResult>, add_newline: bool) -> io::Result<EvalResult>
     if add_newline {
         println!();
     }
-    Ok(EvalResult::Empty)
+    Ok(EvalResult::Atom(Atom::Nil))
 }
 
 pub fn parse_list_of_ints(args: &mut [EvalResult]) -> io::Result<Vec<i64>> {

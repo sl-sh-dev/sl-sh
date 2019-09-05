@@ -65,7 +65,6 @@ pub struct ParseError {
 pub enum EvalResult {
     Atom(Atom),
     Stdout(ChildStdout),
-    Empty,
 }
 
 impl EvalResult {
@@ -84,7 +83,6 @@ impl EvalResult {
                 out.read_to_string(&mut buffer)?;
                 Ok(buffer)
             }
-            EvalResult::Empty => Ok("".to_string()),
         }
     }
 
@@ -102,7 +100,6 @@ impl EvalResult {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
                 }
             }
-            EvalResult::Empty => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
 
@@ -119,14 +116,12 @@ impl EvalResult {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
                 }
             }
-            EvalResult::Empty => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
 
     pub fn write(self) -> io::Result<()> {
         match self {
             EvalResult::Atom(a) => print!("{}", a.to_string()),
-            EvalResult::Empty => {}
             EvalResult::Stdout(mut out) => {
                 let mut buf = [0; 1024];
                 let stdout = io::stdout();

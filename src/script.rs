@@ -10,6 +10,16 @@ pub fn is_whitespace(ch: char) -> bool {
     }
 }
 
+macro_rules! save_token {
+    ($tokens:expr, $token:expr) => {{
+        let t_token = $token.trim();
+        if !t_token.is_empty() {
+            $tokens.push(t_token.to_string());
+            $token = String::new();
+        }
+    }};
+}
+
 pub fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
@@ -50,22 +60,13 @@ pub fn tokenize(text: &str) -> Vec<String> {
                 return tokens;
             }
             if ch == '(' {
-                if !token.is_empty() {
-                    tokens.push(token);
-                    token = String::new();
-                }
+                save_token!(tokens, token);
                 tokens.push("(".to_string());
             } else if ch == ')' {
-                if !token.is_empty() {
-                    tokens.push(token);
-                    token = String::new();
-                }
+                save_token!(tokens, token);
                 tokens.push(")".to_string());
             } else if is_whitespace(ch) {
-                if !token.is_empty() {
-                    tokens.push(token);
-                    token = String::new();
-                }
+                save_token!(tokens, token);
             } else {
                 token.push(ch);
             }
