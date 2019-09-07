@@ -281,6 +281,40 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
+fn builtin_quote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"));
+    }
+    if let Expression::List(list) = &args[0] {
+        let mut output: Vec<Expression> = Vec::with_capacity(list.len());
+        let mut back_quote_next = false;
+        for exp in list {
+            if let Expression::Atom(Atom::Symbol(symbol)) = exp {
+                if symbol == "," {
+                    back_quote_next = true;
+                } else {
+                    if back_quote_next {
+                        output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
+                        back_quote_next = false;
+                    } else {
+                        output.push(exp.clone());
+                    }
+                }
+            } else {
+                if back_quote_next {
+                    output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
+                    back_quote_next = false;
+                } else {
+                    output.push(exp.clone());
+                }
+            }
+        }
+        Ok(Expression::List(output))
+    } else {
+        Ok(args.get(0).unwrap().clone())
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -334,6 +368,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("set".to_string(), Expression::Func(builtin_set));
     data.insert("fn".to_string(), Expression::Func(builtin_fn));
     data.insert("let".to_string(), Expression::Func(builtin_let));
+    data.insert("quote".to_string(), Expression::Func(builtin_quote));
 
     data.insert(
         "=".to_string(),

@@ -28,7 +28,6 @@ pub enum Atom {
     Int(i64),
     Symbol(String),
     String(String),
-    Quote(String),
     Lambda(Lambda),
 }
 
@@ -42,7 +41,6 @@ impl Atom {
             Atom::Int(i) => format!("{}", i),
             Atom::Symbol(s) => s.clone(),
             Atom::String(s) => s.clone(),
-            Atom::Quote(q) => q.clone(),
             Atom::Lambda(_) => "lambda".to_string(),
         }
     }
@@ -189,9 +187,12 @@ impl Expression {
                 ))
             }
             Expression::List(list) => {
+                print!("( ");
                 for exp in list {
                     exp.write(environment)?;
+                    print!(" ");
                 }
+                print!(")");
             }
         }
         Ok(())

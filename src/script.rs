@@ -23,22 +23,10 @@ macro_rules! save_token {
 pub fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
-    let mut in_quote = false;
-    let mut quote_level = 0;
     let mut token = String::new();
     let mut last_ch = ' ';
     for ch in text.chars() {
-        if in_quote && ch == '(' {
-            quote_level += 1;
-        }
-        if in_quote && ch == ')' {
-            quote_level -= 1;
-        }
-        if !in_string && !in_quote && ch == '(' && last_ch == '\'' {
-            quote_level = 1;
-            in_quote = true;
-        }
-        if !in_quote && ch == '\"' && last_ch != '\\' {
+        if ch == '\"' && last_ch != '\\' {
             // Kakoune bug "
             in_string = !in_string;
             token.push(ch);
@@ -49,11 +37,8 @@ pub fn tokenize(text: &str) -> Vec<String> {
             last_ch = ch;
             continue;
         }
-        if in_string || in_quote {
+        if in_string {
             token.push(ch);
-            if in_quote && quote_level == 0 {
-                in_quote = false;
-            }
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.
@@ -65,6 +50,12 @@ pub fn tokenize(text: &str) -> Vec<String> {
             } else if ch == ')' {
                 save_token!(tokens, token);
                 tokens.push(")".to_string());
+            } else if ch == '\'' {
+                save_token!(tokens, token);
+                tokens.push("'".to_string());
+            } else if ch == ',' {
+                save_token!(tokens, token);
+                tokens.push(",".to_string());
             } else if is_whitespace(ch) {
                 save_token!(tokens, token);
             } else {
@@ -83,9 +74,6 @@ fn parse_atom(token: &str) -> Expression {
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
         // Kakoune bug "
         return Expression::Atom(Atom::String(token[1..token.len() - 1].to_string()));
-    }
-    if token.len() > 1 && token.starts_with('\'') {
-        return Expression::Atom(Atom::Quote(token[1..].to_string()));
     }
 
     if token == "true" {
@@ -107,6 +95,33 @@ fn parse_atom(token: &str) -> Expression {
     }
 }
 
+fn close_list(level: i32, stack: &mut Vec<Vec<Expression>>) -> Result<(), ParseError> {
+    if level < 0 {
+        return Err(ParseError {
+            reason: "Unexpected `)`".to_string(),
+        });
+    }
+    if level > 0 {
+        match stack.pop() {
+            Some(v) => match stack.pop() {
+                Some(mut v2) => {
+                    v2.push(Expression::List(v));
+                    stack.push(v2);
+                }
+                None => {
+                    stack.push(v);
+                }
+            },
+            None => {
+                return Err(ParseError {
+                    reason: "Unexpected `)`".to_string(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
         return Err(ParseError {
@@ -120,35 +135,30 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     }
     let mut stack: Vec<Vec<Expression>> = Vec::new();
     let mut level = 0;
+    let mut qexits: Vec<i32> = Vec::new();
     for token in tokens {
         match &token[..] {
+            "'" => {
+                level += 1;
+                qexits.push(level);
+                let mut quoted = Vec::<Expression>::new();
+                quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
+                stack.push(quoted);
+            }
             "(" => {
                 level += 1;
                 stack.push(Vec::<Expression>::new());
             }
             ")" => {
                 level -= 1;
-                if level < 0 {
-                    return Err(ParseError {
-                        reason: "Unexpected `)`".to_string(),
-                    });
-                }
-                if level > 0 {
-                    match stack.pop() {
-                        Some(v) => match stack.pop() {
-                            Some(mut v2) => {
-                                v2.push(Expression::List(v));
-                                stack.push(v2);
-                            }
-                            None => {
-                                stack.push(v);
-                            }
-                        },
-                        None => {
-                            return Err(ParseError {
-                                reason: "Unexpected `)`".to_string(),
-                            });
-                        }
+                close_list(level, &mut stack)?;
+                while let Some(quote_exit_level) = qexits.pop() {
+                    if level == quote_exit_level {
+                        level -= 1;
+                        close_list(level, &mut stack)?;
+                    } else {
+                        qexits.push(quote_exit_level);
+                        break;
                     }
                 }
             }
@@ -156,6 +166,14 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 Some(mut v) => {
                     v.push(parse_atom(token));
                     stack.push(v);
+                    if let Some(quote_exit_level) = qexits.pop() {
+                        if level == quote_exit_level {
+                            level -= 1;
+                            close_list(level, &mut stack)?;
+                        } else {
+                            qexits.push(quote_exit_level);
+                        }
+                    }
                 }
                 None => {
                     return Err(ParseError {
