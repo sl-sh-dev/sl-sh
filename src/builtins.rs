@@ -224,6 +224,63 @@ fn builtin_fn(_environment: &mut Environment, parts: &[Expression]) -> io::Resul
     }
 }
 
+fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() < 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "let requires at least two forms",
+        ));
+    }
+    let mut data: HashMap<String, Expression> = HashMap::new();
+    match &args[0] {
+        Expression::Atom(Atom::Nil) => {}
+        Expression::List(list) => {
+            for binding in list {
+                if let Expression::List(binding_pair) = binding {
+                    if binding_pair.is_empty() || binding_pair.len() > 2 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "let bindings must be a symbol and/or a form",
+                        ));
+                    }
+                    if let Expression::Atom(Atom::Symbol(s)) = binding_pair.get(0).unwrap() {
+                        if binding_pair.len() == 2 {
+                            data.insert(
+                                s.clone(),
+                                eval(
+                                    environment,
+                                    binding_pair.get(1).unwrap(),
+                                    Expression::Atom(Atom::Nil),
+                                    false,
+                                )?,
+                            );
+                        } else {
+                            data.insert(s.clone(), Expression::Atom(Atom::Nil));
+                        }
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "let bindings must be lists",
+                    ));
+                }
+            }
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "let first form must be a list",
+            ))
+        }
+    }
+    let mut new_environment = build_new_scope_with_data(environment, data);
+    let mut args = to_args(&mut new_environment, &args[1..], false)?;
+    match args.pop() {
+        Some(a) => Ok(a),
+        None => Ok(Expression::Atom(Atom::Nil)),
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -276,6 +333,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("export".to_string(), Expression::Func(builtin_export));
     data.insert("set".to_string(), Expression::Func(builtin_set));
     data.insert("fn".to_string(), Expression::Func(builtin_fn));
+    data.insert("let".to_string(), Expression::Func(builtin_let));
 
     data.insert(
         "=".to_string(),

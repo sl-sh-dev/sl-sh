@@ -110,7 +110,7 @@ pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<()> {
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let mut procs = environment.procs.borrow_mut();
-    let keys: Vec<u32> = procs.keys().copied().collect();//map(|pid| *pid).collect();
+    let keys: Vec<u32> = procs.keys().copied().collect();
     let mut dead_pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
         if let Some(child) = procs.get_mut(&key) {
@@ -125,6 +125,21 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     }
     // XXX remove them or better replace pid with exit status
     Ok(())
+}
+
+pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
+    environment: &'a Environment<'a>,
+    mut data_in: HashMap<String, Expression, S>,
+) -> Environment<'a> {
+    let mut data: HashMap<String, Expression> = HashMap::new();
+    for (k, v) in data_in.drain() {
+        data.insert(k, v);
+    }
+    Environment {
+        data,
+        procs: environment.procs.clone(),
+        outer: Some(environment),
+    }
 }
 
 pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> {
