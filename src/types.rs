@@ -23,7 +23,6 @@ pub struct Lambda {
 pub enum Atom {
     Nil,
     True,
-    False,
     Float(f64),
     Int(i64),
     Symbol(String),
@@ -36,7 +35,6 @@ impl Atom {
         match self {
             Atom::Nil => "nil".to_string(),
             Atom::True => "true".to_string(),
-            Atom::False => "false".to_string(),
             Atom::Float(f) => format!("{}", f),
             Atom::Int(i) => format!("{}", i),
             Atom::Symbol(s) => s.clone(),

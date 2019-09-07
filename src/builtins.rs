@@ -21,7 +21,7 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
     let root = Path::new(new_dir);
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("{}", e);
-        Ok(Expression::Atom(Atom::False))
+        Ok(Expression::Atom(Atom::Nil))
     } else {
         Ok(Expression::Atom(Atom::True))
     }
@@ -90,7 +90,7 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
                 Expression::Atom(Atom::Nil),
                 false,
             ),
-            Expression::Atom(Atom::False) => {
+            Expression::Atom(Atom::Nil) => {
                 if plen == 3 {
                     parts.next().unwrap();
                     eval(
@@ -292,21 +292,17 @@ fn builtin_quote(environment: &mut Environment, args: &[Expression]) -> io::Resu
             if let Expression::Atom(Atom::Symbol(symbol)) = exp {
                 if symbol == "," {
                     back_quote_next = true;
-                } else {
-                    if back_quote_next {
-                        output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
-                        back_quote_next = false;
-                    } else {
-                        output.push(exp.clone());
-                    }
-                }
-            } else {
-                if back_quote_next {
+                } else if back_quote_next {
                     output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
                     back_quote_next = false;
                 } else {
                     output.push(exp.clone());
                 }
+            } else if back_quote_next {
+                output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
+                back_quote_next = false;
+            } else {
+                output.push(exp.clone());
             }
         }
         Ok(Expression::List(output))
@@ -331,7 +327,7 @@ macro_rules! ensure_tonicity {
         if f(first, rest) {
             Ok(Expression::Atom(Atom::True))
         } else {
-            Ok(Expression::Atom(Atom::False))
+            Ok(Expression::Atom(Atom::Nil))
         }
     }};
 }

@@ -76,10 +76,10 @@ fn parse_atom(token: &str) -> Expression {
         return Expression::Atom(Atom::String(token[1..token.len() - 1].to_string()));
     }
 
-    if token == "true" {
+    if token == "t" {
         Expression::Atom(Atom::True)
-    } else if token == "false" {
-        Expression::Atom(Atom::False)
+    } else if token == "nil" {
+        Expression::Atom(Atom::Nil)
     } else {
         let potential_int: Result<i64, ParseIntError> = token.parse();
         match potential_int {
