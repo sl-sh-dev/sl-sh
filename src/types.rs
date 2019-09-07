@@ -6,6 +6,13 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
+use crate::builtins_util::wait_process;
+
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub reason: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Box<Expression>,
@@ -45,31 +52,22 @@ impl Atom {
 pub enum Expression {
     Atom(Atom),
     List(Vec<Expression>),
-    Func(fn(&mut Environment, &[Expression]) -> io::Result<EvalResult>),
+    Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
+    Process(u32),
 }
 
 impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Atom(a) => write!(f, "Expression ( Atom: {:?} )", a),
-            Expression::List(l) => write!(f, "Expression ( List: {:?} )", l),
-            Expression::Func(_) => write!(f, "Expression ( Func )"),
+            Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
+            Expression::List(l) => write!(f, "Expression::List({:?})", l),
+            Expression::Func(_) => write!(f, "Expression::Func(_)"),
+            Expression::Process(pid) => write!(f, "Expression::Process({})", pid),
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ParseError {
-    pub reason: String,
-}
-
-#[derive(Clone, Debug)]
-pub enum EvalResult {
-    Atom(Atom),
-    Process(u32),
-}
-
-impl EvalResult {
+impl Expression {
     fn pid_to_string(
         &self,
         procs: Rc<RefCell<HashMap<u32, Child>>>,
@@ -90,28 +88,34 @@ impl EvalResult {
         }
     }
 
-    pub fn make_expression(&mut self, environment: &Environment) -> io::Result<Expression> {
-        match self {
-            EvalResult::Atom(a) => Ok(Expression::Atom(a.clone())),
-            _ => Ok(Expression::Atom(Atom::String(
-                self.make_string(environment)?,
-            ))),
-        }
-    }
-
     pub fn make_string(&self, environment: &Environment) -> io::Result<String> {
         match self {
-            EvalResult::Atom(a) => Ok(a.to_string()),
-            EvalResult::Process(pid) => self.pid_to_string(environment.procs.clone(), *pid),
+            Expression::Atom(a) => Ok(a.to_string()),
+            Expression::Process(pid) => self.pid_to_string(environment.procs.clone(), *pid),
+            Expression::Func(_) => Ok("".to_string()),
+            Expression::List(list) => {
+                let mut res = String::new();
+                res.push('(');
+                let mut first = true;
+                for exp in list {
+                    if !first {
+                        res.push_str(", ");
+                    }
+                    res.push_str(&exp.make_string(environment)?);
+                    first = false;
+                }
+                res.push(')');
+                Ok(res)
+            }
         }
     }
 
     pub fn make_float(&self, environment: &Environment) -> io::Result<f64> {
         match self {
-            EvalResult::Atom(Atom::Float(f)) => Ok(*f),
-            EvalResult::Atom(Atom::Int(i)) => Ok(*i as f64),
-            EvalResult::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            EvalResult::Process(pid) => {
+            Expression::Atom(Atom::Float(f)) => Ok(*f),
+            Expression::Atom(Atom::Int(i)) => Ok(*i as f64),
+            Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Process(pid) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_float: Result<f64, ParseFloatError> = buffer.parse();
                 match potential_float {
@@ -119,14 +123,16 @@ impl EvalResult {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
                 }
             }
+            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
 
     pub fn make_int(&self, environment: &Environment) -> io::Result<i64> {
         match self {
-            EvalResult::Atom(Atom::Int(i)) => Ok(*i),
-            EvalResult::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            EvalResult::Process(pid) => {
+            Expression::Atom(Atom::Int(i)) => Ok(*i),
+            Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Process(pid) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_int: Result<i64, ParseIntError> = buffer.parse();
                 match potential_int {
@@ -134,13 +140,15 @@ impl EvalResult {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
                 }
             }
+            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a integer")),
+            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a integer")),
         }
     }
 
     pub fn write(self, environment: &Environment) -> io::Result<()> {
         match self {
-            EvalResult::Atom(a) => print!("{}", a.to_string()),
-            EvalResult::Process(pid) => {
+            Expression::Atom(a) => print!("{}", a.to_string()),
+            Expression::Process(pid) => {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
@@ -171,13 +179,26 @@ impl EvalResult {
                         ));
                     }
                 }
+                drop(procs);
+                wait_process(environment, pid)?;
+            }
+            Expression::Func(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Can not write a function",
+                ))
+            }
+            Expression::List(list) => {
+                for exp in list {
+                    exp.write(environment)?;
+                }
             }
         }
         Ok(())
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Environment<'a> {
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,

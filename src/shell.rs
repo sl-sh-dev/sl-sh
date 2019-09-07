@@ -17,12 +17,12 @@ use crate::types::*;
 fn run_command(
     environment: &mut Environment,
     command: &str,
-    args: &mut Vec<EvalResult>,
+    args: &mut Vec<Expression>,
     stdin: Stdio,
     stdout: Stdio,
     data_in: Option<Atom>,
     wait: bool,
-) -> io::Result<EvalResult> {
+) -> io::Result<Expression> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
         new_args.push(a.make_string(environment)?);
@@ -33,7 +33,7 @@ fn run_command(
         .stdout(stdout)
         .spawn();
 
-    let mut result = EvalResult::Atom(Atom::Nil);
+    let mut result = Expression::Atom(Atom::Nil);
     match proc {
         Ok(mut proc) => {
             if wait {
@@ -49,8 +49,12 @@ fn run_command(
                     input.write_all(data_in.to_string().as_bytes())?;
                 }
             }
-            let pid = add_process(environment, proc);
-            result = EvalResult::Process(pid);
+            let pid = if !wait {
+                add_process(environment, proc)
+            } else {
+                proc.id()
+            };
+            result = Expression::Process(pid);
         }
         Err(e) => {
             eprintln!("Failed to execute {}: {}", command, e);
@@ -63,7 +67,7 @@ fn call_lambda(
     environment: &mut Environment,
     lambda: &Lambda,
     args: &[Expression],
-) -> io::Result<EvalResult> {
+) -> io::Result<Expression> {
     let mut new_environment = build_new_scope(environment);
     if let Expression::List(l) = &*lambda.params {
         let var_names = to_args_str(&mut new_environment, &l, false)?;
@@ -75,14 +79,12 @@ fn call_lambda(
             ))
         } else {
             for (k, v) in var_names.iter().zip(vars.iter_mut()) {
-                new_environment
-                    .data
-                    .insert(k.clone(), v.make_expression(environment)?);
+                new_environment.data.insert(k.clone(), v.clone());
             }
             eval(
                 &mut new_environment,
                 &lambda.body,
-                EvalResult::Atom(Atom::Nil),
+                Expression::Atom(Atom::Nil),
                 false,
             )
         }
@@ -90,7 +92,7 @@ fn call_lambda(
         eval(
             &mut new_environment,
             &lambda.body,
-            EvalResult::Atom(Atom::Nil),
+            Expression::Atom(Atom::Nil),
             false,
         )
     }
@@ -99,9 +101,9 @@ fn call_lambda(
 pub fn eval(
     environment: &mut Environment,
     expression: &Expression,
-    data_in: EvalResult,
+    data_in: Expression,
     use_stdout: bool,
-) -> io::Result<EvalResult> {
+) -> io::Result<Expression> {
     match expression {
         Expression::List(parts) => {
             let (command, parts) = match parts.split_first() {
@@ -122,7 +124,7 @@ pub fn eval(
                 }
             };
             if command.is_empty() {
-                return Ok(EvalResult::Atom(Atom::Nil));
+                return Ok(Expression::Atom(Atom::Nil));
             }
 
             if let Some(exp) = get_expression(environment, &command) {
@@ -136,7 +138,7 @@ pub fn eval(
                 }
             } else {
                 match &command[..] {
-                    "nil" => Ok(EvalResult::Atom(Atom::Nil)),
+                    "nil" => Ok(Expression::Atom(Atom::Nil)),
                     "|" | "pipe" => {
                         let mut out = data_in;
                         for p in parts {
@@ -144,7 +146,7 @@ pub fn eval(
                         }
                         if use_stdout {
                             out.write(environment)?;
-                            Ok(EvalResult::Atom(Atom::Nil))
+                            Ok(Expression::Atom(Atom::Nil))
                         } else {
                             Ok(out)
                         }
@@ -153,12 +155,12 @@ pub fn eval(
                     command => {
                         let mut data = None;
                         let stdin = match data_in {
-                            EvalResult::Atom(Atom::Nil) => Stdio::inherit(),
-                            EvalResult::Atom(atom) => {
+                            Expression::Atom(Atom::Nil) => Stdio::inherit(),
+                            Expression::Atom(atom) => {
                                 data = Some(atom);
                                 Stdio::piped()
                             }
-                            EvalResult::Process(pid) => {
+                            Expression::Process(pid) => {
                                 let procs = environment.procs.clone();
                                 let mut procs = procs.borrow_mut();
                                 if let Some(proc) = procs.get_mut(&pid) {
@@ -172,6 +174,18 @@ pub fn eval(
                                 } else {
                                     Stdio::inherit()
                                 }
+                            }
+                            Expression::Func(_) => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Invalid expression state before command (special form).",
+                                ))
+                            }
+                            Expression::List(_) => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Invalid expression state before command (form).",
+                                ))
                             }
                         };
                         let stdout = if use_stdout {
@@ -196,22 +210,23 @@ pub fn eval(
         Expression::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
-                    Ok(val) => Ok(EvalResult::Atom(Atom::String(val))),
-                    Err(_) => Ok(EvalResult::Atom(Atom::String("".to_string()))),
+                    Ok(val) => Ok(Expression::Atom(Atom::String(val))),
+                    Err(_) => Ok(Expression::Atom(Atom::String("".to_string()))),
                 }
             } else if let Some(exp) = get_expression(environment, &s[..]) {
                 if let Expression::Func(_) = exp {
-                    Ok(EvalResult::Atom(Atom::String(s.clone())))
+                    Ok(Expression::Atom(Atom::String(s.clone())))
                 } else {
                     let exp = exp.clone();
                     eval(environment, &exp, data_in, use_stdout)
                 }
             } else {
-                Ok(EvalResult::Atom(Atom::String(s.clone())))
+                Ok(Expression::Atom(Atom::String(s.clone())))
             }
         }
-        Expression::Atom(atom) => Ok(EvalResult::Atom(atom.clone())),
-        Expression::Func(_) => Ok(EvalResult::Atom(Atom::Nil)),
+        Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
+        Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
+        Expression::Process(pid) => Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
     }
 }
 
@@ -260,8 +275,8 @@ pub fn start_interactive() {
                 }
                 _ => exp,
             };
-            let res = eval(&mut environment, &exp, EvalResult::Atom(Atom::Nil), false);
-            res.unwrap_or_else(|_| EvalResult::Atom(Atom::String("ERROR".to_string())))
+            let res = eval(&mut environment, &exp, Expression::Atom(Atom::Nil), false);
+            res.unwrap_or_else(|_| Expression::Atom(Atom::String("ERROR".to_string())))
                 .make_string(&environment)
                 .unwrap_or_else(|_| "ERROR".to_string())
         } else {
@@ -271,6 +286,9 @@ pub fn start_interactive() {
                 pwd.display()
             )
         };
+        if let Err(err) = reap_procs(&environment) {
+            eprintln!("Error reaping processes: {}", err);
+        }
         match con.read_line(prompt, None, &mut ShellCompleter) {
             Ok(input) => {
                 if input.is_empty() {
@@ -286,7 +304,7 @@ pub fn start_interactive() {
                 //println!("{:?}", ast);
                 match ast {
                     Ok(ast) => {
-                        match eval(&mut environment, &ast, EvalResult::Atom(Atom::Nil), true) {
+                        match eval(&mut environment, &ast, Expression::Atom(Atom::Nil), true) {
                             Ok(_) => {
                                 //println!("{}", s);
                                 if !input.is_empty() {

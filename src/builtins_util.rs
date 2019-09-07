@@ -9,10 +9,10 @@ pub fn to_args(
     env: &mut Environment,
     parts: &[Expression],
     use_stdout: bool,
-) -> io::Result<Vec<EvalResult>> {
-    let mut args: Vec<EvalResult> = Vec::with_capacity(parts.len());
+) -> io::Result<Vec<Expression>> {
+    let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(eval(env, a, EvalResult::Atom(Atom::Nil), use_stdout)?);
+        args.push(eval(env, a, Expression::Atom(Atom::Nil), use_stdout)?);
     }
     Ok(args)
 }
@@ -25,7 +25,7 @@ pub fn to_args_str(
     let mut args: Vec<String> = Vec::with_capacity(parts.len());
     for a in parts {
         args.push(
-            eval(environment, a, EvalResult::Atom(Atom::Nil), use_stdout)?
+            eval(environment, a, Expression::Atom(Atom::Nil), use_stdout)?
                 .make_string(environment)?,
         );
     }
@@ -34,21 +34,21 @@ pub fn to_args_str(
 
 pub fn print(
     environment: &mut Environment,
-    args: Vec<EvalResult>,
+    args: Vec<Expression>,
     add_newline: bool,
-) -> io::Result<EvalResult> {
+) -> io::Result<Expression> {
     for a in args {
         a.write(environment)?;
     }
     if add_newline {
         println!();
     }
-    Ok(EvalResult::Atom(Atom::Nil))
+    Ok(Expression::Atom(Atom::Nil))
 }
 
 pub fn parse_list_of_ints(
     environment: &mut Environment,
-    args: &mut [EvalResult],
+    args: &mut [Expression],
 ) -> io::Result<Vec<i64>> {
     let mut list: Vec<i64> = Vec::with_capacity(args.len());
     for arg in args {
@@ -59,7 +59,7 @@ pub fn parse_list_of_ints(
 
 pub fn parse_list_of_floats(
     environment: &mut Environment,
-    args: &mut [EvalResult],
+    args: &mut [Expression],
 ) -> io::Result<Vec<f64>> {
     let mut list: Vec<f64> = Vec::with_capacity(args.len());
     for arg in args {
@@ -70,7 +70,7 @@ pub fn parse_list_of_floats(
 
 pub fn parse_list_of_strings(
     environment: &mut Environment,
-    args: &mut [EvalResult],
+    args: &mut [Expression],
 ) -> io::Result<Vec<String>> {
     let mut list: Vec<String> = Vec::with_capacity(args.len());
     for arg in args {
@@ -93,6 +93,38 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
     let pid = process.id();
     environment.procs.borrow_mut().insert(pid, process);
     pid
+}
+
+pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<()> {
+    let mut procs = environment.procs.borrow_mut();
+    let mut found = false;
+    if let Some(child) = procs.get_mut(&pid) {
+        child.wait()?;
+        found = true;
+    }
+    if found {
+        procs.remove(&pid);
+    }
+    Ok(())
+}
+
+pub fn reap_procs(environment: &Environment) -> io::Result<()> {
+    let mut procs = environment.procs.borrow_mut();
+    let keys: Vec<u32> = procs.keys().copied().collect();//map(|pid| *pid).collect();
+    let mut dead_pids: Vec<u32> = Vec::with_capacity(keys.len());
+    for key in keys {
+        if let Some(child) = procs.get_mut(&key) {
+            if let Some(status) = child.try_wait()? {
+                println!("Child {} ended with status {}", key, status);
+                dead_pids.push(key);
+            }
+        }
+    }
+    for pid in dead_pids {
+        procs.remove(&pid);
+    }
+    // XXX remove them or better replace pid with exit status
+    Ok(())
 }
 
 pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> {

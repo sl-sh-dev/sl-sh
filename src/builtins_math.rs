@@ -9,15 +9,15 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
     data.insert(
         "+".to_string(),
         Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-                let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
+                let mut args: Vec<Expression> = to_args(environment, args, false)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
                     //fold(0, |sum, a| sum + a);
-                    Ok(EvalResult::Atom(Atom::Int(sum)))
+                    Ok(Expression::Atom(Atom::Int(sum)))
                 } else {
                     let sum: f64 = parse_list_of_floats(environment, &mut args)?.iter().sum();
-                    Ok(EvalResult::Atom(Atom::Float(sum)))
+                    Ok(Expression::Atom(Atom::Float(sum)))
                 }
             },
         ),
@@ -26,16 +26,16 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
     data.insert(
         "*".to_string(),
         Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-                let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
+                let mut args: Vec<Expression> = to_args(environment, args, false)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
-                    Ok(EvalResult::Atom(Atom::Int(prod)))
+                    Ok(Expression::Atom(Atom::Int(prod)))
                 } else {
                     let prod: f64 = parse_list_of_floats(environment, &mut args)?
                         .iter()
                         .product();
-                    Ok(EvalResult::Atom(Atom::Float(prod)))
+                    Ok(Expression::Atom(Atom::Float(prod)))
                 }
             },
         ),
@@ -44,12 +44,12 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
     data.insert(
         "-".to_string(),
         Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-                let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
+                let mut args: Vec<Expression> = to_args(environment, args, false)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
                         let sum_of_rest: i64 = ints[1..].iter().sum();
-                        Ok(EvalResult::Atom(Atom::Int(first - sum_of_rest)))
+                        Ok(Expression::Atom(Atom::Int(first - sum_of_rest)))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -60,7 +60,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                     let floats = parse_list_of_floats(environment, &mut args)?;
                     if let Some(first) = floats.first() {
                         let sum_of_rest: f64 = floats[1..].iter().sum();
-                        Ok(EvalResult::Atom(Atom::Float(first - sum_of_rest)))
+                        Ok(Expression::Atom(Atom::Float(first - sum_of_rest)))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -75,8 +75,8 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
     data.insert(
         "/".to_string(),
         Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
-                let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
+                let mut args: Vec<Expression> = to_args(environment, args, false)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if ints[1..].iter().any(|&x| x == 0) {
                         Err(io::Error::new(io::ErrorKind::Other, "can not divide by 0"))
@@ -84,7 +84,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                         let div: i64 = ints[1..]
                             .iter()
                             .fold(*ints.first().unwrap(), |div, a| div / a);
-                        Ok(EvalResult::Atom(Atom::Int(div)))
+                        Ok(Expression::Atom(Atom::Int(div)))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -99,7 +99,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                         let div: f64 = floats[1..]
                             .iter()
                             .fold(*floats.first().unwrap(), |div, a| div / a);
-                        Ok(EvalResult::Atom(Atom::Float(div)))
+                        Ok(Expression::Atom(Atom::Float(div)))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
