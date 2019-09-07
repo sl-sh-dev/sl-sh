@@ -37,7 +37,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
             "load needs one argument",
         ))
     } else {
-        let contents = fs::read_to_string(args.pop().unwrap().make_string()?)?;
+        let contents = fs::read_to_string(args.pop().unwrap().make_string(environment)?)?;
         let tokens = tokenize(&contents);
         let ast = parse(&tokens);
         match ast {
@@ -113,12 +113,12 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
 
 fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
     let args: Vec<EvalResult> = to_args(environment, args, false)?;
-    print(args, false)
+    print(environment, args, false)
 }
 
 fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
     let args: Vec<EvalResult> = to_args(environment, args, false)?;
-    print(args, true)
+    print(environment, args, true)
 }
 
 fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<EvalResult> {
@@ -157,8 +157,8 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
         ))
     } else {
         let mut args = args.iter_mut();
-        let key = args.next().unwrap().make_string()?;
-        let val = args.next().unwrap().make_string()?;
+        let key = args.next().unwrap().make_string(environment)?;
+        let val = args.next().unwrap().make_string(environment)?;
         if !val.is_empty() {
             env::set_var(key, val);
         } else {
@@ -189,7 +189,7 @@ fn builtin_set(environment: &mut Environment, parts: &[Expression]) -> io::Resul
                 "use export to set environment variables",
             ));
         }
-        let mut val = eval(
+        let val = eval(
             environment,
             parts.next().unwrap(),
             EvalResult::Atom(Atom::Nil),
@@ -198,9 +198,10 @@ fn builtin_set(environment: &mut Environment, parts: &[Expression]) -> io::Resul
         if let EvalResult::Atom(atom) = val {
             environment.data.insert(key, Expression::Atom(atom));
         } else {
-            environment
-                .data
-                .insert(key, Expression::Atom(Atom::String(val.make_string()?)));
+            environment.data.insert(
+                key,
+                Expression::Atom(Atom::String(val.make_string(environment)?)),
+            );
         }
         Ok(EvalResult::Atom(Atom::Nil))
     }
@@ -248,12 +249,12 @@ macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
         |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
             let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
-            if let Ok(ints) = parse_list_of_ints(&mut args) {
+            if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                 ensure_tonicity!($check_fn, ints, &i64, i64)
-            } else if let Ok(floats) = parse_list_of_floats(&mut args) {
+            } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
                 ensure_tonicity!($check_fn, floats, &f64, f64)
             } else {
-                let strings = parse_list_of_strings(&mut args)?;
+                let strings = parse_list_of_strings(environment, &mut args)?;
                 ensure_tonicity!($check_fn, strings, &str, String)
             }
         }
@@ -281,12 +282,12 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
         Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<EvalResult> {
                 let mut args: Vec<EvalResult> = to_args(environment, args, false)?;
-                if let Ok(ints) = parse_list_of_ints(&mut args) {
+                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
-                } else if let Ok(floats) = parse_list_of_floats(&mut args) {
+                } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
                     ensure_tonicity!(|a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
                 } else {
-                    let strings = parse_list_of_strings(&mut args)?;
+                    let strings = parse_list_of_strings(environment, &mut args)?;
                     ensure_tonicity!(|a, b| a == b, strings, &str, String)
                 }
             },

@@ -1,9 +1,11 @@
 use liner::Context;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, ErrorKind, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::rc::Rc;
 
 use crate::builtins::*;
 use crate::builtins_math::*;
@@ -13,6 +15,7 @@ use crate::script::*;
 use crate::types::*;
 
 fn run_command(
+    environment: &mut Environment,
     command: &str,
     args: &mut Vec<EvalResult>,
     stdin: Stdio,
@@ -22,30 +25,32 @@ fn run_command(
 ) -> io::Result<EvalResult> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
-        new_args.push(a.make_string()?);
+        new_args.push(a.make_string(environment)?);
     }
-    let output = Command::new(command)
+    let proc = Command::new(command)
         .args(new_args)
         .stdin(stdin)
         .stdout(stdout)
         .spawn();
 
     let mut result = EvalResult::Atom(Atom::Nil);
-    match output {
-        Ok(mut output) => {
+    match proc {
+        Ok(mut proc) => {
             if wait {
-                if let Err(err) = output.wait() {
+                if let Err(err) = proc.wait() {
                     eprintln!("Failed to wait for {}: {}", command, err);
                 }
             }
             if let Some(data_in) = data_in {
-                if let Some(mut input) = output.stdin {
+                if proc.stdin.is_some() {
+                    let mut input: Option<ChildStdin> = None;
+                    std::mem::swap(&mut proc.stdin, &mut input);
+                    let mut input = input.unwrap();
                     input.write_all(data_in.to_string().as_bytes())?;
                 }
             }
-            if let Some(out) = output.stdout {
-                result = EvalResult::Stdout(out);
-            }
+            let pid = add_process(environment, proc);
+            result = EvalResult::Process(pid);
         }
         Err(e) => {
             eprintln!("Failed to execute {}: {}", command, e);
@@ -70,7 +75,9 @@ fn call_lambda(
             ))
         } else {
             for (k, v) in var_names.iter().zip(vars.iter_mut()) {
-                new_environment.data.insert(k.clone(), v.make_expression()?);
+                new_environment
+                    .data
+                    .insert(k.clone(), v.make_expression(environment)?);
             }
             eval(
                 &mut new_environment,
@@ -136,7 +143,7 @@ pub fn eval(
                             out = eval(environment, p, out, false)?;
                         }
                         if use_stdout {
-                            out.write()?;
+                            out.write(environment)?;
                             Ok(EvalResult::Atom(Atom::Nil))
                         } else {
                             Ok(out)
@@ -151,7 +158,21 @@ pub fn eval(
                                 data = Some(atom);
                                 Stdio::piped()
                             }
-                            EvalResult::Stdout(out) => Stdio::from(out),
+                            EvalResult::Process(pid) => {
+                                let procs = environment.procs.clone();
+                                let mut procs = procs.borrow_mut();
+                                if let Some(proc) = procs.get_mut(&pid) {
+                                    if proc.stdout.is_some() {
+                                        let mut out: Option<ChildStdout> = None;
+                                        std::mem::swap(&mut proc.stdout, &mut out);
+                                        Stdio::from(out.unwrap())
+                                    } else {
+                                        Stdio::inherit()
+                                    }
+                                } else {
+                                    Stdio::inherit()
+                                }
+                            }
                         };
                         let stdout = if use_stdout {
                             Stdio::inherit()
@@ -159,7 +180,15 @@ pub fn eval(
                             Stdio::piped()
                         };
                         let mut args = to_args(environment, parts, false)?;
-                        run_command(command, &mut args, stdin, stdout, data, use_stdout)
+                        run_command(
+                            environment,
+                            command,
+                            &mut args,
+                            stdin,
+                            stdout,
+                            data,
+                            use_stdout,
+                        )
                     }
                 }
             }
@@ -188,9 +217,14 @@ pub fn eval(
 
 fn build_default_environment<'a>() -> Environment<'a> {
     let mut data: HashMap<String, Expression> = HashMap::new();
+    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     add_builtins(&mut data);
     add_math_builtins(&mut data);
-    Environment { data, outer: None }
+    Environment {
+        data,
+        procs,
+        outer: None,
+    }
 }
 
 pub fn start_interactive() {
@@ -228,7 +262,7 @@ pub fn start_interactive() {
             };
             let res = eval(&mut environment, &exp, EvalResult::Atom(Atom::Nil), false);
             res.unwrap_or_else(|_| EvalResult::Atom(Atom::String("ERROR".to_string())))
-                .make_string()
+                .make_string(&environment)
                 .unwrap_or_else(|_| "ERROR".to_string())
         } else {
             format!(

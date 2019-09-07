@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io;
+use std::process::Child;
 
 use crate::shell::*;
 use crate::types::*;
@@ -17,20 +18,27 @@ pub fn to_args(
 }
 
 pub fn to_args_str(
-    env: &mut Environment,
+    environment: &mut Environment,
     parts: &[Expression],
     use_stdout: bool,
 ) -> io::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(eval(env, a, EvalResult::Atom(Atom::Nil), use_stdout)?.make_string()?);
+        args.push(
+            eval(environment, a, EvalResult::Atom(Atom::Nil), use_stdout)?
+                .make_string(environment)?,
+        );
     }
     Ok(args)
 }
 
-pub fn print(args: Vec<EvalResult>, add_newline: bool) -> io::Result<EvalResult> {
+pub fn print(
+    environment: &mut Environment,
+    args: Vec<EvalResult>,
+    add_newline: bool,
+) -> io::Result<EvalResult> {
     for a in args {
-        a.write()?;
+        a.write(environment)?;
     }
     if add_newline {
         println!();
@@ -38,26 +46,35 @@ pub fn print(args: Vec<EvalResult>, add_newline: bool) -> io::Result<EvalResult>
     Ok(EvalResult::Atom(Atom::Nil))
 }
 
-pub fn parse_list_of_ints(args: &mut [EvalResult]) -> io::Result<Vec<i64>> {
+pub fn parse_list_of_ints(
+    environment: &mut Environment,
+    args: &mut [EvalResult],
+) -> io::Result<Vec<i64>> {
     let mut list: Vec<i64> = Vec::with_capacity(args.len());
     for arg in args {
-        list.push(arg.make_int()?);
+        list.push(arg.make_int(environment)?);
     }
     Ok(list)
 }
 
-pub fn parse_list_of_floats(args: &mut [EvalResult]) -> io::Result<Vec<f64>> {
+pub fn parse_list_of_floats(
+    environment: &mut Environment,
+    args: &mut [EvalResult],
+) -> io::Result<Vec<f64>> {
     let mut list: Vec<f64> = Vec::with_capacity(args.len());
     for arg in args {
-        list.push(arg.make_float()?);
+        list.push(arg.make_float(environment)?);
     }
     Ok(list)
 }
 
-pub fn parse_list_of_strings(args: &mut [EvalResult]) -> io::Result<Vec<String>> {
+pub fn parse_list_of_strings(
+    environment: &mut Environment,
+    args: &mut [EvalResult],
+) -> io::Result<Vec<String>> {
     let mut list: Vec<String> = Vec::with_capacity(args.len());
     for arg in args {
-        list.push(arg.make_string()?);
+        list.push(arg.make_string(environment)?);
     }
     Ok(list)
 }
@@ -72,10 +89,17 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Expression
     }
 }
 
-pub fn build_new_scope<'a>(environment: &'a Environment) -> Environment<'a> {
+pub fn add_process(environment: &Environment, process: Child) -> u32 {
+    let pid = process.id();
+    environment.procs.borrow_mut().insert(pid, process);
+    pid
+}
+
+pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> {
     let data: HashMap<String, Expression> = HashMap::new();
     Environment {
         data,
+        procs: environment.procs.clone(),
         outer: Some(environment),
     }
 }
