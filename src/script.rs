@@ -50,10 +50,17 @@ pub fn tokenize(text: &str) -> Vec<String> {
             } else if ch == ')' {
                 save_token!(tokens, token);
                 tokens.push(")".to_string());
-            } else if ch == '\'' {
+            } else if ch == '\''
+                && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+            {
                 save_token!(tokens, token);
                 tokens.push("'".to_string());
-            } else if ch == ',' {
+            } else if ch == '`'
+                && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+            {
+                save_token!(tokens, token);
+                tokens.push("`".to_string());
+            } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
                 save_token!(tokens, token);
                 tokens.push(",".to_string());
             } else if is_whitespace(ch) {
@@ -136,6 +143,7 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     let mut stack: Vec<Vec<Expression>> = Vec::new();
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
+    let mut backtick_level = 0;
     for token in tokens {
         match &token[..] {
             "'" => {
@@ -143,6 +151,18 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
                 quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
+                stack.push(quoted);
+            }
+            "`" => {
+                level += 1;
+                qexits.push(level);
+                let mut quoted = Vec::<Expression>::new();
+                if backtick_level > 0 {
+                    quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
+                } else {
+                    quoted.push(Expression::Atom(Atom::Symbol("bquote".to_string())));
+                    backtick_level = level;
+                }
                 stack.push(quoted);
             }
             "(" => {
@@ -154,6 +174,9 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 close_list(level, &mut stack)?;
                 while let Some(quote_exit_level) = qexits.pop() {
                     if level == quote_exit_level {
+                        if level == backtick_level {
+                            backtick_level = 0;
+                        }
                         level -= 1;
                         close_list(level, &mut stack)?;
                     } else {
@@ -168,6 +191,9 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                     stack.push(v);
                     if let Some(quote_exit_level) = qexits.pop() {
                         if level == quote_exit_level {
+                            if level == backtick_level {
+                                backtick_level = 0;
+                            }
                             level -= 1;
                             close_list(level, &mut stack)?;
                         } else {

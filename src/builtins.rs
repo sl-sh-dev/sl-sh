@@ -281,31 +281,50 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
-fn builtin_quote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_quote(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"));
     }
-    if let Expression::List(list) = &args[0] {
-        let mut output: Vec<Expression> = Vec::with_capacity(list.len());
-        let mut back_quote_next = false;
-        for exp in list {
-            if let Expression::Atom(Atom::Symbol(symbol)) = exp {
-                if symbol == "," {
-                    back_quote_next = true;
-                } else if back_quote_next {
-                    output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
-                    back_quote_next = false;
-                } else {
-                    output.push(exp.clone());
-                }
+    Ok(args.get(0).unwrap().clone())
+}
+
+fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Result<Expression> {
+    let mut output: Vec<Expression> = Vec::with_capacity(list.len());
+    let mut back_quote_next = false;
+    for exp in list {
+        let exp = if let Expression::List(tlist) = exp {
+            replace_commas(environment, &tlist)?
+        } else {
+            exp.clone()
+        };
+        if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
+            if symbol == "," {
+                back_quote_next = true;
             } else if back_quote_next {
-                output.push(eval(environment, exp, Expression::Atom(Atom::Nil), false)?);
+                output.push(eval(environment, &exp, Expression::Atom(Atom::Nil), false)?);
                 back_quote_next = false;
             } else {
-                output.push(exp.clone());
+                output.push(exp);
             }
+        } else if back_quote_next {
+            output.push(eval(environment, &exp, Expression::Atom(Atom::Nil), false)?);
+            back_quote_next = false;
+        } else {
+            output.push(exp);
         }
-        Ok(Expression::List(output))
+    }
+    Ok(Expression::List(output))
+}
+
+fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "bquote takes one form",
+        ));
+    }
+    if let Expression::List(list) = &args[0] {
+        replace_commas(environment, &list)
     } else {
         Ok(args.get(0).unwrap().clone())
     }
@@ -365,6 +384,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("fn".to_string(), Expression::Func(builtin_fn));
     data.insert("let".to_string(), Expression::Func(builtin_let));
     data.insert("quote".to_string(), Expression::Func(builtin_quote));
+    data.insert("bquote".to_string(), Expression::Func(builtin_bquote));
 
     data.insert(
         "=".to_string(),
