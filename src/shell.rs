@@ -8,7 +8,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::rc::Rc;
 
 use crate::builtins::*;
+use crate::builtins_list::*;
 use crate::builtins_math::*;
+use crate::builtins_str::*;
 use crate::builtins_util::*;
 use crate::completions::*;
 use crate::script::*;
@@ -228,6 +230,8 @@ fn build_default_environment<'a>() -> Environment<'a> {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     add_builtins(&mut data);
     add_math_builtins(&mut data);
+    add_str_builtins(&mut data);
+    add_list_builtins(&mut data);
     Environment {
         data,
         procs,
