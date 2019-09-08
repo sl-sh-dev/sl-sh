@@ -362,6 +362,53 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     Ok(Expression::Atom(Atom::Nil))
 }
 
+fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() < 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "and needs at least two forms",
+        ));
+    }
+    let mut last_exp = Expression::Atom(Atom::Nil);
+    for arg in args {
+        let val = eval(environment, arg, Expression::Atom(Atom::Nil), false)?;
+        match val {
+            Expression::Atom(Atom::Nil) => return Ok(Expression::Atom(Atom::Nil)),
+            _ => last_exp = val,
+        }
+    }
+    Ok(last_exp)
+}
+
+fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() < 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "or needs at least two forms",
+        ));
+    }
+    for arg in args {
+        let val = eval(environment, arg, Expression::Atom(Atom::Nil), false)?;
+        match val {
+            Expression::Atom(Atom::Nil) => {}
+            _ => return Ok(val),
+        }
+    }
+    Ok(Expression::Atom(Atom::Nil))
+}
+
+fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(io::ErrorKind::Other, "not takes one form"));
+    }
+    let val = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    if let Expression::Atom(Atom::Nil) = val {
+        Ok(Expression::Atom(Atom::True))
+    } else {
+        Ok(Expression::Atom(Atom::Nil))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -418,6 +465,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("quote".to_string(), Expression::Func(builtin_quote));
     data.insert("bquote".to_string(), Expression::Func(builtin_bquote));
     data.insert("spawn".to_string(), Expression::Func(builtin_spawn));
+    data.insert("and".to_string(), Expression::Func(builtin_and));
+    data.insert("or".to_string(), Expression::Func(builtin_or));
+    data.insert("not".to_string(), Expression::Func(builtin_not));
+    data.insert("null".to_string(), Expression::Func(builtin_not));
 
     data.insert(
         "=".to_string(),
