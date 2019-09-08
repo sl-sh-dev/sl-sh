@@ -72,15 +72,25 @@ fn call_lambda(
 ) -> io::Result<Expression> {
     let mut new_environment = build_new_scope(environment);
     if let Expression::List(l) = &*lambda.params {
-        let var_names = to_args_str(&mut new_environment, &l, false)?;
-        let mut vars = to_args(&mut new_environment, args, false)?;
+        let mut var_names: Vec<String> = Vec::with_capacity(l.len()); //to_args_str(&mut new_environment, &l, false)?;
+        for arg in l {
+            if let Expression::Atom(Atom::Symbol(s)) = arg {
+                var_names.push(s.clone());
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "parameter name must be symbol",
+                ));
+            }
+        }
+        let vars = to_args(&mut new_environment, args, false)?;
         if var_names.len() != vars.len() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "wrong number of parameters",
             ));
         } else {
-            for (k, v) in var_names.iter().zip(vars.iter_mut()) {
+            for (k, v) in var_names.iter().zip(vars.iter()) {
                 new_environment.data.insert(k.clone(), v.clone());
             }
         }
@@ -111,7 +121,10 @@ pub fn eval(
             let command = match command {
                 Expression::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    eprintln!("Not a valid command, must be a symbol.");
+                    eprintln!(
+                        "Not a valid command {}, must be a symbol.",
+                        command.make_string(environment)?
+                    );
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Not a valid command, must be a symbol.",
@@ -212,8 +225,7 @@ pub fn eval(
                 if let Expression::Func(_) = exp {
                     Ok(Expression::Atom(Atom::String(s.clone())))
                 } else {
-                    let exp = exp.clone();
-                    eval(environment, &exp, data_in, use_stdout)
+                    Ok(exp)
                 }
             } else {
                 Ok(Expression::Atom(Atom::String(s.clone())))
@@ -273,9 +285,11 @@ pub fn start_interactive() {
                 _ => exp,
             };
             let res = eval(&mut environment, &exp, Expression::Atom(Atom::Nil), false);
-            res.unwrap_or_else(|_| Expression::Atom(Atom::String("ERROR".to_string())))
-                .make_string(&environment)
-                .unwrap_or_else(|_| "ERROR".to_string())
+            res.unwrap_or_else(|e| {
+                Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
+            })
+            .make_string(&environment)
+            .unwrap_or_else(|_| "ERROR".to_string())
         } else {
             format!(
                 "\x1b[32m{}:\x1b[34m{}\x1b[37m(TEST SHELL)\x1b[32m>\x1b[39m ",
@@ -283,6 +297,7 @@ pub fn start_interactive() {
                 pwd.display()
             )
         };
+        let prompt = prompt.replace("\\x1b", "\x1b"); // Patch escape codes.
         if let Err(err) = reap_procs(&environment) {
             eprintln!("Error reaping processes: {}", err);
         }
@@ -302,13 +317,16 @@ pub fn start_interactive() {
                 match ast {
                     Ok(ast) => {
                         match eval(&mut environment, &ast, Expression::Atom(Atom::Nil), true) {
-                            Ok(_) => {
+                            Ok(_exp) => {
                                 //println!("{}", s);
                                 if !input.is_empty() {
                                     if let Err(err) = con.history.push(input.into()) {
                                         eprintln!("Error saving history: {}", err);
                                     }
                                 }
+                                /*if let Err(err) = exp.write(&environment) {
+                                    eprintln!("Error writing result: {}", err);
+                                }*/
                             }
                             Err(err) => eprintln!("{}", err),
                         }

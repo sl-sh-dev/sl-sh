@@ -144,11 +144,11 @@ fn builtin_use_stdout(
 }
 
 fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = to_args(environment, args, false)?;
-    match args.pop() {
-        Some(a) => Ok(a),
-        None => Ok(Expression::Atom(Atom::Nil)),
+    let mut last_eval = Expression::Atom(Atom::Nil);
+    for a in args {
+        last_eval = eval(environment, a, Expression::Atom(Atom::Nil), false)?;
     }
+    Ok(last_eval)
 }
 
 fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {

@@ -25,7 +25,14 @@ pub fn tokenize(text: &str) -> Vec<String> {
     let mut in_string = false;
     let mut token = String::new();
     let mut last_ch = ' ';
+    let mut in_comment = false;
     for ch in text.chars() {
+        if in_comment {
+            if ch == '\n' {
+                in_comment = false;
+            }
+            continue;
+        }
         if ch == '\"' && last_ch != '\\' {
             // Kakoune bug "
             in_string = !in_string;
@@ -42,7 +49,8 @@ pub fn tokenize(text: &str) -> Vec<String> {
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.
-                return tokens;
+                in_comment = true;
+                continue;
             }
             if ch == '(' {
                 save_token!(tokens, token);
