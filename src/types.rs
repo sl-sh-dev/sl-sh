@@ -91,14 +91,10 @@ impl Expression {
             Expression::Func(_) => Ok("".to_string()),
             Expression::List(list) => {
                 let mut res = String::new();
-                res.push('(');
-                let mut first = true;
+                res.push_str("( ");
                 for exp in list {
-                    if !first {
-                        res.push_str(", ");
-                    }
                     res.push_str(&exp.make_string(environment)?);
-                    first = false;
+                    res.push_str(" ");
                 }
                 res.push(')');
                 Ok(res)

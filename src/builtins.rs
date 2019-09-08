@@ -137,10 +137,11 @@ fn builtin_use_stdout(
     environment: &mut Environment,
     parts: &[Expression],
 ) -> io::Result<Expression> {
+    let mut last_eval = Expression::Atom(Atom::Nil);
     for a in parts {
-        eval(environment, a, Expression::Atom(Atom::Nil), true)?;
+        last_eval = eval(environment, a, Expression::Atom(Atom::Nil), true)?;
     }
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(last_eval)
 }
 
 fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
