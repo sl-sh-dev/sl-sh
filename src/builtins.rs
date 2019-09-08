@@ -1,9 +1,12 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
 use std::io;
 use std::path::Path;
+use std::process::Child;
+use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::script::*;
@@ -330,6 +333,35 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let mut new_args: Vec<Expression> = Vec::with_capacity(args.len());
+    for a in args {
+        new_args.push(a.clone());
+    }
+    let mut data: HashMap<String, Expression> = HashMap::new();
+    clone_symbols(environment, &mut data);
+    let _child = std::thread::spawn(move || {
+        let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+        //add_builtins(&mut data);
+        //add_math_builtins(&mut data);
+        let mut enviro = Environment {
+            data,
+            procs,
+            outer: None,
+        };
+        let _args = to_args(&mut enviro, &new_args, false).unwrap();
+        /*match args.pop() {
+            Some(a) => Ok(a),
+            None => Ok(Expression::Atom(Atom::Nil)),
+        }*/
+        if let Err(err) = reap_procs(&enviro) {
+            eprintln!("Error waiting on spawned processes: {}", err);
+        }
+    });
+    //let res = child.join()
+    Ok(Expression::Atom(Atom::Nil))
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -385,6 +417,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("let".to_string(), Expression::Func(builtin_let));
     data.insert("quote".to_string(), Expression::Func(builtin_quote));
     data.insert("bquote".to_string(), Expression::Func(builtin_bquote));
+    data.insert("spawn".to_string(), Expression::Func(builtin_spawn));
 
     data.insert(
         "=".to_string(),

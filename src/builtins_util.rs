@@ -150,3 +150,15 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
         outer: Some(environment),
     }
 }
+
+pub fn clone_symbols<S: ::std::hash::BuildHasher>(
+    environment: &Environment,
+    data_in: &mut HashMap<String, Expression, S>,
+) {
+    for (k, v) in &environment.data {
+        data_in.insert(k.clone(), v.clone());
+    }
+    if let Some(outer) = environment.outer {
+        clone_symbols(outer, data_in);
+    }
+}
