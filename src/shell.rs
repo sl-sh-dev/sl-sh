@@ -73,29 +73,22 @@ fn call_lambda(
         let var_names = to_args_str(&mut new_environment, &l, false)?;
         let mut vars = to_args(&mut new_environment, args, false)?;
         if var_names.len() != vars.len() {
-            Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "wrong number of parameters",
-            ))
+            ));
         } else {
             for (k, v) in var_names.iter().zip(vars.iter_mut()) {
                 new_environment.data.insert(k.clone(), v.clone());
             }
-            eval(
-                &mut new_environment,
-                &lambda.body,
-                Expression::Atom(Atom::Nil),
-                false,
-            )
         }
-    } else {
-        eval(
-            &mut new_environment,
-            &lambda.body,
-            Expression::Atom(Atom::Nil),
-            false,
-        )
     }
+    eval(
+        &mut new_environment,
+        &lambda.body,
+        Expression::Atom(Atom::Nil),
+        false,
+    )
 }
 
 pub fn eval(
