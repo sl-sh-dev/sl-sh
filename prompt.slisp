@@ -5,7 +5,10 @@
 
 (set path_list_trunc (fn (plist) (progn
 	(if (> (length plist) 1)
-		(setfirst (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+		(if (> (length (first plist)) 0) 
+			(setfirst (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+			(path_list_trunc (rest plist))
+		)
 		plist
 	)
 )))

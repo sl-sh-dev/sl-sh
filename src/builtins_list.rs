@@ -78,6 +78,7 @@ fn builtin_list_length(
     let arg = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
     match arg {
         Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
+        Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
         Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
         Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.len() as i64))),
         _ => Ok(Expression::Atom(Atom::Int(0))),
