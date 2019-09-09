@@ -53,11 +53,12 @@ fn run_command(
                     input.write_all(data_in.to_string().as_bytes())?;
                 }
             }
-            let pid = if !wait {
+            let pid = add_process(environment, proc);
+            /*let pid = if !wait {
                 add_process(environment, proc)
             } else {
                 proc.id()
-            };
+            };*/
             result = Expression::Process(pid);
         }
         Err(e) => {

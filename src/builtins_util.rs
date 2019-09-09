@@ -114,9 +114,9 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let mut dead_pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
         if let Some(child) = procs.get_mut(&key) {
-            if let Some(status) = child.try_wait()? {
+            if let Some(_status) = child.try_wait()? {
                 // XXX turn off for now but should get waits in the proper places and bring back.
-                println!("Child {} ended with status {}", key, status);
+                //println!("Child {} ended with status {}", key, status);
                 dead_pids.push(key);
             }
         }
