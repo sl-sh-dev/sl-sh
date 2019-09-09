@@ -201,14 +201,15 @@ fn builtin_set(environment: &mut Environment, parts: &[Expression]) -> io::Resul
             Expression::Atom(Atom::Nil),
             false,
         )?;
-        if let Expression::Atom(atom) = val {
+        environment.data.insert(key, val);
+        /*if let Expression::Atom(atom) = val {
             environment.data.insert(key, Expression::Atom(atom));
         } else {
             environment.data.insert(
                 key,
                 Expression::Atom(Atom::String(val.make_string(environment)?)),
             );
-        }
+        }*/
         Ok(Expression::Atom(Atom::Nil))
     }
 }
