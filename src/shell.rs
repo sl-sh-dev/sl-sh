@@ -22,6 +22,7 @@ fn run_command(
     args: &mut Vec<Expression>,
     stdin: Stdio,
     stdout: Stdio,
+    stderr: Stdio,
     data_in: Option<Atom>,
     wait: bool,
 ) -> io::Result<Expression> {
@@ -33,6 +34,7 @@ fn run_command(
         .args(new_args)
         .stdin(stdin)
         .stdout(stdout)
+        .stderr(stderr)
         .spawn();
 
     let mut result = Expression::Atom(Atom::Nil);
@@ -202,12 +204,18 @@ pub fn eval(
                             Stdio::piped()
                         };
                         let mut args = to_args(environment, parts, false)?;
+                        let stderr = if environment.err_null {
+                            Stdio::null()
+                        } else {
+                            Stdio::inherit()
+                        };
                         run_command(
                             environment,
                             command,
                             &mut args,
                             stdin,
                             stdout,
+                            stderr,
                             data,
                             use_stdout,
                         )
@@ -245,6 +253,7 @@ fn build_default_environment<'a>() -> Environment<'a> {
     add_str_builtins(&mut data);
     add_list_builtins(&mut data);
     Environment {
+        err_null: false,
         data,
         procs,
         outer: None,

@@ -22,10 +22,12 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
     let args = args.iter();
     let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
     let root = Path::new(new_dir);
+    env::set_var("OLDPWD", env::current_dir()?);
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("{}", e);
         Ok(Expression::Atom(Atom::Nil))
     } else {
+        env::set_var("PWD", env::current_dir()?);
         Ok(Expression::Atom(Atom::True))
     }
 }
@@ -346,6 +348,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
         //add_builtins(&mut data);
         //add_math_builtins(&mut data);
         let mut enviro = Environment {
+            err_null: false,
             data,
             procs,
             outer: None,
@@ -410,6 +413,13 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
+fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    environment.err_null = true;
+    let res = builtin_progn(environment, args);
+    environment.err_null = false;
+    res
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -470,6 +480,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("or".to_string(), Expression::Func(builtin_or));
     data.insert("not".to_string(), Expression::Func(builtin_not));
     data.insert("null".to_string(), Expression::Func(builtin_not));
+    data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
 
     data.insert(
         "=".to_string(),
