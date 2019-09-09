@@ -150,10 +150,12 @@ pub fn eval(
                 match &command[..] {
                     "nil" => Ok(Expression::Atom(Atom::Nil)),
                     "|" | "pipe" => {
+                        environment.in_pipe = true;
                         let mut out = data_in;
                         for p in parts {
                             out = eval(environment, p, out, false)?;
                         }
+                        environment.in_pipe = false;
                         if use_stdout {
                             out.write(environment)?;
                             Ok(Expression::Atom(Atom::Nil))
@@ -217,7 +219,7 @@ pub fn eval(
                             stdout,
                             stderr,
                             data,
-                            use_stdout,
+                            use_stdout || !environment.in_pipe,
                         )
                     }
                 }
@@ -254,6 +256,7 @@ fn build_default_environment<'a>() -> Environment<'a> {
     add_list_builtins(&mut data);
     Environment {
         err_null: false,
+        in_pipe: false,
         data,
         procs,
         outer: None,

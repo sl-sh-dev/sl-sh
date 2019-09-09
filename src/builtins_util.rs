@@ -114,9 +114,9 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let mut dead_pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
         if let Some(child) = procs.get_mut(&key) {
-            if let Some(_status) = child.try_wait()? {
+            if let Some(status) = child.try_wait()? {
                 // XXX turn off for now but should get waits in the proper places and bring back.
-                //println!("Child {} ended with status {}", key, status);
+                println!("Child {} ended with status {}", key, status);
                 dead_pids.push(key);
             }
         }
@@ -138,6 +138,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
     }
     Environment {
         err_null: environment.err_null,
+        in_pipe: environment.in_pipe,
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),
@@ -148,6 +149,7 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
     let data: HashMap<String, Expression> = HashMap::new();
     Environment {
         err_null: environment.err_null,
+        in_pipe: environment.in_pipe,
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),

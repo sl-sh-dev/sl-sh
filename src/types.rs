@@ -196,6 +196,7 @@ impl Expression {
 #[derive(Clone, Debug)]
 pub struct Environment<'a> {
     pub err_null: bool,
+    pub in_pipe: bool,
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub outer: Option<&'a Environment<'a>>,

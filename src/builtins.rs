@@ -349,6 +349,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
         //add_math_builtins(&mut data);
         let mut enviro = Environment {
             err_null: false,
+            in_pipe: false,
             data,
             procs,
             outer: None,
