@@ -18,6 +18,10 @@
 	(str-cat-list "/" (path_list_trunc (str-split "/" base_pwd)))
 )))
 
-(set __prompt (fn () (
-	format "\x1b[32m[slsh]:" $HOSTNAME ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m "
+(set __prompt (fn () (progn
+	; XXX need to be able to test for symbol existance.
+	(if (is-def $HOSTNAME)
+	(format "\x1b[32m[slsh]:" $HOSTNAME ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m ")
+	(format "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m ")
+	)
 )))

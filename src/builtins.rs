@@ -421,6 +421,27 @@ fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::R
     res
 }
 
+fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-def takes one form (symbol)",
+        ));
+    }
+    if let Expression::Atom(Atom::Symbol(s)) = &args[0] {
+        if is_expression(environment, &s) {
+            Ok(Expression::Atom(Atom::True))
+        } else {
+            Ok(Expression::Atom(Atom::Nil))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-def takes a symbol to lookup",
+        ))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -482,6 +503,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("not".to_string(), Expression::Func(builtin_not));
     data.insert("null".to_string(), Expression::Func(builtin_not));
     data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
+    data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
 
     data.insert(
         "=".to_string(),

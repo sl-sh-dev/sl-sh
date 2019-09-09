@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::process::Child;
+use std::env;
 
 use crate::shell::*;
 use crate::types::*;
@@ -86,6 +87,23 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Expression
             Some(outer) => get_expression(outer, key),
             None => None,
         },
+    }
+}
+
+pub fn is_expression(environment: &Environment, key: &str) -> bool {
+    if key.starts_with('$') {
+        match env::var(&key[1..]) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    } else {
+        match environment.data.get(key) {
+            Some(_) => true,
+            None => match environment.outer {
+                Some(outer) => is_expression(outer, key),
+                None => false,
+            },
+        }
     }
 }
 
