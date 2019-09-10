@@ -2,6 +2,7 @@ use liner::Context;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -352,6 +353,56 @@ pub fn start_interactive() {
                 ErrorKind::Interrupted => {}
                 _ => println!("Error on input: {}", err),
             },
+        }
+    }
+}
+
+pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
+    let mut proc = Command::new(command)
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stdin(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    proc.wait()?;
+    Ok(())
+}
+
+pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
+    let mut environment = build_default_environment();
+    let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
+    for a in args {
+        exp_args.push(Expression::Atom(Atom::String(a.clone())));
+    }
+    environment
+        .data
+        .insert("args".to_string(), Expression::List(exp_args));
+    let contents = fs::read_to_string(command)?;
+    let tokens = tokenize(&contents);
+    let ast = parse(&tokens);
+    match ast {
+        Ok(Expression::List(list)) => {
+            for exp in list {
+                match eval(&mut environment, &exp, Expression::Atom(Atom::Nil), true) {
+                    Ok(_exp) => {}
+                    Err(err) => {
+                        eprintln!("{}", err);
+                        return Err(err);
+                    }
+                }
+            }
+            Ok(())
+        }
+        Ok(ast) => match eval(&mut environment, &ast, Expression::Atom(Atom::Nil), true) {
+            Ok(_exp) => Ok(()),
+            Err(err) => {
+                eprintln!("{}", err);
+                Err(err)
+            }
+        },
+        Err(err) => {
+            eprintln!("{:?}", err);
+            Err(io::Error::new(io::ErrorKind::Other, err.reason))
         }
     }
 }
