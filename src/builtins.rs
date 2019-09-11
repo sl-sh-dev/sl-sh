@@ -154,62 +154,46 @@ fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     Ok(last_eval)
 }
 
-fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args: Vec<Expression> = to_args(environment, &args, false)?;
+fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "export can only have two expressions",
-        ))
-    } else {
-        let mut args = args.iter_mut();
-        let key = args.next().unwrap().make_string(environment)?;
-        let val = args.next().unwrap().make_string(environment)?;
-        if !val.is_empty() {
-            env::set_var(key, val);
-        } else {
-            env::remove_var(key);
-        }
-        Ok(Expression::Atom(Atom::Nil))
-    }
-}
-
-fn builtin_set(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
-    if parts.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "set can only have two expressions",
         ))
     } else {
-        let mut parts = parts.iter();
-        let key = parts.next().unwrap();
+        let mut args = args.iter();
+        let key = args.next().unwrap();
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
                 return Err(io::Error::new(io::ErrorKind::Other, "invalid lvalue"));
             }
         };
-        if key.starts_with('$') {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "use export to set environment variables",
-            ));
-        }
         let val = eval(
             environment,
-            parts.next().unwrap(),
+            args.next().unwrap(),
             Expression::Atom(Atom::Nil),
             false,
         )?;
-        environment.data.insert(key, val);
-        /*if let Expression::Atom(atom) = val {
-            environment.data.insert(key, Expression::Atom(atom));
+        let val = match val {
+            Expression::Atom(atom) => Expression::Atom(atom),
+            Expression::List(list) => Expression::List(list),
+            Expression::Process(_pid) => Expression::Atom(Atom::String(
+                val.make_string(environment)
+                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+            )),
+            Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+        };
+        if key.starts_with('$') {
+            let val = val.make_string(environment)?;
+            if !val.is_empty() {
+                env::set_var(key[1..].to_string(), val);
+            } else {
+                env::remove_var(key[1..].to_string());
+            }
         } else {
-            environment.data.insert(
-                key,
-                Expression::Atom(Atom::String(val.make_string(environment)?)),
-            );
-        }*/
+            environment.data.insert(key, val);
+        }
         Ok(Expression::Atom(Atom::Nil))
     }
 }
@@ -492,7 +476,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
         Expression::Func(builtin_use_stdout),
     );
     data.insert("progn".to_string(), Expression::Func(builtin_progn));
-    data.insert("export".to_string(), Expression::Func(builtin_export));
     data.insert("set".to_string(), Expression::Func(builtin_set));
     data.insert("fn".to_string(), Expression::Func(builtin_fn));
     data.insert("let".to_string(), Expression::Func(builtin_let));

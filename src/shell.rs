@@ -289,10 +289,19 @@ pub fn start_interactive() {
     con.history.append_duplicate_entries = false;
     con.history.inc_append = true;
     con.history.load_duplicates = false;
+    con.key_bindings = liner::KeyBindings::Vi;
     if let Err(err) = con.history.set_file_name_and_load_history("tmp_history") {
         eprintln!("Error loading history: {}", err);
     }
     let mut environment = build_default_environment();
+    let home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => ".".to_string(),
+    };
+    let init_script = format!("{}/.config/slsh/slshrc", home);
+    if let Err(err) = run_script(&init_script, &mut environment) {
+        eprintln!("Failed to run init script {}: {}", init_script, err);
+    }
 
     loop {
         let hostname = match env::var("HOSTNAME") {
@@ -325,7 +334,7 @@ pub fn start_interactive() {
             .unwrap_or_else(|_| "ERROR".to_string())
         } else {
             format!(
-                "\x1b[32m{}:\x1b[34m{}\x1b[37m(TEST SHELL)\x1b[32m>\x1b[39m ",
+                "\x1b[32m{}:\x1b[34m{}\x1b[37m(slsh)\x1b[32m>\x1b[39m ",
                 hostname,
                 pwd.display()
             )
@@ -397,22 +406,14 @@ pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
-    let mut environment = build_default_environment();
-    let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
-    for a in args {
-        exp_args.push(Expression::Atom(Atom::String(a.clone())));
-    }
-    environment
-        .data
-        .insert("args".to_string(), Expression::List(exp_args));
-    let contents = fs::read_to_string(command)?;
+fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> {
+    let contents = fs::read_to_string(file_name)?;
     let tokens = tokenize(&contents);
     let ast = parse(&tokens);
     match ast {
         Ok(Expression::List(list)) => {
             for exp in list {
-                match eval(&mut environment, &exp, Expression::Atom(Atom::Nil), true) {
+                match eval(environment, &exp, Expression::Atom(Atom::Nil), true) {
                     Ok(_exp) => {}
                     Err(err) => {
                         eprintln!("{}", err);
@@ -422,7 +423,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
             }
             Ok(())
         }
-        Ok(ast) => match eval(&mut environment, &ast, Expression::Atom(Atom::Nil), true) {
+        Ok(ast) => match eval(environment, &ast, Expression::Atom(Atom::Nil), true) {
             Ok(_exp) => Ok(()),
             Err(err) => {
                 eprintln!("{}", err);
@@ -434,4 +435,16 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
             Err(io::Error::new(io::ErrorKind::Other, err.reason))
         }
     }
+}
+
+pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
+    let mut environment = build_default_environment();
+    let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
+    for a in args {
+        exp_args.push(Expression::Atom(Atom::String(a.clone())));
+    }
+    environment
+        .data
+        .insert("args".to_string(), Expression::List(exp_args));
+    run_script(command, &mut environment)
 }
