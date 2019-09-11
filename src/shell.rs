@@ -4,9 +4,12 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, ErrorKind, Write};
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::rc::Rc;
+
+use nix::sys::signal::{self, SigHandler, Signal};
 
 use crate::builtins::*;
 use crate::builtins_list::*;
@@ -31,12 +34,28 @@ fn run_command(
     for a in args {
         new_args.push(a.make_string(environment)?);
     }
-    let proc = Command::new(command)
+    let mut com_obj = Command::new(command);
+    com_obj
         .args(new_args)
         .stdin(stdin)
         .stdout(stdout)
-        .stderr(stderr)
-        .spawn();
+        .stderr(stderr);
+
+    unsafe {
+        com_obj.pre_exec(|| -> io::Result<()> {
+            // XXX TODO, do better with these unwraps.
+            /*let pgid = unistd::getpid();
+            if pgid != unistd::getpgrp() {
+                unistd::setpgid(pgid, pgid).unwrap();
+            }*/
+            signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+            Ok(())
+        });
+    }
+
+    let proc = com_obj.spawn();
 
     let mut result = Expression::Atom(Atom::Nil);
     match proc {
@@ -358,12 +377,22 @@ pub fn start_interactive() {
 }
 
 pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
-    let mut proc = Command::new(command)
-        .args(args)
+    let mut com = Command::new(command);
+    com.args(args)
         .stdout(Stdio::inherit())
         .stdin(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?;
+        .stderr(Stdio::inherit());
+
+    unsafe {
+        com.pre_exec(|| -> io::Result<()> {
+            signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+            Ok(())
+        });
+    }
+
+    let mut proc = com.spawn()?;
     proc.wait()?;
     Ok(())
 }
