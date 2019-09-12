@@ -190,7 +190,7 @@ fn setup_args_final(
     min_params: usize,
     use_rest: bool,
 ) -> io::Result<()> {
-    if vars.len() < min_params {
+    if vars.len() < min_params || (!use_rest && vars.len() > min_params) {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "wrong number of parameters",
