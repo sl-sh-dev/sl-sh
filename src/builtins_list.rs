@@ -211,6 +211,91 @@ fn builtin_list_setrest(
     }
 }
 
+fn builtin_str_append(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "append takes two forms (both lists or Strings)",
+        ));
+    }
+    let mut args = to_args(environment, &args, false)?;
+    let end = args.pop().unwrap();
+    let start = args.pop().unwrap();
+    if let Expression::Atom(Atom::String(end)) = end {
+        if let Expression::Atom(Atom::String(start)) = start {
+            let mut new_string = String::with_capacity(start.len() + end.len());
+            new_string.push_str(&start);
+            new_string.push_str(&end);
+            Ok(Expression::Atom(Atom::String(new_string)))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "append forms must both be lists or Strings",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "append forms must both be lists or Strings",
+        ))
+    }
+}
+
+fn builtin_list_append(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "append takes two forms (both lists or Strings)",
+        ));
+    }
+    let mut new_args = to_args(environment, &args, false)?;
+    let end_arg = new_args.pop().unwrap();
+    let start_arg = new_args.pop().unwrap();
+    if let Expression::List(mut end) = end_arg {
+        if let Expression::List(mut start) = start_arg {
+            let mut list: Vec<Expression> = Vec::with_capacity(start.len() + end.len());
+            for a in start.drain(..) {
+                list.push(a);
+            }
+            for a in end.drain(..) {
+                list.push(a);
+            }
+            Ok(Expression::List(list))
+        } else if let Expression::Atom(Atom::Nil) = start_arg {
+            Ok(Expression::List(end))
+        } else {
+            let msg = format!(
+                "append first form ({}) must be a list or String and match the second form (List)",
+                start_arg.display_type()
+            );
+            Err(io::Error::new(io::ErrorKind::Other, msg))
+        }
+    } else if let Expression::Atom(Atom::Nil) = end_arg {
+        if let Expression::List(start) = start_arg {
+            Ok(Expression::List(start))
+        } else if let Expression::Atom(Atom::Nil) = start_arg {
+            Ok(Expression::Atom(Atom::Nil))
+        } else {
+            let msg = format!(
+                "append first form ({}) must be a list or String and match the second form ({})",
+                start_arg.display_type(),
+                end_arg.display_type()
+            );
+            Err(io::Error::new(io::ErrorKind::Other, msg))
+        }
+    } else {
+        new_args.push(start_arg);
+        new_args.push(end_arg);
+        builtin_str_append(environment, &new_args)
+    }
+}
+
 pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("list".to_string(), Expression::Func(builtin_list));
     data.insert("first".to_string(), Expression::Func(builtin_list_first));
@@ -233,4 +318,5 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
         Expression::Func(builtin_list_setrest),
     );
     data.insert("setcdr".to_string(), Expression::Func(builtin_list_setrest));
+    data.insert("append".to_string(), Expression::Func(builtin_list_append));
 }

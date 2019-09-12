@@ -28,6 +28,7 @@ pub enum Atom {
     Symbol(String),
     String(String),
     Lambda(Lambda),
+    Macro(Lambda),
 }
 
 impl Atom {
@@ -39,7 +40,21 @@ impl Atom {
             Atom::Int(i) => format!("{}", i),
             Atom::Symbol(s) => s.clone(),
             Atom::String(s) => s.clone(),
-            Atom::Lambda(_) => "lambda".to_string(),
+            Atom::Lambda(l) => format!("Lambda ({:?}) ({:?})", l.params, l.body), //"lambda".to_string(),
+            Atom::Macro(m) => format!("Macro ({:?}) ({:?})", m.params, m.body), //"macro".to_string(),
+        }
+    }
+
+    pub fn display_type(&self) -> String {
+        match self {
+            Atom::Nil => "Nil".to_string(),
+            Atom::True => "True".to_string(),
+            Atom::Float(_) => "Float".to_string(),
+            Atom::Int(_) => "Int".to_string(),
+            Atom::Symbol(_) => "Symbol".to_string(),
+            Atom::String(_) => "String".to_string(),
+            Atom::Lambda(_) => "Lambda".to_string(),
+            Atom::Macro(_) => "Macro".to_string(),
         }
     }
 }
@@ -64,6 +79,15 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
+    pub fn display_type(&self) -> String {
+        match self {
+            Expression::Atom(a) => a.display_type(),
+            Expression::Process(_) => "Process".to_string(),
+            Expression::Func(_) => "Func".to_string(),
+            Expression::List(_) => "List".to_string(),
+        }
+    }
+
     fn pid_to_string(
         &self,
         procs: Rc<RefCell<HashMap<u32, Child>>>,

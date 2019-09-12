@@ -94,36 +94,29 @@ fn call_lambda(
     args: &[Expression],
 ) -> io::Result<Expression> {
     let mut new_environment = build_new_scope(environment);
-    if let Expression::List(l) = &*lambda.params {
-        let mut var_names: Vec<String> = Vec::with_capacity(l.len()); //to_args_str(&mut new_environment, &l, false)?;
-        for arg in l {
-            if let Expression::Atom(Atom::Symbol(s)) = arg {
-                var_names.push(s.clone());
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "parameter name must be symbol",
-                ));
-            }
-        }
-        let vars = to_args(&mut new_environment, args, false)?;
-        if var_names.len() != vars.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "wrong number of parameters",
-            ));
-        } else {
-            for (k, v) in var_names.iter().zip(vars.iter()) {
-                new_environment.data.insert(k.clone(), v.clone());
-            }
-        }
-    }
+    setup_args(&mut new_environment, &lambda.params, args, true)?;
     eval(
         &mut new_environment,
         &lambda.body,
         Expression::Atom(Atom::Nil),
         false,
     )
+}
+
+fn expand_macro(
+    environment: &mut Environment,
+    sh_macro: &Lambda,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    let mut new_environment = build_new_scope(environment);
+    setup_args(&mut new_environment, &sh_macro.params, args, false)?;
+    let expansion = eval(
+        &mut new_environment,
+        &sh_macro.body,
+        Expression::Atom(Atom::Nil),
+        false,
+    )?;
+    eval(environment, &expansion, Expression::Atom(Atom::Nil), false)
 }
 
 pub fn eval(
@@ -163,6 +156,8 @@ pub fn eval(
                     f(environment, &parts)
                 } else if let Expression::Atom(Atom::Lambda(f)) = exp {
                     call_lambda(environment, &f, parts)
+                } else if let Expression::Atom(Atom::Macro(m)) = exp {
+                    expand_macro(environment, &m, parts)
                 } else {
                     let exp = exp.clone();
                     eval(environment, &exp, data_in, use_stdout)

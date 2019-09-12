@@ -32,7 +32,17 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
     }
 }
 
-//fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {}
+fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "eval can only have one form",
+        ))
+    } else {
+        let args = to_args(environment, args, false)?;
+        eval(environment, &args[0], Expression::Atom(Atom::Nil), false)
+    }
+}
 
 fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut args: Vec<Expression> = to_args(environment, args, false)?;
@@ -427,6 +437,33 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 3 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "defmacro can only have three forms (symbol, bindings and body)",
+        ))
+    } else {
+        let mut args = args.iter();
+        let name = args.next().unwrap();
+        let params = args.next().unwrap();
+        let body = args.next().unwrap();
+        if let Expression::Atom(Atom::Symbol(s)) = name {
+            let m = Expression::Atom(Atom::Macro(Lambda {
+                params: Box::new(params.clone()),
+                body: Box::new(body.clone()),
+            }));
+            environment.data.insert(s.clone(), m);
+            Ok(Expression::Atom(Atom::Nil))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "defmacro first argument must be a symbol",
+            ))
+        }
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -466,6 +503,7 @@ macro_rules! ensure_tonicity_all {
 
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("cd".to_string(), Expression::Func(builtin_cd));
+    data.insert("eval".to_string(), Expression::Func(builtin_eval));
     data.insert("load".to_string(), Expression::Func(builtin_load));
     data.insert("if".to_string(), Expression::Func(builtin_if));
     data.insert("print".to_string(), Expression::Func(builtin_print));
@@ -488,6 +526,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("null".to_string(), Expression::Func(builtin_not));
     data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
     data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
+    data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
 
     data.insert(
         "=".to_string(),
