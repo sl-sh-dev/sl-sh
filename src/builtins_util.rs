@@ -183,6 +183,24 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     }
 }
 
+pub fn expand_tilde(path: &str) -> Option<String> {
+    let mut home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => "/".to_string(),
+    };
+    if !home.ends_with('/') {
+        home.push('/');
+    }
+    if path == "~" {
+        Some(home)
+    } else if path.contains("~/") {
+        let new_path = path.replace("~/", &home);
+        Some(new_path)
+    } else {
+        None
+    }
+}
+
 fn setup_args_final(
     environment: &mut Environment,
     mut var_names: Vec<String>,

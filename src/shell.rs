@@ -226,6 +226,10 @@ pub fn eval(
                         let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
                         for arg in args.drain(..) {
                             if let Expression::Atom(Atom::String(s)) = &arg {
+                                let s = match expand_tilde(&s) {
+                                    Some(p) => p,
+                                    None => s.to_string(), // XXX not great.
+                                };
                                 if s.contains('*')
                                     || s.contains('?')
                                     || s.contains('[')
@@ -257,15 +261,15 @@ pub fn eval(
                                                 }
                                             }
                                             if i == 0 {
-                                                nargs.push(arg);
+                                                nargs.push(Expression::Atom(Atom::String(s)));
                                             }
                                         }
                                         Err(_err) => {
-                                            nargs.push(arg);
+                                            nargs.push(Expression::Atom(Atom::String(s)));
                                         }
                                     }
                                 } else {
-                                    nargs.push(arg);
+                                    nargs.push(Expression::Atom(Atom::String(s)));
                                 }
                             } else {
                                 nargs.push(arg);

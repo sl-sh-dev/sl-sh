@@ -14,21 +14,35 @@ use crate::shell::*;
 use crate::types::*;
 
 fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let home = match env::var("HOME") {
-        Ok(val) => val,
-        Err(_) => "/".to_string(),
-    };
-    let args = to_args_str(environment, args, false)?;
-    let args = args.iter();
-    let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
-    let root = Path::new(new_dir);
-    env::set_var("OLDPWD", env::current_dir()?);
-    if let Err(e) = env::set_current_dir(&root) {
-        eprintln!("{}", e);
-        Ok(Expression::Atom(Atom::Nil))
+    if args.len() > 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "cd can not have more then one form",
+        ))
     } else {
-        env::set_var("PWD", env::current_dir()?);
-        Ok(Expression::Atom(Atom::True))
+        let mut home = match env::var("HOME") {
+            Ok(val) => val,
+            Err(_) => "/".to_string(),
+        };
+        let args = to_args_str(environment, args, false)?;
+        let args = args.iter();
+        let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
+        let expand_dir = expand_tilde(new_dir);
+        let new_dir = if expand_dir.is_some() {
+            home = expand_dir.unwrap();
+            &home
+        } else {
+            new_dir
+        };
+        let root = Path::new(new_dir);
+        env::set_var("OLDPWD", env::current_dir()?);
+        if let Err(e) = env::set_current_dir(&root) {
+            eprintln!("Error changing to {}, {}", root.display(), e);
+            Ok(Expression::Atom(Atom::Nil))
+        } else {
+            env::set_var("PWD", env::current_dir()?);
+            Ok(Expression::Atom(Atom::True))
+        }
     }
 }
 
@@ -185,7 +199,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
             Expression::Atom(Atom::Nil),
             false,
         )?;
-        let val = match val {
+        let mut val = match val {
             Expression::Atom(atom) => Expression::Atom(atom),
             Expression::List(list) => Expression::List(list),
             Expression::Process(_pid) => Expression::Atom(Atom::String(
@@ -196,12 +210,23 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         };
         if key.starts_with('$') {
             let val = val.make_string(environment)?;
+            let val = match expand_tilde(&val) {
+                Some(v) => v,
+                None => val,
+            };
             if !val.is_empty() {
                 env::set_var(key[1..].to_string(), val);
             } else {
                 env::remove_var(key[1..].to_string());
             }
         } else {
+            if let Expression::Atom(Atom::String(vs)) = val {
+                let vs = match expand_tilde(&vs) {
+                    Some(v) => v,
+                    None => vs,
+                };
+                val = Expression::Atom(Atom::String(vs));
+            }
             environment.data.insert(key, val);
         }
         Ok(Expression::Atom(Atom::Nil))
