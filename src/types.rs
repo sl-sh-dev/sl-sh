@@ -6,7 +6,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
-use crate::builtins_util::wait_process;
+use crate::environment::*;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -215,13 +215,4 @@ impl Expression {
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Environment<'a> {
-    pub err_null: bool,
-    pub in_pipe: bool,
-    pub data: HashMap<String, Expression>,
-    pub procs: Rc<RefCell<HashMap<u32, Child>>>,
-    pub outer: Option<&'a Environment<'a>>,
 }

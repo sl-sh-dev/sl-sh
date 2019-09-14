@@ -18,6 +18,7 @@ use crate::builtins_math::*;
 use crate::builtins_str::*;
 use crate::builtins_util::*;
 use crate::completions::*;
+use crate::environment::*;
 use crate::script::*;
 use crate::types::*;
 

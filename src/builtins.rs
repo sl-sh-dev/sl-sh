@@ -9,6 +9,7 @@ use std::process::Child;
 use std::rc::Rc;
 
 use crate::builtins_util::*;
+use crate::environment::*;
 use crate::script::*;
 use crate::shell::*;
 use crate::types::*;

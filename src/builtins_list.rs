@@ -3,6 +3,7 @@ use std::hash::BuildHasher;
 use std::io;
 
 use crate::builtins_util::*;
+use crate::environment::*;
 use crate::shell::*;
 use crate::types::*;
 

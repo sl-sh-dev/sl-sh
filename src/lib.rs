@@ -5,6 +5,9 @@ extern crate nix;
 pub mod types;
 pub use crate::types::*;
 
+pub mod environment;
+pub use crate::environment::*;
+
 pub mod shell;
 pub use crate::shell::*;
 

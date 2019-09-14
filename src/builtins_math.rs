@@ -3,6 +3,7 @@ use std::hash::BuildHasher;
 use std::io;
 
 use crate::builtins_util::*;
+use crate::environment::*;
 use crate::types::*;
 
 pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
