@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::rc::Rc;
 
+use glob::glob;
 use nix::sys::signal::{self, SigHandler, Signal};
 
 use crate::builtins::*;
@@ -222,6 +223,54 @@ pub fn eval(
                             Stdio::piped()
                         };
                         let mut args = to_args(environment, parts, false)?;
+                        let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
+                        for arg in args.drain(..) {
+                            if let Expression::Atom(Atom::String(s)) = &arg {
+                                if s.contains('*')
+                                    || s.contains('?')
+                                    || s.contains('[')
+                                    || s.contains('{')
+                                {
+                                    match glob(&s) {
+                                        Ok(paths) => {
+                                            let mut i = 0;
+                                            for p in paths {
+                                                match p {
+                                                    Ok(p) => {
+                                                        i += 1;
+                                                        if let Some(p) = p.to_str() {
+                                                            nargs.push(Expression::Atom(
+                                                                Atom::String(p.to_string()),
+                                                            ));
+                                                        }
+                                                    }
+                                                    Err(err) => {
+                                                        let msg = format!(
+                                                            "glob error on while iterating {}, {}",
+                                                            s, err
+                                                        );
+                                                        return Err(io::Error::new(
+                                                            io::ErrorKind::Other,
+                                                            msg,
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                            if i == 0 {
+                                                nargs.push(arg);
+                                            }
+                                        }
+                                        Err(_err) => {
+                                            nargs.push(arg);
+                                        }
+                                    }
+                                } else {
+                                    nargs.push(arg);
+                                }
+                            } else {
+                                nargs.push(arg);
+                            }
+                        }
                         let stderr = if environment.err_null {
                             Stdio::null()
                         } else {
@@ -230,7 +279,7 @@ pub fn eval(
                         run_command(
                             environment,
                             command,
-                            &mut args,
+                            &mut nargs,
                             stdin,
                             stdout,
                             stderr,
