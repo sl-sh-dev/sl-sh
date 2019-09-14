@@ -5,15 +5,42 @@ use std::io;
 use std::process::Child;
 use std::rc::Rc;
 
+use crate::builtins::add_builtins;
+use crate::builtins_list::add_list_builtins;
+use crate::builtins_math::add_math_builtins;
+use crate::builtins_str::add_str_builtins;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
+pub struct EnvState {
+    pub in_recur: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct Environment<'a> {
+    pub state: Rc<RefCell<EnvState>>,
     pub err_null: bool,
     pub in_pipe: bool,
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub outer: Option<&'a Environment<'a>>,
+}
+
+pub fn build_default_environment<'a>() -> Environment<'a> {
+    let mut data: HashMap<String, Expression> = HashMap::new();
+    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+    add_builtins(&mut data);
+    add_math_builtins(&mut data);
+    add_str_builtins(&mut data);
+    add_list_builtins(&mut data);
+    Environment {
+        state: Rc::new(RefCell::new(EnvState { in_recur: false })),
+        err_null: false,
+        in_pipe: false,
+        data,
+        procs,
+        outer: None,
+    }
 }
 
 pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
@@ -25,6 +52,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
         data.insert(k, v);
     }
     Environment {
+        state: environment.state.clone(),
         err_null: environment.err_null,
         in_pipe: environment.in_pipe,
         data,
@@ -36,6 +64,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
 pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> {
     let data: HashMap<String, Expression> = HashMap::new();
     Environment {
+        state: environment.state.clone(),
         err_null: environment.err_null,
         in_pipe: environment.in_pipe,
         data,

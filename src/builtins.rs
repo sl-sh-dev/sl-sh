@@ -366,9 +366,9 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     clone_symbols(environment, &mut data);
     let _child = std::thread::spawn(move || {
         let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-        //add_builtins(&mut data);
-        //add_math_builtins(&mut data);
+        let state = Rc::new(RefCell::new(EnvState { in_recur: false }));
         let mut enviro = Environment {
+            state,
             err_null: false,
             in_pipe: false,
             data,

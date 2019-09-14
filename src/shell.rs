@@ -1,21 +1,14 @@
 use liner::Context;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::rc::Rc;
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 
 use glob::glob;
 use nix::sys::signal::{self, SigHandler, Signal};
 
-use crate::builtins::*;
-use crate::builtins_list::*;
-use crate::builtins_math::*;
-use crate::builtins_str::*;
 use crate::builtins_util::*;
 use crate::completions::*;
 use crate::environment::*;
@@ -314,22 +307,6 @@ pub fn eval(
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Process(pid) => Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
-    }
-}
-
-fn build_default_environment<'a>() -> Environment<'a> {
-    let mut data: HashMap<String, Expression> = HashMap::new();
-    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    add_builtins(&mut data);
-    add_math_builtins(&mut data);
-    add_str_builtins(&mut data);
-    add_list_builtins(&mut data);
-    Environment {
-        err_null: false,
-        in_pipe: false,
-        data,
-        procs,
-        outer: None,
     }
 }
 
