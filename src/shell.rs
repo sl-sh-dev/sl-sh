@@ -251,24 +251,80 @@ pub fn start_interactive() {
     }
 }
 
-pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
-    let mut com = Command::new(command);
-    com.args(args)
-        .stdout(Stdio::inherit())
-        .stdin(Stdio::inherit())
-        .stderr(Stdio::inherit());
+fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> io::Result<()> {
+    let mut in_string = false;
+    let mut in_stringd = false;
+    let mut token = String::new();
+    let mut last_ch = ' ';
+    for ch in input.chars() {
+        if ch == '\'' && last_ch != '\\' {
+            // Kakoune bug "
+            in_string = !in_string;
+            if !in_string {
+                nargs.push(token);
+                token = String::new();
+            }
+            last_ch = ch;
+            continue;
+        }
+        if ch == '"' && last_ch != '\\' {
+            // Kakoune bug "
+            in_stringd = !in_stringd;
+            if !in_stringd {
+                nargs.push(token);
+                token = String::new();
+            }
+            last_ch = ch;
+            continue;
+        }
+        if in_string || in_stringd {
+            token.push(ch);
+        } else if ch == ' ' {
+            if !token.is_empty() {
+                nargs.push(token);
+                token = String::new();
+            }
+        } else {
+            token.push(ch);
+        }
+        last_ch = ch;
+    }
+    if !token.is_empty() {
+        nargs.push(token);
+    }
+    Ok(())
+}
 
-    unsafe {
-        com.pre_exec(|| -> io::Result<()> {
-            signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
-            signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
-            signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
-            Ok(())
-        });
+pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
+    // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
+    // and make it work.
+    let mut nargs: Vec<String> = Vec::new();
+    parse_one_run_command_line(command, &mut nargs)?;
+    for arg in args {
+        parse_one_run_command_line(&arg, &mut nargs)?;
     }
 
-    let mut proc = com.spawn()?;
-    proc.wait()?;
+    if !nargs.is_empty() {
+        let mut com = Command::new(&nargs[0]); //command);
+        if nargs.len() > 1 {
+            com.args(&nargs[1..]);
+        }
+        com.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+
+        unsafe {
+            com.pre_exec(|| -> io::Result<()> {
+                signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
+                signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+                Ok(())
+            });
+        }
+
+        let mut proc = com.spawn()?;
+        proc.wait()?;
+    }
     Ok(())
 }
 
