@@ -6,6 +6,7 @@ use std::process::Child;
 use std::rc::Rc;
 
 use crate::builtins::add_builtins;
+use crate::builtins_file::add_file_builtins;
 use crate::builtins_list::add_list_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_str::add_str_builtins;
@@ -15,6 +16,19 @@ use crate::types::*;
 pub struct EnvState {
     pub recur_num_args: Option<usize>,
     pub gensym_count: u32,
+    pub stdout_file: Option<String>,
+    pub stderr_file: Option<String>,
+}
+
+impl Default for EnvState {
+    fn default() -> Self {
+        EnvState {
+            recur_num_args: None,
+            gensym_count: 0,
+            stdout_file: None,
+            stderr_file: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -34,11 +48,9 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
     add_math_builtins(&mut data);
     add_str_builtins(&mut data);
     add_list_builtins(&mut data);
+    add_file_builtins(&mut data);
     Environment {
-        state: Rc::new(RefCell::new(EnvState {
-            recur_num_args: None,
-            gensym_count: 0,
-        })),
+        state: Rc::new(RefCell::new(EnvState::default())),
         err_null: false,
         in_pipe: false,
         data,
@@ -121,14 +133,11 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
 
 pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<()> {
     let mut procs = environment.procs.borrow_mut();
-    let mut found = false;
     if let Some(child) = procs.get_mut(&pid) {
         child.wait()?;
-        found = true;
     }
-    if found {
-        procs.remove(&pid);
-    }
+    // Keep the pids for now, reap_procs should reap them.  This gives stuff a
+    // chance to grab output, exit status, etc.
     Ok(())
 }
 
@@ -139,8 +148,6 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     for key in keys {
         if let Some(child) = procs.get_mut(&key) {
             if let Some(_status) = child.try_wait()? {
-                // XXX turn off for now but should get waits in the proper places and bring back.
-                //println!("Child {} ended with status {}", key, status);
                 dead_pids.push(key);
             }
         }

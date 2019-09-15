@@ -1,6 +1,6 @@
 use liner::Context;
 use std::env;
-use std::fs;
+use std::fs::{self, File};
 use std::io::{self, ErrorKind, Write};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -237,6 +237,9 @@ pub fn eval(
                         };
                         let stdout = if use_stdout {
                             Stdio::inherit()
+                        } else if let Some(s) = &environment.state.borrow().stdout_file {
+                            let outputs = File::create(s)?;
+                            Stdio::from(outputs)
                         } else {
                             Stdio::piped()
                         };
@@ -295,6 +298,9 @@ pub fn eval(
                         }
                         let stderr = if environment.err_null {
                             Stdio::null()
+                        } else if let Some(s) = &environment.state.borrow().stderr_file {
+                            let outputs = File::create(s)?;
+                            Stdio::from(outputs)
                         } else {
                             Stdio::inherit()
                         };
@@ -330,7 +336,7 @@ pub fn eval(
         }
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
-        Expression::Process(pid) => Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
+        Expression::Process(pid) => Ok(Expression::Process(*pid)), //Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
     }
 }
 

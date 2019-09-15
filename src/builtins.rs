@@ -171,7 +171,7 @@ fn builtin_use_stdout(
     Ok(last_eval)
 }
 
-fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut last_eval = Expression::Atom(Atom::Nil);
     for a in args {
         last_eval = eval(environment, a, Expression::Atom(Atom::Nil), false)?;
@@ -374,10 +374,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     clone_symbols(environment, &mut data);
     let _child = std::thread::spawn(move || {
         let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-        let state = Rc::new(RefCell::new(EnvState {
-            recur_num_args: None,
-            gensym_count: 0,
-        }));
+        let state = Rc::new(RefCell::new(EnvState::default()));
         let mut enviro = Environment {
             state,
             err_null: false,
@@ -444,13 +441,6 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
     } else {
         Ok(Expression::Atom(Atom::Nil))
     }
-}
-
-fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.err_null = true;
-    let res = builtin_progn(environment, args);
-    environment.err_null = false;
-    res
 }
 
 fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -587,7 +577,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("or".to_string(), Expression::Func(builtin_or));
     data.insert("not".to_string(), Expression::Func(builtin_not));
     data.insert("null".to_string(), Expression::Func(builtin_not));
-    data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
     data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
     data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
     data.insert("recur".to_string(), Expression::Func(builtin_recur));

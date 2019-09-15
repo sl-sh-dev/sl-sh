@@ -95,7 +95,6 @@ impl Expression {
     ) -> io::Result<String> {
         match procs.borrow_mut().get_mut(&pid) {
             Some(child) => {
-                //match &child.stdout {
                 if child.stdout.is_some() {
                     let mut buffer = String::new();
                     child.stdout.as_mut().unwrap().read_to_string(&mut buffer)?;
@@ -161,9 +160,9 @@ impl Expression {
         }
     }
 
-    pub fn write(&self, environment: &Environment) -> io::Result<()> {
+    pub fn writef(&self, environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
         match self {
-            Expression::Atom(a) => print!("{}", a.to_string()),
+            Expression::Atom(a) => write!(writer, "{}", a.to_string())?,
             Expression::Process(pid) => {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
@@ -172,12 +171,10 @@ impl Expression {
                         if child.stdout.is_some() {
                             let out = child.stdout.as_mut().unwrap();
                             let mut buf = [0; 1024];
-                            let stdout = io::stdout();
-                            let mut handle = stdout.lock();
                             loop {
                                 match out.read(&mut buf) {
                                     Ok(0) => break,
-                                    Ok(_) => handle.write_all(&buf)?,
+                                    Ok(n) => writer.write_all(&buf[..n])?,
                                     Err(err) => return Err(err),
                                 }
                             }
@@ -205,14 +202,21 @@ impl Expression {
                 ))
             }
             Expression::List(list) => {
-                print!("( ");
+                write!(writer, "( ")?;
                 for exp in list {
-                    exp.write(environment)?;
-                    print!(" ");
+                    exp.writef(environment, writer)?;
+                    write!(writer, " ")?;
                 }
-                print!(")");
+                write!(writer, ")")?;
             }
         }
+        writer.flush()?;
         Ok(())
+    }
+
+    pub fn write(&self, environment: &Environment) -> io::Result<()> {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        self.writef(environment, &mut handle)
     }
 }
