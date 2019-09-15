@@ -143,12 +143,12 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
 
 fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args: Vec<Expression> = to_args(environment, args, false)?;
-    print(environment, args, false)
+    print(environment, &args, false)
 }
 
 fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args: Vec<Expression> = to_args(environment, args, false)?;
-    print(environment, args, true)
+    print(environment, &args, true)
 }
 
 fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -187,11 +187,19 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         ))
     } else {
         let mut args = args.iter();
-        let key = args.next().unwrap();
+        let key = eval(
+            environment,
+            args.next().unwrap(),
+            Expression::Atom(Atom::Nil),
+            false,
+        )?;
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
-                return Err(io::Error::new(io::ErrorKind::Other, "invalid lvalue"));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "set's first form must evaluate to a symbol",
+                ));
             }
         };
         let val = eval(
@@ -366,7 +374,10 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     clone_symbols(environment, &mut data);
     let _child = std::thread::spawn(move || {
         let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-        let state = Rc::new(RefCell::new(EnvState { in_recur: false }));
+        let state = Rc::new(RefCell::new(EnvState {
+            recur_num_args: None,
+            gensym_count: 0,
+        }));
         let mut enviro = Environment {
             state,
             err_null: false,
@@ -490,6 +501,32 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
+fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let mut args = to_args(environment, args, false)?;
+    let mut arg_list: Vec<Expression> = Vec::with_capacity(args.len());
+    for a in args.drain(..) {
+        arg_list.push(a.clone());
+    }
+    environment.state.borrow_mut().recur_num_args = Some(arg_list.len());
+    Ok(Expression::List(arg_list))
+}
+
+fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if !args.is_empty() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "gensym takes to arguments",
+        ))
+    } else {
+        let gensym_count = &mut environment.state.borrow_mut().gensym_count;
+        *gensym_count += 1;
+        Ok(Expression::Atom(Atom::Symbol(format!(
+            "gs::{}",
+            *gensym_count
+        ))))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -553,6 +590,8 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
     data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
     data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
+    data.insert("recur".to_string(), Expression::Func(builtin_recur));
+    data.insert("gensym".to_string(), Expression::Func(builtin_gensym));
 
     data.insert(
         "=".to_string(),

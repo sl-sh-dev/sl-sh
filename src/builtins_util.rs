@@ -34,7 +34,7 @@ pub fn to_args_str(
 
 pub fn print(
     environment: &mut Environment,
-    args: Vec<Expression>,
+    args: &[Expression],
     add_newline: bool,
 ) -> io::Result<Expression> {
     for a in args {

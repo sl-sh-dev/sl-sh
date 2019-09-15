@@ -1,0 +1,38 @@
+(defmacro setq (sym bind)
+	`(set (quote ,sym) ,bind)
+)
+
+(defmacro loop (params bindings body)
+	(let ((loop-fn-name (gensym)))
+		`(progn
+			(setq ,loop-fn-name (fn ,params ,body))
+			(eval (append (quote (,loop-fn-name)) ,bindings))
+		)
+	)
+)
+
+(defmacro loop-times (times body)
+	(let ((idx-name (gensym)))
+	(loop (idx-name) `(,times) (progn
+		(eval body)
+		(if (> idx-name 1) (recur (- idx-name 1)))
+	))
+	)
+)
+
+(defmacro for-each (bind in_list body)
+	(loop (plist) `(,in_list) (progn
+		(set bind (first plist))
+		(eval body)
+		(if (> (length plist) 1) (recur (rest plist)))
+	))
+)
+
+(defmacro for-each-idx (bind idx_bind in_list body)
+	(loop (plist idx) `(,in_list 0) (progn
+		(set bind (first plist))
+		(set idx_bind idx)
+		(eval body)
+		(if (> (length plist) 1) (recur (rest plist) (+ idx 1)))
+	))
+)

@@ -73,6 +73,8 @@ pub fn tokenize(text: &str) -> Vec<String> {
                 tokens.push(",".to_string());
             } else if is_whitespace(ch) {
                 save_token!(tokens, token);
+            } else if ch == '\\' && last_ch != '\\' {
+                // Do nothing...
             } else {
                 token.push(ch);
             }

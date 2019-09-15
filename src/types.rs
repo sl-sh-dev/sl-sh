@@ -161,7 +161,7 @@ impl Expression {
         }
     }
 
-    pub fn write(self, environment: &Environment) -> io::Result<()> {
+    pub fn write(&self, environment: &Environment) -> io::Result<()> {
         match self {
             Expression::Atom(a) => print!("{}", a.to_string()),
             Expression::Process(pid) => {
@@ -196,7 +196,7 @@ impl Expression {
                     }
                 }
                 drop(procs);
-                wait_process(environment, pid)?;
+                wait_process(environment, *pid)?;
             }
             Expression::Func(_) => {
                 return Err(io::Error::new(

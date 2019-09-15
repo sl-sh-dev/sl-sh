@@ -89,13 +89,32 @@ fn call_lambda(
     args: &[Expression],
 ) -> io::Result<Expression> {
     let mut new_environment = build_new_scope(environment);
+    let mut looping = true;
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
     setup_args(&mut new_environment, &lambda.params, args, true)?;
-    eval(
-        &mut new_environment,
-        &lambda.body,
-        Expression::Atom(Atom::Nil),
-        false,
-    )
+    while looping {
+        last_eval = eval(
+            &mut new_environment,
+            &lambda.body,
+            Expression::Atom(Atom::Nil),
+            false,
+        );
+        looping = environment.state.borrow().recur_num_args.is_some();
+        if looping {
+            let recur_args = environment.state.borrow().recur_num_args.unwrap();
+            environment.state.borrow_mut().recur_num_args = None;
+            if let Ok(Expression::List(new_args)) = &last_eval {
+                if recur_args != new_args.len() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Called recur in a non-tail position.",
+                    ));
+                }
+                setup_args(&mut new_environment, &lambda.params, &new_args, false)?;
+            }
+        }
+    }
+    last_eval
 }
 
 fn expand_macro(
@@ -120,6 +139,14 @@ pub fn eval(
     data_in: Expression,
     use_stdout: bool,
 ) -> io::Result<Expression> {
+    let in_recur = environment.state.borrow().recur_num_args.is_some();
+    if in_recur {
+        environment.state.borrow_mut().recur_num_args = None;
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Called recur in a non-tail position.",
+        ));
+    }
     match expression {
         Expression::List(parts) => {
             let (command, parts) = match parts.split_first() {
@@ -132,14 +159,11 @@ pub fn eval(
             let command = match command {
                 Expression::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    eprintln!(
+                    let msg = format!(
                         "Not a valid command {}, must be a symbol.",
                         command.make_string(environment)?
                     );
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Not a valid command, must be a symbol.",
-                    ));
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
                 }
             };
             if command.is_empty() {

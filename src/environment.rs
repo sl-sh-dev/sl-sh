@@ -13,7 +13,8 @@ use crate::types::*;
 
 #[derive(Clone, Debug)]
 pub struct EnvState {
-    pub in_recur: bool,
+    pub recur_num_args: Option<usize>,
+    pub gensym_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -34,7 +35,10 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
     add_str_builtins(&mut data);
     add_list_builtins(&mut data);
     Environment {
-        state: Rc::new(RefCell::new(EnvState { in_recur: false })),
+        state: Rc::new(RefCell::new(EnvState {
+            recur_num_args: None,
+            gensym_count: 0,
+        })),
         err_null: false,
         in_pipe: false,
         data,
