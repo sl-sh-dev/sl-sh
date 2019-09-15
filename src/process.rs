@@ -8,6 +8,7 @@ use nix::sys::signal::{self, SigHandler, Signal};
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::shell::*;
 use crate::types::*;
 
 fn run_command(
@@ -18,7 +19,6 @@ fn run_command(
     stdout: Stdio,
     stderr: Stdio,
     data_in: Option<Atom>,
-    wait: bool,
 ) -> io::Result<Expression> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
@@ -50,7 +50,7 @@ fn run_command(
     let mut result = Expression::Atom(Atom::Nil);
     match proc {
         Ok(mut proc) => {
-            if wait {
+            if !environment.in_pipe {
                 if let Err(err) = proc.wait() {
                     eprintln!("Failed to wait for {}: {}", command, err);
                 }
@@ -73,21 +73,45 @@ fn run_command(
     Ok(result)
 }
 
+fn get_output(environment: &Environment, status: &Option<IOState>) -> io::Result<Stdio> {
+    let res = match status {
+        Some(IOState::FileAppend(f)) => {
+            let outputs = File::create(f)?;
+            Stdio::from(outputs)
+        }
+        Some(IOState::FileOverwrite(f)) => {
+            let outputs = File::create(f)?;
+            Stdio::from(outputs)
+        }
+        Some(IOState::Null) => Stdio::null(),
+        Some(IOState::Inherit) => Stdio::inherit(),
+        Some(IOState::Pipe) => Stdio::piped(),
+        None => {
+            let use_stdout = environment.state.borrow().eval_level < 3 && !environment.in_pipe;
+            if use_stdout {
+                Stdio::inherit()
+            } else {
+                Stdio::piped()
+            }
+        }
+    };
+    Ok(res)
+}
+
 pub fn do_command(
     environment: &mut Environment,
     command: &str,
     parts: &[Expression],
-    data_in: Expression,
-    use_stdout: bool,
+    data_in: Option<Expression>,
 ) -> io::Result<Expression> {
     let mut data = None;
     let stdin = match data_in {
-        Expression::Atom(Atom::Nil) => Stdio::inherit(),
-        Expression::Atom(atom) => {
+        Some(Expression::Atom(Atom::Nil)) => Stdio::inherit(),
+        Some(Expression::Atom(atom)) => {
             data = Some(atom);
             Stdio::piped()
         }
-        Expression::Process(pid) => {
+        Some(Expression::Process(pid)) => {
             let procs = environment.procs.clone();
             let mut procs = procs.borrow_mut();
             if let Some(proc) = procs.get_mut(&pid) {
@@ -102,36 +126,23 @@ pub fn do_command(
                 Stdio::inherit()
             }
         }
-        Expression::Func(_) => {
+        Some(Expression::Func(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (special form).",
             ))
         }
-        Expression::List(_) => {
+        Some(Expression::List(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (form).",
             ))
         }
+        None => Stdio::inherit(),
     };
-    let stdout = if use_stdout {
-        Stdio::inherit()
-    } else if let Some(s) = &environment.state.borrow().stdout_file {
-        let outputs = File::create(s)?;
-        Stdio::from(outputs)
-    } else {
-        Stdio::piped()
-    };
-    let stderr = if environment.err_null {
-        Stdio::null()
-    } else if let Some(s) = &environment.state.borrow().stderr_file {
-        let outputs = File::create(s)?;
-        Stdio::from(outputs)
-    } else {
-        Stdio::inherit()
-    };
-    let mut args = to_args(environment, parts, false)?;
+    let stdout = get_output(environment, &environment.state.borrow().stdout_status)?;
+    let stderr = get_output(environment, &environment.state.borrow().stderr_status)?;
+    let mut args = to_args(environment, parts)?;
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {
         if let Expression::Atom(Atom::String(s)) = &arg {
@@ -181,6 +192,38 @@ pub fn do_command(
         stdout,
         stderr,
         data,
-        use_stdout || !environment.in_pipe,
     )
+}
+
+pub fn do_pipe(
+    environment: &mut Environment,
+    parts: &[Expression],
+    data_in: Option<Expression>,
+) -> io::Result<Expression> {
+    let old_pipe_in = environment.in_pipe;
+    let old_out_status = environment.state.borrow().stdout_status.clone();
+    environment.in_pipe = true;
+    let mut out = match data_in {
+        Some(exp) => exp,
+        None => Expression::Atom(Atom::Nil),
+    };
+    environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
+    let mut i = 1; // Meant 1 here.
+    for p in parts {
+        if i == parts.len() && !old_pipe_in {
+            environment.state.borrow_mut().stdout_status = old_out_status.clone();
+            environment.in_pipe = false; // End of the pipe and want to wait.
+        }
+        let res = pipe_eval(environment, p, Some(out));
+        if let Err(err) = res {
+            environment.in_pipe = old_pipe_in;
+            environment.state.borrow_mut().stdout_status = old_out_status;
+            return Err(err);
+        }
+        out = res.unwrap();
+        i += 1;
+    }
+    environment.in_pipe = old_pipe_in;
+    environment.state.borrow_mut().stdout_status = old_out_status;
+    Ok(out)
 }

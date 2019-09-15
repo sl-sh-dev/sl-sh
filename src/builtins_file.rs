@@ -9,9 +9,9 @@ use crate::shell::*;
 use crate::types::*;
 
 fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.err_null = true;
+    environment.state.borrow_mut().stderr_status = Some(IOState::Null);
     let res = builtin_progn(environment, args);
-    environment.err_null = false;
+    environment.state.borrow_mut().stderr_status = None;
     res
 }
 
@@ -22,13 +22,17 @@ fn builtin_file_rdr(environment: &mut Environment, args: &[Expression]) -> io::R
             "file_rdr must have at least two forms",
         ))
     } else {
-        let arg0 = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
-        let res = builtin_progn(environment, &args[1..])?;
-        if let Expression::Atom(Atom::String(s)) = &arg0 {
-            let mut writer = File::create(s)?;
-            res.writef(environment, &mut writer)?;
+        let arg0 = eval(environment, &args[0])?;
+        environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
+        let res = builtin_progn(environment, &args[1..]);
+        environment.state.borrow_mut().stdout_status = None;
+        if let Ok(res) = &res {
+            if let Expression::Atom(Atom::String(s)) = &arg0 {
+                let mut writer = File::create(s)?;
+                res.writef(environment, &mut writer)?;
+            }
         }
-        Ok(res)
+        res
     }
 }
 
@@ -39,13 +43,18 @@ fn builtin_stdout_to(environment: &mut Environment, args: &[Expression]) -> io::
             "stdout-to must have at least two forms",
         ))
     } else {
-        let arg0 = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+        let arg0 = eval(environment, &args[0])?;
         if let Expression::Atom(Atom::String(s)) = &arg0 {
-            environment.state.borrow_mut().stdout_file = Some(s.clone());
+            environment.state.borrow_mut().stdout_status = Some(IOState::FileOverwrite(s.clone()));
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "stdout-to must have a file",
+            ));
         }
-        let res = builtin_progn(environment, &args[1..])?;
-        environment.state.borrow_mut().stdout_file = None;
-        Ok(res)
+        let res = builtin_progn(environment, &args[1..]);
+        environment.state.borrow_mut().stdout_status = None;
+        res
     }
 }
 
@@ -56,13 +65,18 @@ fn builtin_stderr_to(environment: &mut Environment, args: &[Expression]) -> io::
             "stderr-to must have at least two forms",
         ))
     } else {
-        let arg0 = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+        let arg0 = eval(environment, &args[0])?;
         if let Expression::Atom(Atom::String(s)) = &arg0 {
-            environment.state.borrow_mut().stderr_file = Some(s.clone());
+            environment.state.borrow_mut().stderr_status = Some(IOState::FileOverwrite(s.clone()));
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "stderr-to must have a file",
+            ));
         }
-        let res = builtin_progn(environment, &args[1..])?;
-        environment.state.borrow_mut().stderr_file = None;
-        Ok(res)
+        let res = builtin_progn(environment, &args[1..]);
+        environment.state.borrow_mut().stderr_status = None;
+        res
     }
 }
 

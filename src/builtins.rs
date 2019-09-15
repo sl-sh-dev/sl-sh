@@ -25,7 +25,7 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
             Ok(val) => val,
             Err(_) => "/".to_string(),
         };
-        let args = to_args_str(environment, args, false)?;
+        let args = to_args_str(environment, args)?;
         let args = args.iter();
         let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
         let expand_dir = expand_tilde(new_dir);
@@ -54,13 +54,13 @@ fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Resul
             "eval can only have one form",
         ))
     } else {
-        let args = to_args(environment, args, false)?;
-        eval(environment, &args[0], Expression::Atom(Atom::Nil), false)
+        let args = to_args(environment, args)?;
+        eval(environment, &args[0])
     }
 }
 
 fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args: Vec<Expression> = to_args(environment, args, false)?;
+    let mut args: Vec<Expression> = to_args(environment, args)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -92,7 +92,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
                     }
                     _ => ast,
                 };
-                eval(environment, &ast, Expression::Atom(Atom::Nil), false)
+                eval(environment, &ast)
             }
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
@@ -108,27 +108,12 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
         ))
     } else {
         let mut parts = parts.iter();
-        match eval(
-            environment,
-            parts.next().unwrap(),
-            Expression::Atom(Atom::Nil),
-            false,
-        )? {
-            Expression::Atom(Atom::True) => eval(
-                environment,
-                parts.next().unwrap(),
-                Expression::Atom(Atom::Nil),
-                false,
-            ),
+        match eval(environment, parts.next().unwrap())? {
+            Expression::Atom(Atom::True) => eval(environment, parts.next().unwrap()),
             Expression::Atom(Atom::Nil) => {
                 if plen == 3 {
                     parts.next().unwrap();
-                    eval(
-                        environment,
-                        parts.next().unwrap(),
-                        Expression::Atom(Atom::Nil),
-                        false,
-                    )
+                    eval(environment, parts.next().unwrap())
                 } else {
                     Ok(Expression::Atom(Atom::Nil))
                 }
@@ -142,17 +127,17 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
 }
 
 fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args, false)?;
+    let args: Vec<Expression> = to_args(environment, args)?;
     print(environment, &args, false)
 }
 
 fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args, false)?;
+    let args: Vec<Expression> = to_args(environment, args)?;
     print(environment, &args, true)
 }
 
 fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = to_args_str(environment, args, false)?;
+    let args = to_args_str(environment, args)?;
     let mut res = String::new();
     for a in args {
         res.push_str(&a);
@@ -164,17 +149,26 @@ fn builtin_use_stdout(
     environment: &mut Environment,
     parts: &[Expression],
 ) -> io::Result<Expression> {
-    let mut last_eval = Expression::Atom(Atom::Nil);
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let old_out = environment.state.borrow().stdout_status.clone();
+    let old_err = environment.state.borrow().stderr_status.clone();
+    environment.state.borrow_mut().stdout_status = Some(IOState::Inherit);
+    environment.state.borrow_mut().stderr_status = Some(IOState::Inherit);
     for a in parts {
-        last_eval = eval(environment, a, Expression::Atom(Atom::Nil), true)?;
+        last_eval = eval(environment, a);
+        if last_eval.is_err() {
+            break;
+        }
     }
-    Ok(last_eval)
+    environment.state.borrow_mut().stdout_status = old_out;
+    environment.state.borrow_mut().stderr_status = old_err;
+    last_eval
 }
 
 pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut last_eval = Expression::Atom(Atom::Nil);
     for a in args {
-        last_eval = eval(environment, a, Expression::Atom(Atom::Nil), false)?;
+        last_eval = eval(environment, a)?;
     }
     Ok(last_eval)
 }
@@ -187,12 +181,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         ))
     } else {
         let mut args = args.iter();
-        let key = eval(
-            environment,
-            args.next().unwrap(),
-            Expression::Atom(Atom::Nil),
-            false,
-        )?;
+        let key = eval(environment, args.next().unwrap())?;
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
@@ -202,12 +191,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                 ));
             }
         };
-        let val = eval(
-            environment,
-            args.next().unwrap(),
-            Expression::Atom(Atom::Nil),
-            false,
-        )?;
+        let val = eval(environment, args.next().unwrap())?;
         let mut val = match val {
             Expression::Atom(atom) => Expression::Atom(atom),
             Expression::List(list) => Expression::List(list),
@@ -282,12 +266,7 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
                         if binding_pair.len() == 2 {
                             data.insert(
                                 s.clone(),
-                                eval(
-                                    environment,
-                                    binding_pair.get(1).unwrap(),
-                                    Expression::Atom(Atom::Nil),
-                                    false,
-                                )?,
+                                eval(environment, binding_pair.get(1).unwrap())?,
                             );
                         } else {
                             data.insert(s.clone(), Expression::Atom(Atom::Nil));
@@ -309,7 +288,7 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
         }
     }
     let mut new_environment = build_new_scope_with_data(environment, data);
-    let mut args = to_args(&mut new_environment, &args[1..], false)?;
+    let mut args = to_args(&mut new_environment, &args[1..])?;
     match args.pop() {
         Some(a) => Ok(a),
         None => Ok(Expression::Atom(Atom::Nil)),
@@ -336,13 +315,13 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             if symbol == "," {
                 back_quote_next = true;
             } else if back_quote_next {
-                output.push(eval(environment, &exp, Expression::Atom(Atom::Nil), false)?);
+                output.push(eval(environment, &exp)?);
                 back_quote_next = false;
             } else {
                 output.push(exp);
             }
         } else if back_quote_next {
-            output.push(eval(environment, &exp, Expression::Atom(Atom::Nil), false)?);
+            output.push(eval(environment, &exp)?);
             back_quote_next = false;
         } else {
             output.push(exp);
@@ -377,13 +356,12 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
         let state = Rc::new(RefCell::new(EnvState::default()));
         let mut enviro = Environment {
             state,
-            err_null: false,
             in_pipe: false,
             data,
             procs,
             outer: None,
         };
-        let _args = to_args(&mut enviro, &new_args, false).unwrap();
+        let _args = to_args(&mut enviro, &new_args).unwrap();
         /*match args.pop() {
             Some(a) => Ok(a),
             None => Ok(Expression::Atom(Atom::Nil)),
@@ -405,7 +383,7 @@ fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
     let mut last_exp = Expression::Atom(Atom::Nil);
     for arg in args {
-        let val = eval(environment, arg, Expression::Atom(Atom::Nil), false)?;
+        let val = eval(environment, arg)?;
         match val {
             Expression::Atom(Atom::Nil) => return Ok(Expression::Atom(Atom::Nil)),
             _ => last_exp = val,
@@ -422,7 +400,7 @@ fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<
         ));
     }
     for arg in args {
-        let val = eval(environment, arg, Expression::Atom(Atom::Nil), false)?;
+        let val = eval(environment, arg)?;
         match val {
             Expression::Atom(Atom::Nil) => {}
             _ => return Ok(val),
@@ -435,7 +413,7 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "not takes one form"));
     }
-    let val = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    let val = eval(environment, &args[0])?;
     if let Expression::Atom(Atom::Nil) = val {
         Ok(Expression::Atom(Atom::True))
     } else {
@@ -492,7 +470,7 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
 }
 
 fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = to_args(environment, args, false)?;
+    let mut args = to_args(environment, args)?;
     let mut arg_list: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args.drain(..) {
         arg_list.push(a.clone());
@@ -541,7 +519,7 @@ macro_rules! ensure_tonicity {
 macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
         |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-            let mut args: Vec<Expression> = to_args(environment, args, false)?;
+            let mut args: Vec<Expression> = to_args(environment, args)?;
             if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                 ensure_tonicity!($check_fn, ints, &i64, i64)
             } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
@@ -586,7 +564,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
         "=".to_string(),
         Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args, false)?;
+                let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
                 } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {

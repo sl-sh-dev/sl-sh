@@ -11,7 +11,7 @@ fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Resul
     if args.is_empty() {
         return Ok(Expression::Atom(Atom::Nil));
     }
-    let args = to_args(environment, args, false)?;
+    let args = to_args(environment, args)?;
     let mut list: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args {
         list.push(arg);
@@ -26,7 +26,7 @@ fn builtin_list_first(
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "first takes one form"));
     }
-    let arg = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(list) => {
             if !list.is_empty() {
@@ -46,7 +46,7 @@ fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "rest takes one form"));
     }
-    let arg = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(mut list) => {
             if list.len() > 1 {
@@ -76,7 +76,7 @@ fn builtin_list_length(
             "length takes one form",
         ));
     }
-    let arg = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    let arg = eval(environment, &args[0])?;
     match arg {
         Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
         Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
@@ -93,7 +93,7 @@ fn builtin_list_last(environment: &mut Environment, args: &[Expression]) -> io::
             "last takes one form (list)",
         ));
     }
-    let arg = eval(environment, &args[0], Expression::Atom(Atom::Nil), false)?;
+    let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(mut list) => {
             if !list.is_empty() {
@@ -116,7 +116,7 @@ fn builtin_list_nth(environment: &mut Environment, args: &[Expression]) -> io::R
             "nth takes two forms (int and list)",
         ));
     }
-    let args = to_args(environment, &args, false)?;
+    let args = to_args(environment, &args)?;
     let idx = if let Expression::Atom(Atom::Int(i)) = args[0] {
         i
     } else {
@@ -156,7 +156,7 @@ fn builtin_list_setfirst(
             "setfirst takes two forms (form and list)",
         ));
     }
-    let mut args = to_args(environment, &args, false)?;
+    let mut args = to_args(environment, &args)?;
     let old_list = args.pop().unwrap();
     let new_car = args.pop().unwrap();
     match old_list {
@@ -185,7 +185,7 @@ fn builtin_list_setrest(
             "setrest takes two forms (lists)",
         ));
     }
-    let mut args = to_args(environment, &args, false)?;
+    let mut args = to_args(environment, &args)?;
     let new_cdr = args.pop().unwrap();
     let old_list = args.pop().unwrap();
     if let Expression::List(mut new_cdr) = new_cdr {
@@ -222,7 +222,7 @@ fn builtin_str_append(
             "append takes two forms (both lists or Strings)",
         ));
     }
-    let mut args = to_args(environment, &args, false)?;
+    let mut args = to_args(environment, &args)?;
     let end = args.pop().unwrap();
     let start = args.pop().unwrap();
     if let Expression::Atom(Atom::String(end)) = end {
@@ -255,7 +255,7 @@ fn builtin_list_append(
             "append takes two forms (both lists or Strings)",
         ));
     }
-    let mut new_args = to_args(environment, &args, false)?;
+    let mut new_args = to_args(environment, &args)?;
     let end_arg = new_args.pop().unwrap();
     let start_arg = new_args.pop().unwrap();
     if let Expression::List(mut end) = end_arg {

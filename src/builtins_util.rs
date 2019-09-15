@@ -5,29 +5,18 @@ use crate::environment::*;
 use crate::shell::*;
 use crate::types::*;
 
-pub fn to_args(
-    env: &mut Environment,
-    parts: &[Expression],
-    use_stdout: bool,
-) -> io::Result<Vec<Expression>> {
+pub fn to_args(env: &mut Environment, parts: &[Expression]) -> io::Result<Vec<Expression>> {
     let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(eval(env, a, Expression::Atom(Atom::Nil), use_stdout)?);
+        args.push(eval(env, a)?);
     }
     Ok(args)
 }
 
-pub fn to_args_str(
-    environment: &mut Environment,
-    parts: &[Expression],
-    use_stdout: bool,
-) -> io::Result<Vec<String>> {
+pub fn to_args_str(environment: &mut Environment, parts: &[Expression]) -> io::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::with_capacity(parts.len());
     for a in parts {
-        args.push(
-            eval(environment, a, Expression::Atom(Atom::Nil), use_stdout)?
-                .make_string(environment)?,
-        );
+        args.push(eval(environment, a)?.make_string(environment)?);
     }
     Ok(args)
 }
@@ -188,7 +177,7 @@ pub fn setup_args(
         }
         let mut vars = args;
         let t_vars = if eval_args {
-            Some(to_args(environment, args, false)?)
+            Some(to_args(environment, args)?)
         } else {
             None
         };

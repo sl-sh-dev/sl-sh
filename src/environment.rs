@@ -13,11 +13,21 @@ use crate::builtins_str::add_str_builtins;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
+pub enum IOState {
+    FileAppend(String),
+    FileOverwrite(String),
+    Pipe,
+    Inherit,
+    Null,
+}
+
+#[derive(Clone, Debug)]
 pub struct EnvState {
     pub recur_num_args: Option<usize>,
     pub gensym_count: u32,
-    pub stdout_file: Option<String>,
-    pub stderr_file: Option<String>,
+    pub stdout_status: Option<IOState>,
+    pub stderr_status: Option<IOState>,
+    pub eval_level: u32,
 }
 
 impl Default for EnvState {
@@ -25,8 +35,9 @@ impl Default for EnvState {
         EnvState {
             recur_num_args: None,
             gensym_count: 0,
-            stdout_file: None,
-            stderr_file: None,
+            stdout_status: None,
+            stderr_status: None,
+            eval_level: 0,
         }
     }
 }
@@ -34,7 +45,6 @@ impl Default for EnvState {
 #[derive(Clone, Debug)]
 pub struct Environment<'a> {
     pub state: Rc<RefCell<EnvState>>,
-    pub err_null: bool,
     pub in_pipe: bool,
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
@@ -51,7 +61,6 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
     add_file_builtins(&mut data);
     Environment {
         state: Rc::new(RefCell::new(EnvState::default())),
-        err_null: false,
         in_pipe: false,
         data,
         procs,
@@ -69,7 +78,6 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
     }
     Environment {
         state: environment.state.clone(),
-        err_null: environment.err_null,
         in_pipe: environment.in_pipe,
         data,
         procs: environment.procs.clone(),
@@ -81,7 +89,6 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
     let data: HashMap<String, Expression> = HashMap::new();
     Environment {
         state: environment.state.clone(),
-        err_null: environment.err_null,
         in_pipe: environment.in_pipe,
         data,
         procs: environment.procs.clone(),

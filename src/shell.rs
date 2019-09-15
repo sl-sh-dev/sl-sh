@@ -25,12 +25,7 @@ fn call_lambda(
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
     setup_args(&mut new_environment, &lambda.params, args, true)?;
     while looping {
-        last_eval = eval(
-            &mut new_environment,
-            &lambda.body,
-            Expression::Atom(Atom::Nil),
-            false,
-        );
+        last_eval = eval(&mut new_environment, &lambda.body);
         looping = environment.state.borrow().recur_num_args.is_some();
         if looping {
             let recur_args = environment.state.borrow().recur_num_args.unwrap();
@@ -56,20 +51,14 @@ fn expand_macro(
 ) -> io::Result<Expression> {
     let mut new_environment = build_new_scope(environment);
     setup_args(&mut new_environment, &sh_macro.params, args, false)?;
-    let expansion = eval(
-        &mut new_environment,
-        &sh_macro.body,
-        Expression::Atom(Atom::Nil),
-        false,
-    )?;
-    eval(environment, &expansion, Expression::Atom(Atom::Nil), false)
+    let expansion = eval(&mut new_environment, &sh_macro.body)?;
+    eval(environment, &expansion)
 }
 
-pub fn eval(
+fn internal_eval(
     environment: &mut Environment,
     expression: &Expression,
-    data_in: Expression,
-    use_stdout: bool,
+    data_in: Option<Expression>,
 ) -> io::Result<Expression> {
     let in_recur = environment.state.borrow().recur_num_args.is_some();
     if in_recur {
@@ -111,27 +100,14 @@ pub fn eval(
                     expand_macro(environment, &m, parts)
                 } else {
                     let exp = exp.clone();
-                    eval(environment, &exp, data_in, use_stdout)
+                    eval(environment, &exp)
                 }
             } else {
                 match &command[..] {
                     "nil" => Ok(Expression::Atom(Atom::Nil)),
-                    "|" | "pipe" => {
-                        environment.in_pipe = true;
-                        let mut out = data_in;
-                        for p in parts {
-                            out = eval(environment, p, out, false)?;
-                        }
-                        environment.in_pipe = false;
-                        if use_stdout {
-                            out.write(environment)?;
-                            Ok(Expression::Atom(Atom::Nil))
-                        } else {
-                            Ok(out)
-                        }
-                    }
+                    "|" | "pipe" => do_pipe(environment, parts, data_in),
                     //"exit" => return,
-                    command => do_command(environment, command, parts, data_in, use_stdout),
+                    command => do_command(environment, command, parts, data_in),
                 }
             }
         }
@@ -155,6 +131,21 @@ pub fn eval(
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Process(pid) => Ok(Expression::Process(*pid)), //Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
     }
+}
+
+pub fn pipe_eval(
+    environment: &mut Environment,
+    expression: &Expression,
+    data_in: Option<Expression>,
+) -> io::Result<Expression> {
+    environment.state.borrow_mut().eval_level += 1;
+    let result = internal_eval(environment, expression, data_in);
+    environment.state.borrow_mut().eval_level -= 1;
+    result
+}
+
+pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+    pipe_eval(environment, expression, None)
 }
 
 pub fn start_interactive() {
@@ -189,6 +180,8 @@ pub fn start_interactive() {
                 p
             }
         };
+        environment.state.borrow_mut().stdout_status = None;
+        environment.state.borrow_mut().stderr_status = None;
         let prompt = if environment.data.contains_key("__prompt") {
             let mut exp = environment.data.get("__prompt").unwrap().clone();
             exp = match exp {
@@ -199,7 +192,7 @@ pub fn start_interactive() {
                 }
                 _ => exp,
             };
-            let res = eval(&mut environment, &exp, Expression::Atom(Atom::Nil), false);
+            let res = eval(&mut environment, &exp);
             res.unwrap_or_else(|e| {
                 Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
             })
@@ -231,7 +224,7 @@ pub fn start_interactive() {
                 //println!("{:?}", ast);
                 match ast {
                     Ok(ast) => {
-                        match eval(&mut environment, &ast, Expression::Atom(Atom::Nil), true) {
+                        match eval(&mut environment, &ast) {
                             Ok(_exp) => {
                                 //println!("{}", s);
                                 if !input.is_empty() {
@@ -286,7 +279,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
     match ast {
         Ok(Expression::List(list)) => {
             for exp in list {
-                match eval(environment, &exp, Expression::Atom(Atom::Nil), true) {
+                match eval(environment, &exp) {
                     Ok(_exp) => {}
                     Err(err) => {
                         eprintln!("{}", err);
@@ -296,7 +289,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
             }
             Ok(())
         }
-        Ok(ast) => match eval(environment, &ast, Expression::Atom(Atom::Nil), true) {
+        Ok(ast) => match eval(environment, &ast) {
             Ok(_exp) => Ok(()),
             Err(err) => {
                 eprintln!("{}", err);
