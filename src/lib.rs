@@ -1,4 +1,5 @@
 extern crate glob;
+extern crate libc;
 extern crate liner;
 extern crate nix;
 

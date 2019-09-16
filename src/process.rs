@@ -4,12 +4,61 @@ use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 
 use glob::glob;
-use nix::sys::signal::{self, SigHandler, Signal};
+//use nix::sys::signal::{self, SigHandler, Signal};
+use nix::{
+    sys::{
+        signal::{self, SigHandler, Signal},
+        wait::{self, WaitPidFlag, WaitStatus},
+    },
+    unistd::Pid,
+};
 
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::shell::*;
 use crate::types::*;
+
+pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
+    let mut opts = WaitPidFlag::WUNTRACED;
+    opts.insert(WaitPidFlag::WCONTINUED);
+    opts.insert(WaitPidFlag::WNOHANG);
+    match wait::waitpid(Pid::from_raw(pid as i32), Some(opts)) {
+        Err(nix::Error::Sys(nix::errno::Errno::ECHILD)) => {
+            // Does not exist.
+            environment.procs.borrow_mut().remove(&pid);
+            (true, None)
+        }
+        Err(err) => {
+            eprintln!("Error waiting for pid {}, {}", pid, err);
+            //Err(err)
+            environment.procs.borrow_mut().remove(&pid);
+            (true, None)
+        }
+        Ok(WaitStatus::Exited(_, status)) => {
+            environment.procs.borrow_mut().remove(&pid);
+            (true, Some(status))
+        }
+        Ok(WaitStatus::Stopped(..)) => {
+            environment.state.borrow_mut().stopped_procs.push(pid);
+            (true, None)
+        }
+        Ok(WaitStatus::Continued(_)) => (false, None),
+        Ok(_) => (false, None),
+    }
+}
+
+pub fn wait_pid(environment: &Environment, pid: u32) -> Option<i32> {
+    let result: Option<i32>;
+    loop {
+        let (stop, status) = try_wait_pid(environment, pid);
+        if stop {
+            result = status;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    result
+}
 
 fn run_command(
     environment: &mut Environment,
@@ -41,6 +90,7 @@ fn run_command(
             signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
             signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
             signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGTSTP, SigHandler::SigDfl).unwrap();
             Ok(())
         });
     }
@@ -51,9 +101,7 @@ fn run_command(
     match proc {
         Ok(mut proc) => {
             if !environment.in_pipe {
-                if let Err(err) = proc.wait() {
-                    eprintln!("Failed to wait for {}: {}", command, err);
-                }
+                wait_pid(environment, proc.id());
             }
             if let Some(data_in) = data_in {
                 if proc.stdin.is_some() {

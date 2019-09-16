@@ -10,6 +10,7 @@ use crate::builtins_file::add_file_builtins;
 use crate::builtins_list::add_list_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_str::add_str_builtins;
+use crate::process::*;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
@@ -28,6 +29,7 @@ pub struct EnvState {
     pub stdout_status: Option<IOState>,
     pub stderr_status: Option<IOState>,
     pub eval_level: u32,
+    pub stopped_procs: Vec<u32>,
 }
 
 impl Default for EnvState {
@@ -38,6 +40,7 @@ impl Default for EnvState {
             stdout_status: None,
             stderr_status: None,
             eval_level: 0,
+            stopped_procs: Vec::new(),
         }
     }
 }
@@ -138,29 +141,32 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
     pid
 }
 
-pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<()> {
+pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<Option<i32>> {
     let mut procs = environment.procs.borrow_mut();
+    let mut opid: Option<u32> = None;
     if let Some(child) = procs.get_mut(&pid) {
-        child.wait()?;
+        opid = Some(child.id());
     }
-    // Keep the pids for now, reap_procs should reap them.  This gives stuff a
-    // chance to grab output, exit status, etc.
-    Ok(())
+    drop(procs);
+    let mut status: Option<i32> = None;
+    if let Some(pid) = opid {
+        status = wait_pid(environment, pid);
+    }
+    Ok(status)
 }
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let mut procs = environment.procs.borrow_mut();
     let keys: Vec<u32> = procs.keys().copied().collect();
-    let mut dead_pids: Vec<u32> = Vec::with_capacity(keys.len());
+    let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
         if let Some(child) = procs.get_mut(&key) {
-            if let Some(_status) = child.try_wait()? {
-                dead_pids.push(key);
-            }
+            pids.push(child.id());
         }
     }
-    for pid in dead_pids {
-        procs.remove(&pid);
+    drop(procs);
+    for pid in pids {
+        try_wait_pid(environment, pid);
     }
     // XXX remove them or better replace pid with exit status
     Ok(())

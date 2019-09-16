@@ -1,3 +1,7 @@
+use nix::{
+    sys::signal::{self, Signal},
+    unistd::Pid,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
@@ -10,6 +14,7 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::process::*;
 use crate::script::*;
 use crate::shell::*;
 use crate::types::*;
@@ -495,6 +500,28 @@ fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
+    for pid in &environment.state.borrow().stopped_procs {
+        println!("{}", pid);
+    }
+    Ok(Expression::Atom(Atom::Nil))
+}
+
+fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
+    let mut opid: Option<u32> = None;
+    if let Some(pid) = environment.state.borrow_mut().stopped_procs.pop() {
+        opid = Some(pid);
+    }
+    if let Some(pid) = opid {
+        if let Err(err) = signal::kill(Pid::from_raw(pid as i32), Signal::SIGCONT) {
+            eprintln!("Error sending sigcont to wake up process: {}.", err);
+        } else {
+            wait_pid(environment, pid);
+        }
+    }
+    Ok(Expression::Atom(Atom::Nil))
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -559,6 +586,8 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
     data.insert("recur".to_string(), Expression::Func(builtin_recur));
     data.insert("gensym".to_string(), Expression::Func(builtin_gensym));
+    data.insert("jobs".to_string(), Expression::Func(builtin_jobs));
+    data.insert("fg".to_string(), Expression::Func(builtin_fg));
 
     data.insert(
         "=".to_string(),
