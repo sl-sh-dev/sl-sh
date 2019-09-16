@@ -259,7 +259,11 @@ pub fn do_pipe(
     let mut i = 1; // Meant 1 here.
     for p in parts {
         if i == parts.len() && !old_pipe_in {
-            environment.state.borrow_mut().stdout_status = old_out_status.clone();
+            if environment.state.borrow().eval_level > 2 {
+                environment.state.borrow_mut().stdout_status = None;
+            } else {
+                environment.state.borrow_mut().stdout_status = old_out_status.clone();
+            }
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
         let res = pipe_eval(environment, p, Some(out));
