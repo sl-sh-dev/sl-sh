@@ -1,6 +1,9 @@
 use nix::{
-    sys::signal::{self, Signal},
-    unistd::Pid,
+    sys::{
+        signal::{self, Signal},
+        termios,
+    },
+    unistd::{self, Pid},
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -513,10 +516,28 @@ fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result
         opid = Some(pid);
     }
     if let Some(pid) = opid {
-        if let Err(err) = signal::kill(Pid::from_raw(pid as i32), Signal::SIGCONT) {
+        let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
+        let ppid = Pid::from_raw(pid as i32);
+        if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
             eprintln!("Error sending sigcont to wake up process: {}.", err);
         } else {
+            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
+                let msg = format!("Error making {} foreground in parent: {}", pid, err);
+                eprintln!("{}", msg);
+                //return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
             wait_pid(environment, pid);
+            termios::tcsetattr(
+                nix::libc::STDIN_FILENO,
+                termios::SetArg::TCSANOW,
+                &term_settings,
+            );
+            let shell_pid = unistd::getpid();
+            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, shell_pid) {
+                let msg = format!("Error making shell {} foreground: {}", shell_pid, err);
+                eprintln!("{}", msg);
+                //return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
         }
     }
     Ok(Expression::Atom(Atom::Nil))

@@ -8,9 +8,10 @@ use glob::glob;
 use nix::{
     sys::{
         signal::{self, SigHandler, Signal},
+        termios,
         wait::{self, WaitPidFlag, WaitStatus},
     },
-    unistd::Pid,
+    unistd::{self, Pid},
 };
 
 use crate::builtins_util::*;
@@ -18,7 +19,11 @@ use crate::environment::*;
 use crate::shell::*;
 use crate::types::*;
 
-pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
+fn try_wait_pid_internal(
+    environment: &Environment,
+    pid: u32,
+    term_settings: Option<&termios::Termios>,
+) -> (bool, Option<i32>) {
     let mut opts = WaitPidFlag::WUNTRACED;
     opts.insert(WaitPidFlag::WCONTINUED);
     opts.insert(WaitPidFlag::WNOHANG);
@@ -35,10 +40,18 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
             (true, None)
         }
         Ok(WaitStatus::Exited(_, status)) => {
+            if let Some(settings) = term_settings {
+                println!("XXXX reset settings.");
+                termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, settings);
+            }
             environment.procs.borrow_mut().remove(&pid);
             (true, Some(status))
         }
         Ok(WaitStatus::Stopped(..)) => {
+            if let Some(settings) = term_settings {
+                println!("XXXX reset settings.");
+                termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, settings);
+            }
             environment.state.borrow_mut().stopped_procs.push(pid);
             (true, None)
         }
@@ -47,10 +60,26 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
     }
 }
 
-pub fn wait_pid(environment: &Environment, pid: u32) -> Option<i32> {
+pub fn try_wait_pid_term(
+    environment: &Environment,
+    pid: u32,
+    term_setting: &termios::Termios,
+) -> (bool, Option<i32>) {
+    try_wait_pid_internal(environment, pid, Some(term_setting))
+}
+
+pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
+    try_wait_pid_internal(environment, pid, None)
+}
+
+fn wait_pid_internal(
+    environment: &Environment,
+    pid: u32,
+    term_settings: Option<&termios::Termios>,
+) -> Option<i32> {
     let result: Option<i32>;
     loop {
-        let (stop, status) = try_wait_pid(environment, pid);
+        let (stop, status) = try_wait_pid_internal(environment, pid, term_settings);
         if stop {
             result = status;
             break;
@@ -58,6 +87,18 @@ pub fn wait_pid(environment: &Environment, pid: u32) -> Option<i32> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     result
+}
+
+pub fn wait_pid_term(
+    environment: &Environment,
+    pid: u32,
+    term_settings: &termios::Termios,
+) -> Option<i32> {
+    wait_pid_internal(environment, pid, Some(term_settings))
+}
+
+pub fn wait_pid(environment: &Environment, pid: u32) -> Option<i32> {
+    wait_pid_internal(environment, pid, None)
 }
 
 fn run_command(
@@ -74,6 +115,9 @@ fn run_command(
         new_args.push(a.make_string(environment)?);
     }
     let mut com_obj = Command::new(command);
+    //let pgid = unistd::getpid();
+    let foreground = !environment.in_pipe;
+    let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
         .args(new_args)
         .stdin(stdin)
@@ -81,10 +125,22 @@ fn run_command(
         .stderr(stderr);
 
     unsafe {
-        com_obj.pre_exec(|| -> io::Result<()> {
+        com_obj.pre_exec(move || -> io::Result<()> {
             // XXX TODO, do better with these unwraps.
-            /*let pgid = unistd::getpid();
-            if pgid != unistd::getpgrp() {
+            let pid = unistd::getpid();
+            let pgid = unistd::getpid();
+            if let Err(err) = unistd::setpgid(pid, pgid) {
+                let msg = format!("Error setting pgid for {}: {}", pid, err);
+                eprintln!("{}", msg);
+            }
+            if foreground {
+                if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
+                    let msg = format!("Error making {} foreground: {}", pid, err);
+                    eprintln!("{}", msg);
+                    //return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            }
+            /*if pgid != unistd::getpgrp() {
                 unistd::setpgid(pgid, pgid).unwrap();
             }*/
 
@@ -106,14 +162,35 @@ fn run_command(
         });
     }
 
+    let term_settings = termios::tcgetattr(shell_terminal).unwrap();
     let proc = com_obj.spawn();
 
     let mut result = Expression::Atom(Atom::Nil);
     match proc {
         Ok(mut proc) => {
-            if !environment.in_pipe {
-                wait_pid(environment, proc.id());
+            let pid = Pid::from_raw(proc.id() as i32);
+            let pgid = Pid::from_raw(proc.id() as i32);
+            if let Err(err) = unistd::setpgid(pid, pgid) {
+                // Ignore
+                //let msg = format!("Error setting pgid for {} in parent: {}", pid, err);
+                //eprintln!("{}", msg);
             }
+            if foreground {
+                if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
+                    let msg = format!("Error making {} foreground in parent: {}", pid, err);
+                    eprintln!("{}", msg);
+                    //return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+                wait_pid_term(environment, proc.id(), &term_settings);
+                let pid = unistd::getpid();
+                if let Err(err) = unistd::tcsetpgrp(shell_terminal, pid) {
+                    let msg = format!("Error making shell {} foreground: {}", pid, err);
+                    eprintln!("{}", msg);
+                    //return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            }
+            //if !environment.in_pipe {
+            //}
             if let Some(data_in) = data_in {
                 if proc.stdin.is_some() {
                     let mut input: Option<ChildStdin> = None;
