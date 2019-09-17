@@ -87,10 +87,21 @@ fn run_command(
             if pgid != unistd::getpgrp() {
                 unistd::setpgid(pgid, pgid).unwrap();
             }*/
+
+            /*let pid = unistd::getpid();
+            if (pgid == 0) pgid = pid;
+            unistd::setpgid(pid, pgid);
+            if (foreground)
+              tcsetpgrp (shell_terminal, pgid);*/
+
+            /* Set the handling for job control signals back to the default.  */
             signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
-            signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
-            signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGQUIT, SigHandler::SigDfl).unwrap();
             signal::signal(Signal::SIGTSTP, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGTTIN, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGTTOU, SigHandler::SigDfl).unwrap();
+            signal::signal(Signal::SIGCHLD, SigHandler::SigDfl).unwrap();
+
             Ok(())
         });
     }

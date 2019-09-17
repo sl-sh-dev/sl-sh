@@ -65,6 +65,51 @@ fn main() -> io::Result<()> {
     if let Ok(config) = config {
         if config.command.is_none() {
             block_signals();
+            /* See if we are running interactively.  */
+            let shell_terminal = nix::libc::STDIN_FILENO;
+
+            if let Ok(true) = unistd::isatty(shell_terminal) {
+                /* Loop until we are in the foreground.  */
+                let mut shell_pgid = unistd::getpgrp();
+                while unistd::tcgetpgrp(shell_terminal) != Ok(shell_pgid) {
+                    //kill (- shell_pgid, SIGTTIN);
+                    if let Err(err) = signal::kill(shell_pgid, Signal::SIGTTIN) {
+                        eprintln!("Error sending sigttin: {}.", err);
+                    }
+                    shell_pgid = unistd::getpgrp();
+                }
+
+                /* Ignore interactive and job-control signals.  */
+                unsafe {
+                    signal::signal(Signal::SIGINT, SigHandler::SigIgn).unwrap();
+                    signal::signal(Signal::SIGQUIT, SigHandler::SigIgn).unwrap();
+                    signal::signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
+                    signal::signal(Signal::SIGTTIN, SigHandler::SigIgn).unwrap();
+                    signal::signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
+                    signal::signal(Signal::SIGCHLD, SigHandler::SigIgn).unwrap();
+                }
+
+                /* Put ourselves in our own process group.  */
+                let pgid = unistd::getpid();
+                if let Err(err) = unistd::setpgid(pgid, pgid) {
+                    eprintln!("Couldn't put the shell in its own process group: {}", err);
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Couldn't put the shell in its own process group",
+                    ));
+                }
+                /* Grab control of the terminal.  */
+                if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
+                    eprintln!("Couldn't grab control of terminal: {}", err);
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Couldn't grab control of terminal.",
+                    ));
+                }
+                /* Save default terminal attributes for shell.  */
+                //tcgetattr (shell_terminal, &shell_tmodes);
+            }
+
             /*let _child = std::thread::spawn(move || {
                 let mut set: libc::sigset_t = unsafe { mem::zeroed() };
                 unsafe {
@@ -108,9 +153,9 @@ fn main() -> io::Result<()> {
                 signal::signal(Signal::SIGTERM, SigHandler::SigIgn).unwrap();
             }*/
 
-            if let Err(err) = set_unique_pgid() {
+            /*if let Err(err) = set_unique_pgid() {
                 eprintln!("Could not bring shell to foreground: {}", err);
-            }
+            }*/
             start_interactive();
         } else {
             let command = config.command.unwrap();
