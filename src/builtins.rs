@@ -362,6 +362,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     let _child = std::thread::spawn(move || {
         let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
         let state = Rc::new(RefCell::new(EnvState::default()));
+        state.borrow_mut().is_spawn = true;
         let mut enviro = Environment {
             state,
             in_pipe: false,
@@ -526,18 +527,7 @@ fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result
                 eprintln!("{}", msg);
                 //return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
-            wait_pid(environment, pid);
-            termios::tcsetattr(
-                nix::libc::STDIN_FILENO,
-                termios::SetArg::TCSANOW,
-                &term_settings,
-            );
-            let shell_pid = unistd::getpid();
-            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, shell_pid) {
-                let msg = format!("Error making shell {} foreground: {}", shell_pid, err);
-                eprintln!("{}", msg);
-                //return Err(io::Error::new(io::ErrorKind::Other, msg));
-            }
+            wait_pid(environment, pid, Some(&term_settings));
         }
     }
     Ok(Expression::Atom(Atom::Nil))

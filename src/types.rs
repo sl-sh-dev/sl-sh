@@ -7,6 +7,7 @@ use std::process::Child;
 use std::rc::Rc;
 
 use crate::environment::*;
+use crate::process::*;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -193,7 +194,7 @@ impl Expression {
                     }
                 }
                 drop(procs);
-                wait_process(environment, *pid)?;
+                wait_pid(environment, *pid, None);
             }
             Expression::Func(_) => {
                 return Err(io::Error::new(

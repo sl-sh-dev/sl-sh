@@ -30,6 +30,7 @@ pub struct EnvState {
     pub stderr_status: Option<IOState>,
     pub eval_level: u32,
     pub stopped_procs: Vec<u32>,
+    pub is_spawn: bool,
 }
 
 impl Default for EnvState {
@@ -41,6 +42,7 @@ impl Default for EnvState {
             stderr_status: None,
             eval_level: 0,
             stopped_procs: Vec::new(),
+            is_spawn: false,
         }
     }
 }
@@ -139,20 +141,6 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
     let pid = process.id();
     environment.procs.borrow_mut().insert(pid, process);
     pid
-}
-
-pub fn wait_process(environment: &Environment, pid: u32) -> io::Result<Option<i32>> {
-    let mut procs = environment.procs.borrow_mut();
-    let mut opid: Option<u32> = None;
-    if let Some(child) = procs.get_mut(&pid) {
-        opid = Some(child.id());
-    }
-    drop(procs);
-    let mut status: Option<i32> = None;
-    if let Some(pid) = opid {
-        status = wait_pid(environment, pid);
-    }
-    Ok(status)
 }
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
