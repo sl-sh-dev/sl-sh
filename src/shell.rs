@@ -215,9 +215,9 @@ pub fn start_interactive() {
                     continue;
                 }
                 let mod_input = if input.starts_with('(') {
-                    format!("(use-stdout {})", input)
+                    input.clone()
                 } else {
-                    format!("(use-stdout ({}))", input)
+                    format!("({})", input)
                 };
                 let tokens = tokenize(&mod_input);
                 let ast = parse(&tokens);
@@ -226,7 +226,6 @@ pub fn start_interactive() {
                     Ok(ast) => {
                         match eval(&mut environment, &ast) {
                             Ok(_exp) => {
-                                //println!("{}", s);
                                 if !input.is_empty() {
                                     if let Err(err) = con.history.push(input.into()) {
                                         eprintln!("Error saving history: {}", err);
