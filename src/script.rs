@@ -90,7 +90,17 @@ fn parse_atom(token: &str) -> Expression {
     }
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
         // Kakoune bug "
-        return Expression::Atom(Atom::String(token[1..token.len() - 1].to_string()));
+        let mut string = token[1..token.len() - 1].to_string();
+        string = if string.contains('\\') {
+            // XXX TODO, do a proper escaping...
+            string
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+        } else {
+            string
+        };
+        return Expression::Atom(Atom::String(string));
     }
 
     if token == "t" {
