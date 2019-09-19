@@ -81,6 +81,10 @@ pub fn tokenize(text: &str) -> Vec<String> {
         }
         last_ch = ch;
     }
+    let token = token.trim();
+    if !token.is_empty() {
+        tokens.push(token.to_string());
+    }
     tokens
 }
 
@@ -155,7 +159,7 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
             reason: "No tokens".to_string(),
         });
     }
-    if tokens[0] != "(" {
+    if tokens[0] != "(" && tokens[0] != "'" && tokens[0] != "`" {
         return Err(ParseError {
             reason: "Not a list".to_string(),
         });
@@ -190,6 +194,7 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 stack.push(Vec::<Expression>::new());
             }
             ")" => {
+                //quote_start = false;
                 level -= 1;
                 close_list(level, &mut stack)?;
                 while let Some(quote_exit_level) = qexits.pop() {
@@ -227,6 +232,15 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                     });
                 }
             },
+        }
+    }
+    if !qexits.is_empty() {
+        qexits.reverse();
+        for quote_exit_level in qexits.drain(..) {
+            if level == quote_exit_level {
+                level -= 1;
+                close_list(level, &mut stack)?;
+            }
         }
     }
     if level != 0 {

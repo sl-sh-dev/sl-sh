@@ -214,7 +214,10 @@ pub fn start_interactive() {
                 if input.is_empty() {
                     continue;
                 }
-                let mod_input = if input.starts_with('(') {
+                let mod_input = if input.starts_with('(')
+                    || input.starts_with('\'')
+                    || input.starts_with('`')
+                {
                     input.clone()
                 } else {
                     format!("({})", input)
