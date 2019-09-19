@@ -92,7 +92,6 @@ fn run_command(
         new_args.push(a.make_string(environment)?);
     }
     let mut com_obj = Command::new(command);
-    //let pgid = unistd::getpid();
     let foreground = !environment.in_pipe && !environment.state.borrow().is_spawn;
     let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
@@ -100,11 +99,15 @@ fn run_command(
         .stdin(stdin)
         .stdout(stdout)
         .stderr(stderr);
+    let pgid = environment.state.borrow().pipe_pgid;
 
     unsafe {
         com_obj.pre_exec(move || -> io::Result<()> {
             let pid = unistd::getpid();
-            let pgid = unistd::getpid();
+            let pgid = match pgid {
+                Some(pgid) => Pid::from_raw(pgid as i32),
+                None => unistd::getpid(),
+            };
             if let Err(_err) = unistd::setpgid(pid, pgid) {
                 // Ignore, do in parent and child.
                 //let msg = format!("Error setting pgid for {}: {}", pid, err);
@@ -138,7 +141,10 @@ fn run_command(
     match proc {
         Ok(mut proc) => {
             let pid = Pid::from_raw(proc.id() as i32);
-            let pgid = Pid::from_raw(proc.id() as i32);
+            let pgid = match pgid {
+                Some(pgid) => Pid::from_raw(pgid as i32),
+                None => Pid::from_raw(proc.id() as i32),
+            };
             if let Err(_err) = unistd::setpgid(pid, pgid) {
                 // Ignore, do in parent and child.
             }
@@ -317,10 +323,19 @@ pub fn do_pipe(
             environment.state.borrow_mut().stdout_status = old_out_status;
             return Err(err);
         }
+        if let Ok(Expression::Process(pid)) = res {
+            let mut state = environment.state.borrow_mut();
+            if state.pipe_pgid.is_none() {
+                state.pipe_pgid = Some(pid);
+            }
+        }
         out = res.unwrap();
         i += 1;
     }
     environment.in_pipe = old_pipe_in;
+    if !environment.in_pipe {
+        environment.state.borrow_mut().pipe_pgid = None;
+    }
     environment.state.borrow_mut().stdout_status = old_out_status;
     Ok(out)
 }

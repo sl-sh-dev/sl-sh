@@ -31,6 +31,7 @@ pub struct EnvState {
     pub eval_level: u32,
     pub stopped_procs: Vec<u32>,
     pub is_spawn: bool,
+    pub pipe_pgid: Option<u32>,
 }
 
 impl Default for EnvState {
@@ -43,6 +44,7 @@ impl Default for EnvState {
             eval_level: 0,
             stopped_procs: Vec::new(),
             is_spawn: false,
+            pipe_pgid: None,
         }
     }
 }
