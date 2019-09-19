@@ -225,15 +225,21 @@ pub fn start_interactive() {
                 match ast {
                     Ok(ast) => {
                         match eval(&mut environment, &ast) {
-                            Ok(_exp) => {
+                            Ok(exp) => {
                                 if !input.is_empty() {
                                     if let Err(err) = con.history.push(input.into()) {
                                         eprintln!("Error saving history: {}", err);
                                     }
                                 }
-                                /*if let Err(err) = exp.write(&environment) {
-                                    eprintln!("Error writing result: {}", err);
-                                }*/
+                                match exp {
+                                    Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                                    Expression::Process(_) => { /* should have used stdout */ }
+                                    _ => {
+                                        if let Err(err) = exp.write(&environment) {
+                                            eprintln!("Error writing result: {}", err);
+                                        }
+                                    }
+                                }
                             }
                             Err(err) => eprintln!("{}", err),
                         }
