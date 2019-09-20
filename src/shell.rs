@@ -1,6 +1,7 @@
 use liner::Context;
 use std::env;
 use std::fs;
+use std::fs::create_dir_all;
 use std::io::{self, ErrorKind};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -154,14 +155,24 @@ pub fn start_interactive() {
     con.history.inc_append = true;
     con.history.load_duplicates = false;
     con.key_bindings = liner::KeyBindings::Vi;
-    if let Err(err) = con.history.set_file_name_and_load_history("tmp_history") {
-        eprintln!("Error loading history: {}", err);
-    }
-    let mut environment = build_default_environment();
-    let home = match env::var("HOME") {
+    let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),
     };
+    if home.ends_with('/') {
+        home = home[..home.len() - 1].to_string();
+    }
+    let share_dir = format!("{}/.local/share/slsh", home);
+    if let Err(err) = create_dir_all(&share_dir) {
+        eprintln!("Unable to create share directory: {}- {}", share_dir, err);
+    }
+    if let Err(err) = con
+        .history
+        .set_file_name_and_load_history(format!("{}/history", share_dir))
+    {
+        eprintln!("Error loading history: {}", err);
+    }
+    let mut environment = build_default_environment();
     let init_script = format!("{}/.config/slsh/slshrc", home);
     if let Err(err) = run_script(&init_script, &mut environment) {
         eprintln!("Failed to run init script {}: {}", init_script, err);
