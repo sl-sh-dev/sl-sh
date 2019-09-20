@@ -63,7 +63,13 @@ fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Resul
         ))
     } else {
         let args = to_args(environment, args)?;
-        eval(environment, &args[0])
+        match &args[0] {
+            Expression::Atom(Atom::String(s)) => match read(&s) {
+                Ok(ast) => eval(environment, &ast),
+                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+            },
+            _ => eval(environment, &args[0]),
+        }
     }
 }
 
