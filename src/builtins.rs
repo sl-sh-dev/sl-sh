@@ -228,9 +228,9 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                 };
                 val = Expression::Atom(Atom::String(vs));
             }
-            environment.data.insert(key, val);
+            environment.data.insert(key, val.clone());
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(val)
     }
 }
 
