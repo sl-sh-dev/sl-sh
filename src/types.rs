@@ -41,8 +41,10 @@ impl Atom {
             Atom::Int(i) => format!("{}", i),
             Atom::Symbol(s) => s.clone(),
             Atom::String(s) => s.clone(),
-            Atom::Lambda(l) => format!("Lambda ({:?}) ({:?})", l.params, l.body), //"lambda".to_string(),
-            Atom::Macro(m) => format!("Macro ({:?}) ({:?})", m.params, m.body), //"macro".to_string(),
+            Atom::Lambda(l) => {
+                format!("Lambda ({}) ({})", l.params.to_string(), l.body.to_string())
+            }
+            Atom::Macro(m) => format!("Macro ({}) ({})", m.params.to_string(), m.body.to_string()),
         }
     }
 
@@ -80,6 +82,24 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
+    pub fn to_string(&self) -> String {
+        match self {
+            Expression::Atom(a) => a.to_string(),
+            Expression::Process(pid) => format!("{}", pid).to_string(),
+            Expression::Func(_) => "Func".to_string(),
+            Expression::List(list) => {
+                let mut res = String::new();
+                res.push_str("( ");
+                for exp in list {
+                    res.push_str(&exp.to_string());
+                    res.push_str(" ");
+                }
+                res.push(')');
+                res
+            }
+        }
+    }
+
     pub fn display_type(&self) -> String {
         match self {
             Expression::Atom(a) => a.display_type(),
