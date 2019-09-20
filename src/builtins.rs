@@ -18,7 +18,7 @@ use std::rc::Rc;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::process::*;
-use crate::script::*;
+use crate::reader::*;
 use crate::shell::*;
 use crate::types::*;
 
@@ -76,8 +76,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
         ))
     } else {
         let contents = fs::read_to_string(args.pop().unwrap().make_string(environment)?)?;
-        let tokens = tokenize(&contents);
-        let ast = parse(&tokens);
+        let ast = read(&contents);
         match ast {
             Ok(ast) => {
                 let ast = match ast {

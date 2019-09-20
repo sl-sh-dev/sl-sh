@@ -2,7 +2,7 @@ use std::num::{ParseFloatError, ParseIntError};
 
 use crate::types::*;
 
-pub fn is_whitespace(ch: char) -> bool {
+fn is_whitespace(ch: char) -> bool {
     match ch {
         ' ' => true,
         '\t' => true,
@@ -20,7 +20,7 @@ macro_rules! save_token {
     }};
 }
 
-pub fn tokenize(text: &str) -> Vec<String> {
+fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
     let mut token = String::new();
@@ -153,7 +153,7 @@ fn close_list(level: i32, stack: &mut Vec<Vec<Expression>>) -> Result<(), ParseE
     Ok(())
 }
 
-pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
+fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
         return Err(ParseError {
             reason: "No tokens".to_string(),
@@ -262,4 +262,9 @@ pub fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
             }),
         }
     }
+}
+
+pub fn read(text: &str) -> Result<Expression, ParseError> {
+    let tokens = tokenize(text);
+    parse(&tokens)
 }

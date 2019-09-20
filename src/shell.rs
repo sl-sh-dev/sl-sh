@@ -13,7 +13,7 @@ use crate::builtins_util::*;
 use crate::completions::*;
 use crate::environment::*;
 use crate::process::*;
-use crate::script::*;
+use crate::reader::*;
 use crate::types::*;
 
 fn call_lambda(
@@ -233,9 +233,7 @@ pub fn start_interactive() {
                 } else {
                     format!("({})", input)
                 };
-                let tokens = tokenize(&mod_input);
-                let ast = parse(&tokens);
-                //println!("{:?}", ast);
+                let ast = read(&mod_input);
                 match ast {
                     Ok(ast) => {
                         match eval(&mut environment, &ast) {
@@ -349,8 +347,7 @@ pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
 
 fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> {
     let contents = fs::read_to_string(file_name)?;
-    let tokens = tokenize(&contents);
-    let ast = parse(&tokens);
+    let ast = read(&contents);
     match ast {
         Ok(Expression::List(list)) => {
             for exp in list {
