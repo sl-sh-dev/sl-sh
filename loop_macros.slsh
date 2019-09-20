@@ -1,14 +1,14 @@
 (defmacro setq (sym bind)
 	`(set (quote ,sym) ,bind))
 
-(defmacro loop (params bindings body)
-	(let ((loop-fn-name (gensym)))
-		`(progn
-			(setq ,loop-fn-name (fn ,params ,body))
-			(eval (append (quote (,loop-fn-name)) ,bindings)))))
-
 ;(defmacro loop (params bindings body)
-;		`((fn ,params ,body) ,bindings))
+;	(let ((loop-fn-name (gensym)))
+;		`(progn
+;			(setq ,loop-fn-name (fn ,params ,body))
+;			(eval (append (quote (,loop-fn-name)) ,bindings)))))
+
+(defmacro loop (params bindings body)
+		`(eval (append '((fn ,params ,body)) ,bindings)))
 
 (defmacro loop-times (times body)
 	(let ((idx-name (gensym)))

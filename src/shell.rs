@@ -78,8 +78,9 @@ fn internal_eval(
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            let command = match command {
-                Expression::Atom(Atom::Symbol(s)) => s,
+            match command {
+                Expression::Atom(Atom::Symbol(_s)) => {}
+                Expression::List(_list) => {}
                 _ => {
                     let msg = format!(
                         "Not a valid command {}, must be a symbol.",
@@ -88,28 +89,44 @@ fn internal_eval(
                     return Err(io::Error::new(io::ErrorKind::Other, msg));
                 }
             };
-            if command.is_empty() {
-                return Ok(Expression::Atom(Atom::Nil));
-            }
 
-            if let Some(exp) = get_expression(environment, &command) {
-                if let Expression::Func(f) = exp {
-                    f(environment, &parts)
-                } else if let Expression::Atom(Atom::Lambda(f)) = exp {
-                    call_lambda(environment, &f, parts)
-                } else if let Expression::Atom(Atom::Macro(m)) = exp {
-                    expand_macro(environment, &m, parts)
-                } else {
-                    let exp = exp.clone();
-                    eval(environment, &exp)
+            match command {
+                Expression::Atom(Atom::Symbol(command)) => {
+                    if command.is_empty() {
+                        return Ok(Expression::Atom(Atom::Nil));
+                    }
+                    if let Some(exp) = get_expression(environment, &command) {
+                        if let Expression::Func(f) = exp {
+                            f(environment, &parts)
+                        } else if let Expression::Atom(Atom::Lambda(f)) = exp {
+                            call_lambda(environment, &f, parts)
+                        } else if let Expression::Atom(Atom::Macro(m)) = exp {
+                            expand_macro(environment, &m, parts)
+                        } else {
+                            let exp = exp.clone();
+                            eval(environment, &exp)
+                        }
+                    } else {
+                        match &command[..] {
+                            "nil" => Ok(Expression::Atom(Atom::Nil)),
+                            "|" | "pipe" => do_pipe(environment, parts, data_in),
+                            //"exit" => return,
+                            command => do_command(environment, command, parts, data_in),
+                        }
+                    }
                 }
-            } else {
-                match &command[..] {
-                    "nil" => Ok(Expression::Atom(Atom::Nil)),
-                    "|" | "pipe" => do_pipe(environment, parts, data_in),
-                    //"exit" => return,
-                    command => do_command(environment, command, parts, data_in),
+                Expression::List(list) => {
+                    match pipe_eval(environment, &Expression::List(list.to_vec()), data_in)? {
+                        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                        Expression::Func(f) => f(environment, &parts),
+                        _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+                    }
                 }
+                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                Expression::Func(f) => f(environment, &parts),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
             }
         }
         Expression::Atom(Atom::Symbol(s)) => {
