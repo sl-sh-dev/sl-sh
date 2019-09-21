@@ -3,6 +3,7 @@ use std::ffi::OsString;
 
 pub struct Config {
     pub command: Option<String>,
+    pub script: Option<String>,
     pub args: Vec<String>,
 }
 
@@ -22,8 +23,7 @@ OPTIONS:
     -c             Command to run instead of entering the REPL.
 
 ARGS:
-    <args>...  Script arguments. If the -c option is not specified the
-               first parameter is the filename to execute."#;
+    <args>...      Script to run with arguments."#;
 
 fn help(_name: &str) {
     println!("{}", HELP);
@@ -45,6 +45,7 @@ fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Result<String, ()> {
 
 pub fn get_config() -> Result<Config, ()> {
     let mut command: Option<String> = None;
+    let mut script: Option<String> = None;
     let mut command_args: Vec<String> = Vec::new();
 
     let mut args: Vec<OsString> = env::args_os().collect();
@@ -70,8 +71,8 @@ pub fn get_config() -> Result<Config, ()> {
                         return Err(());
                     }
                     _ => {
-                        if command.is_none() {
-                            command = Some(arg);
+                        if command.is_none() && script.is_none() {
+                            script = Some(arg);
                         } else {
                             command_args.push(arg);
                         }
@@ -85,6 +86,7 @@ pub fn get_config() -> Result<Config, ()> {
     }
     Ok(Config {
         command,
+        script,
         args: command_args,
     })
 }

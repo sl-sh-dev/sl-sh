@@ -11,14 +11,16 @@
 		(if (> idx-name 1) (recur (- idx-name 1)))))))
 
 (defmacro for-each (bind in_list body)
-	`(loop (plist) (,in_list) (progn
-		(setq ,bind (first plist))
-		(eval ,body)
-		(if (> (length plist) 1) (recur (rest plist))))))
+	`(if (> (length ,in_list) 0)
+		(loop (plist) (,in_list) (progn
+			(setq ,bind (first plist))
+			(eval ,body)
+			(if (> (length plist) 1) (recur (rest plist)))))))
 
 (defmacro for-each-idx (bind idx_bind in_list body)
-	`(loop (plist idx) (,in_list 0) (progn
-		(setq ,bind (first plist))
-		(setq ,idx_bind idx)
-		(eval ,body)
-		(if (> (length plist) 1) (recur (rest plist) (+ idx 1))))))
+	`(if (> (length ,in_list) 0)
+		(loop (plist idx) (,in_list 0) (progn
+			(setq ,bind (first plist))
+			(setq ,idx_bind idx)
+			(eval ,body)
+			(if (> (length plist) 1) (recur (rest plist) (+ idx 1)))))))
