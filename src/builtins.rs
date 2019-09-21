@@ -317,7 +317,8 @@ fn builtin_quote(_environment: &mut Environment, args: &[Expression]) -> io::Res
 
 fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Result<Expression> {
     let mut output: Vec<Expression> = Vec::with_capacity(list.len());
-    let mut back_quote_next = false;
+    let mut comma_next = false;
+    let mut amp_next = false;
     for exp in list {
         let exp = if let Expression::List(tlist) = exp {
             replace_commas(environment, &tlist)?
@@ -326,16 +327,44 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
             if symbol == "," {
-                back_quote_next = true;
-            } else if back_quote_next {
+                comma_next = true;
+            } else if symbol == ",@" {
+                amp_next = true;
+            } else if comma_next {
                 output.push(eval(environment, &exp)?);
-                back_quote_next = false;
+                comma_next = false;
+            } else if amp_next {
+                let nl = eval(environment, &exp)?;
+                if let Expression::List(mut new_list) = nl {
+                    for item in new_list.drain(..) {
+                        output.push(item);
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        ",@ must be applied to a list",
+                    ));
+                }
+                amp_next = false;
             } else {
                 output.push(exp);
             }
-        } else if back_quote_next {
+        } else if comma_next {
             output.push(eval(environment, &exp)?);
-            back_quote_next = false;
+            comma_next = false;
+        } else if amp_next {
+            let nl = eval(environment, &exp)?;
+            if let Expression::List(mut new_list) = nl {
+                for item in new_list.drain(..) {
+                    output.push(item);
+                }
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    ",@ must be applied to a list",
+                ));
+            }
+            amp_next = false;
         } else {
             output.push(exp);
         }
@@ -483,6 +512,52 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
+fn builtin_expand_macro(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "expand-macro can only have one form (list defining the macro call)",
+        ))
+    } else if let Expression::List(list) = &args[0] {
+        let (command, parts) = match list.split_first() {
+            Some((c, p)) => (c, p),
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "expand-macro needs the macro name and parameters",
+                ));
+            }
+        };
+        if let Expression::Atom(Atom::Symbol(command)) = command {
+            if let Some(Expression::Atom(Atom::Macro(sh_macro))) =
+                get_expression(environment, &command)
+            {
+                let mut new_environment = build_new_scope(environment);
+                setup_args(&mut new_environment, &sh_macro.params, parts, false)?;
+                let expansion = eval(&mut new_environment, &sh_macro.body)?;
+                Ok(expansion)
+            //println!("\nMacro Expansion: {}", expansion.to_string());
+            } else {
+                let msg = format!("expand-macro: {} not a macro", command);
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "expand-macro first item must be a symbol",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "expand-macro can only have one form (list defining the macro call)",
+        ))
+    }
+}
+
 fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut args = to_args(environment, args)?;
     let mut arg_list: Vec<Expression> = Vec::with_capacity(args.len());
@@ -600,6 +675,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("null".to_string(), Expression::Func(builtin_not));
     data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
     data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
+    data.insert(
+        "expand-macro".to_string(),
+        Expression::Func(builtin_expand_macro),
+    );
     data.insert("recur".to_string(), Expression::Func(builtin_recur));
     data.insert("gensym".to_string(), Expression::Func(builtin_gensym));
     data.insert("jobs".to_string(), Expression::Func(builtin_jobs));

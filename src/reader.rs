@@ -20,17 +20,66 @@ macro_rules! save_token {
     }};
 }
 
+fn do_in_string(mut token: String, ch: char, last_ch: &mut char) -> String {
+    let mut set_last_char = false;
+    if !(ch == '\\' && *last_ch != '\\') {
+        // skip a standalone \ for now
+        if *last_ch == '\\' {
+            match ch {
+                'n' => token.push('\n'),
+                'r' => token.push('\r'),
+                't' => token.push('\t'),
+                '"' => token.push('"'),
+                '\\' => {
+                    // These \ are consumed so do not use again.
+                    *last_ch = ' ';
+                    set_last_char = true;
+                    token.push('\\');
+                }
+                _ => {
+                    token.push('\\');
+                    token.push(ch);
+                }
+            }
+        } else {
+            token.push(ch);
+        }
+    }
+    if !set_last_char {
+        *last_ch = ch;
+    }
+    token
+}
+
 fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
     let mut token = String::new();
     let mut last_ch = ' ';
     let mut in_comment = false;
+    let mut last_comma = false;
     for ch in text.chars() {
+        if last_comma {
+            last_comma = false;
+            save_token!(tokens, token);
+            if ch == '@' {
+                tokens.push(",@".to_string());
+                last_ch = ch;
+                continue;
+            } else {
+                tokens.push(",".to_string());
+            }
+        }
         if in_comment {
             if ch == '\n' {
                 in_comment = false;
             }
+            continue;
+        }
+        if ch == '\n' && last_ch == '\\' {
+            // Line ended on \ so combine with next line.
+            token.push('\n');
+            last_ch = ch;
             continue;
         }
         if ch == '\"' && last_ch != '\\' {
@@ -45,7 +94,7 @@ fn tokenize(text: &str) -> Vec<String> {
             continue;
         }
         if in_string {
-            token.push(ch);
+            token = do_in_string(token, ch, &mut last_ch);
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.
@@ -69,8 +118,7 @@ fn tokenize(text: &str) -> Vec<String> {
                 save_token!(tokens, token);
                 tokens.push("`".to_string());
             } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
-                save_token!(tokens, token);
-                tokens.push(",".to_string());
+                last_comma = true;
             } else if is_whitespace(ch) {
                 save_token!(tokens, token);
             } else if ch == '\\' && last_ch != '\\' {
@@ -78,8 +126,8 @@ fn tokenize(text: &str) -> Vec<String> {
             } else {
                 token.push(ch);
             }
+            last_ch = ch;
         }
-        last_ch = ch;
     }
     let token = token.trim();
     if !token.is_empty() {
@@ -94,16 +142,7 @@ fn parse_atom(token: &str) -> Expression {
     }
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
         // Kakoune bug "
-        let mut string = token[1..token.len() - 1].to_string();
-        string = if string.contains('\\') {
-            // XXX TODO, do a proper escaping...
-            string
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t")
-        } else {
-            string
-        };
+        let string = token[1..token.len() - 1].to_string();
         return Expression::Atom(Atom::String(string));
     }
 
@@ -194,7 +233,6 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 stack.push(Vec::<Expression>::new());
             }
             ")" => {
-                //quote_start = false;
                 level -= 1;
                 close_list(level, &mut stack)?;
                 while let Some(quote_exit_level) = qexits.pop() {

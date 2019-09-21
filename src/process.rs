@@ -95,7 +95,7 @@ fn run_command(
     let foreground = !environment.in_pipe && !environment.state.borrow().is_spawn;
     let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
-        .args(new_args)
+        .args(&new_args)
         .stdin(stdin)
         .stdout(stdout)
         .stderr(stderr);
@@ -166,7 +166,11 @@ fn run_command(
             result = Expression::Process(pid);
         }
         Err(e) => {
-            eprintln!("Failed to execute {}: {}", command, e);
+            eprint!("Failed to execute [{}", command);
+            for n in new_args {
+                eprint!(" {}", n);
+            }
+            eprintln!("]: {}", e);
         }
     };
     Ok(result)

@@ -159,6 +159,9 @@ pub fn pipe_eval(
     environment.state.borrow_mut().eval_level += 1;
     let result = internal_eval(environment, expression, data_in);
     environment.state.borrow_mut().eval_level -= 1;
+    if let Err(_err) = &result {
+        eprintln!("Error evaluating {}", expression.to_string());
+    }
     result
 }
 
