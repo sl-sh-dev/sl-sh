@@ -53,6 +53,7 @@ impl Default for EnvState {
 pub struct Environment<'a> {
     pub state: Rc<RefCell<EnvState>>,
     pub in_pipe: bool,
+    pub loose_symbols: bool,
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub outer: Option<&'a Environment<'a>>,
@@ -69,6 +70,7 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
     Environment {
         state: Rc::new(RefCell::new(EnvState::default())),
         in_pipe: false,
+        loose_symbols: false,
         data,
         procs,
         outer: None,
@@ -86,6 +88,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
     Environment {
         state: environment.state.clone(),
         in_pipe: environment.in_pipe,
+        loose_symbols: false,
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),
@@ -97,6 +100,7 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
     Environment {
         state: environment.state.clone(),
         in_pipe: environment.in_pipe,
+        loose_symbols: false,
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),

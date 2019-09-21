@@ -142,7 +142,12 @@ fn internal_eval(
                     Ok(exp)
                 }
             } else {
-                Ok(Expression::Atom(Atom::String(s.clone())))
+                let msg = format!("Symbol {} not found.", s);
+                if environment.loose_symbols {
+                    Ok(Expression::Atom(Atom::String(s.clone())))
+                } else {
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                }
             }
         }
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
@@ -159,9 +164,6 @@ pub fn pipe_eval(
     environment.state.borrow_mut().eval_level += 1;
     let result = internal_eval(environment, expression, data_in);
     environment.state.borrow_mut().eval_level -= 1;
-    if let Err(_err) = &result {
-        eprintln!("Error evaluating {}", expression.to_string());
-    }
     result
 }
 
@@ -255,6 +257,7 @@ pub fn start_interactive() {
                 let ast = read(&mod_input);
                 match ast {
                     Ok(ast) => {
+                        environment.loose_symbols = true;
                         match eval(&mut environment, &ast) {
                             Ok(exp) => {
                                 if !input.is_empty() {
@@ -274,6 +277,7 @@ pub fn start_interactive() {
                             }
                             Err(err) => eprintln!("{}", err),
                         }
+                        environment.loose_symbols = false;
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }

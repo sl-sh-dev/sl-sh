@@ -401,6 +401,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
         let mut enviro = Environment {
             state,
             in_pipe: false,
+            loose_symbols: false,
             data,
             procs,
             outer: None,

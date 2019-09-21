@@ -201,6 +201,43 @@ fn get_output(environment: &Environment, status: &Option<IOState>) -> io::Result
     Ok(res)
 }
 
+pub fn prep_string_arg(s: &str, nargs: &mut Vec<Expression>) -> io::Result<()> {
+    let s = match expand_tilde(&s) {
+        Some(p) => p,
+        None => s.to_string(), // XXX not great.
+    };
+    if s.contains('*') || s.contains('?') || s.contains('[') || s.contains('{') {
+        match glob(&s) {
+            Ok(paths) => {
+                let mut i = 0;
+                for p in paths {
+                    match p {
+                        Ok(p) => {
+                            i += 1;
+                            if let Some(p) = p.to_str() {
+                                nargs.push(Expression::Atom(Atom::String(p.to_string())));
+                            }
+                        }
+                        Err(err) => {
+                            let msg = format!("glob error on while iterating {}, {}", s, err);
+                            return Err(io::Error::new(io::ErrorKind::Other, msg));
+                        }
+                    }
+                }
+                if i == 0 {
+                    nargs.push(Expression::Atom(Atom::String(s)));
+                }
+            }
+            Err(_err) => {
+                nargs.push(Expression::Atom(Atom::String(s)));
+            }
+        }
+    } else {
+        nargs.push(Expression::Atom(Atom::String(s)));
+    }
+    Ok(())
+}
+
 pub fn do_command(
     environment: &mut Environment,
     command: &str,
@@ -248,43 +285,10 @@ pub fn do_command(
     let mut args = to_args(environment, parts)?;
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {
-        if let Expression::Atom(Atom::String(s)) = &arg {
-            let s = match expand_tilde(&s) {
-                Some(p) => p,
-                None => s.to_string(), // XXX not great.
-            };
-            if s.contains('*') || s.contains('?') || s.contains('[') || s.contains('{') {
-                match glob(&s) {
-                    Ok(paths) => {
-                        let mut i = 0;
-                        for p in paths {
-                            match p {
-                                Ok(p) => {
-                                    i += 1;
-                                    if let Some(p) = p.to_str() {
-                                        nargs.push(Expression::Atom(Atom::String(p.to_string())));
-                                    }
-                                }
-                                Err(err) => {
-                                    let msg =
-                                        format!("glob error on while iterating {}, {}", s, err);
-                                    return Err(io::Error::new(io::ErrorKind::Other, msg));
-                                }
-                            }
-                        }
-                        if i == 0 {
-                            nargs.push(Expression::Atom(Atom::String(s)));
-                        }
-                    }
-                    Err(_err) => {
-                        nargs.push(Expression::Atom(Atom::String(s)));
-                    }
-                }
-            } else {
-                nargs.push(Expression::Atom(Atom::String(s)));
-            }
+        if let Expression::Atom(Atom::String(s)) = arg {
+            prep_string_arg(&s, &mut nargs)?;
         } else {
-            nargs.push(arg);
+            nargs.push(arg.clone());
         }
     }
     run_command(
