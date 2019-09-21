@@ -20,16 +20,58 @@ macro_rules! save_token {
     }};
 }
 
-fn do_in_string(mut token: String, ch: char, last_ch: &mut char) -> String {
+fn char_to_hex_num(ch: char) -> u8 {
+    if ch > '0' && ch < '9' {
+        ch as u8 - b'0'
+    } else {
+        match ch {
+            'a' => 10,
+            'b' => 11,
+            'c' => 12,
+            'd' => 13,
+            'e' => 14,
+            'f' => 15,
+            _ => 0,
+        }
+    }
+}
+
+fn escape_to_char(escape_code: &[char]) -> char {
+    let mut ch_n: u8 = 0;
+    if escape_code.len() > 1 {
+        ch_n = (char_to_hex_num(escape_code[0]) * 16) + (char_to_hex_num(escape_code[1]));
+    } else if escape_code.len() == 1 {
+        ch_n = char_to_hex_num(escape_code[0]);
+    }
+    ch_n as char
+}
+
+fn do_in_string(
+    mut token: String,
+    ch: char,
+    last_ch: &mut char,
+    in_escape_code: &mut bool,
+    escape_code: &mut Vec<char>,
+) -> String {
     let mut set_last_char = false;
     if !(ch == '\\' && *last_ch != '\\') {
         // skip a standalone \ for now
-        if *last_ch == '\\' {
+        if *in_escape_code {
+            escape_code.push(ch);
+            if escape_code.len() == 2 {
+                token.push(escape_to_char(escape_code));
+                escape_code.clear();
+                *in_escape_code = false;
+            }
+        } else if *last_ch == '\\' {
             match ch {
                 'n' => token.push('\n'),
                 'r' => token.push('\r'),
                 't' => token.push('\t'),
                 '"' => token.push('"'),
+                'x' => {
+                    *in_escape_code = true;
+                }
                 '\\' => {
                     // These \ are consumed so do not use again.
                     *last_ch = ' ';
@@ -58,6 +100,8 @@ fn tokenize(text: &str) -> Vec<String> {
     let mut last_ch = ' ';
     let mut in_comment = false;
     let mut last_comma = false;
+    let mut escape_code: Vec<char> = Vec::with_capacity(2);
+    let mut in_escape_code = false;
     for ch in text.chars() {
         if last_comma {
             last_comma = false;
@@ -89,12 +133,21 @@ fn tokenize(text: &str) -> Vec<String> {
             if !in_string {
                 tokens.push(token);
                 token = String::new();
+            } else {
+                in_escape_code = false;
+                escape_code.clear();
             }
             last_ch = ch;
             continue;
         }
         if in_string {
-            token = do_in_string(token, ch, &mut last_ch);
+            token = do_in_string(
+                token,
+                ch,
+                &mut last_ch,
+                &mut in_escape_code,
+                &mut escape_code,
+            );
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.

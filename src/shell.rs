@@ -236,7 +236,6 @@ pub fn start_interactive() {
                 pwd.display()
             )
         };
-        let prompt = prompt.replace("\\x1b", "\x1b"); // Patch escape codes.
         if let Err(err) = reap_procs(&environment) {
             eprintln!("Error reaping processes: {}", err);
         }
