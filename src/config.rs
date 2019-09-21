@@ -6,7 +6,7 @@ pub struct Config {
     pub args: Vec<String>,
 }
 
-const VERSION_STRING: &str = env!("VERSION_STRING");
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
 const HELP: &str = r#"slsh - Simple Lisp Shell
 Start the slsh shell.

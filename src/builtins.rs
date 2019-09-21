@@ -16,6 +16,7 @@ use std::process::Child;
 use std::rc::Rc;
 
 use crate::builtins_util::*;
+use crate::config::VERSION_STRING;
 use crate::environment::*;
 use crate::process::*;
 use crate::reader::*;
@@ -613,6 +614,17 @@ fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result
     Ok(Expression::Atom(Atom::Nil))
 }
 
+fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if !args.is_empty() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "version takes to arguments",
+        ))
+    } else {
+        Ok(Expression::Atom(Atom::String(VERSION_STRING.to_string())))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -683,6 +695,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("gensym".to_string(), Expression::Func(builtin_gensym));
     data.insert("jobs".to_string(), Expression::Func(builtin_jobs));
     data.insert("fg".to_string(), Expression::Func(builtin_fg));
+    data.insert("version".to_string(), Expression::Func(builtin_version));
 
     data.insert(
         "=".to_string(),
