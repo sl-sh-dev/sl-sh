@@ -165,7 +165,82 @@ fn builtin_stderr_to(environment: &mut Environment, args: &[Expression]) -> io::
     internal_output_to(environment, args, "stderr-to", false)
 }
 
-pub fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
+fn builtin_path_exists(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "path-exists takes one form (a path)",
+        ))
+    } else {
+        let arg0 = eval(environment, &args[0])?;
+        if let Expression::Atom(Atom::String(p)) = arg0 {
+            let path = Path::new(&p);
+            if path.exists() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "path-exists path must be a string",
+            ))
+        }
+    }
+}
+
+fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-file takes one form (a path)",
+        ))
+    } else {
+        let arg0 = eval(environment, &args[0])?;
+        if let Expression::Atom(Atom::String(p)) = arg0 {
+            let path = Path::new(&p);
+            if path.is_file() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "is-file path must be a string",
+            ))
+        }
+    }
+}
+
+fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-dir takes one form (a path)",
+        ))
+    } else {
+        let arg0 = eval(environment, &args[0])?;
+        if let Expression::Atom(Atom::String(p)) = arg0 {
+            let path = Path::new(&p);
+            if path.is_dir() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "is-dir path must be a string",
+            ))
+        }
+    }
+}
+
+fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
     if environment.in_pipe {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -222,5 +297,11 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
         "file-trunc".to_string(),
         Expression::Func(builtin_file_trunc),
     );
+    data.insert(
+        "path-exists".to_string(),
+        Expression::Func(builtin_path_exists),
+    );
+    data.insert("is-file".to_string(), Expression::Func(builtin_is_file));
+    data.insert("is-dir".to_string(), Expression::Func(builtin_is_dir));
     data.insert("pipe".to_string(), Expression::Func(builtin_pipe));
 }
