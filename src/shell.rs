@@ -171,6 +171,27 @@ pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Resul
     result
 }
 
+fn load_scripts(environment: &mut Environment, home: &str) {
+    let mut script = format!("{}/.config/slsh/slsh_std.lisp", home);
+    if let Err(err) = run_script(&script, environment) {
+        eprintln!(
+            "WARNING: Failed to load standard macros script {}: {}",
+            script, err
+        );
+    }
+    script = format!("{}/.config/slsh/slsh_shell.lisp", home);
+    if let Err(err) = run_script(&script, environment) {
+        eprintln!(
+            "WARNING: Failed to load shell macros script {}: {}",
+            script, err
+        );
+    }
+    script = format!("{}/.config/slsh/slshrc", home);
+    if let Err(err) = run_script(&script, environment) {
+        eprintln!("WARNING: Failed to load init script {}: {}", script, err);
+    }
+}
+
 pub fn start_interactive() {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
@@ -186,19 +207,19 @@ pub fn start_interactive() {
     }
     let share_dir = format!("{}/.local/share/slsh", home);
     if let Err(err) = create_dir_all(&share_dir) {
-        eprintln!("Unable to create share directory: {}- {}", share_dir, err);
+        eprintln!(
+            "WARNING: Unable to create share directory: {}- {}",
+            share_dir, err
+        );
     }
     if let Err(err) = con
         .history
         .set_file_name_and_load_history(format!("{}/history", share_dir))
     {
-        eprintln!("Error loading history: {}", err);
+        eprintln!("WARNING: Unable to load history: {}", err);
     }
     let mut environment = build_default_environment();
-    let init_script = format!("{}/.config/slsh/slshrc", home);
-    if let Err(err) = run_script(&init_script, &mut environment) {
-        eprintln!("Failed to run init script {}: {}", init_script, err);
-    }
+    load_scripts(&mut environment, &home);
 
     loop {
         let hostname = match env::var("HOSTNAME") {
