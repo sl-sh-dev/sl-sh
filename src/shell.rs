@@ -56,11 +56,7 @@ fn expand_macro(
     eval(environment, &expansion)
 }
 
-fn internal_eval(
-    environment: &mut Environment,
-    expression: &Expression,
-    data_in: Option<Expression>,
-) -> io::Result<Expression> {
+fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
     let in_recur = environment.state.borrow().recur_num_args.is_some();
     if in_recur {
         environment.state.borrow_mut().recur_num_args = None;
@@ -95,7 +91,15 @@ fn internal_eval(
                     if command.is_empty() {
                         return Ok(Expression::Atom(Atom::Nil));
                     }
-                    if let Some(exp) = get_expression(environment, &command) {
+                    let form = if environment.form_type == FormType::Any
+                        || environment.form_type == FormType::FormOnly
+                    {
+                        get_expression(environment, &command)
+                    } else {
+                        None
+                    };
+                    if form.is_some() {
+                        let exp = form.unwrap();
                         if let Expression::Func(f) = exp {
                             f(environment, &parts)
                         } else if let Expression::Atom(Atom::Lambda(f)) = exp {
@@ -106,17 +110,22 @@ fn internal_eval(
                             let exp = exp.clone();
                             eval(environment, &exp)
                         }
-                    } else {
+                    } else if environment.form_type == FormType::ExternalOnly
+                        || environment.form_type == FormType::Any
+                    {
                         match &command[..] {
                             "nil" => Ok(Expression::Atom(Atom::Nil)),
-                            "|" | "pipe" => do_pipe(environment, parts, data_in),
+                            "|" | "pipe" => do_pipe(environment, parts),
                             //"exit" => return,
-                            command => do_command(environment, command, parts, data_in),
+                            command => do_command(environment, command, parts),
                         }
+                    } else {
+                        let msg = format!("Not a valid form {}, not found.", command.to_string());
+                        Err(io::Error::new(io::ErrorKind::Other, msg))
                     }
                 }
                 Expression::List(list) => {
-                    match pipe_eval(environment, &Expression::List(list.to_vec()), data_in)? {
+                    match eval(environment, &Expression::List(list.to_vec()))? {
                         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
                         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
                         Expression::Func(f) => f(environment, &parts),
@@ -156,19 +165,11 @@ fn internal_eval(
     }
 }
 
-pub fn pipe_eval(
-    environment: &mut Environment,
-    expression: &Expression,
-    data_in: Option<Expression>,
-) -> io::Result<Expression> {
+pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
     environment.state.borrow_mut().eval_level += 1;
-    let result = internal_eval(environment, expression, data_in);
+    let result = internal_eval(environment, expression);
     environment.state.borrow_mut().eval_level -= 1;
     result
-}
-
-pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
-    pipe_eval(environment, expression, None)
 }
 
 pub fn start_interactive() {

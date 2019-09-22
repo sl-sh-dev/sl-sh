@@ -242,13 +242,12 @@ pub fn do_command(
     environment: &mut Environment,
     command: &str,
     parts: &[Expression],
-    data_in: Option<Expression>,
 ) -> io::Result<Expression> {
     let mut data = None;
-    let stdin = match data_in {
+    let stdin = match &environment.data_in {
         Some(Expression::Atom(Atom::Nil)) => Stdio::inherit(),
         Some(Expression::Atom(atom)) => {
-            data = Some(atom);
+            data = Some(atom.clone());
             Stdio::piped()
         }
         Some(Expression::Process(pid)) => {
@@ -282,7 +281,31 @@ pub fn do_command(
     };
     let stdout = get_output(environment, &environment.state.borrow().stdout_status)?;
     let stderr = get_output(environment, &environment.state.borrow().stderr_status)?;
-    let mut args = to_args(environment, parts)?;
+    let mut args = if environment.loose_symbols {
+        to_args(environment, parts)?
+    } else {
+        // This is an external command so still be loose about symbols.
+        let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
+        for a in parts {
+            let mut is_sym = false;
+            if let Expression::Atom(Atom::Symbol(_)) = a {
+                is_sym = true;
+            }
+            match eval(environment, a) {
+                Ok(exp) => args.push(exp),
+                Err(err) => {
+                    if is_sym {
+                        if let Expression::Atom(Atom::Symbol(s)) = a {
+                            args.push(Expression::Atom(Atom::String(s.clone())));
+                        }
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+        args
+    };
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {
         if let Expression::Atom(Atom::String(s)) = arg {
@@ -302,22 +325,20 @@ pub fn do_command(
     )
 }
 
-pub fn do_pipe(
-    environment: &mut Environment,
-    parts: &[Expression],
-    data_in: Option<Expression>,
-) -> io::Result<Expression> {
-    let old_pipe_in = environment.in_pipe;
+pub fn do_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
+    if environment.in_pipe {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "pipe within pipe, not valid",
+        ));
+    }
     let old_out_status = environment.state.borrow().stdout_status.clone();
     environment.in_pipe = true;
-    let mut out = match data_in {
-        Some(exp) => exp,
-        None => Expression::Atom(Atom::Nil),
-    };
+    let mut out = Expression::Atom(Atom::Nil);
     environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
     let mut i = 1; // Meant 1 here.
     for p in parts {
-        if i == parts.len() && !old_pipe_in {
+        if i == parts.len() {
             if environment.state.borrow().eval_level > 2 {
                 environment.state.borrow_mut().stdout_status = None;
             } else {
@@ -325,9 +346,10 @@ pub fn do_pipe(
             }
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
-        let res = pipe_eval(environment, p, Some(out));
+        environment.data_in = Some(out);
+        let res = eval(environment, p);
         if let Err(err) = res {
-            environment.in_pipe = old_pipe_in;
+            environment.in_pipe = false;
             environment.state.borrow_mut().stdout_status = old_out_status;
             return Err(err);
         }
@@ -340,7 +362,8 @@ pub fn do_pipe(
         out = res.unwrap();
         i += 1;
     }
-    environment.in_pipe = old_pipe_in;
+    environment.data_in = None;
+    environment.in_pipe = false;
     if !environment.in_pipe {
         environment.state.borrow_mut().pipe_pgid = None;
     }

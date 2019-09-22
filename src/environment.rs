@@ -49,6 +49,13 @@ impl Default for EnvState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormType {
+    Any,
+    FormOnly,
+    ExternalOnly,
+}
+
 #[derive(Clone, Debug)]
 pub struct Environment<'a> {
     pub state: Rc<RefCell<EnvState>>,
@@ -57,6 +64,8 @@ pub struct Environment<'a> {
     pub data: HashMap<String, Expression>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub outer: Option<&'a Environment<'a>>,
+    pub data_in: Option<Expression>,
+    pub form_type: FormType,
 }
 
 pub fn build_default_environment<'a>() -> Environment<'a> {
@@ -74,6 +83,8 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
         data,
         procs,
         outer: None,
+        data_in: None,
+        form_type: FormType::Any,
     }
 }
 
@@ -92,6 +103,8 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),
+        data_in: None,
+        form_type: environment.form_type,
     }
 }
 
@@ -104,6 +117,8 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
         data,
         procs: environment.procs.clone(),
         outer: Some(environment),
+        data_in: None,
+        form_type: environment.form_type,
     }
 }
 

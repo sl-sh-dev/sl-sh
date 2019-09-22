@@ -405,6 +405,8 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
             data,
             procs,
             outer: None,
+            data_in: None,
+            form_type: FormType::Any,
         };
         let _args = to_args(&mut enviro, &new_args).unwrap();
         /*match args.pop() {
@@ -626,6 +628,57 @@ fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
+fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "command can only have one form (call defining the external command and arguments)",
+        ))
+    } else if let Expression::List(list) = &args[0] {
+        let (command, parts) = match list.split_first() {
+            Some((c, p)) => (c, p),
+            None => {
+                eprintln!("No valid command.");
+                return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
+            }
+        };
+        match command {
+            Expression::Atom(Atom::Symbol(command)) => {
+                if command.is_empty() {
+                    return Ok(Expression::Atom(Atom::Nil));
+                }
+                do_command(environment, command, parts)
+            }
+            _ => {
+                let msg = format!(
+                    "Not a valid command {}, must be a symbol.",
+                    command.make_string(environment)?
+                );
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "command takes a list"))
+    }
+}
+
+fn builtin_form(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "form can only have one form (call defining the form and arguments)",
+        ))
+    } else if let Expression::List(_list) = &args[0] {
+        let old_form = environment.form_type;
+        environment.form_type = FormType::FormOnly;
+        let result = eval(environment, &args[0]);
+        environment.form_type = old_form;
+        result
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "form takes a list"))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -697,6 +750,8 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("jobs".to_string(), Expression::Func(builtin_jobs));
     data.insert("fg".to_string(), Expression::Func(builtin_fg));
     data.insert("version".to_string(), Expression::Func(builtin_version));
+    data.insert("command".to_string(), Expression::Func(builtin_command));
+    data.insert("form".to_string(), Expression::Func(builtin_form));
 
     data.insert(
         "=".to_string(),
