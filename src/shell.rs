@@ -262,7 +262,8 @@ pub fn start_interactive() {
         if let Err(err) = reap_procs(&environment) {
             eprintln!("Error reaping processes: {}", err);
         }
-        match con.read_line(prompt, None, &mut ShellCompleter) {
+        let mut shell_completer = ShellCompleter::new(&environment);
+        match con.read_line(prompt, None, &mut shell_completer) {
             Ok(input) => {
                 if input.is_empty() {
                     continue;
