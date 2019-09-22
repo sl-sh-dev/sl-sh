@@ -11,7 +11,6 @@ use std::env;
 use std::fs;
 use std::hash::BuildHasher;
 use std::io;
-use std::path::Path;
 use std::process::Child;
 use std::rc::Rc;
 
@@ -22,39 +21,6 @@ use crate::process::*;
 use crate::reader::*;
 use crate::shell::*;
 use crate::types::*;
-
-fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() > 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "cd can not have more then one form",
-        ))
-    } else {
-        let mut home = match env::var("HOME") {
-            Ok(val) => val,
-            Err(_) => "/".to_string(),
-        };
-        let args = to_args_str(environment, args)?;
-        let args = args.iter();
-        let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
-        let expand_dir = expand_tilde(new_dir);
-        let new_dir = if expand_dir.is_some() {
-            home = expand_dir.unwrap();
-            &home
-        } else {
-            new_dir
-        };
-        let root = Path::new(new_dir);
-        env::set_var("OLDPWD", env::current_dir()?);
-        if let Err(e) = env::set_current_dir(&root) {
-            eprintln!("Error changing to {}, {}", root.display(), e);
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            env::set_var("PWD", env::current_dir()?);
-            Ok(Expression::Atom(Atom::True))
-        }
-    }
-}
 
 fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
@@ -157,26 +123,6 @@ fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Res
         res.push_str(&a);
     }
     Ok(Expression::Atom(Atom::String(res)))
-}
-
-fn builtin_use_stdout(
-    environment: &mut Environment,
-    parts: &[Expression],
-) -> io::Result<Expression> {
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
-    let old_out = environment.state.borrow().stdout_status.clone();
-    let old_err = environment.state.borrow().stderr_status.clone();
-    environment.state.borrow_mut().stdout_status = Some(IOState::Inherit);
-    environment.state.borrow_mut().stderr_status = Some(IOState::Inherit);
-    for a in parts {
-        last_eval = eval(environment, a);
-        if last_eval.is_err() {
-            break;
-        }
-    }
-    environment.state.borrow_mut().stdout_status = old_out;
-    environment.state.borrow_mut().stderr_status = old_err;
-    last_eval
 }
 
 pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -717,17 +663,12 @@ macro_rules! ensure_tonicity_all {
 }
 
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
-    data.insert("cd".to_string(), Expression::Func(builtin_cd));
     data.insert("eval".to_string(), Expression::Func(builtin_eval));
     data.insert("load".to_string(), Expression::Func(builtin_load));
     data.insert("if".to_string(), Expression::Func(builtin_if));
     data.insert("print".to_string(), Expression::Func(builtin_print));
     data.insert("println".to_string(), Expression::Func(builtin_println));
     data.insert("format".to_string(), Expression::Func(builtin_format));
-    data.insert(
-        "use-stdout".to_string(),
-        Expression::Func(builtin_use_stdout),
-    );
     data.insert("progn".to_string(), Expression::Func(builtin_progn));
     data.insert("set".to_string(), Expression::Func(builtin_set));
     data.insert("fn".to_string(), Expression::Func(builtin_fn));

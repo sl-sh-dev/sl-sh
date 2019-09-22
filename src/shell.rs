@@ -53,7 +53,11 @@ fn expand_macro(
     let mut new_environment = build_new_scope(environment);
     setup_args(&mut new_environment, &sh_macro.params, args, false)?;
     let expansion = eval(&mut new_environment, &sh_macro.body)?;
-    eval(environment, &expansion)
+    // Mess with eval_level to remove the extra level the macro added- helpful for executables and stdout detection.
+    environment.state.borrow_mut().eval_level -= 1;
+    let result = eval(environment, &expansion);
+    environment.state.borrow_mut().eval_level += 1;
+    result
 }
 
 fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
@@ -113,12 +117,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     } else if environment.form_type == FormType::ExternalOnly
                         || environment.form_type == FormType::Any
                     {
-                        match &command[..] {
-                            "nil" => Ok(Expression::Atom(Atom::Nil)),
-                            "|" | "pipe" => do_pipe(environment, parts),
-                            //"exit" => return,
-                            command => do_command(environment, command, parts),
-                        }
+                        do_command(environment, command, parts)
                     } else {
                         let msg = format!("Not a valid form {}, not found.", command.to_string());
                         Err(io::Error::new(io::ErrorKind::Other, msg))

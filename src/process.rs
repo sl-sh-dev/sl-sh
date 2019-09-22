@@ -176,14 +176,29 @@ fn run_command(
     Ok(result)
 }
 
-fn get_output(environment: &Environment, status: &Option<IOState>) -> io::Result<Stdio> {
-    let res = match status {
+fn get_output(
+    environment: &Environment,
+    out_status: &Option<IOState>,
+    err_status: &Option<IOState>,
+) -> io::Result<(Stdio, Stdio)> {
+    let mut out_file: Option<File> = None;
+    let mut out_name: Option<String> = None;
+    let out_res = match out_status {
         Some(IOState::FileAppend(f)) => {
-            let outputs = File::create(f)?;
+            let outputs = std::fs::OpenOptions::new()
+                .read(false)
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(&f)?;
+            out_file = Some(outputs.try_clone()?);
+            out_name = Some(f.clone());
             Stdio::from(outputs)
         }
         Some(IOState::FileOverwrite(f)) => {
             let outputs = File::create(f)?;
+            out_file = Some(outputs.try_clone()?);
+            out_name = Some(f.clone());
             Stdio::from(outputs)
         }
         Some(IOState::Null) => Stdio::null(),
@@ -198,7 +213,41 @@ fn get_output(environment: &Environment, status: &Option<IOState>) -> io::Result
             }
         }
     };
-    Ok(res)
+    let err_res = match err_status {
+        Some(IOState::FileAppend(f)) => {
+            if out_name.is_some() && &out_name.unwrap() == f {
+                Stdio::from(out_file.unwrap())
+            } else {
+                let outputs = std::fs::OpenOptions::new()
+                    .read(false)
+                    .write(true)
+                    .append(true)
+                    .create(true)
+                    .open(&f)?;
+                Stdio::from(outputs)
+            }
+        }
+        Some(IOState::FileOverwrite(f)) => {
+            if out_name.is_some() && &out_name.unwrap() == f {
+                Stdio::from(out_file.unwrap())
+            } else {
+                let outputs = File::create(f)?;
+                Stdio::from(outputs)
+            }
+        }
+        Some(IOState::Null) => Stdio::null(),
+        Some(IOState::Inherit) => Stdio::inherit(),
+        Some(IOState::Pipe) => Stdio::piped(),
+        None => {
+            let use_stdout = environment.state.borrow().eval_level < 3 && !environment.in_pipe;
+            if use_stdout {
+                Stdio::inherit()
+            } else {
+                Stdio::piped()
+            }
+        }
+    };
+    Ok((out_res, err_res))
 }
 
 pub fn prep_string_arg(s: &str, nargs: &mut Vec<Expression>) -> io::Result<()> {
@@ -279,8 +328,11 @@ pub fn do_command(
         }
         None => Stdio::inherit(),
     };
-    let stdout = get_output(environment, &environment.state.borrow().stdout_status)?;
-    let stderr = get_output(environment, &environment.state.borrow().stderr_status)?;
+    let (stdout, stderr) = get_output(
+        environment,
+        &environment.state.borrow().stdout_status,
+        &environment.state.borrow().stderr_status,
+    )?;
     let mut args = if environment.loose_symbols {
         to_args(environment, parts)?
     } else {
@@ -339,11 +391,7 @@ pub fn do_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resul
     let mut i = 1; // Meant 1 here.
     for p in parts {
         if i == parts.len() {
-            if environment.state.borrow().eval_level > 2 {
-                environment.state.borrow_mut().stdout_status = None;
-            } else {
-                environment.state.borrow_mut().stdout_status = old_out_status.clone();
-            }
+            environment.state.borrow_mut().stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
         environment.data_in = Some(out);
