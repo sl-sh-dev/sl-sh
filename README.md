@@ -2,7 +2,20 @@
 
 This is a shell build around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
-parenthisis).  It is NOT a POSIX shell and makes to attempts to be one.
+parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
+
+Slsh has enough job control to ctrl-z out of an app and fg back into it but it is not complete.
+
+It support quote and backquote (with , and ,@ expansion).
+
+To install you need to copy the two files from the lisp subdirectory to ~/.config/slsh (otherwise will not have any of the macros).
+The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example.
+
+## Tasks
+- [ ] Add autocompletion hooks for custom completions.
+- [ ] Finish job control.
+- [ ] Test scripts to exercise everything.
+- [ ] Better Docs.
 
 ## Available forms:
 

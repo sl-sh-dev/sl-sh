@@ -1,7 +1,4 @@
-(defmacro alias (name body)
-	`(set (quote ,name)
-		(fn (&rest args)
-		(use-stdout (eval (append (quote ,body) args))))))
+; This is an example config file, you would put it in ~/.config/slsh/slshrc to use it.
 
 (set 'parse_git_branch (fn () (progn
 	(err-null (set 'branch (git rev-parse --abbrev-ref HEAD)))
