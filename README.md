@@ -36,10 +36,10 @@ version | | builtin |
 command | | builtin |
 form | | builtin |
 = | | builtin |
-> | | builtin |
->= | | builtin |
-< | | builtin |
-<= | | builtin |
+'>' | | builtin |
+'>=' | | builtin |
+'<' | | builtin |
+'<=' | | builtin |
 setq | symbol/value | macro | Same as set but it quotes the parameter name for you ("set 'xx '(1 2 3)" == "setq xx '(1 2 3).
 defn | name/args_form/body | macro | Define a lambda.
 loop | | macro |
