@@ -35,7 +35,7 @@ impl<'a> Completer for ShellCompleter<'a> {
         match self.comp_type {
             CompType::Nothing => Vec::new(),
             CompType::Command => {
-                let mut ret: Vec<String> = Vec::new();
+                let mut ret = get_dir_matches(start);
                 find_lisp_fns(self.environment, &mut ret, start);
                 find_exes(&mut ret, start);
                 ret
@@ -66,19 +66,7 @@ impl<'a> Completer for ShellCompleter<'a> {
                 ret
             }
             CompType::Other => {
-                let mut ret = match env::current_dir() {
-                    Ok(p) => {
-                        let mut fc = FilenameCompleter::new(Some(p));
-                        match expand_tilde(start) {
-                            Some(s) => fc.completions(&s),
-                            None => fc.completions(start),
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("Error getting current working directory: {}", err);
-                        Vec::new()
-                    }
-                };
+                let mut ret = get_dir_matches(start);
                 find_lisp_symbols(self.environment, &mut ret, start);
                 ret
             }
@@ -128,6 +116,19 @@ impl<'a> Completer for ShellCompleter<'a> {
                 _ => CompType::Other,
             };
         }
+    }
+}
+
+fn get_dir_matches(start: &str) -> Vec<String> {
+    match env::current_dir() {
+        Ok(p) => {
+            let mut fc = FilenameCompleter::new(Some(p));
+            match expand_tilde(start) {
+                Some(s) => fc.completions(&s),
+                None => fc.completions(start),
+            }
+        }
+        Err(_err) => Vec::new(),
     }
 }
 
