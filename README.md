@@ -4,11 +4,11 @@ This is a shell build around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parenthisis).  It is NOT a POSIX shell and makes to attempts to be one.
 
-##Available forms:
+## Available forms:
 
-###Core Forms
+### Core Forms
 Form | Args | Type | description
---------------------------------
+-----|------|------|------------
 eval | Form or string to evalute | builtin | 
 load | | builtin |
 if | | builtin |
@@ -49,11 +49,11 @@ for | | macro |
 fori | | macro |
 
 
-###List Forms
+### List Forms
 Currently slsh uses vectors not cons lists for its internal list structure.
 It uses the first, rest, list names to help reinforce this fact.
 Form | Args | Type | description
---------------------------------
+-----|------|------|------------
 list | | builtin |
 first | | builtin |
 rest | | builtin |
@@ -65,9 +65,9 @@ setrest | | builtin |
 append | | builtin |
 
 
-###String Forms
+### String Forms
 Form | Args | Type | description
---------------------------------
+-----|------|------|------------
 str-trim | string | builtin | Trims both left and right on string.
 str-ltrim | string | builtin | Left trims string.
 str-rtrim | string | builtin | Right trims string.
@@ -77,11 +77,11 @@ str-cat-list | string/list | builtin | Produces a string by joining a list with 
 str-sub | index/length/string | builtin | Returns a new substring of provided string.
 
 
-###File Forms
+### File Forms
 Forms to do file tests, pipes, redirects, etc.  You probably want to use the 
 macros not the builtins.
 Form | Args | Type | description
---------------------------------
+-----|------|------|------------
 cd | path | builtin | Change to provided directory.
 use-stdout | | builtin |
 out-null | | builtin |
@@ -107,9 +107,9 @@ out-err>null | form+ | macro | Redirect stdout and stderr for sub-forms to null.
 alias | new_name/command | macro | Defines an alias for commands (meant for executables not builtins).
 
 
-###Math Forms
+### Math Forms
 Form | Args | Type | description
---------------------------------
+-----|------|------|------------
 + | two or more ints or floats | builtin | Addition
 * | two or more ints or floats | builtin | Multiplication
 - | two or more ints or floats | builtin | Subtraction
