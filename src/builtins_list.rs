@@ -300,9 +300,7 @@ fn builtin_list_append(
 pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("list".to_string(), Expression::Func(builtin_list));
     data.insert("first".to_string(), Expression::Func(builtin_list_first));
-    data.insert("car".to_string(), Expression::Func(builtin_list_first));
     data.insert("rest".to_string(), Expression::Func(builtin_list_rest));
-    data.insert("cdr".to_string(), Expression::Func(builtin_list_rest));
     data.insert("length".to_string(), Expression::Func(builtin_list_length));
     data.insert("last".to_string(), Expression::Func(builtin_list_last));
     data.insert("nth".to_string(), Expression::Func(builtin_list_nth));
@@ -311,13 +309,8 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
         Expression::Func(builtin_list_setfirst),
     );
     data.insert(
-        "setcar".to_string(),
-        Expression::Func(builtin_list_setfirst),
-    );
-    data.insert(
         "setrest".to_string(),
         Expression::Func(builtin_list_setrest),
     );
-    data.insert("setcdr".to_string(), Expression::Func(builtin_list_setrest));
     data.insert("append".to_string(), Expression::Func(builtin_list_append));
 }
