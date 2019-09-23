@@ -105,7 +105,7 @@ out-err>> | file/form+ | macro | Redirect stdout and stderr for sub-forms to the
 out>null | form+ | macro | Redirect stdout for sub-forms to null.
 err>null | form+ | macro | Redirect stderr for sub-forms to null.
 out-err>null | form+ | macro | Redirect stdout and stderr for sub-forms to null.
-'|' | one or more forms | macro | Creates a pipe (job) consisting of the provided forms.
+\| | one or more forms | macro | Creates a pipe (job) consisting of the provided forms.
 alias | new_name/command | macro | Defines an alias for commands (meant for executables not builtins).
 
 
