@@ -35,7 +35,7 @@ fg | | builtin |
 version | | builtin |
 command | | builtin |
 form | | builtin |
-= | | builtin |
+'=' | | builtin |
 '>' | | builtin |
 '>=' | | builtin |
 '<' | | builtin |
@@ -52,6 +52,7 @@ fori | | macro |
 ### List Forms
 Currently slsh uses vectors not cons lists for its internal list structure.
 It uses the first, rest, list names to help reinforce this fact.
+
 Form | Args | Type | description
 -----|------|------|------------
 list | | builtin |
@@ -80,6 +81,7 @@ str-sub | index/length/string | builtin | Returns a new substring of provided st
 ### File Forms
 Forms to do file tests, pipes, redirects, etc.  You probably want to use the 
 macros not the builtins.
+
 Form | Args | Type | description
 -----|------|------|------------
 cd | path | builtin | Change to provided directory.
@@ -110,7 +112,7 @@ alias | new_name/command | macro | Defines an alias for commands (meant for exec
 ### Math Forms
 Form | Args | Type | description
 -----|------|------|------------
-+ | two or more ints or floats | builtin | Addition
-* | two or more ints or floats | builtin | Multiplication
-- | two or more ints or floats | builtin | Subtraction
-/ | two or more ints or floats | builtin | Division
+'+' | two or more ints or floats | builtin | Addition
+'*' | two or more ints or floats | builtin | Multiplication
+'-' | two or more ints or floats | builtin | Subtraction
+'/' | two or more ints or floats | builtin | Division
