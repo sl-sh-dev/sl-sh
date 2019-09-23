@@ -93,6 +93,38 @@ fn do_in_string(
     token
 }
 
+fn handle_char(
+    tokens: &mut Vec<String>,
+    mut token: String,
+    ch: char,
+    last_ch: char,
+    last_comma: &mut bool,
+) -> String {
+    if ch == '(' {
+        save_token!(tokens, token);
+        tokens.push("(".to_string());
+    } else if ch == ')' {
+        save_token!(tokens, token);
+        tokens.push(")".to_string());
+    } else if ch == '\'' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+    {
+        save_token!(tokens, token);
+        tokens.push("'".to_string());
+    } else if ch == '`' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`') {
+        save_token!(tokens, token);
+        tokens.push("`".to_string());
+    } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
+        *last_comma = true;
+    } else if is_whitespace(ch) {
+        save_token!(tokens, token);
+    } else if ch == '\\' && last_ch != '\\' {
+        // Do nothing...
+    } else {
+        token.push(ch);
+    }
+    token
+}
+
 fn tokenize(text: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
@@ -102,6 +134,10 @@ fn tokenize(text: &str) -> Vec<String> {
     let mut last_comma = false;
     let mut escape_code: Vec<char> = Vec::with_capacity(2);
     let mut in_escape_code = false;
+    if text.starts_with("#!") {
+        // Work with shebanged scripts.
+        in_comment = true;
+    }
     for ch in text.chars() {
         if last_comma {
             last_comma = false;
@@ -154,31 +190,7 @@ fn tokenize(text: &str) -> Vec<String> {
                 in_comment = true;
                 continue;
             }
-            if ch == '(' {
-                save_token!(tokens, token);
-                tokens.push("(".to_string());
-            } else if ch == ')' {
-                save_token!(tokens, token);
-                tokens.push(")".to_string());
-            } else if ch == '\''
-                && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
-            {
-                save_token!(tokens, token);
-                tokens.push("'".to_string());
-            } else if ch == '`'
-                && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
-            {
-                save_token!(tokens, token);
-                tokens.push("`".to_string());
-            } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
-                last_comma = true;
-            } else if is_whitespace(ch) {
-                save_token!(tokens, token);
-            } else if ch == '\\' && last_ch != '\\' {
-                // Do nothing...
-            } else {
-                token.push(ch);
-            }
+            token = handle_char(&mut tokens, token, ch, last_ch, &mut last_comma);
             last_ch = ch;
         }
     }
