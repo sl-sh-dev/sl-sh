@@ -333,31 +333,10 @@ pub fn do_command(
         &environment.state.borrow().stdout_status,
         &environment.state.borrow().stderr_status,
     )?;
-    let mut args = if environment.loose_symbols {
-        to_args(environment, parts)?
-    } else {
-        // This is an external command so still be loose about symbols.
-        let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
-        for a in parts {
-            let mut is_sym = false;
-            if let Expression::Atom(Atom::Symbol(_)) = a {
-                is_sym = true;
-            }
-            match eval(environment, a) {
-                Ok(exp) => args.push(exp),
-                Err(err) => {
-                    if is_sym {
-                        if let Expression::Atom(Atom::Symbol(s)) = a {
-                            args.push(Expression::Atom(Atom::String(s.clone())));
-                        }
-                    } else {
-                        return Err(err);
-                    }
-                }
-            }
-        }
-        args
-    };
+    let old_loose_syms = environment.loose_symbols;
+    environment.loose_symbols = true;
+    let mut args = to_args(environment, parts)?;
+    environment.loose_symbols = old_loose_syms;
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {
         if let Expression::Atom(Atom::String(s)) = arg {

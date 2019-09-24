@@ -51,8 +51,11 @@ fn builtin_use_stdout(
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
     let old_out = environment.state.borrow().stdout_status.clone();
     let old_err = environment.state.borrow().stderr_status.clone();
-    environment.state.borrow_mut().stdout_status = Some(IOState::Inherit);
-    environment.state.borrow_mut().stderr_status = Some(IOState::Inherit);
+    if !environment.in_pipe {
+        // Don't break a pipe if in one.
+        environment.state.borrow_mut().stdout_status = Some(IOState::Inherit);
+        environment.state.borrow_mut().stderr_status = Some(IOState::Inherit);
+    }
     for a in parts {
         last_eval = eval(environment, a);
         if last_eval.is_err() {

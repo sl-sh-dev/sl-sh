@@ -62,6 +62,7 @@ pub struct Environment<'a> {
     pub in_pipe: bool,
     pub loose_symbols: bool,
     pub data: HashMap<String, Expression>,
+    pub global: Rc<RefCell<HashMap<String, Expression>>>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub outer: Option<&'a Environment<'a>>,
     pub data_in: Option<Expression>,
@@ -71,6 +72,7 @@ pub struct Environment<'a> {
 pub fn build_default_environment<'a>() -> Environment<'a> {
     let mut data: HashMap<String, Expression> = HashMap::new();
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+    let global: Rc<RefCell<HashMap<String, Expression>>> = Rc::new(RefCell::new(HashMap::new()));
     add_builtins(&mut data);
     add_math_builtins(&mut data);
     add_str_builtins(&mut data);
@@ -81,6 +83,7 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
         in_pipe: false,
         loose_symbols: false,
         data,
+        global,
         procs,
         outer: None,
         data_in: None,
@@ -92,7 +95,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
     environment: &'a Environment<'a>,
     mut data_in: HashMap<String, Expression, S>,
 ) -> Environment<'a> {
-    let mut data: HashMap<String, Expression> = HashMap::new();
+    let mut data: HashMap<String, Expression> = HashMap::with_capacity(data_in.len());
     for (k, v) in data_in.drain() {
         data.insert(k, v);
     }
@@ -101,10 +104,40 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
         in_pipe: environment.in_pipe,
         loose_symbols: false,
         data,
+        global: environment.global.clone(),
         procs: environment.procs.clone(),
         outer: Some(environment),
         data_in: None,
         form_type: environment.form_type,
+    }
+}
+
+pub fn build_new_spawn_scope<'a, S: ::std::hash::BuildHasher>(
+    mut data_in: HashMap<String, Expression, S>,
+    mut global_in: HashMap<String, Expression, S>,
+) -> Environment<'a> {
+    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+    let state = Rc::new(RefCell::new(EnvState::default()));
+    let mut global: HashMap<String, Expression> = HashMap::with_capacity(global_in.len());
+    for (k, v) in global_in.drain() {
+        global.insert(k, v);
+    }
+    let global: Rc<RefCell<HashMap<String, Expression>>> = Rc::new(RefCell::new(global));
+    let mut data: HashMap<String, Expression> = HashMap::with_capacity(data_in.len());
+    for (k, v) in data_in.drain() {
+        data.insert(k, v);
+    }
+    state.borrow_mut().is_spawn = true;
+    Environment {
+        state,
+        in_pipe: false,
+        loose_symbols: false,
+        data,
+        global,
+        procs,
+        outer: None,
+        data_in: None,
+        form_type: FormType::Any,
     }
 }
 
@@ -115,6 +148,7 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
         in_pipe: environment.in_pipe,
         loose_symbols: false,
         data,
+        global: environment.global.clone(),
         procs: environment.procs.clone(),
         outer: Some(environment),
         data_in: None,
@@ -135,13 +169,31 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
 }
 
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Expression> {
-    match environment.data.get(key) {
-        Some(exp) => Some(exp.clone()),
-        None => match environment.outer {
-            Some(outer) => get_expression(outer, key),
+    if key.starts_with("#g") {
+        match environment.global.borrow().get(&key[2..]) {
+            Some(global) => Some(global.clone()),
             None => None,
-        },
+        }
+    } else {
+        match environment.data.get(key) {
+            Some(exp) => Some(exp.clone()),
+            None => match environment.outer {
+                Some(outer) => get_expression(outer, key),
+                None => match environment.global.borrow().get(key) {
+                    Some(global) => Some(global.clone()),
+                    None => None,
+                },
+            },
+        }
     }
+}
+
+pub fn set_expression(environment: &mut Environment, key: String, expression: Expression) {
+    environment.data.insert(key, expression);
+}
+
+pub fn set_expression_global(environment: &mut Environment, key: String, expression: Expression) {
+    environment.global.borrow_mut().insert(key, expression);
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
@@ -152,7 +204,7 @@ pub fn is_expression(environment: &Environment, key: &str) -> bool {
             Some(_) => true,
             None => match environment.outer {
                 Some(outer) => is_expression(outer, key),
-                None => false,
+                None => environment.global.borrow().get(key).is_some(),
             },
         }
     }

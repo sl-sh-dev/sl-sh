@@ -24,7 +24,9 @@ fn call_lambda(
     let mut new_environment = build_new_scope(environment);
     let mut looping = true;
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    new_environment.loose_symbols = environment.loose_symbols;
     setup_args(&mut new_environment, &lambda.params, args, true)?;
+    new_environment.loose_symbols = false;
     while looping {
         last_eval = eval(&mut new_environment, &lambda.body);
         looping = environment.state.borrow().recur_num_args.is_some();
@@ -149,13 +151,11 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                 } else {
                     Ok(exp)
                 }
+            } else if environment.loose_symbols {
+                Ok(Expression::Atom(Atom::String(s.clone())))
             } else {
                 let msg = format!("Symbol {} not found.", s);
-                if environment.loose_symbols {
-                    Ok(Expression::Atom(Atom::String(s.clone())))
-                } else {
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
-                }
+                Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),

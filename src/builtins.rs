@@ -5,14 +5,11 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
 use std::io;
-use std::process::Child;
-use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
@@ -172,6 +169,15 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
             } else {
                 env::remove_var(key[1..].to_string());
             }
+        } else if key.starts_with("#g") {
+            if let Expression::Atom(Atom::String(vs)) = val {
+                let vs = match expand_tilde(&vs) {
+                    Some(v) => v,
+                    None => vs,
+                };
+                val = Expression::Atom(Atom::String(vs));
+            }
+            set_expression_global(environment, key[2..].to_string(), val.clone());
         } else {
             if let Expression::Atom(Atom::String(vs)) = val {
                 let vs = match expand_tilde(&vs) {
@@ -340,25 +346,13 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     }
     let mut data: HashMap<String, Expression> = HashMap::new();
     clone_symbols(environment, &mut data);
+    let mut global: HashMap<String, Expression> = HashMap::new();
+    for (k, v) in environment.global.borrow().iter() {
+        global.insert(k.clone(), v.clone());
+    }
     let _child = std::thread::spawn(move || {
-        let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-        let state = Rc::new(RefCell::new(EnvState::default()));
-        state.borrow_mut().is_spawn = true;
-        let mut enviro = Environment {
-            state,
-            in_pipe: false,
-            loose_symbols: false,
-            data,
-            procs,
-            outer: None,
-            data_in: None,
-            form_type: FormType::Any,
-        };
+        let mut enviro = build_new_spawn_scope(data, global);
         let _args = to_args(&mut enviro, &new_args).unwrap();
-        /*match args.pop() {
-            Some(a) => Ok(a),
-            None => Ok(Expression::Atom(Atom::Nil)),
-        }*/
         if let Err(err) = reap_procs(&enviro) {
             eprintln!("Error waiting on spawned processes: {}", err);
         }
@@ -451,7 +445,11 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
                 params: Box::new(params.clone()),
                 body: Box::new(body.clone()),
             }));
-            environment.data.insert(s.clone(), m);
+            if s.starts_with("#g") {
+                set_expression_global(environment, s[2..].to_string(), m);
+            } else {
+                environment.data.insert(s.clone(), m);
+            }
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(
@@ -625,6 +623,20 @@ fn builtin_form(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
+fn builtin_loose_symbols(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    let old_loose_syms = environment.loose_symbols;
+    environment.loose_symbols = true;
+    let mut last_eval = Expression::Atom(Atom::Nil);
+    for a in args {
+        last_eval = eval(environment, a)?;
+    }
+    environment.loose_symbols = old_loose_syms;
+    Ok(last_eval)
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -693,6 +705,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("version".to_string(), Expression::Func(builtin_version));
     data.insert("command".to_string(), Expression::Func(builtin_command));
     data.insert("form".to_string(), Expression::Func(builtin_form));
+    data.insert(
+        "loose-symbols".to_string(),
+        Expression::Func(builtin_loose_symbols),
+    );
 
     data.insert(
         "=".to_string(),

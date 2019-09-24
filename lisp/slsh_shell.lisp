@@ -2,9 +2,8 @@
 
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
 (defmacro alias (name body)
-	`(set (quote ,name)
-		(fn (&rest args)
-		(use-stdout (eval (append (quote ,body) args))))))
+	`(defn ,name (&rest args)
+		(use-stdout (loose-symbols (eval (append (quote ,body) args))))))
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
