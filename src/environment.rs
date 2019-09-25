@@ -60,6 +60,7 @@ pub enum FormType {
 pub struct Environment<'a> {
     pub state: Rc<RefCell<EnvState>>,
     pub in_pipe: bool,
+    pub is_tty: bool,
     pub loose_symbols: bool,
     pub data: HashMap<String, Expression>,
     pub global: Rc<RefCell<HashMap<String, Expression>>>,
@@ -81,6 +82,7 @@ pub fn build_default_environment<'a>() -> Environment<'a> {
     Environment {
         state: Rc::new(RefCell::new(EnvState::default())),
         in_pipe: false,
+        is_tty: true,
         loose_symbols: false,
         data,
         global,
@@ -102,6 +104,7 @@ pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
     Environment {
         state: environment.state.clone(),
         in_pipe: environment.in_pipe,
+        is_tty: environment.is_tty,
         loose_symbols: false,
         data,
         global: environment.global.clone(),
@@ -131,6 +134,7 @@ pub fn build_new_spawn_scope<'a, S: ::std::hash::BuildHasher>(
     Environment {
         state,
         in_pipe: false,
+        is_tty: false,
         loose_symbols: false,
         data,
         global,
@@ -146,6 +150,7 @@ pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> 
     Environment {
         state: environment.state.clone(),
         in_pipe: environment.in_pipe,
+        is_tty: environment.is_tty,
         loose_symbols: false,
         data,
         global: environment.global.clone(),

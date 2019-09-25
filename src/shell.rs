@@ -325,6 +325,71 @@ pub fn start_interactive() {
     }
 }
 
+pub fn read_stdin() {
+    let mut home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => ".".to_string(),
+    };
+    if home.ends_with('/') {
+        home = home[..home.len() - 1].to_string();
+    }
+    let share_dir = format!("{}/.local/share/slsh", home);
+    if let Err(err) = create_dir_all(&share_dir) {
+        eprintln!(
+            "WARNING: Unable to create share directory: {}- {}",
+            share_dir, err
+        );
+    }
+    let mut environment = build_default_environment();
+    environment.is_tty = false;
+    load_scripts(&mut environment, &home);
+
+    let mut input = String::new();
+    loop {
+        match io::stdin().read_line(&mut input) {
+            Ok(0) => return,
+            Ok(_n) => {
+                environment.state.borrow_mut().stdout_status = None;
+                let mod_input = if input.starts_with('(')
+                    || input.starts_with('\'')
+                    || input.starts_with('`')
+                {
+                    input.clone()
+                } else {
+                    format!("({})", input)
+                };
+                let ast = read(&mod_input);
+                match ast {
+                    Ok(ast) => {
+                        environment.loose_symbols = true;
+                        match eval(&mut environment, &ast) {
+                            Ok(exp) => {
+                                match exp {
+                                    Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                                    Expression::Process(_) => { /* should have used stdout */ }
+                                    _ => {
+                                        if let Err(err) = exp.write(&environment) {
+                                            eprintln!("Error writing result: {}", err);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(err) => eprintln!("{}", err),
+                        }
+                        environment.loose_symbols = false;
+                    }
+                    Err(err) => eprintln!("{:?}", err),
+                }
+                environment.state.borrow_mut().stderr_status = None;
+            }
+            Err(error) => {
+                eprintln!("ERROR reading stdin: {}", error);
+                return;
+            }
+        }
+    }
+}
+
 fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> io::Result<()> {
     let mut in_string = false;
     let mut in_stringd = false;

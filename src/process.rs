@@ -71,9 +71,11 @@ pub fn wait_pid(
         }
     }
     // Move the shell back into the foreground.
-    let pid = unistd::getpid();
-    if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
-        eprintln!("Error making shell {} foreground: {}", pid, err);
+    if environment.is_tty {
+        let pid = unistd::getpid();
+        if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
+            eprintln!("Error making shell {} foreground: {}", pid, err);
+        }
     }
     result
 }
@@ -134,7 +136,11 @@ fn run_command(
         });
     }
 
-    let term_settings = termios::tcgetattr(shell_terminal).unwrap();
+    let term_settings = if environment.is_tty {
+        Some(termios::tcgetattr(shell_terminal).unwrap())
+    } else {
+        None
+    };
     let proc = com_obj.spawn();
 
     let mut result = Expression::Atom(Atom::Nil);
@@ -160,7 +166,11 @@ fn run_command(
                 if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid) {
                     // Ignore, do in parent and child.
                 }
-                wait_pid(environment, proc.id(), Some(&term_settings));
+                if let Some(term_settings) = term_settings {
+                    wait_pid(environment, proc.id(), Some(&term_settings));
+                } else {
+                    wait_pid(environment, proc.id(), None);
+                }
             }
             let pid = add_process(environment, proc);
             result = Expression::Process(pid);

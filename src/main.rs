@@ -46,9 +46,11 @@ fn main() -> io::Result<()> {
                     eprintln!("{}", msg);
                     return Err(io::Error::new(io::ErrorKind::Other, msg));
                 }
+                start_interactive();
+            } else {
+                // No tty, just read stdin and do something with it..
+                read_stdin();
             }
-
-            start_interactive();
         } else if config.command.is_some() {
             let command = config.command.unwrap();
             if let Err(err) = run_one_command(&command, &config.args) {
