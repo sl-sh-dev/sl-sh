@@ -1,5 +1,6 @@
 use liner::Context;
 use std::env;
+use std::ffi::CStr;
 use std::fs;
 use std::fs::create_dir_all;
 use std::io::{self, ErrorKind};
@@ -8,6 +9,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use nix::sys::signal::{self, SigHandler, Signal};
+use nix::unistd::gethostname;
 
 use crate::builtins_util::*;
 use crate::completions::*;
@@ -197,7 +199,17 @@ pub fn start_interactive() {
     con.history.append_duplicate_entries = false;
     con.history.inc_append = true;
     con.history.load_duplicates = false;
+    con.history.share = true;
     con.key_bindings = liner::KeyBindings::Vi;
+    // Initialize the HOST variable
+    let mut hostname = [0_u8; 512];
+    env::set_var(
+        "HOST",
+        &gethostname(&mut hostname)
+            .ok()
+            .map_or_else(|| "?".into(), CStr::to_string_lossy)
+            .as_ref(),
+    );
     let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),
@@ -222,7 +234,7 @@ pub fn start_interactive() {
     load_scripts(&mut environment, &home);
 
     loop {
-        let hostname = match env::var("HOSTNAME") {
+        let hostname = match env::var("HOST") {
             Ok(val) => val,
             Err(_) => "UNKNOWN".to_string(),
         };
