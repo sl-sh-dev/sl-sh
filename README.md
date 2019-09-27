@@ -47,6 +47,7 @@ jobs | | builtin |
 fg | | builtin |
 version | | builtin |
 command | | builtin |
+run-bg | | builtin |
 form | | builtin |
 '=' | | builtin |
 '>' | | builtin |
@@ -109,6 +110,8 @@ path-exists | path | builtin | Boolean, does path exist.
 is-file | path | builtin | Boolean, is path a file.
 is-dir | path | builtin | Boolean, is path a directory.
 pipe | form+ | builtin | Creates a pipe (job) consisting of the provided forms.
+wait | form | builtin | Waits for a pid to finish and returns the status code (fine to use on a process that was not in the background).
+pid | form | builtin | Returns the pid of a form that resolves to a process.
 out> | file/form+ | macro | Redirect stdout for sub-forms to the file, this one truncates first.
 out>> | file/form+ | macro | Redirect stdout for sub-forms to the file, this one appends.
 err> | file/form+ | macro | Redirect stderr for sub-forms to the file, this one truncates first.

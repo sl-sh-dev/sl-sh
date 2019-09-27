@@ -162,7 +162,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
         }
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
-        Expression::Process(pid) => Ok(Expression::Process(*pid)), //Ok(Expression::Atom(Atom::Int(i64::from(*pid)))),
+        Expression::Process(state) => Ok(Expression::Process(*state)),
     }
 }
 

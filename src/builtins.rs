@@ -152,10 +152,16 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         let mut val = match val {
             Expression::Atom(atom) => Expression::Atom(atom),
             Expression::List(list) => Expression::List(list),
-            Expression::Process(_pid) => Expression::Atom(Atom::String(
+            Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
                 val.make_string(environment)
                     .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
             )),
+            Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
+                Expression::Atom(Atom::String(
+                    val.make_string(environment)
+                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                ))
+            }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
         };
         if key.starts_with('$') {
@@ -606,6 +612,43 @@ fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Re
     }
 }
 
+fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "run-bg can only have one form (call defining the external command and arguments)",
+        ))
+    } else if let Expression::List(list) = &args[0] {
+        let (command, parts) = match list.split_first() {
+            Some((c, p)) => (c, p),
+            None => {
+                eprintln!("No valid command.");
+                return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
+            }
+        };
+        match command {
+            Expression::Atom(Atom::Symbol(command)) => {
+                if command.is_empty() {
+                    return Ok(Expression::Atom(Atom::Nil));
+                }
+                environment.run_background = true;
+                let result = do_command(environment, command, parts);
+                environment.run_background = false;
+                result
+            }
+            _ => {
+                let msg = format!(
+                    "Not a valid command {}, must be a symbol.",
+                    command.make_string(environment)?
+                );
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "run-bg takes a list"))
+    }
+}
+
 fn builtin_form(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
         Err(io::Error::new(
@@ -704,6 +747,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
     data.insert("fg".to_string(), Expression::Func(builtin_fg));
     data.insert("version".to_string(), Expression::Func(builtin_version));
     data.insert("command".to_string(), Expression::Func(builtin_command));
+    data.insert("run-bg".to_string(), Expression::Func(builtin_run_bg));
     data.insert("form".to_string(), Expression::Func(builtin_form));
     data.insert(
         "loose-symbols".to_string(),

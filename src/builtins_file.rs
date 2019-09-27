@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::builtins::*;
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::process::*;
 use crate::shell::*;
 use crate::types::*;
 
@@ -94,16 +95,13 @@ fn builtin_file_trunc(
         let arg0 = eval(environment, &args[0])?;
         if let Expression::Atom(Atom::String(s)) = &arg0 {
             File::create(s)?;
-            Ok(Expression::Atom(Atom::Nil))
-        } else if let Expression::Atom(Atom::String(s)) = &arg0 {
-            File::create(s)?;
-            Ok(Expression::Atom(Atom::Nil))
         } else {
-            Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "file_trunc must have one form (file name to create/truncate)",
-            ))
+            ));
         }
+        Ok(arg0)
     }
 }
 
@@ -267,7 +265,13 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
             environment.state.borrow_mut().stdout_status = old_out_status;
             return Err(err);
         }
-        if let Ok(Expression::Process(pid)) = res {
+        if let Ok(Expression::Process(ProcessState::Running(pid))) = res {
+            let mut state = environment.state.borrow_mut();
+            if state.pipe_pgid.is_none() {
+                state.pipe_pgid = Some(pid);
+            }
+        }
+        if let Ok(Expression::Process(ProcessState::Over(pid, _exit_status))) = res {
             let mut state = environment.state.borrow_mut();
             if state.pipe_pgid.is_none() {
                 state.pipe_pgid = Some(pid);
@@ -283,6 +287,71 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
     }
     environment.state.borrow_mut().stdout_status = old_out_status;
     Ok(out)
+}
+
+fn builtin_wait(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "wait takes one form (a pid to wait on)",
+        ))
+    } else {
+        match eval(environment, &args[0]) {
+            Ok(arg) => match arg {
+                Expression::Process(ProcessState::Running(pid)) => {
+                    match wait_pid(environment, pid, None) {
+                        Some(exit_status) => {
+                            Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
+                        }
+                        None => Ok(Expression::Atom(Atom::Nil)),
+                    }
+                }
+                Expression::Process(ProcessState::Over(_pid, exit_status)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
+                }
+                Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
+                    Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
+                    None => Ok(Expression::Atom(Atom::Nil)),
+                },
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "wait error: not a pid",
+                )),
+            },
+            Err(err) => {
+                let msg = format!("wait error evaluating form: {}", err);
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    }
+}
+
+fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "pid takes one form (a process)",
+        ))
+    } else {
+        match eval(environment, &args[0]) {
+            Ok(arg) => match arg {
+                Expression::Process(ProcessState::Running(pid)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
+                }
+                Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "pid error: not a process",
+                )),
+            },
+            Err(err) => {
+                let msg = format!("pid error evaluating form: {}", err);
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    }
 }
 
 pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
@@ -307,4 +376,6 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
     data.insert("is-file".to_string(), Expression::Func(builtin_is_file));
     data.insert("is-dir".to_string(), Expression::Func(builtin_is_dir));
     data.insert("pipe".to_string(), Expression::Func(builtin_pipe));
+    data.insert("wait".to_string(), Expression::Func(builtin_wait));
+    data.insert("pid".to_string(), Expression::Func(builtin_pid));
 }

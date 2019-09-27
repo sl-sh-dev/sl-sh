@@ -62,12 +62,18 @@ impl Atom {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum ProcessState {
+    Running(u32),   // pid
+    Over(u32, i32), // pid and exit status
+}
+
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
     List(Vec<Expression>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
-    Process(u32),
+    Process(ProcessState),
 }
 
 impl fmt::Debug for Expression {
@@ -76,7 +82,14 @@ impl fmt::Debug for Expression {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
             Expression::List(l) => write!(f, "Expression::List({:?})", l),
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
-            Expression::Process(pid) => write!(f, "Expression::Process({})", pid),
+            Expression::Process(ProcessState::Running(pid)) => {
+                write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
+            }
+            Expression::Process(ProcessState::Over(pid, exit_status)) => write!(
+                f,
+                "Expression::Process(ProcessState::Over({}, {}))",
+                pid, exit_status
+            ),
         }
     }
 }
@@ -85,7 +98,10 @@ impl Expression {
     pub fn to_string(&self) -> String {
         match self {
             Expression::Atom(a) => a.to_string(),
-            Expression::Process(pid) => format!("{}", pid).to_string(),
+            Expression::Process(ProcessState::Running(pid)) => format!("{}", pid).to_string(),
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+                format!("{}", pid).to_string()
+            }
             Expression::Func(_) => "Func".to_string(),
             Expression::List(list) => {
                 let mut res = String::new();
@@ -131,7 +147,10 @@ impl Expression {
     pub fn make_string(&self, environment: &Environment) -> io::Result<String> {
         match self {
             Expression::Atom(a) => Ok(a.to_string()),
-            Expression::Process(pid) => self.pid_to_string(environment.procs.clone(), *pid),
+            Expression::Process(ProcessState::Running(_pid)) => Ok("".to_string()),
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+                self.pid_to_string(environment.procs.clone(), *pid)
+            }
             Expression::Func(_) => Ok("".to_string()),
             Expression::List(list) => {
                 let mut res = String::new();
@@ -151,7 +170,11 @@ impl Expression {
             Expression::Atom(Atom::Float(f)) => Ok(*f),
             Expression::Atom(Atom::Int(i)) => Ok(*i as f64),
             Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Process(pid) => {
+            Expression::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Not a number (process still running!)",
+            )),
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_float: Result<f64, ParseFloatError> = buffer.parse();
                 match potential_float {
@@ -168,7 +191,11 @@ impl Expression {
         match self {
             Expression::Atom(Atom::Int(i)) => Ok(*i),
             Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Process(pid) => {
+            Expression::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Not an integer (process still running!)",
+            )),
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_int: Result<i64, ParseIntError> = buffer.parse();
                 match potential_int {
@@ -184,7 +211,14 @@ impl Expression {
     pub fn writef(&self, environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
         match self {
             Expression::Atom(a) => write!(writer, "{}", a.to_string())?,
-            Expression::Process(pid) => {
+            Expression::Process(ProcessState::Running(_pid)) => {
+                // Maybe should write anything available?
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Can not write, process not complete",
+                ));
+            }
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {

@@ -16,7 +16,6 @@ use nix::{
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::shell::*;
 use crate::types::*;
 
 pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
@@ -94,7 +93,8 @@ fn run_command(
         new_args.push(a.make_string(environment)?);
     }
     let mut com_obj = Command::new(command);
-    let foreground = !environment.in_pipe && !environment.state.borrow().is_spawn;
+    let foreground =
+        !environment.in_pipe && !environment.run_background && !environment.state.borrow().is_spawn;
     let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
         .args(&new_args)
@@ -162,18 +162,24 @@ fn run_command(
                     input.write_all(data_in.to_string().as_bytes())?;
                 }
             }
-            if foreground && !environment.in_pipe {
+            let pid = proc.id();
+            result = if foreground && !environment.in_pipe {
                 if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid) {
                     // Ignore, do in parent and child.
                 }
-                if let Some(term_settings) = term_settings {
-                    wait_pid(environment, proc.id(), Some(&term_settings));
+                let status = if let Some(term_settings) = term_settings {
+                    wait_pid(environment, proc.id(), Some(&term_settings))
                 } else {
-                    wait_pid(environment, proc.id(), None);
+                    wait_pid(environment, proc.id(), None)
+                };
+                match status {
+                    Some(code) => Expression::Process(ProcessState::Over(pid, code as i32)),
+                    None => Expression::Atom(Atom::Nil),
                 }
-            }
-            let pid = add_process(environment, proc);
-            result = Expression::Process(pid);
+            } else {
+                Expression::Process(ProcessState::Running(pid))
+            };
+            add_process(environment, proc);
         }
         Err(e) => {
             eprint!("Failed to execute [{}", command);
@@ -303,13 +309,15 @@ pub fn do_command(
     parts: &[Expression],
 ) -> io::Result<Expression> {
     let mut data = None;
+    let foreground =
+        !environment.in_pipe && !environment.run_background && !environment.state.borrow().is_spawn;
     let stdin = match &environment.data_in {
         Some(Expression::Atom(Atom::Nil)) => Stdio::inherit(),
         Some(Expression::Atom(atom)) => {
             data = Some(atom.clone());
             Stdio::piped()
         }
-        Some(Expression::Process(pid)) => {
+        Some(Expression::Process(ProcessState::Running(pid))) => {
             let procs = environment.procs.clone();
             let mut procs = procs.borrow_mut();
             if let Some(proc) = procs.get_mut(&pid) {
@@ -317,12 +325,22 @@ pub fn do_command(
                     let mut out: Option<ChildStdout> = None;
                     std::mem::swap(&mut proc.stdout, &mut out);
                     Stdio::from(out.unwrap())
-                } else {
+                } else if foreground {
                     Stdio::inherit()
+                } else {
+                    Stdio::null()
                 }
-            } else {
+            } else if foreground {
                 Stdio::inherit()
+            } else {
+                Stdio::null()
             }
+        }
+        Some(Expression::Process(ProcessState::Over(_pid, _exit_status))) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (process is already done).",
+            ))
         }
         Some(Expression::Func(_)) => {
             return Err(io::Error::new(
@@ -336,7 +354,13 @@ pub fn do_command(
                 "Invalid expression state before command (form).",
             ))
         }
-        None => Stdio::inherit(),
+        None => {
+            if foreground {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            }
+        }
     };
     let (stdout, stderr) = get_output(
         environment,
@@ -364,46 +388,4 @@ pub fn do_command(
         stderr,
         data,
     )
-}
-
-pub fn do_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
-    if environment.in_pipe {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "pipe within pipe, not valid",
-        ));
-    }
-    let old_out_status = environment.state.borrow().stdout_status.clone();
-    environment.in_pipe = true;
-    let mut out = Expression::Atom(Atom::Nil);
-    environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
-    let mut i = 1; // Meant 1 here.
-    for p in parts {
-        if i == parts.len() {
-            environment.state.borrow_mut().stdout_status = old_out_status.clone();
-            environment.in_pipe = false; // End of the pipe and want to wait.
-        }
-        environment.data_in = Some(out);
-        let res = eval(environment, p);
-        if let Err(err) = res {
-            environment.in_pipe = false;
-            environment.state.borrow_mut().stdout_status = old_out_status;
-            return Err(err);
-        }
-        if let Ok(Expression::Process(pid)) = res {
-            let mut state = environment.state.borrow_mut();
-            if state.pipe_pgid.is_none() {
-                state.pipe_pgid = Some(pid);
-            }
-        }
-        out = res.unwrap();
-        i += 1;
-    }
-    environment.data_in = None;
-    environment.in_pipe = false;
-    if !environment.in_pipe {
-        environment.state.borrow_mut().pipe_pgid = None;
-    }
-    environment.state.borrow_mut().stdout_status = old_out_status;
-    Ok(out)
 }
