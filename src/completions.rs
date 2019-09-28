@@ -17,12 +17,12 @@ enum CompType {
 }
 
 pub struct ShellCompleter<'a> {
-    environment: &'a Environment<'a>,
+    environment: &'a Environment,
     comp_type: CompType,
 }
 
 impl<'a> ShellCompleter<'a> {
-    pub fn new(environment: &'a Environment<'a>) -> ShellCompleter<'a> {
+    pub fn new(environment: &'a Environment) -> ShellCompleter<'a> {
         ShellCompleter {
             environment,
             comp_type: CompType::Nothing,
@@ -138,23 +138,21 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, org_start: 
     } else {
         (org_start, false)
     };
-    for key in environment.data.keys() {
+    let data = &environment.root_scope.borrow().data;
+    for key in data.keys() {
         if key.starts_with(start) {
             let val = if need_paren {
                 format!("({}", key)
             } else {
                 key.to_string()
             };
-            match environment.data.get(key).unwrap() {
+            match **data.get(key).unwrap() {
                 Expression::Func(_) => comps.push(val),
                 Expression::Atom(Atom::Lambda(_)) => comps.push(val),
                 Expression::Atom(Atom::Macro(_)) => comps.push(val),
                 _ => {}
             }
         }
-    }
-    if let Some(env) = environment.outer {
-        find_lisp_fns(env, comps, org_start);
     }
 }
 
@@ -164,14 +162,15 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
     } else {
         (org_start, false)
     };
-    for key in environment.data.keys() {
+    let data = &environment.root_scope.borrow().data;
+    for key in data.keys() {
         if key.starts_with(start) {
             let val = if need_quote {
                 format!("'{}", key)
             } else {
                 key.to_string()
             };
-            match environment.data.get(key).unwrap() {
+            match **data.get(key).unwrap() {
                 Expression::Atom(Atom::Lambda(_)) => {}
                 Expression::Atom(Atom::Macro(_)) => {}
                 Expression::Func(_) => {}
@@ -180,9 +179,6 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
                 }
             }
         }
-    }
-    if let Some(env) = environment.outer {
-        find_lisp_fns(env, comps, org_start);
     }
 }
 

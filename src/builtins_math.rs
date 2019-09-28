@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
+use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::types::*;
 
-pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
+pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "+".to_string(),
-        Expression::Func(
+        Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
                 let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -21,12 +22,12 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                     Ok(Expression::Atom(Atom::Float(sum)))
                 }
             },
-        ),
+        )),
     );
 
     data.insert(
         "*".to_string(),
-        Expression::Func(
+        Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
                 let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -39,12 +40,12 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                     Ok(Expression::Atom(Atom::Float(prod)))
                 }
             },
-        ),
+        )),
     );
 
     data.insert(
         "-".to_string(),
-        Expression::Func(
+        Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
                 let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -70,12 +71,12 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                     }
                 }
             },
-        ),
+        )),
     );
 
     data.insert(
         "/".to_string(),
-        Expression::Func(
+        Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
                 let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -109,6 +110,6 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, 
                     }
                 }
             },
-        ),
+        )),
     );
 }

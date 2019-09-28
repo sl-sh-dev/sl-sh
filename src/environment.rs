@@ -29,7 +29,6 @@ pub struct EnvState {
     pub stdout_status: Option<IOState>,
     pub stderr_status: Option<IOState>,
     pub eval_level: u32,
-    pub stopped_procs: Vec<u32>,
     pub is_spawn: bool,
     pub pipe_pgid: Option<u32>,
 }
@@ -42,7 +41,6 @@ impl Default for EnvState {
             stdout_status: None,
             stderr_status: None,
             eval_level: 0,
-            stopped_procs: Vec::new(),
             is_spawn: false,
             pipe_pgid: None,
         }
@@ -57,167 +55,195 @@ pub enum FormType {
 }
 
 #[derive(Clone, Debug)]
-pub struct Environment<'a> {
-    pub state: Rc<RefCell<EnvState>>,
+pub struct Scope {
+    pub data: HashMap<String, Rc<Expression>>,
+    pub outer: Option<Rc<RefCell<Scope>>>,
+}
+
+impl Default for Scope {
+    fn default() -> Self {
+        let mut data = HashMap::new();
+        add_builtins(&mut data);
+        add_math_builtins(&mut data);
+        add_str_builtins(&mut data);
+        add_list_builtins(&mut data);
+        add_file_builtins(&mut data);
+        Scope { data, outer: None }
+    }
+}
+
+impl Scope {
+    fn with_data<S: ::std::hash::BuildHasher>(
+        environment: Option<&Environment>,
+        mut data_in: HashMap<String, Rc<Expression>, S>,
+    ) -> Scope {
+        let mut data: HashMap<String, Rc<Expression>> = HashMap::with_capacity(data_in.len());
+        for (k, v) in data_in.drain() {
+            data.insert(k, v);
+        }
+        let outer = if let Some(environment) = environment {
+            if let Some(scope) = environment.current_scope.last() {
+                Some(scope.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        Scope { data, outer }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Environment {
+    pub state: EnvState,
+    pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub in_pipe: bool,
     pub run_background: bool,
     pub is_tty: bool,
     pub loose_symbols: bool,
-    pub data: HashMap<String, Expression>,
-    pub global: Rc<RefCell<HashMap<String, Expression>>>,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
-    pub outer: Option<&'a Environment<'a>>,
     pub data_in: Option<Expression>,
     pub form_type: FormType,
+    // This is the environment's root (global scope), it will also be part of
+    // higher level scopes and in the curren_scope vector (the first item).
+    // It's special so keep a reference here as well for handy access.
+    pub root_scope: Rc<RefCell<Scope>>,
+    // Use as a stack of scopes, entering a new pushes and it get popped on exit
+    // The actual lookups are done use the scope and it's outer chain NOT this stack.
+    pub current_scope: Vec<Rc<RefCell<Scope>>>,
 }
 
-pub fn build_default_environment<'a>() -> Environment<'a> {
-    let mut data: HashMap<String, Expression> = HashMap::new();
+pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    let global: Rc<RefCell<HashMap<String, Expression>>> = Rc::new(RefCell::new(HashMap::new()));
-    add_builtins(&mut data);
-    add_math_builtins(&mut data);
-    add_str_builtins(&mut data);
-    add_list_builtins(&mut data);
-    add_file_builtins(&mut data);
+    let root_scope = Rc::new(RefCell::new(Scope::default()));
+    let mut current_scope = Vec::new();
+    current_scope.push(root_scope.clone());
     Environment {
-        state: Rc::new(RefCell::new(EnvState::default())),
+        state: EnvState::default(),
+        stopped_procs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,
         run_background: false,
         is_tty: true,
         loose_symbols: false,
-        data,
-        global,
         procs,
-        outer: None,
         data_in: None,
         form_type: FormType::Any,
+        root_scope,
+        current_scope,
     }
 }
 
-pub fn build_new_scope_with_data<'a, S: ::std::hash::BuildHasher>(
-    environment: &'a Environment<'a>,
-    mut data_in: HashMap<String, Expression, S>,
-) -> Environment<'a> {
-    let mut data: HashMap<String, Expression> = HashMap::with_capacity(data_in.len());
-    for (k, v) in data_in.drain() {
-        data.insert(k, v);
-    }
-    Environment {
-        state: environment.state.clone(),
-        in_pipe: environment.in_pipe,
-        run_background: environment.run_background,
-        is_tty: environment.is_tty,
-        loose_symbols: false,
-        data,
-        global: environment.global.clone(),
-        procs: environment.procs.clone(),
-        outer: Some(environment),
-        data_in: None,
-        form_type: environment.form_type,
-    }
+pub fn build_new_scope_with_data<S: ::std::hash::BuildHasher>(
+    environment: &mut Environment,
+    data_in: HashMap<String, Rc<Expression>, S>,
+) -> Rc<RefCell<Scope>> {
+    let current_scope = Rc::new(RefCell::new(Scope::with_data(Some(environment), data_in)));
+    environment.current_scope.push(current_scope.clone());
+    current_scope
 }
 
-pub fn build_new_spawn_scope<'a, S: ::std::hash::BuildHasher>(
+pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     mut data_in: HashMap<String, Expression, S>,
-    mut global_in: HashMap<String, Expression, S>,
-) -> Environment<'a> {
+) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    let state = Rc::new(RefCell::new(EnvState::default()));
-    let mut global: HashMap<String, Expression> = HashMap::with_capacity(global_in.len());
-    for (k, v) in global_in.drain() {
-        global.insert(k, v);
-    }
-    let global: Rc<RefCell<HashMap<String, Expression>>> = Rc::new(RefCell::new(global));
-    let mut data: HashMap<String, Expression> = HashMap::with_capacity(data_in.len());
+    let mut state = EnvState::default();
+    let mut data: HashMap<String, Rc<Expression>> = HashMap::with_capacity(data_in.len());
     for (k, v) in data_in.drain() {
-        data.insert(k, v);
+        data.insert(k, Rc::new(v));
     }
-    state.borrow_mut().is_spawn = true;
+    state.is_spawn = true;
+    let root_scope = Rc::new(RefCell::new(Scope::with_data(None, data)));
+    let mut current_scope = Vec::new();
+    current_scope.push(root_scope.clone());
     Environment {
         state,
+        stopped_procs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,
         run_background: false,
         is_tty: false,
         loose_symbols: false,
-        data,
-        global,
         procs,
-        outer: None,
         data_in: None,
         form_type: FormType::Any,
+        root_scope,
+        current_scope,
     }
 }
 
-pub fn build_new_scope<'a>(environment: &'a Environment<'a>) -> Environment<'a> {
-    let data: HashMap<String, Expression> = HashMap::new();
-    Environment {
-        state: environment.state.clone(),
-        in_pipe: environment.in_pipe,
-        run_background: environment.run_background,
-        is_tty: environment.is_tty,
-        loose_symbols: false,
-        data,
-        global: environment.global.clone(),
-        procs: environment.procs.clone(),
-        outer: Some(environment),
-        data_in: None,
-        form_type: environment.form_type,
-    }
+pub fn build_new_scope(environment: &Environment) -> Rc<RefCell<Scope>> {
+    let data: HashMap<String, Rc<Expression>> = HashMap::new();
+    let outer = if let Some(scope) = environment.current_scope.last() {
+        Some(scope.clone())
+    } else {
+        None
+    };
+    Rc::new(RefCell::new(Scope { data, outer }))
 }
 
 pub fn clone_symbols<S: ::std::hash::BuildHasher>(
-    environment: &Environment,
+    scope: &Scope,
     data_in: &mut HashMap<String, Expression, S>,
 ) {
-    for (k, v) in &environment.data {
+    for (k, v) in &scope.data {
+        let v = &**v;
         data_in.insert(k.clone(), v.clone());
     }
-    if let Some(outer) = environment.outer {
-        clone_symbols(outer, data_in);
+    if let Some(outer) = &scope.outer {
+        clone_symbols(&outer.borrow(), data_in);
     }
 }
 
-pub fn get_expression(environment: &Environment, key: &str) -> Option<Expression> {
-    if key.starts_with("#g") {
-        match environment.global.borrow().get(&key[2..]) {
-            Some(global) => Some(global.clone()),
-            None => None,
+pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Expression>> {
+    let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+    while loop_scope.is_some() {
+        let scope = loop_scope.unwrap();
+        if let Some(exp) = scope.borrow().data.get(key) {
+            return Some(exp.clone());
         }
-    } else {
-        match environment.data.get(key) {
-            Some(exp) => Some(exp.clone()),
-            None => match environment.outer {
-                Some(outer) => get_expression(outer, key),
-                None => match environment.global.borrow().get(key) {
-                    Some(global) => Some(global.clone()),
-                    None => None,
-                },
-            },
-        }
+        loop_scope = scope.borrow().outer.clone();
     }
+    None
 }
 
-pub fn set_expression(environment: &mut Environment, key: String, expression: Expression) {
-    environment.data.insert(key, expression);
-}
-
-pub fn set_expression_global(environment: &mut Environment, key: String, expression: Expression) {
-    environment.global.borrow_mut().insert(key, expression);
+pub fn set_expression_global(
+    environment: &mut Environment,
+    key: String,
+    expression: Rc<Expression>,
+) {
+    environment
+        .root_scope
+        .borrow_mut()
+        .data
+        .insert(key, expression);
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
     if key.starts_with('$') {
         env::var(&key[1..]).is_ok()
     } else {
-        match environment.data.get(key) {
-            Some(_) => true,
-            None => match environment.outer {
-                Some(outer) => is_expression(outer, key),
-                None => environment.global.borrow().get(key).is_some(),
-            },
+        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        while loop_scope.is_some() {
+            let scope = loop_scope.unwrap();
+            if let Some(_exp) = scope.borrow().data.get(key) {
+                return true;
+            }
+            loop_scope = scope.borrow().outer.clone();
         }
+        false
     }
+}
+
+pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefCell<Scope>>> {
+    let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+    while loop_scope.is_some() {
+        let scope = loop_scope.unwrap();
+        if let Some(_exp) = scope.borrow().data.get(key) {
+            return Some(scope.clone());
+        }
+        loop_scope = scope.borrow().outer.clone();
+    }
+    None
 }
 
 pub fn add_process(environment: &Environment, process: Child) -> u32 {

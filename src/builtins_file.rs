@@ -4,6 +4,7 @@ use std::fs::File;
 use std::hash::BuildHasher;
 use std::io;
 use std::path::Path;
+use std::rc::Rc;
 
 use crate::builtins::*;
 use crate::builtins_util::*;
@@ -50,12 +51,12 @@ fn builtin_use_stdout(
     parts: &[Expression],
 ) -> io::Result<Expression> {
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
-    let old_out = environment.state.borrow().stdout_status.clone();
-    let old_err = environment.state.borrow().stderr_status.clone();
+    let old_out = environment.state.stdout_status.clone();
+    let old_err = environment.state.stderr_status.clone();
     if !environment.in_pipe {
         // Don't break a pipe if in one.
-        environment.state.borrow_mut().stdout_status = Some(IOState::Inherit);
-        environment.state.borrow_mut().stderr_status = Some(IOState::Inherit);
+        environment.state.stdout_status = Some(IOState::Inherit);
+        environment.state.stderr_status = Some(IOState::Inherit);
     }
     for a in parts {
         last_eval = eval(environment, a);
@@ -63,22 +64,22 @@ fn builtin_use_stdout(
             break;
         }
     }
-    environment.state.borrow_mut().stdout_status = old_out;
-    environment.state.borrow_mut().stderr_status = old_err;
+    environment.state.stdout_status = old_out;
+    environment.state.stderr_status = old_err;
     last_eval
 }
 
 fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.state.borrow_mut().stderr_status = Some(IOState::Null);
+    environment.state.stderr_status = Some(IOState::Null);
     let res = builtin_progn(environment, args);
-    environment.state.borrow_mut().stderr_status = None;
+    environment.state.stderr_status = None;
     res
 }
 
 fn builtin_out_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.state.borrow_mut().stderr_status = Some(IOState::Null);
+    environment.state.stderr_status = Some(IOState::Null);
     let res = builtin_progn(environment, args);
-    environment.state.borrow_mut().stderr_status = None;
+    environment.state.stderr_status = None;
     res
 }
 
@@ -113,9 +114,9 @@ fn builtin_file_rdr(environment: &mut Environment, args: &[Expression]) -> io::R
         ))
     } else {
         let arg0 = eval(environment, &args[0])?;
-        environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
+        environment.state.stdout_status = Some(IOState::Pipe);
         let res = builtin_progn(environment, &args[1..]);
-        environment.state.borrow_mut().stdout_status = None;
+        environment.state.stdout_status = None;
         if let Ok(res) = &res {
             if let Expression::Atom(Atom::String(s)) = &arg0 {
                 let mut writer = std::fs::OpenOptions::new()
@@ -144,16 +145,16 @@ fn internal_output_to(
         let arg0 = eval(environment, &args[0])?;
         if let Expression::Atom(Atom::String(s)) = &arg0 {
             if is_stdout {
-                environment.state.borrow_mut().stdout_status = Some(IOState::FileAppend(s.clone()));
+                environment.state.stdout_status = Some(IOState::FileAppend(s.clone()));
             } else {
-                environment.state.borrow_mut().stderr_status = Some(IOState::FileAppend(s.clone()));
+                environment.state.stderr_status = Some(IOState::FileAppend(s.clone()));
             }
         } else {
             let msg = format!("{} must have a file", name);
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         }
         let res = builtin_progn(environment, &args[1..]);
-        environment.state.borrow_mut().stdout_status = None;
+        environment.state.stdout_status = None;
         res
     }
 }
@@ -248,33 +249,31 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
             "pipe within pipe, not valid",
         ));
     }
-    let old_out_status = environment.state.borrow().stdout_status.clone();
+    let old_out_status = environment.state.stdout_status.clone();
     environment.in_pipe = true;
     let mut out = Expression::Atom(Atom::Nil);
-    environment.state.borrow_mut().stdout_status = Some(IOState::Pipe);
+    environment.state.stdout_status = Some(IOState::Pipe);
     let mut i = 1; // Meant 1 here.
     for p in parts {
         if i == parts.len() {
-            environment.state.borrow_mut().stdout_status = old_out_status.clone();
+            environment.state.stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
         environment.data_in = Some(out);
         let res = eval(environment, p);
         if let Err(err) = res {
             environment.in_pipe = false;
-            environment.state.borrow_mut().stdout_status = old_out_status;
+            environment.state.stdout_status = old_out_status;
             return Err(err);
         }
         if let Ok(Expression::Process(ProcessState::Running(pid))) = res {
-            let mut state = environment.state.borrow_mut();
-            if state.pipe_pgid.is_none() {
-                state.pipe_pgid = Some(pid);
+            if environment.state.pipe_pgid.is_none() {
+                environment.state.pipe_pgid = Some(pid);
             }
         }
         if let Ok(Expression::Process(ProcessState::Over(pid, _exit_status))) = res {
-            let mut state = environment.state.borrow_mut();
-            if state.pipe_pgid.is_none() {
-                state.pipe_pgid = Some(pid);
+            if environment.state.pipe_pgid.is_none() {
+                environment.state.pipe_pgid = Some(pid);
             }
         }
         out = res.unwrap();
@@ -283,9 +282,9 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
     environment.data_in = None;
     environment.in_pipe = false;
     if !environment.in_pipe {
-        environment.state.borrow_mut().pipe_pgid = None;
+        environment.state.pipe_pgid = None;
     }
-    environment.state.borrow_mut().stdout_status = old_out_status;
+    environment.state.stdout_status = old_out_status;
     Ok(out)
 }
 
@@ -354,28 +353,49 @@ fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
-pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
-    data.insert("cd".to_string(), Expression::Func(builtin_cd));
+pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+    data.insert("cd".to_string(), Rc::new(Expression::Func(builtin_cd)));
     data.insert(
         "use-stdout".to_string(),
-        Expression::Func(builtin_use_stdout),
+        Rc::new(Expression::Func(builtin_use_stdout)),
     );
-    data.insert("out-null".to_string(), Expression::Func(builtin_out_null));
-    data.insert("err-null".to_string(), Expression::Func(builtin_err_null));
-    data.insert("file-rdr".to_string(), Expression::Func(builtin_file_rdr));
-    data.insert("stdout-to".to_string(), Expression::Func(builtin_stdout_to));
-    data.insert("stderr-to".to_string(), Expression::Func(builtin_stderr_to));
+    data.insert(
+        "out-null".to_string(),
+        Rc::new(Expression::Func(builtin_out_null)),
+    );
+    data.insert(
+        "err-null".to_string(),
+        Rc::new(Expression::Func(builtin_err_null)),
+    );
+    data.insert(
+        "file-rdr".to_string(),
+        Rc::new(Expression::Func(builtin_file_rdr)),
+    );
+    data.insert(
+        "stdout-to".to_string(),
+        Rc::new(Expression::Func(builtin_stdout_to)),
+    );
+    data.insert(
+        "stderr-to".to_string(),
+        Rc::new(Expression::Func(builtin_stderr_to)),
+    );
     data.insert(
         "file-trunc".to_string(),
-        Expression::Func(builtin_file_trunc),
+        Rc::new(Expression::Func(builtin_file_trunc)),
     );
     data.insert(
         "path-exists".to_string(),
-        Expression::Func(builtin_path_exists),
+        Rc::new(Expression::Func(builtin_path_exists)),
     );
-    data.insert("is-file".to_string(), Expression::Func(builtin_is_file));
-    data.insert("is-dir".to_string(), Expression::Func(builtin_is_dir));
-    data.insert("pipe".to_string(), Expression::Func(builtin_pipe));
-    data.insert("wait".to_string(), Expression::Func(builtin_wait));
-    data.insert("pid".to_string(), Expression::Func(builtin_pid));
+    data.insert(
+        "is-file".to_string(),
+        Rc::new(Expression::Func(builtin_is_file)),
+    );
+    data.insert(
+        "is-dir".to_string(),
+        Rc::new(Expression::Func(builtin_is_dir)),
+    );
+    data.insert("pipe".to_string(), Rc::new(Expression::Func(builtin_pipe)));
+    data.insert("wait".to_string(), Rc::new(Expression::Func(builtin_wait)));
+    data.insert("pid".to_string(), Rc::new(Expression::Func(builtin_pid)));
 }

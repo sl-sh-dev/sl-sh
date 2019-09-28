@@ -7,6 +7,7 @@ use std::io::{self, ErrorKind};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::rc::Rc;
 
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::gethostname;
@@ -23,18 +24,24 @@ fn call_lambda(
     lambda: &Lambda,
     args: &[Expression],
 ) -> io::Result<Expression> {
-    let mut new_environment = build_new_scope(environment);
+    // DO NOT use ? in here, need to make sure the new_scope is popped off the
+    // current_scope list before ending.
+    let new_scope = build_new_scope(environment);
+    environment.current_scope.push(new_scope.clone());
     let mut looping = true;
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
-    new_environment.loose_symbols = environment.loose_symbols;
-    setup_args(&mut new_environment, &lambda.params, args, true)?;
-    new_environment.loose_symbols = false;
+    if let Err(err) = setup_args(environment, &lambda.params, args, true) {
+        environment.current_scope.pop();
+        return Err(err);
+    }
+    let old_loose = environment.loose_symbols;
+    environment.loose_symbols = false;
     while looping {
-        last_eval = eval(&mut new_environment, &lambda.body);
-        looping = environment.state.borrow().recur_num_args.is_some();
+        last_eval = eval(environment, &lambda.body);
+        looping = environment.state.recur_num_args.is_some();
         if looping {
-            let recur_args = environment.state.borrow().recur_num_args.unwrap();
-            environment.state.borrow_mut().recur_num_args = None;
+            let recur_args = environment.state.recur_num_args.unwrap();
+            environment.state.recur_num_args = None;
             if let Ok(Expression::List(new_args)) = &last_eval {
                 if recur_args != new_args.len() {
                     return Err(io::Error::new(
@@ -42,10 +49,15 @@ fn call_lambda(
                         "Called recur in a non-tail position.",
                     ));
                 }
-                setup_args(&mut new_environment, &lambda.params, &new_args, false)?;
+                if let Err(err) = setup_args(environment, &lambda.params, &new_args, false) {
+                    environment.current_scope.pop();
+                    return Err(err);
+                }
             }
         }
     }
+    environment.loose_symbols = old_loose;
+    environment.current_scope.pop();
     last_eval
 }
 
@@ -54,20 +66,34 @@ fn expand_macro(
     sh_macro: &Lambda,
     args: &[Expression],
 ) -> io::Result<Expression> {
-    let mut new_environment = build_new_scope(environment);
-    setup_args(&mut new_environment, &sh_macro.params, args, false)?;
-    let expansion = eval(&mut new_environment, &sh_macro.body)?;
-    // Mess with eval_level to remove the extra level the macro added- helpful for executables and stdout detection.
-    environment.state.borrow_mut().eval_level -= 1;
-    let result = eval(environment, &expansion);
-    environment.state.borrow_mut().eval_level += 1;
+    // DO NOT use ? in here, need to make sure the new_scope is popped off the
+    // current_scope list before ending.
+    let new_scope = build_new_scope(environment);
+    environment.current_scope.push(new_scope.clone());
+    if let Err(err) = setup_args(environment, &sh_macro.params, args, false) {
+        environment.current_scope.pop();
+        return Err(err);
+    }
+    let result;
+    match eval(environment, &sh_macro.body) {
+        Ok(expansion) => {
+            // Mess with eval_level to remove the extra level the macro added- helpful for executables and stdout detection.
+            environment.state.eval_level -= 1;
+            result = eval(environment, &expansion);
+            environment.state.eval_level += 1;
+        }
+        Err(err) => {
+            result = Err(err);
+        }
+    }
+    environment.current_scope.pop();
     result
 }
 
 fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
-    let in_recur = environment.state.borrow().recur_num_args.is_some();
+    let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {
-        environment.state.borrow_mut().recur_num_args = None;
+        environment.state.recur_num_args = None;
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "Called recur in a non-tail position.",
@@ -107,7 +133,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                         None
                     };
                     if form.is_some() {
-                        let exp = form.unwrap();
+                        let exp = &*form.unwrap();
                         if let Expression::Func(f) = exp {
                             f(environment, &parts)
                         } else if let Expression::Atom(Atom::Lambda(f)) = exp {
@@ -148,10 +174,11 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     Err(_) => Ok(Expression::Atom(Atom::String("".to_string()))),
                 }
             } else if let Some(exp) = get_expression(environment, &s[..]) {
-                if let Expression::Func(_) = exp {
+                if let Expression::Func(_) = *exp {
                     Ok(Expression::Atom(Atom::String(s.clone())))
                 } else {
-                    Ok(exp)
+                    let exp = &*exp;
+                    Ok(exp.clone())
                 }
             } else if environment.loose_symbols {
                 Ok(Expression::Atom(Atom::String(s.clone())))
@@ -167,9 +194,9 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
 }
 
 pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
-    environment.state.borrow_mut().eval_level += 1;
+    environment.state.eval_level += 1;
     let result = internal_eval(environment, expression);
-    environment.state.borrow_mut().eval_level -= 1;
+    environment.state.eval_level -= 1;
     result
 }
 
@@ -246,15 +273,26 @@ pub fn start_interactive() {
                 p
             }
         };
-        environment.state.borrow_mut().stdout_status = None;
-        environment.state.borrow_mut().stderr_status = None;
-        let prompt = if environment.data.contains_key("__prompt") {
-            let mut exp = environment.data.get("__prompt").unwrap().clone();
-            exp = match exp {
+        environment.state.stdout_status = None;
+        environment.state.stderr_status = None;
+        let prompt = if environment
+            .root_scope
+            .borrow()
+            .data
+            .contains_key("__prompt")
+        {
+            let mut exp = environment
+                .root_scope
+                .borrow()
+                .data
+                .get("__prompt")
+                .unwrap()
+                .clone();
+            exp = match *exp {
                 Expression::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1);
                     v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
-                    Expression::List(v)
+                    Rc::new(Expression::List(v))
                 }
                 _ => exp,
             };
@@ -349,7 +387,7 @@ pub fn read_stdin() {
         match io::stdin().read_line(&mut input) {
             Ok(0) => return,
             Ok(_n) => {
-                environment.state.borrow_mut().stdout_status = None;
+                environment.state.stdout_status = None;
                 let mod_input = if input.starts_with('(')
                     || input.starts_with('\'')
                     || input.starts_with('`')
@@ -380,7 +418,7 @@ pub fn read_stdin() {
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }
-                environment.state.borrow_mut().stderr_status = None;
+                environment.state.stderr_status = None;
             }
             Err(error) => {
                 eprintln!("ERROR reading stdin: {}", error);
@@ -504,7 +542,9 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
         exp_args.push(Expression::Atom(Atom::String(a.clone())));
     }
     environment
+        .root_scope
+        .borrow_mut()
         .data
-        .insert("args".to_string(), Expression::List(exp_args));
+        .insert("args".to_string(), Rc::new(Expression::List(exp_args)));
     run_script(command, &mut environment)
 }

@@ -39,7 +39,7 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
             (true, Some(status))
         }
         Ok(WaitStatus::Stopped(..)) => {
-            environment.state.borrow_mut().stopped_procs.push(pid);
+            environment.stopped_procs.borrow_mut().push(pid);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
@@ -94,14 +94,14 @@ fn run_command(
     }
     let mut com_obj = Command::new(command);
     let foreground =
-        !environment.in_pipe && !environment.run_background && !environment.state.borrow().is_spawn;
+        !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
     let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
         .args(&new_args)
         .stdin(stdin)
         .stdout(stdout)
         .stderr(stderr);
-    let pgid = environment.state.borrow().pipe_pgid;
+    let pgid = environment.state.pipe_pgid;
 
     unsafe {
         com_obj.pre_exec(move || -> io::Result<()> {
@@ -221,7 +221,7 @@ fn get_output(
         Some(IOState::Inherit) => Stdio::inherit(),
         Some(IOState::Pipe) => Stdio::piped(),
         None => {
-            let use_stdout = environment.state.borrow().eval_level < 3 && !environment.in_pipe;
+            let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
             if use_stdout {
                 Stdio::inherit()
             } else {
@@ -255,7 +255,7 @@ fn get_output(
         Some(IOState::Inherit) => Stdio::inherit(),
         Some(IOState::Pipe) => Stdio::piped(),
         None => {
-            let use_stdout = environment.state.borrow().eval_level < 3 && !environment.in_pipe;
+            let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
             if use_stdout {
                 Stdio::inherit()
             } else {
@@ -310,7 +310,7 @@ pub fn do_command(
 ) -> io::Result<Expression> {
     let mut data = None;
     let foreground =
-        !environment.in_pipe && !environment.run_background && !environment.state.borrow().is_spawn;
+        !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
     let stdin = match &environment.data_in {
         Some(Expression::Atom(Atom::Nil)) => Stdio::inherit(),
         Some(Expression::Atom(atom)) => {
@@ -364,8 +364,8 @@ pub fn do_command(
     };
     let (stdout, stderr) = get_output(
         environment,
-        &environment.state.borrow().stdout_status,
-        &environment.state.borrow().stderr_status,
+        &environment.state.stdout_status,
+        &environment.state.stderr_status,
     )?;
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;

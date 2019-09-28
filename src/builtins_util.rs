@@ -1,5 +1,6 @@
 use std::env;
 use std::io;
+use std::rc::Rc;
 
 use crate::environment::*;
 use crate::shell::*;
@@ -87,7 +88,7 @@ pub fn expand_tilde(path: &str) -> Option<String> {
 }
 
 fn setup_args_final(
-    environment: &mut Environment,
+    scope: &mut Scope,
     mut var_names: Vec<String>,
     vars: &[Expression],
     min_params: usize,
@@ -101,24 +102,24 @@ fn setup_args_final(
     } else if use_rest {
         let rest_name = var_names.pop().unwrap();
         for (k, v) in var_names.iter().zip(vars.iter()) {
-            environment.data.insert(k.clone(), v.clone());
+            scope.data.insert(k.clone(), Rc::new(v.clone()));
         }
         if vars.len() > min_params {
             let mut rest_data: Vec<Expression> = Vec::with_capacity(vars.len() - min_params);
             for v in &vars[min_params..] {
                 rest_data.push(v.clone());
             }
-            environment
+            scope
                 .data
-                .insert(rest_name.clone(), Expression::List(rest_data));
+                .insert(rest_name.clone(), Rc::new(Expression::List(rest_data)));
         } else {
-            environment
+            scope
                 .data
-                .insert(rest_name.clone(), Expression::Atom(Atom::Nil));
+                .insert(rest_name.clone(), Rc::new(Expression::Atom(Atom::Nil)));
         }
     } else {
         for (k, v) in var_names.iter().zip(vars.iter()) {
-            environment.data.insert(k.clone(), v.clone());
+            scope.data.insert(k.clone(), Rc::new(v.clone()));
         }
     }
     Ok(())
@@ -183,9 +184,21 @@ pub fn setup_args(
         };
         if let Some(t_vars) = t_vars {
             vars = &t_vars;
-            setup_args_final(environment, var_names, vars, min_params, use_rest)?;
+            setup_args_final(
+                &mut environment.current_scope.last().unwrap().borrow_mut(),
+                var_names,
+                vars,
+                min_params,
+                use_rest,
+            )?;
         } else {
-            setup_args_final(environment, var_names, vars, min_params, use_rest)?;
+            setup_args_final(
+                &mut environment.current_scope.last().unwrap().borrow_mut(),
+                var_names,
+                vars,
+                min_params,
+                use_rest,
+            )?;
         }
     }
     Ok(())

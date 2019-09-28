@@ -10,6 +10,7 @@ use std::env;
 use std::fs;
 use std::hash::BuildHasher;
 use std::io;
+use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
@@ -148,6 +149,121 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                 ));
             }
         };
+        if let Some(scope) = get_symbols_scope(environment, &key) {
+            let val = eval(environment, args.next().unwrap())?;
+            let mut val = match val {
+                Expression::Atom(atom) => Expression::Atom(atom),
+                Expression::List(list) => Expression::List(list),
+                Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
+                    val.make_string(environment)
+                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                )),
+                Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
+                    Expression::Atom(Atom::String(
+                        val.make_string(environment)
+                            .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                    ))
+                }
+                Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+            };
+            if key.starts_with('$') {
+                // Should use export, force this?
+                let val = val.make_string(environment)?;
+                let val = match expand_tilde(&val) {
+                    Some(v) => v,
+                    None => val,
+                };
+                if !val.is_empty() {
+                    env::set_var(key[1..].to_string(), val);
+                } else {
+                    env::remove_var(key[1..].to_string());
+                }
+            } else {
+                if let Expression::Atom(Atom::String(vs)) = val {
+                    let vs = match expand_tilde(&vs) {
+                        Some(v) => v,
+                        None => vs,
+                    };
+                    val = Expression::Atom(Atom::String(vs));
+                }
+                scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
+            }
+            Ok(val)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "set's first form must evaluate to an existing symbol",
+            ))
+        }
+    }
+}
+
+fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 2 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "export can only have two expressions",
+        ))
+    } else {
+        let mut args = args.iter();
+        let key = eval(environment, args.next().unwrap())?;
+        let key = match key {
+            Expression::Atom(Atom::Symbol(s)) => s.clone(),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "export's first form must evaluate to a symbol",
+                ));
+            }
+        };
+        let val = eval(environment, args.next().unwrap())?;
+        let val = match val {
+            Expression::Atom(atom) => Expression::Atom(atom),
+            Expression::List(list) => Expression::List(list),
+            Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
+                val.make_string(environment)
+                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+            )),
+            Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
+                Expression::Atom(Atom::String(
+                    val.make_string(environment)
+                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                ))
+            }
+            Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+        };
+        let val = val.make_string(environment)?;
+        let val = match expand_tilde(&val) {
+            Some(v) => v,
+            None => val,
+        };
+        if !val.is_empty() {
+            env::set_var(key, val.clone());
+        } else {
+            env::remove_var(key);
+        }
+        Ok(Expression::Atom(Atom::String(val)))
+    }
+}
+
+fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 2 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "def can only have two expressions",
+        ))
+    } else {
+        let mut args = args.iter();
+        let key = eval(environment, args.next().unwrap())?;
+        let key = match key {
+            Expression::Atom(Atom::Symbol(s)) => s.clone(),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "def's first form must evaluate to a symbol",
+                ));
+            }
+        };
         let val = eval(environment, args.next().unwrap())?;
         let mut val = match val {
             Expression::Atom(atom) => Expression::Atom(atom),
@@ -164,36 +280,14 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
             }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
         };
-        if key.starts_with('$') {
-            let val = val.make_string(environment)?;
-            let val = match expand_tilde(&val) {
+        if let Expression::Atom(Atom::String(vs)) = val {
+            let vs = match expand_tilde(&vs) {
                 Some(v) => v,
-                None => val,
+                None => vs,
             };
-            if !val.is_empty() {
-                env::set_var(key[1..].to_string(), val);
-            } else {
-                env::remove_var(key[1..].to_string());
-            }
-        } else if key.starts_with("#g") {
-            if let Expression::Atom(Atom::String(vs)) = val {
-                let vs = match expand_tilde(&vs) {
-                    Some(v) => v,
-                    None => vs,
-                };
-                val = Expression::Atom(Atom::String(vs));
-            }
-            set_expression_global(environment, key[2..].to_string(), val.clone());
-        } else {
-            if let Expression::Atom(Atom::String(vs)) = val {
-                let vs = match expand_tilde(&vs) {
-                    Some(v) => v,
-                    None => vs,
-                };
-                val = Expression::Atom(Atom::String(vs));
-            }
-            environment.data.insert(key, val.clone());
+            val = Expression::Atom(Atom::String(vs));
         }
+        set_expression_global(environment, key, Rc::new(val.clone()));
         Ok(val)
     }
 }
@@ -222,7 +316,7 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
             "let requires at least two forms",
         ));
     }
-    let mut data: HashMap<String, Expression> = HashMap::new();
+    let mut data: HashMap<String, Rc<Expression>> = HashMap::new();
     match &args[0] {
         Expression::Atom(Atom::Nil) => {}
         Expression::List(list) => {
@@ -238,10 +332,10 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
                         if binding_pair.len() == 2 {
                             data.insert(
                                 s.clone(),
-                                eval(environment, binding_pair.get(1).unwrap())?,
+                                Rc::new(eval(environment, binding_pair.get(1).unwrap())?),
                             );
                         } else {
-                            data.insert(s.clone(), Expression::Atom(Atom::Nil));
+                            data.insert(s.clone(), Rc::new(Expression::Atom(Atom::Nil)));
                         }
                     }
                 } else {
@@ -259,8 +353,16 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
             ))
         }
     }
-    let mut new_environment = build_new_scope_with_data(environment, data);
-    let mut args = to_args(&mut new_environment, &args[1..])?;
+    let new_scope = build_new_scope_with_data(environment, data);
+    environment.current_scope.push(new_scope.clone());
+    let mut args = match to_args(environment, &args[1..]) {
+        Ok(args) => args,
+        Err(err) => {
+            environment.current_scope.pop();
+            return Err(err);
+        }
+    };
+    environment.current_scope.pop();
     match args.pop() {
         Some(a) => Ok(a),
         None => Ok(Expression::Atom(Atom::Nil)),
@@ -351,13 +453,12 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
         new_args.push(a.clone());
     }
     let mut data: HashMap<String, Expression> = HashMap::new();
-    clone_symbols(environment, &mut data);
-    let mut global: HashMap<String, Expression> = HashMap::new();
-    for (k, v) in environment.global.borrow().iter() {
-        global.insert(k.clone(), v.clone());
-    }
+    clone_symbols(
+        &environment.current_scope.last().unwrap().borrow(),
+        &mut data,
+    );
     let _child = std::thread::spawn(move || {
-        let mut enviro = build_new_spawn_scope(data, global);
+        let mut enviro = build_new_spawn_scope(data);
         let _args = to_args(&mut enviro, &new_args).unwrap();
         if let Err(err) = reap_procs(&enviro) {
             eprintln!("Error waiting on spawned processes: {}", err);
@@ -447,15 +548,11 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
         let params = args.next().unwrap();
         let body = args.next().unwrap();
         if let Expression::Atom(Atom::Symbol(s)) = name {
-            let m = Expression::Atom(Atom::Macro(Lambda {
+            let m = Rc::new(Expression::Atom(Atom::Macro(Lambda {
                 params: Box::new(params.clone()),
                 body: Box::new(body.clone()),
-            }));
-            if s.starts_with("#g") {
-                set_expression_global(environment, s[2..].to_string(), m);
-            } else {
-                environment.data.insert(s.clone(), m);
-            }
+            })));
+            set_expression_global(environment, s.clone(), m);
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(
@@ -486,14 +583,18 @@ fn builtin_expand_macro(
             }
         };
         if let Expression::Atom(Atom::Symbol(command)) = command {
-            if let Some(Expression::Atom(Atom::Macro(sh_macro))) =
-                get_expression(environment, &command)
-            {
-                let mut new_environment = build_new_scope(environment);
-                setup_args(&mut new_environment, &sh_macro.params, parts, false)?;
-                let expansion = eval(&mut new_environment, &sh_macro.body)?;
-                Ok(expansion)
-            //println!("\nMacro Expansion: {}", expansion.to_string());
+            if let Some(exp) = get_expression(environment, &command) {
+                if let Expression::Atom(Atom::Macro(sh_macro)) = &*exp {
+                    let new_scope = build_new_scope(environment);
+                    environment.current_scope.push(new_scope.clone());
+                    setup_args(environment, &sh_macro.params, parts, false)?;
+                    let expansion = eval(environment, &sh_macro.body)?;
+                    environment.current_scope.pop();
+                    Ok(expansion)
+                } else {
+                    let msg = format!("expand-macro: {} not a macro", command);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                }
             } else {
                 let msg = format!("expand-macro: {} not a macro", command);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
@@ -518,7 +619,7 @@ fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Resu
     for a in args.drain(..) {
         arg_list.push(a.clone());
     }
-    environment.state.borrow_mut().recur_num_args = Some(arg_list.len());
+    environment.state.recur_num_args = Some(arg_list.len());
     Ok(Expression::List(arg_list))
 }
 
@@ -529,7 +630,7 @@ fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Res
             "gensym takes to arguments",
         ))
     } else {
-        let gensym_count = &mut environment.state.borrow_mut().gensym_count;
+        let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
         Ok(Expression::Atom(Atom::Symbol(format!(
             "gs::{}",
@@ -539,7 +640,7 @@ fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Res
 }
 
 fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
-    for pid in &environment.state.borrow().stopped_procs {
+    for pid in environment.stopped_procs.borrow().iter() {
         println!("{}", pid);
     }
     Ok(Expression::Atom(Atom::Nil))
@@ -547,7 +648,7 @@ fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Resu
 
 fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
     let mut opid: Option<u32> = None;
-    if let Some(pid) = environment.state.borrow_mut().stopped_procs.pop() {
+    if let Some(pid) = environment.stopped_procs.borrow_mut().pop() {
         opid = Some(pid);
     }
     if let Some(pid) = opid {
@@ -717,46 +818,93 @@ macro_rules! ensure_tonicity_all {
     }};
 }
 
-pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
-    data.insert("eval".to_string(), Expression::Func(builtin_eval));
-    data.insert("load".to_string(), Expression::Func(builtin_load));
-    data.insert("if".to_string(), Expression::Func(builtin_if));
-    data.insert("print".to_string(), Expression::Func(builtin_print));
-    data.insert("println".to_string(), Expression::Func(builtin_println));
-    data.insert("format".to_string(), Expression::Func(builtin_format));
-    data.insert("progn".to_string(), Expression::Func(builtin_progn));
-    data.insert("set".to_string(), Expression::Func(builtin_set));
-    data.insert("fn".to_string(), Expression::Func(builtin_fn));
-    data.insert("let".to_string(), Expression::Func(builtin_let));
-    data.insert("quote".to_string(), Expression::Func(builtin_quote));
-    data.insert("bquote".to_string(), Expression::Func(builtin_bquote));
-    data.insert("spawn".to_string(), Expression::Func(builtin_spawn));
-    data.insert("and".to_string(), Expression::Func(builtin_and));
-    data.insert("or".to_string(), Expression::Func(builtin_or));
-    data.insert("not".to_string(), Expression::Func(builtin_not));
-    data.insert("null".to_string(), Expression::Func(builtin_not));
-    data.insert("is-def".to_string(), Expression::Func(builtin_is_def));
-    data.insert("defmacro".to_string(), Expression::Func(builtin_defmacro));
+pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+    data.insert("eval".to_string(), Rc::new(Expression::Func(builtin_eval)));
+    data.insert("load".to_string(), Rc::new(Expression::Func(builtin_load)));
+    data.insert("if".to_string(), Rc::new(Expression::Func(builtin_if)));
+    data.insert(
+        "print".to_string(),
+        Rc::new(Expression::Func(builtin_print)),
+    );
+    data.insert(
+        "println".to_string(),
+        Rc::new(Expression::Func(builtin_println)),
+    );
+    data.insert(
+        "format".to_string(),
+        Rc::new(Expression::Func(builtin_format)),
+    );
+    data.insert(
+        "progn".to_string(),
+        Rc::new(Expression::Func(builtin_progn)),
+    );
+    data.insert("set".to_string(), Rc::new(Expression::Func(builtin_set)));
+    data.insert(
+        "export".to_string(),
+        Rc::new(Expression::Func(builtin_export)),
+    );
+    data.insert("def".to_string(), Rc::new(Expression::Func(builtin_def)));
+    data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
+    data.insert("let".to_string(), Rc::new(Expression::Func(builtin_let)));
+    data.insert(
+        "quote".to_string(),
+        Rc::new(Expression::Func(builtin_quote)),
+    );
+    data.insert(
+        "bquote".to_string(),
+        Rc::new(Expression::Func(builtin_bquote)),
+    );
+    data.insert(
+        "spawn".to_string(),
+        Rc::new(Expression::Func(builtin_spawn)),
+    );
+    data.insert("and".to_string(), Rc::new(Expression::Func(builtin_and)));
+    data.insert("or".to_string(), Rc::new(Expression::Func(builtin_or)));
+    data.insert("not".to_string(), Rc::new(Expression::Func(builtin_not)));
+    data.insert("null".to_string(), Rc::new(Expression::Func(builtin_not)));
+    data.insert(
+        "is-def".to_string(),
+        Rc::new(Expression::Func(builtin_is_def)),
+    );
+    data.insert(
+        "defmacro".to_string(),
+        Rc::new(Expression::Func(builtin_defmacro)),
+    );
     data.insert(
         "expand-macro".to_string(),
-        Expression::Func(builtin_expand_macro),
+        Rc::new(Expression::Func(builtin_expand_macro)),
     );
-    data.insert("recur".to_string(), Expression::Func(builtin_recur));
-    data.insert("gensym".to_string(), Expression::Func(builtin_gensym));
-    data.insert("jobs".to_string(), Expression::Func(builtin_jobs));
-    data.insert("fg".to_string(), Expression::Func(builtin_fg));
-    data.insert("version".to_string(), Expression::Func(builtin_version));
-    data.insert("command".to_string(), Expression::Func(builtin_command));
-    data.insert("run-bg".to_string(), Expression::Func(builtin_run_bg));
-    data.insert("form".to_string(), Expression::Func(builtin_form));
+    data.insert(
+        "recur".to_string(),
+        Rc::new(Expression::Func(builtin_recur)),
+    );
+    data.insert(
+        "gensym".to_string(),
+        Rc::new(Expression::Func(builtin_gensym)),
+    );
+    data.insert("jobs".to_string(), Rc::new(Expression::Func(builtin_jobs)));
+    data.insert("fg".to_string(), Rc::new(Expression::Func(builtin_fg)));
+    data.insert(
+        "version".to_string(),
+        Rc::new(Expression::Func(builtin_version)),
+    );
+    data.insert(
+        "command".to_string(),
+        Rc::new(Expression::Func(builtin_command)),
+    );
+    data.insert(
+        "run-bg".to_string(),
+        Rc::new(Expression::Func(builtin_run_bg)),
+    );
+    data.insert("form".to_string(), Rc::new(Expression::Func(builtin_form)));
     data.insert(
         "loose-symbols".to_string(),
-        Expression::Func(builtin_loose_symbols),
+        Rc::new(Expression::Func(builtin_loose_symbols)),
     );
 
     data.insert(
         "=".to_string(),
-        Expression::Func(
+        Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
                 let mut args: Vec<Expression> = to_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -768,22 +916,22 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
                     ensure_tonicity!(|a, b| a == b, strings, &str, String)
                 }
             },
-        ),
+        )),
     );
     data.insert(
         ">".to_string(),
-        Expression::Func(ensure_tonicity_all!(|a, b| a > b)),
+        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a > b))),
     );
     data.insert(
         ">=".to_string(),
-        Expression::Func(ensure_tonicity_all!(|a, b| a >= b)),
+        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a >= b))),
     );
     data.insert(
         "<".to_string(),
-        Expression::Func(ensure_tonicity_all!(|a, b| a < b)),
+        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a < b))),
     );
     data.insert(
         "<=".to_string(),
-        Expression::Func(ensure_tonicity_all!(|a, b| a <= b)),
+        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a <= b))),
     );
 }

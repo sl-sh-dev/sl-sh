@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
+use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -144,18 +145,33 @@ fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Re
     }
 }
 
-pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
-    data.insert("str-trim".to_string(), Expression::Func(builtin_str_trim));
-    data.insert("str-ltrim".to_string(), Expression::Func(builtin_str_ltrim));
-    data.insert("str-rtrim".to_string(), Expression::Func(builtin_str_rtrim));
+pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+    data.insert(
+        "str-trim".to_string(),
+        Rc::new(Expression::Func(builtin_str_trim)),
+    );
+    data.insert(
+        "str-ltrim".to_string(),
+        Rc::new(Expression::Func(builtin_str_ltrim)),
+    );
+    data.insert(
+        "str-rtrim".to_string(),
+        Rc::new(Expression::Func(builtin_str_rtrim)),
+    );
     data.insert(
         "str-replace".to_string(),
-        Expression::Func(builtin_str_replace),
+        Rc::new(Expression::Func(builtin_str_replace)),
     );
-    data.insert("str-split".to_string(), Expression::Func(builtin_str_split));
+    data.insert(
+        "str-split".to_string(),
+        Rc::new(Expression::Func(builtin_str_split)),
+    );
     data.insert(
         "str-cat-list".to_string(),
-        Expression::Func(builtin_str_cat_list),
+        Rc::new(Expression::Func(builtin_str_cat_list)),
     );
-    data.insert("str-sub".to_string(), Expression::Func(builtin_str_sub));
+    data.insert(
+        "str-sub".to_string(),
+        Rc::new(Expression::Func(builtin_str_sub)),
+    );
 }

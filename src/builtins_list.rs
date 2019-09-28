@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
+use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -297,20 +298,38 @@ fn builtin_list_append(
     }
 }
 
-pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Expression, S>) {
-    data.insert("list".to_string(), Expression::Func(builtin_list));
-    data.insert("first".to_string(), Expression::Func(builtin_list_first));
-    data.insert("rest".to_string(), Expression::Func(builtin_list_rest));
-    data.insert("length".to_string(), Expression::Func(builtin_list_length));
-    data.insert("last".to_string(), Expression::Func(builtin_list_last));
-    data.insert("nth".to_string(), Expression::Func(builtin_list_nth));
+pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+    data.insert("list".to_string(), Rc::new(Expression::Func(builtin_list)));
+    data.insert(
+        "first".to_string(),
+        Rc::new(Expression::Func(builtin_list_first)),
+    );
+    data.insert(
+        "rest".to_string(),
+        Rc::new(Expression::Func(builtin_list_rest)),
+    );
+    data.insert(
+        "length".to_string(),
+        Rc::new(Expression::Func(builtin_list_length)),
+    );
+    data.insert(
+        "last".to_string(),
+        Rc::new(Expression::Func(builtin_list_last)),
+    );
+    data.insert(
+        "nth".to_string(),
+        Rc::new(Expression::Func(builtin_list_nth)),
+    );
     data.insert(
         "setfirst".to_string(),
-        Expression::Func(builtin_list_setfirst),
+        Rc::new(Expression::Func(builtin_list_setfirst)),
     );
     data.insert(
         "setrest".to_string(),
-        Expression::Func(builtin_list_setrest),
+        Rc::new(Expression::Func(builtin_list_setrest)),
     );
-    data.insert("append".to_string(), Expression::Func(builtin_list_append));
+    data.insert(
+        "append".to_string(),
+        Rc::new(Expression::Func(builtin_list_append)),
+    );
 }
