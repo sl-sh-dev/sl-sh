@@ -276,8 +276,8 @@ pub fn start_interactive() {
     {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
-    let mut environment = build_default_environment();
-    load_scripts(&mut environment, &home);
+    let environment = Rc::new(RefCell::new(build_default_environment()));
+    load_scripts(&mut environment.borrow_mut(), &home);
 
     loop {
         let hostname = match env::var("HOST") {
@@ -292,15 +292,17 @@ pub fn start_interactive() {
                 p
             }
         };
-        environment.state.stdout_status = None;
-        environment.state.stderr_status = None;
+        environment.borrow_mut().state.stdout_status = None;
+        environment.borrow_mut().state.stderr_status = None;
         let prompt = if environment
+            .borrow()
             .root_scope
             .borrow()
             .data
             .contains_key("__prompt")
         {
             let mut exp = environment
+                .borrow()
                 .root_scope
                 .borrow()
                 .data
@@ -315,11 +317,11 @@ pub fn start_interactive() {
                 }
                 _ => exp,
             };
-            let res = eval(&mut environment, &exp);
+            let res = eval(&mut environment.borrow_mut(), &exp);
             res.unwrap_or_else(|e| {
                 Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
             })
-            .make_string(&environment)
+            .make_string(&environment.borrow())
             .unwrap_or_else(|_| "ERROR".to_string())
         } else {
             format!(
@@ -328,10 +330,10 @@ pub fn start_interactive() {
                 pwd.display()
             )
         };
-        if let Err(err) = reap_procs(&environment) {
+        if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
         }
-        let mut shell_completer = ShellCompleter::new(&environment);
+        let mut shell_completer = ShellCompleter::new(environment.clone());
         match con.read_line(prompt, None, &mut shell_completer) {
             Ok(input) => {
                 if input.is_empty() {
@@ -348,8 +350,9 @@ pub fn start_interactive() {
                 let ast = read(&mod_input);
                 match ast {
                     Ok(ast) => {
-                        environment.loose_symbols = true;
-                        match eval(&mut environment, &ast) {
+                        environment.borrow_mut().loose_symbols = true;
+                        let res = eval(&mut environment.borrow_mut(), &ast);
+                        match res {
                             Ok(exp) => {
                                 if !input.is_empty() {
                                     if let Err(err) = con.history.push(input.into()) {
@@ -360,7 +363,7 @@ pub fn start_interactive() {
                                     Expression::Atom(Atom::Nil) => { /* don't print nil */ }
                                     Expression::Process(_) => { /* should have used stdout */ }
                                     _ => {
-                                        if let Err(err) = exp.write(&environment) {
+                                        if let Err(err) = exp.write(&environment.borrow()) {
                                             eprintln!("Error writing result: {}", err);
                                         }
                                     }
@@ -368,7 +371,7 @@ pub fn start_interactive() {
                             }
                             Err(err) => eprintln!("{}", err),
                         }
-                        environment.loose_symbols = false;
+                        environment.borrow_mut().loose_symbols = false;
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }
