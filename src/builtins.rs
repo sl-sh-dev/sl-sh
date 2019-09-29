@@ -5,6 +5,7 @@ use nix::{
     },
     unistd::{self, Pid},
 };
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -292,7 +293,7 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
-fn builtin_fn(_environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
+fn builtin_fn(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
     if parts.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -305,6 +306,7 @@ fn builtin_fn(_environment: &mut Environment, parts: &[Expression]) -> io::Resul
         Ok(Expression::Atom(Atom::Lambda(Lambda {
             params: Box::new(params.clone()),
             body: Box::new(body.clone()),
+            capture: environment.current_scope.last().unwrap().clone(),
         })))
     }
 }
@@ -353,7 +355,7 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
             ))
         }
     }
-    let new_scope = build_new_scope_with_data(environment, data);
+    let new_scope = Rc::new(RefCell::new(Scope::with_data(Some(environment), data)));
     environment.current_scope.push(new_scope.clone());
     let mut args = match to_args(environment, &args[1..]) {
         Ok(args) => args,
@@ -447,7 +449,7 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
-fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+/*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut new_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
         new_args.push(a.clone());
@@ -466,7 +468,7 @@ fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Resu
     });
     //let res = child.join()
     Ok(Expression::Atom(Atom::Nil))
-}
+}*/
 
 fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() < 2 {
@@ -548,7 +550,7 @@ fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::R
         let params = args.next().unwrap();
         let body = args.next().unwrap();
         if let Expression::Atom(Atom::Symbol(s)) = name {
-            let m = Rc::new(Expression::Atom(Atom::Macro(Lambda {
+            let m = Rc::new(Expression::Atom(Atom::Macro(Macro {
                 params: Box::new(params.clone()),
                 body: Box::new(body.clone()),
             })));
@@ -585,10 +587,22 @@ fn builtin_expand_macro(
         if let Expression::Atom(Atom::Symbol(command)) = command {
             if let Some(exp) = get_expression(environment, &command) {
                 if let Expression::Atom(Atom::Macro(sh_macro)) = &*exp {
-                    let new_scope = build_new_scope(environment);
+                    let new_scope = match environment.current_scope.last() {
+                        Some(last) => build_new_scope(Some(last.clone())),
+                        None => build_new_scope(None),
+                    };
                     environment.current_scope.push(new_scope.clone());
-                    setup_args(environment, &sh_macro.params, parts, false)?;
-                    let expansion = eval(environment, &sh_macro.body)?;
+                    if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false)
+                    {
+                        environment.current_scope.pop();
+                        return Err(err);
+                    }
+                    let expansion = eval(environment, &sh_macro.body);
+                    if let Err(err) = expansion {
+                        environment.current_scope.pop();
+                        return Err(err);
+                    }
+                    let expansion = expansion.unwrap();
                     environment.current_scope.pop();
                     Ok(expansion)
                 } else {
@@ -853,10 +867,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert(
         "bquote".to_string(),
         Rc::new(Expression::Func(builtin_bquote)),
-    );
-    data.insert(
-        "spawn".to_string(),
-        Rc::new(Expression::Func(builtin_spawn)),
     );
     data.insert("and".to_string(), Rc::new(Expression::Func(builtin_and)));
     data.insert("or".to_string(), Rc::new(Expression::Func(builtin_or)));

@@ -18,6 +18,13 @@ pub struct ParseError {
 pub struct Lambda {
     pub params: Box<Expression>,
     pub body: Box<Expression>,
+    pub capture: Rc<RefCell<Scope>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Macro {
+    pub params: Box<Expression>,
+    pub body: Box<Expression>,
 }
 
 #[derive(Clone, Debug)]
@@ -29,7 +36,7 @@ pub enum Atom {
     Symbol(String),
     String(String),
     Lambda(Lambda),
-    Macro(Lambda),
+    Macro(Macro),
 }
 
 impl Atom {

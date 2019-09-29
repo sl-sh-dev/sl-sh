@@ -73,7 +73,7 @@ impl Default for Scope {
 }
 
 impl Scope {
-    fn with_data<S: ::std::hash::BuildHasher>(
+    pub fn with_data<S: ::std::hash::BuildHasher>(
         environment: Option<&Environment>,
         mut data_in: HashMap<String, Rc<Expression>, S>,
     ) -> Scope {
@@ -134,15 +134,6 @@ pub fn build_default_environment() -> Environment {
     }
 }
 
-pub fn build_new_scope_with_data<S: ::std::hash::BuildHasher>(
-    environment: &mut Environment,
-    data_in: HashMap<String, Rc<Expression>, S>,
-) -> Rc<RefCell<Scope>> {
-    let current_scope = Rc::new(RefCell::new(Scope::with_data(Some(environment), data_in)));
-    environment.current_scope.push(current_scope.clone());
-    current_scope
-}
-
 pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     mut data_in: HashMap<String, Expression, S>,
 ) -> Environment {
@@ -171,13 +162,8 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     }
 }
 
-pub fn build_new_scope(environment: &Environment) -> Rc<RefCell<Scope>> {
+pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
     let data: HashMap<String, Rc<Expression>> = HashMap::new();
-    let outer = if let Some(scope) = environment.current_scope.last() {
-        Some(scope.clone())
-    } else {
-        None
-    };
     Rc::new(RefCell::new(Scope { data, outer }))
 }
 

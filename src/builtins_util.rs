@@ -127,6 +127,7 @@ fn setup_args_final(
 
 pub fn setup_args(
     environment: &mut Environment,
+    new_scope: Option<&mut Scope>,
     params: &Expression,
     args: &[Expression],
     eval_args: bool,
@@ -176,30 +177,21 @@ pub fn setup_args(
                 "&rest must have one symbol after",
             ));
         }
-        let mut vars = args;
         let t_vars = if eval_args {
             Some(to_args(environment, args)?)
         } else {
             None
         };
+        let last_scope = &mut environment.current_scope.last().unwrap().borrow_mut();
+        let new_scope = match new_scope {
+            Some(new_scope) => new_scope,
+            None => last_scope,
+        };
         if let Some(t_vars) = t_vars {
-            vars = &t_vars;
-            setup_args_final(
-                &mut environment.current_scope.last().unwrap().borrow_mut(),
-                var_names,
-                vars,
-                min_params,
-                use_rest,
-            )?;
+            setup_args_final(new_scope, var_names, &t_vars, min_params, use_rest)?;
         } else {
-            setup_args_final(
-                &mut environment.current_scope.last().unwrap().borrow_mut(),
-                var_names,
-                vars,
-                min_params,
-                use_rest,
-            )?;
-        }
+            setup_args_final(new_scope, var_names, args, min_params, use_rest)?;
+        };
     }
     Ok(())
 }

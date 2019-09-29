@@ -1,4 +1,5 @@
 use liner::Context;
+use std::cell::RefCell;
 use std::env;
 use std::ffi::CStr;
 use std::fs;
@@ -26,14 +27,22 @@ fn call_lambda(
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
-    let new_scope = build_new_scope(environment);
-    environment.current_scope.push(new_scope.clone());
     let mut looping = true;
     let mut last_eval = Ok(Expression::Atom(Atom::Nil));
-    if let Err(err) = setup_args(environment, &lambda.params, args, true) {
-        environment.current_scope.pop();
+    let mut new_scope = Scope::default();
+    if let Err(err) = setup_args(
+        environment,
+        Some(&mut new_scope),
+        &lambda.params,
+        args,
+        true,
+    ) {
         return Err(err);
     }
+    new_scope.outer = Some(lambda.capture.clone());
+    environment
+        .current_scope
+        .push(Rc::new(RefCell::new(new_scope)));
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     while looping {
@@ -44,12 +53,13 @@ fn call_lambda(
             environment.state.recur_num_args = None;
             if let Ok(Expression::List(new_args)) = &last_eval {
                 if recur_args != new_args.len() {
+                    environment.current_scope.pop();
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Called recur in a non-tail position.",
                     ));
                 }
-                if let Err(err) = setup_args(environment, &lambda.params, &new_args, false) {
+                if let Err(err) = setup_args(environment, None, &lambda.params, &new_args, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
@@ -63,31 +73,40 @@ fn call_lambda(
 
 fn expand_macro(
     environment: &mut Environment,
-    sh_macro: &Lambda,
+    sh_macro: &Macro,
     args: &[Expression],
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
-    let new_scope = build_new_scope(environment);
-    environment.current_scope.push(new_scope.clone());
-    if let Err(err) = setup_args(environment, &sh_macro.params, args, false) {
-        environment.current_scope.pop();
-        return Err(err);
-    }
-    let result;
+    let mut new_scope = Scope::default();
+    match setup_args(
+        environment,
+        Some(&mut new_scope),
+        &sh_macro.params,
+        args,
+        false,
+    ) {
+        Ok(scope) => scope,
+        Err(err) => return Err(err),
+    };
+    new_scope.outer = Some(environment.current_scope.last().unwrap().clone());
+    environment
+        .current_scope
+        .push(Rc::new(RefCell::new(new_scope)));
     match eval(environment, &sh_macro.body) {
         Ok(expansion) => {
+            environment.current_scope.pop();
             // Mess with eval_level to remove the extra level the macro added- helpful for executables and stdout detection.
             environment.state.eval_level -= 1;
-            result = eval(environment, &expansion);
+            let result = eval(environment, &expansion);
             environment.state.eval_level += 1;
+            result
         }
         Err(err) => {
-            result = Err(err);
+            environment.current_scope.pop();
+            Err(err)
         }
     }
-    environment.current_scope.pop();
-    result
 }
 
 fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {

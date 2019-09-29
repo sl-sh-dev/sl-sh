@@ -1,24 +1,22 @@
 ; This is an example config file, you would put it in ~/.config/slsh/slshrc to use it.
 
-(set 'parse_git_branch (fn () (progn
-	(err-null (set 'branch (git rev-parse --abbrev-ref HEAD)))
+(defn parse_git_branch () (let ((branch))
+	(err-null (setq branch (git rev-parse --abbrev-ref HEAD)))
 	(if (= branch "")
 		(format "")
-		(format "(" (str-trim branch) ")")))))
+		(format "(" (str-trim branch) ")"))))
 
-(set 'path_list_trunc (fn (plist)
+(defn path_list_trunc (plist)
 	(if (> (length plist) 1)
 		(if (> (length (first plist)) 0) 
 			(setfirst (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
 			(path_list_trunc (rest plist)))
-		plist)))
+		plist))
 
-(set 'get_pwd (fn ()
-	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))))
+(defn get_pwd ()
+	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
 
-(set '__prompt (fn ()
-	(if (is-def $HOSTNAME)
-		(format "\x1b[32m[slsh]:" $HOSTNAME ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m ")
-		(format "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m "))))
+(defn __prompt ()
+	(format "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m "))
 
 (alias ll (ls -al))

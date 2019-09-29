@@ -1,8 +1,11 @@
 (defmacro setq (sym bind)
 	`(set (quote ,sym) ,bind))
 
+(defmacro defq (sym bind)
+	`(def (quote ,sym) ,bind))
+
 (defmacro defn (name args body)
-	`(setq ,name (fn ,args ,body)))
+	`(defq ,name (fn ,args ,body)))
 
 (defmacro loop (params bindings body)
 		`((fn ,params ,body) ,@bindings))
@@ -20,16 +23,18 @@
 		(if (< ,idx-bind stop-name) (recur (+ ,idx-bind 1) stop-name))))))
 
 (defmacro for (bind in_list body)
-	`(if (> (length ,in_list) 0)
-		(loop (plist) (,in_list) (progn
-			(setq ,bind (first plist))
-			(eval ,body)
-			(if (> (length plist) 1) (recur (rest plist)))))))
+	`(let ((,bind))
+		(if (> (length ,in_list) 0)
+			(loop (plist) (,in_list) (progn
+				(setq ,bind (first plist))
+				(eval ,body)
+				(if (> (length plist) 1) (recur (rest plist))))))))
 
 (defmacro fori (idx_bind bind in_list body)
-	`(if (> (length ,in_list) 0)
-		(loop (plist idx) (,in_list 0) (progn
-			(setq ,bind (first plist))
-			(setq ,idx_bind idx)
-			(eval ,body)
-			(if (> (length plist) 1) (recur (rest plist) (+ idx 1)))))))
+	`(let ((,bind)(,idx_bind))
+		(if (> (length ,in_list) 0)
+			(loop (plist idx) (,in_list 0) (progn
+				(setq ,bind (first plist))
+				(setq ,idx_bind idx)
+				(eval ,body)
+				(if (> (length plist) 1) (recur (rest plist) (+ idx 1))))))))
