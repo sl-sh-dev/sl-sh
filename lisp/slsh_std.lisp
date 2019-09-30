@@ -44,6 +44,6 @@
 		(setq make-cond (fn (condition val action others)
 			(if (null val) action
 				(if (null others) `(if (= ,condition ,val) ,action)
-					`(if (= ,condition ,val) ,action ,(match-make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
+					`(if (= ,condition ,val) ,action ,(make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
 		(setq cond-name condition)
 		(make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))
