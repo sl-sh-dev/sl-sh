@@ -215,6 +215,9 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
 pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
     environment.state.eval_level += 1;
     let result = internal_eval(environment, expression);
+    if let Err(err) = &result {
+        eprintln!("Error evaluting {}, {}", expression.to_string(), err);
+    }
     environment.state.eval_level -= 1;
     result
 }
