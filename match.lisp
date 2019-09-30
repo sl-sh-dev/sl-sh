@@ -1,14 +1,20 @@
 (defn match-make-cond (condition val action others) (progn
-                                                     (println "OTHER: " others)
-                                                     (println "ACTION: " action)
-    (if (null others) '()
-    `(if (= ,condition ,val) ,action ,(match-make-cond condition (first (first others)) (nth 1 (first others)) (rest others))))) )
+;                                                     (println "OTHER: " others)
+;                                                     (println "VAL: " val)
+;                                                     (println "ACTION: " action)
+    (if (null val) action
+    (if (null others) `(if (= ,condition ,val) ,action)
+    `(if (= ,condition ,val) ,action ,(match-make-cond condition (first (first others)) (nth 1 (first others)) (rest others))))) ))
 
 (defmacro match (condition &rest branches)
-	(let ((cond-name) (out_list '()))
-        (println branches)
+	(let ((cond-name) (out_list '()) (make-cond))
+        (setq make-cond (fn (condition val action others)
+            (if (null val) action
+                (if (null others) `(if (= ,condition ,val) ,action)
+                    `(if (= ,condition ,val) ,action ,(match-make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
         (setq cond-name condition)
-        (match-make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))
+        (make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))
+
         ;(append out_list `(if (= cond_name ,(first (first cond-name))) `(progn ,(rest __b))
 	;`(loop (idx-name) (,times) (progn
 	;	(eval ,body)
@@ -27,7 +33,8 @@
 (match x
        ('one (println "m one"))
        ('two (println "m two"))
-       ('three (println "m three"))))
+       ('three (println "m three"))
+       (nil (println "default"))))
 
 (matcht 'two)
 (matcht 'one)

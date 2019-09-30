@@ -20,3 +20,11 @@
 	(format "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\x1b[32m>\x1b[39m "))
 
 (alias ll (ls -al))
+
+;; Completion hooks, the match is for the command and then custom completions can be returned.
+(defn __completion_hook (&rest args)
+	(match (first args)
+		('cd 'path)
+		('ls 'default)
+		('git 'default)
+		(nil 'default)))

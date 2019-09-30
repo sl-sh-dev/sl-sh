@@ -38,3 +38,12 @@
 				(setq ,idx_bind idx)
 				(eval ,body)
 				(if (> (length plist) 1) (recur (rest plist) (+ idx 1))))))))
+
+(defmacro match (condition &rest branches)
+	(let ((cond-name) (out_list '()) (make-cond))
+		(setq make-cond (fn (condition val action others)
+			(if (null val) action
+				(if (null others) `(if (= ,condition ,val) ,action)
+					`(if (= ,condition ,val) ,action ,(match-make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
+		(setq cond-name condition)
+		(make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))

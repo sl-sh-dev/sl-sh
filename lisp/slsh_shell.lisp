@@ -45,6 +45,3 @@
 (defmacro | (&rest body)
 	`(pipe ,@body))
 
-(defn __completion_hook (&rest args)
-    (if (= (first args) "cd") 'path 'default))
-
