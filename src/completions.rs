@@ -238,7 +238,7 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
         let mut split_start = start.split('/');
         let mut pat = String::new();
         let mut using_cur_path = false;
-        if start.starts_with("/") {
+        if start.starts_with('/') {
             split_start.next();
             pat.push('/');
         } else {
@@ -273,10 +273,7 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
                     match p {
                         Ok(p) => {
                             let p_lossy = p.to_string_lossy();
-                            let mut need_slash = false;
-                            if p.is_dir() && !p_lossy.ends_with('/') {
-                                need_slash = true;
-                            }
+                            let need_slash = p.is_dir() && !p_lossy.ends_with('/');
                             let mut item = if using_cur_path && p_lossy.starts_with(&cur_path_str) {
                                 p_lossy[(cur_path_str.len() + 1)..].to_string()
                             } else {
