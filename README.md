@@ -127,6 +127,9 @@ err>null | form+ | macro | Redirect stderr for sub-forms to null.
 out-err>null | form+ | macro | Redirect stdout and stderr for sub-forms to null.
 \| | one or more forms | macro | Creates a pipe (job) consisting of the provided forms.
 alias | new_name/command | macro | Defines an alias for commands (meant for executables not builtins).
+pushd | path | macro | Changes directory to path and saves old directory on directory stack.
+popd | | macro | Pops the last directory off directory stack and changes to it.
+dirs | | macro | Display the directory stack.
 
 
 ### Math Forms
