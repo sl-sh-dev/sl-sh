@@ -13,6 +13,30 @@ use crate::process::*;
 use crate::shell::*;
 use crate::types::*;
 
+fn cd_expand_all_dots(cd: String) -> String {
+    let mut all_dots = false;
+    if cd.len() > 2 {
+        all_dots = true;
+        for ch in cd.chars() {
+            if ch != '.' {
+                all_dots = false;
+                break;
+            }
+        }
+    }
+    if all_dots {
+        let mut new_cd = String::new();
+        let paths_up = cd.len() - 2;
+        new_cd.push_str("../");
+        for _i in 0..paths_up {
+            new_cd.push_str("../");
+        }
+        new_cd
+    } else {
+        cd
+    }
+}
+
 fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() > 1 {
         Err(io::Error::new(
@@ -24,6 +48,10 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
             Ok(val) => val,
             Err(_) => "/".to_string(),
         };
+        let old_dir = match env::var("OLDPWD") {
+            Ok(val) => val,
+            Err(_) => home.to_string(),
+        };
         let args = to_args_str(environment, args)?;
         let args = args.iter();
         let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
@@ -34,7 +62,9 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
         } else {
             new_dir
         };
-        let root = Path::new(new_dir);
+        let new_dir = if new_dir == "-" { &old_dir } else { new_dir };
+        let new_dir = cd_expand_all_dots(new_dir.to_string());
+        let root = Path::new(&new_dir);
         env::set_var("OLDPWD", env::current_dir()?);
         if let Err(e) = env::set_current_dir(&root) {
             eprintln!("Error changing to {}, {}", root.display(), e);
