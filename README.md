@@ -38,7 +38,8 @@ and | | builtin |
 or | | builtin |
 not | | builtin |
 null | | builtin |
-is-def | | builtin |
+is-def | symbol | builtin | Return true if symbol is defined for current scope.
+get-type | form | builtin | Evalute the form and return the type as a string.
 defmacro | | builtin |
 expand-macro | | builtin |
 recur | | builtin |
@@ -130,6 +131,8 @@ alias | new_name/command | macro | Defines an alias for commands (meant for exec
 pushd | path | macro | Changes directory to path and saves old directory on directory stack.
 popd | | macro | Pops the last directory off directory stack and changes to it.
 dirs | | macro | Display the directory stack.
+clear-dirs | | macro | Clears the directory stack.
+set-dirs-max | max | macro | Sets the maximum number of dirs to keep in stack (default 20), must be greater then 1.
 
 
 ### Math Forms

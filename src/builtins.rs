@@ -538,6 +538,17 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn builtin_get_type(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "get-type takes one form",
+        ));
+    }
+    let arg0 = eval(environment, &args[0])?;
+    Ok(Expression::Atom(Atom::String(arg0.display_type())))
+}
+
 fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 3 {
         Err(io::Error::new(
@@ -875,6 +886,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert(
         "is-def".to_string(),
         Rc::new(Expression::Func(builtin_is_def)),
+    );
+    data.insert(
+        "get-type".to_string(),
+        Rc::new(Expression::Func(builtin_get_type)),
     );
     data.insert(
         "defmacro".to_string(),
