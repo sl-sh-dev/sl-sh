@@ -33,7 +33,7 @@ set | symbol/value | builtin | Sets something into the current scopes symbol tab
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
 let | | builtin |
 quote | | builtin |
-spawn | | builtin |
+spawn | | builtin | Currently unavailable.  Use run-bg for background processes.
 and | | builtin |
 or | | builtin |
 not | | builtin |
@@ -69,15 +69,19 @@ It uses the first, rest, list names to help reinforce this fact.
 
 Form | Args | Type | description
 -----|------|------|------------
-list | | builtin |
-first | | builtin |
-rest | | builtin |
-length | | builtin |
-last | | builtin |
-nth | | builtin |
-setfirst | | builtin |
-setrest | | builtin |
-append | | builtin |
+list | forms+ | builtin | Produces a list with provided forms as elements.
+first | list | builtin | Produces the first element of the provided list.  Nil if the list is empty.
+rest | list | builtin | Produces the provided list minus the first element.  Nil if the list is empty or one element.
+length | list/str | builtin | Returns the length of the provided list or string.
+last | list | builtin | Produces the last element in the list.  Nil if the list is empty.
+butlast | list | builtin | Produces the provided list minus the last element.  Nil if the list is empty or one element.
+nth | int list | builtin | Produces the element at the provided index, error if index is out of bounds.
+setfirst | form/list | builtin | Produces a new list with the provided form as the first element.
+setrest | list/list | builtin | Produces a new list with the first element from then first list and the rest all the elements from the second.
+setlast | list/form | builtin | Produces a new list with the provided form appended to the list.
+setbutlast | list/list | builtin | Produces a new list with the last element from then second list and the rest all the elements from the first.
+setnth | int form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
+append | list/list | builtin | Produces a new list by appending the second onto the first.
 
 
 ### String Forms

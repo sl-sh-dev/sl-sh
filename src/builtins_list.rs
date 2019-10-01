@@ -110,6 +110,33 @@ fn builtin_list_last(environment: &mut Environment, args: &[Expression]) -> io::
     }
 }
 
+fn builtin_list_butlast(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "butlast takes one form",
+        ));
+    }
+    let arg = eval(environment, &args[0])?;
+    match arg {
+        Expression::List(mut list) => {
+            if list.len() > 1 {
+                list.pop();
+                Ok(Expression::List(list))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "butlast operates on a list",
+        )),
+    }
+}
+
 fn builtin_list_nth(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 2 {
         return Err(io::Error::new(
@@ -210,6 +237,107 @@ fn builtin_list_setrest(
             io::ErrorKind::Other,
             "setrest second form must be a list",
         ))
+    }
+}
+
+fn builtin_list_setlast(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setlast takes two forms (list and form)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let new_last = args.pop().unwrap();
+    let old_list = args.pop().unwrap();
+    match old_list {
+        Expression::List(mut list) => {
+            list.push(new_last);
+            Ok(Expression::List(list))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setlast first form must be a list",
+        )),
+    }
+}
+
+fn builtin_list_setbutlast(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setbutlast takes two forms (lists)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let old_list = args.pop().unwrap();
+    let new_butlast = args.pop().unwrap();
+    if let Expression::List(mut new_butlast) = new_butlast {
+        if let Expression::List(old_list) = old_list {
+            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.len() + 1);
+            for a in new_butlast.drain(..) {
+                list.push(a);
+            }
+            if !old_list.is_empty() {
+                list.push(old_list.last().unwrap().clone());
+            }
+            Ok(Expression::List(list))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "setbutlast second form must be a list",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setbutlast first form must be a list",
+        ))
+    }
+}
+
+fn builtin_list_setnth(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setnth takes three forms (index, new element and list)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let old_list = args.pop().unwrap();
+    let new_element = args.pop().unwrap();
+    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
+        i
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setnth first form must be an int",
+        ));
+    };
+    match old_list {
+        Expression::List(mut list) => {
+            if idx < 0 || idx >= list.len() as i64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "setnth index out of range",
+                ));
+            }
+            list[idx as usize] = new_element;
+            Ok(Expression::List(list))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "setlast third form must be a list",
+        )),
     }
 }
 
@@ -317,6 +445,10 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         Rc::new(Expression::Func(builtin_list_last)),
     );
     data.insert(
+        "butlast".to_string(),
+        Rc::new(Expression::Func(builtin_list_butlast)),
+    );
+    data.insert(
         "nth".to_string(),
         Rc::new(Expression::Func(builtin_list_nth)),
     );
@@ -327,6 +459,18 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert(
         "setrest".to_string(),
         Rc::new(Expression::Func(builtin_list_setrest)),
+    );
+    data.insert(
+        "setlast".to_string(),
+        Rc::new(Expression::Func(builtin_list_setlast)),
+    );
+    data.insert(
+        "setbutlast".to_string(),
+        Rc::new(Expression::Func(builtin_list_setbutlast)),
+    );
+    data.insert(
+        "setnth".to_string(),
+        Rc::new(Expression::Func(builtin_list_setnth)),
     );
     data.insert(
         "append".to_string(),

@@ -45,3 +45,16 @@
 (defmacro | (&rest body)
 	`(pipe ,@body))
 
+;; Scope to contain then pushd/popd/dirs functions.
+(let ((dir_stack '()))
+	;; Push current directory on the directory stack and change to new directory.
+	(defn pushd (dir) (if (form (cd dir))
+		(progn (setq dir_stack (setfirst $OLDPWD dir_stack)) nil)))
+	;; Pop first directory from directory stack and change to it.
+	(defn popd () (if (> (length dir_stack) 0)
+		(progn (cd (first dir_stack))
+		(setq dir_stack (rest dir_stack)) nil)
+		(println "Dir stack is empty")))
+	;; List the directory stack.
+	(defn dirs ()
+		(for d dir_stack (println d))))
