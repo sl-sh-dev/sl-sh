@@ -1,7 +1,9 @@
+use std::env;
 use std::fs::File;
 use std::io::{self, Write};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::rc::Rc;
 
 use glob::glob;
 //use nix::sys::signal::{self, SigHandler, Signal};
@@ -57,6 +59,13 @@ pub fn wait_pid(
         let (stop, status) = try_wait_pid(environment, pid);
         if stop {
             result = status;
+            if status.is_some() && environment.save_exit_status {
+                env::set_var("LAST_STATUS".to_string(), format!("{}", status.unwrap()));
+                environment.root_scope.borrow_mut().data.insert(
+                    "*last-status*".to_string(),
+                    Rc::new(Expression::Atom(Atom::Int(i64::from(status.unwrap())))),
+                );
+            }
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));

@@ -105,6 +105,7 @@ pub struct Environment {
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
     pub data_in: Option<Expression>,
     pub form_type: FormType,
+    pub save_exit_status: bool,
     // This is the environment's root (global scope), it will also be part of
     // higher level scopes and in the curren_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
@@ -129,6 +130,7 @@ pub fn build_default_environment() -> Environment {
         procs,
         data_in: None,
         form_type: FormType::Any,
+        save_exit_status: true,
         root_scope,
         current_scope,
     }
@@ -157,6 +159,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         procs,
         data_in: None,
         form_type: FormType::Any,
+        save_exit_status: true,
         root_scope,
         current_scope,
     }

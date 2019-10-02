@@ -285,7 +285,15 @@ pub fn start_interactive() {
     }
     let environment = Rc::new(RefCell::new(build_default_environment()));
     load_scripts(&mut environment.borrow_mut(), &home);
-
+    environment
+        .borrow_mut()
+        .root_scope
+        .borrow_mut()
+        .data
+        .insert(
+            "*last-status*".to_string(),
+            Rc::new(Expression::Atom(Atom::Int(0))),
+        );
     loop {
         let hostname = match env::var("HOST") {
             Ok(val) => val,
@@ -324,7 +332,9 @@ pub fn start_interactive() {
                 }
                 _ => exp,
             };
+            environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with prompt commands.
             let res = eval(&mut environment.borrow_mut(), &exp);
+            environment.borrow_mut().save_exit_status = true;
             res.unwrap_or_else(|e| {
                 Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
             })
