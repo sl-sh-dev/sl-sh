@@ -107,9 +107,9 @@ fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::R
 }
 
 fn builtin_out_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.state.stderr_status = Some(IOState::Null);
+    environment.state.stdout_status = Some(IOState::Null);
     let res = builtin_progn(environment, args);
-    environment.state.stderr_status = None;
+    environment.state.stdout_status = None;
     res
 }
 

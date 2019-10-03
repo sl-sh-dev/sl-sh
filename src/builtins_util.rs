@@ -1,5 +1,6 @@
 use std::env;
-use std::io;
+use std::fs::File;
+use std::io::{self, Write};
 use std::rc::Rc;
 
 use crate::environment::*;
@@ -22,17 +23,47 @@ pub fn to_args_str(environment: &mut Environment, parts: &[Expression]) -> io::R
     Ok(args)
 }
 
+fn args_out(
+    environment: &mut Environment,
+    args: &[Expression],
+    add_newline: bool,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    for a in args {
+        a.writef(environment, writer)?;
+    }
+    if add_newline {
+        writer.write_all("\n".as_bytes())?;
+    }
+    Ok(())
+}
+
 pub fn print(
     environment: &mut Environment,
     args: &[Expression],
     add_newline: bool,
 ) -> io::Result<Expression> {
-    for a in args {
-        a.write(environment)?;
-    }
-    if add_newline {
-        println!();
-    }
+    match &environment.state.stdout_status {
+        Some(IOState::FileAppend(f)) => {
+            let mut out = std::fs::OpenOptions::new()
+                .read(false)
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(&f)?;
+            args_out(environment, args, add_newline, &mut out)?;
+        }
+        Some(IOState::FileOverwrite(f)) => {
+            let mut out = File::create(f)?; // as Write
+            args_out(environment, args, add_newline, &mut out)?;
+        }
+        Some(IOState::Null) => { /* Nothing to do... */ }
+        _ => {
+            let stdout = io::stdout();
+            let mut out = stdout.lock();
+            args_out(environment, args, add_newline, &mut out)?;
+        }
+    };
     Ok(Expression::Atom(Atom::Nil))
 }
 
