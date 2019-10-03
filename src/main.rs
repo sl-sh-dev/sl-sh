@@ -38,7 +38,12 @@ fn main() -> io::Result<()> {
                 /* Put ourselves in our own process group.  */
                 let pgid = unistd::getpid();
                 if let Err(err) = unistd::setpgid(pgid, pgid) {
-                    eprintln!("Couldn't put the shell in its own process group: {}\n", err);
+                    match err {
+                        nix::Error::Sys(nix::errno::Errno::EPERM) => { /* ignore */ }
+                        _ => {
+                            eprintln!("Couldn't put the shell in its own process group: {}\n", err)
+                        }
+                    }
                 }
                 /* Grab control of the terminal.  */
                 if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {

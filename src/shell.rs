@@ -247,6 +247,56 @@ fn load_scripts(environment: &mut Environment, home: &str) {
     }
 }
 
+fn get_prompt(environment: &mut Environment) -> String {
+    if environment
+        .root_scope
+        .borrow()
+        .data
+        .contains_key("__prompt")
+    {
+        let mut exp = environment
+            .root_scope
+            .borrow()
+            .data
+            .get("__prompt")
+            .unwrap()
+            .clone();
+        exp = match *exp {
+            Expression::Atom(Atom::Lambda(_)) => {
+                let mut v = Vec::with_capacity(1);
+                v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
+                Rc::new(Expression::List(v))
+            }
+            _ => exp,
+        };
+        environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
+        let res = eval(environment, &exp);
+        environment.save_exit_status = true;
+        res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string())))
+            .make_string(environment)
+            .unwrap_or_else(|_| "ERROR".to_string())
+    } else {
+        // Nothing set, use a default.
+        let hostname = match env::var("HOST") {
+            Ok(val) => val,
+            Err(_) => "UNKNOWN".to_string(),
+        };
+        let pwd = match env::current_dir() {
+            Ok(val) => val,
+            Err(_) => {
+                let mut p = PathBuf::new();
+                p.push("/");
+                p
+            }
+        };
+        format!(
+            "\x1b[32m{}:\x1b[34m{}\x1b[37m(slsh)\x1b[32m>\x1b[39m ",
+            hostname,
+            pwd.display()
+        )
+    }
+}
+
 pub fn start_interactive() {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
@@ -295,58 +345,9 @@ pub fn start_interactive() {
             Rc::new(Expression::Atom(Atom::Int(0))),
         );
     loop {
-        let hostname = match env::var("HOST") {
-            Ok(val) => val,
-            Err(_) => "UNKNOWN".to_string(),
-        };
-        let pwd = match env::current_dir() {
-            Ok(val) => val,
-            Err(_) => {
-                let mut p = PathBuf::new();
-                p.push("/");
-                p
-            }
-        };
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
-        let prompt = if environment
-            .borrow()
-            .root_scope
-            .borrow()
-            .data
-            .contains_key("__prompt")
-        {
-            let mut exp = environment
-                .borrow()
-                .root_scope
-                .borrow()
-                .data
-                .get("__prompt")
-                .unwrap()
-                .clone();
-            exp = match *exp {
-                Expression::Atom(Atom::Lambda(_)) => {
-                    let mut v = Vec::with_capacity(1);
-                    v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
-                    Rc::new(Expression::List(v))
-                }
-                _ => exp,
-            };
-            environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with prompt commands.
-            let res = eval(&mut environment.borrow_mut(), &exp);
-            environment.borrow_mut().save_exit_status = true;
-            res.unwrap_or_else(|e| {
-                Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
-            })
-            .make_string(&environment.borrow())
-            .unwrap_or_else(|_| "ERROR".to_string())
-        } else {
-            format!(
-                "\x1b[32m{}:\x1b[34m{}\x1b[37m(slsh)\x1b[32m>\x1b[39m ",
-                hostname,
-                pwd.display()
-            )
-        };
+        let prompt = get_prompt(&mut environment.borrow_mut());
         if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
         }
@@ -364,6 +365,17 @@ pub fn start_interactive() {
                 } else {
                     format!("({})", input)
                 };
+                // Clear the last status once something new is entered.
+                env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
+                environment
+                    .borrow_mut()
+                    .root_scope
+                    .borrow_mut()
+                    .data
+                    .insert(
+                        "*last-status*".to_string(),
+                        Rc::new(Expression::Atom(Atom::Int(i64::from(0)))),
+                    );
                 let ast = read(&mod_input);
                 match ast {
                     Ok(ast) => {
