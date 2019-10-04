@@ -426,6 +426,58 @@ fn builtin_list_append(
     }
 }
 
+fn builtin_list_push(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "push takes two forms (list and form)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let new_item = args.pop().unwrap();
+    let old_list = args.pop().unwrap();
+    match old_list {
+        Expression::List(mut list) => {
+            list.push(new_item);
+            Ok(Expression::List(list))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "push's first form must be a list",
+        )),
+    }
+}
+
+fn builtin_list_pop(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "pop takes a list",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let old_list = args.pop().unwrap();
+    match old_list {
+        Expression::List(mut list) => {
+            if let Some(item) = list.pop() {
+                Ok(item)
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "push's first form must be a list",
+        )),
+    }
+}
+
 pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("list".to_string(), Rc::new(Expression::Func(builtin_list)));
     data.insert(
@@ -475,5 +527,13 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert(
         "append".to_string(),
         Rc::new(Expression::Func(builtin_list_append)),
+    );
+    data.insert(
+        "push".to_string(),
+        Rc::new(Expression::Func(builtin_list_push)),
+    );
+    data.insert(
+        "pop".to_string(),
+        Rc::new(Expression::Func(builtin_list_pop)),
     );
 }
