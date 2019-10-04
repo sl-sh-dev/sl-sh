@@ -11,6 +11,10 @@ It support quote and backquote (with , and ,@ expansion).
 To install you need to copy the two files from the lisp subdirectory to ~/.config/slsh (otherwise will not have any of the macros).
 The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example.
 
+## Building
+
+* `cargo build --release`
+
 ## Tasks
 - [ ] Add autocompletion hooks for custom completions.
 - [ ] Finish job control.
