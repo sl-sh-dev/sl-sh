@@ -219,77 +219,74 @@ impl Completer for ShellCompleter {
 }
 
 fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
-    let path = Path::new(start);
     let mut res = Vec::new();
-    if path.exists() {
-        match path.read_dir() {
-            Ok(dir) => {
-                for entry in dir {
-                    if let Ok(entry) = entry {
-                        res.push(entry.path().to_string_lossy().to_string());
-                    }
-                }
-            }
-            Err(err) => {
-                eprintln!("ERROR reading dir {}: {}", start, err);
-            }
-        }
+
+    let mut split_start = start.split('/');
+    let mut pat = String::new();
+    let mut using_cur_path = false;
+    if start.starts_with('/') {
+        split_start.next();
+        pat.push('/');
     } else {
-        let mut split_start = start.split('/');
-        let mut pat = String::new();
-        let mut using_cur_path = false;
-        if start.starts_with('/') {
-            split_start.next();
-            pat.push('/');
-        } else {
-            using_cur_path = true;
-            pat.push_str(&cur_path.to_string_lossy());
-            pat.push('/');
-        }
-        for element in split_start {
+        using_cur_path = true;
+        pat.push_str(&cur_path.to_string_lossy());
+        pat.push('/');
+    }
+    let mut last_empty = false;
+    for element in split_start {
+        if !element.is_empty() {
+            last_empty = false;
             pat.push_str(element);
             if element != "." && element != ".." {
                 pat.push('*');
             }
             pat.push('/');
+        } else {
+            last_empty = true;
+            pat.push_str("*");
+            pat.push('/');
         }
+    }
 
-        pat.pop(); // pop out the last '/' character
-        if pat.ends_with('.') {
-            pat.push('*')
-        }
-        let cur_path_str = cur_path.to_string_lossy().to_string();
-        let globs = glob_with(
-            &pat,
-            MatchOptions {
-                case_sensitive: true,
-                require_literal_separator: true,
-                require_literal_leading_dot: false,
-            },
-        );
-        match globs {
-            Ok(paths) => {
-                for p in paths {
-                    match p {
-                        Ok(p) => {
-                            let p_lossy = p.to_string_lossy();
-                            let need_slash = p.is_dir() && !p_lossy.ends_with('/');
-                            let mut item = if using_cur_path && p_lossy.starts_with(&cur_path_str) {
-                                p_lossy[(cur_path_str.len() + 1)..].to_string()
-                            } else {
-                                p_lossy.to_string()
-                            };
-                            if need_slash {
-                                item.push('/');
-                            }
-                            res.push(item);
+    pat.pop(); // pop out the last '/' character
+    if last_empty {
+        pat.pop(); // '*'
+        pat.pop(); // '/'
+    }
+    if pat.ends_with('.') {
+        pat.push('*')
+    }
+    let cur_path_str = cur_path.to_string_lossy().to_string();
+    let globs = glob_with(
+        &pat,
+        MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
+        },
+    );
+    match globs {
+        Ok(paths) => {
+            for p in paths {
+                match p {
+                    Ok(p) => {
+                        let p_lossy = p.to_string_lossy();
+                        let need_slash = p.is_dir() && !p_lossy.ends_with('/');
+                        let mut item = if using_cur_path && p_lossy.starts_with(&cur_path_str) {
+                            p_lossy[(cur_path_str.len() + 1)..].to_string()
+                        } else {
+                            p_lossy.to_string()
+                        };
+                        if need_slash {
+                            item.push('/');
                         }
-                        Err(_err) => {}
+                        res.push(item);
                     }
+                    Err(_err) => {}
                 }
             }
-            Err(_err) => {}
         }
+        Err(_err) => {}
     }
     res
 }
