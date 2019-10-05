@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -68,7 +69,7 @@ fn builtin_str_split(environment: &mut Environment, args: &[Expression]) -> io::
     for s in args[1].split(&args[0]) {
         split_list.push(Expression::Atom(Atom::String(s.to_string())));
     }
-    Ok(Expression::List(split_list))
+    Ok(Expression::List(RefCell::new(split_list)))
 }
 
 fn builtin_str_cat_list(
@@ -86,7 +87,7 @@ fn builtin_str_cat_list(
     let mut new_str = String::new();
     if let Expression::List(list) = &args[1] {
         let mut first = true;
-        for s in list {
+        for s in list.borrow().iter() {
             if !first {
                 new_str.push_str(&join_str);
             }

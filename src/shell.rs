@@ -52,14 +52,16 @@ fn call_lambda(
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
             if let Ok(Expression::List(new_args)) = &last_eval {
-                if recur_args != new_args.len() {
+                if recur_args != new_args.borrow().len() {
                     environment.current_scope.pop();
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Called recur in a non-tail position.",
                     ));
                 }
-                if let Err(err) = setup_args(environment, None, &lambda.params, &new_args, false) {
+                if let Err(err) =
+                    setup_args(environment, None, &lambda.params, &new_args.borrow(), false)
+                {
                     environment.current_scope.pop();
                     return Err(err);
                 }
@@ -120,6 +122,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
     }
     match expression {
         Expression::List(parts) => {
+            let parts = parts.borrow();
             let (command, parts) = match parts.split_first() {
                 Some((c, p)) => (c, p),
                 None => {
@@ -173,7 +176,10 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     }
                 }
                 Expression::List(list) => {
-                    match eval(environment, &Expression::List(list.to_vec()))? {
+                    match eval(
+                        environment,
+                        &Expression::List(RefCell::new(list.borrow().to_vec())),
+                    )? {
                         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
                         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
                         Expression::Func(f) => f(environment, &parts),
@@ -265,7 +271,7 @@ fn get_prompt(environment: &mut Environment) -> String {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
-                Rc::new(Expression::List(v))
+                Rc::new(Expression::List(RefCell::new(v)))
             }
             _ => exp,
         };
@@ -561,7 +567,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
     let ast = read(&contents);
     match ast {
         Ok(Expression::List(list)) => {
-            for exp in list {
+            for exp in list.borrow().iter() {
                 match eval(environment, &exp) {
                     Ok(_exp) => {}
                     Err(err) => {
@@ -592,10 +598,9 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
     for a in args {
         exp_args.push(Expression::Atom(Atom::String(a.clone())));
     }
-    environment
-        .root_scope
-        .borrow_mut()
-        .data
-        .insert("args".to_string(), Rc::new(Expression::List(exp_args)));
+    environment.root_scope.borrow_mut().data.insert(
+        "args".to_string(),
+        Rc::new(Expression::List(RefCell::new(exp_args))),
+    );
     run_script(command, &mut environment)
 }

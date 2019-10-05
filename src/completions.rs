@@ -71,7 +71,7 @@ impl ShellCompleter {
                     for a in self.args.drain(..) {
                         v.push(Expression::Atom(Atom::String(a)));
                     }
-                    Rc::new(Expression::List(v))
+                    Rc::new(Expression::List(RefCell::new(v)))
                 }
                 _ => {
                     eprintln!("WARNING: __completion_hook not a function, ignoring.");
@@ -92,9 +92,9 @@ impl ShellCompleter {
                             }
                         }
                         Expression::Atom(Atom::Nil) => HookResult::Default,
-                        Expression::List(mut list) => {
-                            let mut v = Vec::with_capacity(list.len());
-                            for l in list.drain(..) {
+                        Expression::List(list) => {
+                            let mut v = Vec::with_capacity(list.borrow().len());
+                            for l in list.borrow_mut().drain(..) {
                                 let s = l.to_string();
                                 v.push(s);
                             }

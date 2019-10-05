@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -17,7 +18,7 @@ fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Resul
     for arg in args {
         list.push(arg);
     }
-    Ok(Expression::List(list))
+    Ok(Expression::List(RefCell::new(list)))
 }
 
 fn builtin_list_first(
@@ -30,8 +31,8 @@ fn builtin_list_first(
     let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(list) => {
-            if !list.is_empty() {
-                Ok(list.get(0).unwrap().clone())
+            if !list.borrow().is_empty() {
+                Ok(list.borrow().get(0).unwrap().clone())
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -49,13 +50,13 @@ fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::
     }
     let arg = eval(environment, &args[0])?;
     match arg {
-        Expression::List(mut list) => {
-            if list.len() > 1 {
-                let mut rest: Vec<Expression> = Vec::with_capacity(list.len() - 1);
-                for a in list.drain(1..) {
+        Expression::List(list) => {
+            if list.borrow().len() > 1 {
+                let mut rest: Vec<Expression> = Vec::with_capacity(list.borrow().len() - 1);
+                for a in list.borrow_mut().drain(1..) {
                     rest.push(a);
                 }
-                Ok(Expression::List(rest))
+                Ok(Expression::List(RefCell::new(rest)))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -82,7 +83,7 @@ fn builtin_list_length(
         Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
         Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
         Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-        Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.len() as i64))),
+        Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
         _ => Ok(Expression::Atom(Atom::Int(0))),
     }
 }
@@ -96,9 +97,9 @@ fn builtin_list_last(environment: &mut Environment, args: &[Expression]) -> io::
     }
     let arg = eval(environment, &args[0])?;
     match arg {
-        Expression::List(mut list) => {
-            if !list.is_empty() {
-                Ok(list.pop().unwrap().clone())
+        Expression::List(list) => {
+            if !list.borrow().is_empty() {
+                Ok(list.borrow().last().unwrap().clone())
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -122,10 +123,11 @@ fn builtin_list_butlast(
     }
     let arg = eval(environment, &args[0])?;
     match arg {
-        Expression::List(mut list) => {
+        Expression::List(list) => {
+            let mut list = list.borrow().clone();
             if list.len() > 1 {
                 list.pop();
-                Ok(Expression::List(list))
+                Ok(Expression::List(RefCell::new(list)))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -155,6 +157,7 @@ fn builtin_list_nth(environment: &mut Environment, args: &[Expression]) -> io::R
     };
     match &args[1] {
         Expression::List(list) => {
+            let list = list.borrow();
             if !list.is_empty() {
                 if idx < 0 || idx >= list.len() as i64 {
                     return Err(io::Error::new(
@@ -188,13 +191,13 @@ fn builtin_list_setfirst(
     let old_list = args.pop().unwrap();
     let new_car = args.pop().unwrap();
     match old_list {
-        Expression::List(mut list) => {
-            let mut nlist: Vec<Expression> = Vec::with_capacity(list.len() + 1);
+        Expression::List(list) => {
+            let mut nlist: Vec<Expression> = Vec::with_capacity(list.borrow().len() + 1);
             nlist.push(new_car);
-            for a in list.drain(..) {
+            for a in list.borrow_mut().drain(..) {
                 nlist.push(a);
             }
-            Ok(Expression::List(nlist))
+            Ok(Expression::List(RefCell::new(nlist)))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -216,16 +219,16 @@ fn builtin_list_setrest(
     let mut args = to_args(environment, &args)?;
     let new_cdr = args.pop().unwrap();
     let old_list = args.pop().unwrap();
-    if let Expression::List(mut new_cdr) = new_cdr {
+    if let Expression::List(new_cdr) = new_cdr {
         if let Expression::List(old_list) = old_list {
-            let mut list: Vec<Expression> = Vec::with_capacity(new_cdr.len() + 1);
-            if !old_list.is_empty() {
-                list.push(old_list.get(0).unwrap().clone());
+            let mut list: Vec<Expression> = Vec::with_capacity(new_cdr.borrow().len() + 1);
+            if !old_list.borrow().is_empty() {
+                list.push(old_list.borrow().get(0).unwrap().clone());
             }
-            for a in new_cdr.drain(..) {
+            for a in new_cdr.borrow_mut().drain(..) {
                 list.push(a);
             }
-            Ok(Expression::List(list))
+            Ok(Expression::List(RefCell::new(list)))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -254,8 +257,8 @@ fn builtin_list_setlast(
     let new_last = args.pop().unwrap();
     let old_list = args.pop().unwrap();
     match old_list {
-        Expression::List(mut list) => {
-            list.push(new_last);
+        Expression::List(list) => {
+            list.borrow_mut().push(new_last);
             Ok(Expression::List(list))
         }
         _ => Err(io::Error::new(
@@ -278,16 +281,16 @@ fn builtin_list_setbutlast(
     let mut args = to_args(environment, &args)?;
     let old_list = args.pop().unwrap();
     let new_butlast = args.pop().unwrap();
-    if let Expression::List(mut new_butlast) = new_butlast {
+    if let Expression::List(new_butlast) = new_butlast {
         if let Expression::List(old_list) = old_list {
-            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.len() + 1);
-            for a in new_butlast.drain(..) {
+            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.borrow().len() + 1);
+            for a in new_butlast.borrow_mut().drain(..) {
                 list.push(a);
             }
-            if !old_list.is_empty() {
-                list.push(old_list.last().unwrap().clone());
+            if !old_list.borrow().is_empty() {
+                list.push(old_list.borrow().last().unwrap().clone());
             }
-            Ok(Expression::List(list))
+            Ok(Expression::List(RefCell::new(list)))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -324,14 +327,14 @@ fn builtin_list_setnth(
         ));
     };
     match old_list {
-        Expression::List(mut list) => {
-            if idx < 0 || idx >= list.len() as i64 {
+        Expression::List(list) => {
+            if idx < 0 || idx >= list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "setnth index out of range",
                 ));
             }
-            list[idx as usize] = new_element;
+            list.borrow_mut()[idx as usize] = new_element;
             Ok(Expression::List(list))
         }
         _ => Err(io::Error::new(
@@ -387,16 +390,17 @@ fn builtin_list_append(
     let mut new_args = to_args(environment, &args)?;
     let end_arg = new_args.pop().unwrap();
     let start_arg = new_args.pop().unwrap();
-    if let Expression::List(mut end) = end_arg {
-        if let Expression::List(mut start) = start_arg {
-            let mut list: Vec<Expression> = Vec::with_capacity(start.len() + end.len());
-            for a in start.drain(..) {
+    if let Expression::List(end) = end_arg {
+        if let Expression::List(start) = start_arg {
+            let mut list: Vec<Expression> =
+                Vec::with_capacity(start.borrow().len() + end.borrow().len());
+            for a in start.borrow_mut().drain(..) {
                 list.push(a);
             }
-            for a in end.drain(..) {
+            for a in end.borrow_mut().drain(..) {
                 list.push(a);
             }
-            Ok(Expression::List(list))
+            Ok(Expression::List(RefCell::new(list)))
         } else if let Expression::Atom(Atom::Nil) = start_arg {
             Ok(Expression::List(end))
         } else {
@@ -426,10 +430,7 @@ fn builtin_list_append(
     }
 }
 
-fn builtin_list_push(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
+fn builtin_list_push(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -440,8 +441,8 @@ fn builtin_list_push(
     let new_item = args.pop().unwrap();
     let old_list = args.pop().unwrap();
     match old_list {
-        Expression::List(mut list) => {
-            list.push(new_item);
+        Expression::List(list) => {
+            list.borrow_mut().push(new_item);
             Ok(Expression::List(list))
         }
         _ => Err(io::Error::new(
@@ -451,21 +452,15 @@ fn builtin_list_push(
     }
 }
 
-fn builtin_list_pop(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
+fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "pop takes a list",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "pop takes a list"));
     }
     let mut args = to_args(environment, &args)?;
     let old_list = args.pop().unwrap();
     match old_list {
-        Expression::List(mut list) => {
-            if let Some(item) = list.pop() {
+        Expression::List(list) => {
+            if let Some(item) = list.borrow_mut().pop() {
                 Ok(item)
             } else {
                 Ok(Expression::Atom(Atom::Nil))

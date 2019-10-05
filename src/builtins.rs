@@ -52,21 +52,26 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
         match ast {
             Ok(ast) => {
                 let ast = match ast {
-                    Expression::List(list) => {
+                    Expression::List(olist) => {
+                        let mut list = olist.borrow_mut();
                         if let Some(first) = list.get(0) {
                             match first {
                                 Expression::List(_) => {
                                     let mut v = Vec::with_capacity(list.len() + 1);
                                     v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                    for l in list {
+                                    for l in list.drain(..) {
                                         v.push(l);
                                     }
-                                    Expression::List(v)
+                                    Expression::List(RefCell::new(v))
                                 }
-                                _ => Expression::List(list),
+                                _ => {
+                                    drop(list);
+                                    Expression::List(olist)
+                                }
                             }
                         } else {
-                            Expression::List(list)
+                            drop(list);
+                            Expression::List(olist)
                         }
                     }
                     _ => ast,
@@ -322,8 +327,9 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
     match &args[0] {
         Expression::Atom(Atom::Nil) => {}
         Expression::List(list) => {
-            for binding in list {
+            for binding in list.borrow().iter() {
                 if let Expression::List(binding_pair) = binding {
+                    let binding_pair = binding_pair.borrow();
                     if binding_pair.is_empty() || binding_pair.len() > 2 {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -384,7 +390,7 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
     let mut amp_next = false;
     for exp in list {
         let exp = if let Expression::List(tlist) = exp {
-            replace_commas(environment, &tlist)?
+            replace_commas(environment, &tlist.borrow())?
         } else {
             exp.clone()
         };
@@ -398,8 +404,8 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
                 comma_next = false;
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
-                if let Expression::List(mut new_list) = nl {
-                    for item in new_list.drain(..) {
+                if let Expression::List(new_list) = nl {
+                    for item in new_list.borrow_mut().drain(..) {
                         output.push(item);
                     }
                 } else {
@@ -417,8 +423,8 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             comma_next = false;
         } else if amp_next {
             let nl = eval(environment, &exp)?;
-            if let Expression::List(mut new_list) = nl {
-                for item in new_list.drain(..) {
+            if let Expression::List(new_list) = nl {
+                for item in new_list.borrow_mut().drain(..) {
                     output.push(item);
                 }
             } else {
@@ -432,7 +438,7 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             output.push(exp);
         }
     }
-    Ok(Expression::List(output))
+    Ok(Expression::List(RefCell::new(output)))
 }
 
 fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -443,7 +449,7 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
         ));
     }
     if let Expression::List(list) = &args[0] {
-        replace_commas(environment, &list)
+        replace_commas(environment, &list.borrow())
     } else {
         Ok(args.get(0).unwrap().clone())
     }
@@ -586,6 +592,7 @@ fn builtin_expand_macro(
             "expand-macro can only have one form (list defining the macro call)",
         ))
     } else if let Expression::List(list) = &args[0] {
+        let list = list.borrow();
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -645,7 +652,7 @@ fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Resu
         arg_list.push(a.clone());
     }
     environment.state.recur_num_args = Some(arg_list.len());
-    Ok(Expression::List(arg_list))
+    Ok(Expression::List(RefCell::new(arg_list)))
 }
 
 fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -711,6 +718,7 @@ fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Re
             "command can only have one form (call defining the external command and arguments)",
         ))
     } else if let Expression::List(list) = &args[0] {
+        let list = list.borrow();
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -745,6 +753,7 @@ fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Res
             "run-bg can only have one form (call defining the external command and arguments)",
         ))
     } else if let Expression::List(list) = &args[0] {
+        let list = list.borrow();
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {

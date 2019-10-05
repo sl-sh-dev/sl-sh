@@ -78,7 +78,8 @@ pub enum ProcessState {
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
-    List(Vec<Expression>),
+    // RefCell the vector to allow destructive forms.
+    List(RefCell<Vec<Expression>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Process(ProcessState),
 }
@@ -87,7 +88,7 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
-            Expression::List(l) => write!(f, "Expression::List({:?})", l),
+            Expression::List(l) => write!(f, "Expression::List({:?})", l.borrow()),
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
                 write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
@@ -113,7 +114,7 @@ impl Expression {
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("( ");
-                for exp in list {
+                for exp in list.borrow().iter() {
                     res.push_str(&exp.to_string());
                     res.push_str(" ");
                 }
@@ -162,7 +163,7 @@ impl Expression {
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("( ");
-                for exp in list {
+                for exp in list.borrow().iter() {
                     res.push_str(&exp.make_string(environment)?);
                     res.push_str(" ");
                 }
@@ -265,7 +266,7 @@ impl Expression {
             }
             Expression::List(list) => {
                 write!(writer, "( ")?;
-                for exp in list {
+                for exp in list.borrow().iter() {
                     exp.writef(environment, writer)?;
                     write!(writer, " ")?;
                 }

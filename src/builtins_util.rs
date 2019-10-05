@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
@@ -140,9 +141,10 @@ fn setup_args_final(
             for v in &vars[min_params..] {
                 rest_data.push(v.clone());
             }
-            scope
-                .data
-                .insert(rest_name.clone(), Rc::new(Expression::List(rest_data)));
+            scope.data.insert(
+                rest_name.clone(),
+                Rc::new(Expression::List(RefCell::new(rest_data))),
+            );
         } else {
             scope
                 .data
@@ -164,11 +166,12 @@ pub fn setup_args(
     eval_args: bool,
 ) -> io::Result<()> {
     if let Expression::List(l) = params {
+        let l = l.borrow();
         let mut var_names: Vec<String> = Vec::with_capacity(l.len());
         let mut use_rest = false;
         let mut post_rest_cnt = 0;
         let mut min_params = 0;
-        for arg in l {
+        for arg in l.iter() {
             if let Expression::Atom(Atom::Symbol(s)) = arg {
                 match &s[..] {
                     "&rest" => {
