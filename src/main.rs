@@ -8,7 +8,8 @@ use nix::{
     unistd,
 };
 
-use ::slsh::*;
+use ::slsh::config::*;
+use ::slsh::shell::*;
 
 fn main() -> io::Result<()> {
     let config = get_config();

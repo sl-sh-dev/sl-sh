@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::shell::*;
+use crate::eval::*;
 use crate::types::*;
 
 fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {

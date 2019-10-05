@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::builtins_util::expand_tilde;
 use crate::environment::*;
-use crate::shell::*;
+use crate::eval::*;
 use crate::types::*;
 
 #[derive(Debug)]

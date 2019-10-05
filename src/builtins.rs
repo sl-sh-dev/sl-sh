@@ -16,9 +16,9 @@ use std::rc::Rc;
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
+use crate::eval::*;
 use crate::process::*;
 use crate::reader::*;
-use crate::shell::*;
 use crate::types::*;
 
 fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {

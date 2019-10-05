@@ -12,6 +12,9 @@ pub use crate::environment::*;
 pub mod shell;
 pub use crate::shell::*;
 
+pub mod eval;
+pub use crate::eval::*;
+
 pub mod config;
 pub use crate::config::*;
 

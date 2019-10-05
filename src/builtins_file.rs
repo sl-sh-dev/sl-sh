@@ -9,8 +9,8 @@ use std::rc::Rc;
 use crate::builtins::*;
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::eval::*;
 use crate::process::*;
-use crate::shell::*;
 use crate::types::*;
 
 fn cd_expand_all_dots(cd: String) -> String {
