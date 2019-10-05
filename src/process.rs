@@ -4,12 +4,13 @@ use std::io::{self, Write};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 
 use glob::glob;
 //use nix::sys::signal::{self, SigHandler, Signal};
 use nix::{
     sys::{
-        signal::{self, SigHandler, Signal},
+        signal::{self, kill, SigHandler, Signal},
         termios,
         wait::{self, WaitPidFlag, WaitStatus},
     },
@@ -55,7 +56,23 @@ pub fn wait_pid(
     term_settings: Option<&termios::Termios>,
 ) -> Option<i32> {
     let result: Option<i32>;
+    let mut int_cnt = 0;
     loop {
+        if environment.sig_int.load(Ordering::Relaxed) {
+            if int_cnt == 0 {
+                if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGINT) {
+                    eprintln!("ERROR sending SIGINT to child process {}, {}", pid, err);
+                }
+            } else if int_cnt == 1 {
+                if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+                    eprintln!("ERROR sending SIGTERM to child process {}, {}", pid, err);
+                }
+            } else if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGKILL) {
+                eprintln!("ERROR sending SIGKILL to child process {}, {}", pid, err);
+            }
+            int_cnt += 1;
+            environment.sig_int.store(false, Ordering::Relaxed);
+        }
         let (stop, status) = try_wait_pid(environment, pid);
         if stop {
             result = status;

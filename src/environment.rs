@@ -4,6 +4,8 @@ use std::env;
 use std::io;
 use std::process::Child;
 use std::rc::Rc;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use crate::builtins::add_builtins;
 use crate::builtins_file::add_file_builtins;
@@ -96,6 +98,8 @@ impl Scope {
 
 #[derive(Clone, Debug)]
 pub struct Environment {
+    // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
+    pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub in_pipe: bool,
@@ -115,12 +119,13 @@ pub struct Environment {
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
 }
 
-pub fn build_default_environment() -> Environment {
+pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let root_scope = Rc::new(RefCell::new(Scope::default()));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     Environment {
+        sig_int,
         state: EnvState::default(),
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,
@@ -138,6 +143,7 @@ pub fn build_default_environment() -> Environment {
 
 pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     mut data_in: HashMap<String, Expression, S>,
+    sig_int: Arc<AtomicBool>,
 ) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut state = EnvState::default();
@@ -150,6 +156,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     Environment {
+        sig_int,
         state,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,

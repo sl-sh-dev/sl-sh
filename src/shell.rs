@@ -9,6 +9,8 @@ use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::gethostname;
@@ -28,7 +30,7 @@ fn call_lambda(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let mut looping = true;
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let mut last_eval = Expression::Atom(Atom::Nil);
     let mut new_scope = Scope::default();
     if let Err(err) = setup_args(
         environment,
@@ -46,12 +48,12 @@ fn call_lambda(
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     while looping {
-        last_eval = eval(environment, &lambda.body);
+        last_eval = eval(environment, &lambda.body)?;
         looping = environment.state.recur_num_args.is_some();
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
-            if let Ok(Expression::List(new_args)) = &last_eval {
+            if let Expression::List(new_args) = &last_eval {
                 if recur_args != new_args.borrow().len() {
                     environment.current_scope.pop();
                     return Err(io::Error::new(
@@ -70,7 +72,7 @@ fn call_lambda(
     }
     environment.loose_symbols = old_loose;
     environment.current_scope.pop();
-    last_eval
+    Ok(last_eval)
 }
 
 fn expand_macro(
@@ -112,6 +114,12 @@ fn expand_macro(
 }
 
 fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+    if environment.sig_int.load(Ordering::Relaxed) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Script interupted by SIGINT.",
+        ));
+    }
     let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {
         environment.state.recur_num_args = None;
@@ -302,7 +310,7 @@ fn get_prompt(environment: &mut Environment) -> String {
     }
 }
 
-pub fn start_interactive() {
+pub fn start_interactive(sig_int: Arc<AtomicBool>) {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
     con.history.inc_append = true;
@@ -338,7 +346,7 @@ pub fn start_interactive() {
     {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
-    let environment = Rc::new(RefCell::new(build_default_environment()));
+    let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
     load_scripts(&mut environment.borrow_mut(), &home);
     environment
         .borrow_mut()
@@ -352,6 +360,11 @@ pub fn start_interactive() {
     loop {
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
+        // Clear the SIGINT if one occured.
+        environment
+            .borrow()
+            .sig_int
+            .compare_and_swap(true, false, Ordering::Relaxed);
         let prompt = get_prompt(&mut environment.borrow_mut());
         if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
@@ -434,7 +447,7 @@ pub fn read_stdin() {
             share_dir, err
         );
     }
-    let mut environment = build_default_environment();
+    let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     environment.is_tty = false;
     load_scripts(&mut environment, &home);
 
@@ -592,7 +605,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
 }
 
 pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
-    let mut environment = build_default_environment();
+    let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
         exp_args.push(Expression::Atom(Atom::String(a.clone())));
