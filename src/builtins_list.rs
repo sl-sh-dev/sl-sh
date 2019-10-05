@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -18,7 +17,7 @@ fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Resul
     for arg in args {
         list.push(arg);
     }
-    Ok(Expression::List(RefCell::new(list)))
+    Ok(Expression::with_list(list))
 }
 
 fn builtin_list_first(
@@ -53,10 +52,10 @@ fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::
         Expression::List(list) => {
             if list.borrow().len() > 1 {
                 let mut rest: Vec<Expression> = Vec::with_capacity(list.borrow().len() - 1);
-                for a in list.borrow_mut().drain(1..) {
-                    rest.push(a);
+                for a in &list.borrow()[1..] {
+                    rest.push(a.clone());
                 }
-                Ok(Expression::List(RefCell::new(rest)))
+                Ok(Expression::with_list(rest))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -124,10 +123,13 @@ fn builtin_list_butlast(
     let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(list) => {
-            let mut list = list.borrow().clone();
+            let list = list.borrow().clone();
             if list.len() > 1 {
-                list.pop();
-                Ok(Expression::List(RefCell::new(list)))
+                let mut new_list = Vec::with_capacity(list.len() - 1);
+                for a in &list[..(list.len() - 1)] {
+                    new_list.push(a.clone());
+                }
+                Ok(Expression::with_list(new_list))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
@@ -194,10 +196,10 @@ fn builtin_list_setfirst(
         Expression::List(list) => {
             let mut nlist: Vec<Expression> = Vec::with_capacity(list.borrow().len() + 1);
             nlist.push(new_car);
-            for a in list.borrow_mut().drain(..) {
-                nlist.push(a);
+            for a in list.borrow().iter() {
+                nlist.push(a.clone());
             }
-            Ok(Expression::List(RefCell::new(nlist)))
+            Ok(Expression::with_list(nlist))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -225,10 +227,10 @@ fn builtin_list_setrest(
             if !old_list.borrow().is_empty() {
                 list.push(old_list.borrow().get(0).unwrap().clone());
             }
-            for a in new_cdr.borrow_mut().drain(..) {
-                list.push(a);
+            for a in new_cdr.borrow().iter() {
+                list.push(a.clone());
             }
-            Ok(Expression::List(RefCell::new(list)))
+            Ok(Expression::with_list(list))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -258,8 +260,12 @@ fn builtin_list_setlast(
     let old_list = args.pop().unwrap();
     match old_list {
         Expression::List(list) => {
-            list.borrow_mut().push(new_last);
-            Ok(Expression::List(list))
+            let mut new_list = Vec::with_capacity(list.borrow().len() + 1);
+            for a in list.borrow().iter() {
+                new_list.push(a.clone());
+            }
+            new_list.push(new_last);
+            Ok(Expression::with_list(new_list))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -284,13 +290,13 @@ fn builtin_list_setbutlast(
     if let Expression::List(new_butlast) = new_butlast {
         if let Expression::List(old_list) = old_list {
             let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.borrow().len() + 1);
-            for a in new_butlast.borrow_mut().drain(..) {
-                list.push(a);
+            for a in new_butlast.borrow().iter() {
+                list.push(a.clone());
             }
             if !old_list.borrow().is_empty() {
                 list.push(old_list.borrow().last().unwrap().clone());
             }
-            Ok(Expression::List(RefCell::new(list)))
+            Ok(Expression::with_list(list))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -305,6 +311,7 @@ fn builtin_list_setbutlast(
     }
 }
 
+// Destructive
 fn builtin_list_setnth(
     environment: &mut Environment,
     args: &[Expression],
@@ -394,13 +401,13 @@ fn builtin_list_append(
         if let Expression::List(start) = start_arg {
             let mut list: Vec<Expression> =
                 Vec::with_capacity(start.borrow().len() + end.borrow().len());
-            for a in start.borrow_mut().drain(..) {
-                list.push(a);
+            for a in start.borrow().iter() {
+                list.push(a.clone());
             }
-            for a in end.borrow_mut().drain(..) {
-                list.push(a);
+            for a in end.borrow().iter() {
+                list.push(a.clone());
             }
-            Ok(Expression::List(RefCell::new(list)))
+            Ok(Expression::with_list(list))
         } else if let Expression::Atom(Atom::Nil) = start_arg {
             Ok(Expression::List(end))
         } else {
@@ -430,6 +437,7 @@ fn builtin_list_append(
     }
 }
 
+// Destructive
 fn builtin_list_push(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 2 {
         return Err(io::Error::new(
@@ -452,12 +460,12 @@ fn builtin_list_push(environment: &mut Environment, args: &[Expression]) -> io::
     }
 }
 
+// Destructive
 fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "pop takes a list"));
     }
-    let mut args = to_args(environment, &args)?;
-    let old_list = args.pop().unwrap();
+    let old_list = eval(environment, &args[0])?;
     match old_list {
         Expression::List(list) => {
             if let Some(item) = list.borrow_mut().pop() {
@@ -468,7 +476,7 @@ fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::R
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "push's first form must be a list",
+            "pop's first form must be a list",
         )),
     }
 }

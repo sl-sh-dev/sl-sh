@@ -176,10 +176,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     }
                 }
                 Expression::List(list) => {
-                    match eval(
-                        environment,
-                        &Expression::List(RefCell::new(list.borrow().to_vec())),
-                    )? {
+                    match eval(environment, &Expression::with_list(list.borrow().to_vec()))? {
                         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
                         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
                         Expression::Func(f) => f(environment, &parts),
@@ -199,11 +196,13 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     Err(_) => Ok(Expression::Atom(Atom::String("".to_string()))),
                 }
             } else if let Some(exp) = get_expression(environment, &s[..]) {
-                if let Expression::Func(_) = *exp {
-                    Ok(Expression::Atom(Atom::String(s.clone())))
-                } else {
-                    let exp = &*exp;
-                    Ok(exp.clone())
+                match &*exp {
+                    Expression::Func(_) => Ok(Expression::Atom(Atom::String(s.clone()))),
+                    Expression::List(l) => Ok(Expression::List(l.clone())),
+                    _ => {
+                        let exp = &*exp;
+                        Ok(exp.clone())
+                    }
                 }
             } else if environment.loose_symbols {
                 Ok(Expression::Atom(Atom::String(s.clone())))
@@ -271,7 +270,7 @@ fn get_prompt(environment: &mut Environment) -> String {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
-                Rc::new(Expression::List(RefCell::new(v)))
+                Rc::new(Expression::with_list(v))
             }
             _ => exp,
         };
@@ -598,9 +597,10 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
     for a in args {
         exp_args.push(Expression::Atom(Atom::String(a.clone())));
     }
-    environment.root_scope.borrow_mut().data.insert(
-        "args".to_string(),
-        Rc::new(Expression::List(RefCell::new(exp_args))),
-    );
+    environment
+        .root_scope
+        .borrow_mut()
+        .data
+        .insert("args".to_string(), Rc::new(Expression::with_list(exp_args)));
     run_script(command, &mut environment)
 }

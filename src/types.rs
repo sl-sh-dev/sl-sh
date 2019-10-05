@@ -79,7 +79,7 @@ pub enum ProcessState {
 pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
-    List(RefCell<Vec<Expression>>),
+    List(Rc<RefCell<Vec<Expression>>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Process(ProcessState),
 }
@@ -103,6 +103,10 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
+    pub fn with_list(list: Vec<Expression>) -> Expression {
+        Expression::List(Rc::new(RefCell::new(list)))
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             Expression::Atom(a) => a.to_string(),

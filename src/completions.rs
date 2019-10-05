@@ -71,7 +71,7 @@ impl ShellCompleter {
                     for a in self.args.drain(..) {
                         v.push(Expression::Atom(Atom::String(a)));
                     }
-                    Rc::new(Expression::List(RefCell::new(v)))
+                    Rc::new(Expression::with_list(v))
                 }
                 _ => {
                     eprintln!("WARNING: __completion_hook not a function, ignoring.");

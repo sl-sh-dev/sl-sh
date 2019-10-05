@@ -67,6 +67,7 @@ fori | | macro |
 ### List Forms
 Currently slsh uses vectors not cons lists for its internal list structure.
 It uses the first, rest, list names to help reinforce this fact.
+These forms are non-destructive, they will not change any input lists.
 
 Form | Args | Type | description
 -----|------|------|------------
@@ -81,8 +82,16 @@ setfirst | form/list | builtin | Produces a new list with the provided form as t
 setrest | list/list | builtin | Produces a new list with the first element from then first list and the rest all the elements from the second.
 setlast | list/form | builtin | Produces a new list with the provided form appended to the list.
 setbutlast | list/list | builtin | Produces a new list with the last element from then second list and the rest all the elements from the first.
-setnth | int form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
 append | list/list | builtin | Produces a new list by appending the second onto the first.
+
+### Destructive List Forms
+These list forms will change the underlying list(s) they work on.
+
+Form | Args | Type | description
+-----|------|------|------------
+setnth | int form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
+pop | list | builtin | Pops the last elememt from the end of the list, list will be one element shorter.
+push | list form | builtin | Pushes the provided form onto the end of the list.
 
 
 ### String Forms

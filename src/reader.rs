@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::num::{ParseFloatError, ParseIntError};
 
 use crate::types::*;
@@ -241,7 +240,7 @@ fn close_list(level: i32, stack: &mut Vec<Vec<Expression>>) -> Result<(), ParseE
         match stack.pop() {
             Some(v) => match stack.pop() {
                 Some(mut v2) => {
-                    v2.push(Expression::List(RefCell::new(v)));
+                    v2.push(Expression::with_list(v));
                     stack.push(v2);
                 }
                 None => {
@@ -355,12 +354,12 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     if stack.len() > 1 {
         let mut v: Vec<Expression> = Vec::new();
         for s in stack {
-            v.push(Expression::List(RefCell::new(s)));
+            v.push(Expression::with_list(s));
         }
-        Ok(Expression::List(RefCell::new(v)))
+        Ok(Expression::with_list(v))
     } else {
         match stack.pop() {
-            Some(v) => Ok(Expression::List(RefCell::new(v))),
+            Some(v) => Ok(Expression::with_list(v)),
             None => Err(ParseError {
                 reason: "Empty results".to_string(),
             }),

@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
@@ -141,10 +140,9 @@ fn setup_args_final(
             for v in &vars[min_params..] {
                 rest_data.push(v.clone());
             }
-            scope.data.insert(
-                rest_name.clone(),
-                Rc::new(Expression::List(RefCell::new(rest_data))),
-            );
+            scope
+                .data
+                .insert(rest_name.clone(), Rc::new(Expression::with_list(rest_data)));
         } else {
             scope
                 .data

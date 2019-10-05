@@ -62,7 +62,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
                                     for l in list.drain(..) {
                                         v.push(l);
                                     }
-                                    Expression::List(RefCell::new(v))
+                                    Expression::with_list(v)
                                 }
                                 _ => {
                                     drop(list);
@@ -438,7 +438,7 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             output.push(exp);
         }
     }
-    Ok(Expression::List(RefCell::new(output)))
+    Ok(Expression::with_list(output))
 }
 
 fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -652,7 +652,7 @@ fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Resu
         arg_list.push(a.clone());
     }
     environment.state.recur_num_args = Some(arg_list.len());
-    Ok(Expression::List(RefCell::new(arg_list)))
+    Ok(Expression::with_list(arg_list))
 }
 
 fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
