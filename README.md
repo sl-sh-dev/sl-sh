@@ -87,15 +87,19 @@ setrest | list/list | builtin | Produces a new list with the first element from 
 setlast | list/form | builtin | Produces a new list with the provided form appended to the list.
 setbutlast | list/list | builtin | Produces a new list with the last element from then second list and the rest all the elements from the first.
 append | list/list | builtin | Produces a new list by appending the second onto the first.
+is-empty | list | builtin | Returns true if the provided list is empty, nil/false otherwise.
 
 ### Destructive List Forms
-These list forms will change the underlying list(s) they work on.
+These list forms will change the underlying list they work on.
 
 Form | Args | Type | description
 -----|------|------|------------
-setnth | int form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
+setnth | index form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
 pop | list | builtin | Pops the last elememt from the end of the list, list will be one element shorter.
 push | list form | builtin | Pushes the provided form onto the end of the list.
+clear | list | builtin | Removes all elements from list, leaves capacity the same.
+remove-nth | index list | builtin | Removes the element at index and shifts all the remaining to the left.
+insert-nth | index form list | builtin | Inserts the provided form into index and moves all other elements to the right.
 
 
 ### String Forms

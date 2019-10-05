@@ -346,7 +346,7 @@ fn builtin_list_setnth(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "setlast third form must be a list",
+            "setnth third form must be a list",
         )),
     }
 }
@@ -481,6 +481,132 @@ fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
+fn builtin_list_is_empty(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-empty takes a list",
+        ));
+    }
+    let list = eval(environment, &args[0])?;
+    match list {
+        Expression::List(list) => {
+            if list.borrow().is_empty() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            }
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-empty's first form must be a list",
+        )),
+    }
+}
+
+// Destructive
+fn builtin_list_clear(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 1 {
+        return Err(io::Error::new(io::ErrorKind::Other, "clear takes a list"));
+    }
+    let list = eval(environment, &args[0])?;
+    match list {
+        Expression::List(list) => {
+            list.borrow_mut().clear();
+            Ok(Expression::Atom(Atom::Nil))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "clear's first form must be a list",
+        )),
+    }
+}
+
+// Destructive
+fn builtin_list_remove_nth(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "remove-nth takes two forms (index and list)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let list = args.pop().unwrap();
+    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
+        i
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "remove-nth first form must be an int",
+        ));
+    };
+    match list {
+        Expression::List(list) => {
+            if idx < 0 || idx >= list.borrow().len() as i64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "remove-nth index out of range",
+                ));
+            }
+            list.borrow_mut().remove(idx as usize);
+            Ok(Expression::List(list))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "remove-nth second form must be a list",
+        )),
+    }
+}
+
+// Destructive
+fn builtin_list_insert_nth(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.len() != 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "insert-nth takes three forms (index, new element and list)",
+        ));
+    }
+    let mut args = to_args(environment, &args)?;
+    let old_list = args.pop().unwrap();
+    let new_element = args.pop().unwrap();
+    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
+        i
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "insert-nth first form must be an int",
+        ));
+    };
+    match old_list {
+        Expression::List(list) => {
+            if idx < 0 || idx > list.borrow().len() as i64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "insert-nth index out of range",
+                ));
+            }
+            list.borrow_mut().insert(idx as usize, new_element);
+            Ok(Expression::List(list))
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "insert-nth third form must be a list",
+        )),
+    }
+}
+
 pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("list".to_string(), Rc::new(Expression::Func(builtin_list)));
     data.insert(
@@ -538,5 +664,21 @@ pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert(
         "pop".to_string(),
         Rc::new(Expression::Func(builtin_list_pop)),
+    );
+    data.insert(
+        "is-empty".to_string(),
+        Rc::new(Expression::Func(builtin_list_is_empty)),
+    );
+    data.insert(
+        "clear".to_string(),
+        Rc::new(Expression::Func(builtin_list_clear)),
+    );
+    data.insert(
+        "remove-nth".to_string(),
+        Rc::new(Expression::Func(builtin_list_remove_nth)),
+    );
+    data.insert(
+        "insert-nth".to_string(),
+        Rc::new(Expression::Func(builtin_list_insert_nth)),
     );
 }
