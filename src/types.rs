@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::num::{ParseFloatError, ParseIntError};
-use std::ops::Range;
 use std::process::Child;
 use std::rc::Rc;
 
@@ -74,35 +73,6 @@ impl Atom {
 pub enum ProcessState {
     Running(u32),   // pid
     Over(u32, i32), // pid and exit status
-}
-
-#[derive(Clone)]
-pub struct ExpList {
-    pub list: Rc<RefCell<Vec<Expression>>>,
-    pub range: Option<(usize, usize)>,
-}
-
-impl ExpList {
-    pub fn new(list: Rc<RefCell<Vec<Expression>>>, range: Option<(usize, usize)>) -> ExpList {
-        ExpList { list, range }
-    }
-}
-
-#[macro_export]
-macro_rules! list_to_slice {
-    ($list:expr, $exp_list:expr) => {{
-        $list = $exp_list.list.borrow();
-        if let Some(range) = $exp_list.range {
-            //println!("XXXX range {} to {}", range.0, range.1);
-            let sl = $list.get(range.0..range.1);
-            match sl {
-                Some(l) => l,
-                None => &*$list,
-            }
-        } else {
-            &*$list
-        }
-    }};
 }
 
 #[derive(Clone)]
