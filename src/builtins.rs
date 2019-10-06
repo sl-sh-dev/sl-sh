@@ -646,13 +646,9 @@ fn builtin_expand_macro(
 }
 
 fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = to_args(environment, args)?;
-    let mut arg_list: Vec<Expression> = Vec::with_capacity(args.len());
-    for a in args.drain(..) {
-        arg_list.push(a.clone());
-    }
-    environment.state.recur_num_args = Some(arg_list.len());
-    Ok(Expression::with_list(arg_list))
+    let args = to_args(environment, args)?;
+    environment.state.recur_num_args = Some(args.len());
+    Ok(Expression::with_list(args))
 }
 
 fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {

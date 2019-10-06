@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
+use std::iter::FromIterator;
 use std::rc::Rc;
 
 use crate::builtins_util::*;
@@ -13,11 +14,7 @@ fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Resul
         return Ok(Expression::Atom(Atom::Nil));
     }
     let args = to_args(environment, args)?;
-    let mut list: Vec<Expression> = Vec::with_capacity(args.len());
-    for arg in args {
-        list.push(arg);
-    }
-    Ok(Expression::with_list(list))
+    Ok(Expression::with_list(args))
 }
 
 fn builtin_list_first(
@@ -52,10 +49,7 @@ fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::
         Expression::List(list) => {
             let list = list.borrow();
             if list.len() > 1 {
-                let mut rest: Vec<Expression> = Vec::with_capacity(list.len() - 1);
-                for a in &list[1..] {
-                    rest.push(a.clone());
-                }
+                let rest: Vec<Expression> = Vec::from_iter(list[1..].iter().cloned());
                 Ok(Expression::with_list(rest))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
@@ -126,10 +120,8 @@ fn builtin_list_butlast(
         Expression::List(list) => {
             let list = list.borrow();
             if list.len() > 1 {
-                let mut new_list = Vec::with_capacity(list.len() - 1);
-                for a in &list[..(list.len() - 1)] {
-                    new_list.push(a.clone());
-                }
+                let new_list: Vec<Expression> =
+                    Vec::from_iter(list[..(list.len() - 1)].iter().cloned());
                 Ok(Expression::with_list(new_list))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
@@ -195,11 +187,10 @@ fn builtin_list_setfirst(
     let new_car = args.pop().unwrap();
     match old_list {
         Expression::List(list) => {
-            let mut nlist: Vec<Expression> = Vec::with_capacity(list.borrow().len() + 1);
+            let list = list.borrow();
+            let mut nlist: Vec<Expression> = Vec::with_capacity(list.len() + 1);
             nlist.push(new_car);
-            for a in list.borrow().iter() {
-                nlist.push(a.clone());
-            }
+            nlist.extend(list.iter().cloned());
             Ok(Expression::with_list(nlist))
         }
         _ => Err(io::Error::new(
@@ -224,13 +215,13 @@ fn builtin_list_setrest(
     let old_list = args.pop().unwrap();
     if let Expression::List(new_cdr) = new_cdr {
         if let Expression::List(old_list) = old_list {
-            let mut list: Vec<Expression> = Vec::with_capacity(new_cdr.borrow().len() + 1);
-            if !old_list.borrow().is_empty() {
-                list.push(old_list.borrow().get(0).unwrap().clone());
+            let new_cdr = new_cdr.borrow();
+            let old_list = old_list.borrow();
+            let mut list: Vec<Expression> = Vec::with_capacity(new_cdr.len() + 1);
+            if !old_list.is_empty() {
+                list.push(old_list.get(0).unwrap().clone());
             }
-            for a in new_cdr.borrow().iter() {
-                list.push(a.clone());
-            }
+            list.extend(new_cdr.iter().cloned());
             Ok(Expression::with_list(list))
         } else {
             Err(io::Error::new(
@@ -261,10 +252,9 @@ fn builtin_list_setlast(
     let old_list = args.pop().unwrap();
     match old_list {
         Expression::List(list) => {
-            let mut new_list = Vec::with_capacity(list.borrow().len() + 1);
-            for a in list.borrow().iter() {
-                new_list.push(a.clone());
-            }
+            let list = list.borrow();
+            let mut new_list = Vec::with_capacity(list.len() + 1);
+            new_list.extend(list.iter().cloned());
             new_list.push(new_last);
             Ok(Expression::with_list(new_list))
         }
@@ -290,12 +280,12 @@ fn builtin_list_setbutlast(
     let new_butlast = args.pop().unwrap();
     if let Expression::List(new_butlast) = new_butlast {
         if let Expression::List(old_list) = old_list {
-            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.borrow().len() + 1);
-            for a in new_butlast.borrow().iter() {
-                list.push(a.clone());
-            }
-            if !old_list.borrow().is_empty() {
-                list.push(old_list.borrow().last().unwrap().clone());
+            let new_butlast = new_butlast.borrow();
+            let old_list = old_list.borrow();
+            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.len() + 1);
+            list.extend(new_butlast.iter().cloned());
+            if !old_list.is_empty() {
+                list.push(old_list.last().unwrap().clone());
             }
             Ok(Expression::with_list(list))
         } else {
@@ -400,14 +390,11 @@ fn builtin_list_append(
     let start_arg = new_args.pop().unwrap();
     if let Expression::List(end) = end_arg {
         if let Expression::List(start) = start_arg {
-            let mut list: Vec<Expression> =
-                Vec::with_capacity(start.borrow().len() + end.borrow().len());
-            for a in start.borrow().iter() {
-                list.push(a.clone());
-            }
-            for a in end.borrow().iter() {
-                list.push(a.clone());
-            }
+            let end = end.borrow();
+            let start = start.borrow();
+            let mut list: Vec<Expression> = Vec::with_capacity(start.len() + end.len());
+            list.extend(start.iter().cloned());
+            list.extend(end.iter().cloned());
             Ok(Expression::with_list(list))
         } else if let Expression::Atom(Atom::Nil) = start_arg {
             Ok(Expression::List(end))
