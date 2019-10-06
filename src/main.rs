@@ -1,3 +1,8 @@
+//extern crate jemallocator;
+
+//#[global_allocator]
+//static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 use std::io;
 use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -91,10 +96,18 @@ fn main() -> io::Result<()> {
                         let mut sig: libc::c_int = 0;
                         let errno = unsafe { libc::sigwait(&set, &mut sig) };
                         let e = ok_errno(sig, errno);
-                        if let Ok(code) = e {
-                            if code == 2 {
-                                sig_int_t.store(true, Ordering::Relaxed);
+                        match e {
+                            Ok(code) => {
+                                if code == 2 {
+                                    sig_int_t.store(true, Ordering::Relaxed);
+                                } else {
+                                    eprintln!(
+                                        "ERROR, got unexpected signal {} from sigwait.",
+                                        code
+                                    );
+                                }
                             }
+                            Err(err) => eprintln!("ERROR waiting for signal SIGINT: {}", err),
                         }
                         if sig_int_stop_t.load(Ordering::Relaxed) {
                             break;

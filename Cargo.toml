@@ -11,6 +11,7 @@ liner = { git = "https://gitlab.redox-os.org/redox-os/liner" }
 glob = "0.3"
 nix = "0.15.0"
 libc = "0.2"
+# jemallocator = "0.3.0"
 
 [build-dependencies]
 chrono = "0.4.7"
