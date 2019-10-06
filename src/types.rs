@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::num::{ParseFloatError, ParseIntError};
-use std::ops::Range;
 use std::process::Child;
 use std::rc::Rc;
 
@@ -83,8 +82,41 @@ pub struct ExpList {
 }
 
 impl ExpList {
-    pub fn new(list: Rc<RefCell<Vec<Expression>>>, range: Option<(usize, usize)>) -> ExpList {
-        ExpList { list, range }
+    pub fn new(list: Rc<RefCell<Vec<Expression>>>) -> ExpList {
+        ExpList { list, range: None }
+    }
+
+    pub fn new_range(exp_list: &ExpList, start: usize, end: usize) -> ExpList {
+        let range = if let Some(r) = exp_list.range {
+            (r.0 + start, r.1 + end)
+        } else {
+            (start, end)
+        };
+        ExpList { list: exp_list.list.clone(), range: Some(range) }
+    }
+
+    pub fn insert(&self, idx: usize, item: Expression) {
+        if let Some(r) = self.range() {
+            self.list.borrow_mut().insert(r.0 + idx, item);
+        } else {
+            self.list.borrow_mut().insert(idx, item);
+        }
+    }
+
+    pub fn remove(&self, idx: usize) {
+        if let Some(r) = self.range() {
+            self.list.borrow_mut().remove(r.0 + idx);
+        } else {
+            self.list.borrow_mut().remove(idx);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        if let Some(r) = self.range {
+            r.1 - r.0
+        } else {
+            self.list.borrow().len()
+        }
     }
 }
 
@@ -105,11 +137,28 @@ macro_rules! list_to_slice {
     }};
 }
 
+#[macro_export]
+macro_rules! list_to_slice_mut {
+    ($list:expr, $exp_list:expr) => {{
+        $list = $exp_list.list.borrow_mut();
+        if let Some(range) = $exp_list.range {
+            //println!("XXXX range {} to {}", range.0, range.1);
+            let sl = $list.get_mut(range.0..range.1);
+            match sl {
+                Some(l) => l,
+                None => &mut *$list,
+            }
+        } else {
+            &mut *$list
+        }
+    }};
+}
+
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
-    List(Rc<RefCell<Vec<Expression>>>),
+    List(ExpList),//Rc<RefCell<Vec<Expression>>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Process(ProcessState),
 }
@@ -118,7 +167,11 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
-            Expression::List(l) => write!(f, "Expression::List({:?})", l.borrow()),
+            Expression::List(l) => {
+                let lt;
+                let l = list_to_slice!(lt, l);
+                write!(f, "Expression::List({:?})", l)
+            }
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
                 write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
@@ -134,7 +187,11 @@ impl fmt::Debug for Expression {
 
 impl Expression {
     pub fn with_list(list: Vec<Expression>) -> Expression {
-        Expression::List(Rc::new(RefCell::new(list)))
+        Expression::List(ExpList::new(Rc::new(RefCell::new(list))))
+    }
+
+    pub fn with_list_range(exp_list: &ExpList, start: usize, end: usize) -> Expression {
+        Expression::List(ExpList::new_range(exp_list, start, end))
     }
 
     pub fn to_string(&self) -> String {
@@ -148,7 +205,9 @@ impl Expression {
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("( ");
-                for exp in list.borrow().iter() {
+                let lt;
+                let list = list_to_slice!(lt, list);
+                for exp in list.iter() {
                     res.push_str(&exp.to_string());
                     res.push_str(" ");
                 }
@@ -197,7 +256,9 @@ impl Expression {
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("( ");
-                for exp in list.borrow().iter() {
+                let lt;
+                let list = list_to_slice!(lt, list);
+                for exp in list.iter() {
                     res.push_str(&exp.make_string(environment)?);
                     res.push_str(" ");
                 }
@@ -300,7 +361,9 @@ impl Expression {
             }
             Expression::List(list) => {
                 write!(writer, "( ")?;
-                for exp in list.borrow().iter() {
+                let lt;
+                let list = list_to_slice!(lt, list);
+                for exp in list.iter() {
                     exp.writef(environment, writer)?;
                     write!(writer, " ")?;
                 }

@@ -164,7 +164,8 @@ pub fn setup_args(
     eval_args: bool,
 ) -> io::Result<()> {
     if let Expression::List(l) = params {
-        let l = l.borrow();
+        let lt;
+        let l = list_to_slice!(lt, l);
         let mut var_names: Vec<String> = Vec::with_capacity(l.len());
         let mut use_rest = false;
         let mut post_rest_cnt = 0;

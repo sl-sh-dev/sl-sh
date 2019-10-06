@@ -20,6 +20,8 @@ use crate::eval::*;
 use crate::process::*;
 use crate::reader::*;
 use crate::types::*;
+use crate::list_to_slice;
+use crate::list_to_slice_mut;
 
 fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
@@ -53,14 +55,16 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
             Ok(ast) => {
                 let ast = match ast {
                     Expression::List(olist) => {
-                        let mut list = olist.borrow_mut();
+                        let lt;
+                        let list = list_to_slice_mut!(lt, olist);
+                        //let mut list = olist.borrow_mut();
                         if let Some(first) = list.get(0) {
                             match first {
                                 Expression::List(_) => {
                                     let mut v = Vec::with_capacity(list.len() + 1);
                                     v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                    for l in list.drain(..) {
-                                        v.push(l);
+                                    for l in list {//list.drain(..) {
+                                        v.push(l.clone());
                                     }
                                     Expression::with_list(v)
                                 }
@@ -327,9 +331,13 @@ fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result
     match &args[0] {
         Expression::Atom(Atom::Nil) => {}
         Expression::List(list) => {
-            for binding in list.borrow().iter() {
+        let lt;
+        let list = list_to_slice!(lt, list);
+            for binding in list.iter() {
                 if let Expression::List(binding_pair) = binding {
-                    let binding_pair = binding_pair.borrow();
+                        let lt;
+                        let binding_pair = list_to_slice_mut!(lt, binding_pair);
+                    //let binding_pair = binding_pair.borrow();
                     if binding_pair.is_empty() || binding_pair.len() > 2 {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -390,7 +398,9 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
     let mut amp_next = false;
     for exp in list {
         let exp = if let Expression::List(tlist) = exp {
-            replace_commas(environment, &tlist.borrow())?
+                        let lt;
+                        let tlist = list_to_slice_mut!(lt, tlist);
+            replace_commas(environment, tlist)?
         } else {
             exp.clone()
         };
@@ -405,8 +415,10 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
                 if let Expression::List(new_list) = nl {
-                    for item in new_list.borrow_mut().drain(..) {
-                        output.push(item);
+                        let lt;
+                        let new_list = list_to_slice_mut!(lt, new_list);
+                    for item in new_list {
+                        output.push(item.clone());
                     }
                 } else {
                     return Err(io::Error::new(
@@ -424,8 +436,10 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
         } else if amp_next {
             let nl = eval(environment, &exp)?;
             if let Expression::List(new_list) = nl {
-                for item in new_list.borrow_mut().drain(..) {
-                    output.push(item);
+                        let lt;
+                        let new_list = list_to_slice_mut!(lt, new_list);
+                for item in new_list {
+                    output.push(item.clone());
                 }
             } else {
                 return Err(io::Error::new(
@@ -449,7 +463,9 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
         ));
     }
     if let Expression::List(list) = &args[0] {
-        replace_commas(environment, &list.borrow())
+        let lt;
+        let list = list_to_slice!(lt, list);
+        replace_commas(environment, list)
     } else {
         Ok(args.get(0).unwrap().clone())
     }
@@ -592,7 +608,8 @@ fn builtin_expand_macro(
             "expand-macro can only have one form (list defining the macro call)",
         ))
     } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
+        let lt;
+        let list = list_to_slice!(lt, list);
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -718,7 +735,8 @@ fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Re
             "command can only have one form (call defining the external command and arguments)",
         ))
     } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
+        let lt;
+        let list = list_to_slice!(lt, list);
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -731,7 +749,7 @@ fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Re
                 if command.is_empty() {
                     return Ok(Expression::Atom(Atom::Nil));
                 }
-                do_command(environment, command, parts)
+                do_command(environment, &command, parts)
             }
             _ => {
                 let msg = format!(
@@ -753,7 +771,8 @@ fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Res
             "run-bg can only have one form (call defining the external command and arguments)",
         ))
     } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
+        let lt;
+        let list = list_to_slice!(lt, list);
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -767,7 +786,7 @@ fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Res
                     return Ok(Expression::Atom(Atom::Nil));
                 }
                 environment.run_background = true;
-                let result = do_command(environment, command, parts);
+                let result = do_command(environment, &command, parts);
                 environment.run_background = false;
                 result
             }

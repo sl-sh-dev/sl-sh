@@ -596,13 +596,13 @@ fn builtin_list_insert_nth(
     };
     match old_list {
         Expression::List(list) => {
-            if idx < 0 || idx > list.borrow().len() as i64 {
+            if idx < 0 || idx > list.len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "insert-nth index out of range",
                 ));
             }
-            list.borrow_mut().insert(idx as usize, new_element);
+            list.insert(idx as usize, new_element);
             Ok(Expression::List(list))
         }
         _ => Err(io::Error::new(
