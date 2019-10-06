@@ -2,6 +2,7 @@ use std::env;
 use std::fs::File;
 use std::io::{self, Write};
 use std::rc::Rc;
+use std::iter::FromIterator;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -120,7 +121,7 @@ pub fn expand_tilde(path: &str) -> Option<String> {
 
 fn setup_args_final(
     scope: &mut Scope,
-    mut var_names: Vec<String>,
+    var_names: &mut Vec<String>,
     vars: &[Expression],
     min_params: usize,
     use_rest: bool,
@@ -136,10 +137,7 @@ fn setup_args_final(
             scope.data.insert(k.clone(), Rc::new(v.clone()));
         }
         if vars.len() > min_params {
-            let mut rest_data: Vec<Expression> = Vec::with_capacity(vars.len() - min_params);
-            for v in &vars[min_params..] {
-                rest_data.push(v.clone());
-            }
+            let rest_data: Vec<Expression> = Vec::from_iter(vars[min_params..].iter().cloned());
             scope
                 .data
                 .insert(rest_name.clone(), Rc::new(Expression::with_list(rest_data)));
@@ -220,9 +218,9 @@ pub fn setup_args(
             None => last_scope,
         };
         if let Some(t_vars) = t_vars {
-            setup_args_final(new_scope, var_names, &t_vars, min_params, use_rest)?;
+            setup_args_final(new_scope, &mut var_names, &t_vars, min_params, use_rest)?;
         } else {
-            setup_args_final(new_scope, var_names, args, min_params, use_rest)?;
+            setup_args_final(new_scope, &mut var_names, args, min_params, use_rest)?;
         };
     }
     Ok(())
