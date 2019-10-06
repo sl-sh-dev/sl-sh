@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
+use crate::list_to_slice;
 use crate::types::*;
 
 fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -50,9 +51,13 @@ fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::
     let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(list) => {
-            if list.borrow().len() > 1 {
-                let mut rest: Vec<Expression> = Vec::with_capacity(list.borrow().len() - 1);
-                for a in &list.borrow()[1..] {
+            //let exp_test = ExpList::new(list.clone(), Some((1, list.borrow().len())));
+            //let tlist;
+            //println!("XXXX exp test: {:?}", list_to_slice!(tlist, exp_test));
+            let list = list.borrow();
+            if list.len() > 1 {
+                let mut rest: Vec<Expression> = Vec::with_capacity(list.len() - 1);
+                for a in &list[1..] {
                     rest.push(a.clone());
                 }
                 Ok(Expression::with_list(rest))
@@ -123,7 +128,7 @@ fn builtin_list_butlast(
     let arg = eval(environment, &args[0])?;
     match arg {
         Expression::List(list) => {
-            let list = list.borrow().clone();
+            let list = list.borrow();
             if list.len() > 1 {
                 let mut new_list = Vec::with_capacity(list.len() - 1);
                 for a in &list[..(list.len() - 1)] {
