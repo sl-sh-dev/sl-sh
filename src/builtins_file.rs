@@ -184,7 +184,11 @@ fn internal_output_to(
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         }
         let res = builtin_progn(environment, &args[1..]);
-        environment.state.stdout_status = None;
+        if is_stdout {
+            environment.state.stdout_status = None;
+        } else {
+            environment.state.stderr_status = None;
+        }
         res
     }
 }

@@ -213,6 +213,22 @@ fn run_command(
                 eprint!(" {}", n);
             }
             eprintln!("]: {}", e);
+            // Recover from the failed spawn...
+            // If we were saved terminal settings restore them.
+            if let Some(settings) = term_settings {
+                if let Err(err) =
+                    termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, &settings)
+                {
+                    eprintln!("Error resetting shell terminal settings: {}", err);
+                }
+            }
+            // Move the shell back into the foreground.
+            if environment.is_tty {
+                let pid = unistd::getpid();
+                if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
+                    eprintln!("Error making shell {} foreground: {}", pid, err);
+                }
+            }
         }
     };
     Ok(result)

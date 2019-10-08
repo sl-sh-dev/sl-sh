@@ -158,14 +158,8 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) {
                 if input.is_empty() {
                     continue;
                 }
-                let add_parens = if input.starts_with('(')
-                    || input.starts_with('\'')
-                    || input.starts_with('`')
-                {
-                    false
-                } else {
-                    true
-                };
+                let add_parens =
+                    !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
                 environment
@@ -241,14 +235,8 @@ pub fn read_stdin() {
             Ok(_n) => {
                 let input = input.trim();
                 environment.state.stdout_status = None;
-                let add_parens = if input.starts_with('(')
-                    || input.starts_with('\'')
-                    || input.starts_with('`')
-                {
-                    false
-                } else {
-                    true
-                };
+                let add_parens =
+                    !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
                 let ast = read(input, add_parens);
                 match ast {
                     Ok(ast) => {
