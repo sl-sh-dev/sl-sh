@@ -30,7 +30,7 @@ fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Resul
     } else {
         let args = to_args(environment, args)?;
         match &args[0] {
-            Expression::Atom(Atom::String(s)) => match read(&s) {
+            Expression::Atom(Atom::String(s)) => match read(&s, false) {
                 Ok(ast) => eval(environment, &ast),
                 Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
             },
@@ -48,7 +48,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
         ))
     } else {
         let contents = fs::read_to_string(args.pop().unwrap().make_string(environment)?)?;
-        let ast = read(&contents);
+        let ast = read(&contents, false);
         match ast {
             Ok(ast) => {
                 let ast = match ast {

@@ -125,7 +125,7 @@ fn handle_char(
     token
 }
 
-fn tokenize(text: &str) -> Vec<String> {
+fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut in_string = false;
     let mut token = String::new();
@@ -134,6 +134,9 @@ fn tokenize(text: &str) -> Vec<String> {
     let mut last_comma = false;
     let mut escape_code: Vec<char> = Vec::with_capacity(2);
     let mut in_escape_code = false;
+    if add_parens {
+        tokens.push("(".to_string());
+    }
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         in_comment = true;
@@ -197,6 +200,9 @@ fn tokenize(text: &str) -> Vec<String> {
     let token = token.trim();
     if !token.is_empty() {
         tokens.push(token.to_string());
+    }
+    if add_parens {
+        tokens.push(")".to_string());
     }
     tokens
 }
@@ -367,7 +373,7 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     }
 }
 
-pub fn read(text: &str) -> Result<Expression, ParseError> {
-    let tokens = tokenize(text);
+pub fn read(text: &str, add_parens: bool) -> Result<Expression, ParseError> {
+    let tokens = tokenize(text, add_parens);
     parse(&tokens)
 }

@@ -154,16 +154,17 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) {
         let mut shell_completer = ShellCompleter::new(environment.clone());
         match con.read_line(prompt, None, &mut shell_completer) {
             Ok(input) => {
+                let input = input.trim();
                 if input.is_empty() {
                     continue;
                 }
-                let mod_input = if input.starts_with('(')
+                let add_parens = if input.starts_with('(')
                     || input.starts_with('\'')
                     || input.starts_with('`')
                 {
-                    input.clone()
+                    false
                 } else {
-                    format!("({})", input)
+                    true
                 };
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
@@ -176,7 +177,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) {
                         "*last-status*".to_string(),
                         Rc::new(Expression::Atom(Atom::Int(i64::from(0)))),
                     );
-                let ast = read(&mod_input);
+                let ast = read(input, add_parens);
                 match ast {
                     Ok(ast) => {
                         environment.borrow_mut().loose_symbols = true;
@@ -238,16 +239,17 @@ pub fn read_stdin() {
         match io::stdin().read_line(&mut input) {
             Ok(0) => return,
             Ok(_n) => {
+                let input = input.trim();
                 environment.state.stdout_status = None;
-                let mod_input = if input.starts_with('(')
+                let add_parens = if input.starts_with('(')
                     || input.starts_with('\'')
                     || input.starts_with('`')
                 {
-                    input.clone()
+                    false
                 } else {
-                    format!("({})", input)
+                    true
                 };
-                let ast = read(&mod_input);
+                let ast = read(input, add_parens);
                 match ast {
                     Ok(ast) => {
                         environment.loose_symbols = true;
@@ -358,7 +360,7 @@ pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
 
 fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> {
     let contents = fs::read_to_string(file_name)?;
-    let ast = read(&contents);
+    let ast = read(&contents, false);
     match ast {
         Ok(Expression::List(list)) => {
             for exp in list.borrow().iter() {
