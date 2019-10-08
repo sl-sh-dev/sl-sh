@@ -1,8 +1,8 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
-use std::rc::Rc;
 use std::iter::FromIterator;
+use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;

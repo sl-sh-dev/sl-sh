@@ -232,27 +232,20 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
         pat.push_str(&cur_path.to_string_lossy());
         pat.push('/');
     }
-    let mut last_empty = false;
     for element in split_start {
         if !element.is_empty() {
-            last_empty = false;
             pat.push_str(element);
             if element != "." && element != ".." {
                 pat.push('*');
             }
             pat.push('/');
         } else {
-            last_empty = true;
             pat.push_str("*");
             pat.push('/');
         }
     }
 
     pat.pop(); // pop out the last '/' character
-    if last_empty {
-        pat.pop(); // '*'
-        pat.pop(); // '/'
-    }
     if pat.ends_with('.') {
         pat.push('*')
     }
@@ -272,7 +265,10 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
                     Ok(p) => {
                         let p_lossy = p.to_string_lossy();
                         let need_slash = p.is_dir() && !p_lossy.ends_with('/');
-                        let mut item = if using_cur_path && p_lossy.starts_with(&cur_path_str) {
+                        let mut item = if using_cur_path
+                            && p_lossy.starts_with(&cur_path_str)
+                            && p_lossy.len() > cur_path_str.len()
+                        {
                             p_lossy[(cur_path_str.len() + 1)..].to_string()
                         } else {
                             p_lossy.to_string()
