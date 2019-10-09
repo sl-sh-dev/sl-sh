@@ -110,6 +110,8 @@ pub struct Environment {
     pub data_in: Option<Expression>,
     pub form_type: FormType,
     pub save_exit_status: bool,
+    // If this is Some then need to unwind and exit with then provided code (exit was called).
+    pub exit_code: Option<i32>,
     // This is the environment's root (global scope), it will also be part of
     // higher level scopes and in the curren_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
@@ -136,6 +138,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
+        exit_code: None,
         root_scope,
         current_scope,
     }
@@ -167,6 +170,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
+        exit_code: None,
         root_scope,
         current_scope,
     }

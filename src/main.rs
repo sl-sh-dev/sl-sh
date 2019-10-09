@@ -115,7 +115,7 @@ fn main() -> io::Result<()> {
                     }
                 });
 
-                start_interactive(sig_int);
+                let code = start_interactive(sig_int);
                 sig_int_stop.store(true, Ordering::Relaxed);
                 if let Err(err) = signal::kill(shell_pgid, Signal::SIGINT) {
                     eprintln!(
@@ -126,9 +126,11 @@ fn main() -> io::Result<()> {
                 if let Err(err) = sig_child.join() {
                     eprintln!("ERROR waiting on SIGINT thread to end: {:?}.", err);
                 }
+                std::process::exit(code);
             } else {
                 // No tty, just read stdin and do something with it..
-                read_stdin();
+                let code = read_stdin();
+                std::process::exit(code);
             }
         } else if config.command.is_some() {
             let command = config.command.unwrap();
@@ -138,10 +140,8 @@ fn main() -> io::Result<()> {
             }
         } else if config.script.is_some() {
             let script = config.script.unwrap();
-            if let Err(err) = run_one_script(&script, &config.args) {
-                eprintln!("Error running {}: {}", script, err);
-                return Err(err);
-            }
+            let code = run_one_script(&script, &config.args);
+            std::process::exit(code);
         }
     }
     Ok(())

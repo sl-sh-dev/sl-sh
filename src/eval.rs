@@ -36,7 +36,7 @@ fn call_lambda(
     environment.loose_symbols = false;
     while looping {
         last_eval = eval(environment, &lambda.body)?;
-        looping = environment.state.recur_num_args.is_some();
+        looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
@@ -106,6 +106,10 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
             io::ErrorKind::Other,
             "Script interupted by SIGINT.",
         ));
+    }
+    // exit was called so just return nil to unwind.
+    if environment.exit_code.is_some() {
+        return Ok(Expression::Atom(Atom::Nil));
     }
     let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {

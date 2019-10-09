@@ -92,7 +92,7 @@ fn get_prompt(environment: &mut Environment) -> String {
     }
 }
 
-pub fn start_interactive(sig_int: Arc<AtomicBool>) {
+pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
     con.history.inc_append = true;
@@ -201,15 +201,23 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) {
                 }
             }
             Err(err) => match err.kind() {
-                ErrorKind::UnexpectedEof => return,
+                ErrorKind::UnexpectedEof => return 0,
                 ErrorKind::Interrupted => {}
                 _ => println!("Error on input: {}", err),
             },
         }
+        if environment.borrow().exit_code.is_some() {
+            break;
+        }
+    }
+    if environment.borrow().exit_code.is_some() {
+        environment.borrow().exit_code.unwrap()
+    } else {
+        0
     }
 }
 
-pub fn read_stdin() {
+pub fn read_stdin() -> i32 {
     let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),
@@ -231,7 +239,7 @@ pub fn read_stdin() {
     let mut input = String::new();
     loop {
         match io::stdin().read_line(&mut input) {
-            Ok(0) => return,
+            Ok(0) => return 0,
             Ok(_n) => {
                 let input = input.trim();
                 environment.state.stdout_status = None;
@@ -263,9 +271,17 @@ pub fn read_stdin() {
             }
             Err(error) => {
                 eprintln!("ERROR reading stdin: {}", error);
-                return;
+                return 66;
             }
         }
+        if environment.exit_code.is_some() {
+            break;
+        }
+    }
+    if environment.exit_code.is_some() {
+        environment.exit_code.unwrap()
+    } else {
+        0
     }
 }
 
@@ -376,7 +392,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
     }
 }
 
-pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
+pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
@@ -387,5 +403,15 @@ pub fn run_one_script(command: &str, args: &[String]) -> io::Result<()> {
         .borrow_mut()
         .data
         .insert("args".to_string(), Rc::new(Expression::with_list(exp_args)));
-    run_script(command, &mut environment)
+    if let Err(err) = run_script(command, &mut environment) {
+        eprintln!("Error running {}: {}", command, err);
+        if environment.exit_code.is_none() {
+            return 1;
+        }
+    }
+    if environment.exit_code.is_some() {
+        environment.exit_code.unwrap()
+    } else {
+        0
+    }
 }

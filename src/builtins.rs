@@ -811,6 +811,28 @@ fn builtin_loose_symbols(
     Ok(last_eval)
 }
 
+fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() > 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "exit can only take an optional integer (exit code- defaults to 0)",
+        ))
+    } else if args.len() == 1 {
+        if let Expression::Atom(Atom::Int(exit_code)) = &args[0] {
+            environment.exit_code = Some(*exit_code as i32);
+            Ok(Expression::Atom(Atom::Nil))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "exit can only take an optional integer (exit code- defaults to 0)",
+            ))
+        }
+    } else {
+        environment.exit_code = Some(0);
+        Ok(Expression::Atom(Atom::Nil))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -931,6 +953,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "loose-symbols".to_string(),
         Rc::new(Expression::Func(builtin_loose_symbols)),
     );
+    data.insert("exit".to_string(), Rc::new(Expression::Func(builtin_exit)));
 
     data.insert(
         "=".to_string(),
