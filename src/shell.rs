@@ -22,21 +22,21 @@ use crate::reader::*;
 use crate::types::*;
 
 fn load_scripts(environment: &mut Environment, home: &str) {
-    let mut script = format!("{}/.config/slsh/slsh_std.lisp", home);
+    let mut script = format!("{}/.config/sl-sh/slsh_std.lisp", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!(
             "WARNING: Failed to load standard macros script {}: {}",
             script, err
         );
     }
-    script = format!("{}/.config/slsh/slsh_shell.lisp", home);
+    script = format!("{}/.config/sl-sh/slsh_shell.lisp", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!(
             "WARNING: Failed to load shell macros script {}: {}",
             script, err
         );
     }
-    script = format!("{}/.config/slsh/slshrc", home);
+    script = format!("{}/.config/sl-sh/slshrc", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!("WARNING: Failed to load init script {}: {}", script, err);
     }
@@ -85,7 +85,7 @@ fn get_prompt(environment: &mut Environment) -> String {
             }
         };
         format!(
-            "\x1b[32m{}:\x1b[34m{}\x1b[37m(slsh)\x1b[32m>\x1b[39m ",
+            "\x1b[32m{}:\x1b[34m{}\x1b[37m(sl-sh)\x1b[32m>\x1b[39m ",
             hostname,
             pwd.display()
         )
@@ -115,7 +115,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    let share_dir = format!("{}/.local/share/slsh", home);
+    let share_dir = format!("{}/.local/share/sl-sh", home);
     if let Err(err) = create_dir_all(&share_dir) {
         eprintln!(
             "WARNING: Unable to create share directory: {}- {}",
@@ -225,7 +225,7 @@ pub fn read_stdin() -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    let share_dir = format!("{}/.local/share/slsh", home);
+    let share_dir = format!("{}/.local/share/sl-sh", home);
     if let Err(err) = create_dir_all(&share_dir) {
         eprintln!(
             "WARNING: Unable to create share directory: {}- {}",

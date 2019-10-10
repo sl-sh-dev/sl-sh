@@ -172,28 +172,14 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                 }
                 Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
             };
-            if key.starts_with('$') {
-                // Should use export, force this?
-                let val = val.make_string(environment)?;
-                let val = match expand_tilde(&val) {
+            if let Expression::Atom(Atom::String(vs)) = val {
+                let vs = match expand_tilde(&vs) {
                     Some(v) => v,
-                    None => val,
+                    None => vs,
                 };
-                if !val.is_empty() {
-                    env::set_var(key[1..].to_string(), val);
-                } else {
-                    env::remove_var(key[1..].to_string());
-                }
-            } else {
-                if let Expression::Atom(Atom::String(vs)) = val {
-                    let vs = match expand_tilde(&vs) {
-                        Some(v) => v,
-                        None => vs,
-                    };
-                    val = Expression::Atom(Atom::String(vs));
-                }
-                scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
+                val = Expression::Atom(Atom::String(vs));
             }
+            scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
             Ok(val)
         } else {
             Err(io::Error::new(
@@ -293,8 +279,48 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
             };
             val = Expression::Atom(Atom::String(vs));
         }
-        set_expression_global(environment, key, Rc::new(val.clone()));
+        //set_expression_global(environment, key, Rc::new(val.clone()));
+        set_expression_current(environment, key, Rc::new(val.clone()));
         Ok(val)
+    }
+}
+
+fn builtin_is_global_scope(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    if args.is_empty() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-global-scope take no forms",
+        ))
+    } else if environment.current_scope.len() == 1 {
+        Ok(Expression::Atom(Atom::True))
+    } else {
+        Ok(Expression::Atom(Atom::Nil))
+    }
+}
+
+fn builtin_to_symbol(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "to-symbol take one form",
+        ))
+    } else {
+        let val = eval(environment, &args[0])?;
+        match val {
+            Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
+            Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
+            Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(format!("{}", i)))),
+            Expression::Atom(Atom::Float(f)) => {
+                Ok(Expression::Atom(Atom::Symbol(format!("{}", f))))
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "to-symbol can only convert strings, symbols, ints and floats to a symbol",
+            )),
+        }
     }
 }
 
@@ -896,6 +922,14 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::Func(builtin_export)),
     );
     data.insert("def".to_string(), Rc::new(Expression::Func(builtin_def)));
+    data.insert(
+        "is-global-scope".to_string(),
+        Rc::new(Expression::Func(builtin_is_global_scope)),
+    );
+    data.insert(
+        "to-symbol".to_string(),
+        Rc::new(Expression::Func(builtin_to_symbol)),
+    );
     data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
     data.insert("let".to_string(), Rc::new(Expression::Func(builtin_let)));
     data.insert(

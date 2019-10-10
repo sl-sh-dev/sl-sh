@@ -45,28 +45,32 @@
 (defmacro | (&rest body)
 	`(pipe ,@body))
 
+(defq pushd nil)
+(defq popd nil)
+(defq dirs nil)
+(defq clear-dirs nil)
+(defq set-dirs-max nil)
 ;; Scope to contain then pushd/popd/dirs functions.
 (let ((dir_stack '()) (dir_stack_max 20))
 	;; Push current directory on the directory stack and change to new directory.
-	(defn pushd (dir) (if (form (cd dir))
+	(setfn pushd (dir) (if (form (cd dir))
 		(progn
-			(setq dir_stack (setfirst $OLDPWD dir_stack))
-			(if (> (length dir_stack) dir_stack_max) (setq dir_stack (butlast dir_stack)))
+			(push dir_stack $OLDPWD)
+			(if (> (length dir_stack) dir_stack_max) (remove-nth 0 dir_stack))
 			t)
 		nil))
 	;; Pop first directory from directory stack and change to it.
-	(defn popd () (if (> (length dir_stack) 0)
-		(progn (cd (first dir_stack))
-		(setq dir_stack (if (<= (length dir_stack) 1) '() (rest dir_stack))) nil)
+	(setfn popd () (if (> (length dir_stack) 0)
+		(cd (pop dir_stack))
 		(println "Dir stack is empty")))
 	;; List the directory stack.
-	(defn dirs ()
+	(setfn dirs ()
 		(for d dir_stack (println d)))
 	;; Clears the directory stack.
-	(defn clear-dirs ()
-		(setq dir_stack '()))
+	(setfn clear-dirs ()
+		(clear dir_stack))
 	;; Sets the max number of directories to save in the stack.
-	(defn set-dirs-max (max)
+	(setfn set-dirs-max (max)
 		(if (and (= (get-type max) "Int")(> max 1))
 			(setq dir_stack_max max)
 			(println "Error, max must be a positive Int greater then one"))))

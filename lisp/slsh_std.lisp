@@ -7,6 +7,9 @@
 (defmacro defn (name args body)
 	`(defq ,name (fn ,args ,body)))
 
+(defmacro setfn (name args body)
+	`(setq ,name (fn ,args ,body)))
+
 (defmacro loop (params bindings body)
 		`((fn ,params ,body) ,@bindings))
 

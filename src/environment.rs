@@ -218,6 +218,20 @@ pub fn set_expression_global(
         .insert(key, expression);
 }
 
+pub fn set_expression_current(
+    environment: &mut Environment,
+    key: String,
+    expression: Rc<Expression>,
+) {
+    environment
+        .current_scope
+        .last()
+        .unwrap() // Always has at least root scope unless horribly broken.
+        .borrow_mut()
+        .data
+        .insert(key, expression);
+}
+
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
     if key.starts_with('$') {
         env::var(&key[1..]).is_ok()

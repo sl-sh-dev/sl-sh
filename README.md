@@ -33,7 +33,8 @@ print | | builtin |
 println | | builtin |
 format | | builtin |
 progn | forms+ | builtin | Runs each form in turn left to right.
-set | symbol/value | builtin | Sets something into the current scopes symbol table.  Use quote to set a symbol directly (see setq).
+def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
+set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
 let | | builtin |
 quote | | builtin |
