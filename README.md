@@ -36,7 +36,7 @@ progn | forms+ | builtin | Runs each form in turn left to right.
 def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
 set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
-let | | builtin |
+let | | macro |
 quote | | builtin |
 spawn | | builtin | Currently unavailable.  Use run-bg for background processes.
 and | | builtin |
@@ -45,7 +45,8 @@ not | | builtin |
 null | | builtin |
 is-def | symbol | builtin | Return true if symbol is defined for current scope.
 get-type | form | builtin | Evalute the form and return the type as a string.
-defmacro | | builtin |
+macro | | builtin |
+defmacro | | macro |
 expand-macro | | builtin |
 recur | | builtin |
 gensym | | builtin |
@@ -77,6 +78,7 @@ These forms are non-destructive, they will not change any input lists.
 Form | Args | Type | description
 -----|------|------|------------
 list | forms+ | builtin | Produces a list with provided forms as elements.
+make-list | capacity/default | builtin | Make a list with capacity and all values set to default.  Both args are optional, default is nill.
 first | list | builtin | Produces the first element of the provided list.  Nil if the list is empty.
 rest | list | builtin | Produces the provided list minus the first element.  Nil if the list is empty or one element.
 length | list/str | builtin | Returns the length of the provided list or string.

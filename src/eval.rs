@@ -77,7 +77,7 @@ fn expand_macro(
         args,
         false,
     ) {
-        Ok(scope) => scope,
+        Ok(_) => {}
         Err(err) => return Err(err),
     };
     new_scope.outer = Some(environment.current_scope.last().unwrap().clone());

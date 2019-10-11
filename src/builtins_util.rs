@@ -127,10 +127,12 @@ fn setup_args_final(
     use_rest: bool,
 ) -> io::Result<()> {
     if vars.len() < min_params || (!use_rest && vars.len() > min_params) {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "wrong number of parameters",
-        ));
+        let msg = format!(
+            "wrong number of parameters, expected {} got {}",
+            min_params,
+            vars.len()
+        );
+        return Err(io::Error::new(io::ErrorKind::Other, msg));
     } else if use_rest {
         let rest_name = var_names.pop().unwrap();
         for (k, v) in var_names.iter().zip(vars.iter()) {

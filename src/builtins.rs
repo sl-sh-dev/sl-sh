@@ -5,7 +5,6 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -342,67 +341,6 @@ fn builtin_fn(environment: &mut Environment, parts: &[Expression]) -> io::Result
     }
 }
 
-fn builtin_let(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() < 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "let requires at least two forms",
-        ));
-    }
-    let mut data: HashMap<String, Rc<Expression>> = HashMap::new();
-    match &args[0] {
-        Expression::Atom(Atom::Nil) => {}
-        Expression::List(list) => {
-            for binding in list.borrow().iter() {
-                if let Expression::List(binding_pair) = binding {
-                    let binding_pair = binding_pair.borrow();
-                    if binding_pair.is_empty() || binding_pair.len() > 2 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "let bindings must be a symbol and/or a form",
-                        ));
-                    }
-                    if let Expression::Atom(Atom::Symbol(s)) = binding_pair.get(0).unwrap() {
-                        if binding_pair.len() == 2 {
-                            data.insert(
-                                s.clone(),
-                                Rc::new(eval(environment, binding_pair.get(1).unwrap())?),
-                            );
-                        } else {
-                            data.insert(s.clone(), Rc::new(Expression::Atom(Atom::Nil)));
-                        }
-                    }
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "let bindings must be lists",
-                    ));
-                }
-            }
-        }
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "let first form must be a list",
-            ))
-        }
-    }
-    let new_scope = Rc::new(RefCell::new(Scope::with_data(Some(environment), data)));
-    environment.current_scope.push(new_scope.clone());
-    let mut args = match to_args(environment, &args[1..]) {
-        Ok(args) => args,
-        Err(err) => {
-            environment.current_scope.pop();
-            return Err(err);
-        }
-    };
-    environment.current_scope.pop();
-    match args.pop() {
-        Some(a) => Ok(a),
-        None => Ok(Expression::Atom(Atom::Nil)),
-    }
-}
-
 fn builtin_quote(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"));
@@ -431,8 +369,9 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
                 if let Expression::List(new_list) = nl {
-                    for item in new_list.borrow_mut().drain(..) {
-                        output.push(item);
+                    //for item in new_list.borrow_mut().drain(..) {
+                    for item in new_list.borrow().iter() {
+                        output.push(item.clone());
                     }
                 } else {
                     return Err(io::Error::new(
@@ -581,30 +520,20 @@ fn builtin_get_type(environment: &mut Environment, args: &[Expression]) -> io::R
     Ok(Expression::Atom(Atom::String(arg0.display_type())))
 }
 
-fn builtin_defmacro(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 3 {
+fn builtin_macro(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "defmacro can only have three forms (symbol, bindings and body)",
+            "macro can only have two forms (bindings and body)",
         ))
     } else {
         let mut args = args.iter();
-        let name = args.next().unwrap();
         let params = args.next().unwrap();
         let body = args.next().unwrap();
-        if let Expression::Atom(Atom::Symbol(s)) = name {
-            let m = Rc::new(Expression::Atom(Atom::Macro(Macro {
-                params: Box::new(params.clone()),
-                body: Box::new(body.clone()),
-            })));
-            set_expression_global(environment, s.clone(), m);
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "defmacro first argument must be a symbol",
-            ))
-        }
+        Ok(Expression::Atom(Atom::Macro(Macro {
+            params: Box::new(params.clone()),
+            body: Box::new(body.clone()),
+        })))
     }
 }
 
@@ -931,7 +860,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::Func(builtin_to_symbol)),
     );
     data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
-    data.insert("let".to_string(), Rc::new(Expression::Func(builtin_let)));
     data.insert(
         "quote".to_string(),
         Rc::new(Expression::Func(builtin_quote)),
@@ -953,8 +881,8 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::Func(builtin_get_type)),
     );
     data.insert(
-        "defmacro".to_string(),
-        Rc::new(Expression::Func(builtin_defmacro)),
+        "macro".to_string(),
+        Rc::new(Expression::Func(builtin_macro)),
     );
     data.insert(
         "expand-macro".to_string(),

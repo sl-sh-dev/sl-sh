@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -11,10 +12,39 @@ use crate::types::*;
 
 fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.is_empty() {
-        return Ok(Expression::Atom(Atom::Nil));
+        return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
     }
     let args = to_args(environment, args)?;
     Ok(Expression::with_list(args))
+}
+
+fn builtin_make_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() > 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "make-list takes at most two forms",
+        ));
+    }
+    if args.is_empty() {
+        return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
+    }
+    let cap = if let Expression::Atom(Atom::Int(c)) = eval(environment, &args[0])? {
+        c
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "make-list first arg must be an integer",
+        ));
+    };
+    let mut list = Vec::with_capacity(cap as usize);
+    if args.len() == 2 {
+        let v = eval(environment, &args[1])?;
+        for _ in 0..cap {
+            list.push(v.clone());
+        }
+    }
+
+    Ok(Expression::with_list(list))
 }
 
 fn builtin_list_first(
@@ -597,6 +627,10 @@ fn builtin_list_insert_nth(
 
 pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("list".to_string(), Rc::new(Expression::Func(builtin_list)));
+    data.insert(
+        "make-list".to_string(),
+        Rc::new(Expression::Func(builtin_make_list)),
+    );
     data.insert(
         "first".to_string(),
         Rc::new(Expression::Func(builtin_list_first)),
