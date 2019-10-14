@@ -55,7 +55,7 @@ pub fn print(
             args_out(environment, args, add_newline, &mut out)?;
         }
         Some(IOState::FileOverwrite(f)) => {
-            let mut out = File::create(f)?; // as Write
+            let mut out = File::create(f)?;
             args_out(environment, args, add_newline, &mut out)?;
         }
         Some(IOState::Null) => { /* Nothing to do... */ }

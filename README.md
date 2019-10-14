@@ -155,6 +155,40 @@ clear-dirs | | macro | Clears the directory stack.
 set-dirs-max | max | macro | Sets the maximum number of dirs to keep in stack (default 20), must be greater then 1.
 
 
+### File IO Forms
+Forms to read and write files.
+
+Form | Args | Type | description
+-----|------|------|------------
+open | file-name options* | builtin | Open the given file, see table below for open options.
+close | file | builtin | Close the file, if a file has multiple references they all must be closed.  Going out of scope also closes the file.
+flush | file | builtin | Flush the file to disk.
+read-line | file | builtin | Reads and returns a line.  Return nil if the file is at EOF.
+read | file | builtin | Reads the file and parses it into an Expression.
+write-line | file line | builtin | Writes the line, adds a newline at end.
+write-string | file string | builtin | Writes the string, does not add a newline at end.
+
+Options to open, one or more of these can be added to open after the filename.
+A file can only be opened for reading or writing (read is default).
+
+Option | Description
+-------|-----------
+:read | Open file for reading, this is the default.
+:write | Open file for writing.
+:append | Open file for writing and append new data to end.
+:truncate | Open file for write and delete all existing data.
+:create | Create the file if it does not exist and open for writing.
+:create-new | Create if does not exist, error if it does and open for writing.
+:on-error-nil | If open has an error then return nil instead of producing an error.
+
+Notes on closing.  Files will close when they go out of scope.  Using close will
+cause a reference to a file to be marked close (removes that reference).  If
+there are more then one references to a file it will not actually close until
+all are released.  Close will also flush the file even if it is not the final
+reference.  If a reference to a file is captured in a closure that can also keep
+it open (closures currently capture the entire scope not just used symbols).
+
+
 ### Math Forms
 Form | Args | Type | description
 -----|------|------|------------

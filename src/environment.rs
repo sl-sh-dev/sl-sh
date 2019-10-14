@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::builtins::add_builtins;
 use crate::builtins_file::add_file_builtins;
+use crate::builtins_io::add_io_builtins;
 use crate::builtins_list::add_list_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_str::add_str_builtins;
@@ -70,6 +71,7 @@ impl Default for Scope {
         add_str_builtins(&mut data);
         add_list_builtins(&mut data);
         add_file_builtins(&mut data);
+        add_io_builtins(&mut data);
         Scope { data, outer: None }
     }
 }
@@ -113,11 +115,11 @@ pub struct Environment {
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
     // This is the environment's root (global scope), it will also be part of
-    // higher level scopes and in the curren_scope vector (the first item).
+    // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
     pub root_scope: Rc<RefCell<Scope>>,
     // Use as a stack of scopes, entering a new pushes and it get popped on exit
-    // The actual lookups are done use the scope and it's outer chain NOT this stack.
+    // The actual lookups are done using the scope and it's outer chain NOT this stack.
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
 }
 

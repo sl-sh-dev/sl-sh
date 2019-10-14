@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{self, Read, Write};
+use std::fs::File;
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
@@ -76,12 +77,20 @@ pub enum ProcessState {
 }
 
 #[derive(Clone)]
+pub enum FileState {
+    Read(Rc<RefCell<BufReader<File>>>),
+    Write(Rc<RefCell<BufWriter<File>>>),
+    Closed,
+}
+
+#[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
     List(Rc<RefCell<Vec<Expression>>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Process(ProcessState),
+    File(FileState),
 }
 
 impl fmt::Debug for Expression {
@@ -98,6 +107,7 @@ impl fmt::Debug for Expression {
                 "Expression::Process(ProcessState::Over({}, {}))",
                 pid, exit_status
             ),
+            Expression::File(_) => write!(f, "Expression::File(_)"),
         }
     }
 }
@@ -125,6 +135,7 @@ impl Expression {
                 res.push(')');
                 res
             }
+            Expression::File(_) => "File".to_string(),
         }
     }
 
@@ -134,6 +145,7 @@ impl Expression {
             Expression::Process(_) => "Process".to_string(),
             Expression::Func(_) => "Func".to_string(),
             Expression::List(_) => "List".to_string(),
+            Expression::File(_) => "File".to_string(),
         }
     }
 
@@ -174,6 +186,14 @@ impl Expression {
                 res.push(')');
                 Ok(res)
             }
+            Expression::File(FileState::Read(file)) => {
+                let mut f = file.borrow_mut();
+                let mut out_str = String::new();
+                f.read_to_string(&mut out_str)?;
+                Ok(out_str)
+            }
+            Expression::File(FileState::Write(_)) => Ok("".to_string()), //  XXX error instead?
+            Expression::File(FileState::Closed) => Ok("".to_string()),   //  XXX error instead?
         }
     }
 
@@ -196,6 +216,7 @@ impl Expression {
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
 
@@ -215,22 +236,20 @@ impl Expression {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
                 }
             }
-            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a integer")),
-            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a integer")),
+            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
 
     pub fn writef(&self, environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
         match self {
             Expression::Atom(a) => write!(writer, "{}", a.to_string())?,
-            Expression::Process(ProcessState::Running(_pid)) => {
-                // Maybe should write anything available?
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Can not write, process not complete",
-                ));
-            }
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+            Expression::Process(ps) => {
+                let pid = match ps {
+                    ProcessState::Running(pid) => pid,
+                    ProcessState::Over(pid, _exit_status) => pid,
+                };
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
@@ -275,6 +294,29 @@ impl Expression {
                     write!(writer, " ")?;
                 }
                 write!(writer, ")")?;
+            }
+            Expression::File(FileState::Read(file)) => {
+                let mut f = file.borrow_mut();
+                let mut buf = [0; 1024];
+                loop {
+                    match f.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => writer.write_all(&buf[..n])?,
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+            Expression::File(FileState::Write(_)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Can not read from a write file.",
+                ))
+            }
+            Expression::File(FileState::Closed) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Can not read from a closed file.",
+                ))
             }
         }
         writer.flush()?;

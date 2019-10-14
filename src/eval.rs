@@ -213,6 +213,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Process(state) => Ok(Expression::Process(*state)),
+        Expression::File(_) => Ok(Expression::Atom(Atom::Nil)),
     }
 }
 

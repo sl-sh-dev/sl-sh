@@ -185,6 +185,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                                 }
                                 match exp {
                                     Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                                    Expression::File(_) => { /* don't print file contents */ }
                                     Expression::Process(_) => { /* should have used stdout */ }
                                     _ => {
                                         if let Err(err) = exp.write(&environment.borrow()) {

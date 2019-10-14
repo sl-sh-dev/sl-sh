@@ -1,13 +1,13 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
 use glob::glob;
-//use nix::sys::signal::{self, SigHandler, Signal};
 use nix::{
     sys::{
         signal::{self, kill, SigHandler, Signal},
@@ -33,7 +33,6 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
         }
         Err(err) => {
             eprintln!("Error waiting for pid {}, {}", pid, err);
-            //Err(err)
             environment.procs.borrow_mut().remove(&pid);
             (true, None)
         }
@@ -395,6 +394,24 @@ pub fn do_command(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (form).",
             ))
+        }
+        Some(Expression::File(FileState::Read(file))) => {
+            // If there is ever a Windows version then use raw_handle instead of raw_fd.
+            unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
+        }
+        Some(Expression::File(FileState::Write(_))) => {
+            if foreground {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            }
+        }
+        Some(Expression::File(FileState::Closed)) => {
+            if foreground {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            }
         }
         None => {
             if foreground {

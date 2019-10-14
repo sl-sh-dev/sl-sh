@@ -310,6 +310,35 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
                 environment.state.pipe_pgid = Some(pid);
             }
         }
+        if let Ok(Expression::File(FileState::Write(f))) = &res {
+            let mut do_write = false;
+            match &environment.data_in {
+                Some(Expression::Atom(Atom::Nil)) => {}
+                Some(Expression::Atom(_atom)) => {
+                    do_write = true;
+                }
+                Some(Expression::Process(ProcessState::Running(_pid))) => {
+                    do_write = true;
+                }
+                Some(Expression::File(FileState::Read(_file))) => {
+                    do_write = true;
+                }
+                Some(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Invalid expression state before file.",
+                    ))
+                }
+                None => {}
+            }
+            if do_write {
+                environment
+                    .data_in
+                    .as_ref()
+                    .unwrap()
+                    .writef(environment, &mut *f.borrow_mut())?;
+            }
+        }
         out = res.unwrap();
         i += 1;
     }

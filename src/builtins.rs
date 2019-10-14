@@ -170,6 +170,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                     ))
                 }
                 Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+                Expression::File(f) => Expression::File(f),
             };
             if let Expression::Atom(Atom::String(vs)) = val {
                 let vs = match expand_tilde(&vs) {
@@ -222,6 +223,16 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
                 ))
             }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+            Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
+                val.make_string(environment)
+                    .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
+            )),
+            Expression::File(FileState::Write(_)) => {
+                Expression::Atom(Atom::String("::WRITE FILE::".to_string()))
+            }
+            Expression::File(FileState::Closed) => {
+                Expression::Atom(Atom::String("::CLOSED FILE::".to_string()))
+            }
         };
         let val = val.make_string(environment)?;
         let val = match expand_tilde(&val) {
@@ -270,6 +281,7 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
                 ))
             }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+            Expression::File(f) => Expression::File(f),
         };
         if let Expression::Atom(Atom::String(vs)) = val {
             let vs = match expand_tilde(&vs) {
@@ -278,7 +290,6 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
             };
             val = Expression::Atom(Atom::String(vs));
         }
-        //set_expression_global(environment, key, Rc::new(val.clone()));
         set_expression_current(environment, key, Rc::new(val.clone()));
         Ok(val)
     }
