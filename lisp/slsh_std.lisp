@@ -64,3 +64,32 @@
 					(progn (insert-nth idx (nth 0 el) params) (insert-nth idx (nth 1 el) bindings))
 					(println "ERROR"))))
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-list (length vals)) (make-list (length vals))))
+
+(defn map (fun items) (progn
+	(defq new-items (make-list (length items)))
+	(for i items
+		(push new-items (fun i)))
+	new-items))
+
+(defn map! (fun items) (progn
+	(fori i it items
+		(setnth i (fun it) items))
+	items))
+
+(defn reverse (items) (progn
+	(defn irev (items new-items num)
+		(if (>= num 0) (progn (push new-items (nth num items))(recur items new-items (- num 1)))))
+	(defq new-items (make-list (length items)))
+	(irev items new-items (- (length items) 1))
+	new-items))
+
+(defn reverse! (items) (progn
+	(defn irev (items first last)
+		(if (> last first) (progn
+			(defq ftemp (nth first items))
+			(setnth first (nth last items) items)
+			(setnth last ftemp items)
+			(recur items (+ first 1) (- last 1)))))
+	(irev items 0 (- (length items) 1))
+	items))
+
