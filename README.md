@@ -92,6 +92,8 @@ setlast | list/form | builtin | Produces a new list with the provided form appen
 setbutlast | list/list | builtin | Produces a new list with the last element from then second list and the rest all the elements from the first.
 append | list/list | builtin | Produces a new list by appending the second onto the first.
 is-empty | list | builtin | Returns true if the provided list is empty, nil/false otherwise.
+map | lambda list | macro | Returns a new list made by applying the lambda to each item in the provided list.
+reverse | list | macro | Returns a new list made by reversing the elements of the provided list.
 
 ### Destructive List Forms
 These list forms will change the underlying list they work on.
@@ -104,6 +106,8 @@ push | list form | builtin | Pushes the provided form onto the end of the list.
 clear | list | builtin | Removes all elements from list, leaves capacity the same.
 remove-nth | index list | builtin | Removes the element at index and shifts all the remaining to the left.
 insert-nth | index form list | builtin | Inserts the provided form into index and moves all other elements to the right.
+map! | lambda list | macro | Modifies a list by applying the lambda to each item in the provided list.
+reverse! | list | macro | Modifies a list by reversing it's elements.
 
 
 ### String Forms
