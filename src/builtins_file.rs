@@ -287,13 +287,14 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
     environment.in_pipe = true;
     let mut out = Expression::Atom(Atom::Nil);
     environment.state.stdout_status = Some(IOState::Pipe);
+    let mut error: Option<io::Result<Expression>> = None;
     let mut i = 1; // Meant 1 here.
     for p in parts {
         if i == parts.len() {
             environment.state.stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
-        environment.data_in = Some(out);
+        environment.data_in = Some(out.clone());
         let res = eval(environment, p);
         if let Err(err) = res {
             environment.in_pipe = false;
@@ -324,19 +325,24 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
                     do_write = true;
                 }
                 Some(_) => {
-                    return Err(io::Error::new(
+                    error = Some(Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Invalid expression state before file.",
-                    ))
+                    )));
+                    break;
                 }
                 None => {}
             }
             if do_write {
-                environment
+                if let Err(err) = environment
                     .data_in
                     .as_ref()
                     .unwrap()
-                    .writef(environment, &mut *f.borrow_mut())?;
+                    .writef(environment, &mut *f.borrow_mut())
+                {
+                    error = Some(Err(err));
+                    break;
+                }
             }
         }
         out = res.unwrap();
@@ -348,7 +354,11 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
         environment.state.pipe_pgid = None;
     }
     environment.state.stdout_status = old_out_status;
-    Ok(out)
+    if error.is_some() {
+        error.unwrap()
+    } else {
+        Ok(out)
+    }
 }
 
 fn builtin_wait(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {

@@ -29,19 +29,23 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
         Err(nix::Error::Sys(nix::errno::Errno::ECHILD)) => {
             // Does not exist.
             environment.procs.borrow_mut().remove(&pid);
+            remove_job(environment, pid);
             (true, None)
         }
         Err(err) => {
             eprintln!("Error waiting for pid {}, {}", pid, err);
             environment.procs.borrow_mut().remove(&pid);
+            remove_job(environment, pid);
             (true, None)
         }
         Ok(WaitStatus::Exited(_, status)) => {
             environment.procs.borrow_mut().remove(&pid);
+            remove_job(environment, pid);
             (true, Some(status))
         }
         Ok(WaitStatus::Stopped(..)) => {
             environment.stopped_procs.borrow_mut().push(pid);
+            mark_job_stopped(environment, pid);
             (true, None)
         }
         Ok(WaitStatus::Continued(_)) => (false, None),
@@ -172,6 +176,22 @@ fn run_command(
     match proc {
         Ok(mut proc) => {
             let pid = Pid::from_raw(proc.id() as i32);
+            if pgid.is_none() {
+                // || !environment.in_pipe {
+                let mut job = Job {
+                    pids: Vec::new(),  //proc.id(),
+                    names: Vec::new(), //command.to_string(),
+                    status: JobStatus::Running,
+                };
+                job.pids.push(proc.id());
+                job.names.push(command.to_string());
+                environment.jobs.borrow_mut().push(job);
+            } else {
+                let mut job = environment.jobs.borrow_mut().pop().unwrap();
+                job.pids.push(proc.id());
+                job.names.push(command.to_string());
+                environment.jobs.borrow_mut().push(job);
+            }
             let pgid = match pgid {
                 Some(pgid) => Pid::from_raw(pgid as i32),
                 None => Pid::from_raw(proc.id() as i32),

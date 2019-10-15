@@ -634,32 +634,100 @@ fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Res
 }
 
 fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
-    for pid in environment.stopped_procs.borrow().iter() {
-        println!("{}", pid);
+    for (i, job) in environment.jobs.borrow().iter().enumerate() {
+        println!(
+            "[{}]\t{}\t{:?}\t{:?}",
+            i,
+            job.status.to_string(),
+            job.pids,
+            job.names
+        );
     }
     Ok(Expression::Atom(Atom::Nil))
 }
 
-fn builtin_fg(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
-    let mut opid: Option<u32> = None;
-    if let Some(pid) = environment.stopped_procs.borrow_mut().pop() {
-        opid = Some(pid);
-    }
-    if let Some(pid) = opid {
-        let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
-        let ppid = Pid::from_raw(pid as i32);
-        if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
-            eprintln!("Error sending sigcont to wake up process: {}.", err);
+fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option<u32> {
+    if !args.is_empty() {
+        let arg = eval(environment, &args[0]);
+        if let Err(err) = arg {
+            eprintln!("Error evaluating form: {}.", err);
+            None
         } else {
-            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
-                let msg = format!("Error making {} foreground in parent: {}", pid, err);
-                eprintln!("{}", msg);
-                //return Err(io::Error::new(io::ErrorKind::Other, msg));
+            let arg = arg.unwrap();
+            if let Expression::Atom(Atom::Int(ji)) = arg {
+                let ji = ji as usize;
+                let jobs = &*environment.jobs.borrow();
+                if ji < jobs.len() {
+                    let pid = jobs[ji].pids[0];
+                    let mut stop_idx: Option<u32> = None;
+                    for (i, sp) in environment.stopped_procs.borrow().iter().enumerate() {
+                        if *sp == pid {
+                            stop_idx = Some(i as u32);
+                            break;
+                        }
+                    }
+                    if let Some(idx) = stop_idx {
+                        environment.stopped_procs.borrow_mut().remove(idx as usize);
+                    }
+                    Some(pid)
+                } else {
+                    eprintln!("Error job id out of range.");
+                    None
+                }
+            } else {
+                eprintln!("Error job id must be integer.");
+                None
             }
-            wait_pid(environment, pid, Some(&term_settings));
         }
+    } else {
+        environment.stopped_procs.borrow_mut().pop()
     }
-    Ok(Expression::Atom(Atom::Nil))
+}
+
+fn builtin_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() > 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "bg can only have one optional form (job id)",
+        ))
+    } else {
+        let opid = get_stopped_pid(environment, args);
+        if let Some(pid) = opid {
+            let ppid = Pid::from_raw(pid as i32);
+            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+                eprintln!("Error sending sigcont to wake up process: {}.", err);
+            } else {
+                mark_job_running(environment, pid);
+            }
+        }
+        Ok(Expression::Atom(Atom::Nil))
+    }
+}
+
+fn builtin_fg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.len() > 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "fg can only have one optional form (job id)",
+        ))
+    } else {
+        let opid = get_stopped_pid(environment, args);
+        if let Some(pid) = opid {
+            let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
+            let ppid = Pid::from_raw(pid as i32);
+            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+                eprintln!("Error sending sigcont to wake up process: {}.", err);
+            } else {
+                if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
+                    let msg = format!("Error making {} foreground in parent: {}", pid, err);
+                    eprintln!("{}", msg);
+                }
+                mark_job_running(environment, pid);
+                wait_pid(environment, pid, Some(&term_settings));
+            }
+        }
+        Ok(Expression::Atom(Atom::Nil))
+    }
 }
 
 fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -908,6 +976,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::Func(builtin_gensym)),
     );
     data.insert("jobs".to_string(), Rc::new(Expression::Func(builtin_jobs)));
+    data.insert("bg".to_string(), Rc::new(Expression::Func(builtin_bg)));
     data.insert("fg".to_string(), Rc::new(Expression::Func(builtin_fg)));
     data.insert(
         "version".to_string(),

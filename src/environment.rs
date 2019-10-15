@@ -99,11 +99,34 @@ impl Scope {
 }
 
 #[derive(Clone, Debug)]
+pub enum JobStatus {
+    Running,
+    Stopped,
+}
+
+impl JobStatus {
+    pub fn to_string(&self) -> String {
+        match self {
+            JobStatus::Running => "Running".to_string(),
+            JobStatus::Stopped => "Stopped".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Job {
+    pub pids: Vec<u32>,
+    pub names: Vec<String>,
+    pub status: JobStatus,
+}
+
+#[derive(Clone, Debug)]
 pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
+    pub jobs: Rc<RefCell<Vec<Job>>>,
     pub in_pipe: bool,
     pub run_background: bool,
     pub is_tty: bool,
@@ -132,6 +155,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         sig_int,
         state: EnvState::default(),
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
+        jobs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,
         run_background: false,
         is_tty: true,
@@ -164,6 +188,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         sig_int,
         state,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
+        jobs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,
         run_background: false,
         is_tty: false,
@@ -260,6 +285,43 @@ pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefC
         loop_scope = scope.borrow().outer.clone();
     }
     None
+}
+
+pub fn mark_job_stopped(environment: &Environment, pid: u32) {
+    'outer: for mut j in environment.jobs.borrow_mut().iter_mut() {
+        for p in &j.pids {
+            if *p == pid {
+                j.status = JobStatus::Stopped;
+                break 'outer;
+            }
+        }
+    }
+}
+
+pub fn mark_job_running(environment: &Environment, pid: u32) {
+    'outer: for mut j in environment.jobs.borrow_mut().iter_mut() {
+        for p in &j.pids {
+            if *p == pid {
+                j.status = JobStatus::Running;
+                break 'outer;
+            }
+        }
+    }
+}
+
+pub fn remove_job(environment: &Environment, pid: u32) {
+    let mut idx: Option<usize> = None;
+    'outer: for (i, j) in environment.jobs.borrow_mut().iter_mut().enumerate() {
+        for p in &j.pids {
+            if *p == pid {
+                idx = Some(i);
+                break 'outer;
+            }
+        }
+    }
+    if let Some(i) = idx {
+        environment.jobs.borrow_mut().remove(i);
+    }
 }
 
 pub fn add_process(environment: &Environment, process: Child) -> u32 {

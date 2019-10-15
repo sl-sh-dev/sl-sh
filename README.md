@@ -50,9 +50,10 @@ defmacro | | macro |
 expand-macro | | builtin |
 recur | | builtin |
 gensym | | builtin |
-jobs | | builtin |
-fg | | builtin |
-version | | builtin |
+jobs | | builtin | List running jobs and status (stopped/running).
+bg | job_id | builtin | Make a stopped job run in the background (defaults to last stopped job or select by index from jobs form).
+fg | job_id | builtin | Make a stopped job run in the foreground again (defaults to last stopped job or select by index from jobs form).
+version | | builtin | Display the current version.
 command | | builtin |
 run-bg | | builtin |
 form | | builtin |
