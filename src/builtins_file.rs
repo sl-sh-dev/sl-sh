@@ -297,9 +297,8 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
         environment.data_in = Some(out.clone());
         let res = eval(environment, p);
         if let Err(err) = res {
-            environment.in_pipe = false;
-            environment.state.stdout_status = old_out_status;
-            return Err(err);
+            error = Some(Err(err));
+            break;
         }
         if let Ok(Expression::Process(ProcessState::Running(pid))) = res {
             if environment.state.pipe_pgid.is_none() {
@@ -345,14 +344,23 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
                 }
             }
         }
-        out = res.unwrap();
+        if let Ok(Expression::File(FileState::Read(_))) = &res {
+            if i > 1 {
+                error = Some(Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Not a valid place for a read file (must be at start of pipe).",
+                )));
+                break;
+            }
+        }
+        if res.is_ok() {
+            out = res.unwrap();
+        }
         i += 1;
     }
     environment.data_in = None;
     environment.in_pipe = false;
-    if !environment.in_pipe {
-        environment.state.pipe_pgid = None;
-    }
+    environment.state.pipe_pgid = None;
     environment.state.stdout_status = old_out_status;
     if error.is_some() {
         error.unwrap()
