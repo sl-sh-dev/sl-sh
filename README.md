@@ -31,6 +31,8 @@ load | | builtin |
 if | | builtin |
 print | | builtin |
 println | | builtin |
+eprint | | builtin |
+eprintln | | builtin |
 format | | builtin |
 progn | forms+ | builtin | Runs each form in turn left to right.
 def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
