@@ -17,16 +17,34 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
             "open takes at least one form (a file name)",
         ))
     } else {
+        let arg_len = args.len();
         let mut args = args.iter();
-        let file_name = if let Expression::Atom(Atom::String(name)) =
-            eval(environment, &args.next().unwrap())?
-        {
-            name.clone()
-        } else {
-            return Err(io::Error::new(
+        let a = args.next().unwrap();
+        if let Expression::Atom(Atom::Symbol(sym)) = &a {
+            let ret = match &sym[..] {
+                ":stdin" => Some(Expression::File(FileState::Stdin)),
+                ":stdout" => Some(Expression::File(FileState::Stdout)),
+                ":stderr" => Some(Expression::File(FileState::Stderr)),
+                _ => None,
+            };
+            if ret.is_some() {
+                if arg_len > 1 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "open: if first form is a symbol then other forms not valid",
+                    ));
+                }
+                return Ok(ret.unwrap());
+            }
+        }
+        let file_name = match eval(environment, &a)? {
+            Expression::Atom(Atom::String(name)) => name.clone(),
+            _ => {
+                return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "open: first form must evaluate to a string (filename)",
+                "open: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
             ));
+            }
         };
         let mut opts = OpenOptions::new();
         let mut is_read = false;

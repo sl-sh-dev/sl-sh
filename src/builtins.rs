@@ -119,6 +119,16 @@ fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Re
     print(environment, &args, true)
 }
 
+fn builtin_eprint(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args: Vec<Expression> = to_args(environment, args)?;
+    eprint(environment, &args, false)
+}
+
+fn builtin_eprintln(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args: Vec<Expression> = to_args(environment, args)?;
+    eprint(environment, &args, true)
+}
+
 fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = to_args_str(environment, args)?;
     let mut res = String::new();
@@ -223,6 +233,16 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
                 ))
             }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
+            Expression::File(FileState::Stdin) => Expression::Atom(Atom::String(
+                val.make_string(environment)
+                    .unwrap_or_else(|_| "STDIN FAILED".to_string()),
+            )),
+            Expression::File(FileState::Stdout) => {
+                Expression::Atom(Atom::String("::STDOUT::".to_string()))
+            }
+            Expression::File(FileState::Stderr) => {
+                Expression::Atom(Atom::String("::STDERR::".to_string()))
+            }
             Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
                 val.make_string(environment)
                     .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
@@ -915,6 +935,14 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert(
         "println".to_string(),
         Rc::new(Expression::Func(builtin_println)),
+    );
+    data.insert(
+        "eprint".to_string(),
+        Rc::new(Expression::Func(builtin_eprint)),
+    );
+    data.insert(
+        "eprintln".to_string(),
+        Rc::new(Expression::Func(builtin_eprintln)),
     );
     data.insert(
         "format".to_string(),

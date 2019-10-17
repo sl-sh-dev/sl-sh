@@ -72,6 +72,18 @@ impl Default for Scope {
         add_list_builtins(&mut data);
         add_file_builtins(&mut data);
         add_io_builtins(&mut data);
+        data.insert(
+            "*stdin*".to_string(),
+            Rc::new(Expression::File(FileState::Stdin)),
+        );
+        data.insert(
+            "*stdout*".to_string(),
+            Rc::new(Expression::File(FileState::Stdout)),
+        );
+        data.insert(
+            "*stderr*".to_string(),
+            Rc::new(Expression::File(FileState::Stderr)),
+        );
         Scope { data, outer: None }
     }
 }

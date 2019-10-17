@@ -39,6 +39,58 @@ fn args_out(
     Ok(())
 }
 
+fn print_to_oe(
+    environment: &mut Environment,
+    args: &[Expression],
+    add_newline: bool,
+    default_error: bool,
+    key: &str,
+) -> io::Result<()> {
+    let out = get_expression(environment, key);
+    match out {
+        Some(out) => {
+            if let Expression::File(f) = &*out {
+                match f {
+                    FileState::Stdout => {
+                        let stdout = io::stdout();
+                        let mut out = stdout.lock();
+                        args_out(environment, args, add_newline, &mut out)?;
+                    }
+                    FileState::Stderr => {
+                        let stdout = io::stderr();
+                        let mut out = stdout.lock();
+                        args_out(environment, args, add_newline, &mut out)?;
+                    }
+                    FileState::Write(f) => {
+                        args_out(environment, args, add_newline, &mut *f.borrow_mut())?;
+                    }
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "ERROR: Can not print to a non-writable file.",
+                        ));
+                    }
+                }
+            } else {
+                let msg = format!("ERROR: {} is not a file!", key);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+        }
+        None => {
+            if default_error {
+                let stdout = io::stderr();
+                let mut out = stdout.lock();
+                args_out(environment, args, add_newline, &mut out)?;
+            } else {
+                let stdout = io::stdout();
+                let mut out = stdout.lock();
+                args_out(environment, args, add_newline, &mut out)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn print(
     environment: &mut Environment,
     args: &[Expression],
@@ -60,9 +112,34 @@ pub fn print(
         }
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
-            let stdout = io::stdout();
-            let mut out = stdout.lock();
+            print_to_oe(environment, args, add_newline, false, "*stdout*")?;
+        }
+    };
+    Ok(Expression::Atom(Atom::Nil))
+}
+
+pub fn eprint(
+    environment: &mut Environment,
+    args: &[Expression],
+    add_newline: bool,
+) -> io::Result<Expression> {
+    match &environment.state.stderr_status {
+        Some(IOState::FileAppend(f)) => {
+            let mut out = std::fs::OpenOptions::new()
+                .read(false)
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(&f)?;
             args_out(environment, args, add_newline, &mut out)?;
+        }
+        Some(IOState::FileOverwrite(f)) => {
+            let mut out = File::create(f)?;
+            args_out(environment, args, add_newline, &mut out)?;
+        }
+        Some(IOState::Null) => { /* Nothing to do... */ }
+        _ => {
+            print_to_oe(environment, args, add_newline, true, "*stderr*")?;
         }
     };
     Ok(Expression::Atom(Atom::Nil))

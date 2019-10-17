@@ -78,6 +78,9 @@ pub enum ProcessState {
 
 #[derive(Clone)]
 pub enum FileState {
+    Stdin,
+    Stdout,
+    Stderr,
     Read(Rc<RefCell<BufReader<File>>>),
     Write(Rc<RefCell<BufWriter<File>>>),
     Closed,
@@ -186,6 +189,15 @@ impl Expression {
                 res.push(')');
                 Ok(res)
             }
+            Expression::File(FileState::Stdin) => {
+                let f = io::stdin();
+                let mut f = f.lock();
+                let mut out_str = String::new();
+                f.read_to_string(&mut out_str)?;
+                Ok(out_str)
+            }
+            Expression::File(FileState::Stdout) => Ok("".to_string()), //  XXX error instead?
+            Expression::File(FileState::Stderr) => Ok("".to_string()), //  XXX error instead?
             Expression::File(FileState::Read(file)) => {
                 let mut f = file.borrow_mut();
                 let mut out_str = String::new();
@@ -295,6 +307,18 @@ impl Expression {
                 }
                 write!(writer, ")")?;
             }
+            Expression::File(FileState::Stdin) => {
+                let f = io::stdin();
+                let mut f = f.lock();
+                let mut buf = [0; 1024];
+                loop {
+                    match f.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => writer.write_all(&buf[..n])?,
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
             Expression::File(FileState::Read(file)) => {
                 let mut f = file.borrow_mut();
                 let mut buf = [0; 1024];
@@ -306,17 +330,8 @@ impl Expression {
                     }
                 }
             }
-            Expression::File(FileState::Write(_)) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Can not read from a write file.",
-                ))
-            }
-            Expression::File(FileState::Closed) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Can not read from a closed file.",
-                ))
+            Expression::File(_) => {
+                return Err(io::Error::new(io::ErrorKind::Other, "Not a readable file."))
             }
         }
         writer.flush()?;

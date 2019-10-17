@@ -415,23 +415,16 @@ pub fn do_command(
                 "Invalid expression state before command (form).",
             ))
         }
+        Some(Expression::File(FileState::Stdin)) => Stdio::inherit(),
         Some(Expression::File(FileState::Read(file))) => {
             // If there is ever a Windows version then use raw_handle instead of raw_fd.
             unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
         }
-        Some(Expression::File(FileState::Write(_))) => {
-            if foreground {
-                Stdio::inherit()
-            } else {
-                Stdio::null()
-            }
-        }
-        Some(Expression::File(FileState::Closed)) => {
-            if foreground {
-                Stdio::inherit()
-            } else {
-                Stdio::null()
-            }
+        Some(Expression::File(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (not a readable file).",
+            ))
         }
         None => {
             if foreground {

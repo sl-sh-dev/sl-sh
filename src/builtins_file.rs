@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::hash::BuildHasher;
-use std::io;
+use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -276,6 +276,40 @@ fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
+    let mut do_write = false;
+    match &environment.data_in {
+        Some(Expression::Atom(Atom::Nil)) => {}
+        Some(Expression::Atom(_atom)) => {
+            do_write = true;
+        }
+        Some(Expression::Process(ProcessState::Running(_pid))) => {
+            do_write = true;
+        }
+        Some(Expression::File(FileState::Stdin)) => {
+            do_write = true;
+        }
+        Some(Expression::File(FileState::Read(_file))) => {
+            do_write = true;
+        }
+        Some(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before file.",
+            ));
+        }
+        None => {}
+    }
+    if do_write {
+        environment
+            .data_in
+            .as_ref()
+            .unwrap()
+            .writef(environment, writer)?;
+    }
+    Ok(())
+}
+
 fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
     if environment.in_pipe {
         return Err(io::Error::new(
@@ -310,38 +344,26 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
                 environment.state.pipe_pgid = Some(pid);
             }
         }
-        if let Ok(Expression::File(FileState::Write(f))) = &res {
-            let mut do_write = false;
-            match &environment.data_in {
-                Some(Expression::Atom(Atom::Nil)) => {}
-                Some(Expression::Atom(_atom)) => {
-                    do_write = true;
-                }
-                Some(Expression::Process(ProcessState::Running(_pid))) => {
-                    do_write = true;
-                }
-                Some(Expression::File(FileState::Read(_file))) => {
-                    do_write = true;
-                }
-                Some(_) => {
-                    error = Some(Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Invalid expression state before file.",
-                    )));
-                    break;
-                }
-                None => {}
+        if let Ok(Expression::File(FileState::Stdout)) = &res {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            if let Err(err) = pipe_write_file(environment, &mut handle) {
+                error = Some(Err(err));
+                break;
             }
-            if do_write {
-                if let Err(err) = environment
-                    .data_in
-                    .as_ref()
-                    .unwrap()
-                    .writef(environment, &mut *f.borrow_mut())
-                {
-                    error = Some(Err(err));
-                    break;
-                }
+        }
+        if let Ok(Expression::File(FileState::Stderr)) = &res {
+            let stderr = io::stderr();
+            let mut handle = stderr.lock();
+            if let Err(err) = pipe_write_file(environment, &mut handle) {
+                error = Some(Err(err));
+                break;
+            }
+        }
+        if let Ok(Expression::File(FileState::Write(f))) = &res {
+            if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
+                error = Some(Err(err));
+                break;
             }
         }
         if let Ok(Expression::File(FileState::Read(_))) = &res {
