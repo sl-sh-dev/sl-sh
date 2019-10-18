@@ -1,5 +1,4 @@
 use std::env;
-use std::fs::File;
 use std::io::{self, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
@@ -301,22 +300,9 @@ fn get_output(
     out_status: &Option<IOState>,
     err_status: &Option<IOState>,
 ) -> io::Result<(Stdio, Stdio)> {
-    let mut out_file: Option<File> = None;
-    let mut out_name: Option<String> = None;
     let out_res = match out_status {
-        Some(IOState::FileAppend(f)) => {
-            let outputs = std::fs::OpenOptions::new()
-                .read(false)
-                .write(true)
-                .append(true)
-                .create(true)
-                .open(&f)?;
-            out_file = Some(outputs.try_clone()?);
-            out_name = Some(f.clone());
-            Stdio::from(outputs)
-        }
         Some(IOState::Null) => Stdio::null(),
-        Some(IOState::Inherit) => Stdio::inherit(),
+        Some(IOState::Inherit) => get_std_io(environment, true)?,
         Some(IOState::Pipe) => Stdio::piped(),
         None => {
             let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
@@ -328,21 +314,8 @@ fn get_output(
         }
     };
     let err_res = match err_status {
-        Some(IOState::FileAppend(f)) => {
-            if out_name.is_some() && &out_name.unwrap() == f {
-                Stdio::from(out_file.unwrap())
-            } else {
-                let outputs = std::fs::OpenOptions::new()
-                    .read(false)
-                    .write(true)
-                    .append(true)
-                    .create(true)
-                    .open(&f)?;
-                Stdio::from(outputs)
-            }
-        }
         Some(IOState::Null) => Stdio::null(),
-        Some(IOState::Inherit) => Stdio::inherit(),
+        Some(IOState::Inherit) => get_std_io(environment, false)?,
         Some(IOState::Pipe) => Stdio::piped(),
         None => {
             let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;

@@ -23,11 +23,12 @@
 
 ;; Redirect both stdout and stderr to the same file, append the output.
 (defmacro out-err>> (file body)
-	`(stdout-to ,file (stderr-to ,file ,body)))
+	`(let ((f nil)) (loose-symbols (setq f (open ,file :create :append))) (stdout-to f (stderr-to f ,body))))
 
 ;; Redirect both stdout and stderr to the same file, truncate the file first.
 (defmacro out-err> (file body)
-	`(progn (file-trunc ,file) (stdout-to ,file (stderr-to ,file ,body))))
+	`(let ((f nil)) (loose-symbols (setq f (open ,file :create :truncate))) (stdout-to f (stderr-to f ,body))))
+	;`(progn (file-trunc ,file) (stdout-to ,file (stderr-to ,file ,body))))
 
 ;; Redirect stdout to null (/dev/null equivelent).
 (defmacro out>null (body)

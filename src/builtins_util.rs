@@ -96,15 +96,6 @@ pub fn print(
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stdout_status {
-        Some(IOState::FileAppend(f)) => {
-            let mut out = std::fs::OpenOptions::new()
-                .read(false)
-                .write(true)
-                .append(true)
-                .create(true)
-                .open(&f)?;
-            args_out(environment, args, add_newline, &mut out)?;
-        }
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
             print_to_oe(environment, args, add_newline, false, "*stdout*")?;
@@ -119,15 +110,6 @@ pub fn eprint(
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stderr_status {
-        Some(IOState::FileAppend(f)) => {
-            let mut out = std::fs::OpenOptions::new()
-                .read(false)
-                .write(true)
-                .append(true)
-                .create(true)
-                .open(&f)?;
-            args_out(environment, args, add_newline, &mut out)?;
-        }
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
             print_to_oe(environment, args, add_newline, true, "*stderr*")?;

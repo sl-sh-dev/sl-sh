@@ -1,8 +1,9 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::hash::BuildHasher;
-use std::io::{self, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -172,18 +173,35 @@ fn internal_output_to(
         let msg = format!("{} must have at least two forms", name);
         Err(io::Error::new(io::ErrorKind::Other, msg))
     } else {
-        let arg0 = eval(environment, &args[0])?;
-        if let Expression::Atom(Atom::String(s)) = &arg0 {
-            if is_stdout {
-                environment.state.stdout_status = Some(IOState::FileAppend(s.clone()));
-            } else {
-                environment.state.stderr_status = Some(IOState::FileAppend(s.clone()));
+        let file = match eval(environment, &args[0])? {
+            Expression::Atom(Atom::String(s)) => {
+                let outputs = std::fs::OpenOptions::new()
+                    .read(false)
+                    .write(true)
+                    .append(true)
+                    .create(true)
+                    .open(&s)?;
+                Expression::File(FileState::Write(Rc::new(RefCell::new(BufWriter::new(
+                    outputs,
+                )))))
             }
+            Expression::File(f) => Expression::File(f),
+            _ => {
+                let msg = format!("{} must have a file", name);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+        };
+        let new_scope = build_new_scope(Some(environment.current_scope.last().unwrap().clone()));
+        environment.current_scope.push(new_scope);
+        if is_stdout {
+            set_expression_current(environment, "*stdout*".to_string(), Rc::new(file));
+            environment.state.stdout_status = Some(IOState::Inherit);
         } else {
-            let msg = format!("{} must have a file", name);
-            return Err(io::Error::new(io::ErrorKind::Other, msg));
-        }
+            set_expression_current(environment, "*stderr*".to_string(), Rc::new(file));
+            environment.state.stderr_status = Some(IOState::Inherit);
+        };
         let res = builtin_progn(environment, &args[1..]);
+        environment.current_scope.pop();
         if is_stdout {
             environment.state.stdout_status = None;
         } else {

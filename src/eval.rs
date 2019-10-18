@@ -18,20 +18,17 @@ fn call_lambda(
     // current_scope list before ending.
     let mut looping = true;
     let mut last_eval = Expression::Atom(Atom::Nil);
-    let mut new_scope = Scope::default();
+    let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
         environment,
-        Some(&mut new_scope),
+        Some(&mut new_scope.borrow_mut()),
         &lambda.params,
         args,
         true,
     ) {
         return Err(err);
     }
-    new_scope.outer = Some(lambda.capture.clone());
-    environment
-        .current_scope
-        .push(Rc::new(RefCell::new(new_scope)));
+    environment.current_scope.push(new_scope);
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     while looping {
