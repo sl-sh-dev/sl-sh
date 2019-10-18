@@ -272,12 +272,6 @@ fn get_output(
             out_name = Some(f.clone());
             Stdio::from(outputs)
         }
-        Some(IOState::FileOverwrite(f)) => {
-            let outputs = File::create(f)?;
-            out_file = Some(outputs.try_clone()?);
-            out_name = Some(f.clone());
-            Stdio::from(outputs)
-        }
         Some(IOState::Null) => Stdio::null(),
         Some(IOState::Inherit) => Stdio::inherit(),
         Some(IOState::Pipe) => Stdio::piped(),
@@ -301,14 +295,6 @@ fn get_output(
                     .append(true)
                     .create(true)
                     .open(&f)?;
-                Stdio::from(outputs)
-            }
-        }
-        Some(IOState::FileOverwrite(f)) => {
-            if out_name.is_some() && &out_name.unwrap() == f {
-                Stdio::from(out_file.unwrap())
-            } else {
-                let outputs = File::create(f)?;
                 Stdio::from(outputs)
             }
         }

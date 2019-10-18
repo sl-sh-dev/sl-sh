@@ -1,5 +1,4 @@
 use std::env;
-use std::fs::File;
 use std::io::{self, Write};
 use std::iter::FromIterator;
 use std::rc::Rc;
@@ -106,10 +105,6 @@ pub fn print(
                 .open(&f)?;
             args_out(environment, args, add_newline, &mut out)?;
         }
-        Some(IOState::FileOverwrite(f)) => {
-            let mut out = File::create(f)?;
-            args_out(environment, args, add_newline, &mut out)?;
-        }
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
             print_to_oe(environment, args, add_newline, false, "*stdout*")?;
@@ -131,10 +126,6 @@ pub fn eprint(
                 .append(true)
                 .create(true)
                 .open(&f)?;
-            args_out(environment, args, add_newline, &mut out)?;
-        }
-        Some(IOState::FileOverwrite(f)) => {
-            let mut out = File::create(f)?;
             args_out(environment, args, add_newline, &mut out)?;
         }
         Some(IOState::Null) => { /* Nothing to do... */ }

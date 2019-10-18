@@ -19,7 +19,6 @@ use crate::types::*;
 #[derive(Clone, Debug)]
 pub enum IOState {
     FileAppend(String),
-    FileOverwrite(String),
     Pipe,
     Inherit,
     Null,
