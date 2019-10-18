@@ -253,6 +253,49 @@ fn run_command(
     Ok(result)
 }
 
+fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
+    let key = if is_out { "*stdout*" } else { "*stderr*" };
+    let out = get_expression(environment, key);
+    match out {
+        Some(out) => {
+            if let Expression::File(f) = &*out {
+                match f {
+                    FileState::Stdout => {
+                        if is_out {
+                            Ok(Stdio::inherit())
+                        } else {
+                            // If ever Windows need raw hangle not fd.
+                            unsafe { Ok(Stdio::from_raw_fd(io::stdout().as_raw_fd())) }
+                        }
+                    }
+                    FileState::Stderr => {
+                        if !is_out {
+                            Ok(Stdio::inherit())
+                        } else {
+                            // If ever Windows need raw hangle not fd.
+                            unsafe { Ok(Stdio::from_raw_fd(io::stderr().as_raw_fd())) }
+                        }
+                    }
+                    FileState::Write(f) => {
+                        let f = f.borrow();
+                        Ok(Stdio::from(f.get_ref().try_clone()?))
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Can not write to a non-writable file.",
+                    )),
+                }
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Can not write to something not a file.",
+                ))
+            }
+        }
+        None => Ok(Stdio::inherit()),
+    }
+}
+
 fn get_output(
     environment: &Environment,
     out_status: &Option<IOState>,
@@ -278,7 +321,7 @@ fn get_output(
         None => {
             let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
             if use_stdout {
-                Stdio::inherit()
+                get_std_io(environment, true)?
             } else {
                 Stdio::piped()
             }
@@ -304,7 +347,7 @@ fn get_output(
         None => {
             let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
             if use_stdout {
-                Stdio::inherit()
+                get_std_io(environment, false)?
             } else {
                 Stdio::piped()
             }
