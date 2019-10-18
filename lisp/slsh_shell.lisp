@@ -28,7 +28,6 @@
 ;; Redirect both stdout and stderr to the same file, truncate the file first.
 (defmacro out-err> (file body)
 	`(let ((f nil)) (loose-symbols (setq f (open ,file :create :truncate))) (stdout-to f (stderr-to f ,body))))
-	;`(progn (file-trunc ,file) (stdout-to ,file (stderr-to ,file ,body))))
 
 ;; Redirect stdout to null (/dev/null equivelent).
 (defmacro out>null (body)
