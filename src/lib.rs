@@ -45,5 +45,11 @@ pub use crate::builtins_file::*;
 pub mod builtins_io;
 pub use crate::builtins_io::*;
 
+pub mod builtins_pair;
+pub use crate::builtins_pair::*;
+
+pub mod builtins_types;
+pub use crate::builtins_types::*;
+
 pub mod process;
 pub use crate::process::*;

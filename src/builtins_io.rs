@@ -5,12 +5,14 @@ use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::rc::Rc;
 
+use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::reader::*;
 use crate::types::*;
 
 fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.is_empty() {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -121,73 +123,54 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
-fn is_open_file(exp: &Option<Rc<Expression>>) -> bool {
-    if let Some(fexp) = exp {
-        match &**fexp {
-            Expression::File(FileState::Read(_)) => true,
-            Expression::File(FileState::Write(_)) => true,
-            _ => false,
-        }
-    } else {
-        false
-    }
-}
-
 fn builtin_close(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "close takes one form (file to close)",
         ))
     } else {
-        if let Expression::Atom(Atom::Symbol(sym)) = &args[0] {
-            let exp = get_expression(environment, &sym[..]);
-            if is_open_file(&exp) {
-                if let Some(fexp) = exp {
-                    if let Expression::File(FileState::Write(f)) = &*fexp {
-                        // Flush in case there are more then one references to this file, at least the data is flushed.
-                        f.borrow_mut().get_ref().flush()?;
-                    }
-                }
-                let exp_closed = Rc::new(Expression::File(FileState::Closed));
-                set_expression_current(environment, sym.clone(), exp_closed);
-                return Ok(Expression::Atom(Atom::True));
-            }
+        let exp = &args[0];
+        if let Expression::File(FileState::Write(f)) = exp {
+            // Flush in case there are more then one references to this file, at least the data is flushed.
+            f.borrow_mut().get_ref().flush()?;
+        }
+        if let Expression::File(_) = exp {
+            let mut closed = Expression::File(FileState::Closed);
+            std::mem::swap(&mut args[0], &mut closed);
+            return Ok(Expression::Atom(Atom::True));
         }
         Ok(Expression::Atom(Atom::Nil))
     }
 }
 
 fn builtin_flush(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "flush takes one form (file to flush)",
         ))
     } else {
-        if let Expression::Atom(Atom::Symbol(sym)) = &args[0] {
-            let exp = get_expression(environment, &sym[..]);
-            if is_open_file(&exp) {
-                if let Some(fexp) = exp {
-                    if let Expression::File(FileState::Write(f)) = &*fexp {
-                        f.borrow_mut().get_ref().flush()?;
-                        return Ok(Expression::Atom(Atom::True));
-                    }
-                }
-            }
+        let exp = &args[0];
+        if let Expression::File(FileState::Write(f)) = exp {
+            f.borrow_mut().get_ref().flush()?;
+            return Ok(Expression::Atom(Atom::True));
         }
         Ok(Expression::Atom(Atom::Nil))
     }
 }
 
 fn builtin_read_line(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "read-line takes one form (file)",
         ))
     } else {
-        let exp = eval(environment, &args[0])?;
+        let exp = &args[0];
         if let Expression::File(FileState::Read(file)) = &exp {
             let mut line = String::new();
             if 0 == file.borrow_mut().read_line(&mut line)? {
@@ -205,13 +188,14 @@ fn builtin_read_line(environment: &mut Environment, args: &[Expression]) -> io::
 }
 
 fn builtin_read(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "read takes one form (file)",
         ))
     } else {
-        let exp = eval(environment, &args[0])?;
+        let exp = &args[0];
         if let Expression::File(FileState::Read(file)) = &exp {
             let mut fstr = String::new();
             file.borrow_mut().read_to_string(&mut fstr)?;
@@ -232,19 +216,16 @@ fn builtin_write_line(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "write-line takes two forms (file and line)",
         ))
     } else {
-        let exp = eval(environment, &args[0])?;
+        let exp = &args[0];
         if let Expression::File(FileState::Write(file)) = &exp {
-            writeln!(
-                &mut file.borrow_mut(),
-                "{}",
-                eval(environment, &args[1])?.to_string()
-            )?;
+            writeln!(&mut file.borrow_mut(), "{}", &args[1].to_string())?;
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(
@@ -259,19 +240,16 @@ fn builtin_write_string(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "write-string takes two forms (file and line)",
         ))
     } else {
-        let exp = eval(environment, &args[0])?;
+        let exp = &args[0];
         if let Expression::File(FileState::Write(file)) = &exp {
-            write!(
-                &mut file.borrow_mut(),
-                "{}",
-                eval(environment, &args[1])?.to_string()
-            )?;
+            write!(&mut file.borrow_mut(), "{}", &args[1].to_string())?;
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(

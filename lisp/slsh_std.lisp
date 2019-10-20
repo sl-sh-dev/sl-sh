@@ -10,6 +10,18 @@
 (defmacro defn (name args body)
 	`(defq ,name (fn ,args ,body)))
 
+(defn first (obj)
+    (vnth 0 obj))
+
+(defn rest (obj)
+    (vslice obj 1))
+
+(defn last (obj)
+    (vnth (- (length obj) 1) obj))
+
+(defn butlast (obj)
+    (vslice obj 0 (- (length obj) 1)))
+
 (defmacro setfn (name args body)
 	`(setq ,name (fn ,args ,body)))
 
@@ -51,44 +63,44 @@
 		(setq make-cond (fn (condition val action others)
 			(if (null val) action
 				(if (null others) `(if (= ,condition ,val) ,action)
-					`(if (= ,condition ,val) ,action ,(make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
+					`(if (= ,condition ,val) ,action ,(make-cond condition (first (first others)) (vnth 1 (first others)) (rest others)))))))
 		(setq cond-name condition)
-		(make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))
+		(make-cond cond-name (first (first branches)) (vnth 1 (first branches)) (rest branches))))
 
 (defmacro let (vals &rest let_body)
 	((fn (params bindings) (progn
 		(fori idx el vals
 			(if (= 1 (length el))
-				(progn (insert-nth idx (nth 0 el) params) (insert-nth idx nil bindings))
+				(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx nil bindings))
 				(if (= 2 (length el))
-					(progn (insert-nth idx (nth 0 el) params) (insert-nth idx (nth 1 el) bindings))
+					(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx (vnth 1 el) bindings))
 					(println "ERROR"))))
-		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-list (length vals)) (make-list (length vals))))
+		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 
 (defn map (fun items) (progn
-	(defq new-items (make-list (length items)))
+	(defq new-items (make-vec (length items)))
 	(for i items
-		(push new-items (fun i)))
+		(push! new-items (fun i)))
 	new-items))
 
 (defn map! (fun items) (progn
 	(fori i it items
-		(setnth i (fun it) items))
+		(vsetnth i (fun it) items))
 	items))
 
 (defn reverse (items) (progn
 	(defn irev (items new-items num)
-		(if (>= num 0) (progn (push new-items (nth num items))(recur items new-items (- num 1)))))
-	(defq new-items (make-list (length items)))
+		(if (>= num 0) (progn (push! new-items (vnth num items))(recur items new-items (- num 1)))))
+	(defq new-items (make-vec (length items)))
 	(irev items new-items (- (length items) 1))
 	new-items))
 
 (defn reverse! (items) (progn
 	(defn irev (items first last)
 		(if (> last first) (progn
-			(defq ftemp (nth first items))
-			(setnth first (nth last items) items)
-			(setnth last ftemp items)
+			(defq ftemp (vnth first items))
+			(vsetnth first (vnth last items) items)
+			(vsetnth last ftemp items)
 			(recur items (+ first 1) (- last 1)))))
 	(irev items 0 (- (length items) 1))
 	items))

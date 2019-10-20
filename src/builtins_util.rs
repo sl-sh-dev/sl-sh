@@ -7,6 +7,47 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
+pub fn is_proper_list(exp: &Expression) -> bool {
+    if let Expression::Pair(_e1, e2) = exp {
+        if let Expression::Atom(Atom::Nil) = *e2.borrow() {
+            true
+        } else {
+            is_proper_list(&e2.borrow())
+        }
+    } else {
+        false
+    }
+}
+
+pub fn list_to_args(
+    environment: &mut Environment,
+    parts: &[Expression],
+    do_eval: bool,
+) -> io::Result<Vec<Expression>> {
+    if parts.len() == 1 && is_proper_list(&parts[0]) {
+        let mut args: Vec<Expression> = Vec::new();
+        let mut current = parts[0].clone();
+        while let Expression::Pair(e1, e2) = current {
+            if do_eval {
+                args.push(eval(environment, &e1.borrow())?);
+            } else {
+                args.push(e1.borrow().clone());
+            }
+            current = e2.borrow().clone();
+        }
+        Ok(args)
+    } else if do_eval {
+        let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
+        for a in parts {
+            args.push(eval(environment, a)?);
+        }
+        Ok(args)
+    } else {
+        let args: Vec<Expression> = Vec::from_iter(parts.iter().cloned());
+        Ok(args)
+    }
+}
+
 pub fn to_args(env: &mut Environment, parts: &[Expression]) -> io::Result<Vec<Expression>> {
     let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
     for a in parts {

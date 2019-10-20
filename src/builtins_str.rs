@@ -5,39 +5,41 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::eval::*;
 use crate::types::*;
 
 fn builtin_str_trim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-trim takes one form",
         ));
     }
-    let arg = eval(environment, &args[0])?.make_string(environment)?;
+    let arg = args[0].make_string(environment)?;
     Ok(Expression::Atom(Atom::String(arg.trim().to_string())))
 }
 
 fn builtin_str_ltrim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-ltrim takes one form",
         ));
     }
-    let arg = eval(environment, &args[0])?.make_string(environment)?;
+    let arg = args[0].make_string(environment)?;
     Ok(Expression::Atom(Atom::String(arg.trim_start().to_string())))
 }
 
 fn builtin_str_rtrim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-rtrim takes one form",
         ));
     }
-    let arg = eval(environment, &args[0])?.make_string(environment)?;
+    let arg = args[0].make_string(environment)?;
     Ok(Expression::Atom(Atom::String(arg.trim_end().to_string())))
 }
 
@@ -45,27 +47,32 @@ fn builtin_str_replace(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-replace takes three forms",
         ));
     }
-    let args = to_args_str(environment, args)?;
-    let new_str = args[0].replace(&args[1], &args[2]);
+    let arg0 = args[0].make_string(environment)?;
+    let arg1 = args[1].make_string(environment)?;
+    let arg2 = args[2].make_string(environment)?;
+    let new_str = arg0.replace(&arg1, &arg2);
     Ok(Expression::Atom(Atom::String(new_str)))
 }
 
 fn builtin_str_split(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-split takes two forms",
         ));
     }
-    let args = to_args_str(environment, args)?;
+    let arg0 = args[0].make_string(environment)?;
+    let arg1 = args[1].make_string(environment)?;
     let mut split_list: Vec<Expression> = Vec::new();
-    for s in args[1].split(&args[0]) {
+    for s in arg1.split(&arg0) {
         split_list.push(Expression::Atom(Atom::String(s.to_string())));
     }
     Ok(Expression::with_list(split_list))
@@ -75,13 +82,13 @@ fn builtin_str_cat_list(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "str-cat-list takes two forms",
         ));
     }
-    let args = to_args(environment, args)?;
     let join_str = args[0].make_string(environment)?;
     let mut new_str = String::new();
     if let Expression::List(list) = &args[1] {
@@ -103,6 +110,7 @@ fn builtin_str_cat_list(
 }
 
 fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -125,7 +133,7 @@ fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Re
             "str-sub second form must be an int",
         ));
     };
-    let arg3 = eval(environment, &args[2])?;
+    let arg3 = &args[2];
     if let Expression::Atom(Atom::String(s)) = &arg3 {
         if (start + len) <= s.len() {
             Ok(Expression::Atom(Atom::String(

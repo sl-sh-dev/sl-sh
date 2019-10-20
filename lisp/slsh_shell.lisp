@@ -1,5 +1,9 @@
 ;;; Macros to make working with the shell easier.
 
+;; Truncate a file.
+(defmacro file-trunc (file)
+	`(open ,file :create :truncate))
+
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
 (defmacro alias (name body)
 	`(defn ,name (&rest args)

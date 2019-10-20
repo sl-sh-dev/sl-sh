@@ -414,7 +414,13 @@ pub fn do_command(
         Some(Expression::List(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Invalid expression state before command (form).",
+                "Invalid expression state before command (list).",
+            ))
+        }
+        Some(Expression::Pair(_, _)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (pair).",
             ))
         }
         Some(Expression::File(FileState::Stdin)) => Stdio::inherit(),
@@ -443,7 +449,7 @@ pub fn do_command(
     )?;
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut args = to_args(environment, parts)?;
+    let mut args = list_to_args(environment, parts, true)?;
     environment.loose_symbols = old_loose_syms;
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {

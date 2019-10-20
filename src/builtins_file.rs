@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
 use std::hash::BuildHasher;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
@@ -39,6 +38,7 @@ fn cd_expand_all_dots(cd: String) -> String {
 }
 
 fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() > 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -53,7 +53,12 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
             Ok(val) => val,
             Err(_) => home.to_string(),
         };
-        let args = to_args_str(environment, args)?;
+        //let args = to_args_str(environment, args)?;
+        let argsi = args.iter();
+        let mut args: Vec<String> = Vec::with_capacity(args.len());
+        for a in argsi {
+            args.push(a.make_string(environment)?);
+        }
         let args = args.iter();
         let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
         let expand_dir = expand_tilde(new_dir);
@@ -79,9 +84,8 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
 
 fn builtin_use_stdout(
     environment: &mut Environment,
-    parts: &[Expression],
+    args: &[Expression],
 ) -> io::Result<Expression> {
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
     let old_out = environment.state.stdout_status.clone();
     let old_err = environment.state.stderr_status.clone();
     if !environment.in_pipe {
@@ -89,15 +93,20 @@ fn builtin_use_stdout(
         environment.state.stdout_status = Some(IOState::Inherit);
         environment.state.stderr_status = Some(IOState::Inherit);
     }
-    for a in parts {
-        last_eval = eval(environment, a);
-        if last_eval.is_err() {
-            break;
-        }
-    }
+    // Do not use ?, make sure to reset environment state even on error.
+    let args_res = list_to_args(environment, args, true);
     environment.state.stdout_status = old_out;
     environment.state.stderr_status = old_err;
-    last_eval
+    if let Err(err) = args_res {
+        Err(err)
+    } else {
+        let mut args = args_res.unwrap();
+        if args.is_empty() {
+            Ok(Expression::Atom(Atom::Nil))
+        } else {
+            Ok(args.pop().unwrap())
+        }
+    }
 }
 
 fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -114,61 +123,13 @@ fn builtin_out_null(environment: &mut Environment, args: &[Expression]) -> io::R
     res
 }
 
-fn builtin_file_trunc(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "file_trunc must have one form (file name to create/truncate)",
-        ))
-    } else {
-        let arg0 = eval(environment, &args[0])?;
-        if let Expression::Atom(Atom::String(s)) = &arg0 {
-            File::create(s)?;
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "file_trunc must have one form (file name to create/truncate)",
-            ));
-        }
-        Ok(arg0)
-    }
-}
-
-fn builtin_file_rdr(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() < 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "file_rdr must have at least two forms",
-        ))
-    } else {
-        let arg0 = eval(environment, &args[0])?;
-        environment.state.stdout_status = Some(IOState::Pipe);
-        let res = builtin_progn(environment, &args[1..]);
-        environment.state.stdout_status = None;
-        if let Ok(res) = &res {
-            if let Expression::Atom(Atom::String(s)) = &arg0 {
-                let mut writer = std::fs::OpenOptions::new()
-                    .read(false)
-                    .write(true)
-                    .append(true)
-                    .create(true)
-                    .open(s)?;
-                res.writef(environment, &mut writer)?;
-            }
-        }
-        res
-    }
-}
-
 fn internal_output_to(
     environment: &mut Environment,
     args: &[Expression],
     name: &str,
     is_stdout: bool,
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.len() < 2 {
         let msg = format!("{} must have at least two forms", name);
         Err(io::Error::new(io::ErrorKind::Other, msg))
@@ -223,74 +184,68 @@ fn builtin_path_exists(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "path-exists takes one form (a path)",
         ))
-    } else {
-        let arg0 = eval(environment, &args[0])?;
-        if let Expression::Atom(Atom::String(p)) = arg0 {
-            let path = Path::new(&p);
-            if path.exists() {
-                Ok(Expression::Atom(Atom::True))
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
+    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let path = Path::new(&p);
+        if path.exists() {
+            Ok(Expression::Atom(Atom::True))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "path-exists path must be a string",
-            ))
+            Ok(Expression::Atom(Atom::Nil))
         }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "path-exists path must be a string",
+        ))
     }
 }
 
 fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "is-file takes one form (a path)",
         ))
-    } else {
-        let arg0 = eval(environment, &args[0])?;
-        if let Expression::Atom(Atom::String(p)) = arg0 {
-            let path = Path::new(&p);
-            if path.is_file() {
-                Ok(Expression::Atom(Atom::True))
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
+    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let path = Path::new(&p);
+        if path.is_file() {
+            Ok(Expression::Atom(Atom::True))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "is-file path must be a string",
-            ))
+            Ok(Expression::Atom(Atom::Nil))
         }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-file path must be a string",
+        ))
     }
 }
 
 fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "is-dir takes one form (a path)",
         ))
-    } else {
-        let arg0 = eval(environment, &args[0])?;
-        if let Expression::Atom(Atom::String(p)) = arg0 {
-            let path = Path::new(&p);
-            if path.is_dir() {
-                Ok(Expression::Atom(Atom::True))
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
+    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let path = Path::new(&p);
+        if path.is_dir() {
+            Ok(Expression::Atom(Atom::True))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "is-dir path must be a string",
-            ))
+            Ok(Expression::Atom(Atom::Nil))
         }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "is-dir path must be a string",
+        ))
     }
 }
 
@@ -328,7 +283,8 @@ fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Res
     Ok(())
 }
 
-fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
+fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if environment.in_pipe {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -341,8 +297,8 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
     environment.state.stdout_status = Some(IOState::Pipe);
     let mut error: Option<io::Result<Expression>> = None;
     let mut i = 1; // Meant 1 here.
-    for p in parts {
-        if i == parts.len() {
+    for p in &args {
+        if i == args.len() {
             environment.state.stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
@@ -410,66 +366,54 @@ fn builtin_pipe(environment: &mut Environment, parts: &[Expression]) -> io::Resu
 }
 
 fn builtin_wait(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "wait takes one form (a pid to wait on)",
         ))
     } else {
-        match eval(environment, &args[0]) {
-            Ok(arg) => match arg {
-                Expression::Process(ProcessState::Running(pid)) => {
-                    match wait_pid(environment, pid, None) {
-                        Some(exit_status) => {
-                            Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
-                        }
-                        None => Ok(Expression::Atom(Atom::Nil)),
-                    }
-                }
-                Expression::Process(ProcessState::Over(_pid, exit_status)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
-                }
-                Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
+        match args[0] {
+            Expression::Process(ProcessState::Running(pid)) => {
+                match wait_pid(environment, pid, None) {
                     Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
                     None => Ok(Expression::Atom(Atom::Nil)),
-                },
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "wait error: not a pid",
-                )),
-            },
-            Err(err) => {
-                let msg = format!("wait error evaluating form: {}", err);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                }
             }
+            Expression::Process(ProcessState::Over(_pid, exit_status)) => {
+                Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
+            }
+            Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
+                Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
+                None => Ok(Expression::Atom(Atom::Nil)),
+            },
+            _ => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "wait error: not a pid",
+            )),
         }
     }
 }
 
 fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "pid takes one form (a process)",
         ))
     } else {
-        match eval(environment, &args[0]) {
-            Ok(arg) => match arg {
-                Expression::Process(ProcessState::Running(pid)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-                }
-                Expression::Process(ProcessState::Over(pid, _exit_status)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-                }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "pid error: not a process",
-                )),
-            },
-            Err(err) => {
-                let msg = format!("pid error evaluating form: {}", err);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+        match args[0] {
+            Expression::Process(ProcessState::Running(pid)) => {
+                Ok(Expression::Atom(Atom::Int(i64::from(pid))))
             }
+            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+                Ok(Expression::Atom(Atom::Int(i64::from(pid))))
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "pid error: not a process",
+            )),
         }
     }
 }
@@ -489,20 +433,12 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         Rc::new(Expression::Func(builtin_err_null)),
     );
     data.insert(
-        "file-rdr".to_string(),
-        Rc::new(Expression::Func(builtin_file_rdr)),
-    );
-    data.insert(
         "stdout-to".to_string(),
         Rc::new(Expression::Func(builtin_stdout_to)),
     );
     data.insert(
         "stderr-to".to_string(),
         Rc::new(Expression::Func(builtin_stderr_to)),
-    );
-    data.insert(
-        "file-trunc".to_string(),
-        Rc::new(Expression::Func(builtin_file_trunc)),
     );
     data.insert(
         "path-exists".to_string(),

@@ -97,6 +97,75 @@ fn expand_macro(
     }
 }
 
+fn fn_eval(
+    environment: &mut Environment,
+    command: &Expression,
+    parts: &[Expression],
+) -> io::Result<Expression> {
+    match command {
+        Expression::Atom(Atom::Symbol(command)) => {
+            if command.is_empty() {
+                return Ok(Expression::Atom(Atom::Nil));
+            }
+            let form = if environment.form_type == FormType::Any
+                || environment.form_type == FormType::FormOnly
+            {
+                get_expression(environment, &command)
+            } else {
+                None
+            };
+            if form.is_some() {
+                let exp = &*form.unwrap();
+                if let Expression::Func(f) = exp {
+                    f(environment, parts)
+                } else if let Expression::Atom(Atom::Lambda(f)) = exp {
+                    call_lambda(environment, &f, parts)
+                } else if let Expression::Atom(Atom::Macro(m)) = exp {
+                    expand_macro(environment, &m, parts)
+                } else {
+                    let exp = exp.clone();
+                    eval(environment, &exp)
+                }
+            } else if environment.form_type == FormType::ExternalOnly
+                || environment.form_type == FormType::Any
+            {
+                do_command(environment, command, parts)
+            } else {
+                let msg = format!("Not a valid form {}, not found.", command.to_string());
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+        Expression::List(list) => {
+            match eval(environment, &Expression::List(list.clone()))? {
+                //&Expression::with_list(list.borrow().to_vec()))? {
+                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                Expression::Func(f) => f(environment, parts),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+            }
+        }
+        Expression::Pair(e1, e2) => {
+            match eval(environment, &Expression::Pair(e1.clone(), e2.clone()))? {
+                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                Expression::Func(f) => f(environment, parts),
+                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+            }
+        }
+        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+        Expression::Func(f) => f(environment, parts),
+        _ => {
+            let msg = format!(
+                "Not a valid command {}, type {}.",
+                command.make_string(environment)?,
+                command.display_type()
+            );
+            Err(io::Error::new(io::ErrorKind::Other, msg))
+        }
+    }
+}
+
 fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
     if environment.sig_int.load(Ordering::Relaxed) {
         return Err(io::Error::new(
@@ -126,64 +195,12 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            match command {
-                Expression::Atom(Atom::Symbol(_s)) => {}
-                Expression::List(_list) => {}
-                _ => {
-                    let msg = format!(
-                        "Not a valid command {}, must be a symbol.",
-                        command.make_string(environment)?
-                    );
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
-                }
-            };
-
-            match command {
-                Expression::Atom(Atom::Symbol(command)) => {
-                    if command.is_empty() {
-                        return Ok(Expression::Atom(Atom::Nil));
-                    }
-                    let form = if environment.form_type == FormType::Any
-                        || environment.form_type == FormType::FormOnly
-                    {
-                        get_expression(environment, &command)
-                    } else {
-                        None
-                    };
-                    if form.is_some() {
-                        let exp = &*form.unwrap();
-                        if let Expression::Func(f) = exp {
-                            f(environment, &parts)
-                        } else if let Expression::Atom(Atom::Lambda(f)) = exp {
-                            call_lambda(environment, &f, parts)
-                        } else if let Expression::Atom(Atom::Macro(m)) = exp {
-                            expand_macro(environment, &m, parts)
-                        } else {
-                            let exp = exp.clone();
-                            eval(environment, &exp)
-                        }
-                    } else if environment.form_type == FormType::ExternalOnly
-                        || environment.form_type == FormType::Any
-                    {
-                        do_command(environment, command, parts)
-                    } else {
-                        let msg = format!("Not a valid form {}, not found.", command.to_string());
-                        Err(io::Error::new(io::ErrorKind::Other, msg))
-                    }
-                }
-                Expression::List(list) => {
-                    match eval(environment, &Expression::with_list(list.borrow().to_vec()))? {
-                        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-                        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                        Expression::Func(f) => f(environment, &parts),
-                        _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
-                    }
-                }
-                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                Expression::Func(f) => f(environment, &parts),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
-            }
+            fn_eval(environment, command, parts)
+        }
+        Expression::Pair(command, rest) => {
+            let mut parts: Vec<Expression> = Vec::new();
+            parts.push(rest.borrow().clone());
+            fn_eval(environment, &command.borrow(), &parts)
         }
         Expression::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {

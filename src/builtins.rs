@@ -21,13 +21,13 @@ use crate::reader::*;
 use crate::types::*;
 
 fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "eval can only have one form",
         ))
     } else {
-        let args = to_args(environment, args)?;
         match &args[0] {
             Expression::Atom(Atom::String(s)) => match read(&s, false) {
                 Ok(ast) => eval(environment, &ast),
@@ -39,7 +39,7 @@ fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Resul
 }
 
 fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args: Vec<Expression> = to_args(environment, args)?;
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -82,15 +82,53 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
-fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
-    let plen = parts.len();
+fn builtin_length(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
+    if args.len() != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "length takes one form",
+        ));
+    }
+    match &args[0] {
+        Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
+        Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
+        Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
+        Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
+        Expression::Pair(_e1, e2) => {
+            let mut len = 0;
+            let mut e_next = e2.clone();
+            loop {
+                match &*e_next.clone().borrow() {
+                    Expression::Pair(_e1, e2) => {
+                        e_next = e2.clone();
+                        len += 1;
+                    }
+                    Expression::Atom(Atom::Nil) => {
+                        break;
+                    }
+                    _ => {
+                        len += 1;
+                        break;
+                    }
+                }
+            }
+            Ok(Expression::Atom(Atom::Int(len)))
+        }
+        _ => Ok(Expression::Atom(Atom::Int(0))),
+    }
+}
+
+fn builtin_if(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
+    let plen = args.len();
     if plen != 2 && plen != 3 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "if needs exactly two or three expressions",
         ))
     } else {
-        let mut parts = parts.iter();
+        let mut parts = args.iter();
         match eval(environment, parts.next().unwrap())? {
             Expression::Atom(Atom::True) => eval(environment, parts.next().unwrap()),
             Expression::Atom(Atom::Nil) => {
@@ -110,43 +148,45 @@ fn builtin_if(environment: &mut Environment, parts: &[Expression]) -> io::Result
 }
 
 fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     print(environment, &args, false)
 }
 
 fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     print(environment, &args, true)
 }
 
 fn builtin_eprint(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     eprint(environment, &args, false)
 }
 
 fn builtin_eprintln(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args: Vec<Expression> = to_args(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     eprint(environment, &args, true)
 }
 
 fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = to_args_str(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     let mut res = String::new();
     for a in args {
-        res.push_str(&a);
+        res.push_str(&a.make_string(environment)?);
     }
     Ok(Expression::Atom(Atom::String(res)))
 }
 
 pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut last_eval = Expression::Atom(Atom::Nil);
-    for a in args {
-        last_eval = eval(environment, a)?;
+    let mut args = list_to_args(environment, args, true)?;
+    if args.is_empty() {
+        Ok(Expression::Atom(Atom::Nil))
+    } else {
+        Ok(args.pop().unwrap())
     }
-    Ok(last_eval)
 }
 
 fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -154,7 +194,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         ))
     } else {
         let mut args = args.iter();
-        let key = eval(environment, args.next().unwrap())?;
+        let key = args.next().unwrap();
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
@@ -165,10 +205,8 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
             }
         };
         if let Some(scope) = get_symbols_scope(environment, &key) {
-            let val = eval(environment, args.next().unwrap())?;
+            let val = args.next().unwrap();
             let mut val = match val {
-                Expression::Atom(atom) => Expression::Atom(atom),
-                Expression::List(list) => Expression::List(list),
                 Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
                     val.make_string(environment)
                         .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
@@ -179,8 +217,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
                             .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
                     ))
                 }
-                Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
-                Expression::File(f) => Expression::File(f),
+                _ => val.clone(),
             };
             if let Expression::Atom(Atom::String(vs)) = val {
                 let vs = match expand_tilde(&vs) {
@@ -201,6 +238,7 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
 }
 
 fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -208,7 +246,7 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
         ))
     } else {
         let mut args = args.iter();
-        let key = eval(environment, args.next().unwrap())?;
+        let key = args.next().unwrap();
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
@@ -218,10 +256,8 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
                 ));
             }
         };
-        let val = eval(environment, args.next().unwrap())?;
+        let val = args.next().unwrap();
         let val = match val {
-            Expression::Atom(atom) => Expression::Atom(atom),
-            Expression::List(list) => Expression::List(list),
             Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
                 val.make_string(environment)
                     .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
@@ -253,6 +289,7 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
             Expression::File(FileState::Closed) => {
                 Expression::Atom(Atom::String("::CLOSED FILE::".to_string()))
             }
+            _ => val.clone(),
         };
         let val = val.make_string(environment)?;
         let val = match expand_tilde(&val) {
@@ -269,6 +306,7 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
 }
 
 fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -276,7 +314,7 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
         ))
     } else {
         let mut args = args.iter();
-        let key = eval(environment, args.next().unwrap())?;
+        let key = args.next().unwrap();
         let key = match key {
             Expression::Atom(Atom::Symbol(s)) => s.clone(),
             _ => {
@@ -286,10 +324,8 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
                 ));
             }
         };
-        let val = eval(environment, args.next().unwrap())?;
+        let val = args.next().unwrap();
         let mut val = match val {
-            Expression::Atom(atom) => Expression::Atom(atom),
-            Expression::List(list) => Expression::List(list),
             Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
                 val.make_string(environment)
                     .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
@@ -300,8 +336,7 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
                         .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
                 ))
             }
-            Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
-            Expression::File(f) => Expression::File(f),
+            _ => val.clone(),
         };
         if let Expression::Atom(Atom::String(vs)) = val {
             let vs = match expand_tilde(&vs) {
@@ -319,7 +354,7 @@ fn builtin_is_global_scope(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
-    if args.is_empty() {
+    if !args.is_empty() {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "is-global-scope take no forms",
@@ -332,14 +367,14 @@ fn builtin_is_global_scope(
 }
 
 fn builtin_to_symbol(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "to-symbol take one form",
         ))
     } else {
-        let val = eval(environment, &args[0])?;
-        match val {
+        match &args[0] {
             Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
             Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
             Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(format!("{}", i)))),
@@ -473,6 +508,7 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
 }*/
 
 fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() < 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -481,16 +517,16 @@ fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
     let mut last_exp = Expression::Atom(Atom::Nil);
     for arg in args {
-        let val = eval(environment, arg)?;
-        match val {
+        match arg {
             Expression::Atom(Atom::Nil) => return Ok(Expression::Atom(Atom::Nil)),
-            _ => last_exp = val,
+            _ => last_exp = arg,
         }
     }
     Ok(last_exp)
 }
 
 fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() < 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -498,21 +534,20 @@ fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<
         ));
     }
     for arg in args {
-        let val = eval(environment, arg)?;
-        match val {
+        match arg {
             Expression::Atom(Atom::Nil) => {}
-            _ => return Ok(val),
+            _ => return Ok(arg),
         }
     }
     Ok(Expression::Atom(Atom::Nil))
 }
 
 fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "not takes one form"));
     }
-    let val = eval(environment, &args[0])?;
-    if let Expression::Atom(Atom::Nil) = val {
+    if let Expression::Atom(Atom::Nil) = &args[0] {
         Ok(Expression::Atom(Atom::True))
     } else {
         Ok(Expression::Atom(Atom::Nil))
@@ -520,6 +555,7 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
 }
 
 fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -538,17 +574,6 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
             "is-def takes a symbol to lookup",
         ))
     }
-}
-
-fn builtin_get_type(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "get-type takes one form",
-        ));
-    }
-    let arg0 = eval(environment, &args[0])?;
-    Ok(Expression::Atom(Atom::String(arg0.display_type())))
 }
 
 fn builtin_macro(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -572,6 +597,7 @@ fn builtin_expand_macro(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -632,7 +658,7 @@ fn builtin_expand_macro(
 }
 
 fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = to_args(environment, args)?;
+    let args = list_to_args(environment, args, true)?;
     environment.state.recur_num_args = Some(args.len());
     Ok(Expression::with_list(args))
 }
@@ -668,36 +694,30 @@ fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Resu
 
 fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option<u32> {
     if !args.is_empty() {
-        let arg = eval(environment, &args[0]);
-        if let Err(err) = arg {
-            eprintln!("Error evaluating form: {}.", err);
-            None
-        } else {
-            let arg = arg.unwrap();
-            if let Expression::Atom(Atom::Int(ji)) = arg {
-                let ji = ji as usize;
-                let jobs = &*environment.jobs.borrow();
-                if ji < jobs.len() {
-                    let pid = jobs[ji].pids[0];
-                    let mut stop_idx: Option<u32> = None;
-                    for (i, sp) in environment.stopped_procs.borrow().iter().enumerate() {
-                        if *sp == pid {
-                            stop_idx = Some(i as u32);
-                            break;
-                        }
+        let arg = &args[0];
+        if let Expression::Atom(Atom::Int(ji)) = arg {
+            let ji = *ji as usize;
+            let jobs = &*environment.jobs.borrow();
+            if ji < jobs.len() {
+                let pid = jobs[ji].pids[0];
+                let mut stop_idx: Option<u32> = None;
+                for (i, sp) in environment.stopped_procs.borrow().iter().enumerate() {
+                    if *sp == pid {
+                        stop_idx = Some(i as u32);
+                        break;
                     }
-                    if let Some(idx) = stop_idx {
-                        environment.stopped_procs.borrow_mut().remove(idx as usize);
-                    }
-                    Some(pid)
-                } else {
-                    eprintln!("Error job id out of range.");
-                    None
                 }
+                if let Some(idx) = stop_idx {
+                    environment.stopped_procs.borrow_mut().remove(idx as usize);
+                }
+                Some(pid)
             } else {
-                eprintln!("Error job id must be integer.");
+                eprintln!("Error job id out of range.");
                 None
             }
+        } else {
+            eprintln!("Error job id must be integer.");
+            None
         }
     } else {
         environment.stopped_procs.borrow_mut().pop()
@@ -705,13 +725,14 @@ fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option
 }
 
 fn builtin_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() > 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "bg can only have one optional form (job id)",
         ))
     } else {
-        let opid = get_stopped_pid(environment, args);
+        let opid = get_stopped_pid(environment, &args);
         if let Some(pid) = opid {
             let ppid = Pid::from_raw(pid as i32);
             if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
@@ -725,13 +746,14 @@ fn builtin_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<
 }
 
 fn builtin_fg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() > 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "fg can only have one optional form (job id)",
         ))
     } else {
-        let opid = get_stopped_pid(environment, args);
+        let opid = get_stopped_pid(environment, &args);
         if let Some(pid) = opid {
             let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
             let ppid = Pid::from_raw(pid as i32);
@@ -765,34 +787,14 @@ fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Re
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "command can only have one form (call defining the external command and arguments)",
+            "command can only have one form",
         ))
-    } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
-        let (command, parts) = match list.split_first() {
-            Some((c, p)) => (c, p),
-            None => {
-                eprintln!("No valid command.");
-                return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
-            }
-        };
-        match command {
-            Expression::Atom(Atom::Symbol(command)) => {
-                if command.is_empty() {
-                    return Ok(Expression::Atom(Atom::Nil));
-                }
-                do_command(environment, command, parts)
-            }
-            _ => {
-                let msg = format!(
-                    "Not a valid command {}, must be a symbol.",
-                    command.make_string(environment)?
-                );
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        }
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "command takes a list"))
+        let old_form = environment.form_type;
+        environment.form_type = FormType::ExternalOnly;
+        let result = eval(environment, &args[0]);
+        environment.form_type = old_form;
+        result
     }
 }
 
@@ -800,37 +802,13 @@ fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Res
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "run-bg can only have one form (call defining the external command and arguments)",
+            "run-bg can only have one form",
         ))
-    } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
-        let (command, parts) = match list.split_first() {
-            Some((c, p)) => (c, p),
-            None => {
-                eprintln!("No valid command.");
-                return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
-            }
-        };
-        match command {
-            Expression::Atom(Atom::Symbol(command)) => {
-                if command.is_empty() {
-                    return Ok(Expression::Atom(Atom::Nil));
-                }
-                environment.run_background = true;
-                let result = do_command(environment, command, parts);
-                environment.run_background = false;
-                result
-            }
-            _ => {
-                let msg = format!(
-                    "Not a valid command {}, must be a symbol.",
-                    command.make_string(environment)?
-                );
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        }
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "run-bg takes a list"))
+        environment.run_background = true;
+        let result = eval(environment, &args[0]);
+        environment.run_background = false;
+        result
     }
 }
 
@@ -866,6 +844,7 @@ fn builtin_loose_symbols(
 }
 
 fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() > 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -911,7 +890,7 @@ macro_rules! ensure_tonicity {
 macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
         |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-            let mut args: Vec<Expression> = to_args(environment, args)?;
+            let mut args: Vec<Expression> = list_to_args(environment, args, true)?;
             if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                 ensure_tonicity!($check_fn, ints, &i64, i64)
             } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
@@ -927,6 +906,10 @@ macro_rules! ensure_tonicity_all {
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("eval".to_string(), Rc::new(Expression::Func(builtin_eval)));
     data.insert("load".to_string(), Rc::new(Expression::Func(builtin_load)));
+    data.insert(
+        "length".to_string(),
+        Rc::new(Expression::Func(builtin_length)),
+    );
     data.insert("if".to_string(), Rc::new(Expression::Func(builtin_if)));
     data.insert(
         "print".to_string(),
@@ -982,10 +965,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert(
         "is-def".to_string(),
         Rc::new(Expression::Func(builtin_is_def)),
-    );
-    data.insert(
-        "get-type".to_string(),
-        Rc::new(Expression::Func(builtin_get_type)),
     );
     data.insert(
         "macro".to_string(),

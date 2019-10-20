@@ -7,10 +7,9 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
-use crate::eval::*;
 use crate::types::*;
 
-fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.is_empty() {
         return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
     }
@@ -18,27 +17,28 @@ fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Resul
     Ok(Expression::with_list(args))
 }
 
-fn builtin_make_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_make_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() > 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "make-list takes at most two forms",
+            "make-vec takes at most two forms",
         ));
     }
     if args.is_empty() {
         return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
     }
-    let cap = if let Expression::Atom(Atom::Int(c)) = eval(environment, &args[0])? {
+    let cap = if let Expression::Atom(Atom::Int(c)) = args[0] {
         c
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "make-list first arg must be an integer",
+            "make-vec first arg must be an integer",
         ));
     };
     let mut list = Vec::with_capacity(cap as usize);
     if args.len() == 2 {
-        let v = eval(environment, &args[1])?;
+        let v = &args[1];
         for _ in 0..cap {
             list.push(v.clone());
         }
@@ -47,131 +47,77 @@ fn builtin_make_list(environment: &mut Environment, args: &[Expression]) -> io::
     Ok(Expression::with_list(list))
 }
 
-fn builtin_list_first(
+fn builtin_vec_vslice(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "first takes one form"));
-    }
-    let arg = eval(environment, &args[0])?;
-    match arg {
-        Expression::List(list) => {
-            if !list.borrow().is_empty() {
-                Ok(list.borrow().get(0).unwrap().clone())
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
-        }
-        _ => Err(io::Error::new(
+    let args = list_to_args(environment, args, true)?;
+    if args.len() != 2 && args.len() != 3 {
+        return Err(io::Error::new(
             io::ErrorKind::Other,
-            "first operates on a list",
-        )),
+            "vslice takes two or three forms",
+        ));
     }
-}
-
-fn builtin_list_rest(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "rest takes one form"));
-    }
-    let arg = eval(environment, &args[0])?;
-    match arg {
+    let start = if let Expression::Atom(Atom::Int(i)) = args[1] {
+        i as usize
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "vslice second arg must be an integer",
+        ));
+    };
+    let end = if args.len() == 3 {
+        if let Expression::Atom(Atom::Int(i)) = args[2] {
+            i as usize
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "vslice second arg must be an integer",
+            ));
+        }
+    } else {
+        0
+    };
+    match &args[0] {
         Expression::List(list) => {
             let list = list.borrow();
-            if list.len() > 1 {
-                let rest: Vec<Expression> = Vec::from_iter(list[1..].iter().cloned());
-                Ok(Expression::with_list(rest))
+            if !list.is_empty() {
+                let len = list.len();
+                if start == len {
+                    return Ok(Expression::Atom(Atom::Nil));
+                }
+                if start > (len - 1) || end > len {
+                    let msg = format!(
+                        "vslice index out of range (start  {}, end {}, length {})",
+                        start, end, len
+                    );
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+                let slice = if args.len() == 3 {
+                    Vec::from_iter(list[start..end].iter().cloned())
+                } else {
+                    Vec::from_iter(list[start..].iter().cloned())
+                };
+                Ok(Expression::with_list(slice))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
             }
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "rest operates on a list",
+            "vslice operates on a vector",
         )),
     }
 }
 
-fn builtin_list_length(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "length takes one form",
-        ));
-    }
-    let arg = eval(environment, &args[0])?;
-    match arg {
-        Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
-        Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
-        Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-        Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
-        _ => Ok(Expression::Atom(Atom::Int(0))),
-    }
-}
-
-fn builtin_list_last(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "last takes one form (list)",
-        ));
-    }
-    let arg = eval(environment, &args[0])?;
-    match arg {
-        Expression::List(list) => {
-            if !list.borrow().is_empty() {
-                Ok(list.borrow().last().unwrap().clone())
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "last operates on a list",
-        )),
-    }
-}
-
-fn builtin_list_butlast(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "butlast takes one form",
-        ));
-    }
-    let arg = eval(environment, &args[0])?;
-    match arg {
-        Expression::List(list) => {
-            let list = list.borrow();
-            if list.len() > 1 {
-                let new_list: Vec<Expression> =
-                    Vec::from_iter(list[..(list.len() - 1)].iter().cloned());
-                Ok(Expression::with_list(new_list))
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
-            }
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "butlast operates on a list",
-        )),
-    }
-}
-
-fn builtin_list_nth(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "nth takes two forms (int and list)",
         ));
     }
-    let args = to_args(environment, &args)?;
     let idx = if let Expression::Atom(Atom::Int(i)) = args[0] {
         i
     } else {
@@ -202,148 +148,18 @@ fn builtin_list_nth(environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
-fn builtin_list_setfirst(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setfirst takes two forms (form and list)",
-        ));
-    }
-    let mut args = to_args(environment, &args)?;
-    let old_list = args.pop().unwrap();
-    let new_car = args.pop().unwrap();
-    match old_list {
-        Expression::List(list) => {
-            let list = list.borrow();
-            let mut nlist: Vec<Expression> = Vec::with_capacity(list.len() + 1);
-            nlist.push(new_car);
-            nlist.extend(list.iter().cloned());
-            Ok(Expression::with_list(nlist))
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setfirst second form must be a list",
-        )),
-    }
-}
-
-fn builtin_list_setrest(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setrest takes two forms (lists)",
-        ));
-    }
-    let mut args = to_args(environment, &args)?;
-    let new_cdr = args.pop().unwrap();
-    let old_list = args.pop().unwrap();
-    if let Expression::List(new_cdr) = new_cdr {
-        if let Expression::List(old_list) = old_list {
-            let new_cdr = new_cdr.borrow();
-            let old_list = old_list.borrow();
-            let mut list: Vec<Expression> = Vec::with_capacity(new_cdr.len() + 1);
-            if !old_list.is_empty() {
-                list.push(old_list.get(0).unwrap().clone());
-            }
-            list.extend(new_cdr.iter().cloned());
-            Ok(Expression::with_list(list))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "setrest first form must be a list",
-            ))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setrest second form must be a list",
-        ))
-    }
-}
-
-fn builtin_list_setlast(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setlast takes two forms (list and form)",
-        ));
-    }
-    let mut args = to_args(environment, &args)?;
-    let new_last = args.pop().unwrap();
-    let old_list = args.pop().unwrap();
-    match old_list {
-        Expression::List(list) => {
-            let list = list.borrow();
-            let mut new_list = Vec::with_capacity(list.len() + 1);
-            new_list.extend(list.iter().cloned());
-            new_list.push(new_last);
-            Ok(Expression::with_list(new_list))
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setlast first form must be a list",
-        )),
-    }
-}
-
-fn builtin_list_setbutlast(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setbutlast takes two forms (lists)",
-        ));
-    }
-    let mut args = to_args(environment, &args)?;
-    let old_list = args.pop().unwrap();
-    let new_butlast = args.pop().unwrap();
-    if let Expression::List(new_butlast) = new_butlast {
-        if let Expression::List(old_list) = old_list {
-            let new_butlast = new_butlast.borrow();
-            let old_list = old_list.borrow();
-            let mut list: Vec<Expression> = Vec::with_capacity(new_butlast.len() + 1);
-            list.extend(new_butlast.iter().cloned());
-            if !old_list.is_empty() {
-                list.push(old_list.last().unwrap().clone());
-            }
-            Ok(Expression::with_list(list))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "setbutlast second form must be a list",
-            ))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "setbutlast first form must be a list",
-        ))
-    }
-}
-
 // Destructive
-fn builtin_list_setnth(
+fn builtin_vec_setnth(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "setnth takes three forms (index, new element and list)",
         ));
     }
-    let mut args = to_args(environment, &args)?;
     let old_list = args.pop().unwrap();
     let new_element = args.pop().unwrap();
     let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
@@ -376,13 +192,13 @@ fn builtin_str_append(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "append takes two forms (both lists or Strings)",
         ));
     }
-    let mut args = to_args(environment, &args)?;
     let end = args.pop().unwrap();
     let start = args.pop().unwrap();
     if let Expression::Atom(Atom::String(end)) = end {
@@ -405,17 +221,17 @@ fn builtin_str_append(
     }
 }
 
-fn builtin_list_append(
+fn builtin_vec_append(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
-    if args.len() != 2 {
+    let mut new_args = list_to_args(environment, args, true)?;
+    if new_args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "append takes two forms (both lists or Strings)",
         ));
     }
-    let mut new_args = to_args(environment, &args)?;
     let end_arg = new_args.pop().unwrap();
     let start_arg = new_args.pop().unwrap();
     if let Expression::List(end) = end_arg {
@@ -456,14 +272,14 @@ fn builtin_list_append(
 }
 
 // Destructive
-fn builtin_list_push(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "push takes two forms (list and form)",
         ));
     }
-    let mut args = to_args(environment, &args)?;
     let new_item = args.pop().unwrap();
     let old_list = args.pop().unwrap();
     match old_list {
@@ -479,11 +295,12 @@ fn builtin_list_push(environment: &mut Environment, args: &[Expression]) -> io::
 }
 
 // Destructive
-fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "pop takes a list"));
     }
-    let old_list = eval(environment, &args[0])?;
+    let old_list = &args[0];
     match old_list {
         Expression::List(list) => {
             if let Some(item) = list.borrow_mut().pop() {
@@ -499,17 +316,18 @@ fn builtin_list_pop(environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
-fn builtin_list_is_empty(
+fn builtin_vec_is_empty(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "is-empty takes a list",
         ));
     }
-    let list = eval(environment, &args[0])?;
+    let list = &args[0];
     match list {
         Expression::List(list) => {
             if list.borrow().is_empty() {
@@ -526,14 +344,15 @@ fn builtin_list_is_empty(
 }
 
 // Destructive
-fn builtin_list_clear(
+fn builtin_vec_vclear(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "clear takes a list"));
     }
-    let list = eval(environment, &args[0])?;
+    let list = &args[0];
     match list {
         Expression::List(list) => {
             list.borrow_mut().clear();
@@ -547,17 +366,17 @@ fn builtin_list_clear(
 }
 
 // Destructive
-fn builtin_list_remove_nth(
+fn builtin_vec_remove_nth(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "remove-nth takes two forms (index and list)",
         ));
     }
-    let mut args = to_args(environment, &args)?;
     let list = args.pop().unwrap();
     let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
         i
@@ -586,17 +405,17 @@ fn builtin_list_remove_nth(
 }
 
 // Destructive
-fn builtin_list_insert_nth(
+fn builtin_vec_insert_nth(
     environment: &mut Environment,
     args: &[Expression],
 ) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "insert-nth takes three forms (index, new element and list)",
         ));
     }
-    let mut args = to_args(environment, &args)?;
     let old_list = args.pop().unwrap();
     let new_element = args.pop().unwrap();
     let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
@@ -625,82 +444,50 @@ fn builtin_list_insert_nth(
     }
 }
 
-pub fn add_list_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
-    data.insert("list".to_string(), Rc::new(Expression::Func(builtin_list)));
+pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+    data.insert("vec".to_string(), Rc::new(Expression::Func(builtin_vec)));
     data.insert(
-        "make-list".to_string(),
-        Rc::new(Expression::Func(builtin_make_list)),
+        "make-vec".to_string(),
+        Rc::new(Expression::Func(builtin_make_vec)),
     );
     data.insert(
-        "first".to_string(),
-        Rc::new(Expression::Func(builtin_list_first)),
+        "vslice".to_string(),
+        Rc::new(Expression::Func(builtin_vec_vslice)),
     );
     data.insert(
-        "rest".to_string(),
-        Rc::new(Expression::Func(builtin_list_rest)),
+        "vnth".to_string(),
+        Rc::new(Expression::Func(builtin_vec_nth)),
     );
     data.insert(
-        "length".to_string(),
-        Rc::new(Expression::Func(builtin_list_length)),
-    );
-    data.insert(
-        "last".to_string(),
-        Rc::new(Expression::Func(builtin_list_last)),
-    );
-    data.insert(
-        "butlast".to_string(),
-        Rc::new(Expression::Func(builtin_list_butlast)),
-    );
-    data.insert(
-        "nth".to_string(),
-        Rc::new(Expression::Func(builtin_list_nth)),
-    );
-    data.insert(
-        "setfirst".to_string(),
-        Rc::new(Expression::Func(builtin_list_setfirst)),
-    );
-    data.insert(
-        "setrest".to_string(),
-        Rc::new(Expression::Func(builtin_list_setrest)),
-    );
-    data.insert(
-        "setlast".to_string(),
-        Rc::new(Expression::Func(builtin_list_setlast)),
-    );
-    data.insert(
-        "setbutlast".to_string(),
-        Rc::new(Expression::Func(builtin_list_setbutlast)),
-    );
-    data.insert(
-        "setnth".to_string(),
-        Rc::new(Expression::Func(builtin_list_setnth)),
+        "vsetnth!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_setnth)),
     );
     data.insert(
         "append".to_string(),
-        Rc::new(Expression::Func(builtin_list_append)),
+        Rc::new(Expression::Func(builtin_vec_append)),
     );
     data.insert(
-        "push".to_string(),
-        Rc::new(Expression::Func(builtin_list_push)),
+        "push!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_push)),
     );
     data.insert(
-        "pop".to_string(),
-        Rc::new(Expression::Func(builtin_list_pop)),
+        "pop!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_pop)),
     );
     data.insert(
         "is-empty".to_string(),
-        Rc::new(Expression::Func(builtin_list_is_empty)),
+        Rc::new(Expression::Func(builtin_vec_is_empty)),
     );
     data.insert(
-        "clear".to_string(),
-        Rc::new(Expression::Func(builtin_list_clear)),
+        "vclear!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_vclear)),
     );
     data.insert(
-        "remove-nth".to_string(),
-        Rc::new(Expression::Func(builtin_list_remove_nth)),
+        "vremove-nth!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_remove_nth)),
     );
     data.insert(
-        "insert-nth".to_string(),
-        Rc::new(Expression::Func(builtin_list_insert_nth)),
+        "vinsert-nth!".to_string(),
+        Rc::new(Expression::Func(builtin_vec_insert_nth)),
     );
 }

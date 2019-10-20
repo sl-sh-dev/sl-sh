@@ -91,6 +91,7 @@ pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
     List(Rc<RefCell<Vec<Expression>>>),
+    Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Process(ProcessState),
     File(FileState),
@@ -101,6 +102,9 @@ impl fmt::Debug for Expression {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
             Expression::List(l) => write!(f, "Expression::List({:?})", l.borrow()),
+            Expression::Pair(e1, e2) => {
+                write!(f, "Expression::Pair({:?} . {:?})", e1.borrow(), e2.borrow())
+            }
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
                 write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
@@ -138,6 +142,11 @@ impl Expression {
                 res.push(')');
                 res
             }
+            Expression::Pair(e1, e2) => format!(
+                "( {} . {} )",
+                e1.borrow().to_string(),
+                e2.borrow().to_string()
+            ),
             Expression::File(_) => "File".to_string(),
         }
     }
@@ -148,6 +157,7 @@ impl Expression {
             Expression::Process(_) => "Process".to_string(),
             Expression::Func(_) => "Func".to_string(),
             Expression::List(_) => "List".to_string(),
+            Expression::Pair(_, _) => "Pair".to_string(),
             Expression::File(_) => "File".to_string(),
         }
     }
@@ -189,6 +199,11 @@ impl Expression {
                 res.push(')');
                 Ok(res)
             }
+            Expression::Pair(e1, e2) => Ok(format!(
+                "( {} . {} )",
+                e1.borrow().to_string(),
+                e2.borrow().to_string()
+            )),
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
@@ -228,6 +243,7 @@ impl Expression {
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
@@ -250,6 +266,7 @@ impl Expression {
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
@@ -306,6 +323,14 @@ impl Expression {
                     write!(writer, " ")?;
                 }
                 write!(writer, ")")?;
+            }
+            Expression::Pair(e1, e2) => {
+                write!(
+                    writer,
+                    "( {} . {} )",
+                    e1.borrow().to_string(),
+                    e2.borrow().to_string()
+                )?;
             }
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();

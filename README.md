@@ -16,8 +16,6 @@ The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example.
 * `cargo build --release`
 
 ## Tasks
-- [ ] Add autocompletion hooks for custom completions.
-- [ ] Finish job control.
 - [ ] Test scripts to exercise everything.
 - [ ] Better Docs.
 
@@ -38,6 +36,7 @@ progn | forms+ | builtin | Runs each form in turn left to right.
 def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
 set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
+length | form | builtin | Returns the length of the provided object.
 let | | macro |
 quote | | builtin |
 spawn | | builtin | Currently unavailable.  Use run-bg for background processes.
@@ -73,43 +72,80 @@ for | | macro |
 fori | | macro |
 
 
-### List Forms
+### Type Forms
+These forms provide information/tests about an objects underlying type.
+
+Form | Args | Type | description
+-----|------|------|------------
+type | obj | builtin | Produces the string representation of objects type.
+is-nil | obj | builtin | True if obj is the nil type/false otherwise.
+is-true | obj | builtin | True if obj is the true type/false otherwise.
+is-float | obj | builtin | True if obj is the float type/false otherwise.
+is-int | obj | builtin | True if obj is the int type/false otherwise.
+is-symbol | obj | builtin | True if obj is the symbol type/false otherwise.
+is-string | obj | builtin | True if obj is the string type/false otherwise.
+is-lambda | obj | builtin | True if obj is the lambda type/false otherwise.
+is-macro | obj | builtin | True if obj is the macro type/false otherwise.
+is-vec | obj | builtin | True if obj is the vec type/false otherwise.
+is-pair | obj | builtin | True if obj is the pair type/false otherwise.
+is-builtin | obj | builtin | True if obj is the builtin (special form) type/false otherwise.
+is-process | obj | builtin | True if obj is the process type/false otherwise.
+is-file | obj | builtin | True if obj is the file type/false otherwise.
+is-proper-list | obj | builtin | True if obj is a pair that is a proper list (last pair in chain has a nil cdr).
+
+
+### Vector Forms
 Currently slsh uses vectors not cons lists for its internal list structure.
-It uses the first, rest, list names to help reinforce this fact.
-These forms are non-destructive, they will not change any input lists.
+Forms ending in '!' are destructive and change the underlying vector other forms
+do not make changes to the the provided vector.
+
+Builtins:
 
 Form | Args | Type | description
 -----|------|------|------------
-list | forms+ | builtin | Produces a list with provided forms as elements.
-make-list | capacity/default | builtin | Make a list with capacity and all values set to default.  Both args are optional, default is nill.
-first | list | builtin | Produces the first element of the provided list.  Nil if the list is empty.
-rest | list | builtin | Produces the provided list minus the first element.  Nil if the list is empty or one element.
-length | list/str | builtin | Returns the length of the provided list or string.
-last | list | builtin | Produces the last element in the list.  Nil if the list is empty.
-butlast | list | builtin | Produces the provided list minus the last element.  Nil if the list is empty or one element.
-nth | int list | builtin | Produces the element at the provided index, error if index is out of bounds.
-setfirst | form/list | builtin | Produces a new list with the provided form as the first element.
-setrest | list/list | builtin | Produces a new list with the first element from then first list and the rest all the elements from the second.
-setlast | list/form | builtin | Produces a new list with the provided form appended to the list.
-setbutlast | list/list | builtin | Produces a new list with the last element from then second list and the rest all the elements from the first.
-append | list/list | builtin | Produces a new list by appending the second onto the first.
-is-empty | list | builtin | Returns true if the provided list is empty, nil/false otherwise.
-map | lambda list | macro | Returns a new list made by applying the lambda to each item in the provided list.
-reverse | list | macro | Returns a new list made by reversing the elements of the provided list.
+append | vector/vector | builtin | Produces a new vector by appending the second onto the first.
+is-empty | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
+make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nill.
+pop! | vector | builtin | Removes the last item from a vector and produces it.
+push! | vector/obj | builtin | Pushes the provided object onto the end of a vector.
+vclear! | vector | builtin | Removes all elements from a vector.
+vec | obj+ | builtin | Produces a vector with provided objects as elements.
+vnth | int vector | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
+vinsert-nth! | index/obj/vector | builtin | Inserts a new element at index, all other elements shift right (ie is additive).
+vremove-nth! | index/vector | builtin | Removes the element at index from a vector (all other elements will shift left).
+vsetnth! | index/form/vector | builtin | Sets the nth element of a vector with the provided object.
 
-### Destructive List Forms
-These list forms will change the underlying list they work on.
+Macros:
 
 Form | Args | Type | description
 -----|------|------|------------
-setnth | index form list | builtin | Produces a new list by replacing the element at index with then provided form, error if index is out of bounds.
-pop | list | builtin | Pops the last elememt from the end of the list, list will be one element shorter.
-push | list form | builtin | Pushes the provided form onto the end of the list.
-clear | list | builtin | Removes all elements from list, leaves capacity the same.
-remove-nth | index list | builtin | Removes the element at index and shifts all the remaining to the left.
-insert-nth | index form list | builtin | Inserts the provided form into index and moves all other elements to the right.
-map! | lambda list | macro | Modifies a list by applying the lambda to each item in the provided list.
-reverse! | list | macro | Modifies a list by reversing it's elements.
+butlast | vector | macro | Produces the provided vector minus the last element.  Nil if the vector is empty or one element.
+first | vector | macro | Produces the first element of the provided vector.  Nil if the vector is empty.
+last | vector | macro | Produces the last element in the vector.  Nil if the vector is empty.
+map | lambda vector | macro | Returns a new vector made by applying the lambda to each item in the provided vector.
+map! | lambda vector | macro | Modifies vector by applying the lambda to each item in the provided vector.
+rest | vector | macro | Produces the provided vector minus the first element.  Nil if the vector is empty or one element.
+reverse | vector | macro | Returns a new vector made by reversing the elements of the provided vector.
+reverse! | vector | macro | Modifies vector by reversing the elements of the provided vector.
+
+
+### Pair/List (aka Cons List) Forms
+By default this Lisp uses vector's as it's underlying list structure but does
+provide a primative type 'Pair' (aka Cons Cell) that can be used to create
+traditional Lisp list structures.  These lists will need to be created by 
+building them up with joins or with the list command.  Once built they should
+by usable in place of a vector list for purposes of lambda calls, parameters, etc.
+
+Builtins:
+
+Form | Args | Type | description
+-----|------|------|------------
+join | obj/obj | builtin | Creates a Pair with the provided object as car and cdr.
+list | obj+ | builtin | Will produce a proper list with the provided objects as elements (last pair has a cdr of nil).
+car | pair | builtin | Produces the car (first/left) element of a pair.
+cdr | pair | builtin | Produces the cdr (second/right) element of a pair.
+xar! | pair/obj | builtin | Modifies pair by settings it's car to obj, produces the modified pair.
+xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces the modified pair.
 
 
 ### String Forms
@@ -134,10 +170,9 @@ cd | path | builtin | Change to provided directory.
 use-stdout | | builtin |
 out-null | | builtin |
 err-null | | builtin |
-file-rdr | | builtin |
 stdout-to | | builtin |
 stderr-to | | builtin |
-file-trunc | | builtin |
+file-trunc | | macro |
 path-exists | path | builtin | Boolean, does path exist.
 is-file | path | builtin | Boolean, is path a file.
 is-dir | path | builtin | Boolean, is path a directory.

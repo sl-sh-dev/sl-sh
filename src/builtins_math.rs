@@ -12,7 +12,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         "+".to_string(),
         Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args)?;
+                let mut args = list_to_args(environment, args, true)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
                     //fold(0, |sum, a| sum + a);
@@ -29,7 +29,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         "*".to_string(),
         Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args)?;
+                let mut args = list_to_args(environment, args, true)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
                     Ok(Expression::Atom(Atom::Int(prod)))
@@ -47,7 +47,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         "-".to_string(),
         Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args)?;
+                let mut args = list_to_args(environment, args, true)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
                         let sum_of_rest: i64 = ints[1..].iter().sum();
@@ -78,7 +78,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         "/".to_string(),
         Rc::new(Expression::Func(
             |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args)?;
+                let mut args = list_to_args(environment, args, true)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if ints[1..].iter().any(|&x| x == 0) {
                         Err(io::Error::new(io::ErrorKind::Other, "can not divide by 0"))
