@@ -10,20 +10,49 @@
 (defmacro defn (name args body)
 	`(defq ,name (fn ,args ,body)))
 
-(defn first (obj)
-    (vnth 0 obj))
-
-(defn rest (obj)
-    (vslice obj 1))
-
-(defn last (obj)
-    (vnth (- (length obj) 1) obj))
-
-(defn butlast (obj)
-    (vslice obj 0 (- (length obj) 1)))
-
 (defmacro setfn (name args body)
 	`(setq ,name (fn ,args ,body)))
+
+(defn first (obj)
+    (if (is-vec obj)
+        (vnth 0 obj)
+        (if (is-proper-list obj)
+            (car obj)
+            (err "Not a vector or list"))))
+
+(defn rest (obj)
+    (if (is-vec obj)
+        (vslice obj 1)
+        (if (is-proper-list obj)
+            (cdr obj)
+            (err "Not a vector or list"))))
+
+(defn last (obj)
+    (if (is-vec obj)
+        (vnth (- (length obj) 1) obj)
+        (if (is-proper-list obj)
+            (if (null (cdr obj))
+                (car obj)
+                (recur (cdr obj)))
+            (err "Not a vector or list"))))
+
+(defn butlast (obj)
+    (if (is-vec obj)
+        (vslice obj 0 (- (length obj) 1))
+        (if (is-proper-list obj) (progn
+            (defq new-link (join nil nil))
+            (if (null (cdr obj))
+                (setq new-link nil)
+                (setq new-link (join (car obj) (butlast (cdr obj)))))
+            new-link)
+            (err "Not a vector or list"))))
+
+(defn setnth! (idx obj l)
+    (if (is-vec l)
+        (progn (vsetnth! idx obj l) nil)
+        (if (is-proper-list l)
+            (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))
+            (err "Not a vector or list"))))
 
 (defmacro loop (params bindings body)
 		`((fn ,params ,body) ,@bindings))
@@ -74,7 +103,7 @@
 				(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx nil bindings))
 				(if (= 2 (length el))
 					(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx (vnth 1 el) bindings))
-					(println "ERROR"))))
+					(err "ERROR: invalid bindings on let"))))
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 
 (defn map (fun items) (progn

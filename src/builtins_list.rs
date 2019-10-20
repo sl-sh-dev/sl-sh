@@ -188,39 +188,6 @@ fn builtin_vec_setnth(
     }
 }
 
-fn builtin_str_append(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "append takes two forms (both lists or Strings)",
-        ));
-    }
-    let end = args.pop().unwrap();
-    let start = args.pop().unwrap();
-    if let Expression::Atom(Atom::String(end)) = end {
-        if let Expression::Atom(Atom::String(start)) = start {
-            let mut new_string = String::with_capacity(start.len() + end.len());
-            new_string.push_str(&start);
-            new_string.push_str(&end);
-            Ok(Expression::Atom(Atom::String(new_string)))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "append forms must both be lists or Strings",
-            ))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "append forms must both be lists or Strings",
-        ))
-    }
-}
-
 fn builtin_vec_append(
     environment: &mut Environment,
     args: &[Expression],
@@ -229,7 +196,7 @@ fn builtin_vec_append(
     if new_args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "append takes two forms (both lists or Strings)",
+            "vappend takes two vectors",
         ));
     }
     let end_arg = new_args.pop().unwrap();
@@ -246,7 +213,7 @@ fn builtin_vec_append(
             Ok(Expression::List(end))
         } else {
             let msg = format!(
-                "append first form ({}) must be a list or String and match the second form (List)",
+                "vappend first form ({}) must be a vector",
                 start_arg.display_type()
             );
             Err(io::Error::new(io::ErrorKind::Other, msg))
@@ -258,16 +225,18 @@ fn builtin_vec_append(
             Ok(Expression::Atom(Atom::Nil))
         } else {
             let msg = format!(
-                "append first form ({}) must be a list or String and match the second form ({})",
+                "vappend first form ({}) must be a vector",
                 start_arg.display_type(),
-                end_arg.display_type()
             );
             Err(io::Error::new(io::ErrorKind::Other, msg))
         }
     } else {
-        new_args.push(start_arg);
-        new_args.push(end_arg);
-        builtin_str_append(environment, &new_args)
+        let msg = format!(
+            "vappend first form ({}) and second form ({}) must be vectors",
+            start_arg.display_type(),
+            end_arg.display_type()
+        );
+        Err(io::Error::new(io::ErrorKind::Other, msg))
     }
 }
 
@@ -463,7 +432,7 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::Func(builtin_vec_setnth)),
     );
     data.insert(
-        "append".to_string(),
+        "vappend".to_string(),
         Rc::new(Expression::Func(builtin_vec_append)),
     );
     data.insert(

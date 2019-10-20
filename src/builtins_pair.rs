@@ -21,14 +21,14 @@ fn builtin_join(environment: &mut Environment, args: &[Expression]) -> io::Resul
 }
 
 fn builtin_list(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    if args.is_empty() {
+        return Ok(Expression::Atom(Atom::Nil));
+    }
     let head = Expression::Pair(
         Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
         Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
     );
     let mut current = head.clone();
-    if args.is_empty() {
-        return Ok(head);
-    }
     let mut args = list_to_args(environment, args, true)?;
     let elements = args.len() - 1;
     for (i, a) in args.drain(..).enumerate() {

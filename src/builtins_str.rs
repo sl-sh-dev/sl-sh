@@ -153,6 +153,39 @@ fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Re
     }
 }
 
+fn builtin_str_append(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<Expression> {
+    let mut args = list_to_args(environment, args, true)?;
+    if args.len() != 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "str-append takes two strings",
+        ));
+    }
+    let end = args.pop().unwrap();
+    let start = args.pop().unwrap();
+    if let Expression::Atom(Atom::String(end)) = end {
+        if let Expression::Atom(Atom::String(start)) = start {
+            let mut new_string = String::with_capacity(start.len() + end.len());
+            new_string.push_str(&start);
+            new_string.push_str(&end);
+            Ok(Expression::Atom(Atom::String(new_string)))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "str-append forms must both be strings",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "str-append forms must both be strings",
+        ))
+    }
+}
+
 pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "str-trim".to_string(),
@@ -181,5 +214,9 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     data.insert(
         "str-sub".to_string(),
         Rc::new(Expression::Func(builtin_str_sub)),
+    );
+    data.insert(
+        "str-append".to_string(),
+        Rc::new(Expression::Func(builtin_str_append)),
     );
 }

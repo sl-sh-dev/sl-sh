@@ -38,6 +38,21 @@ fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
+fn builtin_err(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, true)?;
+    if args.len() != 1 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "err can only have one form",
+        ))
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            args[0].make_string(environment)?,
+        ))
+    }
+}
+
 fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let mut args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
@@ -105,6 +120,7 @@ fn builtin_length(environment: &mut Environment, args: &[Expression]) -> io::Res
                         len += 1;
                     }
                     Expression::Atom(Atom::Nil) => {
+                        len += 1;
                         break;
                     }
                     _ => {
@@ -905,6 +921,7 @@ macro_rules! ensure_tonicity_all {
 
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("eval".to_string(), Rc::new(Expression::Func(builtin_eval)));
+    data.insert("err".to_string(), Rc::new(Expression::Func(builtin_err)));
     data.insert("load".to_string(), Rc::new(Expression::Func(builtin_load)));
     data.insert(
         "length".to_string(),

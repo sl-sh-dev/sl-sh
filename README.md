@@ -103,7 +103,7 @@ Builtins:
 
 Form | Args | Type | description
 -----|------|------|------------
-append | vector/vector | builtin | Produces a new vector by appending the second onto the first.
+vappend | vector/vector | builtin | Produces a new vector by appending the second onto the first.
 is-empty | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
 make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nill.
 pop! | vector | builtin | Removes the last item from a vector and produces it.
@@ -119,12 +119,8 @@ Macros:
 
 Form | Args | Type | description
 -----|------|------|------------
-butlast | vector | macro | Produces the provided vector minus the last element.  Nil if the vector is empty or one element.
-first | vector | macro | Produces the first element of the provided vector.  Nil if the vector is empty.
-last | vector | macro | Produces the last element in the vector.  Nil if the vector is empty.
 map | lambda vector | macro | Returns a new vector made by applying the lambda to each item in the provided vector.
 map! | lambda vector | macro | Modifies vector by applying the lambda to each item in the provided vector.
-rest | vector | macro | Produces the provided vector minus the first element.  Nil if the vector is empty or one element.
 reverse | vector | macro | Returns a new vector made by reversing the elements of the provided vector.
 reverse! | vector | macro | Modifies vector by reversing the elements of the provided vector.
 
@@ -148,6 +144,20 @@ xar! | pair/obj | builtin | Modifies pair by settings it's car to obj, produces 
 xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces the modified pair.
 
 
+### Macros that work on vectors or lists
+These macros will work on either a vector or a pair made into a proper list
+(cons list).  If these do what you want then probably better to use then
+the type specific versions (if they exist, ie first vs car).
+
+Form | Args | Type | description
+-----|------|------|------------
+butlast | list \| vector | macro | Produces the provided list minus the last element.  Nil if the list is empty or one element.
+first | list \| vector | macro | Produces the first element of the provided list.  Nil if the list is empty.
+last | list \| vector | macro | Produces the last element in the list.  Nil if the list is empty.
+rest | list \| vector | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
+setnth! | idx/obj/list \| vector | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
+
+
 ### String Forms
 Form | Args | Type | description
 -----|------|------|------------
@@ -158,6 +168,7 @@ str-replace | string/old/new | builtin | Produces a new string by replacing all 
 str-split | split_string/string | builtin | Produces a list by splitting the string on the provided split_string.
 str-cat-list | string/list | builtin | Produces a string by joining a list with the provided string as a divider.
 str-sub | index/length/string | builtin | Returns a new substring of provided string.
+str-append | string string | builtin | Returns a new string from appending two other strings.
 
 
 ### File Forms
