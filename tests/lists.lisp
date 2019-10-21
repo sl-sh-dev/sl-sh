@@ -23,7 +23,7 @@
         (println "PASS 6") (println "FAIL"))
     (if (and (lists= (vsetnth! 1 'x l1) '(1 x 3)) (lists= l1 '(1 x 3)))
         (println "PASS 7") (println "FAIL"))
-    (if (and (lists= (append l1 l2) '(1 x 3 a b c)) (lists= l1 '(1 x 3)) (lists= l2 '(a b c)))
+    (if (and (lists= (vappend l1 l2) '(1 x 3 a b c)) (lists= l1 '(1 x 3)) (lists= l2 '(a b c)))
         (println "PASS 8") (println "FAIL"))
     (if (and (lists= (push! l1 4) '(1 x 3 4)) (lists= l1 '(1 x 3 4)))
         (println "PASS 9") (println "FAIL"))
@@ -52,7 +52,7 @@
     )
 
 println "Testing Lists from Pairs (Cons Lists)"
-(let ((l1 (list 1 2 3)) (l2 (list a b c)) (l3 (list 1 2 (list a b c) 3)) (l4))
+(let ((l1 (list 1 2 3)) (l2 (list 'a 'b 'c)) (l3 (list 1 2 (list 'a 'b 'c) 3)) (l4))
     (if (and (= (first l1) 1) (lists= l1 '(1 2 3)))
         (println "PASS 1") (println "FAIL"))
     (if (and (lists= (rest l1) '(2 3)) (lists= l1 '(1 2 3)))

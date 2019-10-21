@@ -234,6 +234,7 @@ pub fn read_stdin() -> i32 {
         );
     }
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+    environment.do_job_control = false;
     environment.is_tty = false;
     load_scripts(&mut environment, &home);
 
@@ -395,6 +396,17 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
 
 pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+    environment.do_job_control = false;
+
+    let mut home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => ".".to_string(),
+    };
+    if home.ends_with('/') {
+        home = home[..home.len() - 1].to_string();
+    }
+    load_scripts(&mut environment, &home);
+
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
         exp_args.push(Expression::Atom(Atom::String(a.clone())));

@@ -130,22 +130,25 @@ fn run_command(
         .stdout(stdout)
         .stderr(stderr);
     let pgid = environment.state.pipe_pgid;
+    let do_job_control = environment.do_job_control;
 
     unsafe {
         com_obj.pre_exec(move || -> io::Result<()> {
-            let pid = unistd::getpid();
-            let pgid = match pgid {
-                Some(pgid) => Pid::from_raw(pgid as i32),
-                None => unistd::getpid(),
-            };
-            if let Err(_err) = unistd::setpgid(pid, pgid) {
-                // Ignore, do in parent and child.
-                //let msg = format!("Error setting pgid for {}: {}", pid, err);
-            }
-            if foreground {
-                if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+            if do_job_control {
+                let pid = unistd::getpid();
+                let pgid = match pgid {
+                    Some(pgid) => Pid::from_raw(pgid as i32),
+                    None => unistd::getpid(),
+                };
+                if let Err(_err) = unistd::setpgid(pid, pgid) {
                     // Ignore, do in parent and child.
-                    //let msg = format!("Error making {} foreground: {}", pid, err);
+                    //let msg = format!("Error setting pgid for {}: {}", pid, err);
+                }
+                if foreground {
+                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                        // Ignore, do in parent and child.
+                        //let msg = format!("Error making {} foreground: {}", pid, err);
+                    }
                 }
             }
 
@@ -164,7 +167,7 @@ fn run_command(
         });
     }
 
-    let term_settings = if environment.is_tty {
+    let term_settings = if environment.is_tty && environment.do_job_control {
         Some(termios::tcgetattr(shell_terminal).unwrap())
     } else {
         None
@@ -174,29 +177,30 @@ fn run_command(
     let mut result = Expression::Atom(Atom::Nil);
     match proc {
         Ok(mut proc) => {
-            let pid = Pid::from_raw(proc.id() as i32);
-            if pgid.is_none() {
-                // || !environment.in_pipe {
-                let mut job = Job {
-                    pids: Vec::new(),  //proc.id(),
-                    names: Vec::new(), //command.to_string(),
-                    status: JobStatus::Running,
-                };
-                job.pids.push(proc.id());
-                job.names.push(command.to_string());
-                environment.jobs.borrow_mut().push(job);
-            } else {
-                let mut job = environment.jobs.borrow_mut().pop().unwrap();
-                job.pids.push(proc.id());
-                job.names.push(command.to_string());
-                environment.jobs.borrow_mut().push(job);
-            }
-            let pgid = match pgid {
+            let pgid_raw = match pgid {
                 Some(pgid) => Pid::from_raw(pgid as i32),
                 None => Pid::from_raw(proc.id() as i32),
             };
-            if let Err(_err) = unistd::setpgid(pid, pgid) {
-                // Ignore, do in parent and child.
+            if environment.do_job_control {
+                let pid = Pid::from_raw(proc.id() as i32);
+                if pgid.is_none() {
+                    let mut job = Job {
+                        pids: Vec::new(),
+                        names: Vec::new(),
+                        status: JobStatus::Running,
+                    };
+                    job.pids.push(proc.id());
+                    job.names.push(command.to_string());
+                    environment.jobs.borrow_mut().push(job);
+                } else {
+                    let mut job = environment.jobs.borrow_mut().pop().unwrap();
+                    job.pids.push(proc.id());
+                    job.names.push(command.to_string());
+                    environment.jobs.borrow_mut().push(job);
+                }
+                if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
+                    // Ignore, do in parent and child.
+                }
             }
             if let Some(data_in) = data_in {
                 if proc.stdin.is_some() {
@@ -208,8 +212,10 @@ fn run_command(
             }
             let pid = proc.id();
             result = if foreground && !environment.in_pipe {
-                if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid) {
-                    // Ignore, do in parent and child.
+                if environment.do_job_control {
+                    if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid_raw) {
+                        // Ignore, do in parent and child.
+                    }
                 }
                 let status = if let Some(term_settings) = term_settings {
                     wait_pid(environment, proc.id(), Some(&term_settings))
