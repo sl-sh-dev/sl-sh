@@ -288,10 +288,8 @@ pub fn setup_args(
                     }
                 }
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "parameter name must be symbol",
-                ));
+                let msg = format!("parameter name must be symbol, got {:?}", arg);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
         }
         if use_rest && post_rest_cnt != 1 {
@@ -301,7 +299,9 @@ pub fn setup_args(
             ));
         }
         let t_vars = if eval_args {
-            Some(to_args(environment, args)?)
+            Some(list_to_args(environment, args, true)?)
+        } else if args.len() == 1 && is_proper_list(&args[0]) {
+            Some(list_to_args(environment, args, false)?)
         } else {
             None
         };

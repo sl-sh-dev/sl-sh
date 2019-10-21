@@ -592,7 +592,8 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
-fn builtin_macro(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+fn builtin_macro(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
