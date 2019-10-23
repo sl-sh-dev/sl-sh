@@ -47,7 +47,7 @@
 
 ;; Redirect stderr to null (/dev/null equivelent).
 (defmacro err>null (body)
-	`(dyn '*stdout* (open "/dev/null" :write) ,body))
+	`(dyn '*stderr* (open "/dev/null" :write) ,body))
 
 ;; Redirect both stdout and stderr to null (/dev/null equivelent).
 (defmacro out-err>null (body)
