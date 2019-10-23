@@ -1,49 +1,57 @@
 ;;; Macros to make working with the shell easier.
 
-;; Truncate a file.
-(defmacro file-trunc (file)
-	`(open ,file :create :truncate))
-
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
 (defmacro alias (name body)
 	`(defn ,name (&rest args)
-		(use-stdout (loose-symbols (eval (vappend (quote ,body) args))))))
+		(loose-symbols (eval (vappend (quote ,body) args)))))
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
-	`(use-stdout (stdout-to ,file ,body)))
+	`(if (is-file ,file)
+		(dyn '*stdout* ,file ,body)
+		(dyn '*stdout* (open ,file :create :append) ,body)))
 
 ;; Redirect stdout to file, truncate the file first.
 (defmacro out> (file body)
-	`(progn (file-trunc ,file) (use-stdout (stdout-to ,file ,body))))
+	`(if (is-file ,file)
+		(dyn '*stdout* ,file ,body)
+		(dyn '*stdout* (open ,file :create :truncate) ,body)))
 
 ;; Redirect stderr to file, append the output.
 (defmacro err>> (file body)
-	`(use-stdout (stderr-to ,file ,body)))
+	`(if (is-file ,file)
+		(dyn '*stderr* ,file ,body)
+		(dyn '*stderr* (open ,file :create :append) ,body)))
 
 ;; Redirect stderr to file, truncate the file first.
 (defmacro err> (file body)
-	`(progn (file-trunc ,file) (use-stdout (stderr-to ,file ,body))))
+	`(if (is-file ,file)
+		(dyn '*stderr* ,file ,body)
+		(dyn '*stderr* (open ,file :create :truncate) ,body)))
 
 ;; Redirect both stdout and stderr to the same file, append the output.
 (defmacro out-err>> (file body)
-	`(let ((f nil)) (loose-symbols (setq f (open ,file :create :append))) (stdout-to f (stderr-to f ,body))))
+	`(if (is-file ,file)
+		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
+		(dyn '*stdout* (open ,file :create :append) (dyn '*stderr* *stdout* ,body))))
 
 ;; Redirect both stdout and stderr to the same file, truncate the file first.
 (defmacro out-err> (file body)
-	`(let ((f nil)) (loose-symbols (setq f (open ,file :create :truncate))) (stdout-to f (stderr-to f ,body))))
+	`(if (is-file ,file)
+		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
+		(dyn '*stdout* (open ,file :create :truncate) (dyn '*stderr* *stdout* ,body))))
 
 ;; Redirect stdout to null (/dev/null equivelent).
 (defmacro out>null (body)
-	`(out-null ,body))
+	`(dyn '*stdout* (open "/dev/null" :write) ,body))
 
 ;; Redirect stderr to null (/dev/null equivelent).
 (defmacro err>null (body)
-	`(err-null ,body))
+	`(dyn '*stdout* (open "/dev/null" :write) ,body))
 
 ;; Redirect both stdout and stderr to null (/dev/null equivelent).
 (defmacro out-err>null (body)
-	`(out-null (err-null ,body)))
+	`(dyn '*stdout* (open "/dev/null" :write) (dyn '*stderr* *stdout* ,body)))
 
 ;; Shorthand for pipe builtin.
 (defmacro | (&rest body)

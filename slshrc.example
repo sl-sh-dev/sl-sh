@@ -1,7 +1,7 @@
 ; This is an example config file, you would put it in ~/.config/slsh/slshrc to use it.
 
 (defn parse_git_branch () (let ((branch))
-	(err-null (setq branch (git rev-parse --abbrev-ref HEAD)))
+	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
 	(if (= branch "")
 		(format "")
 		(format "(" (str-trim branch) ")"))))

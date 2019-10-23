@@ -201,6 +201,51 @@ pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::
     }
 }
 
+fn proc_set_vars2(
+    environment: &mut Environment,
+    key: &Expression,
+    val: &Expression,
+) -> io::Result<(String, Expression)> {
+    let key = match key {
+        Expression::Atom(Atom::Symbol(s)) => s.clone(),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "first form (binding key) must evaluate to a symbol",
+            ));
+        }
+    };
+    let mut val = match val {
+        Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
+            val.make_string(environment)
+                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+        )),
+        Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
+            Expression::Atom(Atom::String(
+                val.make_string(environment)
+                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+            ))
+        }
+        _ => val.clone(),
+    };
+    if let Expression::Atom(Atom::String(vs)) = val {
+        let vs = match expand_tilde(&vs) {
+            Some(v) => v,
+            None => vs,
+        };
+        val = Expression::Atom(Atom::String(vs));
+    }
+    Ok((key, val))
+}
+
+fn proc_set_vars(
+    environment: &mut Environment,
+    args: &[Expression],
+) -> io::Result<(String, Expression)> {
+    let mut args = args.iter();
+    proc_set_vars2(environment, args.next().unwrap(), args.next().unwrap())
+}
+
 fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
@@ -209,39 +254,11 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
             "set can only have two expressions",
         ))
     } else {
-        let mut args = args.iter();
-        let key = args.next().unwrap();
-        let key = match key {
-            Expression::Atom(Atom::Symbol(s)) => s.clone(),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "set's first form must evaluate to a symbol",
-                ));
-            }
-        };
-        if let Some(scope) = get_symbols_scope(environment, &key) {
-            let val = args.next().unwrap();
-            let mut val = match val {
-                Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-                    val.make_string(environment)
-                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-                )),
-                Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
-                    Expression::Atom(Atom::String(
-                        val.make_string(environment)
-                            .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-                    ))
-                }
-                _ => val.clone(),
-            };
-            if let Expression::Atom(Atom::String(vs)) = val {
-                let vs = match expand_tilde(&vs) {
-                    Some(v) => v,
-                    None => vs,
-                };
-                val = Expression::Atom(Atom::String(vs));
-            }
+        let (key, val) = proc_set_vars(environment, &args)?;
+        if environment.dynamic_scope.contains_key(&key) {
+            environment.dynamic_scope.insert(key, Rc::new(val.clone()));
+            Ok(val)
+        } else if let Some(scope) = get_symbols_scope(environment, &key) {
             scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
             Ok(val)
         } else {
@@ -329,40 +346,40 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
             "def can only have two expressions",
         ))
     } else {
-        let mut args = args.iter();
-        let key = args.next().unwrap();
-        let key = match key {
-            Expression::Atom(Atom::Symbol(s)) => s.clone(),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "def's first form must evaluate to a symbol",
-                ));
-            }
-        };
-        let val = args.next().unwrap();
-        let mut val = match val {
-            Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-                val.make_string(environment)
-                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-            )),
-            Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
-                Expression::Atom(Atom::String(
-                    val.make_string(environment)
-                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-                ))
-            }
-            _ => val.clone(),
-        };
-        if let Expression::Atom(Atom::String(vs)) = val {
-            let vs = match expand_tilde(&vs) {
-                Some(v) => v,
-                None => vs,
-            };
-            val = Expression::Atom(Atom::String(vs));
-        }
+        let (key, val) = proc_set_vars(environment, &args)?;
         set_expression_current(environment, key, Rc::new(val.clone()));
         Ok(val)
+    }
+}
+
+fn builtin_dyn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
+    if args.len() != 3 {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "dyn requires three expressions (symbol, value, form to evaluate)",
+        ))
+    } else {
+        let arg0 = eval(environment, &args[0])?;
+        let arg1 = eval(environment, &args[1])?;
+        let (key, val) = proc_set_vars2(environment, &arg0, &arg1)?;
+        let old_val = if environment.dynamic_scope.contains_key(&key) {
+            Some(environment.dynamic_scope.remove(&key).unwrap())
+        } else {
+            None
+        };
+        environment
+            .dynamic_scope
+            .insert(key.clone(), Rc::new(val.clone()));
+        let res = eval(environment, &args[2]);
+        if old_val.is_some() {
+            environment
+                .dynamic_scope
+                .insert(key.clone(), old_val.unwrap());
+        } else {
+            environment.dynamic_scope.remove(&key);
+        }
+        res
     }
 }
 
@@ -959,6 +976,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::Func(builtin_export)),
     );
     data.insert("def".to_string(), Rc::new(Expression::Func(builtin_def)));
+    data.insert("dyn".to_string(), Rc::new(Expression::Func(builtin_dyn)));
     data.insert(
         "is-global-scope".to_string(),
         Rc::new(Expression::Func(builtin_is_global_scope)),

@@ -1,12 +1,10 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::builtins::*;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
@@ -80,104 +78,6 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
             Ok(Expression::Atom(Atom::True))
         }
     }
-}
-
-fn builtin_use_stdout(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    let old_out = environment.state.stdout_status.clone();
-    let old_err = environment.state.stderr_status.clone();
-    if !environment.in_pipe {
-        // Don't break a pipe if in one.
-        environment.state.stdout_status = Some(IOState::Inherit);
-        environment.state.stderr_status = Some(IOState::Inherit);
-    }
-    // Do not use ?, make sure to reset environment state even on error.
-    let args_res = list_to_args(environment, args, true);
-    environment.state.stdout_status = old_out;
-    environment.state.stderr_status = old_err;
-    if let Err(err) = args_res {
-        Err(err)
-    } else {
-        let mut args = args_res.unwrap();
-        if args.is_empty() {
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            Ok(args.pop().unwrap())
-        }
-    }
-}
-
-fn builtin_err_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.state.stderr_status = Some(IOState::Null);
-    let res = builtin_progn(environment, args);
-    environment.state.stderr_status = None;
-    res
-}
-
-fn builtin_out_null(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    environment.state.stdout_status = Some(IOState::Null);
-    let res = builtin_progn(environment, args);
-    environment.state.stdout_status = None;
-    res
-}
-
-fn internal_output_to(
-    environment: &mut Environment,
-    args: &[Expression],
-    name: &str,
-    is_stdout: bool,
-) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.len() < 2 {
-        let msg = format!("{} must have at least two forms", name);
-        Err(io::Error::new(io::ErrorKind::Other, msg))
-    } else {
-        let file = match eval(environment, &args[0])? {
-            Expression::Atom(Atom::String(s)) => {
-                let outputs = std::fs::OpenOptions::new()
-                    .read(false)
-                    .write(true)
-                    .append(true)
-                    .create(true)
-                    .open(&s)?;
-                Expression::File(FileState::Write(Rc::new(RefCell::new(BufWriter::new(
-                    outputs,
-                )))))
-            }
-            Expression::File(f) => Expression::File(f),
-            _ => {
-                let msg = format!("{} must have a file", name);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
-            }
-        };
-        let new_scope = build_new_scope(Some(environment.current_scope.last().unwrap().clone()));
-        environment.current_scope.push(new_scope);
-        if is_stdout {
-            set_expression_current(environment, "*stdout*".to_string(), Rc::new(file));
-            environment.state.stdout_status = Some(IOState::Inherit);
-        } else {
-            set_expression_current(environment, "*stderr*".to_string(), Rc::new(file));
-            environment.state.stderr_status = Some(IOState::Inherit);
-        };
-        let res = builtin_progn(environment, &args[1..]);
-        environment.current_scope.pop();
-        if is_stdout {
-            environment.state.stdout_status = None;
-        } else {
-            environment.state.stderr_status = None;
-        }
-        res
-    }
-}
-
-fn builtin_stdout_to(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    internal_output_to(environment, args, "stdout-to", true)
-}
-
-fn builtin_stderr_to(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    internal_output_to(environment, args, "stderr-to", false)
 }
 
 fn builtin_path_exists(
@@ -420,26 +320,6 @@ fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result
 
 pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("cd".to_string(), Rc::new(Expression::Func(builtin_cd)));
-    data.insert(
-        "use-stdout".to_string(),
-        Rc::new(Expression::Func(builtin_use_stdout)),
-    );
-    data.insert(
-        "out-null".to_string(),
-        Rc::new(Expression::Func(builtin_out_null)),
-    );
-    data.insert(
-        "err-null".to_string(),
-        Rc::new(Expression::Func(builtin_err_null)),
-    );
-    data.insert(
-        "stdout-to".to_string(),
-        Rc::new(Expression::Func(builtin_stdout_to)),
-    );
-    data.insert(
-        "stderr-to".to_string(),
-        Rc::new(Expression::Func(builtin_stderr_to)),
-    );
     data.insert(
         "path-exists".to_string(),
         Rc::new(Expression::Func(builtin_path_exists)),

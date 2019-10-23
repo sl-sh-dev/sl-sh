@@ -186,6 +186,28 @@ fn builtin_str_append(
     }
 }
 
+fn builtin_str(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let old_out = environment.state.stdout_status.clone();
+    let old_err = environment.state.stderr_status.clone();
+    environment.state.stdout_status = Some(IOState::Pipe);
+    environment.state.stderr_status = Some(IOState::Pipe);
+    // Do not use ?, make sure to reset environment state even on error.
+    let args = list_to_args(environment, args, true);
+    let ret = match args {
+        Ok(args) => {
+            let mut res = String::new();
+            for a in args {
+                res.push_str(&a.make_string(environment)?);
+            }
+            Ok(Expression::Atom(Atom::String(res)))
+        }
+        Err(err) => Err(err),
+    };
+    environment.state.stdout_status = old_out;
+    environment.state.stderr_status = old_err;
+    ret
+}
+
 pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "str-trim".to_string(),
@@ -219,4 +241,5 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         "str-append".to_string(),
         Rc::new(Expression::Func(builtin_str_append)),
     );
+    data.insert("str".to_string(), Rc::new(Expression::Func(builtin_str)));
 }

@@ -136,7 +136,7 @@ Builtins:
 
 Form | Args | Type | description
 -----|------|------|------------
-join | obj/obj | builtin | Creates a Pair with the provided object as car and cdr.
+join | obj/obj | builtin | Creates a Pair with the provided objects as car and cdr.
 list | obj+ | builtin | Will produce a proper list with the provided objects as elements (last pair has a cdr of nil).
 car | pair | builtin | Produces the car (first/left) element of a pair.
 cdr | pair | builtin | Produces the cdr (second/right) element of a pair.
@@ -178,12 +178,6 @@ macros not the builtins.
 Form | Args | Type | description
 -----|------|------|------------
 cd | path | builtin | Change to provided directory.
-use-stdout | | builtin |
-out-null | | builtin |
-err-null | | builtin |
-stdout-to | | builtin |
-stderr-to | | builtin |
-file-trunc | | macro |
 path-exists | path | builtin | Boolean, does path exist.
 is-file | path | builtin | Boolean, is path a file.
 is-dir | path | builtin | Boolean, is path a directory.

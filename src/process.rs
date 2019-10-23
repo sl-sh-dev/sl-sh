@@ -310,27 +310,13 @@ fn get_output(
         Some(IOState::Null) => Stdio::null(),
         Some(IOState::Inherit) => get_std_io(environment, true)?,
         Some(IOState::Pipe) => Stdio::piped(),
-        None => {
-            let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
-            if use_stdout {
-                get_std_io(environment, true)?
-            } else {
-                Stdio::piped()
-            }
-        }
+        None => get_std_io(environment, true)?,
     };
     let err_res = match err_status {
         Some(IOState::Null) => Stdio::null(),
         Some(IOState::Inherit) => get_std_io(environment, false)?,
         Some(IOState::Pipe) => Stdio::piped(),
-        None => {
-            let use_stdout = environment.state.eval_level < 3 && !environment.in_pipe;
-            if use_stdout {
-                get_std_io(environment, false)?
-            } else {
-                Stdio::piped()
-            }
-        }
+        None => get_std_io(environment, false)?,
     };
     Ok((out_res, err_res))
 }

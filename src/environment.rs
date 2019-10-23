@@ -152,6 +152,9 @@ pub struct Environment {
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
+    // This is the dynamic bindings.  These take precidence over the other
+    // bindings.
+    pub dynamic_scope: HashMap<String, Rc<Expression>>,
     // This is the environment's root (global scope), it will also be part of
     // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
@@ -181,6 +184,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
+        dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
     }
@@ -215,6 +219,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
+        dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
     }
@@ -239,15 +244,19 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
 }
 
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Expression>> {
-    let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
-    while loop_scope.is_some() {
-        let scope = loop_scope.unwrap();
-        if let Some(exp) = scope.borrow().data.get(key) {
-            return Some(exp.clone());
+    if environment.dynamic_scope.contains_key(key) {
+        Some(environment.dynamic_scope.get(key).unwrap().clone())
+    } else {
+        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        while loop_scope.is_some() {
+            let scope = loop_scope.unwrap();
+            if let Some(exp) = scope.borrow().data.get(key) {
+                return Some(exp.clone());
+            }
+            loop_scope = scope.borrow().outer.clone();
         }
-        loop_scope = scope.borrow().outer.clone();
+        None
     }
-    None
 }
 
 pub fn set_expression_global(
