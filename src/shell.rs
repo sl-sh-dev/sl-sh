@@ -158,8 +158,10 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 if input.is_empty() {
                     continue;
                 }
-                let add_parens =
-                    !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
+                let add_parens = !(input.starts_with('(')
+                    || input.starts_with('\'')
+                    || input.starts_with('`')
+                    || input.starts_with('#'));
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
                 environment

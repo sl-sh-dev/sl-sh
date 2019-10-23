@@ -810,7 +810,7 @@ fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::R
     if !args.is_empty() {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "version takes to arguments",
+            "version takes no arguments",
         ))
     } else {
         Ok(Expression::Atom(Atom::String(VERSION_STRING.to_string())))

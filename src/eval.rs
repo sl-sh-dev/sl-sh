@@ -84,11 +84,7 @@ fn expand_macro(
     match eval(environment, &sh_macro.body) {
         Ok(expansion) => {
             environment.current_scope.pop();
-            // Mess with eval_level to remove the extra level the macro added- helpful for executables and stdout detection.
-            environment.state.eval_level -= 1;
-            let result = eval(environment, &expansion);
-            environment.state.eval_level += 1;
-            result
+            eval(environment, &expansion)
         }
         Err(err) => {
             environment.current_scope.pop();
@@ -199,7 +195,13 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
         }
         Expression::Pair(command, rest) => {
             let mut parts: Vec<Expression> = Vec::new();
-            parts.push(rest.borrow().clone());
+            let mut push = true;
+            if let Expression::Atom(Atom::Nil) = *rest.borrow() {
+                push = false;
+            }
+            if push {
+                parts.push(rest.borrow().clone());
+            }
             fn_eval(environment, &command.borrow(), &parts)
         }
         Expression::Atom(Atom::Symbol(s)) => {

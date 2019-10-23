@@ -1,6 +1,18 @@
+use std::cell::RefCell;
 use std::num::{ParseFloatError, ParseIntError};
+use std::rc::Rc;
 
 use crate::types::*;
+
+enum ListType {
+    Vector,
+    List,
+}
+
+struct List {
+    list_type: ListType,
+    vec: Vec<Expression>,
+}
 
 fn is_whitespace(ch: char) -> bool {
     match ch {
@@ -100,7 +112,10 @@ fn handle_char(
     last_ch: char,
     last_comma: &mut bool,
 ) -> String {
-    if ch == '(' {
+    if ch == '(' && last_ch == '#' {
+        save_token!(tokens, token);
+        tokens.push("#(".to_string());
+    } else if ch == '(' {
         save_token!(tokens, token);
         tokens.push("(".to_string());
     } else if ch == ')' {
@@ -117,8 +132,10 @@ fn handle_char(
         *last_comma = true;
     } else if is_whitespace(ch) {
         save_token!(tokens, token);
-    } else if ch == '\\' && last_ch != '\\' {
+    } else if (ch == '\\' && last_ch != '\\') || ch == '#' {
         // Do nothing...
+        //} else if ch == '#' {
+        // Reader macro char, do not save in tokens.
     } else {
         token.push(ch);
     }
@@ -236,17 +253,62 @@ fn parse_atom(token: &str) -> Expression {
     }
 }
 
-fn close_list(level: i32, stack: &mut Vec<Vec<Expression>>) -> Result<(), ParseError> {
+fn to_cons(v: &mut Vec<Expression>) -> Expression {
+    let mut last_pair = Expression::Atom(Atom::Nil);
+    if !v.is_empty() {
+        let mut i = v.len() - 1;
+        loop {
+            last_pair = Expression::Pair(
+                Rc::new(RefCell::new(v.remove(i))),
+                Rc::new(RefCell::new(last_pair.clone())),
+            );
+            if i == 0 {
+                break;
+            }
+            i -= 1;
+        }
+    } else {
+        last_pair = Expression::Pair(
+            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
+            Rc::new(RefCell::new(last_pair.clone())),
+        );
+    }
+    last_pair
+}
+
+fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
     if level < 0 {
         return Err(ParseError {
             reason: "Unexpected `)`".to_string(),
         });
     }
+    /*if level == 0 && cons_list {
+        match stack.pop() {
+            Some(mut v) => {
+                let mut vn: Vec<Expression> = Vec::with_capacity(1);
+                vn.push(to_cons(&mut v));
+                stack.push(vn);
+            }
+            None => {
+                return Err(ParseError {
+                    reason: "Unexpected `)`".to_string(),
+                });
+            }
+        }
+    }*/
     if level > 0 {
         match stack.pop() {
-            Some(v) => match stack.pop() {
+            Some(mut v) => match stack.pop() {
                 Some(mut v2) => {
-                    v2.push(Expression::with_list(v));
+                    match v.list_type {
+                        ListType::Vector => {
+                            v2.vec.push(Expression::with_list(v.vec));
+                        }
+                        ListType::List => {
+                            let cons_list = to_cons(&mut v.vec);
+                            v2.vec.push(cons_list);
+                        }
+                    }
                     stack.push(v2);
                 }
                 None => {
@@ -269,12 +331,12 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
             reason: "No tokens".to_string(),
         });
     }
-    if tokens[0] != "(" && tokens[0] != "'" && tokens[0] != "`" {
+    if tokens[0] != "(" && tokens[0] != "#(" && tokens[0] != "'" && tokens[0] != "`" {
         return Err(ParseError {
             reason: "Not a list".to_string(),
         });
     }
-    let mut stack: Vec<Vec<Expression>> = Vec::new();
+    let mut stack: Vec<List> = Vec::new();
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
     let mut backtick_level = 0;
@@ -285,7 +347,10 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
                 quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
-                stack.push(quoted);
+                stack.push(List {
+                    list_type: ListType::Vector,
+                    vec: quoted,
+                });
             }
             "`" => {
                 level += 1;
@@ -297,11 +362,24 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                     quoted.push(Expression::Atom(Atom::Symbol("bquote".to_string())));
                     backtick_level = level;
                 }
-                stack.push(quoted);
+                stack.push(List {
+                    list_type: ListType::Vector,
+                    vec: quoted,
+                });
+            }
+            "#(" => {
+                level += 1;
+                stack.push(List {
+                    list_type: ListType::List,
+                    vec: Vec::<Expression>::new(),
+                });
             }
             "(" => {
                 level += 1;
-                stack.push(Vec::<Expression>::new());
+                stack.push(List {
+                    list_type: ListType::Vector,
+                    vec: Vec::<Expression>::new(),
+                });
             }
             ")" => {
                 level -= 1;
@@ -321,7 +399,7 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
             }
             _ => match stack.pop() {
                 Some(mut v) => {
-                    v.push(parse_atom(token));
+                    v.vec.push(parse_atom(token));
                     stack.push(v);
                     if let Some(quote_exit_level) = qexits.pop() {
                         if level == quote_exit_level {
@@ -359,13 +437,24 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     }
     if stack.len() > 1 {
         let mut v: Vec<Expression> = Vec::new();
-        for s in stack {
-            v.push(Expression::with_list(s));
+        for s in stack.iter_mut() {
+            match s.list_type {
+                ListType::Vector => {
+                    // XXX do something about this stupid clone...
+                    v.push(Expression::with_list(s.vec.clone()));
+                }
+                ListType::List => {
+                    v.push(to_cons(&mut s.vec));
+                }
+            }
         }
         Ok(Expression::with_list(v))
     } else {
         match stack.pop() {
-            Some(v) => Ok(Expression::with_list(v)),
+            Some(mut v) => match v.list_type {
+                ListType::Vector => Ok(Expression::with_list(v.vec)),
+                ListType::List => Ok(to_cons(&mut v.vec)),
+            },
             None => Err(ParseError {
                 reason: "Empty results".to_string(),
             }),
