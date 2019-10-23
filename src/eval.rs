@@ -191,7 +191,20 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            fn_eval(environment, command, parts)
+            if parts.len() == 1 {
+                if let Expression::Pair(_, _) = parts[0] {
+                    let mut p = Vec::with_capacity(1);
+                    p.push(Expression::Pair(
+                        Rc::new(RefCell::new(parts[0].clone())),
+                        Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
+                    ));
+                    fn_eval(environment, command, &p)
+                } else {
+                    fn_eval(environment, command, parts)
+                }
+            } else {
+                fn_eval(environment, command, parts)
+            }
         }
         Expression::Pair(command, rest) => {
             let mut parts: Vec<Expression> = Vec::new();

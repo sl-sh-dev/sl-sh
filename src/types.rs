@@ -7,6 +7,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
+use crate::builtins_util::is_proper_list;
 use crate::environment::*;
 use crate::process::*;
 
@@ -142,11 +143,26 @@ impl Expression {
                 res.push(')');
                 res
             }
-            Expression::Pair(e1, e2) => format!(
-                "( {} . {} )",
-                e1.borrow().to_string(),
-                e2.borrow().to_string()
-            ),
+            Expression::Pair(e1, e2) => {
+                if is_proper_list(self) {
+                    let mut res = String::new();
+                    res.push_str("#( ");
+                    let mut current = e1.borrow().clone();
+                    while let Expression::Pair(e1, e2) = current {
+                        res.push_str(&e1.borrow().to_string());
+                        res.push_str(" ");
+                        current = e2.borrow().clone();
+                    }
+                    res.push(')');
+                    res
+                } else {
+                    format!(
+                        "( {} . {} )",
+                        e1.borrow().to_string(),
+                        e2.borrow().to_string()
+                    )
+                }
+            }
             Expression::File(_) => "File".to_string(),
         }
     }
@@ -199,11 +215,26 @@ impl Expression {
                 res.push(')');
                 Ok(res)
             }
-            Expression::Pair(e1, e2) => Ok(format!(
-                "( {} . {} )",
-                e1.borrow().to_string(),
-                e2.borrow().to_string()
-            )),
+            Expression::Pair(e1, e2) => {
+                if is_proper_list(self) {
+                    let mut res = String::new();
+                    res.push_str("#( ");
+                    let mut current = e1.borrow().clone();
+                    while let Expression::Pair(e1, e2) = current {
+                        res.push_str(&e1.borrow().make_string(environment)?);
+                        res.push_str(" ");
+                        current = e2.borrow().clone();
+                    }
+                    res.push(')');
+                    Ok(res)
+                } else {
+                    Ok(format!(
+                        "( {} . {} )",
+                        e1.borrow().to_string(),
+                        e2.borrow().to_string()
+                    ))
+                }
+            }
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
@@ -325,12 +356,23 @@ impl Expression {
                 write!(writer, ")")?;
             }
             Expression::Pair(e1, e2) => {
-                write!(
-                    writer,
-                    "( {} . {} )",
-                    e1.borrow().to_string(),
-                    e2.borrow().to_string()
-                )?;
+                if is_proper_list(self) {
+                    write!(writer, "#( ")?;
+                    let mut current = e1.borrow().clone();
+                    while let Expression::Pair(e1, e2) = current {
+                        e1.borrow().writef(environment, writer)?;
+                        write!(writer, " ")?;
+                        current = e2.borrow().clone();
+                    }
+                    write!(writer, ")")?;
+                } else {
+                    write!(
+                        writer,
+                        "( {} . {} )",
+                        e1.borrow().to_string(),
+                        e2.borrow().to_string()
+                    )?;
+                }
             }
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
