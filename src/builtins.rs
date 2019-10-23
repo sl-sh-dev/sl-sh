@@ -444,7 +444,15 @@ fn builtin_quote(_environment: &mut Environment, args: &[Expression]) -> io::Res
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"));
     }
-    Ok(args.get(0).unwrap().clone())
+    if let Expression::Pair(e1, e2) = args.get(0).unwrap() {
+        if let Expression::Atom(Atom::Nil) = *e2.borrow() {
+            Ok(e1.borrow().clone())
+        } else {
+            Ok(args.get(0).unwrap().clone())
+        }
+    } else {
+        Ok(args.get(0).unwrap().clone())
+    }
 }
 
 fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Result<Expression> {

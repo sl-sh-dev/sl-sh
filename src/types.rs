@@ -147,7 +147,9 @@ impl Expression {
                 if is_proper_list(self) {
                     let mut res = String::new();
                     res.push_str("#( ");
-                    let mut current = e1.borrow().clone();
+                    let mut current = e2.borrow().clone();
+                    res.push_str(&e1.borrow().to_string());
+                    res.push_str(" ");
                     while let Expression::Pair(e1, e2) = current {
                         res.push_str(&e1.borrow().to_string());
                         res.push_str(" ");
@@ -219,7 +221,9 @@ impl Expression {
                 if is_proper_list(self) {
                     let mut res = String::new();
                     res.push_str("#( ");
-                    let mut current = e1.borrow().clone();
+                    res.push_str(&e1.borrow().make_string(environment)?);
+                    res.push_str(" ");
+                    let mut current = e2.borrow().clone();
                     while let Expression::Pair(e1, e2) = current {
                         res.push_str(&e1.borrow().make_string(environment)?);
                         res.push_str(" ");
@@ -230,8 +234,8 @@ impl Expression {
                 } else {
                     Ok(format!(
                         "( {} . {} )",
-                        e1.borrow().to_string(),
-                        e2.borrow().to_string()
+                        e1.borrow().make_string(environment)?,
+                        e2.borrow().make_string(environment)?
                     ))
                 }
             }
@@ -358,7 +362,9 @@ impl Expression {
             Expression::Pair(e1, e2) => {
                 if is_proper_list(self) {
                     write!(writer, "#( ")?;
-                    let mut current = e1.borrow().clone();
+                    e1.borrow().writef(environment, writer)?;
+                    write!(writer, " ")?;
+                    let mut current = e2.borrow().clone();
                     while let Expression::Pair(e1, e2) = current {
                         e1.borrow().writef(environment, writer)?;
                         write!(writer, " ")?;
