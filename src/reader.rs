@@ -134,8 +134,7 @@ fn handle_char(
         save_token!(tokens, token);
     } else if (ch == '\\' && last_ch != '\\') || ch == '#' {
         // Do nothing...
-        //} else if ch == '#' {
-        // Reader macro char, do not save in tokens.
+        // # is reader macro char, do not save in tokens.
     } else {
         token.push(ch);
     }
@@ -148,6 +147,7 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
     let mut token = String::new();
     let mut last_ch = ' ';
     let mut in_comment = false;
+    let mut comment_depth = 0;
     let mut last_comma = false;
     let mut escape_code: Vec<char> = Vec::with_capacity(2);
     let mut in_escape_code = false;
@@ -171,9 +171,17 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
             }
         }
         if in_comment {
-            if ch == '\n' {
+            if ch == '\n' && comment_depth == 0 {
                 in_comment = false;
+            } else if last_ch == '|' && ch == '#' {
+                comment_depth -= 1;
+                if comment_depth == 0 {
+                    in_comment = false;
+                }
+            } else if last_ch == '#' && ch == '|' {
+                comment_depth += 1;
             }
+            last_ch = ch;
             continue;
         }
         if ch == '\n' && last_ch == '\\' {
@@ -207,6 +215,10 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
         } else {
             if ch == ';' {
                 // Comment, ignore the rest of the line.
+                in_comment = true;
+                continue;
+            } else if last_ch == '#' && ch == '|' {
+                comment_depth += 1;
                 in_comment = true;
                 continue;
             }
@@ -282,27 +294,20 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
             reason: "Unexpected `)`".to_string(),
         });
     }
-    /*if level == 0 && cons_list {
-        match stack.pop() {
-            Some(mut v) => {
-                let mut vn: Vec<Expression> = Vec::with_capacity(1);
-                vn.push(to_cons(&mut v));
-                stack.push(vn);
-            }
-            None => {
-                return Err(ParseError {
-                    reason: "Unexpected `)`".to_string(),
-                });
-            }
-        }
-    }*/
     if level > 0 {
         match stack.pop() {
             Some(mut v) => match stack.pop() {
                 Some(mut v2) => {
                     match v.list_type {
                         ListType::Vector => {
-                            v2.vec.push(Expression::with_list(v.vec));
+                            if v.vec.len() == 3 && v.vec[1].to_string() == "." {
+                                v2.vec.push(Expression::Pair(
+                                    Rc::new(RefCell::new(v.vec[0].clone())),
+                                    Rc::new(RefCell::new(v.vec[2].clone())),
+                                ));
+                            } else {
+                                v2.vec.push(Expression::with_list(v.vec));
+                            }
                         }
                         ListType::List => {
                             let cons_list = to_cons(&mut v.vec);

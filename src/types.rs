@@ -41,19 +41,28 @@ pub enum Atom {
     Macro(Macro),
 }
 
-impl Atom {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Atom::Nil => "nil".to_string(),
-            Atom::True => "true".to_string(),
-            Atom::Float(f) => format!("{}", f),
-            Atom::Int(i) => format!("{}", i),
-            Atom::Symbol(s) => s.clone(),
-            Atom::String(s) => s.clone(),
-            Atom::Lambda(l) => {
-                format!("Lambda ({}) ({})", l.params.to_string(), l.body.to_string())
-            }
-            Atom::Macro(m) => format!("Macro ({}) ({})", m.params.to_string(), m.body.to_string()),
+            Atom::Nil => write!(f, "nil"),
+            Atom::True => write!(f, "true"),
+            Atom::Float(n) => write!(f, "{}", n),
+            Atom::Int(i) => write!(f, "{}", i),
+            Atom::Symbol(s) => write!(f, "{}", s),
+            Atom::String(s) => write!(f, "\"{}\"", s),
+            Atom::Lambda(l) => write!(f, "(fn {} {})", l.params.to_string(), l.body.to_string()),
+            Atom::Macro(m) => write!(f, "(macro {} {})", m.params.to_string(), m.body.to_string()),
+        }
+    }
+}
+
+impl Atom {
+    // Like to_string but don't put quotes around strings.
+    pub fn as_string(&self) -> String {
+        if let Atom::String(s) = self {
+            s.to_string()
+        } else {
+            self.to_string()
         }
     }
 
@@ -98,6 +107,59 @@ pub enum Expression {
     File(FileState),
 }
 
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expression::Atom(a) => write!(f, "{}", a),
+            Expression::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
+            Expression::Process(ProcessState::Over(pid, exit_status)) => write!(
+                f,
+                "#<PID: {}, EXIT STATUS: {},  Complete>",
+                pid, exit_status
+            ),
+            Expression::Func(_) => write!(f, "#<Function>"),
+            Expression::List(list) => {
+                let mut res = String::new();
+                res.push_str("( ");
+                for exp in list.borrow().iter() {
+                    res.push_str(&exp.to_string());
+                    res.push_str(" ");
+                }
+                res.push(')');
+                write!(f, "{}", res)
+            }
+            Expression::Pair(e1, e2) => {
+                if is_proper_list(self) {
+                    let mut res = String::new();
+                    res.push_str("#( ");
+                    let mut current = e2.borrow().clone();
+                    res.push_str(&e1.borrow().to_string());
+                    res.push_str(" ");
+                    while let Expression::Pair(e1, e2) = current {
+                        res.push_str(&e1.borrow().to_string());
+                        res.push_str(" ");
+                        current = e2.borrow().clone();
+                    }
+                    res.push(')');
+                    write!(f, "{}", res)
+                } else {
+                    write!(
+                        f,
+                        "( {} . {} )",
+                        e1.borrow().to_string(),
+                        e2.borrow().to_string()
+                    )
+                }
+            }
+            Expression::File(FileState::Stdout) => write!(f, "#<STDOUT>"),
+            Expression::File(FileState::Stderr) => write!(f, "#<STDERR>"),
+            Expression::File(FileState::Stdin) => write!(f, "#<STDIN>"),
+            Expression::File(FileState::Closed) => write!(f, "#<CLOSED FILE>"),
+            Expression::File(FileState::Read(_file)) => write!(f, "#<READ FILE>"),
+            Expression::File(FileState::Write(_file)) => write!(f, "#<WRITE FILE>"),
+        }
+    }
+}
 impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -125,56 +187,12 @@ impl Expression {
         Expression::List(Rc::new(RefCell::new(list)))
     }
 
-    pub fn to_string(&self) -> String {
-        match self {
-            Expression::Atom(a) => a.to_string(),
-            Expression::Process(ProcessState::Running(pid)) => format!("{}", pid).to_string(),
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
-                format!("{}", pid).to_string()
-            }
-            Expression::Func(_) => "Func".to_string(),
-            Expression::List(list) => {
-                let mut res = String::new();
-                res.push_str("( ");
-                for exp in list.borrow().iter() {
-                    res.push_str(&exp.to_string());
-                    res.push_str(" ");
-                }
-                res.push(')');
-                res
-            }
-            Expression::Pair(e1, e2) => {
-                if is_proper_list(self) {
-                    let mut res = String::new();
-                    res.push_str("#( ");
-                    let mut current = e2.borrow().clone();
-                    res.push_str(&e1.borrow().to_string());
-                    res.push_str(" ");
-                    while let Expression::Pair(e1, e2) = current {
-                        res.push_str(&e1.borrow().to_string());
-                        res.push_str(" ");
-                        current = e2.borrow().clone();
-                    }
-                    res.push(')');
-                    res
-                } else {
-                    format!(
-                        "( {} . {} )",
-                        e1.borrow().to_string(),
-                        e2.borrow().to_string()
-                    )
-                }
-            }
-            Expression::File(_) => "File".to_string(),
-        }
-    }
-
     pub fn display_type(&self) -> String {
         match self {
             Expression::Atom(a) => a.display_type(),
             Expression::Process(_) => "Process".to_string(),
             Expression::Func(_) => "Func".to_string(),
-            Expression::List(_) => "List".to_string(),
+            Expression::List(_) => "Vector".to_string(),
             Expression::Pair(_, _) => "Pair".to_string(),
             Expression::File(_) => "File".to_string(),
         }
@@ -202,43 +220,13 @@ impl Expression {
     pub fn make_string(&self, environment: &Environment) -> io::Result<String> {
         match self {
             Expression::Atom(a) => Ok(a.to_string()),
-            Expression::Process(ProcessState::Running(_pid)) => Ok("".to_string()),
+            Expression::Process(ProcessState::Running(_pid)) => Ok(self.to_string()),
             Expression::Process(ProcessState::Over(pid, _exit_status)) => {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
-            Expression::Func(_) => Ok("".to_string()),
-            Expression::List(list) => {
-                let mut res = String::new();
-                res.push_str("( ");
-                for exp in list.borrow().iter() {
-                    res.push_str(&exp.make_string(environment)?);
-                    res.push_str(" ");
-                }
-                res.push(')');
-                Ok(res)
-            }
-            Expression::Pair(e1, e2) => {
-                if is_proper_list(self) {
-                    let mut res = String::new();
-                    res.push_str("#( ");
-                    res.push_str(&e1.borrow().make_string(environment)?);
-                    res.push_str(" ");
-                    let mut current = e2.borrow().clone();
-                    while let Expression::Pair(e1, e2) = current {
-                        res.push_str(&e1.borrow().make_string(environment)?);
-                        res.push_str(" ");
-                        current = e2.borrow().clone();
-                    }
-                    res.push(')');
-                    Ok(res)
-                } else {
-                    Ok(format!(
-                        "( {} . {} )",
-                        e1.borrow().make_string(environment)?,
-                        e2.borrow().make_string(environment)?
-                    ))
-                }
-            }
+            Expression::Func(_) => Ok(self.to_string()),
+            Expression::List(_list) => Ok(self.to_string()),
+            Expression::Pair(_e1, _e2) => Ok(self.to_string()),
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
@@ -246,16 +234,22 @@ impl Expression {
                 f.read_to_string(&mut out_str)?;
                 Ok(out_str)
             }
-            Expression::File(FileState::Stdout) => Ok("".to_string()), //  XXX error instead?
-            Expression::File(FileState::Stderr) => Ok("".to_string()), //  XXX error instead?
             Expression::File(FileState::Read(file)) => {
                 let mut f = file.borrow_mut();
                 let mut out_str = String::new();
                 f.read_to_string(&mut out_str)?;
                 Ok(out_str)
             }
-            Expression::File(FileState::Write(_)) => Ok("".to_string()), //  XXX error instead?
-            Expression::File(FileState::Closed) => Ok("".to_string()),   //  XXX error instead?
+            Expression::File(_) => Ok(self.to_string()),
+        }
+    }
+
+    // Like make_string but don't put quotes around strings.
+    pub fn as_string(&self, environment: &Environment) -> io::Result<String> {
+        if let Expression::Atom(a) = self {
+            Ok(a.as_string())
+        } else {
+            self.make_string(environment)
         }
     }
 
@@ -308,7 +302,7 @@ impl Expression {
 
     pub fn writef(&self, environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
         match self {
-            Expression::Atom(a) => write!(writer, "{}", a.to_string())?,
+            Expression::Atom(a) => write!(writer, "{}", a.as_string())?,
             Expression::Process(ps) => {
                 let pid = match ps {
                     ProcessState::Running(pid) => pid,
@@ -345,41 +339,9 @@ impl Expression {
                 drop(procs);
                 wait_pid(environment, *pid, None);
             }
-            Expression::Func(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Can not write a function",
-                ))
-            }
-            Expression::List(list) => {
-                write!(writer, "( ")?;
-                for exp in list.borrow().iter() {
-                    exp.writef(environment, writer)?;
-                    write!(writer, " ")?;
-                }
-                write!(writer, ")")?;
-            }
-            Expression::Pair(e1, e2) => {
-                if is_proper_list(self) {
-                    write!(writer, "#( ")?;
-                    e1.borrow().writef(environment, writer)?;
-                    write!(writer, " ")?;
-                    let mut current = e2.borrow().clone();
-                    while let Expression::Pair(e1, e2) = current {
-                        e1.borrow().writef(environment, writer)?;
-                        write!(writer, " ")?;
-                        current = e2.borrow().clone();
-                    }
-                    write!(writer, ")")?;
-                } else {
-                    write!(
-                        writer,
-                        "( {} . {} )",
-                        e1.borrow().to_string(),
-                        e2.borrow().to_string()
-                    )?;
-                }
-            }
+            Expression::Func(_) => write!(writer, "{}", self.to_string())?,
+            Expression::List(_list) => write!(writer, "{}", self.to_string())?,
+            Expression::Pair(_e1, _e2) => write!(writer, "{}", self.to_string())?,
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
@@ -403,9 +365,7 @@ impl Expression {
                     }
                 }
             }
-            Expression::File(_) => {
-                return Err(io::Error::new(io::ErrorKind::Other, "Not a readable file."))
-            }
+            Expression::File(_) => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;
         Ok(())

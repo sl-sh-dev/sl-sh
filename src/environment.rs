@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
+use std::fmt;
 use std::io;
 use std::process::Child;
 use std::rc::Rc;
@@ -118,11 +119,11 @@ pub enum JobStatus {
     Stopped,
 }
 
-impl JobStatus {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            JobStatus::Running => "Running".to_string(),
-            JobStatus::Stopped => "Stopped".to_string(),
+            JobStatus::Running => write!(f, "Running"),
+            JobStatus::Stopped => write!(f, "Stopped"),
         }
     }
 }

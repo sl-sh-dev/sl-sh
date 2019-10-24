@@ -7,6 +7,10 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::types::*;
 
+fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<String> {
+    exp.as_string(environment)
+}
+
 fn builtin_str_trim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
@@ -15,7 +19,7 @@ fn builtin_str_trim(environment: &mut Environment, args: &[Expression]) -> io::R
             "str-trim takes one form",
         ));
     }
-    let arg = args[0].make_string(environment)?;
+    let arg = as_string(environment, &args[0])?;
     Ok(Expression::Atom(Atom::String(arg.trim().to_string())))
 }
 
@@ -27,7 +31,7 @@ fn builtin_str_ltrim(environment: &mut Environment, args: &[Expression]) -> io::
             "str-ltrim takes one form",
         ));
     }
-    let arg = args[0].make_string(environment)?;
+    let arg = as_string(environment, &args[0])?;
     Ok(Expression::Atom(Atom::String(arg.trim_start().to_string())))
 }
 
@@ -39,7 +43,7 @@ fn builtin_str_rtrim(environment: &mut Environment, args: &[Expression]) -> io::
             "str-rtrim takes one form",
         ));
     }
-    let arg = args[0].make_string(environment)?;
+    let arg = as_string(environment, &args[0])?;
     Ok(Expression::Atom(Atom::String(arg.trim_end().to_string())))
 }
 
@@ -54,9 +58,9 @@ fn builtin_str_replace(
             "str-replace takes three forms",
         ));
     }
-    let arg0 = args[0].make_string(environment)?;
-    let arg1 = args[1].make_string(environment)?;
-    let arg2 = args[2].make_string(environment)?;
+    let arg0 = as_string(environment, &args[0])?;
+    let arg1 = as_string(environment, &args[1])?;
+    let arg2 = as_string(environment, &args[2])?;
     let new_str = arg0.replace(&arg1, &arg2);
     Ok(Expression::Atom(Atom::String(new_str)))
 }
@@ -69,8 +73,8 @@ fn builtin_str_split(environment: &mut Environment, args: &[Expression]) -> io::
             "str-split takes two forms",
         ));
     }
-    let arg0 = args[0].make_string(environment)?;
-    let arg1 = args[1].make_string(environment)?;
+    let arg0 = as_string(environment, &args[0])?;
+    let arg1 = as_string(environment, &args[1])?;
     let mut split_list: Vec<Expression> = Vec::new();
     for s in arg1.split(&arg0) {
         split_list.push(Expression::Atom(Atom::String(s.to_string())));
@@ -89,7 +93,7 @@ fn builtin_str_cat_list(
             "str-cat-list takes two forms",
         ));
     }
-    let join_str = args[0].make_string(environment)?;
+    let join_str = as_string(environment, &args[0])?;
     let mut new_str = String::new();
     if let Expression::List(list) = &args[1] {
         let mut first = true;
@@ -97,7 +101,7 @@ fn builtin_str_cat_list(
             if !first {
                 new_str.push_str(&join_str);
             }
-            new_str.push_str(&s.make_string(environment)?);
+            new_str.push_str(&as_string(environment, s)?);
             first = false;
         }
     } else {
@@ -197,7 +201,7 @@ fn builtin_str(environment: &mut Environment, args: &[Expression]) -> io::Result
         Ok(args) => {
             let mut res = String::new();
             for a in args {
-                res.push_str(&a.make_string(environment)?);
+                res.push_str(&as_string(environment, &a)?);
             }
             Ok(Expression::Atom(Atom::String(res)))
         }

@@ -78,12 +78,14 @@ pub fn wait_pid(
         let (stop, status) = try_wait_pid(environment, pid);
         if stop {
             result = status;
-            if status.is_some() && environment.save_exit_status {
-                env::set_var("LAST_STATUS".to_string(), format!("{}", status.unwrap()));
-                environment.root_scope.borrow_mut().data.insert(
-                    "*last-status*".to_string(),
-                    Rc::new(Expression::Atom(Atom::Int(i64::from(status.unwrap())))),
-                );
+            if let Some(status) = status {
+                if environment.save_exit_status {
+                    env::set_var("LAST_STATUS".to_string(), format!("{}", status));
+                    environment.root_scope.borrow_mut().data.insert(
+                        "*last-status*".to_string(),
+                        Rc::new(Expression::Atom(Atom::Int(i64::from(status)))),
+                    );
+                }
             }
             break;
         }
@@ -118,7 +120,7 @@ fn run_command(
 ) -> io::Result<Expression> {
     let mut new_args: Vec<String> = Vec::new();
     for a in args {
-        new_args.push(a.make_string(environment)?);
+        new_args.push(a.as_string(environment)?);
     }
     let mut com_obj = Command::new(command);
     let foreground =

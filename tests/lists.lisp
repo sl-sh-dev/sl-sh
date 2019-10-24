@@ -1,3 +1,13 @@
+#|
+	Test the comment blocks while we are at it...
+
+|#
+#|
+	Test the #|comment blocks while we are at it...
+
+|#
+Some stuff
+|#
 (defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))
         nil

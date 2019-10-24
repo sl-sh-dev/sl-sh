@@ -68,7 +68,7 @@ fn get_prompt(environment: &mut Environment) -> String {
         let res = eval(environment, &exp);
         environment.save_exit_status = true;
         res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string())))
-            .make_string(environment)
+            .as_string(environment)
             .unwrap_or_else(|_| "ERROR".to_string())
     } else {
         // Nothing set, use a default.

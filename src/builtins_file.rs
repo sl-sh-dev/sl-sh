@@ -51,17 +51,16 @@ fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<
             Ok(val) => val,
             Err(_) => home.to_string(),
         };
-        //let args = to_args_str(environment, args)?;
         let argsi = args.iter();
         let mut args: Vec<String> = Vec::with_capacity(args.len());
         for a in argsi {
-            args.push(a.make_string(environment)?);
+            args.push(a.as_string(environment)?);
         }
         let args = args.iter();
         let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
         let expand_dir = expand_tilde(new_dir);
-        let new_dir = if expand_dir.is_some() {
-            home = expand_dir.unwrap();
+        let new_dir = if let Some(h) = expand_dir {
+            home = h;
             &home
         } else {
             new_dir
@@ -249,17 +248,15 @@ fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 break;
             }
         }
-        if res.is_ok() {
-            out = res.unwrap();
-        }
+        out = if let Ok(out) = res { out } else { out };
         i += 1;
     }
     environment.data_in = None;
     environment.in_pipe = false;
     environment.state.pipe_pgid = None;
     environment.state.stdout_status = old_out_status;
-    if error.is_some() {
-        error.unwrap()
+    if let Some(error) = error {
+        error
     } else {
         Ok(out)
     }

@@ -29,14 +29,14 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 ":stderr" => Some(Expression::File(FileState::Stderr)),
                 _ => None,
             };
-            if ret.is_some() {
+            if let Some(ret) = ret {
                 if arg_len > 1 {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "open: if first form is a symbol then other forms not valid",
                     ));
                 }
-                return Ok(ret.unwrap());
+                return Ok(ret);
             }
         }
         let file_name = match eval(environment, &a)? {
@@ -225,7 +225,11 @@ fn builtin_write_line(
     } else {
         let exp = &args[0];
         if let Expression::File(FileState::Write(file)) = &exp {
-            writeln!(&mut file.borrow_mut(), "{}", &args[1].to_string())?;
+            writeln!(
+                &mut file.borrow_mut(),
+                "{}",
+                &args[1].as_string(environment)?
+            )?;
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(
@@ -244,12 +248,16 @@ fn builtin_write_string(
     if args.len() != 2 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "write-string takes two forms (file and line)",
+            "write-string takes two forms (file and string)",
         ))
     } else {
         let exp = &args[0];
         if let Expression::File(FileState::Write(file)) = &exp {
-            write!(&mut file.borrow_mut(), "{}", &args[1].to_string())?;
+            write!(
+                &mut file.borrow_mut(),
+                "{}",
+                &args[1].as_string(environment)?
+            )?;
             Ok(Expression::Atom(Atom::Nil))
         } else {
             Err(io::Error::new(

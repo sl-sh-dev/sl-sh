@@ -5,7 +5,8 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{hash_map, HashMap};
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
@@ -48,7 +49,7 @@ fn builtin_err(environment: &mut Environment, args: &[Expression]) -> io::Result
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            args[0].make_string(environment)?,
+            args[0].as_string(environment)?,
         ))
     }
 }
@@ -61,7 +62,7 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
             "load needs one argument",
         ))
     } else {
-        let contents = fs::read_to_string(args.pop().unwrap().make_string(environment)?)?;
+        let contents = fs::read_to_string(args.pop().unwrap().as_string(environment)?)?;
         let ast = read(&contents, false);
         match ast {
             Ok(ast) => {
@@ -187,7 +188,7 @@ fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Res
     let args = list_to_args(environment, args, true)?;
     let mut res = String::new();
     for a in args {
-        res.push_str(&a.make_string(environment)?);
+        res.push_str(&a.as_string(environment)?);
     }
     Ok(Expression::Atom(Atom::String(res)))
 }
@@ -217,12 +218,12 @@ fn proc_set_vars2(
     };
     let mut val = match val {
         Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-            val.make_string(environment)
+            val.as_string(environment)
                 .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
         )),
         Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
             Expression::Atom(Atom::String(
-                val.make_string(environment)
+                val.as_string(environment)
                     .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
             ))
         }
@@ -255,8 +256,8 @@ fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result
         ))
     } else {
         let (key, val) = proc_set_vars(environment, &args)?;
-        if environment.dynamic_scope.contains_key(&key) {
-            environment.dynamic_scope.insert(key, Rc::new(val.clone()));
+        if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
+            entry.insert(Rc::new(val.clone()));
             Ok(val)
         } else if let Some(scope) = get_symbols_scope(environment, &key) {
             scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
@@ -292,18 +293,18 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
         let val = args.next().unwrap();
         let val = match val {
             Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-                val.make_string(environment)
+                val.as_string(environment)
                     .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
             )),
             Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
                 Expression::Atom(Atom::String(
-                    val.make_string(environment)
+                    val.as_string(environment)
                         .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
                 ))
             }
             Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
             Expression::File(FileState::Stdin) => Expression::Atom(Atom::String(
-                val.make_string(environment)
+                val.as_string(environment)
                     .unwrap_or_else(|_| "STDIN FAILED".to_string()),
             )),
             Expression::File(FileState::Stdout) => {
@@ -313,7 +314,7 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
                 Expression::Atom(Atom::String("::STDERR::".to_string()))
             }
             Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
-                val.make_string(environment)
+                val.as_string(environment)
                     .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
             )),
             Expression::File(FileState::Write(_)) => {
@@ -324,7 +325,7 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
             }
             _ => val.clone(),
         };
-        let val = val.make_string(environment)?;
+        let val = val.as_string(environment)?;
         let val = match expand_tilde(&val) {
             Some(v) => v,
             None => val,
@@ -372,10 +373,8 @@ fn builtin_dyn(environment: &mut Environment, args: &[Expression]) -> io::Result
             .dynamic_scope
             .insert(key.clone(), Rc::new(val.clone()));
         let res = eval(environment, &args[2]);
-        if old_val.is_some() {
-            environment
-                .dynamic_scope
-                .insert(key.clone(), old_val.unwrap());
+        if let Some(old_val) = old_val {
+            environment.dynamic_scope.insert(key.clone(), old_val);
         } else {
             environment.dynamic_scope.remove(&key);
         }
@@ -514,6 +513,7 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
 }
 
 fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+    let args = list_to_args(environment, args, false)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -700,7 +700,22 @@ fn builtin_expand_macro(
 }
 
 fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
+    let mut args = list_to_args(environment, args, true)?;
+    // Patch up a pair as the only element in list so it gets interpreted correctly.
+    args = if args.len() == 1 {
+        if let Expression::Pair(_, _) = args[0] {
+            let mut p = Vec::with_capacity(1);
+            p.push(Expression::Pair(
+                Rc::new(RefCell::new(args[0].clone())),
+                Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
+            ));
+            p
+        } else {
+            args
+        }
+    } else {
+        args
+    };
     environment.state.recur_num_args = Some(args.len());
     Ok(Expression::with_list(args))
 }

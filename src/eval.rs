@@ -110,13 +110,12 @@ fn fn_eval(
             } else {
                 None
             };
-            if form.is_some() {
-                let exp = &*form.unwrap();
-                if let Expression::Func(f) = exp {
+            if let Some(exp) = form {
+                if let Expression::Func(f) = &*exp {
                     f(environment, parts)
-                } else if let Expression::Atom(Atom::Lambda(f)) = exp {
+                } else if let Expression::Atom(Atom::Lambda(f)) = &*exp {
                     call_lambda(environment, &f, parts)
-                } else if let Expression::Atom(Atom::Macro(m)) = exp {
+                } else if let Expression::Atom(Atom::Macro(m)) = &*exp {
                     expand_macro(environment, &m, parts)
                 } else {
                     let exp = exp.clone();
