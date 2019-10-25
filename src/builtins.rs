@@ -549,15 +549,10 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
 }*/
 
 fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() < 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "and needs at least two forms",
-        ));
-    }
-    let mut last_exp = Expression::Atom(Atom::Nil);
+    let args = list_to_args(environment, args, false)?;
+    let mut last_exp = Expression::Atom(Atom::True);
     for arg in args {
+        let arg = eval(environment, &arg)?;
         match arg {
             Expression::Atom(Atom::Nil) => return Ok(Expression::Atom(Atom::Nil)),
             _ => last_exp = arg,
@@ -567,14 +562,9 @@ fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result
 }
 
 fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() < 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "or needs at least two forms",
-        ));
-    }
+    let args = list_to_args(environment, args, false)?;
     for arg in args {
+        let arg = eval(environment, &arg)?;
         match arg {
             Expression::Atom(Atom::Nil) => {}
             _ => return Ok(arg),

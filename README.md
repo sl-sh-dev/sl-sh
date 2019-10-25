@@ -40,8 +40,8 @@ length | form | builtin | Returns the length of the provided object.
 let | | macro |
 quote | | builtin |
 spawn | | builtin | Currently unavailable.  Use run-bg for background processes.
-and | | builtin |
-or | | builtin |
+and | form* | builtin | Evaluate each form left to right and stop on a nil (produce nil). Produce the last form's value if no nils.  Produce true on no arguments.
+or | form* | builtin | Evaluate each form left to right and produce the first non-nil result (stop evaluting). Produce nil on no arguments.
 not | | builtin |
 null | | builtin |
 is-def | symbol | builtin | Return true if symbol is defined for current scope.
