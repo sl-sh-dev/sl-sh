@@ -8,6 +8,7 @@
 |#
 Some stuff
 |#
+
 (defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))
         nil

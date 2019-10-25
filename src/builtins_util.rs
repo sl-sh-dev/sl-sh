@@ -48,6 +48,34 @@ pub fn list_to_args(
     }
 }
 
+pub fn exp_to_args(
+    environment: &mut Environment,
+    parts: &Expression,
+    do_eval: bool,
+) -> io::Result<Vec<Expression>> {
+    if is_proper_list(parts) {
+        let mut args: Vec<Expression> = Vec::new();
+        let mut current = parts.clone();
+        while let Expression::Pair(e1, e2) = current {
+            if do_eval {
+                args.push(eval(environment, &e1.borrow())?);
+            } else {
+                args.push(e1.borrow().clone());
+            }
+            current = e2.borrow().clone();
+        }
+        Ok(args)
+    } else if do_eval {
+        let mut args: Vec<Expression> = Vec::with_capacity(1);
+        args.push(eval(environment, parts)?);
+        Ok(args)
+    } else {
+        let mut args: Vec<Expression> = Vec::with_capacity(1);
+        args.push(parts.clone());
+        Ok(args)
+    }
+}
+
 pub fn to_args(env: &mut Environment, parts: &[Expression]) -> io::Result<Vec<Expression>> {
     let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
     for a in parts {

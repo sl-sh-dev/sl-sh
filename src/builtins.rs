@@ -635,6 +635,48 @@ fn builtin_macro(environment: &mut Environment, args: &[Expression]) -> io::Resu
     }
 }
 
+fn do_expansion(
+    environment: &mut Environment,
+    command: &Expression,
+    parts: &[Expression],
+) -> io::Result<Expression> {
+    if let Expression::Atom(Atom::Symbol(command)) = command {
+        if let Some(exp) = get_expression(environment, &command) {
+            if let Expression::Atom(Atom::Macro(sh_macro)) = &*exp {
+                let new_scope = match environment.current_scope.last() {
+                    Some(last) => build_new_scope(Some(last.clone())),
+                    None => build_new_scope(None),
+                };
+                environment.current_scope.push(new_scope.clone());
+                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
+                    environment.current_scope.pop();
+                    return Err(err);
+                }
+                let expansion = eval(environment, &sh_macro.body);
+                if let Err(err) = expansion {
+                    environment.current_scope.pop();
+                    return Err(err);
+                }
+                let expansion = expansion.unwrap();
+                environment.current_scope.pop();
+                Ok(expansion)
+            } else {
+                let msg = format!("expand-macro: {} not a macro", command);
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        } else {
+            let msg = format!("expand-macro: {} not a macro", command);
+            Err(io::Error::new(io::ErrorKind::Other, msg))
+        }
+    } else {
+        let msg = format!(
+            "expand-macro first item must be a symbol, found {}",
+            command.to_string()
+        );
+        Err(io::Error::new(io::ErrorKind::Other, msg))
+    }
+}
+
 fn builtin_expand_macro(
     environment: &mut Environment,
     args: &[Expression],
@@ -656,41 +698,10 @@ fn builtin_expand_macro(
                 ));
             }
         };
-        if let Expression::Atom(Atom::Symbol(command)) = command {
-            if let Some(exp) = get_expression(environment, &command) {
-                if let Expression::Atom(Atom::Macro(sh_macro)) = &*exp {
-                    let new_scope = match environment.current_scope.last() {
-                        Some(last) => build_new_scope(Some(last.clone())),
-                        None => build_new_scope(None),
-                    };
-                    environment.current_scope.push(new_scope.clone());
-                    if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false)
-                    {
-                        environment.current_scope.pop();
-                        return Err(err);
-                    }
-                    let expansion = eval(environment, &sh_macro.body);
-                    if let Err(err) = expansion {
-                        environment.current_scope.pop();
-                        return Err(err);
-                    }
-                    let expansion = expansion.unwrap();
-                    environment.current_scope.pop();
-                    Ok(expansion)
-                } else {
-                    let msg = format!("expand-macro: {} not a macro", command);
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
-                }
-            } else {
-                let msg = format!("expand-macro: {} not a macro", command);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "expand-macro first item must be a symbol",
-            ))
-        }
+        do_expansion(environment, command, parts)
+    } else if let Expression::Pair(e1, e2) = &args[0] {
+        let parts = exp_to_args(environment, &*e2.borrow(), false)?;
+        do_expansion(environment, &e1.borrow(), &parts)
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,

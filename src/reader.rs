@@ -14,6 +14,12 @@ struct List {
     vec: Vec<Expression>,
 }
 
+struct Token {
+    token: String,
+    line: usize,
+    column: usize,
+}
+
 fn is_whitespace(ch: char) -> bool {
     match ch {
         ' ' => true,
@@ -23,10 +29,14 @@ fn is_whitespace(ch: char) -> bool {
 }
 
 macro_rules! save_token {
-    ($tokens:expr, $token:expr) => {{
+    ($tokens:expr, $token:expr, $line:expr, $column:expr) => {{
         let t_token = $token.trim();
         if !t_token.is_empty() {
-            $tokens.push(t_token.to_string());
+            $tokens.push(Token {
+                token: t_token.to_string(),
+                line: $line,
+                column: $column,
+            });
             $token = String::new();
         }
     }};
@@ -106,32 +116,61 @@ fn do_in_string(
 }
 
 fn handle_char(
-    tokens: &mut Vec<String>,
+    tokens: &mut Vec<Token>,
     mut token: String,
     ch: char,
     last_ch: char,
     last_comma: &mut bool,
+    line: usize,
+    column: usize,
 ) -> String {
-    if ch == '(' && last_ch == '#' {
-        save_token!(tokens, token);
-        tokens.push("#(".to_string());
+    if last_ch == '#' && ch == '(' {
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "#(".to_string(),
+            line,
+            column,
+        });
+    } else if last_ch == '#' && ch == '<' {
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "#<".to_string(),
+            line,
+            column,
+        });
     } else if ch == '(' {
-        save_token!(tokens, token);
-        tokens.push("(".to_string());
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "(".to_string(),
+            line,
+            column,
+        });
     } else if ch == ')' {
-        save_token!(tokens, token);
-        tokens.push(")".to_string());
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: ")".to_string(),
+            line,
+            column,
+        });
     } else if ch == '\'' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
     {
-        save_token!(tokens, token);
-        tokens.push("'".to_string());
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "'".to_string(),
+            line,
+            column,
+        });
     } else if ch == '`' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`') {
-        save_token!(tokens, token);
-        tokens.push("`".to_string());
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "`".to_string(),
+            line,
+            column,
+        });
     } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
         *last_comma = true;
     } else if is_whitespace(ch) {
-        save_token!(tokens, token);
+        save_token!(tokens, token, line, column);
     } else if (ch == '\\' && last_ch != '\\') || ch == '#' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
@@ -141,8 +180,8 @@ fn handle_char(
     token
 }
 
-fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
-    let mut tokens: Vec<String> = Vec::new();
+fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
+    let mut tokens: Vec<Token> = Vec::new();
     let mut in_string = false;
     let mut token = String::new();
     let mut last_ch = ' ';
@@ -151,23 +190,43 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
     let mut last_comma = false;
     let mut escape_code: Vec<char> = Vec::with_capacity(2);
     let mut in_escape_code = false;
+    let mut line = 1;
+    let mut column = 0;
     if add_parens {
-        tokens.push("(".to_string());
+        tokens.push(Token {
+            token: "(".to_string(),
+            line,
+            column,
+        });
     }
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         in_comment = true;
     }
     for ch in text.chars() {
+        if ch == '\n' {
+            line += 1;
+            column = 0;
+        } else {
+            column += 1;
+        }
         if last_comma {
             last_comma = false;
-            save_token!(tokens, token);
+            save_token!(tokens, token, line, column);
             if ch == '@' {
-                tokens.push(",@".to_string());
+                tokens.push(Token {
+                    token: ",@".to_string(),
+                    line,
+                    column,
+                });
                 last_ch = ch;
                 continue;
             } else {
-                tokens.push(",".to_string());
+                tokens.push(Token {
+                    token: ",".to_string(),
+                    line,
+                    column,
+                });
             }
         }
         if in_comment {
@@ -195,7 +254,11 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
             in_string = !in_string;
             token.push(ch);
             if !in_string {
-                tokens.push(token);
+                tokens.push(Token {
+                    token,
+                    line,
+                    column,
+                });
                 token = String::new();
             } else {
                 in_escape_code = false;
@@ -222,16 +285,32 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<String> {
                 in_comment = true;
                 continue;
             }
-            token = handle_char(&mut tokens, token, ch, last_ch, &mut last_comma);
+            token = handle_char(
+                &mut tokens,
+                token,
+                ch,
+                last_ch,
+                &mut last_comma,
+                line,
+                column,
+            );
             last_ch = ch;
         }
     }
     let token = token.trim();
     if !token.is_empty() {
-        tokens.push(token.to_string());
+        tokens.push(Token {
+            token: token.to_string(),
+            line,
+            column,
+        });
     }
     if add_parens {
-        tokens.push(")".to_string());
+        tokens.push(Token {
+            token: ")".to_string(),
+            line,
+            column,
+        });
     }
     tokens
 }
@@ -330,13 +409,17 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
     Ok(())
 }
 
-fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
+fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
         return Err(ParseError {
             reason: "No tokens".to_string(),
         });
     }
-    if tokens[0] != "(" && tokens[0] != "#(" && tokens[0] != "'" && tokens[0] != "`" {
+    if tokens[0].token != "("
+        && tokens[0].token != "#("
+        && tokens[0].token != "'"
+        && tokens[0].token != "`"
+    {
         return Err(ParseError {
             reason: "Not a list".to_string(),
         });
@@ -345,7 +428,8 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
     let mut backtick_level = 0;
-    for token in tokens {
+    for token_full in tokens {
+        let token = &token_full.token;
         match &token[..] {
             "'" => {
                 level += 1;
@@ -402,9 +486,16 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                     }
                 }
             }
+            "#<" => {
+                let reason = format!(
+                    "Found an unreadable token: line {}, col: {}",
+                    token_full.line, token_full.column
+                );
+                return Err(ParseError { reason });
+            }
             _ => match stack.pop() {
                 Some(mut v) => {
-                    v.vec.push(parse_atom(token));
+                    v.vec.push(parse_atom(&token));
                     stack.push(v);
                     if let Some(quote_exit_level) = qexits.pop() {
                         if level == quote_exit_level {
@@ -419,9 +510,11 @@ fn parse(tokens: &[String]) -> Result<Expression, ParseError> {
                     }
                 }
                 None => {
-                    return Err(ParseError {
-                        reason: "Found symbol without containing list".to_string(),
-                    });
+                    let reason = format!(
+                        "Found symbol without containing list: line {}, col: {}",
+                        token_full.line, token_full.column
+                    );
+                    return Err(ParseError { reason });
                 }
             },
         }
