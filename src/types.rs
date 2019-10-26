@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::marker;
 use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
@@ -96,6 +97,54 @@ pub enum FileState {
     Closed,
 }
 
+pub struct PairIter<'a> {
+    current: Option<Expression>,
+    started: bool,
+    _marker: marker::PhantomData<&'a Expression>,
+}
+
+impl<'a> PairIter<'a> {
+    fn new(exp: Expression) -> PairIter<'a> {
+        PairIter {
+            current: Some(exp),
+            started: false,
+            _marker: marker::PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for PairIter<'a> {
+    type Item = &'a Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.started {
+            self.started = true;
+        } else {
+            self.current = if let Some(current) = &self.current {
+                if let Expression::Pair(_e1, e2) = current {
+                    Some(e2.borrow().clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+        }
+        if let Some(current) = &self.current {
+            if let Expression::Pair(e1, _e2) = current {
+                unsafe {
+                    // Need an unbound lifetime to get 'a
+                    Some(&*e1.as_ptr())
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
@@ -120,10 +169,15 @@ impl fmt::Display for Expression {
             Expression::Func(_) => write!(f, "#<Function>"),
             Expression::List(list) => {
                 let mut res = String::new();
-                res.push_str("( ");
+                res.push_str("(");
+                let mut first = true;
                 for exp in list.borrow().iter() {
+                    if !first {
+                        res.push_str(" ");
+                    } else {
+                        first = false;
+                    }
                     res.push_str(&exp.to_string());
-                    res.push_str(" ");
                 }
                 res.push(')');
                 write!(f, "{}", res)
@@ -131,21 +185,22 @@ impl fmt::Display for Expression {
             Expression::Pair(e1, e2) => {
                 if is_proper_list(self) {
                     let mut res = String::new();
-                    res.push_str("#( ");
-                    let mut current = e2.borrow().clone();
-                    res.push_str(&e1.borrow().to_string());
-                    res.push_str(" ");
-                    while let Expression::Pair(e1, e2) = current {
-                        res.push_str(&e1.borrow().to_string());
-                        res.push_str(" ");
-                        current = e2.borrow().clone();
+                    res.push_str("#(");
+                    let mut first = true;
+                    for p in self.pair_iter().unwrap() {
+                        if !first {
+                            res.push_str(" ");
+                        } else {
+                            first = false;
+                        }
+                        res.push_str(&p.to_string());
                     }
                     res.push(')');
                     write!(f, "{}", res)
                 } else {
                     write!(
                         f,
-                        "( {} . {} )",
+                        "({} . {})",
                         e1.borrow().to_string(),
                         e2.borrow().to_string()
                     )
@@ -183,6 +238,15 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
+    pub fn pair_iter(&self) -> Option<impl Iterator<Item = &Expression>> {
+        match self {
+            Expression::Pair(e1, e2) => {
+                Some(PairIter::new(Expression::Pair(e1.clone(), e2.clone())))
+            }
+            _ => None,
+        }
+    }
+
     pub fn with_list(list: Vec<Expression>) -> Expression {
         Expression::List(Rc::new(RefCell::new(list)))
     }
