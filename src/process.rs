@@ -18,6 +18,7 @@ use nix::{
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::eval::*;
 use crate::types::*;
 
 pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
@@ -360,10 +361,10 @@ pub fn prep_string_arg(s: &str, nargs: &mut Vec<Expression>) -> io::Result<()> {
     Ok(())
 }
 
-pub fn do_command(
+pub fn do_command<'a>(
     environment: &mut Environment,
     command: &str,
-    parts: &[Expression],
+    parts: Box<dyn Iterator<Item = &Expression> + 'a>,
 ) -> io::Result<Expression> {
     let mut data = None;
     let foreground =
@@ -402,7 +403,13 @@ pub fn do_command(
         Some(Expression::Func(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Invalid expression state before command (special form).",
+                "Invalid expression state before command (function).",
+            ))
+        }
+        Some(Expression::Function(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (function).",
             ))
         }
         Some(Expression::List(_)) => {
@@ -443,7 +450,10 @@ pub fn do_command(
     )?;
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut args = list_to_args(environment, parts, true)?;
+    let mut args = Vec::new();
+    for a in parts {
+        args.push(eval(environment, &a)?);
+    }
     environment.loose_symbols = old_loose_syms;
     let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
     for arg in args.drain(..) {

@@ -5,7 +5,6 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::cell::RefCell;
 use std::collections::{hash_map, HashMap};
 use std::env;
 use std::fs;
@@ -480,6 +479,7 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
                         output.push(item.clone());
                     }
                 } else {
+                    println!("XXXX {:?}, {:?}", exp, nl);
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         ",@ must be applied to a list",
@@ -548,8 +548,10 @@ fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Res
     Ok(Expression::Atom(Atom::Nil))
 }*/
 
-fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
+fn builtin_and(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
     let mut last_exp = Expression::Atom(Atom::True);
     for arg in args {
         let arg = eval(environment, &arg)?;
@@ -561,8 +563,10 @@ fn builtin_and(environment: &mut Environment, args: &[Expression]) -> io::Result
     Ok(last_exp)
 }
 
-fn builtin_or(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
+fn builtin_or(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
     for arg in args {
         let arg = eval(environment, &arg)?;
         match arg {
@@ -628,7 +632,7 @@ fn builtin_macro(environment: &mut Environment, args: &[Expression]) -> io::Resu
 fn do_expansion(
     environment: &mut Environment,
     command: &Expression,
-    parts: &[Expression],
+    parts: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     if let Expression::Atom(Atom::Symbol(command)) = command {
         if let Some(exp) = get_expression(environment, &command) {
@@ -638,7 +642,9 @@ fn do_expansion(
                     None => build_new_scope(None),
                 };
                 environment.current_scope.push(new_scope.clone());
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
+                let args: Vec<Expression> = parts.cloned().collect();
+                let ib: Box<(dyn Iterator<Item = &Expression>)> = Box::new(args.iter());
+                if let Err(err) = setup_args(environment, None, &sh_macro.params, ib, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
@@ -669,56 +675,52 @@ fn do_expansion(
 
 fn builtin_expand_macro(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "expand-macro can only have one form (list defining the macro call)",
-        ))
-    } else if let Expression::List(list) = &args[0] {
-        let list = list.borrow();
-        let (command, parts) = match list.split_first() {
-            Some((c, p)) => (c, p),
-            None => {
-                return Err(io::Error::new(
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            return if let Expression::List(list) = arg0 {
+                let list = list.borrow();
+                let (command, parts) = match list.split_first() {
+                    Some((c, p)) => (c, p),
+                    None => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "expand-macro needs the macro name and parameters",
+                        ));
+                    }
+                };
+                do_expansion(environment, command, &mut parts.iter())
+            } else if let Expression::Pair(e1, e2) = arg0 {
+                //let parts = exp_to_args(environment, &*e2.borrow(), false)?;
+                do_expansion(environment, &e1.borrow(), &mut *e2.borrow().iter())
+            } else {
+                Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "expand-macro needs the macro name and parameters",
-                ));
-            }
-        };
-        do_expansion(environment, command, parts)
-    } else if let Expression::Pair(e1, e2) = &args[0] {
-        let parts = exp_to_args(environment, &*e2.borrow(), false)?;
-        do_expansion(environment, &e1.borrow(), &parts)
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "expand-macro can only have one form (list defining the macro call)",
-        ))
+                    "expand-macro can only have one form (list defining the macro call)",
+                ))
+            };
+        }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "expand-macro can only have one form (list defining the macro call)",
+    ))
 }
 
-fn builtin_recur(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    // Patch up a pair as the only element in list so it gets interpreted correctly.
-    args = if args.len() == 1 {
-        if let Expression::Pair(_, _) = args[0] {
-            let mut p = Vec::with_capacity(1);
-            p.push(Expression::Pair(
-                Rc::new(RefCell::new(args[0].clone())),
-                Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-            ));
-            p
-        } else {
-            args
-        }
-    } else {
-        args
-    };
-    environment.state.recur_num_args = Some(args.len());
-    Ok(Expression::with_list(args))
+fn builtin_recur(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut arg_list: Vec<Expression> = Vec::new();
+    let mut arg_num = 0;
+    for a in args {
+        let a = eval(environment, a)?;
+        arg_list.push(a);
+        arg_num += 1;
+    }
+    environment.state.recur_num_args = Some(arg_num);
+    Ok(Expression::with_list(arg_list))
 }
 
 fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -1018,8 +1020,14 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "bquote".to_string(),
         Rc::new(Expression::Func(builtin_bquote)),
     );
-    data.insert("and".to_string(), Rc::new(Expression::Func(builtin_and)));
-    data.insert("or".to_string(), Rc::new(Expression::Func(builtin_or)));
+    data.insert(
+        "and".to_string(),
+        Rc::new(Expression::make_special(builtin_and, "")),
+    );
+    data.insert(
+        "or".to_string(),
+        Rc::new(Expression::make_special(builtin_or, "")),
+    );
     data.insert("not".to_string(), Rc::new(Expression::Func(builtin_not)));
     data.insert("null".to_string(), Rc::new(Expression::Func(builtin_not)));
     data.insert(
@@ -1032,11 +1040,11 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "expand-macro".to_string(),
-        Rc::new(Expression::Func(builtin_expand_macro)),
+        Rc::new(Expression::make_special(builtin_expand_macro, "")),
     );
     data.insert(
         "recur".to_string(),
-        Rc::new(Expression::Func(builtin_recur)),
+        Rc::new(Expression::make_function(builtin_recur, "")),
     );
     data.insert(
         "gensym".to_string(),

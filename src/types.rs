@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::iter;
 use std::marker;
 use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
@@ -145,6 +146,28 @@ impl<'a> Iterator for PairIter<'a> {
     }
 }
 
+//type CallFunc = fn(&mut Environment, dyn Iterator<Item = &Expression>) -> io::Result<Expression>;
+type CallFunc =
+    fn(&mut Environment, &mut dyn Iterator<Item = &Expression>) -> io::Result<Expression>;
+//    fn(&mut Environment, Box<dyn Iterator<Item = &Expression>>) -> io::Result<Expression>;
+
+#[derive(Clone)]
+pub struct Callable {
+    pub func: CallFunc,
+    pub doc_str: String,
+    pub is_special_form: bool,
+}
+
+impl Callable {
+    pub fn new(func: CallFunc, doc_str: String, is_special_form: bool) -> Callable {
+        Callable {
+            func,
+            doc_str,
+            is_special_form,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
@@ -152,6 +175,7 @@ pub enum Expression {
     List(Rc<RefCell<Vec<Expression>>>),
     Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
+    Function(Callable),
     Process(ProcessState),
     File(FileState),
 }
@@ -167,6 +191,7 @@ impl fmt::Display for Expression {
                 pid, exit_status
             ),
             Expression::Func(_) => write!(f, "#<Function>"),
+            Expression::Function(_) => write!(f, "#<Function>"),
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("(");
@@ -187,7 +212,7 @@ impl fmt::Display for Expression {
                     let mut res = String::new();
                     res.push_str("#(");
                     let mut first = true;
-                    for p in self.pair_iter().unwrap() {
+                    for p in self.iter() {
                         if !first {
                             res.push_str(" ");
                         } else {
@@ -224,6 +249,7 @@ impl fmt::Debug for Expression {
                 write!(f, "Expression::Pair({:?} . {:?})", e1.borrow(), e2.borrow())
             }
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
+            Expression::Function(_) => write!(f, "Expression::Function(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
                 write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
             }
@@ -238,13 +264,24 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
-    pub fn pair_iter(&self) -> Option<impl Iterator<Item = &Expression>> {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = &Expression>> {
         match self {
             Expression::Pair(e1, e2) => {
-                Some(PairIter::new(Expression::Pair(e1.clone(), e2.clone())))
+                Box::new(PairIter::new(Expression::Pair(e1.clone(), e2.clone())))
             }
-            _ => None,
+            //Expression::List(list) => {
+            //    Box::new(list.clone().borrow().iter())
+            //}
+            _ => Box::new(iter::empty()),
         }
+    }
+
+    pub fn make_function(func: CallFunc, doc_str: &str) -> Expression {
+        Expression::Function(Callable::new(func, doc_str.to_string(), false))
+    }
+
+    pub fn make_special(func: CallFunc, doc_str: &str) -> Expression {
+        Expression::Function(Callable::new(func, doc_str.to_string(), true))
     }
 
     pub fn with_list(list: Vec<Expression>) -> Expression {
@@ -255,7 +292,8 @@ impl Expression {
         match self {
             Expression::Atom(a) => a.display_type(),
             Expression::Process(_) => "Process".to_string(),
-            Expression::Func(_) => "Func".to_string(),
+            Expression::Func(_) => "Function".to_string(),
+            Expression::Function(_) => "Function".to_string(),
             Expression::List(_) => "Vector".to_string(),
             Expression::Pair(_, _) => "Pair".to_string(),
             Expression::File(_) => "File".to_string(),
@@ -289,6 +327,7 @@ impl Expression {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
             Expression::Func(_) => Ok(self.to_string()),
+            Expression::Function(_) => Ok(self.to_string()),
             Expression::List(_list) => Ok(self.to_string()),
             Expression::Pair(_e1, _e2) => Ok(self.to_string()),
             Expression::File(FileState::Stdin) => {
@@ -335,6 +374,7 @@ impl Expression {
                 }
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
@@ -358,6 +398,7 @@ impl Expression {
                 }
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
@@ -404,6 +445,7 @@ impl Expression {
                 wait_pid(environment, *pid, None);
             }
             Expression::Func(_) => write!(writer, "{}", self.to_string())?,
+            Expression::Function(_) => write!(writer, "{}", self.to_string())?,
             Expression::List(_list) => write!(writer, "{}", self.to_string())?,
             Expression::Pair(_e1, _e2) => write!(writer, "{}", self.to_string())?,
             Expression::File(FileState::Stdin) => {

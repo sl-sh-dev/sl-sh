@@ -238,48 +238,116 @@ pub fn expand_tilde(path: &str) -> Option<String> {
     }
 }
 
-fn setup_args_final(
-    scope: &mut Scope,
+fn setup_args_final<'a>(
+    environment: &mut Environment,
+    scope: &mut Option<&mut Scope>,
     var_names: &mut Vec<String>,
-    vars: &[Expression],
+    mut vars: Box<dyn Iterator<Item = &Expression> + 'a>,
     min_params: usize,
     use_rest: bool,
+    do_eval: bool,
 ) -> io::Result<()> {
-    if vars.len() < min_params || (!use_rest && vars.len() > min_params) {
-        let msg = format!(
-            "wrong number of parameters, expected {} got {}",
-            min_params,
-            vars.len()
-        );
-        return Err(io::Error::new(io::ErrorKind::Other, msg));
-    } else if use_rest {
+    if use_rest {
         let rest_name = var_names.pop().unwrap();
-        for (k, v) in var_names.iter().zip(vars.iter()) {
-            scope.data.insert(k.clone(), Rc::new(v.clone()));
+        let mut names_iter = var_names.iter();
+        let mut params = 0;
+        loop {
+            let k = names_iter.next();
+            if k.is_none() {
+                break;
+            }
+            let v = vars.next();
+            if v.is_none() {
+                let msg = format!(
+                    "wrong number of parameters, expected {} got {}",
+                    min_params, params
+                );
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+            let v2 = if do_eval {
+                eval(environment, v.unwrap())?
+            } else {
+                v.unwrap().clone()
+            };
+            if let Some(scope) = scope {
+                scope.data.insert(k.unwrap().clone(), Rc::new(v2));
+            } else {
+                set_expression_current(environment, k.unwrap().clone(), Rc::new(v2));
+            }
+            params += 1;
         }
-        if vars.len() > min_params {
-            let rest_data: Vec<Expression> = Vec::from_iter(vars[min_params..].iter().cloned());
+        let mut rest_data: Vec<Expression> = Vec::new();
+        for v in vars {
+            let v2 = if do_eval {
+                eval(environment, v)?
+            } else {
+                v.clone()
+            };
+            rest_data.push(v2);
+        }
+        if rest_data.is_empty() {
+            if let Some(scope) = scope {
+                scope
+                    .data
+                    .insert(rest_name.clone(), Rc::new(Expression::Atom(Atom::Nil)));
+            } else {
+                set_expression_current(
+                    environment,
+                    rest_name.clone(),
+                    Rc::new(Expression::Atom(Atom::Nil)),
+                );
+            }
+        } else if let Some(scope) = scope {
             scope
                 .data
                 .insert(rest_name.clone(), Rc::new(Expression::with_list(rest_data)));
         } else {
-            scope
-                .data
-                .insert(rest_name.clone(), Rc::new(Expression::Atom(Atom::Nil)));
+            set_expression_current(
+                environment,
+                rest_name.clone(),
+                Rc::new(Expression::with_list(rest_data)),
+            );
         }
     } else {
-        for (k, v) in var_names.iter().zip(vars.iter()) {
-            scope.data.insert(k.clone(), Rc::new(v.clone()));
+        let mut names_iter = var_names.iter();
+        let mut params = 0;
+        loop {
+            let k = names_iter.next();
+            let v = vars.next();
+            if k.is_none() && v.is_none() {
+                break;
+            } else if k.is_none() || v.is_none() {
+                if v.is_some() {
+                    params += 1;
+                }
+                let msg = format!(
+                    "wrong number of parameters, expected {} got {}",
+                    min_params,
+                    (params + vars.count())
+                );
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+            let v2 = if do_eval {
+                eval(environment, v.unwrap())?
+            } else {
+                v.unwrap().clone()
+            };
+            if let Some(scope) = scope {
+                scope.data.insert(k.unwrap().clone(), Rc::new(v2));
+            } else {
+                set_expression_current(environment, k.unwrap().clone(), Rc::new(v2));
+            }
+            params += 1;
         }
     }
     Ok(())
 }
 
-pub fn setup_args(
+pub fn setup_args<'a>(
     environment: &mut Environment,
-    new_scope: Option<&mut Scope>,
+    mut new_scope: Option<&mut Scope>,
     params: &Expression,
-    args: &[Expression],
+    args: Box<dyn Iterator<Item = &Expression> + 'a>,
     eval_args: bool,
 ) -> io::Result<()> {
     if let Expression::List(l) = params {
@@ -326,23 +394,15 @@ pub fn setup_args(
                 "&rest must have one symbol after",
             ));
         }
-        let t_vars = if eval_args {
-            Some(list_to_args(environment, args, true)?)
-        } else if args.len() == 1 && is_proper_list(&args[0]) {
-            Some(list_to_args(environment, args, false)?)
-        } else {
-            None
-        };
-        let last_scope = &mut environment.current_scope.last().unwrap().borrow_mut();
-        let new_scope = match new_scope {
-            Some(new_scope) => new_scope,
-            None => last_scope,
-        };
-        if let Some(t_vars) = t_vars {
-            setup_args_final(new_scope, &mut var_names, &t_vars, min_params, use_rest)?;
-        } else {
-            setup_args_final(new_scope, &mut var_names, args, min_params, use_rest)?;
-        };
+        setup_args_final(
+            environment,
+            &mut new_scope,
+            &mut var_names,
+            args,
+            min_params,
+            use_rest,
+            eval_args,
+        )?;
     }
     Ok(())
 }

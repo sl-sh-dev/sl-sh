@@ -9,10 +9,14 @@ use crate::environment::*;
 use crate::process::*;
 use crate::types::*;
 
-fn call_lambda(
+fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = &Expression> + 'a> {
+    Box::new(v.iter())
+}
+
+fn call_lambda<'a>(
     environment: &mut Environment,
     lambda: &Lambda,
-    args: &[Expression],
+    args: Box<dyn Iterator<Item = &Expression> + 'a>,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
@@ -45,9 +49,9 @@ fn call_lambda(
                         "Called recur in a non-tail position.",
                     ));
                 }
-                if let Err(err) =
-                    setup_args(environment, None, &lambda.params, &new_args.borrow(), false)
-                {
+                let new_args1 = new_args.borrow();
+                let ib = box_slice_it(&new_args1);
+                if let Err(err) = setup_args(environment, None, &lambda.params, ib, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
@@ -59,10 +63,10 @@ fn call_lambda(
     Ok(last_eval)
 }
 
-fn expand_macro(
+fn expand_macro<'a>(
     environment: &mut Environment,
     sh_macro: &Macro,
-    args: &[Expression],
+    args: Box<dyn Iterator<Item = &Expression> + 'a>,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
@@ -75,7 +79,9 @@ fn expand_macro(
         false,
     ) {
         Ok(_) => {}
-        Err(err) => return Err(err),
+        Err(err) => {
+            return Err(err);
+        }
     };
     new_scope.outer = Some(environment.current_scope.last().unwrap().clone());
     environment
@@ -93,10 +99,10 @@ fn expand_macro(
     }
 }
 
-fn fn_eval(
+fn fn_eval<'a>(
     environment: &mut Environment,
     command: &Expression,
-    parts: &[Expression],
+    mut parts: Box<dyn Iterator<Item = &Expression> + 'a>,
 ) -> io::Result<Expression> {
     match command {
         Expression::Atom(Atom::Symbol(command)) => {
@@ -111,15 +117,18 @@ fn fn_eval(
                 None
             };
             if let Some(exp) = form {
-                if let Expression::Func(f) = &*exp {
-                    f(environment, parts)
-                } else if let Expression::Atom(Atom::Lambda(f)) = &*exp {
-                    call_lambda(environment, &f, parts)
-                } else if let Expression::Atom(Atom::Macro(m)) = &*exp {
-                    expand_macro(environment, &m, parts)
-                } else {
-                    let exp = exp.clone();
-                    eval(environment, &exp)
+                match &*exp {
+                    Expression::Func(f) => {
+                        let parts: Vec<Expression> = parts.cloned().collect();
+                        f(environment, &parts)
+                    }
+                    Expression::Function(c) => (c.func)(environment, &mut *parts),
+                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, parts),
+                    Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                    _ => {
+                        let exp = exp.clone();
+                        eval(environment, &exp)
+                    }
                 }
             } else if environment.form_type == FormType::ExternalOnly
                 || environment.form_type == FormType::Any
@@ -130,26 +139,35 @@ fn fn_eval(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::List(list) => {
-            match eval(environment, &Expression::List(list.clone()))? {
-                //&Expression::with_list(list.borrow().to_vec()))? {
-                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                Expression::Func(f) => f(environment, parts),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+        Expression::List(list) => match eval(environment, &Expression::List(list.clone()))? {
+            Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+            Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+            Expression::Func(f) => {
+                let parts: Vec<Expression> = parts.cloned().collect();
+                f(environment, &parts)
             }
-        }
+            Expression::Function(c) => (c.func)(environment, &mut *parts),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+        },
         Expression::Pair(e1, e2) => {
             match eval(environment, &Expression::Pair(e1.clone(), e2.clone()))? {
                 Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
                 Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                Expression::Func(f) => f(environment, parts),
+                Expression::Func(f) => {
+                    let parts: Vec<Expression> = parts.cloned().collect();
+                    f(environment, &parts)
+                }
+                Expression::Function(c) => (c.func)(environment, &mut *parts),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
             }
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-        Expression::Func(f) => f(environment, parts),
+        Expression::Func(f) => {
+            let parts: Vec<Expression> = parts.cloned().collect();
+            f(environment, &parts)
+        }
+        Expression::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
             let msg = format!(
                 "Not a valid command {}, type {}.",
@@ -161,7 +179,10 @@ fn fn_eval(
     }
 }
 
-fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+fn internal_eval<'a>(
+    environment: &mut Environment,
+    expression: &'a Expression,
+) -> io::Result<Expression> {
     if environment.sig_int.load(Ordering::Relaxed) {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -190,31 +211,11 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            if parts.len() == 1 {
-                if let Expression::Pair(_, _) = parts[0] {
-                    let mut p = Vec::with_capacity(1);
-                    p.push(Expression::Pair(
-                        Rc::new(RefCell::new(parts[0].clone())),
-                        Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-                    ));
-                    fn_eval(environment, command, &p)
-                } else {
-                    fn_eval(environment, command, parts)
-                }
-            } else {
-                fn_eval(environment, command, parts)
-            }
+            let ib = box_slice_it(&parts);
+            fn_eval(environment, command, ib)
         }
         Expression::Pair(command, rest) => {
-            let mut parts: Vec<Expression> = Vec::new();
-            let mut push = true;
-            if let Expression::Atom(Atom::Nil) = *rest.borrow() {
-                push = false;
-            }
-            if push {
-                parts.push(rest.borrow().clone());
-            }
-            fn_eval(environment, &command.borrow(), &parts)
+            fn_eval(environment, &command.borrow(), rest.borrow().iter())
         }
         Expression::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
@@ -240,12 +241,16 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
         }
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
+        Expression::Function(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Process(state) => Ok(Expression::Process(*state)),
         Expression::File(_) => Ok(Expression::Atom(Atom::Nil)),
     }
 }
 
-pub fn eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+pub fn eval<'a>(
+    environment: &mut Environment,
+    expression: &'a Expression,
+) -> io::Result<Expression> {
     environment.state.eval_level += 1;
     let result = internal_eval(environment, expression);
     if let Err(_err) = &result {

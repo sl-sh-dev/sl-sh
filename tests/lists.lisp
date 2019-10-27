@@ -71,7 +71,7 @@ println "Testing Lists from Pairs (Cons Lists)"
     (if (= (length l1) 3)
         (println "PASS 3") (println "FAIL"))
     (if (and (= (last l1) 3) (lists= l1 '(1 2 3)))
-        (println "PASS 4") (printnl "FAIL"))
+        (println "PASS 4") (println "FAIL" (last l1) l1))
     (if (and (lists= (butlast l1) '(1 2)) (lists= l1 '(1 2 3)))
         (println "PASS 5") (println "FAIL"))
     (if (and (= (car (cdr l1)) 2) (lists= l1 '(1 2 3)))
