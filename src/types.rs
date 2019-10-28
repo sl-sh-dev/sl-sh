@@ -194,7 +194,7 @@ impl fmt::Display for Expression {
             Expression::Function(_) => write!(f, "#<Function>"),
             Expression::List(list) => {
                 let mut res = String::new();
-                res.push_str("(");
+                res.push_str("#(");
                 let mut first = true;
                 for exp in list.borrow().iter() {
                     if !first {
@@ -210,7 +210,7 @@ impl fmt::Display for Expression {
             Expression::Pair(e1, e2) => {
                 if is_proper_list(self) {
                     let mut res = String::new();
-                    res.push_str("#(");
+                    res.push_str("(");
                     let mut first = true;
                     for p in self.iter() {
                         if !first {

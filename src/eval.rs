@@ -147,7 +147,10 @@ fn fn_eval<'a>(
                 f(environment, &parts)
             }
             Expression::Function(c) => (c.func)(environment, &mut *parts),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+            _ => {
+                let msg = format!("Not a valid command {:?}", list);
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
         },
         Expression::Pair(e1, e2) => {
             match eval(environment, &Expression::Pair(e1.clone(), e2.clone()))? {
@@ -158,7 +161,10 @@ fn fn_eval<'a>(
                     f(environment, &parts)
                 }
                 Expression::Function(c) => (c.func)(environment, &mut *parts),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "Not a valid command")),
+                _ => {
+                    let msg = format!("Not a valid command {:?}", command);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                }
             }
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),

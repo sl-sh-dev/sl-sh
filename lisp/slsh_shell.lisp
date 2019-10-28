@@ -3,7 +3,7 @@
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
 (defmacro alias (name body)
 	`(defn ,name (&rest args)
-		(loose-symbols (eval (vappend (quote ,body) args)))))
+		(loose-symbols (eval (append (quote ,body) args)))))
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
@@ -63,26 +63,26 @@
 (defq clear-dirs nil)
 (defq set-dirs-max nil)
 ;; Scope to contain then pushd/popd/dirs functions.
-(let ((dir_stack '()) (dir_stack_max 20))
+(let ((dir_stack (make-vec 20)) (dir_stack_max 20))
 	;; Push current directory on the directory stack and change to new directory.
 	(setfn pushd (dir) (if (form (cd dir))
 		(progn
-			(push dir_stack $OLDPWD)
-			(if (> (length dir_stack) dir_stack_max) (remove-nth 0 dir_stack))
+			(push! dir_stack $OLDPWD)
+			(if (> (length dir_stack) dir_stack_max) (vremove-nth! 0 dir_stack))
 			t)
 		nil))
 	;; Pop first directory from directory stack and change to it.
 	(setfn popd () (if (> (length dir_stack) 0)
-		(cd (pop dir_stack))
+		(cd (pop! dir_stack))
 		(println "Dir stack is empty")))
 	;; List the directory stack.
 	(setfn dirs ()
 		(for d dir_stack (println d)))
 	;; Clears the directory stack.
 	(setfn clear-dirs ()
-		(clear dir_stack))
+		(vclear! dir_stack))
 	;; Sets the max number of directories to save in the stack.
 	(setfn set-dirs-max (max)
-		(if (and (= (get-type max) "Int")(> max 1))
+		(if (and (= (type max) "Int")(> max 1))
 			(setq dir_stack_max max)
-			(println "Error, max must be a positive Int greater then one"))))
+			(err "Error, max must be a positive Int greater then one"))))

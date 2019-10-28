@@ -31,10 +31,8 @@ fn builtin_make_vec(environment: &mut Environment, args: &[Expression]) -> io::R
     let cap = if let Expression::Atom(Atom::Int(c)) = args[0] {
         c
     } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "make-vec first arg must be an integer",
-        ));
+        let msg = format!("make-vec first arg must be an integer, found {:?}", args[0]);
+        return Err(io::Error::new(io::ErrorKind::Other, msg));
     };
     let mut list = Vec::with_capacity(cap as usize);
     if args.len() == 2 {
@@ -185,58 +183,6 @@ fn builtin_vec_setnth(
             io::ErrorKind::Other,
             "setnth third form must be a list",
         )),
-    }
-}
-
-fn builtin_vec_append(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    let mut new_args = list_to_args(environment, args, true)?;
-    if new_args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vappend takes two vectors",
-        ));
-    }
-    let end_arg = new_args.pop().unwrap();
-    let start_arg = new_args.pop().unwrap();
-    if let Expression::List(end) = end_arg {
-        if let Expression::List(start) = start_arg {
-            let end = end.borrow();
-            let start = start.borrow();
-            let mut list: Vec<Expression> = Vec::with_capacity(start.len() + end.len());
-            list.extend(start.iter().cloned());
-            list.extend(end.iter().cloned());
-            Ok(Expression::with_list(list))
-        } else if let Expression::Atom(Atom::Nil) = start_arg {
-            Ok(Expression::List(end))
-        } else {
-            let msg = format!(
-                "vappend first form ({}) must be a vector",
-                start_arg.display_type()
-            );
-            Err(io::Error::new(io::ErrorKind::Other, msg))
-        }
-    } else if let Expression::Atom(Atom::Nil) = end_arg {
-        if let Expression::List(start) = start_arg {
-            Ok(Expression::List(start))
-        } else if let Expression::Atom(Atom::Nil) = start_arg {
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            let msg = format!(
-                "vappend first form ({}) must be a vector",
-                start_arg.display_type(),
-            );
-            Err(io::Error::new(io::ErrorKind::Other, msg))
-        }
-    } else {
-        let msg = format!(
-            "vappend first form ({}) and second form ({}) must be vectors",
-            start_arg.display_type(),
-            end_arg.display_type()
-        );
-        Err(io::Error::new(io::ErrorKind::Other, msg))
     }
 }
 
@@ -430,10 +376,6 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     data.insert(
         "vsetnth!".to_string(),
         Rc::new(Expression::Func(builtin_vec_setnth)),
-    );
-    data.insert(
-        "vappend".to_string(),
-        Rc::new(Expression::Func(builtin_vec_append)),
     );
     data.insert(
         "push!".to_string(),

@@ -55,9 +55,9 @@ jobs | | builtin | List running jobs and status (stopped/running).
 bg | job_id | builtin | Make a stopped job run in the background (defaults to last stopped job or select by index from jobs form).
 fg | job_id | builtin | Make a stopped job run in the foreground again (defaults to last stopped job or select by index from jobs form).
 version | | builtin | Display the current version.
-command | | builtin |
-run-bg | | builtin |
-form | | builtin |
+command | forms* | builtin | All forms run under this form will only execute system commands not lisp functions.
+run-bg | form* | builtin | Any system commands started under this form will be in the background.
+form | form* | builtin | Any forms run under this will not execute system commands, only lisp functions.
 '=' | | builtin |
 '>' | | builtin |
 '>=' | | builtin |
@@ -103,7 +103,6 @@ Builtins:
 
 Form | Args | Type | description
 -----|------|------|------------
-vappend | vector/vector | builtin | Produces a new vector by appending the second onto the first.
 is-empty | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
 make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nill.
 pop! | vector | builtin | Removes the last item from a vector and produces it.
@@ -151,9 +150,11 @@ the type specific versions (if they exist, ie first vs car).
 
 Form | Args | Type | description
 -----|------|------|------------
+append | 2 lists or vectors | macro | Produces a new vector by appending the second onto the first.
 butlast | list \| vector | macro | Produces the provided list minus the last element.  Nil if the list is empty or one element.
 first | list \| vector | macro | Produces the first element of the provided list.  Nil if the list is empty.
 last | list \| vector | macro | Produces the last element in the list.  Nil if the list is empty.
+nth | int vector or list | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
 rest | list \| vector | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
 setnth! | idx/obj/list \| vector | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 

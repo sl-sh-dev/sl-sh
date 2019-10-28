@@ -358,11 +358,6 @@ fn to_cons(v: &mut Vec<Expression>) -> Expression {
             }
             i -= 1;
         }
-    } else {
-        last_pair = Expression::Pair(
-            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-            Rc::new(RefCell::new(last_pair.clone())),
-        );
     }
     last_pair
 }
@@ -379,18 +374,18 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
                 Some(mut v2) => {
                     match v.list_type {
                         ListType::Vector => {
+                            v2.vec.push(Expression::with_list(v.vec));
+                        }
+                        ListType::List => {
                             if v.vec.len() == 3 && v.vec[1].to_string() == "." {
                                 v2.vec.push(Expression::Pair(
                                     Rc::new(RefCell::new(v.vec[0].clone())),
                                     Rc::new(RefCell::new(v.vec[2].clone())),
                                 ));
                             } else {
-                                v2.vec.push(Expression::with_list(v.vec));
+                                let cons_list = to_cons(&mut v.vec);
+                                v2.vec.push(cons_list);
                             }
-                        }
-                        ListType::List => {
-                            let cons_list = to_cons(&mut v.vec);
-                            v2.vec.push(cons_list);
                         }
                     }
                     stack.push(v2);
@@ -437,7 +432,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                 let mut quoted = Vec::<Expression>::new();
                 quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
                 stack.push(List {
-                    list_type: ListType::Vector,
+                    list_type: ListType::List,
                     vec: quoted,
                 });
             }
@@ -452,21 +447,21 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                     backtick_level = level;
                 }
                 stack.push(List {
-                    list_type: ListType::Vector,
+                    list_type: ListType::List,
                     vec: quoted,
                 });
             }
             "#(" => {
                 level += 1;
                 stack.push(List {
-                    list_type: ListType::List,
+                    list_type: ListType::Vector,
                     vec: Vec::<Expression>::new(),
                 });
             }
             "(" => {
                 level += 1;
                 stack.push(List {
-                    list_type: ListType::Vector,
+                    list_type: ListType::List,
                     vec: Vec::<Expression>::new(),
                 });
             }

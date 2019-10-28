@@ -78,6 +78,14 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
                                     }
                                     Expression::with_list(v)
                                 }
+                                Expression::Pair(_, _) => {
+                                    let mut v = Vec::with_capacity(list.len() + 1);
+                                    v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                    for l in list.drain(..) {
+                                        v.push(l);
+                                    }
+                                    Expression::with_list(v)
+                                }
                                 _ => {
                                     drop(list);
                                     Expression::List(olist)
@@ -438,30 +446,30 @@ fn builtin_fn(environment: &mut Environment, parts: &[Expression]) -> io::Result
     }
 }
 
-fn builtin_quote(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"));
-    }
-    if let Expression::Pair(e1, e2) = args.get(0).unwrap() {
-        if let Expression::Atom(Atom::Nil) = *e2.borrow() {
-            Ok(e1.borrow().clone())
-        } else {
-            Ok(args.get(0).unwrap().clone())
+fn builtin_quote(
+    _environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            return Ok(arg.clone());
         }
-    } else {
-        Ok(args.get(0).unwrap().clone())
     }
+    Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"))
 }
 
-fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Result<Expression> {
-    let mut output: Vec<Expression> = Vec::with_capacity(list.len());
+fn replace_commas(
+    environment: &mut Environment,
+    list: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut output: Vec<Expression> = Vec::new(); //with_capacity(list.len());
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
-        let exp = if let Expression::List(tlist) = exp {
-            replace_commas(environment, &tlist.borrow())?
-        } else {
-            exp.clone()
+        let exp = match exp {
+            Expression::List(tlist) => replace_commas(environment, &mut tlist.borrow().iter())?,
+            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter())?,
+            _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
             if symbol == "," {
@@ -478,8 +486,11 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
                     for item in new_list.borrow().iter() {
                         output.push(item.clone());
                     }
+                } else if let Expression::Pair(_, _) = nl {
+                    for item in nl.iter() {
+                        output.push(item.clone());
+                    }
                 } else {
-                    println!("XXXX {:?}, {:?}", exp, nl);
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         ",@ must be applied to a list",
@@ -498,6 +509,10 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
                 for item in new_list.borrow_mut().drain(..) {
                     output.push(item);
                 }
+            } else if let Expression::Pair(_, _) = nl {
+                for item in nl.iter() {
+                    output.push(item.clone());
+                }
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -512,19 +527,25 @@ fn replace_commas(environment: &mut Environment, list: &[Expression]) -> io::Res
     Ok(Expression::with_list(output))
 }
 
-fn builtin_bquote(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "bquote takes one form",
-        ));
+fn builtin_bquote(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            return match arg {
+                Expression::List(list) => {
+                    replace_commas(environment, &mut Box::new(list.borrow().iter()))
+                }
+                Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter()),
+                _ => Ok(arg.clone()),
+            };
+        }
     }
-    if let Expression::List(list) = &args[0] {
-        replace_commas(environment, &list.borrow())
-    } else {
-        Ok(args.get(0).unwrap().clone())
-    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "bquote takes one form",
+    ))
 }
 
 /*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -832,8 +853,11 @@ fn builtin_fg(environment: &mut Environment, args: &[Expression]) -> io::Result<
     }
 }
 
-fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if !args.is_empty() {
+fn builtin_version(
+    _environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_some() {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "version takes no arguments",
@@ -843,64 +867,75 @@ fn builtin_version(_environment: &mut Environment, args: &[Expression]) -> io::R
     }
 }
 
-fn builtin_command(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "command can only have one form",
-        ))
-    } else {
-        let old_form = environment.form_type;
-        environment.form_type = FormType::ExternalOnly;
-        let result = eval(environment, &args[0]);
-        environment.form_type = old_form;
-        result
+fn builtin_command(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let old_form = environment.form_type;
+    environment.form_type = FormType::ExternalOnly;
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    for a in args {
+        last_eval = eval(environment, a);
+        if let Err(err) = last_eval {
+            environment.form_type = old_form;
+            return Err(err);
+        }
     }
+    environment.form_type = old_form;
+    last_eval
 }
 
-fn builtin_run_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "run-bg can only have one form",
-        ))
-    } else {
-        environment.run_background = true;
-        let result = eval(environment, &args[0]);
-        environment.run_background = false;
-        result
+fn builtin_run_bg(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    environment.run_background = true;
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    for a in args {
+        last_eval = eval(environment, a);
+        if let Err(err) = last_eval {
+            environment.run_background = false;
+            return Err(err);
+        }
     }
+    environment.run_background = false;
+    last_eval
 }
 
-fn builtin_form(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "form can only have one form (call defining the form and arguments)",
-        ))
-    } else if let Expression::List(_list) = &args[0] {
-        let old_form = environment.form_type;
-        environment.form_type = FormType::FormOnly;
-        let result = eval(environment, &args[0]);
-        environment.form_type = old_form;
-        result
-    } else {
-        Err(io::Error::new(io::ErrorKind::Other, "form takes a list"))
+fn builtin_form(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let old_form = environment.form_type;
+    environment.form_type = FormType::FormOnly;
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    for a in args {
+        last_eval = eval(environment, a);
+        if let Err(err) = last_eval {
+            environment.form_type = old_form;
+            return Err(err);
+        }
     }
+    environment.form_type = old_form;
+    last_eval
 }
 
 fn builtin_loose_symbols(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut last_eval = Expression::Atom(Atom::Nil);
+    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
     for a in args {
-        last_eval = eval(environment, a)?;
+        last_eval = eval(environment, a);
+        if let Err(err) = last_eval {
+            environment.loose_symbols = old_loose_syms;
+            return Err(err);
+        }
     }
     environment.loose_symbols = old_loose_syms;
-    Ok(last_eval)
+    last_eval
 }
 
 fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -1014,11 +1049,11 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
     data.insert(
         "quote".to_string(),
-        Rc::new(Expression::Func(builtin_quote)),
+        Rc::new(Expression::make_special(builtin_quote, "")),
     );
     data.insert(
         "bquote".to_string(),
-        Rc::new(Expression::Func(builtin_bquote)),
+        Rc::new(Expression::make_special(builtin_bquote, "")),
     );
     data.insert(
         "and".to_string(),
@@ -1055,20 +1090,38 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert("fg".to_string(), Rc::new(Expression::Func(builtin_fg)));
     data.insert(
         "version".to_string(),
-        Rc::new(Expression::Func(builtin_version)),
+        Rc::new(Expression::make_function(
+            builtin_version,
+            "Produce executable version as string.",
+        )),
     );
     data.insert(
         "command".to_string(),
-        Rc::new(Expression::Func(builtin_command)),
+        Rc::new(Expression::make_special(
+            builtin_command,
+            "Only execute system commands not forms within this form.",
+        )),
     );
     data.insert(
         "run-bg".to_string(),
-        Rc::new(Expression::Func(builtin_run_bg)),
+        Rc::new(Expression::make_special(
+            builtin_run_bg,
+            "Any system commands started within form will be in the background.",
+        )),
     );
-    data.insert("form".to_string(), Rc::new(Expression::Func(builtin_form)));
+    data.insert(
+        "form".to_string(),
+        Rc::new(Expression::make_special(
+            builtin_form,
+            "Do not execute system commands within this form.",
+        )),
+    );
     data.insert(
         "loose-symbols".to_string(),
-        Rc::new(Expression::Func(builtin_loose_symbols)),
+        Rc::new(Expression::make_special(
+            builtin_loose_symbols,
+            "Within this form any undefined symbols become strings.",
+        )),
     );
     data.insert("exit".to_string(), Rc::new(Expression::Func(builtin_exit)));
 

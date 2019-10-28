@@ -54,6 +54,13 @@
             (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))
             (err "Not a vector or list"))))
 
+(defn nth (idx obj)
+    (if (is-vec obj)
+        (vnth idx obj)
+        (if (is-proper-list obj)
+            (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
+            (err "Not a vector or list"))))
+
 (defmacro loop (params bindings body)
 		`((fn ,params ,body) ,@bindings))
 
@@ -92,19 +99,25 @@
 		(setq make-cond (fn (condition val action others)
 			(if (null val) action
 				(if (null others) `(if (= ,condition ,val) ,action)
-					`(if (= ,condition ,val) ,action ,(make-cond condition (first (first others)) (vnth 1 (first others)) (rest others)))))))
+					`(if (= ,condition ,val) ,action ,(make-cond condition (first (first others)) (nth 1 (first others)) (rest others)))))))
 		(setq cond-name condition)
-		(make-cond cond-name (first (first branches)) (vnth 1 (first branches)) (rest branches))))
+		(make-cond cond-name (first (first branches)) (nth 1 (first branches)) (rest branches))))
 
 (defmacro let (vals &rest let_body)
 	((fn (params bindings) (progn
 		(fori idx el vals
 			(if (= 1 (length el))
-				(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx nil bindings))
+				(progn (vinsert-nth! idx (nth 0 el) params) (vinsert-nth! idx nil bindings))
 				(if (= 2 (length el))
-					(progn (vinsert-nth! idx (vnth 0 el) params) (vinsert-nth! idx (vnth 1 el) bindings))
+					(progn (vinsert-nth! idx (nth 0 el) params) (vinsert-nth! idx (nth 1 el) bindings))
 					(err "ERROR: invalid bindings on let"))))
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
+
+(defn append (l1 l2) (progn
+    (def 'ret (make-vec))
+    (for el l1 (push! ret el))
+    (for el l2 (push! ret el))
+    ret))
 
 (defn map (fun items) (progn
 	(defq new-items (make-vec (length items)))

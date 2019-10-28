@@ -24,19 +24,7 @@ pub fn list_to_args(
     parts: &[Expression],
     do_eval: bool,
 ) -> io::Result<Vec<Expression>> {
-    if parts.len() == 1 && is_proper_list(&parts[0]) {
-        let mut args: Vec<Expression> = Vec::new();
-        let mut current = parts[0].clone();
-        while let Expression::Pair(e1, e2) = current {
-            if do_eval {
-                args.push(eval(environment, &e1.borrow())?);
-            } else {
-                args.push(e1.borrow().clone());
-            }
-            current = e2.borrow().clone();
-        }
-        Ok(args)
-    } else if do_eval {
+    if do_eval {
         let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
         for a in parts {
             args.push(eval(environment, a)?);
@@ -350,59 +338,64 @@ pub fn setup_args<'a>(
     args: Box<dyn Iterator<Item = &Expression> + 'a>,
     eval_args: bool,
 ) -> io::Result<()> {
-    if let Expression::List(l) = params {
-        let l = l.borrow();
-        let mut var_names: Vec<String> = Vec::with_capacity(l.len());
-        let mut use_rest = false;
-        let mut post_rest_cnt = 0;
-        let mut min_params = 0;
-        for arg in l.iter() {
-            if let Expression::Atom(Atom::Symbol(s)) = arg {
-                match &s[..] {
-                    "&rest" => {
-                        if use_rest {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "&rest can only appear once",
-                            ));
-                        }
-                        use_rest = true;
+    let l;
+    let p_iter = match params {
+        Expression::List(li) => {
+            l = li.borrow();
+            Box::new(l.iter())
+        }
+        _ => params.iter(),
+    };
+    let mut var_names: Vec<String> = Vec::new(); //with_capacity(l.len());
+    let mut use_rest = false;
+    let mut post_rest_cnt = 0;
+    let mut min_params = 0;
+    for arg in p_iter {
+        if let Expression::Atom(Atom::Symbol(s)) = arg {
+            match &s[..] {
+                "&rest" => {
+                    if use_rest {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "&rest can only appear once",
+                        ));
                     }
-                    _ => {
-                        if post_rest_cnt > 1 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "&rest can only have one symbol after",
-                            ));
-                        }
-                        if use_rest {
-                            post_rest_cnt += 1;
-                        } else {
-                            min_params += 1;
-                        }
-                        var_names.push(s.clone());
-                    }
+                    use_rest = true;
                 }
-            } else {
-                let msg = format!("parameter name must be symbol, got {:?}", arg);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                _ => {
+                    if post_rest_cnt > 1 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "&rest can only have one symbol after",
+                        ));
+                    }
+                    if use_rest {
+                        post_rest_cnt += 1;
+                    } else {
+                        min_params += 1;
+                    }
+                    var_names.push(s.clone());
+                }
             }
+        } else {
+            let msg = format!("parameter name must be symbol, got {:?}", arg);
+            return Err(io::Error::new(io::ErrorKind::Other, msg));
         }
-        if use_rest && post_rest_cnt != 1 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "&rest must have one symbol after",
-            ));
-        }
-        setup_args_final(
-            environment,
-            &mut new_scope,
-            &mut var_names,
-            args,
-            min_params,
-            use_rest,
-            eval_args,
-        )?;
     }
+    if use_rest && post_rest_cnt != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "&rest must have one symbol after",
+        ));
+    }
+    setup_args_final(
+        environment,
+        &mut new_scope,
+        &mut var_names,
+        args,
+        min_params,
+        use_rest,
+        eval_args,
+    )?;
     Ok(())
 }
