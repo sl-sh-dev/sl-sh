@@ -171,7 +171,7 @@ fn handle_char(
         *last_comma = true;
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
-    } else if (ch == '\\' && last_ch != '\\') || ch == '#' {
+    } else if ch == '#' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
     } else {
