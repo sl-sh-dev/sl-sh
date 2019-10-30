@@ -138,6 +138,8 @@ fn handle_char(
             line,
             column,
         });
+    } else if ch == '(' && last_ch == '\\' {
+        token.push(ch);
     } else if ch == '(' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -145,6 +147,8 @@ fn handle_char(
             line,
             column,
         });
+    } else if ch == ')' && last_ch == '\\' {
+        token.push(ch);
     } else if ch == ')' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -169,12 +173,18 @@ fn handle_char(
         });
     } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
         *last_comma = true;
+    } else if last_ch =='\\' && ch == ' ' {
+        // Keep an escaped space in token since this is a shell...
+        token.push(ch);
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
-    } else if ch == '#' {
+    } else if ch == '\\' || ch == '#' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
     } else {
+        if last_ch == '\\' {
+            token.push(last_ch);
+        }
         token.push(ch);
     }
     token
