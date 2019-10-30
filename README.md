@@ -94,10 +94,31 @@ is-file | obj | builtin | True if obj is the file type/false otherwise.
 is-proper-list | obj | builtin | True if obj is a pair that is a proper list (last pair in chain has a nil cdr).
 
 
+### Pair/List (aka Cons List) Forms
+Operations on the 'Pair' type (aka Cons Cell) that can be used to create
+traditional Lisp list structures.  These are the default list structure and
+are produced with bare parentheses in code.  These lists can also be created by 
+building them up with joins or with the list form.
+
+Builtins:
+
+Form | Args | Type | description
+-----|------|------|------------
+join | obj/obj | builtin | Creates a Pair with the provided objects as car and cdr.
+list | obj+ | builtin | Will produce a proper list with the provided objects as elements (last pair has a cdr of nil).
+car | pair | builtin | Produces the car (first/left) element of a pair.
+cdr | pair | builtin | Produces the cdr (second/right) element of a pair.
+xar! | pair/obj | builtin | Modifies pair by settings it's car to obj, produces the modified pair.
+xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces the modified pair.
+
+
 ### Vector Forms
 Currently slsh uses vectors not cons lists for its internal list structure.
 Forms ending in '!' are destructive and change the underlying vector other forms
-do not make changes to the the provided vector.
+do not make changes to the the provided vector.  They are usable in place of a
+list for purposes of lambda calls, parameters, etc (they work the same as a list
+made froms pairs but are vectors not linked lists).  Use #() to declare them in
+code (i.e. '#(1 2 3) or #(+ 1 2)).
 
 Builtins:
 
@@ -114,40 +135,12 @@ vinsert-nth! | index/obj/vector | builtin | Inserts a new element at index, all 
 vremove-nth! | index/vector | builtin | Removes the element at index from a vector (all other elements will shift left).
 vsetnth! | index/form/vector | builtin | Sets the nth element of a vector with the provided object.
 
-Macros:
-
-Form | Args | Type | description
------|------|------|------------
-map | lambda vector | macro | Returns a new vector made by applying the lambda to each item in the provided vector.
-map! | lambda vector | macro | Modifies vector by applying the lambda to each item in the provided vector.
-reverse | vector | macro | Returns a new vector made by reversing the elements of the provided vector.
-reverse! | vector | macro | Modifies vector by reversing the elements of the provided vector.
-
-
-### Pair/List (aka Cons List) Forms
-By default this Lisp uses vector's as it's underlying list structure but does
-provide a primative type 'Pair' (aka Cons Cell) that can be used to create
-traditional Lisp list structures.  These lists will need to be created by 
-building them up with joins or with the list command.  Once built they should
-by usable in place of a vector list for purposes of lambda calls, parameters, etc.
-
-Builtins:
-
-Form | Args | Type | description
------|------|------|------------
-join | obj/obj | builtin | Creates a Pair with the provided objects as car and cdr.
-list | obj+ | builtin | Will produce a proper list with the provided objects as elements (last pair has a cdr of nil).
-car | pair | builtin | Produces the car (first/left) element of a pair.
-cdr | pair | builtin | Produces the cdr (second/right) element of a pair.
-xar! | pair/obj | builtin | Modifies pair by settings it's car to obj, produces the modified pair.
-xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces the modified pair.
-
 
 ### Macros that work on vectors or lists
 These macros will work on either a vector or a pair made into a proper list
-(cons list).  If these do what you want then probably better to use then
-the type specific versions (if they exist, ie first vs car).
-NOTE: list under args can be a vector or cons list.
+(cons list).  Use these in preference to the vector/list specific versions when
+possible (ie first vs car).
+NOTE: list on this tables can be a vector or a list.
 
 Form | Args | Type | description
 -----|------|------|------------
@@ -157,8 +150,12 @@ butlast | list | macro | Produces the provided list minus the last element.  Nil
 copy-seq | list | macro | Produces a copy of the provided list (copy has same type as the parameter).
 first | list | macro | Produces the first element of the provided list.  Nil if the list is empty.
 last | list | macro | Produces the last element in the list.  Nil if the list is empty.
+map | lambda list | macro | Returns a new list made by applying the lambda to each item in the provided list.
+map! | lambda list | macro | Modifies a list by applying the lambda to each item in the list.
 nth | int list | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
 rest | list | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
+reverse | list | macro | Returns a new list made by reversing the elements of the provided list.
+reverse! | list | macro | Modifies a list by reversing it's elements.
 setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 
 
