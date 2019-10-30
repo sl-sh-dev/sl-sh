@@ -10,6 +10,40 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
+/// Unescape filenames for the completer so that special characters will be properly shown.
+fn unescape(input: &str) -> String {
+    let mut output = Vec::with_capacity(input.len());
+    let mut check = false;
+    for character in input.bytes() {
+        match character {
+            b'\\' if !check => check = true,
+            b'(' | b')' | b'"' | b'\'' | b' ' if check => {
+                output.push(character);
+                check = false;
+            }
+            _ if check => {
+                output.extend(&[b'\\', character]);
+                check = false;
+            }
+            _ => output.push(character),
+        }
+    }
+    unsafe { String::from_utf8_unchecked(output) }
+}
+
+/// Escapes filenames from the completer so that special characters will be properly escaped.
+fn escape(input: &str) -> String {
+    let mut output = Vec::with_capacity(input.len());
+    for character in input.bytes() {
+        match character {
+            b'(' | b')' | b'"' | b'\'' | b' ' => output.push(b'\\'),
+            _ => (),
+        }
+        output.push(character);
+    }
+    unsafe { String::from_utf8_unchecked(output) }
+}
+
 #[derive(Debug)]
 enum CompType {
     Nothing,
@@ -218,10 +252,16 @@ impl Completer for ShellCompleter {
     }
 }
 
-fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
+fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
     let mut res = Vec::new();
 
-    let mut split_start = start.split('/');
+    let (start, need_quotes) = if org_start.starts_with('"') {
+        (&org_start[1..], true)
+    } else {
+        (org_start, false)
+    };
+    let unescaped = unescape(start);
+    let mut split_start = unescaped.split('/');
     let mut pat = String::new();
     let mut using_cur_path = false;
     if start.starts_with('/') {
@@ -235,7 +275,8 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
     for element in split_start {
         if !element.is_empty() {
             pat.push_str(element);
-            if element != "." && element != ".." {
+            let path = Path::new(&pat);
+            if element != "." && element != ".." && !path.exists() {
                 pat.push('*');
             }
             pat.push('/');
@@ -246,7 +287,8 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
     }
 
     pat.pop(); // pop out the last '/' character
-    if pat.ends_with('.') {
+               //if pat.ends_with('.') || !pat.ends_with('*') {
+    if !pat.ends_with('*') {
         pat.push('*')
     }
     let cur_path_str = cur_path.to_string_lossy().to_string();
@@ -276,7 +318,12 @@ fn find_file_completions(start: &str, cur_path: &Path) -> Vec<String> {
                         if need_slash {
                             item.push('/');
                         }
-                        res.push(item);
+                        let val = if need_quotes {
+                            format!("\"{}", item)
+                        } else {
+                            item.to_string()
+                        };
+                        res.push(escape(&val));
                     }
                     Err(_err) => {}
                 }

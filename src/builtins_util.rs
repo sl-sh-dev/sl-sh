@@ -209,17 +209,33 @@ pub fn parse_list_of_strings(
 }
 
 pub fn expand_tilde(path: &str) -> Option<String> {
-    let mut home = match env::var("HOME") {
-        Ok(val) => val,
-        Err(_) => "/".to_string(),
-    };
-    if !home.ends_with('/') {
-        home.push('/');
-    }
-    if path == "~" {
-        Some(home)
-    } else if path.contains("~/") {
-        let new_path = path.replace("~/", &home);
+    if path.contains('~') {
+        let mut home = match env::var("HOME") {
+            Ok(val) => val,
+            Err(_) => "/".to_string(),
+        };
+        if home.ends_with('/') {
+            home.pop();
+        }
+        let mut new_path = String::new();
+        let mut last_ch = ' ';
+        for ch in path.chars() {
+            if ch == '~' {
+                if last_ch == '\\' {
+                    new_path.push('~');
+                } else {
+                    new_path.push_str(&home);
+                }
+            } else {
+                if last_ch == '\\' {
+                    new_path.push('\\');
+                }
+                if ch != '\\' {
+                    new_path.push(ch);
+                }
+            }
+            last_ch = ch;
+        }
         Some(new_path)
     } else {
         None
