@@ -173,7 +173,7 @@ fn handle_char(
         });
     } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
         *last_comma = true;
-    } else if last_ch =='\\' && ch == ' ' {
+    } else if last_ch == '\\' && ch == ' ' {
         // Keep an escaped space in token since this is a shell...
         token.push(ch);
     } else if is_whitespace(ch) {

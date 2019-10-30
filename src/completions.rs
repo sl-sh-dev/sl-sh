@@ -17,8 +17,7 @@ fn unescape(input: &str) -> String {
     for character in input.bytes() {
         match character {
             b'\\' if !check => check = true,
-            b'(' | b')' | b'"' | b'\'' | b' ' if check =>
-            {
+            b'(' | b')' | b'"' | b'\'' | b' ' if check => {
                 output.push(character);
                 check = false;
             }
@@ -288,7 +287,7 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
     }
 
     pat.pop(); // pop out the last '/' character
-    //if pat.ends_with('.') || !pat.ends_with('*') {
+               //if pat.ends_with('.') || !pat.ends_with('*') {
     if !pat.ends_with('*') {
         pat.push('*')
     }
