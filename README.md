@@ -147,16 +147,19 @@ xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces 
 These macros will work on either a vector or a pair made into a proper list
 (cons list).  If these do what you want then probably better to use then
 the type specific versions (if they exist, ie first vs car).
+NOTE: list under args can be a vector or cons list.
 
 Form | Args | Type | description
 -----|------|------|------------
-append | 2 lists or vectors | macro | Produces a new vector by appending the second onto the first.
-butlast | list \| vector | macro | Produces the provided list minus the last element.  Nil if the list is empty or one element.
-first | list \| vector | macro | Produces the first element of the provided list.  Nil if the list is empty.
-last | list \| vector | macro | Produces the last element in the list.  Nil if the list is empty.
-nth | int vector or list | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
-rest | list \| vector | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
-setnth! | idx/obj/list \| vector | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
+append | 2+ lists | macro | Produces a new list (type will be same as first parameter) by appending the other lists onto the first.
+append! | 2+ lists | macro | Modifies the first list by appending the other lists onto it.
+butlast | list | macro | Produces the provided list minus the last element.  Nil if the list is empty or one element.
+copy-seq | list | macro | Produces a copy of the provided list (copy has same type as the parameter).
+first | list | macro | Produces the first element of the provided list.  Nil if the list is empty.
+last | list | macro | Produces the last element in the list.  Nil if the list is empty.
+nth | int list | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
+rest | list | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
+setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 
 
 ### String Forms

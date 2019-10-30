@@ -113,11 +113,74 @@
 					(err "ERROR: invalid bindings on let"))))
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 
-(defn append (l1 l2) (progn
-    (def 'ret (make-vec))
-    (for el l1 (push! ret el))
-    (for el l2 (push! ret el))
+(defn copy-seq (seq)
+    (if (is-vec seq)
+        (progn
+            (def 'tseq (make-vec (length seq)))
+            (for el seq (push! tseq el))
+            tseq)
+        (if (is-proper-list seq)
+            (progn
+                (def 'tseq nil)
+                (def 'tcell nil)
+                (def 'head nil)
+                (for el seq (progn
+                    (if (null head)
+                        (progn (set 'tseq (set 'head (join el nil))))
+                        (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
+                head)
+            (err "Not a list or vector."))))
+
+(def 'append nil)
+(def 'append! nil)
+(let ((tseq))
+(defn copy-els (to l) (progn
+    (def 'tcell nil)
+    (for el l
+        (if (null to)
+            (progn (set 'tseq (set 'to (join el nil))))
+            (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell))))
+    to))
+
+(defn last-cell (obj)
+    (if (is-proper-list obj)
+        (if (null (cdr obj))
+            obj
+            (recur (cdr obj)))
+        (err "Not a list")))
+
+(setfn append (l1 l2 &rest others) (progn
+    (def 'ret nil)
+    (if (is-vec l1)
+        (progn
+            (set 'ret (make-vec))
+            (for el l1 (push! ret el))
+            (for el l2 (push! ret el))
+            (for l others (for el l (push! ret el))))
+        (if (or (is-proper-list l1) (null l1))
+            (progn
+                (set 'ret (copy-els ret l1))
+                (set 'ret (copy-els ret l2))
+                (for l others
+                    (set 'ret (copy-els ret l))))
+            (err "First element not a list or vector.")))
+    (set 'tseq nil)
     ret))
+
+(setfn append! (ret l2 &rest others) (progn
+    (if (is-vec ret)
+        (progn
+            (for el l2 (push! ret el))
+            (for l others (for el l (push! ret el))))
+        (if (or (is-proper-list ret) (null l1))
+            (progn
+                (set 'tseq (last-cell ret))
+                (set 'ret (copy-els ret l2))
+                (for l others
+                    (set 'ret (copy-els ret l))))
+            (err "First element not a list or vector.")))
+    (set 'tseq nil)
+    ret)))
 
 (defn map (fun items) (progn
 	(defq new-items (make-vec (length items)))
