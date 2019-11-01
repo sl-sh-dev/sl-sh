@@ -48,12 +48,13 @@ fn builtin_fncall(
 ) -> io::Result<Expression> {
     let mut call_list = Vec::new();
     for arg in args {
-        call_list.push(eval(environment, &arg)?);
+        call_list.push(arg.clone());
     }
     if call_list.is_empty() {
         return Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"));
     }
-    fn_call(environment, &call_list[0], Box::new(call_list[1..].iter()))
+    let command = eval(environment, &call_list[0])?;
+    fn_call(environment, &command, Box::new(call_list[1..].iter()))
 }
 
 fn builtin_apply(
@@ -64,14 +65,15 @@ fn builtin_apply(
     let mut last_arg: Option<&Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(eval(environment, &a)?);
+            call_list.push(a);
         }
         last_arg = Some(arg);
     }
     let tlist;
+    let list_borrow;
+    let last_evaled;
     if let Some(alist) = last_arg {
-        let list_borrow;
-        let last_evaled = eval(environment, alist)?;
+        last_evaled = eval(environment, alist)?;
         let itr = match last_evaled {
             Expression::List(list) => {
                 tlist = list.clone();
@@ -87,13 +89,18 @@ fn builtin_apply(
             }
         };
         for a in itr {
-            call_list.push(a.clone());
+            call_list.push(a);
         }
     }
     if call_list.is_empty() {
         return Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"));
     }
-    fn_call(environment, &call_list[0], Box::new(call_list[1..].iter()))
+    let command = eval(environment, &call_list[0])?;
+    fn_call(
+        environment,
+        &command,
+        Box::new(call_list[1..].iter().copied()),
+    )
 }
 
 fn builtin_err(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
