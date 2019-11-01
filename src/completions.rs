@@ -383,6 +383,7 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, org_start: 
             };
             match **data.get(key).unwrap() {
                 Expression::Func(_) => comps.push(val),
+                Expression::Function(_) => comps.push(val),
                 Expression::Atom(Atom::Lambda(_)) => comps.push(val),
                 Expression::Atom(Atom::Macro(_)) => comps.push(val),
                 _ => {}

@@ -178,7 +178,7 @@ fn handle_char(
         token.push(ch);
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
-    } else if ch == '\\' || ch == '#' {
+    } else if ch == '\\' || ch == '#' || ch == '\n' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
     } else {
