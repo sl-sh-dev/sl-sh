@@ -99,6 +99,57 @@ fn expand_macro<'a>(
     }
 }
 
+pub fn fn_call<'a>(
+    environment: &mut Environment,
+    command: &Expression,
+    mut args: Box<dyn Iterator<Item = &Expression> + 'a>,
+) -> io::Result<Expression> {
+    match command {
+        Expression::Atom(Atom::Symbol(command)) => {
+            if let Some(exp) = get_expression(environment, &command) {
+                match &*exp {
+                    Expression::Func(f) => {
+                        let parts: Vec<Expression> = args.cloned().collect();
+                        f(environment, &parts)
+                    }
+                    Expression::Function(c) if !c.is_special_form => {
+                        (c.func)(environment, &mut *args)
+                    }
+                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args),
+                    _ => {
+                        let msg = format!(
+                            "Symbol {} is not callable (or is macro or special form).",
+                            command
+                        );
+                        Err(io::Error::new(io::ErrorKind::Other, msg))
+                    }
+                }
+            } else {
+                let msg = format!(
+                    "Symbol {} is not callable (or is macro or special form).",
+                    command
+                );
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args),
+        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, args),
+        Expression::Func(f) => {
+            let parts: Vec<Expression> = args.cloned().collect();
+            f(environment, &parts)
+        }
+        Expression::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
+        _ => {
+            let msg = format!(
+                "Called an invalid command {}, type {}.",
+                command.make_string(environment)?,
+                command.display_type()
+            );
+            Err(io::Error::new(io::ErrorKind::Other, msg))
+        }
+    }
+}
+
 fn fn_eval<'a>(
     environment: &mut Environment,
     command: &Expression,

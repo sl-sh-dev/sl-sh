@@ -25,6 +25,9 @@ The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example.
 Form | Args | Type | description
 -----|------|------|------------
 eval | Form or string to evalute | builtin | 
+fncall | fn form+ | builtin | Calls the first argument (lambda or builtin function) with the rest of the args.
+apply | fn form* list | builtin | Calls the first argument (lambda or builtin function) with the rest of the args and spreads the final arg out (must be a list).
+err | string | builtin | Raises an error with the provided string as it's message.
 load | | builtin |
 if | | builtin |
 print | | builtin |

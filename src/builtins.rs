@@ -20,22 +20,80 @@ use crate::process::*;
 use crate::reader::*;
 use crate::types::*;
 
-fn builtin_eval(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "eval can only have one form",
-        ))
-    } else {
-        match &args[0] {
-            Expression::Atom(Atom::String(s)) => match read(&s, false) {
-                Ok(ast) => eval(environment, &ast),
-                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-            },
-            _ => eval(environment, &args[0]),
+fn builtin_eval(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, &arg)?;
+            return match arg {
+                Expression::Atom(Atom::String(s)) => match read(&s, false) {
+                    Ok(ast) => eval(environment, &ast),
+                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                },
+                _ => eval(environment, &arg),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "eval can only have one form",
+    ))
+}
+
+fn builtin_fncall(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut call_list = Vec::new();
+    for arg in args {
+        call_list.push(eval(environment, &arg)?);
+    }
+    if call_list.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"));
+    }
+    fn_call(environment, &call_list[0], Box::new(call_list[1..].iter()))
+}
+
+fn builtin_apply(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut call_list = Vec::new();
+    let mut last_arg: Option<&Expression> = None;
+    for arg in args {
+        if let Some(a) = last_arg {
+            call_list.push(eval(environment, &a)?);
+        }
+        last_arg = Some(arg);
+    }
+    let tlist;
+    if let Some(alist) = last_arg {
+        let list_borrow;
+        let last_evaled = eval(environment, alist)?;
+        let itr = match last_evaled {
+            Expression::List(list) => {
+                tlist = list.clone();
+                list_borrow = tlist.borrow();
+                Box::new(list_borrow.iter())
+            }
+            Expression::Pair(_, _) => last_evaled.iter(),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "apply: last arg not a list",
+                ))
+            }
+        };
+        for a in itr {
+            call_list.push(a.clone());
+        }
+    }
+    if call_list.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"));
+    }
+    fn_call(environment, &call_list[0], Box::new(call_list[1..].iter()))
 }
 
 fn builtin_err(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -999,7 +1057,27 @@ macro_rules! ensure_tonicity_all {
 }
 
 pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
-    data.insert("eval".to_string(), Rc::new(Expression::Func(builtin_eval)));
+    data.insert(
+        "eval".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_eval,
+            "Evalute the provided expression",
+        )),
+    );
+    data.insert(
+        "fncall".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_fncall,
+            "Call the provided function with the suplied arguments",
+        )),
+    );
+    data.insert(
+        "apply".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_apply,
+            "Call the provided function with the suplied arguments, last is a list that will be expanded",
+        )),
+    );
     data.insert("err".to_string(), Rc::new(Expression::Func(builtin_err)));
     data.insert("load".to_string(), Rc::new(Expression::Func(builtin_load)));
     data.insert(
