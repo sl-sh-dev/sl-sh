@@ -75,7 +75,7 @@ fn builtin_apply(
     if let Some(alist) = last_arg {
         last_evaled = eval(environment, alist)?;
         let itr = match last_evaled {
-            Expression::List(list) => {
+            Expression::Vector(list) => {
                 tlist = list.clone();
                 list_borrow = tlist.borrow();
                 Box::new(list_borrow.iter())
@@ -131,11 +131,11 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
         match ast {
             Ok(ast) => {
                 let ast = match ast {
-                    Expression::List(olist) => {
+                    Expression::Vector(olist) => {
                         let mut list = olist.borrow_mut();
                         if let Some(first) = list.get(0) {
                             match first {
-                                Expression::List(_) => {
+                                Expression::Vector(_) => {
                                     let mut v = Vec::with_capacity(list.len() + 1);
                                     v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
                                     for l in list.drain(..) {
@@ -153,12 +153,12 @@ fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Resul
                                 }
                                 _ => {
                                     drop(list);
-                                    Expression::List(olist)
+                                    Expression::Vector(olist)
                                 }
                             }
                         } else {
                             drop(list);
-                            Expression::List(olist)
+                            Expression::Vector(olist)
                         }
                     }
                     _ => ast,
@@ -182,7 +182,7 @@ fn builtin_length(environment: &mut Environment, args: &[Expression]) -> io::Res
         Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
         Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
         Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-        Expression::List(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
+        Expression::Vector(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
         Expression::Pair(_e1, e2) => {
             let mut len = 0;
             let mut e_next = e2.clone();
@@ -651,7 +651,7 @@ fn replace_commas(
     let mut amp_next = false;
     for exp in list {
         let exp = match exp {
-            Expression::List(tlist) => {
+            Expression::Vector(tlist) => {
                 replace_commas(environment, &mut tlist.borrow().iter(), is_vector)?
             }
             Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector)?,
@@ -667,7 +667,7 @@ fn replace_commas(
                 comma_next = false;
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
-                if let Expression::List(new_list) = nl {
+                if let Expression::Vector(new_list) = nl {
                     for item in new_list.borrow().iter() {
                         output.push(item.clone());
                     }
@@ -690,7 +690,7 @@ fn replace_commas(
             comma_next = false;
         } else if amp_next {
             let nl = eval(environment, &exp)?;
-            if let Expression::List(new_list) = nl {
+            if let Expression::Vector(new_list) = nl {
                 for item in new_list.borrow_mut().drain(..) {
                     output.push(item);
                 }
@@ -723,7 +723,7 @@ fn builtin_bquote(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             return match arg {
-                Expression::List(list) => {
+                Expression::Vector(list) => {
                     replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
                 }
                 Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false),
@@ -891,7 +891,7 @@ fn builtin_expand_macro(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Expression::List(list) = arg0 {
+            return if let Expression::Vector(list) = arg0 {
                 let list = list.borrow();
                 let (command, parts) = match list.split_first() {
                     Some((c, p)) => (c, p),

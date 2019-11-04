@@ -30,8 +30,8 @@ pub use crate::builtins_math::*;
 pub mod builtins_str;
 pub use crate::builtins_str::*;
 
-pub mod builtins_list;
-pub use crate::builtins_list::*;
+pub mod builtins_vector;
+pub use crate::builtins_vector::*;
 
 pub mod builtins;
 pub use crate::builtins::*;

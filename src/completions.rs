@@ -126,7 +126,7 @@ impl ShellCompleter {
                             }
                         }
                         Expression::Atom(Atom::Nil) => HookResult::Default,
-                        Expression::List(list) => {
+                        Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
                                 let s = l.to_string();

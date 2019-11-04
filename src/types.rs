@@ -172,7 +172,7 @@ impl Callable {
 pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
-    List(Rc<RefCell<Vec<Expression>>>),
+    Vector(Rc<RefCell<Vec<Expression>>>),
     Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Function(Callable),
@@ -212,7 +212,7 @@ impl fmt::Display for Expression {
             ),
             Expression::Func(_) => write!(f, "#<Function>"),
             Expression::Function(_) => write!(f, "#<Function>"),
-            Expression::List(list) => {
+            Expression::Vector(list) => {
                 let mut res = String::new();
                 res.push_str("#(");
                 list_out(&mut res, &mut list.borrow().iter());
@@ -271,7 +271,7 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
-            Expression::List(l) => write!(f, "Expression::List({:?})", l.borrow()),
+            Expression::Vector(l) => write!(f, "Expression::Vector({:?})", l.borrow()),
             Expression::Pair(e1, e2) => {
                 write!(f, "Expression::Pair({:?} . {:?})", e1.borrow(), e2.borrow())
             }
@@ -296,7 +296,7 @@ impl Expression {
             Expression::Pair(e1, e2) => {
                 Box::new(PairIter::new(Expression::Pair(e1.clone(), e2.clone())))
             }
-            //Expression::List(list) => {
+            //Expression::Vector(list) => {
             //    Box::new(list.clone().borrow().iter())
             //}
             _ => Box::new(iter::empty()),
@@ -312,7 +312,7 @@ impl Expression {
     }
 
     pub fn with_list(list: Vec<Expression>) -> Expression {
-        Expression::List(Rc::new(RefCell::new(list)))
+        Expression::Vector(Rc::new(RefCell::new(list)))
     }
 
     pub fn cons_from_vec(v: &mut Vec<Expression>) -> Expression {
@@ -339,7 +339,7 @@ impl Expression {
             Expression::Process(_) => "Process".to_string(),
             Expression::Func(_) => "Function".to_string(),
             Expression::Function(_) => "Function".to_string(),
-            Expression::List(_) => "Vector".to_string(),
+            Expression::Vector(_) => "Vector".to_string(),
             Expression::Pair(_, _) => "Pair".to_string(),
             Expression::File(_) => "File".to_string(),
         }
@@ -382,7 +382,7 @@ impl Expression {
             Ok(())
         }
         match self {
-            Expression::List(list) => {
+            Expression::Vector(list) => {
                 init_space(indent, writer)?;
                 let a_str = self.to_string();
                 if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
@@ -476,7 +476,7 @@ impl Expression {
             }
             Expression::Func(_) => Ok(self.to_string()),
             Expression::Function(_) => Ok(self.to_string()),
-            Expression::List(_list) => Ok(self.to_string()),
+            Expression::Vector(_list) => Ok(self.to_string()),
             Expression::Pair(_e1, _e2) => Ok(self.to_string()),
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
@@ -523,7 +523,7 @@ impl Expression {
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
@@ -547,7 +547,7 @@ impl Expression {
             }
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::List(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
@@ -594,7 +594,7 @@ impl Expression {
             }
             Expression::Func(_) => write!(writer, "{}", self.to_string())?,
             Expression::Function(_) => write!(writer, "{}", self.to_string())?,
-            Expression::List(_list) => write!(writer, "{}", self.to_string())?,
+            Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
             Expression::Pair(_e1, _e2) => write!(writer, "{}", self.to_string())?,
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();

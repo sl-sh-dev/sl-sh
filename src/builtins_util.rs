@@ -261,7 +261,7 @@ pub fn setup_args<'a>(
 ) -> io::Result<()> {
     let l;
     let p_iter = match params {
-        Expression::List(li) => {
+        Expression::Vector(li) => {
             l = li.borrow();
             Box::new(l.iter())
         }

@@ -412,7 +412,7 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (function).",
             ))
         }
-        Some(Expression::List(_)) => {
+        Some(Expression::Vector(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (list).",

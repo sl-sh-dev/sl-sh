@@ -372,7 +372,7 @@ fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> 
     let contents = fs::read_to_string(file_name)?;
     let ast = read(&contents, false);
     match ast {
-        Ok(Expression::List(list)) => {
+        Ok(Expression::Vector(list)) => {
             for exp in list.borrow().iter() {
                 match eval(environment, &exp) {
                     Ok(_exp) => {}

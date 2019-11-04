@@ -179,7 +179,7 @@ fn builtin_is_vec(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::List(_) = arg {
+            return if let Expression::Vector(_) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
                 Ok(Expression::Atom(Atom::Nil))

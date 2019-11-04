@@ -96,7 +96,7 @@ fn builtin_str_cat_list(
     }
     let join_str = as_string(environment, &args[0])?;
     let mut new_str = String::new();
-    if let Expression::List(list) = &args[1] {
+    if let Expression::Vector(list) = &args[1] {
         let mut first = true;
         for s in list.borrow().iter() {
             if !first {

@@ -41,7 +41,7 @@ fn call_lambda<'a>(
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
-            if let Expression::List(new_args) = &last_eval {
+            if let Expression::Vector(new_args) = &last_eval {
                 if recur_args != new_args.borrow().len() {
                     environment.current_scope.pop();
                     return Err(io::Error::new(
@@ -190,7 +190,7 @@ fn fn_eval<'a>(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::List(list) => match eval(environment, &Expression::List(list.clone()))? {
+        Expression::Vector(list) => match eval(environment, &Expression::Vector(list.clone()))? {
             Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
             Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
             Expression::Func(f) => {
@@ -259,7 +259,7 @@ fn internal_eval<'a>(
         ));
     }
     match expression {
-        Expression::List(parts) => {
+        Expression::Vector(parts) => {
             let parts = parts.borrow();
             let (command, parts) = match parts.split_first() {
                 Some((c, p)) => (c, p),
@@ -283,7 +283,7 @@ fn internal_eval<'a>(
             } else if let Some(exp) = get_expression(environment, &s[..]) {
                 match &*exp {
                     Expression::Func(_) => Ok(Expression::Atom(Atom::String(s.clone()))),
-                    Expression::List(l) => Ok(Expression::List(l.clone())),
+                    Expression::Vector(l) => Ok(Expression::Vector(l.clone())),
                     _ => {
                         let exp = &*exp;
                         Ok(exp.clone())

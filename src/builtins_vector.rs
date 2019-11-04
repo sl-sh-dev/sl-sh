@@ -11,7 +11,7 @@ use crate::types::*;
 
 fn builtin_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     if args.is_empty() {
-        return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
+        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
     }
     let args = to_args(environment, args)?;
     Ok(Expression::with_list(args))
@@ -26,7 +26,7 @@ fn builtin_make_vec(environment: &mut Environment, args: &[Expression]) -> io::R
         ));
     }
     if args.is_empty() {
-        return Ok(Expression::List(Rc::new(RefCell::new(Vec::new()))));
+        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
     }
     let cap = if let Expression::Atom(Atom::Int(c)) = args[0] {
         c
@@ -77,7 +77,7 @@ fn builtin_vec_vslice(
         0
     };
     match &args[0] {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             let list = list.borrow();
             if !list.is_empty() {
                 let len = list.len();
@@ -125,7 +125,7 @@ fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Re
         ));
     };
     match &args[1] {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             let list = list.borrow();
             if !list.is_empty() {
                 if idx < 0 || idx >= list.len() as i64 {
@@ -169,7 +169,7 @@ fn builtin_vec_setnth(
         ));
     };
     match old_list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             if idx < 0 || idx >= list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -177,7 +177,7 @@ fn builtin_vec_setnth(
                 ));
             }
             list.borrow_mut()[idx as usize] = new_element;
-            Ok(Expression::List(list))
+            Ok(Expression::Vector(list))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -198,9 +198,9 @@ fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::R
     let new_item = args.pop().unwrap();
     let old_list = args.pop().unwrap();
     match old_list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             list.borrow_mut().push(new_item);
-            Ok(Expression::List(list))
+            Ok(Expression::Vector(list))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -217,7 +217,7 @@ fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Re
     }
     let old_list = &args[0];
     match old_list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             if let Some(item) = list.borrow_mut().pop() {
                 Ok(item)
             } else {
@@ -244,7 +244,7 @@ fn builtin_vec_is_empty(
     }
     let list = &args[0];
     match list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             if list.borrow().is_empty() {
                 Ok(Expression::Atom(Atom::True))
             } else {
@@ -269,7 +269,7 @@ fn builtin_vec_vclear(
     }
     let list = &args[0];
     match list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             list.borrow_mut().clear();
             Ok(Expression::Atom(Atom::Nil))
         }
@@ -302,7 +302,7 @@ fn builtin_vec_remove_nth(
         ));
     };
     match list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             if idx < 0 || idx >= list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -310,7 +310,7 @@ fn builtin_vec_remove_nth(
                 ));
             }
             list.borrow_mut().remove(idx as usize);
-            Ok(Expression::List(list))
+            Ok(Expression::Vector(list))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -342,7 +342,7 @@ fn builtin_vec_insert_nth(
         ));
     };
     match old_list {
-        Expression::List(list) => {
+        Expression::Vector(list) => {
             if idx < 0 || idx > list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -350,7 +350,7 @@ fn builtin_vec_insert_nth(
                 ));
             }
             list.borrow_mut().insert(idx as usize, new_element);
-            Ok(Expression::List(list))
+            Ok(Expression::Vector(list))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
