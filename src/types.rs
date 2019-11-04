@@ -182,6 +182,26 @@ pub enum Expression {
 
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = &Expression>) {
+            let mut first = true;
+            let mut last_exp = &Expression::Atom(Atom::Nil);
+            for p in itr {
+                if !first {
+                    if let Expression::Atom(Atom::Symbol(sym)) = last_exp {
+                        if sym != "," && sym != ",@" {
+                            res.push_str(" ");
+                        }
+                    } else {
+                        res.push_str(" ");
+                    }
+                } else {
+                    first = false;
+                }
+                res.push_str(&p.to_string());
+                last_exp = p;
+            }
+        }
+
         match self {
             Expression::Atom(a) => write!(f, "{}", a),
             Expression::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
@@ -195,33 +215,39 @@ impl fmt::Display for Expression {
             Expression::List(list) => {
                 let mut res = String::new();
                 res.push_str("#(");
-                let mut first = true;
-                for exp in list.borrow().iter() {
-                    if !first {
-                        res.push_str(" ");
-                    } else {
-                        first = false;
-                    }
-                    res.push_str(&exp.to_string());
-                }
+                list_out(&mut res, &mut list.borrow().iter());
                 res.push(')');
                 write!(f, "{}", res)
             }
             Expression::Pair(e1, e2) => {
                 if is_proper_list(self) {
-                    let mut res = String::new();
-                    res.push_str("(");
-                    let mut first = true;
-                    for p in self.iter() {
-                        if !first {
-                            res.push_str(" ");
-                        } else {
-                            first = false;
+                    match &*e1.borrow() {
+                        Expression::Atom(Atom::Symbol(sym)) if sym == "quote" => {
+                            f.write_str("'")?;
+                            // This will be a two element list or something is wrong...
+                            if let Expression::Pair(a2, _is_nil) = &*e2.borrow() {
+                                f.write_str(&a2.borrow().to_string())
+                            } else {
+                                f.write_str(&e2.borrow().to_string())
+                            }
                         }
-                        res.push_str(&p.to_string());
+                        Expression::Atom(Atom::Symbol(sym)) if sym == "bquote" => {
+                            f.write_str("`")?;
+                            // This will be a two element list or something is wrong...
+                            if let Expression::Pair(a2, _is_nil) = &*e2.borrow() {
+                                f.write_str(&a2.borrow().to_string())
+                            } else {
+                                f.write_str(&e2.borrow().to_string())
+                            }
+                        }
+                        _ => {
+                            let mut res = String::new();
+                            res.push_str("(");
+                            list_out(&mut res, &mut self.iter());
+                            res.push(')');
+                            write!(f, "{}", res)
+                        }
                     }
-                    res.push(')');
-                    write!(f, "{}", res)
                 } else {
                     write!(
                         f,
@@ -240,6 +266,7 @@ impl fmt::Display for Expression {
         }
     }
 }
+
 impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -317,6 +344,109 @@ impl Expression {
             }
             None => Ok("".to_string()),
         }
+    }
+
+    fn pretty_print_int(
+        &self,
+        environment: &mut Environment,
+        indent: usize,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        fn init_space(indent: usize, writer: &mut dyn Write) -> io::Result<()> {
+            let mut i = 0;
+            if indent > 0 {
+                writer.write_all("\n".as_bytes())?;
+            }
+            while i < indent {
+                writer.write_all(b"    ")?;
+                i += 1;
+            }
+            Ok(())
+        }
+        match self {
+            Expression::List(list) => {
+                init_space(indent, writer)?;
+                let a_str = self.to_string();
+                if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
+                    writer.write_all(a_str.as_bytes())?;
+                } else {
+                    writer.write_all(b"#(")?;
+                    let mut first = true;
+                    for exp in list.borrow().iter() {
+                        if !first {
+                            writer.write_all(b" ")?;
+                        } else {
+                            first = false;
+                        }
+                        exp.pretty_print_int(environment, indent + 1, writer)?;
+                    }
+                    writer.write_all(b")")?;
+                }
+            }
+            Expression::Pair(e1, e2) => {
+                init_space(indent, writer)?;
+                let a_str = self.to_string();
+                if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
+                    writer.write_all(a_str.as_bytes())?;
+                } else if is_proper_list(self) {
+                    writer.write_all(b"(")?;
+                    let mut first = true;
+                    let mut last_p = &Expression::Atom(Atom::Nil);
+                    for p in self.iter() {
+                        if !first {
+                            if let Expression::Atom(Atom::Symbol(sym)) = last_p {
+                                if sym != "," && sym != ",@" {
+                                    writer.write_all(b" ")?;
+                                }
+                            } else {
+                                writer.write_all(b" ")?;
+                            }
+                        } else {
+                            first = false;
+                        }
+                        p.pretty_print_int(environment, indent + 1, writer)?;
+                        last_p = p;
+                    }
+                    writer.write_all(b")")?;
+                } else {
+                    write!(
+                        writer,
+                        "({} . {})",
+                        e1.borrow().to_string(),
+                        e2.borrow().to_string()
+                    )?;
+                }
+            }
+            Expression::Atom(Atom::String(_s)) => {
+                write!(writer, "{}", self.to_string())?;
+            }
+            Expression::Atom(Atom::Lambda(l)) => {
+                write!(writer, "(fn {}", l.params.to_string())?;
+                l.body.pretty_print_int(environment, indent + 1, writer)?;
+                writer.write_all(b")")?;
+            }
+            Expression::Atom(Atom::Macro(m)) => {
+                write!(writer, "(macro {}", m.params.to_string())?;
+                m.body.pretty_print_int(environment, indent + 1, writer)?;
+                writer.write_all(b")")?;
+            }
+            _ => self.writef(environment, writer)?,
+        }
+        Ok(())
+    }
+
+    pub fn pretty_printf(
+        &self,
+        environment: &mut Environment,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        self.pretty_print_int(environment, 0, writer)
+    }
+
+    pub fn pretty_print(&self, environment: &mut Environment) -> io::Result<()> {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        self.pretty_print_int(environment, 0, &mut handle)
     }
 
     pub fn make_string(&self, environment: &Environment) -> io::Result<String> {

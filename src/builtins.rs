@@ -9,7 +9,7 @@ use std::collections::{hash_map, HashMap};
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
-use std::io;
+use std::io::{self, Write};
 use std::rc::Rc;
 
 use crate::builtins_util::*;
@@ -236,31 +236,143 @@ fn builtin_if(environment: &mut Environment, args: &[Expression]) -> io::Result<
     }
 }
 
-fn builtin_print(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    print(environment, &args, false)
+fn args_out(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    add_newline: bool,
+    pretty: bool,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    for a in args {
+        let aa = eval(environment, a)?;
+        if pretty {
+            aa.pretty_printf(environment, writer)?;
+        } else {
+            aa.writef(environment, writer)?;
+        }
+    }
+    if add_newline {
+        writer.write_all("\n".as_bytes())?;
+    }
+    Ok(())
 }
 
-fn builtin_println(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    print(environment, &args, true)
+fn print_to_oe(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    add_newline: bool,
+    pretty: bool,
+    default_error: bool,
+    key: &str,
+) -> io::Result<()> {
+    let out = get_expression(environment, key);
+    match out {
+        Some(out) => {
+            if let Expression::File(f) = &*out {
+                match f {
+                    FileState::Stdout => {
+                        let stdout = io::stdout();
+                        let mut out = stdout.lock();
+                        args_out(environment, args, add_newline, pretty, &mut out)?;
+                    }
+                    FileState::Stderr => {
+                        let stdout = io::stderr();
+                        let mut out = stdout.lock();
+                        args_out(environment, args, add_newline, pretty, &mut out)?;
+                    }
+                    FileState::Write(f) => {
+                        args_out(environment, args, add_newline, pretty, &mut *f.borrow_mut())?;
+                    }
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "ERROR: Can not print to a non-writable file.",
+                        ));
+                    }
+                }
+            } else {
+                let msg = format!("ERROR: {} is not a file!", key);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+        }
+        None => {
+            if default_error {
+                let stdout = io::stderr();
+                let mut out = stdout.lock();
+                args_out(environment, args, add_newline, pretty, &mut out)?;
+            } else {
+                let stdout = io::stdout();
+                let mut out = stdout.lock();
+                args_out(environment, args, add_newline, pretty, &mut out)?;
+            }
+        }
+    }
+    Ok(())
 }
 
-fn builtin_eprint(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    eprint(environment, &args, false)
+fn print(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    add_newline: bool,
+) -> io::Result<Expression> {
+    match &environment.state.stdout_status {
+        Some(IOState::Null) => { /* Nothing to do... */ }
+        _ => {
+            print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
+        }
+    };
+    Ok(Expression::Atom(Atom::Nil))
 }
 
-fn builtin_eprintln(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    eprint(environment, &args, true)
+pub fn eprint(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    add_newline: bool,
+) -> io::Result<Expression> {
+    match &environment.state.stderr_status {
+        Some(IOState::Null) => { /* Nothing to do... */ }
+        _ => {
+            print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
+        }
+    };
+    Ok(Expression::Atom(Atom::Nil))
 }
 
-fn builtin_format(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
+fn builtin_print(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    print(environment, args, false)
+}
+
+fn builtin_println(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    print(environment, args, true)
+}
+
+fn builtin_eprint(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    eprint(environment, args, false)
+}
+
+fn builtin_eprintln(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    eprint(environment, args, true)
+}
+
+fn builtin_format(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
     let mut res = String::new();
     for a in args {
-        res.push_str(&a.as_string(environment)?);
+        res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
     Ok(Expression::Atom(Atom::String(res)))
 }
@@ -697,22 +809,24 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
-fn builtin_macro(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "macro can only have two forms (bindings and body)",
-        ))
-    } else {
-        let mut args = args.iter();
-        let params = args.next().unwrap();
-        let body = args.next().unwrap();
-        Ok(Expression::Atom(Atom::Macro(Macro {
-            params: Box::new(params.clone()),
-            body: Box::new(body.clone()),
-        })))
+fn builtin_macro(
+    _environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(params) = args.next() {
+        if let Some(body) = args.next() {
+            if args.next().is_none() {
+                return Ok(Expression::Atom(Atom::Macro(Macro {
+                    params: Box::new(params.clone()),
+                    body: Box::new(body.clone()),
+                })));
+            }
+        }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "macro can only have two forms (bindings and body)",
+    ))
 }
 
 fn do_expansion(
@@ -1094,23 +1208,38 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert("if".to_string(), Rc::new(Expression::Func(builtin_if)));
     data.insert(
         "print".to_string(),
-        Rc::new(Expression::Func(builtin_print)),
+        Rc::new(Expression::make_function(
+            builtin_print,
+            "Print the arguments.",
+        )),
     );
     data.insert(
         "println".to_string(),
-        Rc::new(Expression::Func(builtin_println)),
+        Rc::new(Expression::make_function(
+            builtin_println,
+            "Print the arguments and then a newline.",
+        )),
     );
     data.insert(
         "eprint".to_string(),
-        Rc::new(Expression::Func(builtin_eprint)),
+        Rc::new(Expression::make_function(
+            builtin_eprint,
+            "Print the arguments to stderr.",
+        )),
     );
     data.insert(
         "eprintln".to_string(),
-        Rc::new(Expression::Func(builtin_eprintln)),
+        Rc::new(Expression::make_function(
+            builtin_eprintln,
+            "Print the arguments to stderr and then a newline.",
+        )),
     );
     data.insert(
         "format".to_string(),
-        Rc::new(Expression::Func(builtin_format)),
+        Rc::new(Expression::make_function(
+            builtin_format,
+            "Build a formatted string from arguments.",
+        )),
     );
     data.insert(
         "progn".to_string(),
@@ -1156,7 +1285,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "macro".to_string(),
-        Rc::new(Expression::Func(builtin_macro)),
+        Rc::new(Expression::make_function(builtin_macro, "Define a macro.")),
     );
     data.insert(
         "expand-macro".to_string(),
