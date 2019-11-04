@@ -354,24 +354,6 @@ fn parse_atom(token: &str) -> Expression {
     }
 }
 
-fn to_cons(v: &mut Vec<Expression>) -> Expression {
-    let mut last_pair = Expression::Atom(Atom::Nil);
-    if !v.is_empty() {
-        let mut i = v.len() - 1;
-        loop {
-            last_pair = Expression::Pair(
-                Rc::new(RefCell::new(v.remove(i))),
-                Rc::new(RefCell::new(last_pair.clone())),
-            );
-            if i == 0 {
-                break;
-            }
-            i -= 1;
-        }
-    }
-    last_pair
-}
-
 fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
     if level < 0 {
         return Err(ParseError {
@@ -393,8 +375,7 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
                                     Rc::new(RefCell::new(v.vec[2].clone())),
                                 ));
                             } else {
-                                let cons_list = to_cons(&mut v.vec);
-                                v2.vec.push(cons_list);
+                                v2.vec.push(Expression::cons_from_vec(&mut v.vec));
                             }
                         }
                     }
@@ -547,7 +528,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                     v.push(Expression::with_list(s.vec.clone()));
                 }
                 ListType::List => {
-                    v.push(to_cons(&mut s.vec));
+                    v.push(Expression::cons_from_vec(&mut s.vec));
                 }
             }
         }
@@ -556,7 +537,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
         match stack.pop() {
             Some(mut v) => match v.list_type {
                 ListType::Vector => Ok(Expression::with_list(v.vec)),
-                ListType::List => Ok(to_cons(&mut v.vec)),
+                ListType::List => Ok(Expression::cons_from_vec(&mut v.vec)),
             },
             None => Err(ParseError {
                 reason: "Empty results".to_string(),

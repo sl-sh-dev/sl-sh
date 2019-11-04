@@ -638,14 +638,17 @@ fn builtin_quote(
 fn replace_commas(
     environment: &mut Environment,
     list: &mut dyn Iterator<Item = &Expression>,
+    is_vector: bool,
 ) -> io::Result<Expression> {
     let mut output: Vec<Expression> = Vec::new(); //with_capacity(list.len());
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
         let exp = match exp {
-            Expression::List(tlist) => replace_commas(environment, &mut tlist.borrow().iter())?,
-            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter())?,
+            Expression::List(tlist) => {
+                replace_commas(environment, &mut tlist.borrow().iter(), is_vector)?
+            }
+            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector)?,
             _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
@@ -659,7 +662,6 @@ fn replace_commas(
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
                 if let Expression::List(new_list) = nl {
-                    //for item in new_list.borrow_mut().drain(..) {
                     for item in new_list.borrow().iter() {
                         output.push(item.clone());
                     }
@@ -701,7 +703,11 @@ fn replace_commas(
             output.push(exp);
         }
     }
-    Ok(Expression::with_list(output))
+    if is_vector {
+        Ok(Expression::with_list(output))
+    } else {
+        Ok(Expression::cons_from_vec(&mut output))
+    }
 }
 
 fn builtin_bquote(
@@ -712,9 +718,9 @@ fn builtin_bquote(
         if args.next().is_none() {
             return match arg {
                 Expression::List(list) => {
-                    replace_commas(environment, &mut Box::new(list.borrow().iter()))
+                    replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
                 }
-                Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter()),
+                Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false),
                 _ => Ok(arg.clone()),
             };
         }

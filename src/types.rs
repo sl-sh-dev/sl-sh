@@ -315,6 +315,24 @@ impl Expression {
         Expression::List(Rc::new(RefCell::new(list)))
     }
 
+    pub fn cons_from_vec(v: &mut Vec<Expression>) -> Expression {
+        let mut last_pair = Expression::Atom(Atom::Nil);
+        if !v.is_empty() {
+            let mut i = v.len() - 1;
+            loop {
+                last_pair = Expression::Pair(
+                    Rc::new(RefCell::new(v.remove(i))),
+                    Rc::new(RefCell::new(last_pair.clone())),
+                );
+                if i == 0 {
+                    break;
+                }
+                i -= 1;
+            }
+        }
+        last_pair
+    }
+
     pub fn display_type(&self) -> String {
         match self {
             Expression::Atom(a) => a.display_type(),
