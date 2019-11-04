@@ -189,6 +189,11 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                                     Expression::Atom(Atom::Nil) => { /* don't print nil */ }
                                     Expression::File(_) => { /* don't print file contents */ }
                                     Expression::Process(_) => { /* should have used stdout */ }
+                                    Expression::Atom(Atom::String(_)) => {
+                                        if let Err(err) = exp.write(&environment.borrow()) {
+                                            eprintln!("Error writing result: {}", err);
+                                        }
+                                    }
                                     _ => {
                                         if let Err(err) =
                                             exp.pretty_print(&mut environment.borrow_mut())
