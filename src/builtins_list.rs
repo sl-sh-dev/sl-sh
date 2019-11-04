@@ -239,7 +239,7 @@ fn builtin_vec_is_empty(
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-empty takes a list",
+            "vec-empty? takes a list",
         ));
     }
     let list = &args[0];
@@ -253,7 +253,7 @@ fn builtin_vec_is_empty(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-empty's first form must be a list",
+            "vec-empty?'s first form must be a list",
         )),
     }
 }
@@ -386,7 +386,7 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::Func(builtin_vec_pop)),
     );
     data.insert(
-        "is-empty".to_string(),
+        "vec-empty?".to_string(),
         Rc::new(Expression::Func(builtin_vec_is_empty)),
     );
     data.insert(

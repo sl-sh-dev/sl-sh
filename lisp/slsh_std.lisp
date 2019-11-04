@@ -66,12 +66,12 @@
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 
 (defn copy-seq (seq)
-    (if (is-vec seq)
+    (if (vec? seq)
         (progn
             (def 'tseq (make-vec (length seq)))
             (for el seq (push! tseq el))
             tseq)
-        (if (is-proper-list seq)
+        (if (list? seq)
             (progn
                 (def 'tseq nil)
                 (def 'tcell nil)
@@ -87,32 +87,32 @@
 ;;; Forms that work with sequences (list or vectors).
 
 (defn first (obj)
-    (if (is-vec obj)
+    (if (vec? obj)
         (vnth 0 obj)
-        (if (is-proper-list obj)
+        (if (list? obj)
             (car obj)
             (err "Not a vector or list"))))
 
 (defn rest (obj)
-    (if (is-vec obj)
+    (if (vec? obj)
         (vslice obj 1)
-        (if (is-proper-list obj)
+        (if (list? obj)
             (cdr obj)
             (err "Not a vector or list"))))
 
 (defn last (obj)
-    (if (is-vec obj)
+    (if (vec? obj)
         (vnth (- (length obj) 1) obj)
-        (if (is-proper-list obj)
+        (if (list? obj)
             (if (null (cdr obj))
                 (car obj)
                 (recur (cdr obj)))
             (err "Not a vector or list"))))
 
 (defn butlast (obj)
-    (if (is-vec obj)
+    (if (vec? obj)
         (vslice obj 0 (- (length obj) 1))
-        (if (is-proper-list obj) (progn
+        (if (list? obj) (progn
             (defq new-link (join nil nil))
             (if (null (cdr obj))
                 (setq new-link nil)
@@ -121,16 +121,16 @@
             (err "Not a vector or list"))))
 
 (defn setnth! (idx obj l)
-    (if (is-vec l)
+    (if (vec? l)
         (progn (vsetnth! idx obj l) nil)
-        (if (is-proper-list l)
+        (if (list? l)
             (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))
             (err "Not a vector or list"))))
 
 (defn nth (idx obj)
-    (if (is-vec obj)
+    (if (vec? obj)
         (vnth idx obj)
-        (if (is-proper-list obj)
+        (if (list? obj)
             (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
             (err "Not a vector or list"))))
 
@@ -146,7 +146,7 @@
         to))
 
     (defn last-cell (obj)
-        (if (is-proper-list obj)
+        (if (list? obj)
             (if (null (cdr obj))
                 obj
                 (recur (cdr obj)))
@@ -154,13 +154,13 @@
 
     (setfn append (l1 l2 &rest others) (progn
         (def 'ret nil)
-        (if (is-vec l1)
+        (if (vec? l1)
             (progn
                 (set 'ret (make-vec))
                 (for el l1 (push! ret el))
                 (for el l2 (push! ret el))
                 (for l others (for el l (push! ret el))))
-            (if (or (is-proper-list l1) (null l1))
+            (if (or (list? l1) (null l1))
                 (progn
                     (set 'ret (copy-els ret l1))
                     (set 'ret (copy-els ret l2))
@@ -171,11 +171,11 @@
         ret))
 
     (setfn append! (ret l2 &rest others) (progn
-        (if (is-vec ret)
+        (if (vec? ret)
             (progn
                 (for el l2 (push! ret el))
                 (for l others (for el l (push! ret el))))
-            (if (or (is-proper-list ret) (null ret))
+            (if (or (list? ret) (null ret))
                 (progn
                     (set 'tseq (last-cell ret))
                     (set 'ret (copy-els ret l2))
@@ -195,12 +195,12 @@
         new-items))
 
     (defn map (fun items)
-        (if (is-vec items)
+        (if (vec? items)
             (progn
                 (defq new-items (make-vec (length items)))
                 (for i items (push! new-items (fun i)))
                 new-items)
-            (if (is-proper-list items)
+            (if (list? items)
                 (progn
                     (defq new-items nil)
                     (set 'new-items (map-into(fun items new-items)))
@@ -216,14 +216,14 @@
     items))
 
 (defn reverse (items) (progn
-    (if (is-vec items)
+    (if (vec? items)
         (progn
             (defn irev (items new-items num)
                 (if (>= num 0) (progn (push! new-items (nth num items))(recur items new-items (- num 1)))))
             (defq new-items (make-vec (length items)))
             (irev items new-items (- (length items) 1))
             new-items)
-        (if (is-proper-list items)
+        (if (list? items)
             (progn
                 (def 'titems (copy-seq items))
                 (reverse! titems))

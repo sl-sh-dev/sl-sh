@@ -245,6 +245,12 @@ fn args_out(
 ) -> io::Result<()> {
     for a in args {
         let aa = eval(environment, a)?;
+        // If we have a standalone string do not quote it...
+        let pretty = if let Expression::Atom(Atom::String(_)) = aa {
+            false
+        } else {
+            pretty
+        };
         if pretty {
             aa.pretty_printf(environment, writer)?;
         } else {

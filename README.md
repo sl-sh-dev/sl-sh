@@ -80,21 +80,21 @@ These forms provide information/tests about an objects underlying type.
 
 Form | Args | Type | description
 -----|------|------|------------
-type | obj | builtin | Produces the string representation of objects type.
-is-nil | obj | builtin | True if obj is the nil type/false otherwise.
-is-true | obj | builtin | True if obj is the true type/false otherwise.
-is-float | obj | builtin | True if obj is the float type/false otherwise.
-is-int | obj | builtin | True if obj is the int type/false otherwise.
-is-symbol | obj | builtin | True if obj is the symbol type/false otherwise.
-is-string | obj | builtin | True if obj is the string type/false otherwise.
-is-lambda | obj | builtin | True if obj is the lambda type/false otherwise.
-is-macro | obj | builtin | True if obj is the macro type/false otherwise.
-is-vec | obj | builtin | True if obj is the vec type/false otherwise.
-is-pair | obj | builtin | True if obj is the pair type/false otherwise.
-is-builtin | obj | builtin | True if obj is the builtin (special form) type/false otherwise.
-is-process | obj | builtin | True if obj is the process type/false otherwise.
-is-file | obj | builtin | True if obj is the file type/false otherwise.
-is-proper-list | obj | builtin | True if obj is a pair that is a proper list (last pair in chain has a nil cdr).
+type? | obj | builtin | Produces the string representation of objects type.
+nil? | obj | builtin | True if obj is the nil type/false otherwise.
+true? | obj | builtin | True if obj is the true type/false otherwise.
+float? | obj | builtin | True if obj is the float type/false otherwise.
+int? | obj | builtin | True if obj is the int type/false otherwise.
+symbol? | obj | builtin | True if obj is the symbol type/false otherwise.
+string? | obj | builtin | True if obj is the string type/false otherwise.
+lambda? | obj | builtin | True if obj is the lambda type/false otherwise.
+macro? | obj | builtin | True if obj is the macro type/false otherwise.
+vec? | obj | builtin | True if obj is the vec type/false otherwise.
+pair? | obj | builtin | True if obj is the pair type/false otherwise.
+builtin? | obj | builtin | True if obj is the builtin (special form) type/false otherwise.
+process? | obj | builtin | True if obj is the process type/false otherwise.
+file? | obj | builtin | True if obj is the file type/false otherwise.
+list? | obj | builtin | True if obj is a pair that is a proper list (last pair in chain has a nil cdr).
 
 
 ### Pair/List (aka Cons List) Forms
@@ -127,7 +127,7 @@ Builtins:
 
 Form | Args | Type | description
 -----|------|------|------------
-is-empty | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
+vec-empty? | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
 make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nill.
 pop! | vector | builtin | Removes the last item from a vector and produces it.
 push! | vector/obj | builtin | Pushes the provided object onto the end of a vector.
@@ -165,6 +165,7 @@ setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, pro
 ### String Forms
 Form | Args | Type | description
 -----|------|------|------------
+str | form* | builtin | Creates a new string with the values of it's arguments.  Any command's run under it will have stdout captured as a string.
 str-trim | string | builtin | Trims both left and right on string.
 str-ltrim | string | builtin | Left trims string.
 str-rtrim | string | builtin | Right trims string.
@@ -182,9 +183,9 @@ macros not the builtins.
 Form | Args | Type | description
 -----|------|------|------------
 cd | path | builtin | Change to provided directory.
-path-exists | path | builtin | Boolean, does path exist.
-is-file | path | builtin | Boolean, is path a file.
-is-dir | path | builtin | Boolean, is path a directory.
+fs-exists? | path | builtin | Boolean, does path exist.
+fs-file? | path | builtin | Boolean, is path a file.
+fs-dir? | path | builtin | Boolean, is path a directory.
 pipe | form+ | builtin | Creates a pipe (job) consisting of the provided forms.
 wait | form | builtin | Waits for a pid to finish and returns the status code (fine to use on a process that was not in the background).
 pid | form | builtin | Returns the pid of a form that resolves to a process.

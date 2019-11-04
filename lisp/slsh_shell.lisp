@@ -7,37 +7,37 @@
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stdout* ,file ,body)
 		(dyn '*stdout* (open ,file :create :append) ,body)))
 
 ;; Redirect stdout to file, truncate the file first.
 (defmacro out> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stdout* ,file ,body)
 		(dyn '*stdout* (open ,file :create :truncate) ,body)))
 
 ;; Redirect stderr to file, append the output.
 (defmacro err>> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stderr* ,file ,body)
 		(dyn '*stderr* (open ,file :create :append) ,body)))
 
 ;; Redirect stderr to file, truncate the file first.
 (defmacro err> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stderr* ,file ,body)
 		(dyn '*stderr* (open ,file :create :truncate) ,body)))
 
 ;; Redirect both stdout and stderr to the same file, append the output.
 (defmacro out-err>> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
 		(dyn '*stdout* (open ,file :create :append) (dyn '*stderr* *stdout* ,body))))
 
 ;; Redirect both stdout and stderr to the same file, truncate the file first.
 (defmacro out-err> (file body)
-	`(if (is-file ,file)
+	`(if (file? ,file)
 		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
 		(dyn '*stdout* (open ,file :create :truncate) (dyn '*stderr* *stdout* ,body))))
 

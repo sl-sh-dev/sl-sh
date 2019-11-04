@@ -318,15 +318,15 @@ fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result
 pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert("cd".to_string(), Rc::new(Expression::Func(builtin_cd)));
     data.insert(
-        "path-exists".to_string(),
+        "fs-exists?".to_string(),
         Rc::new(Expression::Func(builtin_path_exists)),
     );
     data.insert(
-        "is-file".to_string(),
+        "fs-file?".to_string(),
         Rc::new(Expression::Func(builtin_is_file)),
     );
     data.insert(
-        "is-dir".to_string(),
+        "fs-dir?".to_string(),
         Rc::new(Expression::Func(builtin_is_dir)),
     );
     data.insert("pipe".to_string(), Rc::new(Expression::Func(builtin_pipe)));

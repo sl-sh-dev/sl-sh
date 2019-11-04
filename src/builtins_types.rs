@@ -35,10 +35,7 @@ fn builtin_is_nil(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-nil needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "nil? needs one form"))
 }
 
 fn builtin_is_true(
@@ -55,10 +52,7 @@ fn builtin_is_true(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-true needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "true? needs one form"))
 }
 
 fn builtin_is_float(
@@ -77,7 +71,7 @@ fn builtin_is_float(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-float needs one form",
+        "float? needs one form",
     ))
 }
 
@@ -95,10 +89,7 @@ fn builtin_is_int(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-int needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "int? needs one form"))
 }
 
 fn builtin_is_symbol(
@@ -117,7 +108,7 @@ fn builtin_is_symbol(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-symbol needs one form",
+        "symbol? needs one form",
     ))
 }
 
@@ -137,7 +128,7 @@ fn builtin_is_string(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-string needs one form",
+        "string? needs one form",
     ))
 }
 
@@ -157,7 +148,7 @@ fn builtin_is_lambda(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-lambda needs one form",
+        "lambda? needs one form",
     ))
 }
 
@@ -177,7 +168,7 @@ fn builtin_is_macro(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-macro needs one form",
+        "macro? needs one form",
     ))
 }
 
@@ -195,10 +186,7 @@ fn builtin_is_vec(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-vec needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "vec? needs one form"))
 }
 
 fn builtin_is_pair(
@@ -215,10 +203,7 @@ fn builtin_is_pair(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-pair needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "pair? needs one form"))
 }
 
 fn builtin_is_builtin(
@@ -237,7 +222,7 @@ fn builtin_is_builtin(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-builtin needs one form",
+        "builtin? needs one form",
     ))
 }
 
@@ -257,7 +242,7 @@ fn builtin_is_process(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "is-process needs one form",
+        "process? needs one form",
     ))
 }
 
@@ -275,10 +260,7 @@ fn builtin_is_file(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-file needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "file? needs one form"))
 }
 
 fn builtin_is_proper_list(
@@ -295,10 +277,7 @@ fn builtin_is_proper_list(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "is-proper-list needs one form",
-    ))
+    Err(io::Error::new(io::ErrorKind::Other, "list? needs one form"))
 }
 
 pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
@@ -307,59 +286,59 @@ pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
         Rc::new(Expression::make_function(builtin_type, "")),
     );
     data.insert(
-        "is-nil".to_string(),
+        "nil?".to_string(),
         Rc::new(Expression::make_function(builtin_is_nil, "")),
     );
     data.insert(
-        "is-true".to_string(),
+        "true?".to_string(),
         Rc::new(Expression::make_function(builtin_is_true, "")),
     );
     data.insert(
-        "is-float".to_string(),
+        "float?".to_string(),
         Rc::new(Expression::make_function(builtin_is_float, "")),
     );
     data.insert(
-        "is-int".to_string(),
+        "int?".to_string(),
         Rc::new(Expression::make_function(builtin_is_int, "")),
     );
     data.insert(
-        "is-symbol".to_string(),
+        "symbol?".to_string(),
         Rc::new(Expression::make_function(builtin_is_symbol, "")),
     );
     data.insert(
-        "is-string".to_string(),
+        "string?".to_string(),
         Rc::new(Expression::make_function(builtin_is_string, "")),
     );
     data.insert(
-        "is-lambda".to_string(),
+        "lambda?".to_string(),
         Rc::new(Expression::make_function(builtin_is_lambda, "")),
     );
     data.insert(
-        "is-macro".to_string(),
+        "macro?".to_string(),
         Rc::new(Expression::make_function(builtin_is_macro, "")),
     );
     data.insert(
-        "is-vec".to_string(),
+        "vec?".to_string(),
         Rc::new(Expression::make_function(builtin_is_vec, "")),
     );
     data.insert(
-        "is-pair".to_string(),
+        "pair?".to_string(),
         Rc::new(Expression::make_function(builtin_is_pair, "")),
     );
     data.insert(
-        "is-builtin".to_string(),
+        "builtin?".to_string(),
         Rc::new(Expression::make_function(builtin_is_builtin, "")),
     );
     data.insert(
-        "is-process".to_string(),
+        "process?".to_string(),
         Rc::new(Expression::make_function(builtin_is_process, "")),
     );
     data.insert(
-        "is-file".to_string(),
+        "file?".to_string(),
         Rc::new(Expression::make_function(builtin_is_file, "")),
     );
     data.insert(
-        "is-proper-list".to_string(),
+        "list?".to_string(),
         Rc::new(Expression::make_function(builtin_is_proper_list, "")),
     );
 }
