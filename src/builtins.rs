@@ -204,6 +204,7 @@ fn builtin_length(environment: &mut Environment, args: &[Expression]) -> io::Res
             }
             Ok(Expression::Atom(Atom::Int(len)))
         }
+        Expression::HashMap(map) => Ok(Expression::Atom(Atom::Int(map.borrow().len() as i64))),
         _ => Ok(Expression::Atom(Atom::Int(0))),
     }
 }

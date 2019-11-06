@@ -48,6 +48,9 @@ pub use crate::builtins_io::*;
 pub mod builtins_pair;
 pub use crate::builtins_pair::*;
 
+pub mod builtins_hashmap;
+pub use crate::builtins_hashmap::*;
+
 pub mod builtins_types;
 pub use crate::builtins_types::*;
 

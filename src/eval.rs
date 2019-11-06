@@ -296,6 +296,7 @@ fn internal_eval<'a>(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
+        Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Function(_) => Ok(Expression::Atom(Atom::Nil)),

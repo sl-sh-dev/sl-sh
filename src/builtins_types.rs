@@ -263,6 +263,23 @@ fn builtin_is_file(
     Err(io::Error::new(io::ErrorKind::Other, "file? needs one form"))
 }
 
+fn builtin_is_hash(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            return if let Expression::HashMap(_) = arg {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            };
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::Other, "hash? needs one form"))
+}
+
 fn builtin_is_proper_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -336,6 +353,10 @@ pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert(
         "file?".to_string(),
         Rc::new(Expression::make_function(builtin_is_file, "")),
+    );
+    data.insert(
+        "hash?".to_string(),
+        Rc::new(Expression::make_function(builtin_is_hash, "")),
     );
     data.insert(
         "list?".to_string(),

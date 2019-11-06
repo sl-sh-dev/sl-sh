@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::builtins::add_builtins;
 use crate::builtins_file::add_file_builtins;
+use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_pair::add_pair_builtins;
@@ -74,6 +75,7 @@ impl Default for Scope {
         add_file_builtins(&mut data);
         add_io_builtins(&mut data);
         add_pair_builtins(&mut data);
+        add_hash_builtins(&mut data);
         add_type_builtins(&mut data);
         data.insert(
             "*stdin*".to_string(),

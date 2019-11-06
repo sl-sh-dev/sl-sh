@@ -424,6 +424,12 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (pair).",
             ))
         }
+        Some(Expression::HashMap(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (hashmap).",
+            ))
+        }
         Some(Expression::File(FileState::Stdin)) => Stdio::inherit(),
         Some(Expression::File(FileState::Read(file))) => {
             // If there is ever a Windows version then use raw_handle instead of raw_fd.

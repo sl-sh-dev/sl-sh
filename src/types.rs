@@ -146,10 +146,8 @@ impl<'a> Iterator for PairIter<'a> {
     }
 }
 
-//type CallFunc = fn(&mut Environment, dyn Iterator<Item = &Expression>) -> io::Result<Expression>;
 type CallFunc =
     fn(&mut Environment, &mut dyn Iterator<Item = &Expression>) -> io::Result<Expression>;
-//    fn(&mut Environment, Box<dyn Iterator<Item = &Expression>>) -> io::Result<Expression>;
 
 #[derive(Clone)]
 pub struct Callable {
@@ -174,6 +172,7 @@ pub enum Expression {
     // RefCell the vector to allow destructive forms.
     Vector(Rc<RefCell<Vec<Expression>>>),
     Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
+    HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Function(Callable),
     Process(ProcessState),
@@ -257,6 +256,15 @@ impl fmt::Display for Expression {
                     )
                 }
             }
+            Expression::HashMap(map) => {
+                let mut res = String::new();
+                res.push_str("(make-hash (");
+                for (key, val) in map.borrow().iter() {
+                    res.push_str(&format!("({} . {})", key, val));
+                }
+                res.push_str("))");
+                write!(f, "{}", res)
+            }
             Expression::File(FileState::Stdout) => write!(f, "#<STDOUT>"),
             Expression::File(FileState::Stderr) => write!(f, "#<STDERR>"),
             Expression::File(FileState::Stdin) => write!(f, "#<STDIN>"),
@@ -275,6 +283,7 @@ impl fmt::Debug for Expression {
             Expression::Pair(e1, e2) => {
                 write!(f, "Expression::Pair({:?} . {:?})", e1.borrow(), e2.borrow())
             }
+            Expression::HashMap(map) => write!(f, "Expression::HashMap({:?})", map.borrow()),
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
             Expression::Function(_) => write!(f, "Expression::Function(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
@@ -341,6 +350,7 @@ impl Expression {
             Expression::Function(_) => "Function".to_string(),
             Expression::Vector(_) => "Vector".to_string(),
             Expression::Pair(_, _) => "Pair".to_string(),
+            Expression::HashMap(_) => "HashMap".to_string(),
             Expression::File(_) => "File".to_string(),
         }
     }
@@ -435,6 +445,20 @@ impl Expression {
                     )?;
                 }
             }
+            Expression::HashMap(map) => {
+                init_space(indent, writer)?;
+                let a_str = self.to_string();
+                if a_str.len() < 40 {
+                    writer.write_all(a_str.as_bytes())?;
+                } else {
+                    writer.write_all(b"(make-hash (")?;
+                    for (key, val) in map.borrow().iter() {
+                        init_space(indent + 1, writer)?;
+                        write!(writer, "({} . {})", key, val)?;
+                    }
+                    write!(writer, "))")?;
+                }
+            }
             Expression::Atom(Atom::String(_s)) => {
                 write!(writer, "{}", self.to_string())?;
             }
@@ -478,6 +502,7 @@ impl Expression {
             Expression::Function(_) => Ok(self.to_string()),
             Expression::Vector(_list) => Ok(self.to_string()),
             Expression::Pair(_e1, _e2) => Ok(self.to_string()),
+            Expression::HashMap(_map) => Ok(self.to_string()),
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
@@ -525,6 +550,7 @@ impl Expression {
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
@@ -549,6 +575,7 @@ impl Expression {
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
@@ -596,6 +623,7 @@ impl Expression {
             Expression::Function(_) => write!(writer, "{}", self.to_string())?,
             Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
             Expression::Pair(_e1, _e2) => write!(writer, "{}", self.to_string())?,
+            Expression::HashMap(_map) => write!(writer, "{}", self.to_string())?,
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
                 let mut f = f.lock();
