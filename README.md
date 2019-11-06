@@ -162,6 +162,18 @@ reverse! | list | macro | Modifies a list by reversing it's elements.
 setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 
 
+### HashMap Forms
+Form | Args | Type | description
+-----|------|------|------------
+hash-clear! | | builtin |
+hash-get | | builtin |
+hash-haskey | | builtin |
+make-hash | |builtin |
+hash-keys | | builtin |
+hash-remove! | | builtin |
+hash-set! | | builtin |
+
+
 ### String Forms
 Form | Args | Type | description
 -----|------|------|------------
