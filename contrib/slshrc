@@ -109,12 +109,12 @@
 		(str "")
 		(str "(" (str-trim branch) ")"))))
 
-#| prompt ensures
-	1. always a new line above prompt
-	2. if pushd has been used displays in reverse order dirs to popd
-	3. current path
-	4. if in git dir display current branch
-	5. cursor on near empty line |#
+;;prompt ensures
+;;	1. always a new line above prompt
+;;	2. if pushd has been used displays in reverse order dirs to popd
+;;	3. current path
+;;	4. if in git dir display current branch
+;;	5. cursor on near empty line
 (defn __prompt ()
 	(str "\n" (if (> (length (get-dirs)) 0) (str (map! smaller_path (reverse (get-dirs)))) "") "\n" "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) "\n" (set_prompt_tail)))
 
