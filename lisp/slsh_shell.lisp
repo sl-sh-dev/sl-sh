@@ -60,6 +60,7 @@
 (defq pushd nil)
 (defq popd nil)
 (defq dirs nil)
+(defq get-dirs nil)
 (defq clear-dirs nil)
 (defq set-dirs-max nil)
 ;; Scope to contain then pushd/popd/dirs functions.
@@ -78,6 +79,8 @@
 	;; List the directory stack.
 	(setfn dirs ()
 		(for d dir_stack (println d)))
+	;; Return the vector of directories.
+	(setfn get-dirs () dir_stack)
 	;; Clears the directory stack.
 	(setfn clear-dirs ()
 		(vclear! dir_stack))
