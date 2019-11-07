@@ -458,24 +458,17 @@ pub fn do_command<'a>(
     environment.loose_symbols = true;
     let mut args = Vec::new();
     for a in parts {
-        args.push(eval(environment, &a)?);
-    }
-    environment.loose_symbols = old_loose_syms;
-    let mut nargs: Vec<Expression> = Vec::with_capacity(args.len());
-    for arg in args.drain(..) {
-        if let Expression::Atom(Atom::String(s)) = arg {
-            prep_string_arg(&s, &mut nargs)?;
+        if let Expression::Atom(Atom::String(_)) = a {
+            args.push(a.clone());
         } else {
-            nargs.push(arg.clone());
+            let new_a = eval(environment, &a)?;
+            if let Expression::Atom(Atom::String(s)) = new_a {
+                prep_string_arg(&s, &mut args)?;
+            } else {
+                args.push(new_a.clone());
+            }
         }
     }
-    run_command(
-        environment,
-        command,
-        &mut nargs,
-        stdin,
-        stdout,
-        stderr,
-        data,
-    )
+    environment.loose_symbols = old_loose_syms;
+    run_command(environment, command, &mut args, stdin, stdout, stderr, data)
 }
