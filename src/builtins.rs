@@ -394,7 +394,7 @@ pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::
 }
 
 fn proc_set_vars2(
-    environment: &mut Environment,
+    _environment: &mut Environment,
     key: &Expression,
     val: &Expression,
 ) -> io::Result<(String, Expression)> {
@@ -407,19 +407,7 @@ fn proc_set_vars2(
             ));
         }
     };
-    let mut val = match val {
-        Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-            val.as_string(environment)
-                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-        )),
-        Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
-            Expression::Atom(Atom::String(
-                val.as_string(environment)
-                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-            ))
-        }
-        _ => val.clone(),
-    };
+    let mut val = val.clone();
     if let Expression::Atom(Atom::String(vs)) = val {
         let vs = match expand_tilde(&vs) {
             Some(v) => v,
