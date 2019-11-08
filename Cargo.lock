@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.6.15"
+version = "0.6.16"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -103,138 +103,173 @@ fn builtin_apply(
     )
 }
 
-fn builtin_err(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "err can only have one form",
-        ))
+fn builtin_unwind_protect(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(protected) = args.next() {
+        let result = eval(environment, protected);
+        for a in args {
+            if let Err(err) = eval(environment, a) {
+                eprintln!(
+                    "ERROR in unwind-protect cleanup form {}, {} will continue cleanup",
+                    a, err
+                );
+            }
+        }
+        result
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            args[0].as_string(environment)?,
-        ))
+        Ok(Expression::Atom(Atom::Nil))
     }
 }
 
-fn builtin_load(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "load needs one argument",
-        ))
-    } else {
-        let contents = fs::read_to_string(args.pop().unwrap().as_string(environment)?)?;
-        let ast = read(&contents, false);
-        match ast {
-            Ok(ast) => {
-                let ast = match ast {
-                    Expression::Vector(olist) => {
-                        let mut list = olist.borrow_mut();
-                        if let Some(first) = list.get(0) {
-                            match first {
-                                Expression::Vector(_) => {
-                                    let mut v = Vec::with_capacity(list.len() + 1);
-                                    v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                    for l in list.drain(..) {
-                                        v.push(l);
+fn builtin_err(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                arg.as_string(environment)?,
+            ));
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "err can only have one form",
+    ))
+}
+
+fn builtin_load(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            let contents = fs::read_to_string(arg.as_string(environment)?)?;
+            let ast = read(&contents, false);
+            return match ast {
+                Ok(ast) => {
+                    let ast = match ast {
+                        Expression::Vector(olist) => {
+                            let mut list = olist.borrow_mut();
+                            if let Some(first) = list.get(0) {
+                                match first {
+                                    Expression::Vector(_) => {
+                                        let mut v = Vec::with_capacity(list.len() + 1);
+                                        v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                        for l in list.drain(..) {
+                                            v.push(l);
+                                        }
+                                        Expression::with_list(v)
                                     }
-                                    Expression::with_list(v)
-                                }
-                                Expression::Pair(_, _) => {
-                                    let mut v = Vec::with_capacity(list.len() + 1);
-                                    v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                    for l in list.drain(..) {
-                                        v.push(l);
+                                    Expression::Pair(_, _) => {
+                                        let mut v = Vec::with_capacity(list.len() + 1);
+                                        v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                        for l in list.drain(..) {
+                                            v.push(l);
+                                        }
+                                        Expression::with_list(v)
                                     }
-                                    Expression::with_list(v)
+                                    _ => {
+                                        drop(list);
+                                        Expression::Vector(olist)
+                                    }
                                 }
-                                _ => {
-                                    drop(list);
-                                    Expression::Vector(olist)
-                                }
+                            } else {
+                                drop(list);
+                                Expression::Vector(olist)
                             }
-                        } else {
-                            drop(list);
-                            Expression::Vector(olist)
+                        }
+                        _ => ast,
+                    };
+                    eval(environment, &ast)
+                }
+                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+            };
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "load needs one argument",
+    ))
+}
+
+fn builtin_length(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            return match &arg {
+                Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
+                Expression::Atom(Atom::String(s)) => {
+                    Ok(Expression::Atom(Atom::Int(s.len() as i64)))
+                }
+                Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
+                Expression::Vector(list) => {
+                    Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64)))
+                }
+                Expression::Pair(_e1, e2) => {
+                    let mut len = 0;
+                    let mut e_next = e2.clone();
+                    loop {
+                        match &*e_next.clone().borrow() {
+                            Expression::Pair(_e1, e2) => {
+                                e_next = e2.clone();
+                                len += 1;
+                            }
+                            Expression::Atom(Atom::Nil) => {
+                                len += 1;
+                                break;
+                            }
+                            _ => {
+                                len += 1;
+                                break;
+                            }
                         }
                     }
-                    _ => ast,
-                };
-                eval(environment, &ast)
-            }
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                    Ok(Expression::Atom(Atom::Int(len)))
+                }
+                Expression::HashMap(map) => {
+                    Ok(Expression::Atom(Atom::Int(map.borrow().len() as i64)))
+                }
+                _ => Ok(Expression::Atom(Atom::Int(0))),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "length takes one form",
+    ))
 }
 
-fn builtin_length(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "length takes one form",
-        ));
-    }
-    match &args[0] {
-        Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
-        Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Int(s.len() as i64))),
-        Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-        Expression::Vector(list) => Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64))),
-        Expression::Pair(_e1, e2) => {
-            let mut len = 0;
-            let mut e_next = e2.clone();
-            loop {
-                match &*e_next.clone().borrow() {
-                    Expression::Pair(_e1, e2) => {
-                        e_next = e2.clone();
-                        len += 1;
-                    }
-                    Expression::Atom(Atom::Nil) => {
-                        len += 1;
-                        break;
-                    }
-                    _ => {
-                        len += 1;
-                        break;
+fn builtin_if(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(if_form) = args.next() {
+        if let Some(then_form) = args.next() {
+            return match eval(environment, if_form)? {
+                Expression::Atom(Atom::Nil) => {
+                    if let Some(else_form) = args.next() {
+                        eval(environment, else_form)
+                    } else {
+                        Ok(Expression::Atom(Atom::Nil))
                     }
                 }
-            }
-            Ok(Expression::Atom(Atom::Int(len)))
-        }
-        Expression::HashMap(map) => Ok(Expression::Atom(Atom::Int(map.borrow().len() as i64))),
-        _ => Ok(Expression::Atom(Atom::Int(0))),
-    }
-}
-
-fn builtin_if(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    let plen = args.len();
-    if plen != 2 && plen != 3 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "if needs exactly two or three expressions",
-        ))
-    } else {
-        let mut parts = args.iter();
-        match eval(environment, parts.next().unwrap())? {
-            Expression::Atom(Atom::True) => eval(environment, parts.next().unwrap()),
-            Expression::Atom(Atom::Nil) => {
-                if plen == 3 {
-                    parts.next().unwrap();
-                    eval(environment, parts.next().unwrap())
-                } else {
-                    Ok(Expression::Atom(Atom::Nil))
-                }
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "if must evaluate to true or false",
-            )),
+                _ => eval(environment, then_form),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "if needs exactly two or three expressions",
+    ))
 }
 
 fn args_out(
@@ -518,6 +553,25 @@ fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
+fn builtin_unexport(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let key = eval(environment, key)?;
+            if let Expression::Atom(Atom::Symbol(k)) = key {
+                env::remove_var(k);
+                return Ok(Expression::Atom(Atom::Nil));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "unexport can only have one expression (symbol)",
+    ))
+}
+
 fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 2 {
@@ -530,6 +584,25 @@ fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result
         set_expression_current(environment, key, Rc::new(val.clone()));
         Ok(val)
     }
+}
+
+fn builtin_undef(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let key = eval(environment, key)?;
+            if let Expression::Atom(Atom::Symbol(k)) = key {
+                remove_expression_current(environment, &k);
+                return Ok(Expression::Atom(Atom::Nil));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "undef can only have one expression (symbol)",
+    ))
 }
 
 fn builtin_dyn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -1200,13 +1273,41 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
             "Call the provided function with the suplied arguments, last is a list that will be expanded",
         )),
     );
-    data.insert("err".to_string(), Rc::new(Expression::Func(builtin_err)));
-    data.insert("load".to_string(), Rc::new(Expression::Func(builtin_load)));
+    data.insert(
+        "unwind-protect".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_unwind_protect,
+            "After evaluation first form, make sure the following cleanup forms run (returns first form's result)"
+        )),
+    );
+    data.insert(
+        "err".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_err,
+            "Raise an error with the supplied message",
+        )),
+    );
+    data.insert(
+        "load".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_load,
+            "Read and eval a file.",
+        )),
+    );
     data.insert(
         "length".to_string(),
-        Rc::new(Expression::Func(builtin_length)),
+        Rc::new(Expression::make_function(
+            builtin_length,
+            "Return length of suplied expression.",
+        )),
     );
-    data.insert("if".to_string(), Rc::new(Expression::Func(builtin_if)));
+    data.insert(
+        "if".to_string(),
+        Rc::new(Expression::make_special(
+            builtin_if,
+            "If then else conditional.",
+        )),
+    );
     data.insert(
         "print".to_string(),
         Rc::new(Expression::make_function(
@@ -1251,7 +1352,21 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "export".to_string(),
         Rc::new(Expression::Func(builtin_export)),
     );
+    data.insert(
+        "unexport".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_unexport,
+            "Remove a var from the current shell environment.",
+        )),
+    );
     data.insert("def".to_string(), Rc::new(Expression::Func(builtin_def)));
+    data.insert(
+        "undef".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_undef,
+            "Remove a symbol from the current scope (if it exists).",
+        )),
+    );
     data.insert("dyn".to_string(), Rc::new(Expression::Func(builtin_dyn)));
     data.insert(
         "is-global-scope".to_string(),

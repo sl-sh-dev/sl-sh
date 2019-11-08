@@ -27,6 +27,7 @@ Form | Args | Type | description
 eval | Form or string to evalute | builtin | 
 fncall | fn form+ | builtin | Calls the first argument (lambda or builtin function) with the rest of the args.
 apply | fn form* list | builtin | Calls the first argument (lambda or builtin function) with the rest of the args and spreads the final arg out (must be a list).
+unwind-protect | form/form* | builtin | Evals the first form and returns it's result, all of the other forms will eval even if the first form error's out.
 err | string | builtin | Raises an error with the provided string as it's message.
 load | | builtin |
 if | | builtin |
@@ -36,7 +37,10 @@ eprint | | builtin |
 eprintln | | builtin |
 format | | builtin |
 progn | forms+ | builtin | Runs each form in turn left to right.
+export | symbol/string | builtin | Sets symbol as an environment variable to string.
+unexport | symbol | builtin | Removes symbol as an environment variable.
 def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
+undef | symbol | builtin | Removes the symbol from the current scope (does not try any other scope if not in current).
 set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
 length | form | builtin | Returns the length of the provided object.
