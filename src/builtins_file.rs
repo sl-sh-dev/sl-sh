@@ -87,7 +87,7 @@ fn builtin_path_exists(
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "path-exists takes one form (a path)",
+            "fs-exists? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
         let path = Path::new(&p);
@@ -99,7 +99,7 @@ fn builtin_path_exists(
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "path-exists path must be a string",
+            "fs-exists? path must be a string",
         ))
     }
 }
@@ -109,7 +109,7 @@ fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Re
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-file takes one form (a path)",
+            "fs-file? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
         let path = Path::new(&p);
@@ -121,7 +121,7 @@ fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Re
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-file path must be a string",
+            "fs-file? path must be a string",
         ))
     }
 }
@@ -131,7 +131,7 @@ fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Res
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-dir takes one form (a path)",
+            "fs-dir? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
         let path = Path::new(&p);
@@ -143,7 +143,7 @@ fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Res
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-dir path must be a string",
+            "fs-dir? path must be a string",
         ))
     }
 }

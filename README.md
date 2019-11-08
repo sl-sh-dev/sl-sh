@@ -4,12 +4,10 @@ This is a shell build around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
 
-Slsh has enough job control to ctrl-z out of an app and fg back into it but it is not complete.
-
 It support quote and backquote (with , and ,@ expansion).
 
-To install you need to copy the two files from the lisp subdirectory to ~/.config/slsh (otherwise will not have any of the macros).
-The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example.
+To install you need to copy the two files from the lisp subdirectory to ~/.config/slsh (otherwise you will not have any of the macros).
+The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example or the contrib directory for examples.
 
 ## Building
 
@@ -37,8 +35,6 @@ eprint | | builtin |
 eprintln | | builtin |
 format | | builtin |
 progn | forms+ | builtin | Runs each form in turn left to right.
-export | symbol/string | builtin | Sets symbol as an environment variable to string.
-unexport | symbol | builtin | Removes symbol as an environment variable.
 def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
 undef | symbol | builtin | Removes the symbol from the current scope (does not try any other scope if not in current).
 set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
@@ -52,19 +48,11 @@ or | form* | builtin | Evaluate each form left to right and produce the first no
 not | | builtin |
 null | | builtin |
 is-def | symbol | builtin | Return true if symbol is defined for current scope.
-get-type | form | builtin | Evalute the form and return the type as a string.
 macro | | builtin |
 defmacro | | macro |
 expand-macro | | builtin |
 recur | | builtin |
 gensym | | builtin |
-jobs | | builtin | List running jobs and status (stopped/running).
-bg | job_id | builtin | Make a stopped job run in the background (defaults to last stopped job or select by index from jobs form).
-fg | job_id | builtin | Make a stopped job run in the foreground again (defaults to last stopped job or select by index from jobs form).
-version | | builtin | Display the current version.
-command | forms* | builtin | All forms run under this form will only execute system commands not lisp functions.
-run-bg | form* | builtin | Any system commands started under this form will be in the background.
-form | form* | builtin | Any forms run under this will not execute system commands, only lisp functions.
 '=' | | builtin |
 '>' | | builtin |
 '>=' | | builtin |
@@ -84,7 +72,7 @@ These forms provide information/tests about an objects underlying type.
 
 Form | Args | Type | description
 -----|------|------|------------
-type? | obj | builtin | Produces the string representation of objects type.
+type | obj | builtin | Produces the string representation of objects type.
 nil? | obj | builtin | True if obj is the nil type/false otherwise.
 true? | obj | builtin | True if obj is the true type/false otherwise.
 float? | obj | builtin | True if obj is the float type/false otherwise.
@@ -98,6 +86,7 @@ pair? | obj | builtin | True if obj is the pair type/false otherwise.
 builtin? | obj | builtin | True if obj is the builtin (special form) type/false otherwise.
 process? | obj | builtin | True if obj is the process type/false otherwise.
 file? | obj | builtin | True if obj is the file type/false otherwise.
+hash? | obj | builtin | True if obj is a hashmap/false otherwise.
 list? | obj | builtin | True if obj is a pair that is a proper list (last pair in chain has a nil cdr).
 
 
@@ -192,19 +181,27 @@ str-sub | index/length/string | builtin | Returns a new substring of provided st
 str-append | string string | builtin | Returns a new string from appending two other strings.
 
 
-### File Forms
-Forms to do file tests, pipes, redirects, etc.  You probably want to use the 
-macros not the builtins.
+### Shell Forms
+Forms to do shell operations like file tests, pipes, redirects, etc.
 
 Form | Args | Type | description
 -----|------|------|------------
-cd | path | builtin | Change to provided directory.
-fs-exists? | path | builtin | Boolean, does path exist.
-fs-file? | path | builtin | Boolean, is path a file.
-fs-dir? | path | builtin | Boolean, is path a directory.
-pipe | form+ | builtin | Creates a pipe (job) consisting of the provided forms.
-wait | form | builtin | Waits for a pid to finish and returns the status code (fine to use on a process that was not in the background).
-pid | form | builtin | Returns the pid of a form that resolves to a process.
+cd | path | builtin (builtins_file.rs) | Change to provided directory.
+fs-exists? | path | builtin (builtins_file.rs) | Boolean, does path exist.
+fs-file? | path | builtin (builtins_file.rs) | Boolean, is path a file.
+fs-dir? | path | builtin (builtins_file.rs) | Boolean, is path a directory.
+pipe | form+ | builtin (builtins_file.rs) | Creates a pipe (job) consisting of the provided forms.
+wait | form | builtin (builtins_file.rs) | Waits for a pid to finish and returns the status code (fine to use on a process that was not in the background).
+pid | form | builtin (builtins_file.rs) | Returns the pid of a form that resolves to a process.
+export | symbol/string | builtin (builtins.rs) | Sets symbol as an environment variable to string.
+unexport | symbol | builtin (builtins.rs) | Removes symbol as an environment variable.
+jobs | | builtin (builtins.rs) | List running jobs and status (stopped/running).
+bg | job_id | builtin (builtins.rs) | Make a stopped job run in the background (defaults to last stopped job or select by index from jobs form).
+fg | job_id | builtin (builtins.rs) | Make a stopped job run in the foreground again (defaults to last stopped job or select by index from jobs form).
+version | | builtin (builtins.rs) | Display the current version.
+command | forms* | builtin (builtins.rs) | All forms run under this form will only execute system commands not lisp functions.
+run-bg | form* | builtin (builtins.rs) | Any system commands started under this form will be in the background.
+form | form* | builtin (builtins.rs) | Any forms run under this will not execute system commands, only lisp functions.
 out> | file/form+ | macro | Redirect stdout for sub-forms to the file, this one truncates first.
 out>> | file/form+ | macro | Redirect stdout for sub-forms to the file, this one appends.
 err> | file/form+ | macro | Redirect stderr for sub-forms to the file, this one truncates first.
@@ -216,11 +213,13 @@ err>null | form+ | macro | Redirect stderr for sub-forms to null.
 out-err>null | form+ | macro | Redirect stdout and stderr for sub-forms to null.
 \| | one or more forms | macro | Creates a pipe (job) consisting of the provided forms.
 alias | new_name/command | macro | Defines an alias for commands (meant for executables not builtins).
-pushd | path | macro | Changes directory to path and saves old directory on directory stack.
-popd | | macro | Pops the last directory off directory stack and changes to it.
-dirs | | macro | Display the directory stack.
-clear-dirs | | macro | Clears the directory stack.
-set-dirs-max | max | macro | Sets the maximum number of dirs to keep in stack (default 20), must be greater then 1.
+pushd | path | lambda | Changes directory to path and saves old directory on directory stack.
+popd | | lambda | Pops the last directory off directory stack and changes to it.
+dirs | | lambda | Display the directory stack.
+get-dirs | | lambda | Returns the vector that contains the pushd/popd stack (newest item is at end).
+clear-dirs | | lambda | Clears the directory stack.
+set-dirs-max | max | lambda | Sets the maximum number of dirs to keep in stack (default 20), must be greater then 1.
+let-env | list/commands | macro | Sets environment variables that are reset once the macro is done.  Uses the same conventions as let.
 
 
 ### File IO Forms
