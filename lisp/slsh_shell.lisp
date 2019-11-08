@@ -89,3 +89,35 @@
 		(if (and (= (type max) "Int")(> max 1))
 			(setq dir_stack_max max)
 			(err "Error, max must be a positive Int greater then one"))))
+
+
+;; Like let but sets environment variables that are reset after the macro finishes.
+(defmacro let-env (vals &rest let_body)
+	((fn (params bindings olds) (progn
+		(fori idx el vals
+			(if (= 1 (length el))
+				(progn
+					(vinsert-nth! idx (nth 0 el) params)
+					(vinsert-nth! idx nil bindings)
+					(vinsert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+				(if (= 2 (length el))
+					(progn
+						(vinsert-nth! idx (nth 0 el) params)
+						(vinsert-nth! idx (nth 1 el) bindings)
+						(vinsert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+					(err "ERROR: invalid bindings on let-env"))))
+		`((fn (params bindings olds)
+			(unwind-protect
+				(progn
+					(fori i p params
+						(if (null (nth i bindings))
+							(unexport p)
+							(export p (nth i bindings))))
+					,@let_body)
+				(fori i p params
+					(if (null (nth i olds))
+						(unexport p)
+						(export p (nth i olds))))))
+		(quote ,params) (quote ,bindings) (quote ,olds))))
+	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
+

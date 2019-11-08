@@ -171,7 +171,7 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == ',' && (last_ch == ' ' || last_ch == '(') {
+    } else if ch == ',' && (is_whitespace(last_ch) || last_ch == '(') {
         *last_comma = true;
     } else if last_ch == '\\' && ch == ' ' {
         // Keep an escaped space in token since this is a shell...

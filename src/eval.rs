@@ -278,7 +278,7 @@ fn internal_eval<'a>(
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
                     Ok(val) => Ok(Expression::Atom(Atom::String(val))),
-                    Err(_) => Ok(Expression::Atom(Atom::String("".to_string()))),
+                    Err(_) => Ok(Expression::Atom(Atom::Nil)),
                 }
             } else if let Some(exp) = get_expression(environment, &s[..]) {
                 match &*exp {
