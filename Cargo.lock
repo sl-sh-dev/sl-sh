@@ -62,7 +62,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "liner"
 version = "0.5.0"
-source = "git+https://gitlab.redox-os.org/redox-os/liner#3f3d1d4e6058067e9d03a9b1510d8f2edac073c7"
+source = "git+https://gitlab.redox-os.org/sstanfield/liner#8750b7bc41381ade4630add8c53d93d2077acfc8"
 dependencies = [
  "bytecount 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -119,12 +119,12 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.6.17"
+version = "0.6.18"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
- "liner 0.5.0 (git+https://gitlab.redox-os.org/redox-os/liner)",
+ "liner 0.5.0 (git+https://gitlab.redox-os.org/sstanfield/liner)",
  "nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -189,7 +189,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 "checksum itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5b8467d9c1cebe26feb08c640139247fac215782d35371ade9a2136ed6085358"
 "checksum libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)" = "34fcd2c08d2f832f376f4173a231990fa5aef4e99fb569867318a227ef4c06ba"
-"checksum liner 0.5.0 (git+https://gitlab.redox-os.org/redox-os/liner)" = "<none>"
+"checksum liner 0.5.0 (git+https://gitlab.redox-os.org/sstanfield/liner)" = "<none>"
 "checksum nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3b2e0b4f3320ed72aaedb9a5ac838690a8047c7b275da22711fddff4f8a14229"
 "checksum num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)" = "b85e541ef8255f6cf42bbfe4ef361305c6c135d10919ecc26126c4e5ae94bc09"
 "checksum num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "6ba9a427cfca2be13aa6f6403b0b7e7368fe982bfa16fccc450ce74c46cd9b32"
