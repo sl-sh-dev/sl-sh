@@ -177,7 +177,6 @@ fn run_command(
     };
     let proc = com_obj.spawn();
 
-    let mut result = Expression::Atom(Atom::Nil);
     match proc {
         Ok(mut proc) => {
             let pgid_raw = match pgid {
@@ -214,7 +213,7 @@ fn run_command(
                 }
             }
             let pid = proc.id();
-            result = if foreground && !environment.in_pipe {
+            let result = if foreground && !environment.in_pipe {
                 if environment.do_job_control {
                     if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid_raw) {
                         // Ignore, do in parent and child.
@@ -233,13 +232,15 @@ fn run_command(
                 Expression::Process(ProcessState::Running(pid))
             };
             add_process(environment, proc);
+            Ok(result)
         }
         Err(e) => {
-            eprint!("Failed to execute [{}", command);
+            let mut err_msg = String::new();
+            err_msg.push_str(&format!("Failed to execute [{}", command));
             for n in new_args {
-                eprint!(" {}", n);
+                err_msg.push_str(&format!(" {}", n));
             }
-            eprintln!("]: {}", e);
+            err_msg.push_str(&format!("]: {}", e));
             // Recover from the failed spawn...
             // If we were saved terminal settings restore them.
             if let Some(settings) = term_settings {
@@ -256,9 +257,9 @@ fn run_command(
                     eprintln!("Error making shell {} foreground: {}", pid, err);
                 }
             }
+            Err(io::Error::new(io::ErrorKind::Other, err_msg))
         }
-    };
-    Ok(result)
+    }
 }
 
 fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {

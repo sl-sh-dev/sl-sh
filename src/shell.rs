@@ -203,11 +203,25 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                                     }
                                 }
                             }
-                            Err(err) => eprintln!("{}", err),
+                            Err(err) => {
+                                if !input.is_empty() {
+                                    if let Err(err) = con.history.push_throwaway(input.into()) {
+                                        eprintln!("Error saving temp history: {}", err);
+                                    }
+                                }
+                                eprintln!("{}", err);
+                            }
                         }
                         environment.borrow_mut().loose_symbols = false;
                     }
-                    Err(err) => eprintln!("{:?}", err),
+                    Err(err) => {
+                        if !input.is_empty() {
+                            if let Err(err) = con.history.push_throwaway(input.into()) {
+                                eprintln!("Error saving temp history: {}", err);
+                            }
+                        }
+                        eprintln!("{:?}", err);
+                    }
                 }
             }
             Err(err) => match err.kind() {
