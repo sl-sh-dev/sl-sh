@@ -430,11 +430,11 @@ pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::
 
 fn proc_set_vars2(
     _environment: &mut Environment,
-    key: &Expression,
-    val: &Expression,
+    key: Expression,
+    mut val: Expression,
 ) -> io::Result<(String, Expression)> {
     let key = match key {
-        Expression::Atom(Atom::Symbol(s)) => s.clone(),
+        Expression::Atom(Atom::Symbol(s)) => s,
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -442,7 +442,6 @@ fn proc_set_vars2(
             ));
         }
     };
-    let mut val = val.clone();
     if let Expression::Atom(Atom::String(vs)) = val {
         let vs = match expand_tilde(&vs) {
             Some(v) => v,
@@ -455,33 +454,40 @@ fn proc_set_vars2(
 
 fn proc_set_vars(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
+    only_two: bool,
 ) -> io::Result<(String, Expression)> {
-    let mut args = args.iter();
-    proc_set_vars2(environment, args.next().unwrap(), args.next().unwrap())
+    if let Some(key) = args.next() {
+        if let Some(val) = args.next() {
+            if !only_two || args.next().is_none() {
+                let key = eval(environment, key)?;
+                let val = eval(environment, val)?;
+                return proc_set_vars2(environment, key, val);
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "def/set requires a key and value",
+    ))
 }
 
-fn builtin_set(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
+fn builtin_set(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let (key, val) = proc_set_vars(environment, args, true)?;
+    if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
+        entry.insert(Rc::new(val.clone()));
+        Ok(val)
+    } else if let Some(scope) = get_symbols_scope(environment, &key) {
+        scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
+        Ok(val)
+    } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "set can only have two expressions",
+            "set's first form must evaluate to an existing symbol",
         ))
-    } else {
-        let (key, val) = proc_set_vars(environment, &args)?;
-        if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
-            entry.insert(Rc::new(val.clone()));
-            Ok(val)
-        } else if let Some(scope) = get_symbols_scope(environment, &key) {
-            scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
-            Ok(val)
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "set's first form must evaluate to an existing symbol",
-            ))
-        }
     }
 }
 
@@ -572,15 +578,50 @@ fn builtin_unexport(
     ))
 }
 
-fn builtin_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "def can only have two expressions",
-        ))
+fn builtin_def(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let (key, val) = proc_set_vars(environment, args, true)?;
+    if key.contains("::") {
+        // namespace reference.
+        let mut key_i = key.splitn(2, "::");
+        if let Some(namespace) = key_i.next() {
+            if let Some(key) = key_i.next() {
+                let namespace = if namespace == "ns" {
+                    if let Some(exp) = get_expression(environment, "*ns*") {
+                        match &*exp {
+                            Expression::Atom(Atom::String(s)) => s.to_string(),
+                            _ => "NO_NAME".to_string(),
+                        }
+                    } else {
+                        "NO_NAME".to_string()
+                    }
+                } else {
+                    namespace.to_string()
+                };
+                let mut scope = Some(environment.current_scope.last().unwrap().clone());
+                while let Some(in_scope) = scope {
+                    let name = in_scope.borrow().name.clone();
+                    if let Some(name) = name {
+                        if name == namespace {
+                            in_scope
+                                .borrow_mut()
+                                .data
+                                .insert(key.to_string(), Rc::new(val.clone()));
+                            return Ok(val);
+                        }
+                    }
+                    scope = in_scope.borrow().outer.clone();
+                }
+            }
+        }
+        let msg = format!(
+            "def namespaced symbol {} not valid or namespace not a parent namespace",
+            key
+        );
+        Err(io::Error::new(io::ErrorKind::Other, msg))
     } else {
-        let (key, val) = proc_set_vars(environment, &args)?;
         set_expression_current(environment, key, Rc::new(val.clone()));
         Ok(val)
     }
@@ -605,32 +646,32 @@ fn builtin_undef(
     ))
 }
 
-fn builtin_dyn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.len() != 3 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "dyn requires three expressions (symbol, value, form to evaluate)",
-        ))
+fn builtin_dyn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let (key, val) = proc_set_vars(environment, args, false)?;
+    let old_val = if environment.dynamic_scope.contains_key(&key) {
+        Some(environment.dynamic_scope.remove(&key).unwrap())
     } else {
-        let arg0 = eval(environment, &args[0])?;
-        let arg1 = eval(environment, &args[1])?;
-        let (key, val) = proc_set_vars2(environment, &arg0, &arg1)?;
-        let old_val = if environment.dynamic_scope.contains_key(&key) {
-            Some(environment.dynamic_scope.remove(&key).unwrap())
-        } else {
-            None
-        };
+        None
+    };
+    if let Some(exp) = args.next() {
         environment
             .dynamic_scope
             .insert(key.clone(), Rc::new(val.clone()));
-        let res = eval(environment, &args[2]);
+        let res = eval(environment, exp);
         if let Some(old_val) = old_val {
             environment.dynamic_scope.insert(key.clone(), old_val);
         } else {
             environment.dynamic_scope.remove(&key);
         }
         res
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "dyn requires three expressions (symbol, value, form to evaluate)",
+        ))
     }
 }
 
@@ -810,7 +851,7 @@ fn builtin_bquote(
         &mut data,
     );
     let _child = std::thread::spawn(move || {
-        let mut enviro = build_new_spawn_scope(data);
+        let mut enviro = build_new_spawn_scope(data, environment.sig_int);
         let _args = to_args(&mut enviro, &new_args).unwrap();
         if let Err(err) = reap_procs(&enviro) {
             eprintln!("Error waiting on spawned processes: {}", err);
@@ -1247,6 +1288,10 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
             };
+            scope.borrow_mut().data.insert(
+                "*ns*".to_string(),
+                Rc::new(Expression::Atom(Atom::String(key))),
+            );
             environment.current_scope.push(scope);
             return Ok(Expression::Atom(Atom::Nil));
         }
@@ -1436,7 +1481,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "progn".to_string(),
         Rc::new(Expression::Func(builtin_progn)),
     );
-    data.insert("set".to_string(), Rc::new(Expression::Func(builtin_set)));
+    data.insert(
+        "set".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_set,
+            "Sets an existing expression in the current scope(s).",
+        )),
+    );
     data.insert(
         "export".to_string(),
         Rc::new(Expression::Func(builtin_export)),
@@ -1448,7 +1499,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
             "Remove a var from the current shell environment.",
         )),
     );
-    data.insert("def".to_string(), Rc::new(Expression::Func(builtin_def)));
+    data.insert(
+        "def".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_def,
+            "Adds an expression to the current scope.",
+        )),
+    );
     data.insert(
         "undef".to_string(),
         Rc::new(Expression::make_function(
@@ -1456,7 +1513,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
             "Remove a symbol from the current scope (if it exists).",
         )),
     );
-    data.insert("dyn".to_string(), Rc::new(Expression::Func(builtin_dyn)));
+    data.insert(
+        "dyn".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_dyn,
+            "Creates a dynamic binding and evals a form under it.",
+        )),
+    );
     data.insert(
         "is-global-scope".to_string(),
         Rc::new(Expression::Func(builtin_is_global_scope)),
@@ -1474,6 +1537,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "bquote".to_string(),
         Rc::new(Expression::make_special(builtin_bquote, "")),
     );
+    /*data.insert(
+        "spawn".to_string(),
+        Rc::new(Expression::Func(builtin_spawn)),
+    );*/
     data.insert(
         "and".to_string(),
         Rc::new(Expression::make_special(builtin_and, "")),

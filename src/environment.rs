@@ -91,10 +91,14 @@ impl Default for Scope {
             "*stderr*".to_string(),
             Rc::new(Expression::File(FileState::Stderr)),
         );
+        data.insert(
+            "*ns*".to_string(),
+            Rc::new(Expression::Atom(Atom::String("root".to_string()))),
+        );
         Scope {
             data,
             outer: None,
-            name: Some("::root".to_string()),
+            name: Some("root".to_string()),
         }
     }
 }
@@ -184,6 +188,8 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let root_scope = Rc::new(RefCell::new(Scope::default()));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
+    let mut namespaces = HashMap::new();
+    namespaces.insert("root".to_string(), root_scope.clone());
     Environment {
         sig_int,
         state: EnvState::default(),
@@ -202,7 +208,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
-        namespaces: HashMap::new(),
+        namespaces,
     }
 }
 
@@ -213,6 +219,10 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut state = EnvState::default();
     let mut data: HashMap<String, Rc<Expression>> = HashMap::with_capacity(data_in.len());
+    data.insert(
+        "*ns*".to_string(),
+        Rc::new(Expression::Atom(Atom::String("root".to_string()))),
+    );
     for (k, v) in data_in.drain() {
         data.insert(k, Rc::new(v));
     }
@@ -220,6 +230,8 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     let root_scope = Rc::new(RefCell::new(Scope::with_data(None, data)));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
+    let mut namespaces = HashMap::new();
+    namespaces.insert("root".to_string(), root_scope.clone());
     Environment {
         sig_int,
         state,
@@ -238,7 +250,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
-        namespaces: HashMap::new(),
+        namespaces,
     }
 }
 

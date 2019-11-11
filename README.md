@@ -121,7 +121,7 @@ Builtins:
 Form | Args | Type | description
 -----|------|------|------------
 vec-empty? | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
-make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nill.
+make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nil.
 pop! | vector | builtin | Removes the last item from a vector and produces it.
 push! | vector/obj | builtin | Pushes the provided object onto the end of a vector.
 vclear! | vector | builtin | Removes all elements from a vector.

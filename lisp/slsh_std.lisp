@@ -83,6 +83,12 @@
                 head)
             (err "Not a list or vector."))))
 
+(defmacro ns-export (symbol) `(progn
+    (if (not (is-def *ns-exports*)) (defq *ns-exports* (vec)))
+    (push! *ns-exports* ,symbol)))
+
+(defmacro ns-import (namespace)
+    `(for sym (eval (to-symbol (str ,namespace "::*ns-exports*"))) (def (to-symbol (str "ns::" sym)) (eval (to-symbol (str ,namespace "::" sym))))))
 
 ;;; Forms that work with sequences (list or vectors).
 

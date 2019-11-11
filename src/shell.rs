@@ -21,7 +21,7 @@ use crate::eval::*;
 use crate::reader::*;
 use crate::types::*;
 
-fn load_scripts(environment: &mut Environment, home: &str) {
+fn load_user_env(environment: &mut Environment, home: &str) {
     let mut script = format!("{}/.config/sl-sh/slsh_std.lisp", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!(
@@ -36,6 +36,14 @@ fn load_scripts(environment: &mut Environment, home: &str) {
             script, err
         );
     }
+    let dname = build_new_namespace(environment, "user");
+    match dname {
+        Ok(scope) => environment.current_scope.push(scope),
+        Err(msg) => eprintln!(
+            "ERROR: Failed to create default namespace \"user\": {}",
+            msg
+        ),
+    }
     script = format!("{}/.config/sl-sh/slshrc", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!("WARNING: Failed to load init script {}: {}", script, err);
@@ -43,20 +51,8 @@ fn load_scripts(environment: &mut Environment, home: &str) {
 }
 
 fn get_prompt(environment: &mut Environment) -> String {
-    if environment
-        .root_scope
-        .borrow()
-        .data
-        .contains_key("__prompt")
-    {
-        let mut exp = environment
-            .root_scope
-            .borrow()
-            .data
-            .get("__prompt")
-            .unwrap()
-            .clone();
-        exp = match *exp {
+    if let Some(exp) = get_expression(environment, "__prompt") {
+        let exp = match *exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
@@ -84,10 +80,19 @@ fn get_prompt(environment: &mut Environment) -> String {
                 p
             }
         };
+        let namespace = if let Some(exp) = get_expression(environment, "*ns*") {
+            match &*exp {
+                Expression::Atom(Atom::String(s)) => s.to_string(),
+                _ => "NO_NAME".to_string(),
+            }
+        } else {
+            "NO_NAME".to_string()
+        };
         format!(
-            "\x1b[32m{}:\x1b[34m{}\x1b[37m(sl-sh)\x1b[32m>\x1b[39m ",
+            "\x1b[32m{}:\x1b[34m{}\x1b[37m(sl-sh::{})\x1b[32m>\x1b[39m ",
             hostname,
-            pwd.display()
+            pwd.display(),
+            namespace,
         )
     }
 }
@@ -129,15 +134,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
-    load_scripts(&mut environment.borrow_mut(), &home);
-    let dname = build_new_namespace(&mut environment.borrow_mut(), "user");
-    match dname {
-        Ok(scope) => environment.borrow_mut().current_scope.push(scope),
-        Err(msg) => eprintln!(
-            "ERROR: Failed to create default namespace \"user\": {}",
-            msg
-        ),
-    }
+    load_user_env(&mut environment.borrow_mut(), &home);
     environment
         .borrow_mut()
         .root_scope
@@ -267,7 +264,7 @@ pub fn read_stdin() -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     environment.do_job_control = false;
     environment.is_tty = false;
-    load_scripts(&mut environment, &home);
+    load_user_env(&mut environment, &home);
 
     let mut input = String::new();
     loop {
@@ -436,7 +433,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    load_scripts(&mut environment, &home);
+    load_user_env(&mut environment, &home);
 
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
