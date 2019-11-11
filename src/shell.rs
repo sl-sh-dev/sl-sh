@@ -130,6 +130,14 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
     load_scripts(&mut environment.borrow_mut(), &home);
+    let dname = build_new_namespace(&mut environment.borrow_mut(), "user");
+    match dname {
+        Ok(scope) => environment.borrow_mut().current_scope.push(scope),
+        Err(msg) => eprintln!(
+            "ERROR: Failed to create default namespace \"user\": {}",
+            msg
+        ),
+    }
     environment
         .borrow_mut()
         .root_scope

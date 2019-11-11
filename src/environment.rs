@@ -63,6 +63,8 @@ pub enum FormType {
 pub struct Scope {
     pub data: HashMap<String, Rc<Expression>>,
     pub outer: Option<Rc<RefCell<Scope>>>,
+    // If this scope is a namespace it will have a name otherwise it will be None.
+    pub name: Option<String>,
 }
 
 impl Default for Scope {
@@ -89,7 +91,11 @@ impl Default for Scope {
             "*stderr*".to_string(),
             Rc::new(Expression::File(FileState::Stderr)),
         );
-        Scope { data, outer: None }
+        Scope {
+            data,
+            outer: None,
+            name: Some("::root".to_string()),
+        }
     }
 }
 
@@ -111,7 +117,11 @@ impl Scope {
         } else {
             None
         };
-        Scope { data, outer }
+        Scope {
+            data,
+            outer,
+            name: None,
+        }
     }
 }
 
@@ -165,6 +175,8 @@ pub struct Environment {
     // Use as a stack of scopes, entering a new pushes and it get popped on exit
     // The actual lookups are done using the scope and it's outer chain NOT this stack.
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
+    // Map of all the created namespaces.
+    pub namespaces: HashMap<String, Rc<RefCell<Scope>>>,
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
@@ -190,6 +202,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
+        namespaces: HashMap::new(),
     }
 }
 
@@ -225,12 +238,43 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         dynamic_scope: HashMap::new(),
         root_scope,
         current_scope,
+        namespaces: HashMap::new(),
     }
 }
 
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
     let data: HashMap<String, Rc<Expression>> = HashMap::new();
-    Rc::new(RefCell::new(Scope { data, outer }))
+    Rc::new(RefCell::new(Scope {
+        data,
+        outer,
+        name: None,
+    }))
+}
+
+pub fn build_new_namespace(
+    environment: &mut Environment,
+    name: &str,
+) -> Result<Rc<RefCell<Scope>>, String> {
+    if environment.namespaces.contains_key(name) {
+        let msg = format!("Namespace {} already exists!", name);
+        Err(msg)
+    } else {
+        let mut data: HashMap<String, Rc<Expression>> = HashMap::new();
+        data.insert(
+            "*ns*".to_string(),
+            Rc::new(Expression::Atom(Atom::String(name.to_string()))),
+        );
+        let scope = Scope {
+            data,
+            outer: Some(environment.root_scope.clone()),
+            name: Some(name.to_string()),
+        };
+        let scope = Rc::new(RefCell::new(scope));
+        environment
+            .namespaces
+            .insert(name.to_string(), scope.clone());
+        Ok(scope)
+    }
 }
 
 pub fn clone_symbols<S: ::std::hash::BuildHasher>(
@@ -249,10 +293,22 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Expression>> {
     if environment.dynamic_scope.contains_key(key) {
         Some(environment.dynamic_scope.get(key).unwrap().clone())
+    } else if key.contains("::") {
+        // namespace reference.
+        let mut key_i = key.splitn(2, "::");
+        if let Some(namespace) = key_i.next() {
+            if let Some(scope) = environment.namespaces.get(namespace) {
+                if let Some(key) = key_i.next() {
+                    if let Some(exp) = scope.borrow().data.get(key) {
+                        return Some(exp.clone());
+                    }
+                }
+            }
+        }
+        None
     } else {
         let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
-        while loop_scope.is_some() {
-            let scope = loop_scope.unwrap();
+        while let Some(scope) = loop_scope {
             if let Some(exp) = scope.borrow().data.get(key) {
                 return Some(exp.clone());
             }
@@ -260,18 +316,6 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Express
         }
         None
     }
-}
-
-pub fn set_expression_global(
-    environment: &mut Environment,
-    key: String,
-    expression: Rc<Expression>,
-) {
-    environment
-        .root_scope
-        .borrow_mut()
-        .data
-        .insert(key, expression);
 }
 
 pub fn set_expression_current(
@@ -302,28 +346,32 @@ pub fn is_expression(environment: &Environment, key: &str) -> bool {
     if key.starts_with('$') {
         env::var(&key[1..]).is_ok()
     } else {
-        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
-        while loop_scope.is_some() {
-            let scope = loop_scope.unwrap();
-            if let Some(_exp) = scope.borrow().data.get(key) {
-                return true;
-            }
-            loop_scope = scope.borrow().outer.clone();
-        }
-        false
+        get_expression(environment, key).is_some()
     }
 }
 
 pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefCell<Scope>>> {
-    let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
-    while loop_scope.is_some() {
-        let scope = loop_scope.unwrap();
-        if let Some(_exp) = scope.borrow().data.get(key) {
-            return Some(scope.clone());
+    // DO NOT return a namespace for a namespace key otherwise set will work to
+    // set symbols in other namespaces.
+    if !key.contains("::") {
+        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        while loop_scope.is_some() {
+            let scope = loop_scope.unwrap();
+            if let Some(_exp) = scope.borrow().data.get(key) {
+                return Some(scope.clone());
+            }
+            loop_scope = scope.borrow().outer.clone();
         }
-        loop_scope = scope.borrow().outer.clone();
     }
     None
+}
+
+pub fn get_namespace(environment: &Environment, name: &str) -> Option<Rc<RefCell<Scope>>> {
+    if environment.namespaces.contains_key(name) {
+        Some(environment.namespaces.get(name).unwrap().clone())
+    } else {
+        None
+    }
 }
 
 pub fn mark_job_stopped(environment: &Environment, pid: u32) {

@@ -36,7 +36,13 @@ fn call_lambda<'a>(
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     while looping {
-        last_eval = eval(environment, &lambda.body)?;
+        last_eval = match eval(environment, &lambda.body) {
+            Ok(e) => e,
+            Err(err) => {
+                environment.current_scope.pop();
+                return Err(err);
+            }
+        };
         looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();

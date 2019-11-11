@@ -1214,6 +1214,95 @@ fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
+fn builtin_ns_create(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if environment
+        .current_scope
+        .last()
+        .unwrap()
+        .borrow()
+        .name
+        .is_none()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "ns-create can only create a namespace when not in a lexical scope",
+        ));
+    }
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(sym)) => sym,
+                Expression::Atom(Atom::String(s)) => s,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "ns-create: namespace must be a symbol or string",
+                    ))
+                }
+            };
+            let scope = match build_new_namespace(environment, &key) {
+                Ok(scope) => scope,
+                Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
+            };
+            environment.current_scope.push(scope);
+            return Ok(Expression::Atom(Atom::Nil));
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "ns-create takes one arg, the name of the new namespace",
+    ))
+}
+
+fn builtin_ns_enter(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if environment
+        .current_scope
+        .last()
+        .unwrap()
+        .borrow()
+        .name
+        .is_none()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "ns-enter can only enter a namespace when not in a lexical scope",
+        ));
+    }
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(sym)) => sym,
+                Expression::Atom(Atom::String(s)) => s,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "ns-enter: namespace must be a symbol or string",
+                    ))
+                }
+            };
+            let scope = match get_namespace(environment, &key) {
+                Some(scope) => scope,
+                None => {
+                    let msg = format!("Error, namespace {} does not exist!", key);
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            };
+            environment.current_scope.push(scope);
+            return Ok(Expression::Atom(Atom::Nil));
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "ns-enter takes one arg, the name of the namespace to enter",
+    ))
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -1454,6 +1543,20 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         )),
     );
     data.insert("exit".to_string(), Rc::new(Expression::Func(builtin_exit)));
+    data.insert(
+        "ns-create".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_ns_create,
+            "Creates and enters a new a namespace.",
+        )),
+    );
+    data.insert(
+        "ns-enter".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_ns_enter,
+            "Enters an existing namespace.",
+        )),
+    );
 
     data.insert(
         "=".to_string(),
