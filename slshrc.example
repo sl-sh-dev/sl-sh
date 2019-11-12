@@ -1,5 +1,8 @@
 ; This is an example config file, you would put it in ~/.config/slsh/slshrc to use it.
 
+(core::ns-import 'core)
+(ns-import 'shell)
+
 (defn parse_git_branch () (let ((branch))
 	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
 	(if (= branch "")
@@ -20,9 +23,16 @@
 	(if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m ")))
 
 (defn __prompt ()
-	(format "\x1b[32m[slsh]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail)))
+	(str "\x1b[32m[" *ns* "]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail)))
 
+(alias ls (/bin/ls --color=auto -F))
 (alias ll (ls -al))
+;(alias vi (nvim))
+;(alias vim (nvim))
+
+;(export 'PATH (str "/bin:/usr/local/bin:" '~/bin))
+
+;(if (fs-dir? "/home/sstanf/.cargo") (export 'PATH (str $PATH ":" '~/.cargo/bin)))
 
 ;; Completion hooks, the match is for the command and then custom completions can be returned.
 (defn __completion_hook (&rest args)
