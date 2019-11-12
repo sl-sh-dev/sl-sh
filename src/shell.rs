@@ -1,5 +1,6 @@
 use liner::Context;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::env;
 use std::ffi::CStr;
 use std::fs;
@@ -40,7 +41,18 @@ fn load_user_env(environment: &mut Environment, home: &str) {
     }
     let dname = build_new_namespace(environment, "user");
     match dname {
-        Ok(scope) => environment.current_scope.push(scope),
+        Ok(scope) => {
+            let settings = Rc::new(RefCell::new(HashMap::new()));
+            settings.borrow_mut().insert(
+                "keybindings".to_string(),
+                Rc::new(Expression::Atom(Atom::Symbol("emacs".to_string()))),
+            );
+            scope.borrow_mut().data.insert(
+                "*repl-settings*".to_string(),
+                Rc::new(Expression::HashMap(settings)),
+            );
+            environment.current_scope.push(scope);
+        }
         Err(msg) => eprintln!(
             "ERROR: Failed to create default namespace \"user\": {}",
             msg
@@ -99,13 +111,68 @@ fn get_prompt(environment: &mut Environment) -> String {
     }
 }
 
+fn handle_result(
+    environment: &mut Environment,
+    res: io::Result<Expression>,
+    con: &mut Context,
+    input: &str,
+) {
+    match res {
+        Ok(exp) => {
+            if !input.is_empty() {
+                if let Err(err) = con.history.push(input.into()) {
+                    eprintln!("Error saving history: {}", err);
+                }
+            }
+            match exp {
+                Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                Expression::File(_) => { /* don't print file contents */ }
+                Expression::Process(_) => { /* should have used stdout */ }
+                Expression::Atom(Atom::String(_)) => {
+                    if let Err(err) = exp.write(environment) {
+                        eprintln!("Error writing result: {}", err);
+                    }
+                }
+                _ => {
+                    if let Err(err) = exp.pretty_print(environment) {
+                        eprintln!("Error writing result: {}", err);
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            if !input.is_empty() {
+                if let Err(err) = con.history.push_throwaway(input.into()) {
+                    eprintln!("Error saving temp history: {}", err);
+                }
+            }
+            eprintln!("{}", err);
+        }
+    }
+}
+
+fn apply_repl_settings(repl_settings: Rc<Expression>, con: &mut Context) {
+    if let Expression::HashMap(repl_settings) = &*repl_settings {
+        if let Some(keybindings) = repl_settings.borrow().get("keybindings") {
+            let keybindings = keybindings.clone();
+            if let Expression::Atom(Atom::Symbol(keybindings)) = &*keybindings {
+                match &keybindings[..] {
+                    "vi" => con.key_bindings = liner::KeyBindings::Vi,
+                    "emacs" => con.key_bindings = liner::KeyBindings::Emacs,
+                    _ => eprintln!("Invalid keybinding setting: {}", keybindings),
+                }
+            }
+        }
+    }
+}
+
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
     con.history.inc_append = true;
     con.history.load_duplicates = false;
     con.history.share = true;
-    con.key_bindings = liner::KeyBindings::Vi;
+    con.key_bindings = liner::KeyBindings::Emacs;
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
@@ -137,6 +204,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
     load_user_env(&mut environment.borrow_mut(), &home);
+    let repl_settings = get_expression(&environment.borrow(), "*repl-settings*").unwrap();
     environment
         .borrow_mut()
         .root_scope
@@ -147,6 +215,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             Rc::new(Expression::Atom(Atom::Int(0))),
         );
     loop {
+        apply_repl_settings(repl_settings.clone(), &mut con);
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
         // Clear the SIGINT if one occured.
@@ -185,40 +254,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                     Ok(ast) => {
                         environment.borrow_mut().loose_symbols = true;
                         let res = eval(&mut environment.borrow_mut(), &ast);
-                        match res {
-                            Ok(exp) => {
-                                if !input.is_empty() {
-                                    if let Err(err) = con.history.push(input.into()) {
-                                        eprintln!("Error saving history: {}", err);
-                                    }
-                                }
-                                match exp {
-                                    Expression::Atom(Atom::Nil) => { /* don't print nil */ }
-                                    Expression::File(_) => { /* don't print file contents */ }
-                                    Expression::Process(_) => { /* should have used stdout */ }
-                                    Expression::Atom(Atom::String(_)) => {
-                                        if let Err(err) = exp.write(&environment.borrow()) {
-                                            eprintln!("Error writing result: {}", err);
-                                        }
-                                    }
-                                    _ => {
-                                        if let Err(err) =
-                                            exp.pretty_print(&mut environment.borrow_mut())
-                                        {
-                                            eprintln!("Error writing result: {}", err);
-                                        }
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                if !input.is_empty() {
-                                    if let Err(err) = con.history.push_throwaway(input.into()) {
-                                        eprintln!("Error saving temp history: {}", err);
-                                    }
-                                }
-                                eprintln!("{}", err);
-                            }
-                        }
+                        handle_result(&mut environment.borrow_mut(), res, &mut con, input);
                         environment.borrow_mut().loose_symbols = false;
                     }
                     Err(err) => {

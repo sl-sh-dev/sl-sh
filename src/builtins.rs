@@ -162,24 +162,22 @@ fn builtin_load(
                 };
                 let mut path_out = file_name.clone();
                 for l in p_itr {
-                    match l {
-                        Expression::Atom(Atom::Symbol(sym)) => {
-                            let path_str = format!("{}/{}", sym, file_name);
-                            let path = Path::new(&path_str);
-                            if path.exists() {
-                                path_out = path_str;
-                                break;
-                            }
+                    let path_name = match l {
+                        Expression::Atom(Atom::Symbol(sym)) => Some(sym),
+                        Expression::Atom(Atom::String(s)) => Some(s),
+                        _ => None,
+                    };
+                    if let Some(path_name) = path_name {
+                        let path_str = if path_name.ends_with('/') {
+                            format!("{}{}", path_name, file_name)
+                        } else {
+                            format!("{}/{}", path_name, file_name)
+                        };
+                        let path = Path::new(&path_str);
+                        if path.exists() {
+                            path_out = path_str;
+                            break;
                         }
-                        Expression::Atom(Atom::String(s)) => {
-                            let path_str = format!("{}/{}", s, file_name);
-                            let path = Path::new(&path_str);
-                            if path.exists() {
-                                path_out = path_str;
-                                break;
-                            }
-                        }
-                        _ => {}
                     }
                 }
                 path_out
