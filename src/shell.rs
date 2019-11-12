@@ -182,6 +182,9 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             .map_or_else(|| "?".into(), CStr::to_string_lossy)
             .as_ref(),
     );
+    if let Ok(dir) = env::current_dir() {
+        env::set_var("PWD", dir);
+    }
     let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),
