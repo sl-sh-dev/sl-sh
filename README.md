@@ -67,6 +67,14 @@ for | | macro |
 fori | | macro |
 
 
+### Namespace Forms
+Form | Args | Type | description
+-----|------|------|------------
+ns-create | name | builtin | Create and enter a new namespace.
+ns-enter | name | builtin | Enter an existing namespace.
+ns-import | namespace (string) | macro | Bring all the exported symbols from a namespace into the current namespace.
+ns-export | symbol or list of symbols| macro | Make the provided symbols importable.
+
 ### Type Forms
 These forms provide information/tests about an objects underlying type.
 
@@ -122,14 +130,15 @@ Form | Args | Type | description
 -----|------|------|------------
 vec-empty? | vector | builtin | Returns true if the provided vector is empty, nil/false otherwise.
 make-vec | capacity/default | builtin | Make a vector with capacity and all values set to default.  Both args are optional, default is nil.
-pop! | vector | builtin | Removes the last item from a vector and produces it.
-push! | vector/obj | builtin | Pushes the provided object onto the end of a vector.
-vclear! | vector | builtin | Removes all elements from a vector.
+vec-pop! | vector | builtin | Removes the last item from a vector and produces it.
+vec-push! | vector/obj | builtin | Pushes the provided object onto the end of a vector.
+vec-clear! | vector | builtin | Removes all elements from a vector.
 vec | obj+ | builtin | Produces a vector with provided objects as elements.
-vnth | int vector | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
-vinsert-nth! | index/obj/vector | builtin | Inserts a new element at index, all other elements shift right (ie is additive).
-vremove-nth! | index/vector | builtin | Removes the element at index from a vector (all other elements will shift left).
-vsetnth! | index/form/vector | builtin | Sets the nth element of a vector with the provided object.
+vec-nth | int vector | builtin | Produces the element at the provided index (0 based), error if index is out of bounds.
+vec-insert-nth! | index/obj/vector | builtin | Inserts a new element at index, all other elements shift right (ie is additive).
+vec-remove-nth! | index/vector | builtin | Removes the element at index from a vector (all other elements will shift left).
+vec-setnth! | index/form/vector | builtin | Sets the nth element of a vector with the provided object.
+vec-slice | vector/start/end | builtin | Returns a new vector containing elements start (inclusive) so end (exclusive).
 
 
 ### Macros that work on vectors or lists

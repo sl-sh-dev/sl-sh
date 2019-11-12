@@ -45,15 +45,12 @@ fn builtin_make_vec(environment: &mut Environment, args: &[Expression]) -> io::R
     Ok(Expression::with_list(list))
 }
 
-fn builtin_vec_vslice(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
+fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 2 && args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "vslice takes two or three forms",
+            "vec-slice takes two or three forms",
         ));
     }
     let start = if let Expression::Atom(Atom::Int(i)) = args[1] {
@@ -61,7 +58,7 @@ fn builtin_vec_vslice(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "vslice second arg must be an integer",
+            "vec-slice second arg must be an integer",
         ));
     };
     let end = if args.len() == 3 {
@@ -70,7 +67,7 @@ fn builtin_vec_vslice(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "vslice second arg must be an integer",
+                "vec-slice second arg must be an integer",
             ));
         }
     } else {
@@ -86,7 +83,7 @@ fn builtin_vec_vslice(
                 }
                 if start > (len - 1) || end > len {
                     let msg = format!(
-                        "vslice index out of range (start  {}, end {}, length {})",
+                        "vec-slice index out of range (start  {}, end {}, length {})",
                         start, end, len
                     );
                     return Err(io::Error::new(io::ErrorKind::Other, msg));
@@ -103,7 +100,7 @@ fn builtin_vec_vslice(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "vslice operates on a vector",
+            "vec-slice operates on a vector",
         )),
     }
 }
@@ -113,7 +110,7 @@ fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Re
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "nth takes two forms (int and list)",
+            "vec-nth takes two forms (int and list)",
         ));
     }
     let idx = if let Expression::Atom(Atom::Int(i)) = args[0] {
@@ -121,7 +118,7 @@ fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Re
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "nth first form must be an int",
+            "vec-nth first form must be an int",
         ));
     };
     match &args[1] {
@@ -131,7 +128,7 @@ fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Re
                 if idx < 0 || idx >= list.len() as i64 {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "nth index out of range",
+                        "vec-nth index out of range",
                     ));
                 }
                 Ok(list.get(idx as usize).unwrap().clone())
@@ -141,7 +138,7 @@ fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Re
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "nth second form must be a list",
+            "vec-nth second form must be a list",
         )),
     }
 }
@@ -155,7 +152,7 @@ fn builtin_vec_setnth(
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "setnth takes three forms (index, new element and list)",
+            "vec-setnth! takes three forms (index, new element and list)",
         ));
     }
     let old_list = args.pop().unwrap();
@@ -165,7 +162,7 @@ fn builtin_vec_setnth(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "setnth first form must be an int",
+            "vec-setnth! first form must be an int",
         ));
     };
     match old_list {
@@ -173,7 +170,7 @@ fn builtin_vec_setnth(
             if idx < 0 || idx >= list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "setnth index out of range",
+                    "vec-setnth! index out of range",
                 ));
             }
             list.borrow_mut()[idx as usize] = new_element;
@@ -181,7 +178,7 @@ fn builtin_vec_setnth(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "setnth third form must be a list",
+            "vec-setnth! third form must be a list",
         )),
     }
 }
@@ -192,7 +189,7 @@ fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::R
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "push takes two forms (list and form)",
+            "vec-push! takes two forms (list and form)",
         ));
     }
     let new_item = args.pop().unwrap();
@@ -204,7 +201,7 @@ fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::R
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "push's first form must be a list",
+            "vec-push!'s first form must be a list",
         )),
     }
 }
@@ -213,7 +210,10 @@ fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::R
 fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "pop takes a list"));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "vec-pop! takes a list",
+        ));
     }
     let old_list = &args[0];
     match old_list {
@@ -226,7 +226,7 @@ fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Re
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "pop's first form must be a list",
+            "vec-pop!'s first form must be a list",
         )),
     }
 }
@@ -265,7 +265,10 @@ fn builtin_vec_vclear(
 ) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "clear takes a list"));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "vec-clear! takes a vector",
+        ));
     }
     let list = &args[0];
     match list {
@@ -275,7 +278,7 @@ fn builtin_vec_vclear(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "clear's first form must be a list",
+            "vec-clear!'s first form must be a list",
         )),
     }
 }
@@ -289,7 +292,7 @@ fn builtin_vec_remove_nth(
     if args.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "remove-nth takes two forms (index and list)",
+            "vec-remove-nth! takes two forms (index and list)",
         ));
     }
     let list = args.pop().unwrap();
@@ -298,7 +301,7 @@ fn builtin_vec_remove_nth(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "remove-nth first form must be an int",
+            "vec-remove-nth! first form must be an int",
         ));
     };
     match list {
@@ -306,7 +309,7 @@ fn builtin_vec_remove_nth(
             if idx < 0 || idx >= list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "remove-nth index out of range",
+                    "vec-remove-nth! index out of range",
                 ));
             }
             list.borrow_mut().remove(idx as usize);
@@ -314,7 +317,7 @@ fn builtin_vec_remove_nth(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "remove-nth second form must be a list",
+            "vec-remove-nth! second form must be a list",
         )),
     }
 }
@@ -328,7 +331,7 @@ fn builtin_vec_insert_nth(
     if args.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "insert-nth takes three forms (index, new element and list)",
+            "vec-insert-nth! takes three forms (index, new element and list)",
         ));
     }
     let old_list = args.pop().unwrap();
@@ -338,7 +341,7 @@ fn builtin_vec_insert_nth(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "insert-nth first form must be an int",
+            "vec-insert-nth! first form must be an int",
         ));
     };
     match old_list {
@@ -346,7 +349,7 @@ fn builtin_vec_insert_nth(
             if idx < 0 || idx > list.borrow().len() as i64 {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "insert-nth index out of range",
+                    "vec-insert-nth! index out of range",
                 ));
             }
             list.borrow_mut().insert(idx as usize, new_element);
@@ -354,7 +357,7 @@ fn builtin_vec_insert_nth(
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "insert-nth third form must be a list",
+            "vec-insert-nth! third form must be a list",
         )),
     }
 }
@@ -366,23 +369,23 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::Func(builtin_make_vec)),
     );
     data.insert(
-        "vslice".to_string(),
-        Rc::new(Expression::Func(builtin_vec_vslice)),
+        "vec-slice".to_string(),
+        Rc::new(Expression::Func(builtin_vec_slice)),
     );
     data.insert(
-        "vnth".to_string(),
+        "vec-nth".to_string(),
         Rc::new(Expression::Func(builtin_vec_nth)),
     );
     data.insert(
-        "vsetnth!".to_string(),
+        "vec-setnth!".to_string(),
         Rc::new(Expression::Func(builtin_vec_setnth)),
     );
     data.insert(
-        "push!".to_string(),
+        "vec-push!".to_string(),
         Rc::new(Expression::Func(builtin_vec_push)),
     );
     data.insert(
-        "pop!".to_string(),
+        "vec-pop!".to_string(),
         Rc::new(Expression::Func(builtin_vec_pop)),
     );
     data.insert(
@@ -390,15 +393,15 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::Func(builtin_vec_is_empty)),
     );
     data.insert(
-        "vclear!".to_string(),
+        "vec-clear!".to_string(),
         Rc::new(Expression::Func(builtin_vec_vclear)),
     );
     data.insert(
-        "vremove-nth!".to_string(),
+        "vec-remove-nth!".to_string(),
         Rc::new(Expression::Func(builtin_vec_remove_nth)),
     );
     data.insert(
-        "vinsert-nth!".to_string(),
+        "vec-insert-nth!".to_string(),
         Rc::new(Expression::Func(builtin_vec_insert_nth)),
     );
 }

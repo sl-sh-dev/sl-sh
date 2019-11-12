@@ -10,6 +10,7 @@ use std::env;
 use std::fs;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
+use std::path::Path;
 use std::rc::Rc;
 
 use crate::builtins_util::*;
@@ -149,7 +150,43 @@ fn builtin_load(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            let contents = fs::read_to_string(arg.as_string(environment)?)?;
+            let file_name = arg.as_string(environment)?;
+            let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
+                let vec_borrow;
+                let p_itr = match &*lp {
+                    Expression::Vector(vec) => {
+                        vec_borrow = vec.borrow();
+                        Box::new(vec_borrow.iter())
+                    }
+                    _ => lp.iter(),
+                };
+                let mut path_out = file_name.clone();
+                for l in p_itr {
+                    match l {
+                        Expression::Atom(Atom::Symbol(sym)) => {
+                            let path_str = format!("{}/{}", sym, file_name);
+                            let path = Path::new(&path_str);
+                            if path.exists() {
+                                path_out = path_str;
+                                break;
+                            }
+                        }
+                        Expression::Atom(Atom::String(s)) => {
+                            let path_str = format!("{}/{}", s, file_name);
+                            let path = Path::new(&path_str);
+                            if path.exists() {
+                                path_out = path_str;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                path_out
+            } else {
+                file_name
+            };
+            let contents = fs::read_to_string(file_path)?;
             let ast = read(&contents, false);
             return match ast {
                 Ok(ast) => {

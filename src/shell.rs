@@ -22,17 +22,19 @@ use crate::reader::*;
 use crate::types::*;
 
 fn load_user_env(environment: &mut Environment, home: &str) {
-    let mut script = format!("{}/.config/sl-sh/slsh_std.lisp", home);
+    let mut load_path = Vec::new();
+    load_path.push(Expression::Atom(Atom::String(format!(
+        "{}/.config/sl-sh",
+        home
+    ))));
+    environment.root_scope.borrow_mut().data.insert(
+        "*load-path*".to_string(),
+        Rc::new(Expression::with_list(load_path)),
+    );
+    let mut script = format!("{}/.config/sl-sh/slsh-std.lisp", home);
     if let Err(err) = run_script(&script, environment) {
         eprintln!(
             "WARNING: Failed to load standard macros script {}: {}",
-            script, err
-        );
-    }
-    script = format!("{}/.config/sl-sh/slsh_shell.lisp", home);
-    if let Err(err) = run_script(&script, environment) {
-        eprintln!(
-            "WARNING: Failed to load shell macros script {}: {}",
             script, err
         );
     }

@@ -1,3 +1,6 @@
+(ns-create 'shell)
+(core::ns-import 'core)
+
 ;;; Macros to make working with the shell easier.
 
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
@@ -69,7 +72,7 @@
 	(setfn pushd (dir) (if (form (cd dir))
 		(progn
 			(push! dir_stack $OLDPWD)
-			(if (> (length dir_stack) dir_stack_max) (vremove-nth! 0 dir_stack))
+			(if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
 			t)
 		nil))
 	;; Pop first directory from directory stack and change to it.
@@ -83,7 +86,7 @@
 	(setfn get-dirs () dir_stack)
 	;; Clears the directory stack.
 	(setfn clear-dirs ()
-		(vclear! dir_stack))
+		(vec-clear! dir_stack))
 	;; Sets the max number of directories to save in the stack.
 	(setfn set-dirs-max (max)
 		(if (and (= (type max) "Int")(> max 1))
@@ -97,14 +100,14 @@
 		(fori idx el vals
 			(if (= 1 (length el))
 				(progn
-					(vinsert-nth! idx (nth 0 el) params)
-					(vinsert-nth! idx nil bindings)
-					(vinsert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+					(vec-insert-nth! idx (nth 0 el) params)
+					(vec-insert-nth! idx nil bindings)
+					(vec-insert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
 				(if (= 2 (length el))
 					(progn
-						(vinsert-nth! idx (nth 0 el) params)
-						(vinsert-nth! idx (nth 1 el) bindings)
-						(vinsert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+						(vec-insert-nth! idx (nth 0 el) params)
+						(vec-insert-nth! idx (nth 1 el) bindings)
+						(vec-insert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
@@ -120,4 +123,6 @@
 						(export p (nth i olds))))))
 		(quote ,params) (quote ,bindings) (quote ,olds))))
 	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
+
+(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max))
 
