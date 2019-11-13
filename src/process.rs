@@ -462,9 +462,18 @@ pub fn do_command<'a>(
         if let Expression::Atom(Atom::String(_)) = a {
             args.push(a.clone());
         } else {
+            let glob_expand = if let Expression::Atom(Atom::Symbol(_)) = a {
+                true
+            } else {
+                false
+            };
             let new_a = eval(environment, &a)?;
-            if let Expression::Atom(Atom::String(s)) = new_a {
-                prep_string_arg(&s, &mut args)?;
+            if let Expression::Atom(Atom::String(s)) = &new_a {
+                if glob_expand {
+                    prep_string_arg(&s, &mut args)?;
+                } else {
+                    args.push(new_a.clone());
+                }
             } else {
                 args.push(new_a.clone());
             }
