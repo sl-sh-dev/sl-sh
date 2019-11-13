@@ -74,13 +74,13 @@
 	;; Push current directory on the directory stack and change to new directory.
 	(setfn pushd (dir) (if (form (cd dir))
 		(progn
-			(push! dir_stack $OLDPWD)
+			(vec-push! dir_stack $OLDPWD)
 			(if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
 			t)
 		nil))
 	;; Pop first directory from directory stack and change to it.
 	(setfn popd () (if (> (length dir_stack) 0)
-		(cd (pop! dir_stack))
+		(cd (vec-pop! dir_stack))
 		(println "Dir stack is empty")))
 	;; List the directory stack.
 	(setfn dirs ()
