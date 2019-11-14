@@ -1,0 +1,134 @@
+;; This is an example config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
+(core::ns-import 'core)
+(ns-import 'shell)
+
+(hash-set! *repl-settings* 'keybindings 'vi)
+
+(defn path_list_trunc (plist)
+	(if (> (length plist) 1)
+		(if (> (length (first plist)) 0)
+			(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+			(path_list_trunc (rest plist)))
+		plist))
+
+(alias :q (exit))
+
+;; better ls
+(alias ls (lsd))
+
+;; betterer ls
+(alias ll (lsd -altrh))
+
+;; better cp
+(defn pcp (&rest args)
+	(if (= (length args) 2)
+		(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@args))
+			(if (and (= (length args) 3) (= (first args) "-r"))
+				(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@(rest args)))
+				(err "I take 3 arguemnts or -r that is it"))))
+
+;; alias pipe to your clipboard
+(alias sc (xclip -selection c))
+
+;;put my pwd in my clipboard
+(alias this (| (pwd) (sc)))
+
+
+(defn persist-nss (&rest args)
+	(if (= (length args) 2)
+		(eval `(notify-send -t 0 ,@args --icon=system-software-update))
+		(err "takes 2 arguments")))
+
+(defn nss-pass (&rest args)
+	(if (= (length args) 2)
+		(eval `(notify-send -t 0 ,@args --icon=face-wink))
+		(err "takes 2 arguments")))
+
+(defn nss-fail (&rest args)
+	(if (= (length args) 2)
+		(eval `(notify-send -t 0 ,@args --icon=process-stop))
+		(err "takes 2 arguments")))
+
+;; fun, persistent notify send!
+(defn nss (&rest args)
+	(if (> (length args) 1)
+		(err "I take one fucking argument dude.")
+		(persist-nss (nth 0 args) (str (fortune)))))
+
+;;gradle build
+(defn g (&rest args)
+	(let ((log-out-file "last_build.log"))
+	(progn
+		(|
+			(defq gradle-proc (eval (append '(./gradlew) args)))
+			(tee log-out-file)
+		)
+		(defq gradle-ret-code (wait gradle-proc))
+		(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+		(defq proj-name (str (basename $PWD)))
+		(if (= 0 gradle-ret-code)
+			(nss-pass (str "PASS! - " proj-name) log-out-txt)
+			(nss-fail (str "FAIL! - " proj-name) log-out-txt))
+		gradle-ret-code)))
+
+;; HW zsh pipes to slush pipes
+;; zsh history search
+(defn zh ()
+	(progn
+		(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
+
+;; epoch in milliseconds
+(alias epochms (| (date +%s%N) (cut -b1-13)))
+
+(defn datest ()
+	(let-env ((TZ ":America/New_York"))
+	 (date)))
+
+;; takes epock IN SECONDS and converts to nice date time
+(defn fromepoch (time)
+	(date -d (str "@" time)))
+
+(defn timestamp ()
+	(date +%Y%m%d_%H%M%S))
+
+;;results feed into vim
+(defn vimifind (&rest args)
+	(if (< (length args) 2)
+		(let
+			((vimargs (str-split
+				" "
+				(str (| (find . -iname (nth 0 args)) (tr "\n" " "))))))
+			(progn
+				`(loose-symbols (vim ,@vimargs))))
+		(err "Only accepts 0 or 1 arguments")))
+
+(defn get_pwd ()
+	(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
+
+(defn smaller_path (dir)
+	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
+
+(defn set_prompt_tail ()
+	(if (= *last-status* 0) "\x1b[32m☭ >\x1b[39m " (str "\x1b[31m(" *last-status* ")☭ >\x1b[39m ")))
+
+(defn parse_git_branch () (let ((branch))
+	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
+	(if (= branch "")
+		(str "")
+		(str "(" (str-trim branch) ")"))))
+
+;; prompt ensures
+;;	1. always a new line above prompt
+;;	2. if pushd has been used displays in reverse order dirs to popd
+;;	3. current path
+;;	4. if in git dir display current branch
+;;	5. cursor on near empty line
+(defn __prompt ()
+	(str "\n" (if (> (length (get-dirs)) 0) (str (map! smaller_path (reverse (get-dirs)))) "") "\n" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n" (set_prompt_tail)))
+
+(println "		Hey, hey, hey. Don't be mean.")
+(println "		We don't have to be mean because,")
+(println "		remember, no matter where you go,")
+(println "		there you are.")
+(println "			- Buckaroo Banzai")
