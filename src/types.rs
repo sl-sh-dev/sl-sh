@@ -173,6 +173,7 @@ pub enum Expression {
     Vector(Rc<RefCell<Vec<Expression>>>),
     Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
+    // Func is depricated use Function for new code.
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Function(Callable),
     Process(ProcessState),

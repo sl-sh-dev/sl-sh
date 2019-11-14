@@ -72,6 +72,8 @@ Form | Args | Type | description
 -----|------|------|------------
 ns-create | name | builtin | Create and enter a new namespace.
 ns-enter | name | builtin | Enter an existing namespace.
+ns-exists? | name | builtin | True if name is a namespace, nil otherwise.
+ns-list | | builtin | Returns a vector of all the namespace names (strings).
 ns-import | namespace (string) | macro | Bring all the exported symbols from a namespace into the current namespace.
 ns-export | symbol or list of symbols| macro | Make the provided symbols importable.
 
@@ -199,6 +201,7 @@ cd | path | builtin (builtins_file.rs) | Change to provided directory.
 fs-exists? | path | builtin (builtins_file.rs) | Boolean, does path exist.
 fs-file? | path | builtin (builtins_file.rs) | Boolean, is path a file.
 fs-dir? | path | builtin (builtins_file.rs) | Boolean, is path a directory.
+glob | string+ | builtin (builtins_file.rs) | Glob expand each string argument and return a list of all files.
 pipe | form+ | builtin (builtins_file.rs) | Creates a pipe (job) consisting of the provided forms.
 wait | form | builtin (builtins_file.rs) | Waits for a pid to finish and returns the status code (fine to use on a process that was not in the background).
 pid | form | builtin (builtins_file.rs) | Returns the pid of a form that resolves to a process.

@@ -5,6 +5,8 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
 
+use glob::glob;
+
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
@@ -35,47 +37,45 @@ fn cd_expand_all_dots(cd: String) -> String {
     }
 }
 
-fn builtin_cd(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() > 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "cd can not have more then one form",
-        ))
+fn builtin_cd(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => "/".to_string(),
+    };
+    let old_dir = match env::var("OLDPWD") {
+        Ok(val) => val,
+        Err(_) => home.to_string(),
+    };
+    let new_dir = if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?.as_string(environment)?;
+            if let Some(h) = expand_tilde(&arg) {
+                h
+            } else {
+                arg
+            }
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "cd can not have more then one form",
+            ));
+        }
     } else {
-        let mut home = match env::var("HOME") {
-            Ok(val) => val,
-            Err(_) => "/".to_string(),
-        };
-        let old_dir = match env::var("OLDPWD") {
-            Ok(val) => val,
-            Err(_) => home.to_string(),
-        };
-        let argsi = args.iter();
-        let mut args: Vec<String> = Vec::with_capacity(args.len());
-        for a in argsi {
-            args.push(a.as_string(environment)?);
-        }
-        let args = args.iter();
-        let new_dir = args.peekable().peek().map_or(&home[..], |x| *x);
-        let expand_dir = expand_tilde(new_dir);
-        let new_dir = if let Some(h) = expand_dir {
-            home = h;
-            &home
-        } else {
-            new_dir
-        };
-        let new_dir = if new_dir == "-" { &old_dir } else { new_dir };
-        let new_dir = cd_expand_all_dots(new_dir.to_string());
-        let root = Path::new(&new_dir);
-        env::set_var("OLDPWD", env::current_dir()?);
-        if let Err(e) = env::set_current_dir(&root) {
-            eprintln!("Error changing to {}, {}", root.display(), e);
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            env::set_var("PWD", env::current_dir()?);
-            Ok(Expression::Atom(Atom::True))
-        }
+        home
+    };
+    let new_dir = if new_dir == "-" { &old_dir } else { &new_dir };
+    let new_dir = cd_expand_all_dots(new_dir.to_string());
+    let root = Path::new(&new_dir);
+    env::set_var("OLDPWD", env::current_dir()?);
+    if let Err(e) = env::set_current_dir(&root) {
+        eprintln!("Error changing to {}, {}", root.display(), e);
+        Ok(Expression::Atom(Atom::Nil))
+    } else {
+        env::set_var("PWD", env::current_dir()?);
+        Ok(Expression::Atom(Atom::True))
     }
 }
 
@@ -315,8 +315,55 @@ fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result
     }
 }
 
+fn builtin_glob(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut files = Vec::new();
+    for pat in args {
+        let pat = match eval(environment, pat)? {
+            Expression::Atom(Atom::String(s)) => s,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "globs need to be strings",
+                ))
+            }
+        };
+        let pat = match expand_tilde(&pat) {
+            Some(p) => p,
+            None => pat,
+        };
+        match glob(&pat) {
+            Ok(paths) => {
+                for p in paths {
+                    match p {
+                        Ok(p) => {
+                            if let Some(p) = p.to_str() {
+                                files.push(Expression::Atom(Atom::String(p.to_string())));
+                            }
+                        }
+                        Err(err) => {
+                            let msg = format!("glob error on while iterating {}, {}", pat, err);
+                            return Err(io::Error::new(io::ErrorKind::Other, msg));
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                let msg = format!("glob error on {}, {}", pat, err);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+        }
+    }
+    Ok(Expression::with_list(files))
+}
+
 pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
-    data.insert("cd".to_string(), Rc::new(Expression::Func(builtin_cd)));
+    data.insert(
+        "cd".to_string(),
+        Rc::new(Expression::make_function(builtin_cd, "Change directory.")),
+    );
     data.insert(
         "fs-exists?".to_string(),
         Rc::new(Expression::Func(builtin_path_exists)),
@@ -332,4 +379,11 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert("pipe".to_string(), Rc::new(Expression::Func(builtin_pipe)));
     data.insert("wait".to_string(), Rc::new(Expression::Func(builtin_wait)));
     data.insert("pid".to_string(), Rc::new(Expression::Func(builtin_pid)));
+    data.insert(
+        "glob".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_glob,
+            "Takes a list of globs and return the list of them expanded.",
+        )),
+    );
 }

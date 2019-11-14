@@ -1383,6 +1383,52 @@ fn builtin_ns_enter(
     ))
 }
 
+fn builtin_ns_exists(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(sym)) => sym,
+                Expression::Atom(Atom::String(s)) => s,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "ns-exists?: namespace must be a symbol or string",
+                    ))
+                }
+            };
+            if environment.namespaces.contains_key(&key) {
+                return Ok(Expression::Atom(Atom::True));
+            } else {
+                return Ok(Expression::Atom(Atom::Nil));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "ns-exists? takes one arg, the name of the namespace to test existance of",
+    ))
+}
+
+fn builtin_ns_list(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        let mut ns_list = Vec::with_capacity(environment.namespaces.len());
+        for ns in environment.namespaces.keys() {
+            ns_list.push(Expression::Atom(Atom::String(ns.to_string())));
+        }
+        return Ok(Expression::with_list(ns_list));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "ns-list takes no args",
+    ))
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -1657,6 +1703,20 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::make_function(
             builtin_ns_enter,
             "Enters an existing namespace.",
+        )),
+    );
+    data.insert(
+        "ns-exists?".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_ns_exists,
+            "True if the supplied namespace exists.",
+        )),
+    );
+    data.insert(
+        "ns-list".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_ns_list,
+            "Returns a vector of all namespaces.",
         )),
     );
 
