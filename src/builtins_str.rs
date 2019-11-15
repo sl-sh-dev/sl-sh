@@ -199,6 +199,15 @@ fn builtin_str(
     let old_err = environment.state.stderr_status.clone();
     environment.state.stdout_status = Some(IOState::Pipe);
     environment.state.stderr_status = Some(IOState::Pipe);
+
+    // Get out of a pipe for the str call if in one...
+    let data_in = environment.data_in.clone();
+    environment.data_in = None;
+    let in_pipe = environment.in_pipe;
+    environment.in_pipe = false;
+    let pipe_pgid = environment.state.pipe_pgid;
+    environment.state.pipe_pgid = None;
+
     // Do not use ?, make sure to reset environment state even on error.
     let mut res = String::new();
     for a in args {
@@ -222,6 +231,9 @@ fn builtin_str(
     }
     environment.state.stdout_status = old_out;
     environment.state.stderr_status = old_err;
+    environment.data_in = data_in;
+    environment.in_pipe = in_pipe;
+    environment.state.pipe_pgid = pipe_pgid;
     Ok(Expression::Atom(Atom::String(res)))
 }
 

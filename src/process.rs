@@ -195,10 +195,14 @@ fn run_command(
                     job.names.push(command.to_string());
                     environment.jobs.borrow_mut().push(job);
                 } else {
-                    let mut job = environment.jobs.borrow_mut().pop().unwrap();
-                    job.pids.push(proc.id());
-                    job.names.push(command.to_string());
-                    environment.jobs.borrow_mut().push(job);
+                    let job = environment.jobs.borrow_mut().pop();
+                    if let Some(mut job) = job {
+                        job.pids.push(proc.id());
+                        job.names.push(command.to_string());
+                        environment.jobs.borrow_mut().push(job);
+                    } else {
+                        eprintln!("WARNING: Soemthing in pipe is amiss, probably a command not part of pipe or a bug!");
+                    }
                 }
                 if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
                     // Ignore, do in parent and child.
