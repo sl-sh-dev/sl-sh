@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.7.5"
+version = "0.7.6"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 liner = { git = "https://gitlab.redox-os.org/sstanfield/liner" }
+#liner = "0.5"
 glob = "0.3"
 nix = "0.15.0"
 libc = "0.2"
@@ -16,3 +17,5 @@ libc = "0.2"
 [build-dependencies]
 chrono = "0.4.7"
 
+#[patch.crates-io]
+#liner = { path = "../liner" }

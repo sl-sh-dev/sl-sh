@@ -231,6 +231,11 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             eprintln!("Error reaping processes: {}", err);
         }
         let mut shell_completer = ShellCompleter::new(environment.clone());
+        con.history.search_context = if let Ok(cur_dir) = env::current_dir() {
+            Some(cur_dir.to_string_lossy().to_string())
+        } else {
+            None
+        };
         match con.read_line(prompt, None, &mut shell_completer) {
             Ok(input) => {
                 let input = input.trim();
