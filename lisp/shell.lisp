@@ -4,12 +4,9 @@
 ;;; Macros to make working with the shell easier.
 
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
-; This macro is odd, alias needs to be a special form so that it does not eval
-; args.  So the macro makes a macro that basically works as a special form and 
-; produces nil (so the second eval does nothing).
 (defmacro alias (name body)
 	`(defmacro ,name (&rest args)
-		(progn (eval (append (quote ,body) args)) nil)))
+		(append (quote ,body) args)))
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
