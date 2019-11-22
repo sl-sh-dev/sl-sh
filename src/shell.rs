@@ -1,4 +1,3 @@
-use liner::Context;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
@@ -12,6 +11,9 @@ use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+use liner::ColorClosure;
+use liner::Context;
 
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::gethostname;
@@ -108,6 +110,39 @@ fn get_prompt(environment: &mut Environment) -> String {
             pwd.display(),
             namespace,
         )
+    }
+}
+
+fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosure> {
+    let mut has_handle = false;
+    let mut exp = Rc::new(Expression::Atom(Atom::Nil));
+    if let Some(lexp) = get_expression(&environment.borrow(), "__line_handler") {
+        has_handle = true;
+        exp = lexp.clone();
+    }
+    if has_handle {
+        let line_color = move |input: &str| -> String {
+            let exp = match *exp {
+                Expression::Atom(Atom::Lambda(_)) => {
+                    let mut v = Vec::with_capacity(1);
+                    v.push(Expression::Atom(Atom::Symbol("__line_handler".to_string())));
+                    v.push(Expression::Atom(Atom::String(input.to_string())));
+                    Rc::new(Expression::with_list(v))
+                }
+                _ => return input.to_string(),
+            };
+            environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with line_handler.
+            let res = eval(&mut environment.borrow_mut(), &exp);
+            environment.borrow_mut().save_exit_status = true;
+            res.unwrap_or_else(|e| {
+                Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
+            })
+            .as_string(&environment.borrow())
+            .unwrap_or_else(|_| "ERROR".to_string())
+        };
+        Some(Box::new(line_color))
+    } else {
+        None
     }
 }
 
@@ -236,7 +271,8 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         } else {
             None
         };
-        match con.read_line(prompt, None, &mut shell_completer) {
+        let color_closure = get_color_closure(environment.clone());
+        match con.read_line(prompt, color_closure, &mut shell_completer) {
             Ok(input) => {
                 let input = input.trim();
                 if input.is_empty() {
