@@ -5,6 +5,7 @@ use std::env;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::builtins_util::compress_tilde;
 use crate::builtins_util::expand_tilde;
 use crate::environment::*;
 use crate::eval::*;
@@ -32,7 +33,20 @@ fn unescape(input: &str) -> String {
 }
 
 /// Escapes filenames from the completer so that special characters will be properly escaped.
-fn escape(input: &str) -> String {
+/// If collapse_tilde is true also replace home dir paths with ~.
+fn escape(input: &str, collapse_tilde: bool) -> String {
+    let tinput;
+    let input = if collapse_tilde {
+        match compress_tilde(input) {
+            Some(s) => {
+                tinput = s;
+                &tinput
+            }
+            None => input,
+        }
+    } else {
+        input
+    };
     let mut output = Vec::with_capacity(input.len());
     for character in input.bytes() {
         match character {
@@ -254,6 +268,16 @@ impl Completer for ShellCompleter {
 
 fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
     let mut res = Vec::new();
+    let mut tilde_expanded = false;
+    let tinput;
+    let org_start = match expand_tilde(org_start) {
+        Some(s) => {
+            tilde_expanded = true;
+            tinput = s;
+            &tinput
+        }
+        None => org_start,
+    };
 
     let (start, need_quotes) = if org_start.starts_with('"') {
         (&org_start[1..], true)
@@ -323,7 +347,7 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
                         } else {
                             item.to_string()
                         };
-                        res.push(escape(&val));
+                        res.push(escape(&val, tilde_expanded));
                     }
                     Err(_err) => {}
                 }
@@ -336,13 +360,7 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
 
 fn get_dir_matches(start: &str) -> Vec<String> {
     match env::current_dir() {
-        Ok(p) => {
-            //let mut fc = FilenameCompleter::new(Some(p));
-            match expand_tilde(start) {
-                Some(s) => find_file_completions(&s, &p), //fc.completions(&s),
-                None => find_file_completions(start, &p), //fc.completions(start),
-            }
-        }
+        Ok(p) => find_file_completions(start, &p),
         Err(_err) => Vec::new(),
     }
 }

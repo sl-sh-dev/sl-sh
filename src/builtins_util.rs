@@ -147,6 +147,21 @@ pub fn expand_tilde(path: &str) -> Option<String> {
     }
 }
 
+pub fn compress_tilde(path: &str) -> Option<String> {
+    if let Ok(mut home) = env::var("HOME") {
+        if home.ends_with('/') {
+            home.pop();
+        }
+        if path.contains(&home) {
+            Some(path.replace(&home, "~"))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn setup_args_final<'a>(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
