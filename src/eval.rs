@@ -286,6 +286,9 @@ fn internal_eval<'a>(
                     Ok(val) => Ok(Expression::Atom(Atom::String(val))),
                     Err(_) => Ok(Expression::Atom(Atom::Nil)),
                 }
+            } else if s.starts_with(':') {
+                // Got a keyword, so just be you...
+                Ok(Expression::Atom(Atom::Symbol(s.clone())))
             } else if let Some(exp) = get_expression(environment, &s[..]) {
                 match &*exp {
                     Expression::Func(_) => Ok(Expression::Atom(Atom::String(s.clone()))),
