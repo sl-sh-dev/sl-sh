@@ -4,9 +4,11 @@
 (ns-import 'shell)
 
 ; Use vi keybindings
-;(hash-set! *repl-settings* 'keybindings 'vi)
-; Use emacs keybindings
-;(hash-set! *repl-settings* 'keybindings 'emacs)
+;(hash-set! *repl-settings* :keybindings :vi)
+; Use a key sequence in vi insert mode as ESC (string and milliseconds time)
+;(hash-set! *repl-settings* :vi_esc_sequence '("jk" 500))
+; Use emacs keybindings (default)
+;(hash-set! *repl-settings* :keybindings :emacs)
 
 (defn parse_git_branch () (let ((branch))
 	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))

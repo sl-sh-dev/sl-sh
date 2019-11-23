@@ -188,14 +188,42 @@ fn handle_result(
 
 fn apply_repl_settings(repl_settings: Rc<Expression>, con: &mut Context) {
     if let Expression::HashMap(repl_settings) = &*repl_settings {
-        if let Some(keybindings) = repl_settings.borrow().get("keybindings") {
+        if let Some(keybindings) = repl_settings.borrow().get(":keybindings") {
             let keybindings = keybindings.clone();
             if let Expression::Atom(Atom::Symbol(keybindings)) = &*keybindings {
                 match &keybindings[..] {
-                    "vi" => con.key_bindings = liner::KeyBindings::Vi,
-                    "emacs" => con.key_bindings = liner::KeyBindings::Emacs,
+                    ":vi" => con.key_bindings = liner::KeyBindings::Vi,
+                    ":emacs" => con.key_bindings = liner::KeyBindings::Emacs,
                     _ => eprintln!("Invalid keybinding setting: {}", keybindings),
                 }
+            }
+        }
+        if let Some(vi_esc) = repl_settings.borrow().get(":vi_esc_sequence") {
+            let vi_esc = vi_esc.clone();
+            let vl_i;
+            let mut i = match &*vi_esc {
+                Expression::Vector(vl) => {
+                    vl_i = vl.borrow();
+                    Box::new(vl_i.iter())
+                }
+                _ => vi_esc.iter(),
+            };
+            if let Some(Expression::Atom(Atom::String(keys))) = i.next() {
+                if let Some(Expression::Atom(Atom::Int(ms))) = i.next() {
+                    if keys.len() == 2 {
+                        let mut chars = keys.chars();
+                        con.vi_esc_sequence =
+                            Some((chars.next().unwrap(), chars.next().unwrap(), *ms as u32));
+                    } else {
+                        eprintln!(":vi_esc_sequence first value should be a string of two characters (two key sequence for escape)");
+                    }
+                } else {
+                    eprintln!(":vi_esc_sequence second value should be number (ms delay)");
+                }
+            } else {
+                eprintln!(
+                    ":vi_esc_sequence first value should be a string (two key sequence for escape)"
+                );
             }
         }
     }
@@ -208,6 +236,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     con.history.load_duplicates = false;
     con.history.share = true;
     con.key_bindings = liner::KeyBindings::Emacs;
+    con.vi_esc_sequence = None;
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
