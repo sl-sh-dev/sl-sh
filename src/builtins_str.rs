@@ -66,21 +66,35 @@ fn builtin_str_replace(
     Ok(Expression::Atom(Atom::String(new_str)))
 }
 
-fn builtin_str_split(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-split takes two forms",
-        ));
+fn builtin_str_split(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(pat) = args.next() {
+        if let Some(text) = args.next() {
+            if args.next().is_none() {
+                let pat = eval(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
+                let text = eval(environment, text)?;
+                let text = as_string(environment, &text)?;
+                let mut split_list: Vec<Expression> = Vec::new();
+                if pat == ":whitespace" {
+                    for s in text.split_whitespace() {
+                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                    }
+                } else {
+                    for s in text.split(&pat) {
+                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                    }
+                }
+                return Ok(Expression::with_list(split_list));
+            }
+        }
     }
-    let arg0 = as_string(environment, &args[0])?;
-    let arg1 = as_string(environment, &args[1])?;
-    let mut split_list: Vec<Expression> = Vec::new();
-    for s in arg1.split(&arg0) {
-        split_list.push(Expression::Atom(Atom::String(s.to_string())));
-    }
-    Ok(Expression::with_list(split_list))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-split takes two forms",
+    ))
 }
 
 fn builtin_str_cat_list(
@@ -256,7 +270,10 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     );
     data.insert(
         "str-split".to_string(),
-        Rc::new(Expression::Func(builtin_str_split)),
+        Rc::new(Expression::make_function(
+            builtin_str_split,
+            "Use a pattern to split a string (:whitespace to split on whitespace).",
+        )),
     );
     data.insert(
         "str-cat-list".to_string(),
