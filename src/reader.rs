@@ -30,10 +30,9 @@ fn is_whitespace(ch: char) -> bool {
 
 macro_rules! save_token {
     ($tokens:expr, $token:expr, $line:expr, $column:expr) => {{
-        let t_token = $token.trim();
-        if !t_token.is_empty() {
+        if !$token.is_empty() {
             $tokens.push(Token {
-                token: t_token.to_string(),
+                token: $token,
                 line: $line,
                 column: $column,
             });
@@ -121,9 +120,10 @@ fn handle_char(
     ch: char,
     last_ch: char,
     last_comma: &mut bool,
-    line: usize,
-    column: usize,
+    expect_char: &mut bool,
+    line_column: (usize, usize),
 ) -> String {
+    let (line, column) = line_column;
     if last_ch == '#' && ch == '(' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -131,6 +131,14 @@ fn handle_char(
             line,
             column,
         });
+    } else if last_ch == '#' && ch == '\\' {
+        save_token!(tokens, token, line, column);
+        tokens.push(Token {
+            token: "#\\".to_string(),
+            line,
+            column,
+        });
+        *expect_char = true;
     } else if last_ch == '#' && ch == '<' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -173,8 +181,8 @@ fn handle_char(
         });
     } else if ch == ',' && (is_whitespace(last_ch) || last_ch == '(') {
         *last_comma = true;
-    } else if last_ch == '\\' && ch == ' ' {
-        // Keep an escaped space in token since this is a shell...
+    } else if last_ch == '\\' && is_whitespace(ch) {
+        // Keep an escaped whitespace in token since this is a shell...
         token.push(ch);
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
@@ -182,8 +190,10 @@ fn handle_char(
         // Do nothing...
         // # is reader macro char, do not save in tokens.
     } else {
-        if last_ch == '\\' {
+        if last_ch == '\\' && !*expect_char {
             token.push(last_ch);
+        } else {
+            *expect_char = false;
         }
         token.push(ch);
     }
@@ -202,6 +212,7 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
     let mut in_escape_code = false;
     let mut line = 1;
     let mut column = 0;
+    let mut expect_char = false;
     if add_parens {
         tokens.push(Token {
             token: "(".to_string(),
@@ -260,7 +271,6 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
             continue;
         }
         if ch == '\"' && last_ch != '\\' {
-            // Kakoune bug "
             in_string = !in_string;
             token.push(ch);
             if !in_string {
@@ -301,8 +311,8 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
                 ch,
                 last_ch,
                 &mut last_comma,
-                line,
-                column,
+                &mut expect_char,
+                (line, column),
             );
             last_ch = ch;
         }
@@ -325,12 +335,24 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
     tokens
 }
 
+fn parse_char(token_full: &Token) -> Result<Expression, ParseError> {
+    if token_full.token.len() != 1 {
+        let reason = format!(
+            "Not a valid char [{}]: line {}, col: {}",
+            token_full.token, token_full.line, token_full.column
+        );
+        return Err(ParseError { reason });
+    }
+    Ok(Expression::Atom(Atom::Char(
+        token_full.token.chars().next().unwrap(),
+    )))
+}
+
 fn parse_atom(token: &str) -> Expression {
     if token.is_empty() {
         return Expression::Atom(Atom::Nil);
     }
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
-        // Kakoune bug "
         let string = token[1..token.len() - 1].to_string();
         return Expression::Atom(Atom::String(string));
     }
@@ -414,6 +436,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
     let mut backtick_level = 0;
+    let mut is_char = false;
     for token_full in tokens {
         let token = &token_full.token;
         match &token[..] {
@@ -472,6 +495,9 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                     }
                 }
             }
+            "#\\" => {
+                is_char = true;
+            }
             "#<" => {
                 let reason = format!(
                     "Found an unreadable token: line {}, col: {}",
@@ -481,7 +507,15 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
             }
             _ => match stack.pop() {
                 Some(mut v) => {
-                    v.vec.push(parse_atom(&token));
+                    if is_char {
+                        v.vec.push(parse_char(&token_full)?);
+                        is_char = false;
+                    } else {
+                        let token = token.trim();
+                        if !token.is_empty() {
+                            v.vec.push(parse_atom(&token));
+                        }
+                    }
                     stack.push(v);
                     if let Some(quote_exit_level) = qexits.pop() {
                         if level == quote_exit_level {

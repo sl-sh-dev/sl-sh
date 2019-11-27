@@ -39,6 +39,7 @@ pub enum Atom {
     Int(i64),
     Symbol(String),
     String(String),
+    Char(char),
     Lambda(Lambda),
     Macro(Macro),
 }
@@ -52,6 +53,7 @@ impl fmt::Display for Atom {
             Atom::Int(i) => write!(f, "{}", i),
             Atom::Symbol(s) => write!(f, "{}", s),
             Atom::String(s) => write!(f, "\"{}\"", s),
+            Atom::Char(c) => write!(f, "#\\{}", c),
             Atom::Lambda(l) => write!(f, "(fn {} {})", l.params.to_string(), l.body.to_string()),
             Atom::Macro(m) => write!(f, "(macro {} {})", m.params.to_string(), m.body.to_string()),
         }
@@ -59,10 +61,12 @@ impl fmt::Display for Atom {
 }
 
 impl Atom {
-    // Like to_string but don't put quotes around strings.
+    // Like to_string but don't put quotes around strings or #\ in front of chars.
     pub fn as_string(&self) -> String {
         if let Atom::String(s) = self {
             s.to_string()
+        } else if let Atom::Char(c) = self {
+            c.to_string()
         } else {
             self.to_string()
         }
@@ -76,6 +80,7 @@ impl Atom {
             Atom::Int(_) => "Int".to_string(),
             Atom::Symbol(_) => "Symbol".to_string(),
             Atom::String(_) => "String".to_string(),
+            Atom::Char(_) => "Char".to_string(),
             Atom::Lambda(_) => "Lambda".to_string(),
             Atom::Macro(_) => "Macro".to_string(),
         }
@@ -461,6 +466,9 @@ impl Expression {
                 }
             }
             Expression::Atom(Atom::String(_s)) => {
+                write!(writer, "{}", self.to_string())?;
+            }
+            Expression::Atom(Atom::Char(_c)) => {
                 write!(writer, "{}", self.to_string())?;
             }
             Expression::Atom(Atom::Lambda(l)) => {
