@@ -243,7 +243,12 @@ fn builtin_length(
             return match &arg {
                 Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
                 Expression::Atom(Atom::String(s)) => {
-                    Ok(Expression::Atom(Atom::Int(s.len() as i64)))
+                    let mut i = 0;
+                    // Need to walk the chars to get the length in utf8 chars not bytes.
+                    for _ in s.chars() {
+                        i += 1;
+                    }
+                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
                 }
                 Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
                 Expression::Vector(list) => {

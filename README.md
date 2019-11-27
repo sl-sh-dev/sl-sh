@@ -190,6 +190,23 @@ str-split | split_string/string | builtin | Produces a list by splitting the str
 str-cat-list | string/list | builtin | Produces a string by joining a list with the provided string as a divider.
 str-sub | index/length/string | builtin | Returns a new substring of provided string.
 str-append | string string | builtin | Returns a new string from appending two other strings.
+str-empty? | string | builtin | Returns true if the string is empty, false (nil) otherwise.
+str-nth | int string | builtin | Returns the character at the nth position.
+str-lower | string | builtin | Return the all lowercase string for provided string.
+str-upper | string | builtin | Return the all uppercase string for provided string.
+
+
+### Char Forms
+Form | Args | Type | description
+-----|------|------|------------
+char= | char+ | builtin | Return true of all provided chars are equal.
+char!= | char+ | builtin | Return true of all provided chars are not equal.
+char> | char+ | builtin | Return true of each provided char is greater then the next.
+char< | char+ | builtin | Return true of each provided char is less then the next.
+char>= | char+ | builtin | Return true of each provided char is greater then or equal to the next.
+char<= | char+ | builtin | Return true of each provided char is less then or equal to the next.
+char-lower | char | builtin | Return the ascii lowercase char for char or char if not an ascii uppercase.
+char-upper | char | builtin | Return the ascii uppercase char for char or char if not an ascii lowercase.
 
 
 ### Shell Forms

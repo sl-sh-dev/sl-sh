@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::eval::*;
 use crate::types::*;
 
 fn builtin_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -105,42 +106,32 @@ fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::
     }
 }
 
-fn builtin_vec_nth(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-nth takes two forms (int and list)",
-        ));
-    }
-    let idx = if let Expression::Atom(Atom::Int(i)) = args[0] {
-        i
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-nth first form must be an int",
-        ));
-    };
-    match &args[1] {
-        Expression::Vector(list) => {
-            let list = list.borrow();
-            if !list.is_empty() {
-                if idx < 0 || idx >= list.len() as i64 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "vec-nth index out of range",
-                    ));
+fn builtin_vec_nth(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(idx) = args.next() {
+        if let Some(list) = args.next() {
+            if args.next().is_none() {
+                if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
+                    if let Expression::Vector(list) = eval(environment, &list)? {
+                        let list = list.borrow();
+                        if idx < 0 || idx >= list.len() as i64 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "vec-nth index out of range",
+                            ));
+                        }
+                        return Ok(list.get(idx as usize).unwrap().clone());
+                    }
                 }
-                Ok(list.get(idx as usize).unwrap().clone())
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
             }
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-nth second form must be a list",
-        )),
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-nth takes two forms (int and list)",
+    ))
 }
 
 // Destructive
@@ -374,7 +365,10 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     );
     data.insert(
         "vec-nth".to_string(),
-        Rc::new(Expression::Func(builtin_vec_nth)),
+        Rc::new(Expression::make_function(
+            builtin_vec_nth,
+            "Get the nth element of a list.",
+        )),
     );
     data.insert(
         "vec-setnth!".to_string(),

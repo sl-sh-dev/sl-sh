@@ -251,6 +251,124 @@ fn builtin_str(
     Ok(Expression::Atom(Atom::String(res)))
 }
 
+fn builtin_str_empty(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(string) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::String(string)) = eval(environment, &string)? {
+                return if string.is_empty() {
+                    Ok(Expression::Atom(Atom::True))
+                } else {
+                    Ok(Expression::Atom(Atom::Nil))
+                };
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-empty? takes a string",
+    ))
+}
+
+fn builtin_str_nth(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(idx) = args.next() {
+        if let Some(string) = args.next() {
+            if args.next().is_none() {
+                if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
+                    if let Expression::Atom(Atom::String(string)) = eval(environment, &string)? {
+                        for (i, ch) in string.chars().enumerate() {
+                            if i as i64 == idx {
+                                return Ok(Expression::Atom(Atom::Char(ch)));
+                            }
+                        }
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-nth index out of range",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-nth takes two forms (int and string)",
+    ))
+}
+
+fn builtin_str_lower(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(ch) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::String(string)) = eval(environment, ch)? {
+                return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-lower takes a string",
+    ))
+}
+
+fn builtin_str_upper(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(ch) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::String(string)) = eval(environment, ch)? {
+                return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-upper takes a string",
+    ))
+}
+
+fn builtin_char_lower(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(ch) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::Char(ch)) = eval(environment, ch)? {
+                return Ok(Expression::Atom(Atom::Char(ch.to_ascii_lowercase())));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "char-lower takes a single char and produces it's ascii lowercase char",
+    ))
+}
+
+fn builtin_char_upper(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(ch) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::Char(ch)) = eval(environment, ch)? {
+                return Ok(Expression::Atom(Atom::Char(ch.to_ascii_uppercase())));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "char-upper takes a single char and produces it's ascii upper char",
+    ))
+}
+
 type CharTestFunc = fn(char, char) -> bool;
 
 fn char_test(
@@ -320,7 +438,49 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
             "Make a new string with it's arguments.",
         )),
     );
+    data.insert(
+        "str-empty?".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_empty,
+            "Is a string empty?",
+        )),
+    );
+    data.insert(
+        "str-nth".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_nth,
+            "Get the nth char of a string.",
+        )),
+    );
+    data.insert(
+        "str-lower".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_lower,
+            "Get all lower case string from a string.",
+        )),
+    );
+    data.insert(
+        "str-upper".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_upper,
+            "Get all upper case string from a string.",
+        )),
+    );
 
+    data.insert(
+        "char-lower".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_char_lower,
+            "Get ascii lower case character for a character.",
+        )),
+    );
+    data.insert(
+        "char-upper".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_char_upper,
+            "Get ascii upper case character for a character.",
+        )),
+    );
     data.insert(
         "char=".to_string(),
         Rc::new(Expression::make_function(
