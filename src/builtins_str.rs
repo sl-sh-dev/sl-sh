@@ -251,6 +251,32 @@ fn builtin_str(
     Ok(Expression::Atom(Atom::String(res)))
 }
 
+type CharTestFunc = fn(char, char) -> bool;
+
+fn char_test(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    ch_test: CharTestFunc,
+) -> io::Result<Expression> {
+    let mut last_ch = None;
+    for arg in args {
+        if let Expression::Atom(Atom::Char(ch)) = eval(environment, &arg)? {
+            if let Some(last_ch) = last_ch {
+                if !ch_test(last_ch, ch) {
+                    return Ok(Expression::Atom(Atom::Nil));
+                }
+            }
+            last_ch = Some(ch);
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "char= only works on chars",
+            ));
+        }
+    }
+    Ok(Expression::Atom(Atom::True))
+}
+
 pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "str-trim".to_string(),
@@ -292,6 +318,73 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str,
             "Make a new string with it's arguments.",
+        )),
+    );
+
+    data.insert(
+        "char=".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 == ch2)
+            },
+            "Test chars for equality.",
+        )),
+    );
+    data.insert(
+        "char!=".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 != ch2)
+            },
+            "Test chars for non equality.",
+        )),
+    );
+    data.insert(
+        "char>".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 > ch2)
+            },
+            "Test chars for greater than.",
+        )),
+    );
+    data.insert(
+        "char<".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 < ch2)
+            },
+            "Test chars for less than.",
+        )),
+    );
+    data.insert(
+        "char>=".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 >= ch2)
+            },
+            "Test chars for greater then or equal.",
+        )),
+    );
+    data.insert(
+        "char<=".to_string(),
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                char_test(environment, args, |ch1, ch2| ch1 <= ch2)
+            },
+            "Test chars for less than or equal.",
         )),
     );
 }
