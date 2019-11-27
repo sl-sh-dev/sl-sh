@@ -336,6 +336,16 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
 }
 
 fn parse_char(token_full: &Token) -> Result<Expression, ParseError> {
+    match &token_full.token.to_lowercase()[..] {
+        "space" => return Ok(Expression::Atom(Atom::Char(' '))),
+        "tab" => return Ok(Expression::Atom(Atom::Char('\t'))),
+        // newline should be the platform line end.
+        "newline" => return Ok(Expression::Atom(Atom::Char('\n'))),
+        "linefeed" => return Ok(Expression::Atom(Atom::Char('\n'))),
+        "return" => return Ok(Expression::Atom(Atom::Char('\r'))),
+        "backspace" => return Ok(Expression::Atom(Atom::Char('\u{0008}'))),
+        _ => {}
+    }
     if token_full.token.len() != 1 {
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",

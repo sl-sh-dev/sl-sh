@@ -132,6 +132,23 @@ fn builtin_is_string(
     ))
 }
 
+fn builtin_is_char(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            return if let Expression::Atom(Atom::Char(_)) = arg {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            };
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::Other, "char? needs one form"))
+}
+
 fn builtin_is_lambda(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -325,6 +342,10 @@ pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     data.insert(
         "string?".to_string(),
         Rc::new(Expression::make_function(builtin_is_string, "")),
+    );
+    data.insert(
+        "char?".to_string(),
+        Rc::new(Expression::make_function(builtin_is_char, "")),
     );
     data.insert(
         "lambda?".to_string(),
