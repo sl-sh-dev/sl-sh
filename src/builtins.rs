@@ -459,13 +459,15 @@ fn builtin_format(
     Ok(Expression::Atom(Atom::String(res)))
 }
 
-pub fn builtin_progn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.is_empty() {
-        Ok(Expression::Atom(Atom::Nil))
-    } else {
-        Ok(args.pop().unwrap())
+pub fn builtin_progn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut ret = Expression::Atom(Atom::Nil);
+    for arg in args {
+        ret = eval(environment, &arg)?;
     }
+    Ok(ret)
 }
 
 fn proc_set_vars2(
@@ -1434,6 +1436,54 @@ fn builtin_ns_list(
     ))
 }
 
+fn builtin_error_stack_on(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        environment.stack_on_error = true;
+        return Ok(Expression::Atom(Atom::Nil));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "error-stack-on takes no args",
+    ))
+}
+
+fn builtin_error_stack_off(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        environment.stack_on_error = false;
+        return Ok(Expression::Atom(Atom::Nil));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "error-stack-on takes no args",
+    ))
+}
+
+fn builtin_get_error(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut ret = Expression::Atom(Atom::Nil);
+    for arg in args {
+        match eval(environment, &arg) {
+            Ok(exp) => ret = exp,
+            Err(err) => {
+                let mut v = Vec::new();
+                v.push(Expression::Atom(Atom::Symbol(":error".to_string())));
+                let msg = format!("{}", err);
+                v.push(Expression::Atom(Atom::String(msg)));
+                return Ok(Expression::with_list(v));
+            }
+        }
+    }
+    Ok(ret)
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -1565,7 +1615,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "progn".to_string(),
-        Rc::new(Expression::Func(builtin_progn)),
+        Rc::new(Expression::make_special(
+            builtin_progn,
+            "Evalutate each form and return the last.",
+        )),
     );
     data.insert(
         "set".to_string(),
@@ -1722,6 +1775,27 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::make_function(
             builtin_ns_list,
             "Returns a vector of all namespaces.",
+        )),
+    );
+    data.insert(
+        "error-stack-on".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_error_stack_on,
+            "Print the eval stack on error.",
+        )),
+    );
+    data.insert(
+        "error-stack-off".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_error_stack_off,
+            "Do not print the eval stack on error.",
+        )),
+    );
+    data.insert(
+        "get-error".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_get_error,
+            "Evaluate each form (like progn) but on error return #(:error msg) instead of aborting.",
         )),
     );
 

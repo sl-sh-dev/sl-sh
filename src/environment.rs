@@ -167,6 +167,8 @@ pub struct Environment {
     pub data_in: Option<Expression>,
     pub form_type: FormType,
     pub save_exit_status: bool,
+    pub stack_on_error: bool,
+    pub error_expression: Option<Expression>,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
@@ -204,6 +206,8 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
+        stack_on_error: false,
+        error_expression: None,
         exit_code: None,
         dynamic_scope: HashMap::new(),
         root_scope,
@@ -246,6 +250,8 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
+        stack_on_error: false,
+        error_expression: None,
         exit_code: None,
         dynamic_scope: HashMap::new(),
         root_scope,

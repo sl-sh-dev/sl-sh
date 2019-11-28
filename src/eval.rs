@@ -321,13 +321,18 @@ pub fn eval<'a>(
     environment.state.eval_level += 1;
     let result = internal_eval(environment, expression);
     if let Err(_err) = &result {
-        eprintln!("{}: Error evaluting:", environment.state.eval_level,);
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        if let Err(err) = expression.pretty_printf(environment, &mut handle) {
-            eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
+        if environment.error_expression.is_none() {
+            environment.error_expression = Some(expression.clone());
         }
-        eprintln!("\n=============================================================");
+        if environment.stack_on_error {
+            eprintln!("{}: Error evaluting:", environment.state.eval_level);
+            let stderr = io::stderr();
+            let mut handle = stderr.lock();
+            if let Err(err) = expression.pretty_printf(environment, &mut handle) {
+                eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
+            }
+            eprintln!("\n=============================================================");
+        }
     }
     environment.state.eval_level -= 1;
     result

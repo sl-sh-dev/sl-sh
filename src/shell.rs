@@ -181,7 +181,21 @@ fn handle_result(
                     eprintln!("Error saving temp history: {}", err);
                 }
             }
-            eprintln!("{}", err);
+            if !environment.stack_on_error {
+                if let Some(exp) = &environment.error_expression {
+                    let exp = exp.clone();
+                    eprintln!("Error evaluting:");
+                    let stderr = io::stderr();
+                    let mut handle = stderr.lock();
+                    if let Err(err) = exp.pretty_printf(environment, &mut handle) {
+                        eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
+                    }
+                    eprintln!("");
+                }
+                eprintln!("{}", err);
+            } else {
+                eprintln!("{}", err);
+            }
         }
     }
 }
@@ -326,6 +340,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 match ast {
                     Ok(ast) => {
                         environment.borrow_mut().loose_symbols = true;
+                        environment.borrow_mut().error_expression = None;
                         let res = eval(&mut environment.borrow_mut(), &ast);
                         handle_result(&mut environment.borrow_mut(), res, &mut con, input);
                         environment.borrow_mut().loose_symbols = false;

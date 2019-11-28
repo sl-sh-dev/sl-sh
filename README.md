@@ -53,6 +53,9 @@ defmacro | | macro |
 expand-macro | | builtin |
 recur | | builtin |
 gensym | | builtin |
+error-stack-on | | builtin | Print the eval stack on error.
+error-stack-off | | builtin | Do not print the eval stack on error.
+get-error | form* | builtin | Like progn but on error return #(:error msg).
 '=' | | builtin |
 '>' | | builtin |
 '>=' | | builtin |
