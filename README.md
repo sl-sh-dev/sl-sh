@@ -197,6 +197,7 @@ str-empty? | string | builtin | Returns true if the string is empty, false (nil)
 str-nth | int string | builtin | Returns the character at the nth position.
 str-lower | string | builtin | Return the all lowercase string for provided string.
 str-upper | string | builtin | Return the all uppercase string for provided string.
+str-bytes | string | builtin | Return the bytes in a string (can be more then the chars- utf8).
 
 
 ### Char Forms

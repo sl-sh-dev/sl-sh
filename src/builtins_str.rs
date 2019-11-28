@@ -335,6 +335,23 @@ fn builtin_str_upper(
     ))
 }
 
+fn builtin_str_bytes(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::String(string)) = eval(environment, arg)? {
+                return Ok(Expression::Atom(Atom::Int(string.len() as i64)));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-bytes takes a string",
+    ))
+}
+
 fn builtin_char_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -464,6 +481,13 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_upper,
             "Get all upper case string from a string.",
+        )),
+    );
+    data.insert(
+        "str-bytes".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_bytes,
+            "Return number of bytes in a string (may be more then length).",
         )),
     );
 
