@@ -112,4 +112,28 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
             },
         )),
     );
+
+    data.insert(
+        "%".to_string(),
+        Rc::new(Expression::Func(
+            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
+                let mut args = list_to_args(environment, args, true)?;
+                let ints = parse_list_of_ints(environment, &mut args)?;
+                if ints.len() != 2 {
+                    Err(io::Error::new(io::ErrorKind::Other, "expected two ints"))
+                } else {
+                    let arg1 = ints.get(0).unwrap();
+                    let arg2 = ints.get(1).unwrap();
+                    if *arg2 == 0 {
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "expected two ints, second can not be 0",
+                        ))
+                    } else {
+                        Ok(Expression::Atom(Atom::Int(arg1 % arg2)))
+                    }
+                }
+            },
+        )),
+    );
 }

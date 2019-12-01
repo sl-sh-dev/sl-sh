@@ -450,7 +450,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     for token_full in tokens {
         let token = &token_full.token;
         match &token[..] {
-            "'" => {
+            "'" if !is_char => {
                 level += 1;
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
@@ -460,7 +460,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                     vec: quoted,
                 });
             }
-            "`" => {
+            "`" if !is_char => {
                 level += 1;
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
@@ -482,14 +482,14 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                     vec: Vec::<Expression>::new(),
                 });
             }
-            "(" => {
+            "(" if !is_char => {
                 level += 1;
                 stack.push(List {
                     list_type: ListType::List,
                     vec: Vec::<Expression>::new(),
                 });
             }
-            ")" => {
+            ")" if !is_char => {
                 level -= 1;
                 close_list(level, &mut stack)?;
                 while let Some(quote_exit_level) = qexits.pop() {
