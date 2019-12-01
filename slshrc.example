@@ -9,6 +9,8 @@
 ;(hash-set! *repl-settings* :vi_esc_sequence '("jk" 500))
 ; Use emacs keybindings (default)
 ;(hash-set! *repl-settings* :keybindings :emacs)
+; Turn on syntax highlighting at the repl
+(syntax-on)
 
 (defn parse_git_branch () (let ((branch))
 	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))

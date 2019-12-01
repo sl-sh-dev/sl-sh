@@ -291,7 +291,6 @@ fn internal_eval<'a>(
                 Ok(Expression::Atom(Atom::Symbol(s.clone())))
             } else if let Some(exp) = get_expression(environment, &s[..]) {
                 match &*exp {
-                    Expression::Func(_) => Ok(Expression::Atom(Atom::String(s.clone()))),
                     Expression::Vector(l) => Ok(Expression::Vector(l.clone())),
                     _ => {
                         let exp = &*exp;

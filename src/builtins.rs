@@ -485,10 +485,6 @@ fn proc_set_vars2(
         }
     };
     if let Expression::Atom(Atom::String(vs)) = val {
-        let vs = match expand_tilde(&vs) {
-            Some(v) => v,
-            None => vs,
-        };
         val = Expression::Atom(Atom::String(vs));
     }
     Ok((key, val))
