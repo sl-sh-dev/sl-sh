@@ -229,11 +229,10 @@ fn builtin_is_builtin(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
-            return if let Expression::Func(_) = arg {
-                Ok(Expression::Atom(Atom::True))
-            } else {
-                Ok(Expression::Atom(Atom::Nil))
+            return match eval(environment, arg)? {
+                Expression::Func(_) => Ok(Expression::Atom(Atom::True)),
+                Expression::Function(_) => Ok(Expression::Atom(Atom::True)),
+                _ => Ok(Expression::Atom(Atom::Nil)),
             };
         }
     }

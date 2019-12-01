@@ -1,12 +1,12 @@
 (ns-create 'core)
 
-(if (is-def *ns-exports*) (vec-clear! *ns-exports*))
+(if (def? '*ns-exports*) (vec-clear! *ns-exports*))
 
 (def 'defmacro (macro (name args body)
 	`(progn (def (quote ,name) (macro ,args ,body)) nil)))
 
 (defmacro ns-export (symbol) `(progn
-    (if (not (is-def *ns-exports*)) (defq *ns-exports* (vec)))
+    (if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
     (if (symbol? ,symbol)
         (vec-push! *ns-exports* (quote ,symbol))
         (if (or (list? ,symbol) (vec? ,symbol))

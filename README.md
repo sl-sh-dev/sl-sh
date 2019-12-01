@@ -47,7 +47,7 @@ and | form* | builtin | Evaluate each form left to right and stop on a nil (prod
 or | form* | builtin | Evaluate each form left to right and produce the first non-nil result (stop evaluting). Produce nil on no arguments.
 not | | builtin |
 null | | builtin |
-is-def | symbol | builtin | Return true if symbol is defined for current scope.
+def? | symbol | builtin | Return true if symbol is defined for current scope.
 macro | | builtin |
 defmacro | | macro |
 expand-macro | | builtin |
@@ -56,6 +56,9 @@ gensym | | builtin |
 error-stack-on | | builtin | Print the eval stack on error.
 error-stack-off | | builtin | Do not print the eval stack on error.
 get-error | form* | builtin | Like progn but on error return #(:error msg).
+global-scope? | | builtin | Is code running in the global (root) scope.
+to-symbol | form | builtin | Converts a string, int or float to a symbol.
+dyn | symbol value form | Sets dynamic var to symbol to value for the execution of form.
 '=' | | builtin |
 '>' | | builtin |
 '>=' | | builtin |
@@ -211,6 +214,7 @@ char>= | char+ | builtin | Return true of each provided char is greater then or 
 char<= | char+ | builtin | Return true of each provided char is less then or equal to the next.
 char-lower | char | builtin | Return the ascii lowercase char for char or char if not an ascii uppercase.
 char-upper | char | builtin | Return the ascii uppercase char for char or char if not an ascii lowercase.
+char-whitespace? | char | builtin | Return true if char is whitespace, false/nil otherwise.
 
 
 ### Shell Forms

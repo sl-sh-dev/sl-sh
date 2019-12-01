@@ -724,7 +724,7 @@ fn builtin_is_global_scope(
     if !args.is_empty() {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-global-scope take no forms",
+            "global-scope? take no forms",
         ))
     } else if environment.current_scope.len() == 1 {
         Ok(Expression::Atom(Atom::True))
@@ -945,11 +945,11 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
 }
 
 fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
+    let args = list_to_args(environment, args, true)?;
     if args.len() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-def takes one form (symbol)",
+            "def? takes one form (symbol)",
         ));
     }
     if let Expression::Atom(Atom::Symbol(s)) = &args[0] {
@@ -961,7 +961,7 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "is-def takes a symbol to lookup",
+            "def? takes a symbol to lookup",
         ))
     }
 }
@@ -1660,7 +1660,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         )),
     );
     data.insert(
-        "is-global-scope".to_string(),
+        "global-scope?".to_string(),
         Rc::new(Expression::Func(builtin_is_global_scope)),
     );
     data.insert(
@@ -1691,7 +1691,7 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     data.insert("not".to_string(), Rc::new(Expression::Func(builtin_not)));
     data.insert("null".to_string(), Rc::new(Expression::Func(builtin_not)));
     data.insert(
-        "is-def".to_string(),
+        "def?".to_string(),
         Rc::new(Expression::Func(builtin_is_def)),
     );
     data.insert(
