@@ -17,5 +17,9 @@ libc = "0.2"
 [build-dependencies]
 chrono = "0.4.7"
 
+[profile.release]
+lto = true
+#opt-level = 'z'
+
 #[patch.crates-io]
 #liner = { path = "../liner" }
