@@ -180,8 +180,8 @@
 					(str shell::*fg-red* command shell::*fg-default*)))))
 
 	(defn prtoken () (progn
-		(def 'ttok (str token))
-		(str-buf-clear! token)
+		(def 'ttok token)
+		(set 'token (str-buf ""))
 		(command-color ttok)))
 	(defn paren-open () (progn
 		(str-buf-push! out (prtoken) (paren-color plev) #\( shell::*fg-default*)
