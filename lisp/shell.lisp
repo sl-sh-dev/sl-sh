@@ -151,8 +151,8 @@
 (defn __line_handler (line) (progn
 	(def 'plev 0)
 	(def 'ch nil)
-	(def 'out (str ""))
-	(def 'token (str ""))
+	(def 'out (str-buf ""))
+	(def 'token (str-buf ""))
 	(def 'tok-command t)
 
 	(defn func? (com) (progn
@@ -180,22 +180,22 @@
 					(str shell::*fg-red* command shell::*fg-default*)))))
 
 	(defn prtoken () (progn
-		(def 'ttok token)
-		(set 'token (str ""))
+		(def 'ttok (str token))
+		(str-buf-clear! token)
 		(command-color ttok)))
 	(defn paren-open () (progn
-		(set 'out (str out (prtoken) (paren-color plev) #\( shell::*fg-default*))
+		(str-buf-push! out (prtoken) (paren-color plev) #\( shell::*fg-default*)
 		(set 'plev (+ plev 1))
 		(set 'tok-command t)))
 	(defn paren-close ()
 		(if (> plev 0)
 			(progn
 				(set 'plev (- plev 1))
-				(set 'out (str out (prtoken) (paren-color plev) #\) shell::*fg-default*)))
-			(set 'out (str out (prtoken) shell::*fg-red* #\) shell::*fg-default*))))
+				(str-buf-push! out (prtoken) (paren-color plev) #\) shell::*fg-default*))
+			(str-buf-push! out (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
 
 	(defn whitespace (ch) (progn
-		(set 'out (str out (prtoken) ch))
+		(str-buf-push! out (prtoken) ch)
 		(set 'tok-command nil)))
 
 	(dotimesi i (length line)
@@ -207,9 +207,9 @@
 				(paren-close)
 				(if (char-whitespace? ch)
 					(whitespace ch)
-					(set 'token (str token ch)))))))
-	(set 'out (str out (prtoken)))
-	out))
+					(str-buf-push! token ch))))))
+	(str-buf-push! out (prtoken))
+	(str out)))
 	nil))
 
 ;; Turn off syntax highlighting at the repl.

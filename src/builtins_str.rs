@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -94,6 +95,113 @@ fn builtin_str_split(
     Err(io::Error::new(
         io::ErrorKind::Other,
         "str-split takes two forms",
+    ))
+}
+
+fn builtin_str_rsplit(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(pat) = args.next() {
+        if let Some(text) = args.next() {
+            if args.next().is_none() {
+                let pat = eval(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
+                let text = eval(environment, text)?;
+                let text = as_string(environment, &text)?;
+                let mut split_list: Vec<Expression> = Vec::new();
+                for s in text.rsplit(&pat) {
+                    split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                }
+                return Ok(Expression::with_list(split_list));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-rsplit takes two forms",
+    ))
+}
+
+fn builtin_str_splitn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(n) = args.next() {
+        if let Some(pat) = args.next() {
+            if let Some(text) = args.next() {
+                if args.next().is_none() {
+                    let n = if let Expression::Atom(Atom::Int(n)) = eval(environment, n)? {
+                        if n < 0 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-splitn first form must be a positive integer",
+                            ));
+                        }
+                        n
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-splitn first form must be an integer",
+                        ));
+                    };
+                    let pat = eval(environment, pat)?;
+                    let pat = as_string(environment, &pat)?;
+                    let text = eval(environment, text)?;
+                    let text = as_string(environment, &text)?;
+                    let mut split_list: Vec<Expression> = Vec::new();
+                    for s in text.splitn(n as usize, &pat) {
+                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                    }
+                    return Ok(Expression::with_list(split_list));
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-splitn takes three forms",
+    ))
+}
+
+fn builtin_str_rsplitn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(n) = args.next() {
+        if let Some(pat) = args.next() {
+            if let Some(text) = args.next() {
+                if args.next().is_none() {
+                    let n = if let Expression::Atom(Atom::Int(n)) = eval(environment, n)? {
+                        if n < 0 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-splitn first form must be a positive integer",
+                            ));
+                        }
+                        n
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-rsplitn first form must be an integer",
+                        ));
+                    };
+                    let pat = eval(environment, pat)?;
+                    let pat = as_string(environment, &pat)?;
+                    let text = eval(environment, text)?;
+                    let text = as_string(environment, &text)?;
+                    let mut split_list: Vec<Expression> = Vec::new();
+                    for s in text.rsplitn(n as usize, &pat) {
+                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                    }
+                    return Ok(Expression::with_list(split_list));
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-rsplitn takes three forms",
     ))
 }
 
@@ -257,13 +365,16 @@ fn builtin_str_empty(
 ) -> io::Result<Expression> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::String(string)) = eval(environment, &string)? {
-                return if string.is_empty() {
-                    Ok(Expression::Atom(Atom::True))
-                } else {
-                    Ok(Expression::Atom(Atom::Nil))
-                };
-            }
+            let string = match eval(environment, &string)? {
+                Expression::Atom(Atom::String(string)) => string,
+                Expression::Atom(Atom::StringBuf(string)) => string.borrow().to_string(),
+                _ => "".to_string(),
+            };
+            return if string.is_empty() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::Atom(Atom::Nil))
+            };
         }
     }
     Err(io::Error::new(
@@ -280,17 +391,20 @@ fn builtin_str_nth(
         if let Some(string) = args.next() {
             if args.next().is_none() {
                 if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
-                    if let Expression::Atom(Atom::String(string)) = eval(environment, &string)? {
-                        for (i, ch) in string.chars().enumerate() {
-                            if i as i64 == idx {
-                                return Ok(Expression::Atom(Atom::Char(ch)));
-                            }
+                    let string = match eval(environment, &string)? {
+                        Expression::Atom(Atom::String(string)) => string,
+                        Expression::Atom(Atom::StringBuf(string)) => string.borrow().to_string(),
+                        _ => "".to_string(),
+                    };
+                    for (i, ch) in string.chars().enumerate() {
+                        if i as i64 == idx {
+                            return Ok(Expression::Atom(Atom::Char(ch)));
                         }
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-nth index out of range",
-                        ));
                     }
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "str-nth index out of range",
+                    ));
                 }
             }
         }
@@ -305,11 +419,19 @@ fn builtin_str_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    if let Some(ch) = args.next() {
+    if let Some(string) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::String(string)) = eval(environment, ch)? {
-                return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())));
-            }
+            match eval(environment, &string)? {
+                Expression::Atom(Atom::String(string)) => {
+                    return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())))
+                }
+                Expression::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::Atom(Atom::String(
+                        string.borrow().to_ascii_lowercase(),
+                    )))
+                }
+                _ => {}
+            };
         }
     }
     Err(io::Error::new(
@@ -322,11 +444,19 @@ fn builtin_str_upper(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    if let Some(ch) = args.next() {
+    if let Some(string) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::String(string)) = eval(environment, ch)? {
-                return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())));
-            }
+            match eval(environment, &string)? {
+                Expression::Atom(Atom::String(string)) => {
+                    return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())))
+                }
+                Expression::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::Atom(Atom::String(
+                        string.borrow().to_ascii_uppercase(),
+                    )))
+                }
+                _ => {}
+            };
         }
     }
     Err(io::Error::new(
@@ -341,15 +471,130 @@ fn builtin_str_bytes(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::String(string)) = eval(environment, arg)? {
-                return Ok(Expression::Atom(Atom::Int(string.len() as i64)));
-            }
+            match eval(environment, &arg)? {
+                Expression::Atom(Atom::String(string)) => {
+                    return Ok(Expression::Atom(Atom::Int(string.len() as i64)))
+                }
+                Expression::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::Atom(Atom::Int(string.borrow().len() as i64)))
+                }
+                _ => {}
+            };
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
         "str-bytes takes a string",
     ))
+}
+
+fn builtin_str_buf(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let old_out = environment.state.stdout_status.clone();
+    let old_err = environment.state.stderr_status.clone();
+    environment.state.stdout_status = Some(IOState::Pipe);
+    environment.state.stderr_status = Some(IOState::Pipe);
+
+    // Get out of a pipe for the str call if in one...
+    let data_in = environment.data_in.clone();
+    environment.data_in = None;
+    let in_pipe = environment.in_pipe;
+    environment.in_pipe = false;
+    let pipe_pgid = environment.state.pipe_pgid;
+    environment.state.pipe_pgid = None;
+
+    // Do not use ?, make sure to reset environment state even on error.
+    let mut res = String::new();
+    for a in args {
+        match eval(environment, &a) {
+            Err(err) => {
+                environment.state.stdout_status = old_out;
+                environment.state.stderr_status = old_err;
+                return Err(err);
+            }
+            Ok(a) => {
+                match as_string(environment, &a) {
+                    Err(err) => {
+                        environment.state.stdout_status = old_out;
+                        environment.state.stderr_status = old_err;
+                        return Err(err);
+                    }
+                    Ok(s) => res.push_str(&s),
+                };
+            }
+        }
+    }
+    environment.state.stdout_status = old_out;
+    environment.state.stderr_status = old_err;
+    environment.data_in = data_in;
+    environment.in_pipe = in_pipe;
+    environment.state.pipe_pgid = pipe_pgid;
+    Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
+        res,
+    )))))
+}
+
+fn builtin_str_buf_push(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    // Do not use ?, make sure to reset environment state even on error.
+    if let Some(arg0) = args.next() {
+        if let Expression::Atom(Atom::StringBuf(res_in)) = eval(environment, arg0)? {
+            let mut res = res_in.borrow_mut();
+            for a in args {
+                let a = eval(environment, &a)?;
+                res.push_str(&as_string(environment, &a)?);
+            }
+            Ok(Expression::Atom(Atom::StringBuf(res_in.clone())))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "str-buf-push! takes a string buffer as first form",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "str-buf-push! takes at least one form",
+        ))
+    }
+}
+
+fn builtin_str_buf_clear(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    // Do not use ?, make sure to reset environment state even on error.
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            if let Expression::Atom(Atom::StringBuf(res_in)) = eval(environment, arg0)? {
+                let mut res = res_in.borrow_mut();
+                for a in args {
+                    let a = eval(environment, &a)?;
+                    res.push_str(&as_string(environment, &a)?);
+                }
+                Ok(Expression::Atom(Atom::StringBuf(res_in.clone())))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "str-buf-clear! takes a string buffer as first form",
+                ))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "str-buf-clear! takes only one form",
+            ))
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "str-buf-clear! takes one form",
+        ))
+    }
 }
 
 fn builtin_char_lower(
@@ -458,6 +703,27 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         )),
     );
     data.insert(
+        "str-rsplit".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_rsplit,
+            "Use a pattern to split a string into reverse order.",
+        )),
+    );
+    data.insert(
+        "str-splitn".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_splitn,
+            "Use a pattern to split a string with at most n items.",
+        )),
+    );
+    data.insert(
+        "str-rsplitn".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_rsplitn,
+            "Use a pattern to split a string with at most n items returned in reverse order.",
+        )),
+    );
+    data.insert(
         "str-cat-list".to_string(),
         Rc::new(Expression::Func(builtin_str_cat_list)),
     );
@@ -509,6 +775,27 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_bytes,
             "Return number of bytes in a string (may be more then length).",
+        )),
+    );
+    data.insert(
+        "str-buf".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_buf,
+            "Make a new string buffer with it's arguments.",
+        )),
+    );
+    data.insert(
+        "str-buf-push!".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_buf_push,
+            "Push the forms (as strings) onto the first argument (a string buffer).",
+        )),
+    );
+    data.insert(
+        "str-buf-clear!".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_buf_clear,
+            "Clear a string buffer.",
         )),
     );
 

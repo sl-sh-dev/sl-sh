@@ -96,6 +96,14 @@ fn builtin_path_exists(
         } else {
             Ok(Expression::Atom(Atom::Nil))
         }
+    } else if let Expression::Atom(Atom::StringBuf(p)) = &args[0] {
+        let pb = p.borrow();
+        let path = Path::new(&*pb);
+        if path.exists() {
+            Ok(Expression::Atom(Atom::True))
+        } else {
+            Ok(Expression::Atom(Atom::Nil))
+        }
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,

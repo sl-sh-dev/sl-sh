@@ -158,6 +158,10 @@ fn handle_result(
                 if let Err(err) = con.history.push(input.into()) {
                     eprintln!("Error saving history: {}", err);
                 }
+                environment.root_scope.borrow_mut().data.insert(
+                    "*last-command*".to_string(),
+                    Rc::new(Expression::Atom(Atom::String(input.to_string()))),
+                );
             }
             match exp {
                 Expression::Atom(Atom::Nil) => { /* don't print nil */ }

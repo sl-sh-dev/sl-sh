@@ -739,6 +739,9 @@ fn builtin_to_symbol(environment: &mut Environment, args: &[Expression]) -> io::
     } else {
         match &args[0] {
             Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
+            Expression::Atom(Atom::StringBuf(s)) => {
+                Ok(Expression::Atom(Atom::Symbol(s.borrow().clone())))
+            }
             Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
             Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(format!("{}", i)))),
             Expression::Atom(Atom::Float(f)) => {

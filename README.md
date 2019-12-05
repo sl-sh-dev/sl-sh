@@ -193,6 +193,9 @@ str-ltrim | string | builtin | Left trims string.
 str-rtrim | string | builtin | Right trims string.
 str-replace | string/old/new | builtin | Produces a new string by replacing all occurances of old with new.
 str-split | split_string/string | builtin | Produces a list by splitting the string on the provided split_string.
+str-rsplit | split_string/string | builtin | Produces a list by splitting the string on the provided split_string in reverse order.
+str-splitn | n/split_string/string | builtin | Produces a list by splitting the string on the provided split_string with at most n items.
+str-rsplitn | n/split_string/string | builtin | Produces a list by splitting the string on the provided split_string with at most n items in reverse order.
 str-cat-list | string/list | builtin | Produces a string by joining a list with the provided string as a divider.
 str-sub | index/length/string | builtin | Returns a new substring of provided string.
 str-append | string string | builtin | Returns a new string from appending two other strings.
@@ -201,6 +204,9 @@ str-nth | int string | builtin | Returns the character at the nth position.
 str-lower | string | builtin | Return the all lowercase string for provided string.
 str-upper | string | builtin | Return the all uppercase string for provided string.
 str-bytes | string | builtin | Return the bytes in a string (can be more then the chars- utf8).
+str-buf | form* | builtin | Creates a new string buffer with the values of it's arguments.  Any command's run under it will have stdout captured as a string.  Use a string buffer to build strings without excess allocations.
+str-buf-push! | form* | builtin | First form is a string buffer that the following forms are appended to.
+str-buf-clear! | string buffer | builtin | Clear the provided string buffer.
 
 
 ### Char Forms
