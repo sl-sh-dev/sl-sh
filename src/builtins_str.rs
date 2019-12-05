@@ -572,10 +572,7 @@ fn builtin_str_buf_clear(
         if args.next().is_none() {
             if let Expression::Atom(Atom::StringBuf(res_in)) = eval(environment, arg0)? {
                 let mut res = res_in.borrow_mut();
-                for a in args {
-                    let a = eval(environment, &a)?;
-                    res.push_str(&as_string(environment, &a)?);
-                }
+                res.clear();
                 Ok(Expression::Atom(Atom::StringBuf(res_in.clone())))
             } else {
                 Err(io::Error::new(
