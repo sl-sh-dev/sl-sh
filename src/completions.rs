@@ -207,7 +207,7 @@ impl Completer for ShellCompleter {
         }
     }
 
-    fn on_event<W: std::io::Write>(&mut self, event: Event<'_, '_, W>) {
+    fn on_event(&mut self, event: Event<'_, '_>) {
         self.args.clear();
         if let EventKind::BeforeComplete = event.kind {
             let (words, pos) = event.editor.get_words_and_cursor_position();

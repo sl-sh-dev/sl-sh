@@ -48,7 +48,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "liner"
 version = "0.5.0"
-source = "git+https://gitlab.redox-os.org/sstanfield/liner#90bc1ccdf01642136864b14be43e231ae3849570"
+source = "git+https://gitlab.redox-os.org/sstanfield/liner#4c6cf29dd883da9b7d83b826710bdcf6f4161a28"
 dependencies = [
  "bytecount 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "termion 1.5.4 (git+https://gitlab.redox-os.org/redox-os/termion)",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.7.16"
+version = "0.7.17"
 dependencies = [
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

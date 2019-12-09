@@ -12,6 +12,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use liner::keymap;
 use liner::ColorClosure;
 use liner::Context;
 
@@ -23,6 +24,18 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::reader::*;
 use crate::types::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Keys {
+    Vi,
+    Emacs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ReplSettings {
+    key_bindings: Keys,
+    vi_esc_sequence: Option<(char, char, u32)>,
+}
 
 fn load_user_env(environment: &mut Environment, home: &str) {
     let mut load_path = Vec::new();
@@ -204,14 +217,18 @@ fn handle_result(
     }
 }
 
-fn apply_repl_settings(repl_settings: Rc<Expression>, con: &mut Context) {
+fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
+    let mut ret = ReplSettings {
+        key_bindings: Keys::Emacs,
+        vi_esc_sequence: None,
+    };
     if let Expression::HashMap(repl_settings) = &*repl_settings {
         if let Some(keybindings) = repl_settings.borrow().get(":keybindings") {
             let keybindings = keybindings.clone();
             if let Expression::Atom(Atom::Symbol(keybindings)) = &*keybindings {
                 match &keybindings[..] {
-                    ":vi" => con.key_bindings = liner::KeyBindings::Vi,
-                    ":emacs" => con.key_bindings = liner::KeyBindings::Emacs,
+                    ":vi" => ret.key_bindings = Keys::Vi,
+                    ":emacs" => ret.key_bindings = Keys::Emacs,
                     _ => eprintln!("Invalid keybinding setting: {}", keybindings),
                 }
             }
@@ -230,7 +247,7 @@ fn apply_repl_settings(repl_settings: Rc<Expression>, con: &mut Context) {
                 if let Some(Expression::Atom(Atom::Int(ms))) = i.next() {
                     if keys.len() == 2 {
                         let mut chars = keys.chars();
-                        con.vi_esc_sequence =
+                        ret.vi_esc_sequence =
                             Some((chars.next().unwrap(), chars.next().unwrap(), *ms as u32));
                     } else {
                         eprintln!(":vi_esc_sequence first value should be a string of two characters (two key sequence for escape)");
@@ -245,6 +262,7 @@ fn apply_repl_settings(repl_settings: Rc<Expression>, con: &mut Context) {
             }
         }
     }
+    ret
 }
 
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
@@ -253,8 +271,6 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     con.history.inc_append = true;
     con.history.load_duplicates = false;
     con.history.share = true;
-    con.key_bindings = liner::KeyBindings::Emacs;
-    con.vi_esc_sequence = None;
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
@@ -299,8 +315,28 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             "*last-status*".to_string(),
             Rc::new(Expression::Atom(Atom::Int(0))),
         );
+    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
+    let mut current_repl_settings = ReplSettings {
+        key_bindings: Keys::Emacs,
+        vi_esc_sequence: None,
+    };
     loop {
-        apply_repl_settings(repl_settings.clone(), &mut con);
+        let new_repl_settings = apply_repl_settings(repl_settings.clone());
+        keymap = if current_repl_settings != new_repl_settings {
+            match new_repl_settings.key_bindings {
+                Keys::Vi => {
+                    let mut vi = keymap::Vi::new();
+                    if let Some((ch1, ch2, timeout)) = new_repl_settings.vi_esc_sequence {
+                        vi.set_esc_sequence(ch1, ch2, timeout);
+                    }
+                    Box::new(vi)
+                }
+                Keys::Emacs => Box::new(keymap::Emacs::new()),
+            }
+        } else {
+            keymap
+        };
+        current_repl_settings = new_repl_settings;
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
         // Clear the SIGINT if one occured.
@@ -319,7 +355,12 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             None
         };
         let color_closure = get_color_closure(environment.clone());
-        match con.read_line(prompt, color_closure, &mut shell_completer) {
+        match con.read_line(
+            prompt,
+            color_closure,
+            &mut shell_completer,
+            Some(&mut *keymap),
+        ) {
             Ok(input) => {
                 let input = input.trim();
                 if input.is_empty() {
