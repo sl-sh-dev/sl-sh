@@ -488,6 +488,31 @@ fn builtin_str_bytes(
     ))
 }
 
+fn builtin_str_starts_with(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(pat) = args.next() {
+        if let Some(text) = args.next() {
+            if args.next().is_none() {
+                let pat = eval(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
+                let text = eval(environment, text)?;
+                let text = as_string(environment, &text)?;
+                return if text.starts_with(&pat) {
+                    Ok(Expression::Atom(Atom::True))
+                } else {
+                    Ok(Expression::Atom(Atom::Nil))
+                };
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-start-with takes two forms",
+    ))
+}
+
 fn builtin_str_buf(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -772,6 +797,13 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_bytes,
             "Return number of bytes in a string (may be more then length).",
+        )),
+    );
+    data.insert(
+        "str-starts-with".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_starts_with,
+            "True if the second form starts with the first (as strings).",
         )),
     );
     data.insert(

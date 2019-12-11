@@ -21,6 +21,9 @@ fn build_map(
                 Expression::Atom(Atom::String(s)) => {
                     map.insert(s.to_string(), Rc::new(val.borrow().clone()))
                 }
+                Expression::Atom(Atom::StringBuf(s)) => {
+                    map.insert(s.borrow().to_string(), Rc::new(val.borrow().clone()))
+                }
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -81,6 +84,11 @@ fn builtin_hash_set(
                                 map.borrow_mut().insert(s, Rc::new(val));
                                 return Ok(Expression::HashMap(map.clone()));
                             }
+                            Expression::Atom(Atom::StringBuf(s)) => {
+                                map.borrow_mut()
+                                    .insert(s.borrow().to_string(), Rc::new(val));
+                                return Ok(Expression::HashMap(map.clone()));
+                            }
                             _ => {
                                 return Err(io::Error::new(
                                     io::ErrorKind::Other,
@@ -124,6 +132,9 @@ fn builtin_hash_remove(
                         Expression::Atom(Atom::String(s)) => {
                             return do_rem(&mut map.borrow_mut(), &s);
                         }
+                        Expression::Atom(Atom::StringBuf(s)) => {
+                            return do_rem(&mut map.borrow_mut(), &s.borrow());
+                        }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -166,6 +177,9 @@ fn builtin_hash_get(
                         Expression::Atom(Atom::String(s)) => {
                             return do_get(&map.borrow(), &s);
                         }
+                        Expression::Atom(Atom::StringBuf(s)) => {
+                            return do_get(&map.borrow(), &s.borrow());
+                        }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -207,10 +221,16 @@ fn builtin_hash_haskey(
                         Expression::Atom(Atom::String(s)) => {
                             return do_has(&map.borrow(), &s);
                         }
+                        Expression::Atom(Atom::StringBuf(s)) => {
+                            return do_has(&map.borrow(), &s.borrow());
+                        }
                         _ => {
+                            let msg =
+                                format!("hash-haskey key can only be a symbol or string {:?}", key);
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
-                                "hash-haskey key can only be a symbol or string",
+                                msg,
+                                //"hash-haskey key can only be a symbol or string",
                             ));
                         }
                     }
