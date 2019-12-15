@@ -1,0 +1,232 @@
+;; This is an example config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
+(core::ns-import 'core)
+(ns-import 'shell)
+
+;; custom env settings {{{
+	;; use vi keybindings on cli
+	(hash-set! *repl-settings* :keybindings :vi)
+	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
+
+	;; syntax highlighting
+	(syntax-on)
+
+	(error-stack-on)
+;; }}}
+
+;; quality of life {{{
+	(alias :q (exit))
+
+	(alias ls (lsd))
+
+	;; betterer ls
+	(alias ll (lsd -haltr))
+
+	;; env var la as Last Arg executed from the last command
+	(alias la (first (str-rsplitn 2 " " *last-command*)))
+	;;(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
+
+	(defn cl (&rest args)
+		(if (= (length args) 1)
+			(and (cd (first args)) (ls .))
+			(err "I take one argument.")))
+	;; (alias cd (cl))  this line blows the stack
+
+	;; better cp
+	(defn cp (&rest args)
+		(progn
+			(println 'meow)
+		(if (= (length args) 2)
+			(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@args))
+			(if (and (= (length args) 3) (= (first args) "-r"))
+				(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@(rest args)))
+				(eval `(/sbin/cp ,@(rest args)))))))
+
+	;; stdin to clipboard
+	(alias sc (str-trim (xclip -selection c)))
+
+	;;put my pwd in my clipboard
+	(alias this (| (pwd) (sc)))
+
+	;;gradle build
+	(defn g (&rest args)
+		(let ((log-out-file "last_build.log"))
+		(progn
+			(|
+				(defq gradle-proc (eval (append '(./gradlew) args)))
+				(tee log-out-file)
+			)
+			(defq gradle-ret-code (wait gradle-proc))
+			(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+			(defq proj-name (str (basename $PWD)))
+			(if (= 0 gradle-ret-code)
+				(nss-pass (str "PASS! - " proj-name) log-out-txt)
+				(nss-fail (str "FAIL! - " proj-name) log-out-txt))
+			(= 0 gradle-ret-code))))
+
+	;; TODO zsh pipes to slush pipes, test if zsh str has | .
+	;; TODO add cmd to history
+	;; zsh history search
+	(defn zh ()
+		(progn
+			(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+			(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
+
+	(defn stripcolor (&rest args)
+		(if (< (length args) 2)
+			(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
+			(err "Only accepts 0 or 1 arguments")))
+
+	;; all find . -iname &rest
+	(defn ifind (&rest args)
+	(if (< (length args) 2)
+		(| (find . -iname (str (nth 0 args))))
+		(err "Only accepts 0 or 1 arguments")))
+
+	;;results feed into vim
+	(defn vimifind (&rest args)
+		(if (< (length args) 2)
+			(let
+				((vimargs (str-split
+					" "
+					(str-trim (str (| (find . -iname (nth 0 args)) (tr "\n" " ")))))))
+				(progn
+					`(loose-symbols (vim ,@vimargs))))
+			(err "Only accepts 0 or 1 arguments")))
+;; }}}
+
+;; notification helpers {{{
+	(defn persist-nss (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=system-software-update))
+			(err "takes 2 arguments")))
+
+	(defn nss-pass (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=face-wink))
+			(err "takes 2 arguments")))
+
+	(defn nss-fail (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=process-stop))
+			(err "takes 2 arguments")))
+
+	;; fun, persistent notify send!
+	(defn pnss (&rest args)
+		(if (> (length args) 1)
+			(err "I take one fucking argument dude.")
+			(persist-nss (nth 0 args) (str (fortune)))))
+
+	;;tell me about it!
+	(defn tmai ()
+		(pnss (str "Last program exit status: " *last-status* ".")))
+;; }}}
+
+;; tmux aliases {{{
+	(alias tmuxls (tmux list-sessions))
+
+	(alias tmuxnew (tmux new -s))
+
+	(alias tmuxkill (tmux kill-session -t))
+
+	(defn tmuxopen (&rest args)
+		(if (= (length args) 1)
+			(progn
+				(defq tmux-ret-code (tmux a -t (first args)))
+				(if (= 0 tmux-ret-code)
+					0
+					(tmuxnew (first args))))
+			(err "Takes one argument, name of tmux session to create.")))
+;; }}}
+
+;; time helpers {{{
+	;; epoch in milliseconds
+	(alias epochms (| (date +%s%N) (cut -b1-13)))
+
+	(defn datest ()
+		(let-env ((TZ ":America/New_York"))
+		 (date)))
+
+	;; takes epock IN SECONDS and converts to nice date time
+	(defn fromepoch (time)
+		(date -d (str "@" time)))
+
+	(defn timestamp ()
+	(date +%Y%m%d_%H%M%S))
+;; }}}
+
+;; git helpers {{{
+	(defn git-branches ()
+		(str-split " " (str-trim (str (| (git branch --all --format="%(refname:short)") (tr "\n" " "))))))
+
+	(defn git-modified ()
+		(str-split " " (str-trim (str (| (git diff --name-status) (cut -f2) (tr "\n" " "))))))
+
+	(defn git-checkout ()
+		(append (git-modified) (git-branches)))
+;;; }}}
+
+;; prompt {{{
+	(defn get_pwd ()
+		(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
+
+	(defn path_list_trunc (plist)
+		(if (> (length plist) 1)
+			(if (> (length (first plist)) 0)
+				(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+				(path_list_trunc (rest plist)))
+			plist))
+
+	(defn smaller_path (dir)
+		(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
+
+	(defn set_prompt_tail ()
+		(if (= *last-status* 0) "\x1b[32m☭ >\x1b[39m " (str "\x1b[31m(" *last-status* ")☭ >\x1b[39m ")))
+
+	(defn parse_git_branch () (let ((branch))
+		(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
+		(if (= branch "")
+			(str "")
+			(str "(" (str-trim branch) ")"))))
+
+	;; prompt ensures
+	;;	1. always a new line above prompt
+	;;	2. if pushd has been used displays in reverse order dirs to popd
+	;;	3. current path
+	;;	4. if in git dir display current branch
+	;;	5. cursor on near empty line
+	(defn __prompt ()
+		(progn
+			(str
+				"\n"
+				(if (> (length (get-dirs)) 0)
+					(str (map! smaller_path (reverse (get-dirs))))
+					"")
+				"\n" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+				(set_prompt_tail))))
+;; }}}
+
+;; completions {{{
+	(defn git-completion (args)
+		(match (first args)
+			('checkout (git-checkout))
+			(nil 'default)))
+
+	;; Completion hooks, the match is for the command and then custom completions can be returned.
+	(defn __completion_hook (&rest args)
+		(match (first args)
+			('cd 'path)
+			('ls 'default)
+			('git (let ((subcommands (rest args)))
+				(if (vec-empty? subcommands)
+					'default
+					(git-completion subcommands))))
+			(nil 'default)))
+;; }}}
+
+;; i'm fun {{{
+	(println "		Hey, hey, hey. Don't be mean.")
+	(println "		We don't have to be mean because,")
+	(println "		remember, no matter where you go,")
+	(println "		there you are.")
+	(println "			- Buckaroo Banzai")
+;; }}}
