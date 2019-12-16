@@ -27,9 +27,10 @@
 
 	(defn cl (&rest args)
 		(if (= (length args) 1)
-			(and (cd (first args)) (ls .))
+			(and (root::cd (first args)) (ls .))
 			(err "I take one argument.")))
-	;; (alias cd (cl))  this line blows the stack
+
+	(alias cd (cl))
 
 	;; better cp
 	(defn cp (&rest args)
