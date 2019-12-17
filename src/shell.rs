@@ -265,6 +265,43 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
     ret
 }
 
+fn exec_hook(environment: &mut Environment, input: String) -> String {
+    if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
+        let exp = match *exec_exp {
+            Expression::Atom(Atom::Lambda(_)) => {
+                let mut v = Vec::with_capacity(2);
+                v.push(Expression::Atom(Atom::Symbol("__exec_hook".to_string())));
+                v.push(Expression::Atom(Atom::String(input.clone())));
+                Rc::new(Expression::with_list(v))
+            }
+            _ => {
+                eprintln!("WARNING: __exec_hook not a lambda, ignoring.");
+                return input;
+            }
+        };
+        match eval(environment, &exp) {
+            Ok(res) => match res {
+                Expression::Atom(Atom::String(s)) => s.clone(),
+                Expression::Atom(Atom::StringBuf(s)) => s.borrow().clone(),
+                Expression::Atom(Atom::Nil) => "".to_string(),
+                _ => {
+                    eprintln!(
+                        "WARNING: unexpected result from __exec_hook, {:?}, ignoring.",
+                        res
+                    );
+                    input
+                }
+            },
+            Err(err) => {
+                eprintln!("ERROR calling __exec_hook: {}", err);
+                input
+            }
+        }
+    } else {
+        input
+    }
+}
+
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut con = Context::new();
     con.history.append_duplicate_entries = false;
@@ -314,6 +351,15 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         .insert(
             "*last-status*".to_string(),
             Rc::new(Expression::Atom(Atom::Int(0))),
+        );
+    environment
+        .borrow_mut()
+        .root_scope
+        .borrow_mut()
+        .data
+        .insert(
+            "*last-command*".to_string(),
+            Rc::new(Expression::Atom(Atom::String("".to_string()))),
         );
     let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
     let mut current_repl_settings = ReplSettings {
@@ -366,6 +412,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 if input.is_empty() {
                     continue;
                 }
+                let input = exec_hook(&mut environment.borrow_mut(), input.to_string());
                 let add_parens = !(input.starts_with('(')
                     || input.starts_with('\'')
                     || input.starts_with('`')
@@ -381,13 +428,13 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                         "*last-status*".to_string(),
                         Rc::new(Expression::Atom(Atom::Int(i64::from(0)))),
                     );
-                let ast = read(input, add_parens);
+                let ast = read(&input, add_parens);
                 match ast {
                     Ok(ast) => {
                         environment.borrow_mut().loose_symbols = true;
                         environment.borrow_mut().error_expression = None;
                         let res = eval(&mut environment.borrow_mut(), &ast);
-                        handle_result(&mut environment.borrow_mut(), res, &mut con, input);
+                        handle_result(&mut environment.borrow_mut(), res, &mut con, &input);
                         environment.borrow_mut().loose_symbols = false;
                     }
                     Err(err) => {

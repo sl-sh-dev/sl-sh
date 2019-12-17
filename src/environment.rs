@@ -178,7 +178,7 @@ pub struct Environment {
     // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
     pub root_scope: Rc<RefCell<Scope>>,
-    // Use as a stack of scopes, entering a new pushes and it get popped on exit
+    // Use as a stack of scopes, entering a new pushes and it gets popped on exit
     // The actual lookups are done using the scope and it's outer chain NOT this stack.
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
     // Map of all the created namespaces.

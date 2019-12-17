@@ -93,24 +93,9 @@ impl ShellCompleter {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        if self
-            .environment
-            .borrow()
-            .root_scope
-            .borrow()
-            .data
-            .contains_key("__completion_hook")
-        {
-            let mut exp = self
-                .environment
-                .borrow()
-                .root_scope
-                .borrow()
-                .data
-                .get("__completion_hook")
-                .unwrap()
-                .clone();
-            exp = match *exp {
+        let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
+        if let Some(comp_exp) = comp_exp {
+            let exp = match *comp_exp {
                 Expression::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     v.push(Expression::Atom(Atom::Symbol(
@@ -143,6 +128,14 @@ impl ShellCompleter {
                         Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
+                                let s = l.to_string();
+                                v.push(s);
+                            }
+                            HookResult::UseList(v)
+                        }
+                        Expression::Pair(_, _) => {
+                            let mut v = Vec::new();
+                            for l in res.iter() {
                                 let s = l.to_string();
                                 v.push(s);
                             }
