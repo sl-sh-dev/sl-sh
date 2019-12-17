@@ -148,12 +148,14 @@
 ;; Turn on syntax highlighting at the repl.
 (defmacro syntax-on  () '(progn
 ; Syntax highlight the supplied line.
-(defn __line_handler (line) (progn
-	(def 'plev 0)
-	(def 'ch nil)
-	(def 'out (str-buf ""))
-	(def 'token (str-buf ""))
-	(def 'tok-command t)
+(def '__line_handler nil)
+(let ((plev 0)
+	(ch nil)
+	(bad-syms (make-hash))
+	(sys-syms (make-hash))
+	(out (str-buf ""))
+	(token (str-buf ""))
+	(tok-command t))
 
 	(defn func? (com) (progn
 		(def 'com-sym (to-symbol com))
@@ -167,6 +169,15 @@
 			(if (= col 1) shell::*fg-cyan*
 				(if (= col 2) shell::*fg-yellow*
 					(if (= col 3) shell::*fg-blue*))))))
+
+	(defn my-sys-command? (command) (progn
+		(def 'ret nil)
+		(if (hash-haskey sys-syms command)
+			(set 'ret t)
+			(if (not (hash-haskey bad-syms command)) (progn
+				(set 'ret (sys-command? command))
+				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
+		ret))
 
 	(defn command-color (command)
 		(if (not tok-command)
@@ -184,33 +195,43 @@
 		(set 'token (str-buf ""))
 		(command-color ttok)))
 	(defn paren-open () (progn
-		(str-buf-push! out (prtoken) (paren-color plev) #\( shell::*fg-default*)
+		(def 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
 		(set 'plev (+ plev 1))
-		(set 'tok-command t)))
+		(set 'tok-command t)
+		ret))
 	(defn paren-close ()
 		(if (> plev 0)
 			(progn
 				(set 'plev (- plev 1))
-				(str-buf-push! out (prtoken) (paren-color plev) #\) shell::*fg-default*))
-			(str-buf-push! out (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
+				(str (prtoken) (paren-color plev) #\) shell::*fg-default*))
+			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
 
 	(defn whitespace (ch) (progn
-		(str-buf-push! out (prtoken) ch)
-		(set 'tok-command nil)))
+		(def 'ret (str (prtoken) ch))
+		;(def 'ret (str token ch))
+		(set 'token (str-buf ""))
+		(set 'tok-command nil)
+		ret))
 
-	(dotimesi i (length line)
-		(progn
-		(set 'ch (str-nth i line))
-		(if (char= ch #\()
-			(paren-open)
-			(if (char= ch #\))
-				(paren-close)
-				(if (char-whitespace? ch)
-					(whitespace ch)
-					(str-buf-push! token ch))))))
-	(str-buf-push! out (prtoken))
-	(str out)))
-	nil))
+	(setfn __line_handler (line) (progn
+		(set 'plev 0)
+		(set 'ch nil)
+		(set 'token (str-buf ""))
+		(set 'tok-command t)
+		(if (<= (length line) 1) (progn
+			(hash-clear! bad-syms)
+			(hash-clear! sys-syms)))
+		(set 'out (str-buf-map (fn (ch) (progn
+			(if (char= ch #\()
+				(paren-open)
+				(if (char= ch #\))
+					(paren-close)
+					(if (char-whitespace? ch)
+						(whitespace ch)
+						(progn (str-buf-push! token ch) "")))))) line))
+		(str-buf-push! out (prtoken))
+		(str out)))
+		nil)))
 
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))

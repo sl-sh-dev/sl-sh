@@ -33,15 +33,17 @@
 
 (defmacro dotimes (times body)
 	(core::let ((idx-name (gensym)))
-	`(core::loop (idx-name) (,times) (progn
-		(,@body)
-		(if (> idx-name 1) (recur (- idx-name 1)))))))
+	`(if (> ,times 0)
+		(core::loop (idx-name) (,times) (progn
+			(,@body)
+			(if (> idx-name 1) (recur (- idx-name 1))))))))
 
 (defmacro dotimesi (idx-bind times body)
 	(core::let ((stop-name (gensym)))
-	`(core::loop (,idx-bind stop-name) (0 (- ,times 1)) (progn
-		(,@body)
-		(if (< ,idx-bind stop-name) (recur (+ ,idx-bind 1) stop-name))))))
+	`(if (> ,times 0)
+		(core::loop (,idx-bind stop-name) (0 (- ,times 1)) (progn
+			(,@body)
+			(if (< ,idx-bind stop-name) (recur (+ ,idx-bind 1) stop-name)))))))
 
 (defmacro for (bind in_list body)
 	`(core::let ((,bind))

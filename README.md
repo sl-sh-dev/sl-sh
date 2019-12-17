@@ -205,9 +205,11 @@ str-lower | string | builtin | Return the all lowercase string for provided stri
 str-upper | string | builtin | Return the all uppercase string for provided string.
 str-bytes | string | builtin | Return the bytes in a string (can be more then the chars- utf8).
 str-starts-with | string string | builtin | Return true if the second string starts with the first.
+str-map | lambda string | builtin | Creates a new string by applying the lambda to each character of the provided string (or string buffer).
 str-buf | form* | builtin | Creates a new string buffer with the values of it's arguments.  Any command's run under it will have stdout captured as a string.  Use a string buffer to build strings without excess allocations.
 str-buf-push! | form* | builtin | First form is a string buffer that the following forms are appended to.
 str-buf-clear! | string buffer | builtin | Clear the provided string buffer.
+str-buf-map | lambda string | builtin | Creates a new stringi buffer by applying the lambda to each character of the provided string (or string buffer).
 
 
 ### Char Forms

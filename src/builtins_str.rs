@@ -619,6 +619,90 @@ fn builtin_str_buf_clear(
     }
 }
 
+fn str_map_inner(environment: &mut Environment, func: Lambda, string: &str) -> io::Result<String> {
+    let mut res = String::new();
+    for ch in string.chars() {
+        let mut list = Vec::with_capacity(2);
+        list.push(Expression::Atom(Atom::Lambda(func.clone())));
+        list.push(Expression::Atom(Atom::Char(ch)));
+        let a = eval(environment, &Expression::with_list(list))?;
+        res.push_str(&as_string(environment, &a)?);
+    }
+    Ok(res)
+}
+
+fn builtin_str_map(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(func) = args.next() {
+        if let Some(string) = args.next() {
+            if args.next().is_none() {
+                let func = eval(environment, func)?;
+                let string = eval(environment, string)?;
+                if let Expression::Atom(Atom::Lambda(func)) = func {
+                    match string {
+                        Expression::Atom(Atom::String(string)) => {
+                            return Ok(Expression::Atom(Atom::String(str_map_inner(
+                                environment,
+                                func,
+                                &string,
+                            )?)));
+                        }
+                        Expression::Atom(Atom::StringBuf(string)) => {
+                            return Ok(Expression::Atom(Atom::String(str_map_inner(
+                                environment,
+                                func,
+                                &string.borrow(),
+                            )?)));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-map takes lambda and a string",
+    ))
+}
+
+fn builtin_str_buf_map(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(func) = args.next() {
+        if let Some(string) = args.next() {
+            if args.next().is_none() {
+                let func = eval(environment, func)?;
+                let string = eval(environment, string)?;
+                if let Expression::Atom(Atom::Lambda(func)) = func {
+                    match string {
+                        Expression::Atom(Atom::String(string)) => {
+                            let res = str_map_inner(environment, func, &string)?;
+                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
+                                res,
+                            )))));
+                        }
+                        Expression::Atom(Atom::StringBuf(string)) => {
+                            let res = str_map_inner(environment, func, &string.borrow())?;
+                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
+                                res,
+                            )))));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-buf-map takes lambda and a string",
+    ))
+}
+
 fn builtin_char_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -825,6 +909,20 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_buf_clear,
             "Clear a string buffer.",
+        )),
+    );
+    data.insert(
+        "str-map".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_map,
+            "Make a new string by applying lambda to each char.",
+        )),
+    );
+    data.insert(
+        "str-buf-map".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_buf_map,
+            "Make a new string by applying lambda to each char.",
         )),
     );
 
