@@ -34,13 +34,11 @@
 
 	;; better cp
 	(defn cp (&rest args)
-		(progn
-			(println 'meow)
 		(if (= (length args) 2)
 			(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@args))
 			(if (and (= (length args) 3) (= (first args) "-r"))
 				(eval `(rsync -ah --inplace --no-whole-file --info=progress2 ,@(rest args)))
-				(eval `(/sbin/cp ,@(rest args)))))))
+				(eval `(/sbin/cp ,@(rest args))))))
 
 	;; stdin to clipboard
 	(alias sc (str-trim (xclip -selection c)))
@@ -197,6 +195,8 @@
 	;;	5. cursor on near empty line
 	(defn __prompt ()
 		(progn
+			;; set $la to be the last argument of the last command.
+			(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
 			(str
 				"\n"
 				(if (> (length (get-dirs)) 0)
