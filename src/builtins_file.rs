@@ -90,6 +90,10 @@ fn builtin_path_exists(
             "fs-exists? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let p = match expand_tilde(&p) {
+            Some(p) => p,
+            None => p.to_string(), // XXX not great.
+        };
         let path = Path::new(&p);
         if path.exists() {
             Ok(Expression::Atom(Atom::True))
@@ -120,6 +124,10 @@ fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Re
             "fs-file? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let p = match expand_tilde(&p) {
+            Some(p) => p,
+            None => p.to_string(), // XXX not great.
+        };
         let path = Path::new(&p);
         if path.is_file() {
             Ok(Expression::Atom(Atom::True))
@@ -142,6 +150,10 @@ fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Res
             "fs-dir? takes one form (a path)",
         ))
     } else if let Expression::Atom(Atom::String(p)) = &args[0] {
+        let p = match expand_tilde(&p) {
+            Some(p) => p,
+            None => p.to_string(), // XXX not great.
+        };
         let path = Path::new(&p);
         if path.is_dir() {
             Ok(Expression::Atom(Atom::True))
