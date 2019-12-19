@@ -21,10 +21,6 @@
 	;; betterer ls
 	(alias ll (lsd -haltr))
 
-	;; env var la as Last Arg executed from the last command
-	(alias la (first (str-rsplitn 2 " " *last-command*)))
-	;;(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
-
 	(defn cl (&rest args)
 		(if (= (length args) 1)
 			(and (root::cd (first args)) (ls .))
@@ -206,7 +202,22 @@
 				(set_prompt_tail))))
 ;; }}}
 
+;; execute hook fcns {{{
+
+	(defn change-dir-if-arg-is-dir (cmd)
+			(if (fs-dir? cmd)
+				(str "cd " cmd)
+				cmd))
+
+	(defn __exec_hook (cmd-to-execute)
+		(let ((args-list (str-split " " cmd-to-execute)))
+				(match (length args-list)
+					(1 (change-dir-if-arg-is-dir (first args-list)))
+					(nil cmd-to-execute))))
+;; }}}
+
 ;; completions {{{
+
 	(defn git-completion (args)
 		(match (first args)
 			('checkout (git-checkout))
@@ -215,13 +226,10 @@
 	;; Completion hooks, the match is for the command and then custom completions can be returned.
 	(defn __completion_hook (&rest args)
 		(match (first args)
-			('cd 'path)
-			('ls 'default)
-			('git (let ((subcommands (rest args)))
-				(if (vec-empty? subcommands)
-					'default
-					(git-completion subcommands))))
+			("cd" 'path)
+			("ls" 'default)
 			(nil 'default)))
+
 ;; }}}
 
 ;; i'm fun {{{
