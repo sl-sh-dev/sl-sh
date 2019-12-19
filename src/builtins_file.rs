@@ -79,93 +79,64 @@ fn builtin_cd(
     }
 }
 
+fn file_test(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+    test: fn(path: &Path) -> bool,
+    fn_name: &str,
+) -> io::Result<Expression> {
+    if let Some(p) = args.next() {
+        if args.next().is_none() {
+            let p = match eval(environment, p)? {
+                Expression::Atom(Atom::String(p)) => {
+                    match expand_tilde(&p) {
+                        Some(p) => p,
+                        None => p.to_string(), // XXX not great.
+                    }
+                }
+                Expression::Atom(Atom::StringBuf(p)) => {
+                    let pb = p.borrow();
+                    match expand_tilde(&pb) {
+                        Some(p) => p,
+                        None => pb.to_string(), // XXX not great.
+                    }
+                }
+                _ => {
+                    let msg = format!("{} path must be a string", fn_name);
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            };
+            let path = Path::new(&p);
+            if test(path) {
+                return Ok(Expression::Atom(Atom::True));
+            } else {
+                return Ok(Expression::Atom(Atom::Nil));
+            }
+        }
+    }
+    let msg = format!("{} takes a string (a path)", fn_name);
+    Err(io::Error::new(io::ErrorKind::Other, msg))
+}
+
 fn builtin_path_exists(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-exists? takes one form (a path)",
-        ))
-    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
-        let p = match expand_tilde(&p) {
-            Some(p) => p,
-            None => p.to_string(), // XXX not great.
-        };
-        let path = Path::new(&p);
-        if path.exists() {
-            Ok(Expression::Atom(Atom::True))
-        } else {
-            Ok(Expression::Atom(Atom::Nil))
-        }
-    } else if let Expression::Atom(Atom::StringBuf(p)) = &args[0] {
-        let pb = p.borrow();
-        let path = Path::new(&*pb);
-        if path.exists() {
-            Ok(Expression::Atom(Atom::True))
-        } else {
-            Ok(Expression::Atom(Atom::Nil))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-exists? path must be a string",
-        ))
-    }
+    file_test(environment, args, |path| path.exists(), "fs-exists?")
 }
 
-fn builtin_is_file(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-file? takes one form (a path)",
-        ))
-    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
-        let p = match expand_tilde(&p) {
-            Some(p) => p,
-            None => p.to_string(), // XXX not great.
-        };
-        let path = Path::new(&p);
-        if path.is_file() {
-            Ok(Expression::Atom(Atom::True))
-        } else {
-            Ok(Expression::Atom(Atom::Nil))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-file? path must be a string",
-        ))
-    }
+fn builtin_is_file(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    file_test(environment, args, |path| path.is_file(), "fs-file?")
 }
 
-fn builtin_is_dir(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-dir? takes one form (a path)",
-        ))
-    } else if let Expression::Atom(Atom::String(p)) = &args[0] {
-        let p = match expand_tilde(&p) {
-            Some(p) => p,
-            None => p.to_string(), // XXX not great.
-        };
-        let path = Path::new(&p);
-        if path.is_dir() {
-            Ok(Expression::Atom(Atom::True))
-        } else {
-            Ok(Expression::Atom(Atom::Nil))
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fs-dir? path must be a string",
-        ))
-    }
+fn builtin_is_dir(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
 fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
@@ -343,6 +314,7 @@ fn builtin_glob(
     for pat in args {
         let pat = match eval(environment, pat)? {
             Expression::Atom(Atom::String(s)) => s,
+            Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -386,15 +358,24 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     );
     data.insert(
         "fs-exists?".to_string(),
-        Rc::new(Expression::Func(builtin_path_exists)),
+        Rc::new(Expression::make_function(
+            builtin_path_exists,
+            "Does the given path exist?",
+        )),
     );
     data.insert(
         "fs-file?".to_string(),
-        Rc::new(Expression::Func(builtin_is_file)),
+        Rc::new(Expression::make_function(
+            builtin_is_file,
+            "Is the given path a file?",
+        )),
     );
     data.insert(
         "fs-dir?".to_string(),
-        Rc::new(Expression::Func(builtin_is_dir)),
+        Rc::new(Expression::make_function(
+            builtin_is_dir,
+            "Is the given path a directory?",
+        )),
     );
     data.insert("pipe".to_string(), Rc::new(Expression::Func(builtin_pipe)));
     data.insert("wait".to_string(), Rc::new(Expression::Func(builtin_wait)));
