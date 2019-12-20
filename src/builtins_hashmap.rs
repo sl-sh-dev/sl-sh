@@ -77,17 +77,17 @@ fn builtin_hash_set(
                     if let Expression::HashMap(map) = map {
                         match key {
                             Expression::Atom(Atom::Symbol(sym)) => {
-                                map.borrow_mut().insert(sym.to_string(), Rc::new(val));
-                                return Ok(Expression::HashMap(map.clone()));
+                                map.borrow_mut().insert(sym, Rc::new(val));
+                                return Ok(Expression::HashMap(map));
                             }
                             Expression::Atom(Atom::String(s)) => {
                                 map.borrow_mut().insert(s, Rc::new(val));
-                                return Ok(Expression::HashMap(map.clone()));
+                                return Ok(Expression::HashMap(map));
                             }
                             Expression::Atom(Atom::StringBuf(s)) => {
                                 map.borrow_mut()
                                     .insert(s.borrow().to_string(), Rc::new(val));
-                                return Ok(Expression::HashMap(map.clone()));
+                                return Ok(Expression::HashMap(map));
                             }
                             _ => {
                                 return Err(io::Error::new(

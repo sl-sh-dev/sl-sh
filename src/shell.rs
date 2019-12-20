@@ -92,7 +92,7 @@ fn get_prompt(environment: &mut Environment) -> String {
         environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
         let res = eval(environment, &exp);
         environment.save_exit_status = true;
-        res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string())))
+        res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
             .as_string(environment)
             .unwrap_or_else(|_| "ERROR".to_string())
     } else {
@@ -131,7 +131,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
     let mut exp = Rc::new(Expression::Atom(Atom::Nil));
     if let Some(lexp) = get_expression(&environment.borrow(), "__line_handler") {
         has_handle = true;
-        exp = lexp.clone();
+        exp = lexp;
     }
     if has_handle {
         let line_color = move |input: &str| -> String {
@@ -147,11 +147,9 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
             environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with line_handler.
             let res = eval(&mut environment.borrow_mut(), &exp);
             environment.borrow_mut().save_exit_status = true;
-            res.unwrap_or_else(|e| {
-                Expression::Atom(Atom::String(format!("ERROR: {}", e).to_string()))
-            })
-            .as_string(&environment.borrow())
-            .unwrap_or_else(|_| "ERROR".to_string())
+            res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
+                .as_string(&environment.borrow())
+                .unwrap_or_else(|_| "ERROR".to_string())
         };
         Some(Box::new(line_color))
     } else {
@@ -284,7 +282,7 @@ fn exec_hook(environment: &mut Environment, input: String) -> String {
         };
         match eval(environment, &exp) {
             Ok(res) => match res {
-                Expression::Atom(Atom::String(s)) => s.clone(),
+                Expression::Atom(Atom::String(s)) => s,
                 Expression::Atom(Atom::StringBuf(s)) => s.borrow().clone(),
                 Expression::Atom(Atom::Nil) => "".to_string(),
                 _ => {

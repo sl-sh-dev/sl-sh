@@ -213,22 +213,22 @@ fn setup_args_final<'a>(
             if let Some(scope) = scope {
                 scope
                     .data
-                    .insert(rest_name.clone(), Rc::new(Expression::Atom(Atom::Nil)));
+                    .insert(rest_name, Rc::new(Expression::Atom(Atom::Nil)));
             } else {
                 set_expression_current(
                     environment,
-                    rest_name.clone(),
+                    rest_name,
                     Rc::new(Expression::Atom(Atom::Nil)),
                 );
             }
         } else if let Some(scope) = scope {
             scope
                 .data
-                .insert(rest_name.clone(), Rc::new(Expression::with_list(rest_data)));
+                .insert(rest_name, Rc::new(Expression::with_list(rest_data)));
         } else {
             set_expression_current(
                 environment,
-                rest_name.clone(),
+                rest_name,
                 Rc::new(Expression::with_list(rest_data)),
             );
         }

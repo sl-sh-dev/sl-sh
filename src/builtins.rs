@@ -12,6 +12,7 @@ use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
+use std::cmp::Ordering;
 
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
@@ -77,7 +78,7 @@ fn builtin_apply(
         last_evaled = eval(environment, alist)?;
         let itr = match last_evaled {
             Expression::Vector(list) => {
-                tlist = list.clone();
+                tlist = list;
                 list_borrow = tlist.borrow();
                 Box::new(list_borrow.iter())
             }
@@ -695,12 +696,10 @@ fn builtin_dyn(
         None
     };
     if let Some(exp) = args.next() {
-        environment
-            .dynamic_scope
-            .insert(key.clone(), Rc::new(val.clone()));
+        environment.dynamic_scope.insert(key.clone(), Rc::new(val));
         let res = eval(environment, exp);
         if let Some(old_val) = old_val {
-            environment.dynamic_scope.insert(key.clone(), old_val);
+            environment.dynamic_scope.insert(key, old_val);
         } else {
             environment.dynamic_scope.remove(&key);
         }
@@ -997,7 +996,7 @@ fn do_expansion(
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
                 };
-                environment.current_scope.push(new_scope.clone());
+                environment.current_scope.push(new_scope);
                 let args: Vec<Expression> = parts.cloned().collect();
                 let ib: Box<(dyn Iterator<Item = &Expression>)> = Box::new(args.iter());
                 if let Err(err) = setup_args(environment, None, &sh_macro.params, ib, false) {
@@ -1275,24 +1274,26 @@ fn builtin_loose_symbols(
 
 fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
     let args = list_to_args(environment, args, true)?;
-    if args.len() > 1 {
-        Err(io::Error::new(
+    match args.len().cmp(&1) {
+        Ordering::Greater => Err(io::Error::new(
             io::ErrorKind::Other,
             "exit can only take an optional integer (exit code- defaults to 0)",
-        ))
-    } else if args.len() == 1 {
-        if let Expression::Atom(Atom::Int(exit_code)) = &args[0] {
-            environment.exit_code = Some(*exit_code as i32);
-            Ok(Expression::Atom(Atom::Nil))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "exit can only take an optional integer (exit code- defaults to 0)",
-            ))
+        )),
+        Ordering::Equal => {
+            if let Expression::Atom(Atom::Int(exit_code)) = &args[0] {
+                environment.exit_code = Some(*exit_code as i32);
+                Ok(Expression::Atom(Atom::Nil))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "exit can only take an optional integer (exit code- defaults to 0)",
+                ))
+            }
         }
-    } else {
-        environment.exit_code = Some(0);
-        Ok(Expression::Atom(Atom::Nil))
+        Ordering::Less => {
+            environment.exit_code = Some(0);
+            Ok(Expression::Atom(Atom::Nil))
+        }
     }
 }
 

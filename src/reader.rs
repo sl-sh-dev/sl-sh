@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
@@ -59,10 +60,12 @@ fn char_to_hex_num(ch: char) -> u8 {
 
 fn escape_to_char(escape_code: &[char]) -> char {
     let mut ch_n: u8 = 0;
-    if escape_code.len() > 1 {
-        ch_n = (char_to_hex_num(escape_code[0]) * 16) + (char_to_hex_num(escape_code[1]));
-    } else if escape_code.len() == 1 {
-        ch_n = char_to_hex_num(escape_code[0]);
+    match escape_code.len().cmp(&1) {
+        Ordering::Greater => {
+            ch_n = (char_to_hex_num(escape_code[0]) * 16) + (char_to_hex_num(escape_code[1]))
+        }
+        Ordering::Equal => ch_n = char_to_hex_num(escape_code[0]),
+        Ordering::Less => {}
     }
     ch_n as char
 }
@@ -379,7 +382,7 @@ fn parse_atom(token: &str) -> Expression {
                 let potential_float: Result<f64, ParseFloatError> = token.parse();
                 match potential_float {
                     Ok(v) => Expression::Atom(Atom::Float(v)),
-                    Err(_) => Expression::Atom(Atom::Symbol(token.to_string().clone())),
+                    Err(_) => Expression::Atom(Atom::Symbol(token.to_string())),
                 }
             }
         }

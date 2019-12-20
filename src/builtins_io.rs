@@ -40,7 +40,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
             }
         }
         let file_name = match eval(environment, &a)? {
-            Expression::Atom(Atom::String(name)) => name.clone(),
+            Expression::Atom(Atom::String(name)) => name,
             _ => {
                 return Err(io::Error::new(
                 io::ErrorKind::Other,
