@@ -164,12 +164,15 @@ fn handle_result(
     res: io::Result<Expression>,
     con: &mut Context,
     input: &str,
+    save_history: bool,
 ) {
     match res {
         Ok(exp) => {
             if !input.is_empty() {
-                if let Err(err) = con.history.push(input.into()) {
-                    eprintln!("Error saving history: {}", err);
+                if save_history {
+                    if let Err(err) = con.history.push(input.into()) {
+                        eprintln!("Error saving history: {}", err);
+                    }
                 }
                 environment.root_scope.borrow_mut().data.insert(
                     "*last-command*".to_string(),
@@ -193,7 +196,7 @@ fn handle_result(
             }
         }
         Err(err) => {
-            if !input.is_empty() {
+            if save_history && !input.is_empty() {
                 if let Err(err) = con.history.push_throwaway(input.into()) {
                     eprintln!("Error saving temp history: {}", err);
                 }
@@ -431,10 +434,13 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 let ast = read(&input, add_parens);
                 match ast {
                     Ok(ast) => {
+                        if let Err(err) = con.history.push(input.clone().into()) {
+                            eprintln!("Error saving history: {}", err);
+                        }
                         environment.borrow_mut().loose_symbols = true;
                         environment.borrow_mut().error_expression = None;
                         let res = eval(&mut environment.borrow_mut(), &ast);
-                        handle_result(&mut environment.borrow_mut(), res, &mut con, &input);
+                        handle_result(&mut environment.borrow_mut(), res, &mut con, &input, false);
                         environment.borrow_mut().loose_symbols = false;
                     }
                     Err(err) => {
