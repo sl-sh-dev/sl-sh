@@ -1,0 +1,292 @@
+;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
+(core::ns-import 'core)
+(ns-import 'shell)
+
+;; custom env settings {{{
+	;; use vi keybindings on cli
+	(hash-set! *repl-settings* :keybindings :vi)
+	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
+
+	;; syntax highlighting
+	(syntax-on)
+
+	(error-stack-on)
+;; }}}
+
+;; quality of life {{{
+	(alias :q (exit))
+
+	(alias ls (lsd))
+
+	;; betterer ls
+	(alias ll (lsd -haltr))
+
+	(defn cl (&rest args)
+		(if (= (length args) 1)
+			(and (root::cd (first args)) (ls .))
+			(err "I take one argument.")))
+
+	(alias cd (cl))
+
+	;; stdin to clipboard
+	(alias sc (str-trim (xclip -selection c)))
+
+	;;put my pwd in my clipboard
+	(alias this (| (pwd) (sc)))
+
+	;;gradle build
+	(defn g (&rest args)
+		(let ((log-out-file "last_build.log"))
+		(progn
+			(|
+				(defq gradle-proc (eval (append '(./gradlew) args)))
+				(tee log-out-file)
+			)
+			(defq gradle-ret-code (wait gradle-proc))
+			(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+			(defq proj-name (str (basename $PWD)))
+			(if (= 0 gradle-ret-code)
+				(nss-pass (str "PASS! - " proj-name) log-out-txt)
+				(nss-fail (str "FAIL! - " proj-name) log-out-txt))
+			(= 0 gradle-ret-code))))
+
+	;; TODO zsh pipes to slush pipes, test if zsh str has | .
+	;; TODO add cmd to history
+	;; zsh history search
+	(defn zh ()
+		(progn
+			(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+			(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
+
+	(defn stripcolor (&rest args)
+		(if (< (length args) 2)
+			(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
+			(err "Only accepts 0 or 1 arguments")))
+
+	;; all find . -iname &rest
+	(defn ifind (&rest args)
+	(if (< (length args) 2)
+		(| (find . -iname (str (nth 0 args))))
+		(err "Only accepts 0 or 1 arguments")))
+
+	;;results feed into vim
+	(defn vimifind (&rest args)
+		(if (< (length args) 2)
+			(let
+				((vimargs (str-split
+					" "
+					(str-trim (str (| (find . -iname (nth 0 args)) (tr "\n" " ")))))))
+				(progn
+					`(loose-symbols (vim ,@vimargs))))
+			(err "Only accepts 0 or 1 arguments")))
+;; }}}
+
+;; notification helpers {{{
+	(defn persist-nss (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=system-software-update))
+			(err "takes 2 arguments")))
+
+	(defn nss-pass (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=face-wink))
+			(err "takes 2 arguments")))
+
+	(defn nss-fail (&rest args)
+		(if (= (length args) 2)
+			(eval `(notify-send -t 0 ,@args --icon=process-stop))
+			(err "takes 2 arguments")))
+
+	;; fun, persistent notify send!
+	(defn pnss (&rest args)
+		(if (> (length args) 1)
+			(err "I take one fucking argument dude.")
+			(persist-nss (nth 0 args) (str (fortune)))))
+
+	;;tell me about it!
+	(defn tmai ()
+		(pnss (str "Last program exit status: " *last-status* ".")))
+;; }}}
+
+;; tmux aliases {{{
+	(alias tmuxls (tmux list-sessions))
+
+	(alias tmuxnew (tmux new -s))
+
+	(alias tmuxkill (tmux kill-session -t))
+
+	(defn tmuxopen (&rest args)
+		(if (= (length args) 1)
+			(progn
+				(defq tmux-ret-code (tmux a -t (first args)))
+				(if (= 0 tmux-ret-code)
+					0
+					(tmuxnew (first args))))
+			(err "Takes one argument, name of tmux session to create.")))
+;; }}}
+
+;; time helpers {{{
+	;; epoch in milliseconds
+	(alias epochms (| (date +%s%N) (cut -b1-13)))
+
+	(defn datest ()
+		(let-env ((TZ ":America/New_York"))
+		 (date)))
+
+	;; takes epock IN SECONDS and converts to nice date time
+	(defn fromepoch (time)
+		(date -d (str "@" time)))
+
+	(defn timestamp ()
+	(date +%Y%m%d_%H%M%S))
+;; }}}
+
+;; prompt {{{
+	(defn get_pwd ()
+		(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
+
+	(defn path_list_trunc (plist)
+		(if (> (length plist) 1)
+			(if (> (length (first plist)) 0)
+				(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+				(path_list_trunc (rest plist)))
+			plist))
+
+	(defn smaller_path (dir)
+		(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
+
+	(defn set_prompt_tail ()
+		(if (= *last-status* 0) "\x1b[32m☭ >\x1b[39m " (str "\x1b[31m(" *last-status* ")☭ >\x1b[39m ")))
+
+	(defn parse_git_branch () (let ((branch))
+		(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
+		(if (= branch "")
+			(str "")
+			(str "(" (str-trim branch) ")"))))
+
+	;; prompt ensures
+	;;	1. always a new line above prompt
+	;;	2. if pushd has been used displays in reverse order dirs to popd
+	;;	3. current path
+	;;	4. if in git dir display current branch
+	;;	5. cursor on near empty line
+	(defn __prompt ()
+		(progn
+			;; set $la to be the last argument of the last command.
+			(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
+			(str
+				"\n"
+				(if (> (length (get-dirs)) 0)
+					(str (map! smaller_path (reverse (get-dirs))))
+					"")
+				"\n" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+				(set_prompt_tail))))
+;; }}}
+
+;; execute hook fcns {{{
+
+	(defn change-dir-if-arg-is-dir (cmd)
+			(if (fs-dir? cmd)
+				(str "cd " cmd)
+				cmd))
+
+	(defn __exec_hook (cmd-to-execute)
+		(let ((args-list (str-split " " cmd-to-execute)))
+				(match (length args-list)
+					(1 (change-dir-if-arg-is-dir (first args-list)))
+					(nil cmd-to-execute))))
+;; }}}
+
+;; completions {{{
+
+(defn get-completions-src ()
+	(str "
+		#
+		# Author: Brian Beffa <brbsix@gmail.com>
+		# Original source: https://brbsix.github.io/2015/11/29/accessing-tab-completion-programmatically-in-bash/
+		# License: LGPLv3 (http://www.gnu.org/licenses/lgpl-3.0.txt)
+		#
+
+		get_completions(){
+			local completion COMP_CWORD COMP_LINE COMP_POINT COMP_WORDS COMPREPLY=()
+
+			# load bash-completion if necessary
+			declare -F _completion_loader &>/dev/null || {
+				source /usr/share/bash-completion/bash_completion
+			}
+
+			COMP_LINE=$*
+			COMP_POINT=${#COMP_LINE}
+
+			eval set -- \"$@\"
+
+			COMP_WORDS=(\"$@\")
+
+			# add '' to COMP_WORDS if the last character of the command line is a space
+			[[ ${COMP_LINE[@]: -1} = ' ' ]] && COMP_WORDS+=('')
+
+			# index of the last word
+			COMP_CWORD=$(( ${#COMP_WORDS[@]} - 1 ))
+
+			# determine completion function
+			completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
+
+			# run _completion_loader only if necessary
+			[[ -n $completion ]] || {
+
+				# load completion
+				_completion_loader \"$1\"
+
+				# detect completion
+				completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
+
+			}
+
+			# ensure completion was detected
+			[[ -n $completion ]] || return 1
+
+			# execute completion function
+			\"$completion\"
+
+			# print completions to stdout
+			printf '%s\\n' \"${COMPREPLY[@]}\" | LC_ALL=C sort
+		}
+	"))
+
+	(defn get-bash-completion (to-complete)
+		(str-split
+			"\n"
+			(str-trim
+				(str
+					(bash -c (str (get-completions-src) "
+					get_completions \"" to-complete "\""))))))
+
+	(defn build-arg-str (string a-list)
+		(let ((next-arg-string (str string (first a-list) " "))
+				(rest-of-args (rest a-list)))
+			(if (=  0 (length rest-of-args))
+				next-arg-string
+				(build-arg-str next-arg-string rest-of-args))))
+
+	(defn check-bash-completion (args)
+		(let ((arg-str (build-arg-str "" args)))
+			(get-bash-completion arg-str)))
+
+	;; Completion hooks, the match is for the command and then custom completions can be returned.
+	(defn __completion_hook (&rest args)
+		(match (first args)
+				("cd" 'path)
+				("ls" 'default)
+				(nil
+					(progn
+						(defq possible-completions (check-bash-completion args))
+						(if (= nil possible-completions) 'default possible-completions)))))
+;; }}}
+
+;; i'm fun {{{
+	(println "		Hey, hey, hey. Don't be mean.")
+	(println "		We don't have to be mean because,")
+	(println "		remember, no matter where you go,")
+	(println "		there you are.")
+	(println "			- Buckaroo Banzai")
+;; }}}
