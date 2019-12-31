@@ -1,9 +1,8 @@
-;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
+;; This is a sl-sh file for people named price, you would put it in ~/.config/slsh/bash-completions.lisp to use it.
 (core::ns-import 'core)
 (ns-import 'shell)
 
 ;; completions {{{
-
 (defn get-completions-src ()
 	(str "
 		#
