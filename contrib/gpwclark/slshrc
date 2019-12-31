@@ -1,6 +1,7 @@
 ;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
 (core::ns-import 'core)
 (ns-import 'shell)
+(load "/home/price/.config/sl-sh/bash-completions.lisp")
 
 ;; custom env settings {{{
 	;; use vi keybindings on cli
@@ -195,92 +196,6 @@
 				(match (length args-list)
 					(1 (change-dir-if-arg-is-dir (first args-list)))
 					(nil cmd-to-execute))))
-;; }}}
-
-;; completions {{{
-
-(defn get-completions-src ()
-	(str "
-		#
-		# Author: Brian Beffa <brbsix@gmail.com>
-		# Original source: https://brbsix.github.io/2015/11/29/accessing-tab-completion-programmatically-in-bash/
-		# License: LGPLv3 (http://www.gnu.org/licenses/lgpl-3.0.txt)
-		#
-
-		get_completions(){
-			local completion COMP_CWORD COMP_LINE COMP_POINT COMP_WORDS COMPREPLY=()
-
-			# load bash-completion if necessary
-			declare -F _completion_loader &>/dev/null || {
-				source /usr/share/bash-completion/bash_completion
-			}
-
-			COMP_LINE=$*
-			COMP_POINT=${#COMP_LINE}
-
-			eval set -- \"$@\"
-
-			COMP_WORDS=(\"$@\")
-
-			# add '' to COMP_WORDS if the last character of the command line is a space
-			[[ ${COMP_LINE[@]: -1} = ' ' ]] && COMP_WORDS+=('')
-
-			# index of the last word
-			COMP_CWORD=$(( ${#COMP_WORDS[@]} - 1 ))
-
-			# determine completion function
-			completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
-
-			# run _completion_loader only if necessary
-			[[ -n $completion ]] || {
-
-				# load completion
-				_completion_loader \"$1\"
-
-				# detect completion
-				completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
-
-			}
-
-			# ensure completion was detected
-			[[ -n $completion ]] || return 1
-
-			# execute completion function
-			\"$completion\"
-
-			# print completions to stdout
-			printf '%s\\n' \"${COMPREPLY[@]}\" | LC_ALL=C sort
-		}
-	"))
-
-	(defn get-bash-completion (to-complete)
-		(str-split
-			"\n"
-			(str-trim
-				(str
-					(bash -c (str (get-completions-src) "
-					get_completions \"" to-complete "\""))))))
-
-	(defn build-arg-str (string a-list)
-		(let ((next-arg-string (str string (first a-list) " "))
-				(rest-of-args (rest a-list)))
-			(if (=  0 (length rest-of-args))
-				next-arg-string
-				(build-arg-str next-arg-string rest-of-args))))
-
-	(defn check-bash-completion (args)
-		(let ((arg-str (build-arg-str "" args)))
-			(get-bash-completion arg-str)))
-
-	;; Completion hooks, the match is for the command and then custom completions can be returned.
-	(defn __completion_hook (&rest args)
-		(match (first args)
-				("cd" 'path)
-				("ls" 'default)
-				(nil
-					(progn
-						(defq possible-completions (check-bash-completion args))
-						(if (= nil possible-completions) 'default possible-completions)))))
 ;; }}}
 
 ;; i'm fun {{{
