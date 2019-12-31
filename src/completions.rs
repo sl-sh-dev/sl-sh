@@ -128,7 +128,10 @@ impl ShellCompleter {
                         Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
-                                let s = l.to_string();
+                                let s = match l.as_string(&self.environment.borrow()) {
+                                    Ok(s) => s,
+                                    Err(_) => "ERROR".to_string(),
+                                };
                                 v.push(s);
                             }
                             HookResult::UseList(v)
@@ -136,7 +139,10 @@ impl ShellCompleter {
                         Expression::Pair(_, _) => {
                             let mut v = Vec::new();
                             for l in res.iter() {
-                                let s = l.to_string();
+                                let s = match l.as_string(&self.environment.borrow()) {
+                                    Ok(s) => s,
+                                    Err(_) => "ERROR".to_string(),
+                                };
                                 v.push(s);
                             }
                             HookResult::UseList(v)

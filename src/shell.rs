@@ -362,15 +362,15 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             "*last-command*".to_string(),
             Rc::new(Expression::Atom(Atom::String("".to_string()))),
         );
-    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
     let mut current_repl_settings = ReplSettings {
         key_bindings: Keys::Emacs,
         vi_esc_sequence: None,
     };
+    con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
         let new_repl_settings = apply_repl_settings(repl_settings.clone());
-        keymap = if current_repl_settings != new_repl_settings {
-            match new_repl_settings.key_bindings {
+        if current_repl_settings != new_repl_settings {
+            let keymap: Box<dyn keymap::KeyMap> = match new_repl_settings.key_bindings {
                 Keys::Vi => {
                     let mut vi = keymap::Vi::new();
                     if let Some((ch1, ch2, timeout)) = new_repl_settings.vi_esc_sequence {
@@ -379,9 +379,8 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                     Box::new(vi)
                 }
                 Keys::Emacs => Box::new(keymap::Emacs::new()),
-            }
-        } else {
-            keymap
+            };
+            con.set_keymap(keymap);
         };
         current_repl_settings = new_repl_settings;
         environment.borrow_mut().state.stdout_status = None;
@@ -395,19 +394,13 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
         }
-        let mut shell_completer = ShellCompleter::new(environment.clone());
         con.history.search_context = if let Ok(cur_dir) = env::current_dir() {
             Some(cur_dir.to_string_lossy().to_string())
         } else {
             None
         };
         let color_closure = get_color_closure(environment.clone());
-        match con.read_line(
-            prompt,
-            color_closure,
-            &mut shell_completer,
-            Some(&mut *keymap),
-        ) {
+        match con.read_line(prompt, color_closure) {
             Ok(input) => {
                 let input = input.trim();
                 if input.is_empty() {

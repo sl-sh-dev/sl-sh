@@ -5,6 +5,7 @@ use nix::{
     },
     unistd::{self, Pid},
 };
+use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap};
 use std::env;
 use std::fs;
@@ -12,7 +13,6 @@ use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
-use std::cmp::Ordering;
 
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
@@ -152,6 +152,10 @@ fn builtin_load(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let file_name = arg.as_string(environment)?;
+            let file_name = match expand_tilde(&file_name) {
+                Some(f) => f,
+                None => file_name,
+            };
             let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
                 let vec_borrow;
                 let p_itr = match &*lp {
