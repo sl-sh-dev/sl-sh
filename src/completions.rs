@@ -111,7 +111,8 @@ impl ShellCompleter {
                     return HookResult::Default;
                 }
             };
-            match eval(&mut self.environment.borrow_mut(), &exp) {
+            let envir = &mut self.environment.borrow_mut();
+            match eval(envir, &exp) {
                 Ok(res) => {
                     match res {
                         Expression::Atom(Atom::String(s)) | Expression::Atom(Atom::Symbol(s)) => {
@@ -128,7 +129,7 @@ impl ShellCompleter {
                         Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
-                                let s = match l.as_string(&self.environment.borrow()) {
+                                let s = match l.as_string(envir) {
                                     Ok(s) => s,
                                     Err(_) => "ERROR".to_string(),
                                 };
@@ -139,7 +140,7 @@ impl ShellCompleter {
                         Expression::Pair(_, _) => {
                             let mut v = Vec::new();
                             for l in res.iter() {
-                                let s = match l.as_string(&self.environment.borrow()) {
+                                let s = match l.as_string(envir) {
                                     Ok(s) => s,
                                     Err(_) => "ERROR".to_string(),
                                 };

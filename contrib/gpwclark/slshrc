@@ -1,7 +1,7 @@
 ;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
 (core::ns-import 'core)
 (ns-import 'shell)
-(load "/home/price/.config/sl-sh/bash-completions.lisp")
+(load "~/.config/sl-sh/bash-completions.lisp")
 
 ;; custom env settings {{{
 	;; use vi keybindings on cli
