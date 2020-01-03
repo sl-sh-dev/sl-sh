@@ -62,7 +62,7 @@
 
 	(defn get-bash-completion (to-complete)
 		(str-split
-			" \n"
+			"\n"
 			(str-trim
 				(str
 					(bash -c (str (get-completions-src) "
