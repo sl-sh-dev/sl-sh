@@ -207,33 +207,52 @@ fn builtin_str_rsplitn(
 
 fn builtin_str_cat_list(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-cat-list takes two forms",
-        ));
-    }
-    let join_str = as_string(environment, &args[0])?;
-    let mut new_str = String::new();
-    if let Expression::Vector(list) = &args[1] {
-        let mut first = true;
-        for s in list.borrow().iter() {
-            if !first {
-                new_str.push_str(&join_str);
+    if let Some(join_str) = args.next() {
+        let join_str = eval(environment, join_str)?;
+        let join_str = as_string(environment, &join_str)?;
+        if let Some(list) = args.next() {
+            if args.next().is_none() {
+                let mut new_str = String::new();
+                let list = eval(environment, list)?;
+                match list {
+                    Expression::Vector(list) => {
+                        let mut first = true;
+                        for s in list.borrow().iter() {
+                            if !first {
+                                new_str.push_str(&join_str);
+                            }
+                            new_str.push_str(&as_string(environment, s)?);
+                            first = false;
+                        }
+                    }
+                    Expression::Pair(_, _) => {
+                        let list = list.iter();
+                        let mut first = true;
+                        for s in list {
+                            if !first {
+                                new_str.push_str(&join_str);
+                            }
+                            new_str.push_str(&as_string(environment, s)?);
+                            first = false;
+                        }
+                    }
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-cat-list second form must be a list",
+                        ));
+                    }
+                }
+                return Ok(Expression::Atom(Atom::String(new_str)));
             }
-            new_str.push_str(&as_string(environment, s)?);
-            first = false;
         }
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-cat-list second form must be a list",
-        ));
     }
-    Ok(Expression::Atom(Atom::String(new_str)))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-cat-list takes two forms",
+    ))
 }
 
 fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -831,7 +850,10 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     );
     data.insert(
         "str-cat-list".to_string(),
-        Rc::new(Expression::Func(builtin_str_cat_list)),
+        Rc::new(Expression::make_function(
+            builtin_str_cat_list,
+            "Build a string by concatting a list with a join string.",
+        )),
     );
     data.insert(
         "str-sub".to_string(),
