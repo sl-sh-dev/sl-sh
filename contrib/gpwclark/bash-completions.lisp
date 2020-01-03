@@ -68,15 +68,8 @@
 					(bash -c (str (get-completions-src) "
 					load_extra_completions_only \"" to-complete "\""))))))
 
-	(defn build-arg-str (string a-list)
-		(loop (next-arg-string rest-of-args)
-				((str string (first a-list) " ") (rest a-list))
-				(if (=  0 (length rest-of-args))
-					next-arg-string
-					(build-arg-str next-arg-string rest-of-args))))
-
 	(defn check-bash-completion (args)
-		(let ((arg-str (build-arg-str "" args)))
+		(let ((arg-str (str-cat-list " " args)))
 			(progn
 				(defq raw-list-of-completions (get-bash-completion arg-str))
 				(if (and
@@ -88,11 +81,10 @@
 	;; Completion hooks, the match is for the command and then custom completions can be returned.
 	(defn __completion_hook (&rest args)
 		(match (first args)
-				("cd" 'path)
-				("ls" 'default)
-				(nil
-					(progn
-						(defq possible-completions (check-bash-completion args))
-						;;(println (str "the completions: " possible-completions))
-						(if (= nil possible-completions) 'default possible-completions)))))
+			("cd" 'path)
+			("ls" 'default)
+			(nil
+				(progn
+					(defq possible-completions (check-bash-completion args))
+					(if (= nil possible-completions) 'default possible-completions)))))
 ;; }}}
