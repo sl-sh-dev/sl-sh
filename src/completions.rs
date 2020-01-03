@@ -223,6 +223,9 @@ impl Completer for ShellCompleter {
                 }
                 self.args.push(word);
             }
+            if String::from(event.editor.current_buffer().clone()).ends_with(' ') {
+                self.args.push("".to_string());
+            }
             self.comp_type = match pos {
                 _ if words.is_empty() => CompType::Nothing,
                 CursorPosition::InWord(0) => CompType::Command,
