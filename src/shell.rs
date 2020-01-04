@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::CStr;
-use std::fs;
 use std::fs::create_dir_all;
 use std::io::{self, ErrorKind};
 use std::os::unix::process::CommandExt;
@@ -19,6 +18,7 @@ use liner::Context;
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::gethostname;
 
+use crate::builtins::load;
 use crate::completions::*;
 use crate::environment::*;
 use crate::eval::*;
@@ -47,11 +47,10 @@ fn load_user_env(environment: &mut Environment, home: &str) {
         "*load-path*".to_string(),
         Rc::new(Expression::with_list(load_path)),
     );
-    let mut script = format!("{}/.config/sl-sh/slsh-std.lisp", home);
-    if let Err(err) = run_script(&script, environment) {
+    if let Err(err) = load(environment, "slsh-std.lisp") {
         eprintln!(
-            "WARNING: Failed to load standard macros script {}: {}",
-            script, err
+            "WARNING: Failed to load standard macros script slsh-std.lisp: {}",
+            err
         );
     }
     let dname = build_new_namespace(environment, "user");
@@ -73,9 +72,8 @@ fn load_user_env(environment: &mut Environment, home: &str) {
             msg
         ),
     }
-    script = format!("{}/.config/sl-sh/slshrc", home);
-    if let Err(err) = run_script(&script, environment) {
-        eprintln!("WARNING: Failed to load init script {}: {}", script, err);
+    if let Err(err) = load(environment, "slshrc") {
+        eprintln!("WARNING: Failed to load init script slshrc: {}", err);
     }
 }
 
@@ -607,36 +605,6 @@ pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-fn run_script(file_name: &str, environment: &mut Environment) -> io::Result<()> {
-    let contents = fs::read_to_string(file_name)?;
-    let ast = read(&contents, false);
-    match ast {
-        Ok(Expression::Vector(list)) => {
-            for exp in list.borrow().iter() {
-                match eval(environment, &exp) {
-                    Ok(_exp) => {}
-                    Err(err) => {
-                        eprintln!("{}", err);
-                        return Err(err);
-                    }
-                }
-            }
-            Ok(())
-        }
-        Ok(ast) => match eval(environment, &ast) {
-            Ok(_exp) => Ok(()),
-            Err(err) => {
-                eprintln!("{}", err);
-                Err(err)
-            }
-        },
-        Err(err) => {
-            eprintln!("{:?}", err);
-            Err(io::Error::new(io::ErrorKind::Other, err.reason))
-        }
-    }
-}
-
 pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     environment.do_job_control = false;
@@ -659,7 +627,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         .borrow_mut()
         .data
         .insert("args".to_string(), Rc::new(Expression::with_list(exp_args)));
-    if let Err(err) = run_script(command, &mut environment) {
+    if let Err(err) = load(&mut environment, command) {
         eprintln!("Error running {}: {}", command, err);
         if environment.exit_code.is_none() {
             return 1;

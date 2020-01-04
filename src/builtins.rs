@@ -144,6 +144,107 @@ fn builtin_err(
     ))
 }
 
+pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expression> {
+    let core_lisp = include_bytes!("../lisp/core.lisp");
+    let seq_lisp = include_bytes!("../lisp/seq.lisp");
+    let shell_lisp = include_bytes!("../lisp/shell.lisp");
+    let slsh_std_lisp = include_bytes!("../lisp/slsh-std.lisp");
+    let slshrc = include_bytes!("../lisp/slshrc");
+    let file_name = match expand_tilde(&file_name) {
+        Some(f) => f,
+        None => file_name.to_string(),
+    };
+    let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
+        let vec_borrow;
+        let p_itr = match &*lp {
+            Expression::Vector(vec) => {
+                vec_borrow = vec.borrow();
+                Box::new(vec_borrow.iter())
+            }
+            _ => lp.iter(),
+        };
+        let mut path_out = file_name.clone();
+        for l in p_itr {
+            let path_name = match l {
+                Expression::Atom(Atom::Symbol(sym)) => Some(sym),
+                Expression::Atom(Atom::String(s)) => Some(s),
+                _ => None,
+            };
+            if let Some(path_name) = path_name {
+                let path_str = if path_name.ends_with('/') {
+                    format!("{}{}", path_name, file_name)
+                } else {
+                    format!("{}/{}", path_name, file_name)
+                };
+                let path = Path::new(&path_str);
+                if path.exists() {
+                    path_out = path_str;
+                    break;
+                }
+            }
+        }
+        path_out
+    } else {
+        file_name
+    };
+    let path = Path::new(&file_path);
+    let ast = if path.exists() {
+        let contents = fs::read_to_string(file_path)?;
+        read(&contents, false)
+    } else {
+        match &file_path[..] {
+            "core.lisp" => read(&String::from_utf8_lossy(core_lisp), false),
+            "seq.lisp" => read(&String::from_utf8_lossy(seq_lisp), false),
+            "shell.lisp" => read(&String::from_utf8_lossy(shell_lisp), false),
+            "slsh-std.lisp" => read(&String::from_utf8_lossy(slsh_std_lisp), false),
+            "slshrc" => read(&String::from_utf8_lossy(slshrc), false),
+            _ => {
+                let msg = format!("{} not found", file_path);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
+            }
+        }
+    };
+    match ast {
+        Ok(ast) => {
+            let ast = match ast {
+                Expression::Vector(olist) => {
+                    let mut list = olist.borrow_mut();
+                    if let Some(first) = list.get(0) {
+                        match first {
+                            Expression::Vector(_) => {
+                                let mut v = Vec::with_capacity(list.len() + 1);
+                                v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                for l in list.drain(..) {
+                                    v.push(l);
+                                }
+                                Expression::with_list(v)
+                            }
+                            Expression::Pair(_, _) => {
+                                let mut v = Vec::with_capacity(list.len() + 1);
+                                v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                for l in list.drain(..) {
+                                    v.push(l);
+                                }
+                                Expression::with_list(v)
+                            }
+                            _ => {
+                                drop(list);
+                                Expression::Vector(olist)
+                            }
+                        }
+                    } else {
+                        drop(list);
+                        Expression::Vector(olist)
+                    }
+                }
+                _ => ast,
+            };
+            eval(environment, &ast)
+        }
+        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+    }
+}
+
 fn builtin_load(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -152,84 +253,7 @@ fn builtin_load(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let file_name = arg.as_string(environment)?;
-            let file_name = match expand_tilde(&file_name) {
-                Some(f) => f,
-                None => file_name,
-            };
-            let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
-                let vec_borrow;
-                let p_itr = match &*lp {
-                    Expression::Vector(vec) => {
-                        vec_borrow = vec.borrow();
-                        Box::new(vec_borrow.iter())
-                    }
-                    _ => lp.iter(),
-                };
-                let mut path_out = file_name.clone();
-                for l in p_itr {
-                    let path_name = match l {
-                        Expression::Atom(Atom::Symbol(sym)) => Some(sym),
-                        Expression::Atom(Atom::String(s)) => Some(s),
-                        _ => None,
-                    };
-                    if let Some(path_name) = path_name {
-                        let path_str = if path_name.ends_with('/') {
-                            format!("{}{}", path_name, file_name)
-                        } else {
-                            format!("{}/{}", path_name, file_name)
-                        };
-                        let path = Path::new(&path_str);
-                        if path.exists() {
-                            path_out = path_str;
-                            break;
-                        }
-                    }
-                }
-                path_out
-            } else {
-                file_name
-            };
-            let contents = fs::read_to_string(file_path)?;
-            let ast = read(&contents, false);
-            return match ast {
-                Ok(ast) => {
-                    let ast = match ast {
-                        Expression::Vector(olist) => {
-                            let mut list = olist.borrow_mut();
-                            if let Some(first) = list.get(0) {
-                                match first {
-                                    Expression::Vector(_) => {
-                                        let mut v = Vec::with_capacity(list.len() + 1);
-                                        v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                        for l in list.drain(..) {
-                                            v.push(l);
-                                        }
-                                        Expression::with_list(v)
-                                    }
-                                    Expression::Pair(_, _) => {
-                                        let mut v = Vec::with_capacity(list.len() + 1);
-                                        v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
-                                        for l in list.drain(..) {
-                                            v.push(l);
-                                        }
-                                        Expression::with_list(v)
-                                    }
-                                    _ => {
-                                        drop(list);
-                                        Expression::Vector(olist)
-                                    }
-                                }
-                            } else {
-                                drop(list);
-                                Expression::Vector(olist)
-                            }
-                        }
-                        _ => ast,
-                    };
-                    eval(environment, &ast)
-                }
-                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-            };
+            return load(environment, &file_name);
         }
     }
     Err(io::Error::new(
