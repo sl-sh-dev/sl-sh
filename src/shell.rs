@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use liner::keymap;
+use liner::Buffer;
 use liner::ColorClosure;
 use liner::Context;
 
@@ -301,12 +302,46 @@ fn exec_hook(environment: &mut Environment, input: String) -> String {
     }
 }
 
+// Like the liner default but make '(' and ')' their own words for cleaner completions.
+fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
+    let mut res = Vec::new();
+
+    let mut word_start = None;
+    let mut just_had_backslash = false;
+
+    for (i, &c) in buf.chars().enumerate() {
+        if c == '\\' {
+            just_had_backslash = true;
+            continue;
+        }
+
+        if let Some(start) = word_start {
+            if (c == ' ' || c == '(' || c == ')') && !just_had_backslash {
+                res.push((start, i));
+                if c == '(' || c == ')' {
+                    res.push((i, i + 1));
+                }
+                word_start = None;
+            }
+        } else if c == '(' || c == ')' {
+            res.push((i, i + 1));
+        } else if c != ' ' {
+            word_start = Some(i);
+        }
+
+        just_had_backslash = false;
+    }
+
+    if let Some(start) = word_start {
+        res.push((start, buf.num_chars()));
+    }
+
+    res
+}
+
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut con = Context::new();
-    con.history.append_duplicate_entries = false;
-    con.history.inc_append = true;
-    con.history.load_duplicates = false;
-    con.history.share = true;
+    con.set_word_divider(Box::new(get_liner_words));
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
@@ -392,11 +427,12 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
         }
-        con.history.search_context = if let Ok(cur_dir) = env::current_dir() {
-            Some(cur_dir.to_string_lossy().to_string())
-        } else {
-            None
-        };
+        con.history
+            .set_search_context(if let Ok(cur_dir) = env::current_dir() {
+                Some(cur_dir.to_string_lossy().to_string())
+            } else {
+                None
+            });
         let color_closure = get_color_closure(environment.clone());
         match con.read_line(prompt, color_closure) {
             Ok(input) => {

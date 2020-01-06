@@ -212,15 +212,10 @@ impl Completer for ShellCompleter {
         if let EventKind::BeforeComplete = event.kind {
             let (words, pos) = event.editor.get_words_and_cursor_position();
             for word_limits in &words {
-                let mut word = event
+                let word = event
                     .editor
                     .current_buffer()
                     .range(word_limits.0, word_limits.1);
-                if word.contains('(') {
-                    self.args.clear();
-                    let mut swords = word.rsplitn(2, '(');
-                    word = swords.nth(0).unwrap().to_string();
-                }
                 self.args.push(word);
             }
             if String::from(event.editor.current_buffer().clone()).ends_with(' ') {
@@ -233,14 +228,15 @@ impl Completer for ShellCompleter {
                     if index == 0 {
                         CompType::Command
                     } else {
-                        let word_limits = words.into_iter().nth(index);
+                        let word_limits = words.get(index - 1);
                         let is_form_start = word_limits
-                            .map(|(start, end)| event.editor.current_buffer().range(start, end))
-                            .filter(|filename| filename.starts_with('('))
+                            .map(|(start, end)| event.editor.current_buffer().range(*start, *end))
+                            .filter(|filename| filename == "(")
                             .is_some();
                         if is_form_start {
                             CompType::CommandParen
                         } else {
+                            let word_limits = words.into_iter().nth(index);
                             let is_env_var = word_limits
                                 .map(|(start, end)| event.editor.current_buffer().range(start, end))
                                 .filter(|filename| filename.starts_with('$'))
@@ -314,7 +310,6 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
     }
 
     pat.pop(); // pop out the last '/' character
-               //if pat.ends_with('.') || !pat.ends_with('*') {
     if !pat.ends_with('*') {
         pat.push('*')
     }
@@ -388,20 +383,11 @@ fn get_env_matches(start: &str) -> Vec<String> {
     ret
 }
 
-fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, org_start: &str) {
-    let (start, need_paren) = if org_start.starts_with('(') {
-        (&org_start[1..], true)
-    } else {
-        (org_start, false)
-    };
+fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str) {
     let data = &environment.root_scope.borrow().data;
     for key in data.keys() {
         if key.starts_with(start) {
-            let val = if need_paren {
-                format!("({}", key)
-            } else {
-                key.to_string()
-            };
+            let val = key.to_string();
             match **data.get(key).unwrap() {
                 Expression::Func(_) => comps.push(val),
                 Expression::Function(_) => comps.push(val),
@@ -440,11 +426,6 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
 }
 
 fn find_exes(comps: &mut Vec<String>, start: &str) {
-    let (start, need_paren) = if start.starts_with('(') {
-        (&start[1..], true)
-    } else {
-        (start, false)
-    };
     let paths = if let Some(paths) = env::var_os("PATH") {
         env::split_paths(&paths)
             .map(|s| {
@@ -472,12 +453,7 @@ fn find_exes(comps: &mut Vec<String>, start: &str) {
                                 if let Some(p) = p.file_name() {
                                     if let Some(p) = p.to_str() {
                                         if p.starts_with(start) {
-                                            let com = if need_paren {
-                                                format!("({}", p)
-                                            } else {
-                                                p.to_string()
-                                            };
-                                            comps.push(com);
+                                            comps.push(p.to_string());
                                         }
                                     }
                                 }
