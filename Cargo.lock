@@ -46,16 +46,6 @@ version = "0.2.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "liner"
-version = "0.5.0"
-source = "git+https://github.com/sstanfield/liner.git#e20547612370a4001943c997656b5d4cb8cb91b6"
-dependencies = [
- "bytecount 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "termion 1.5.4 (git+https://gitlab.redox-os.org/redox-os/termion)",
- "unicode-width 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "nix"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,6 +80,16 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "redox_liner"
+version = "0.5.1"
+source = "git+https://github.com/sstanfield/liner.git#bc4d5d751c0eccd5f4bb8a67f3eea60d874b1a18"
+dependencies = [
+ "bytecount 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "termion 1.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-width 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,19 +104,19 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.7.27"
+version = "0.7.28"
 dependencies = [
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
- "liner 0.5.0 (git+https://github.com/sstanfield/liner.git)",
  "nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "redox_liner 0.5.1 (git+https://github.com/sstanfield/liner.git)",
 ]
 
 [[package]]
 name = "termion"
 version = "1.5.4"
-source = "git+https://gitlab.redox-os.org/redox-os/termion#c443136bdc53eb249613d1131d7586338ae73538"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "numtoa 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -172,14 +172,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "31850b4a4d6bae316f7a09e691c944c28299298837edc0a03f755618c23cbc01"
 "checksum glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 "checksum libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)" = "d515b1f41455adea1313a4a2ac8a8a477634fbae63cc6100e3aebb207ce61558"
-"checksum liner 0.5.0 (git+https://github.com/sstanfield/liner.git)" = "<none>"
 "checksum nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3b2e0b4f3320ed72aaedb9a5ac838690a8047c7b275da22711fddff4f8a14229"
 "checksum num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)" = "b85e541ef8255f6cf42bbfe4ef361305c6c135d10919ecc26126c4e5ae94bc09"
 "checksum num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)" = "d4c81ffc11c212fa327657cb19dd85eb7419e163b5b076bede2bdb5c974c07e4"
 "checksum numtoa 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
+"checksum redox_liner 0.5.1 (git+https://github.com/sstanfield/liner.git)" = "<none>"
 "checksum redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)" = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
 "checksum redox_termios 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7e891cfe48e9100a70a3b6eb652fef28920c117d366339687bd5576160db0f76"
-"checksum termion 1.5.4 (git+https://gitlab.redox-os.org/redox-os/termion)" = "<none>"
+"checksum termion 1.5.4 (registry+https://github.com/rust-lang/crates.io-index)" = "818ef3700c2a7b447dca1a1dd28341fe635e6ee103c806c636bb9c929991b2cd"
 "checksum time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)" = "db8dcfca086c1143c9270ac42a2bbd8a7ee477b78ac8e45b19abfb0cbede4b6f"
 "checksum unicode-width 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "7007dbd421b92cc6e28410fe7362e2e0a2503394908f417b68ec8d1c364c4e20"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"

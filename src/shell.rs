@@ -11,10 +11,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use liner::keymap;
-use liner::Buffer;
-use liner::ColorClosure;
-use liner::Context;
+use liner::{keymap, Buffer, ColorClosure, Context, Prompt};
 
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::gethostname;
@@ -32,10 +29,14 @@ enum Keys {
     Emacs,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ReplSettings {
     key_bindings: Keys,
     vi_esc_sequence: Option<(char, char, u32)>,
+    vi_normal_prompt_prefix: Option<String>,
+    vi_normal_prompt_suffix: Option<String>,
+    vi_insert_prompt_prefix: Option<String>,
+    vi_insert_prompt_suffix: Option<String>,
 }
 
 fn load_user_env(environment: &mut Environment, home: &str) {
@@ -78,7 +79,7 @@ fn load_user_env(environment: &mut Environment, home: &str) {
     }
 }
 
-fn get_prompt(environment: &mut Environment) -> String {
+fn get_prompt(environment: &mut Environment) -> Prompt {
     if let Some(exp) = get_expression(environment, "__prompt") {
         let exp = match *exp {
             Expression::Atom(Atom::Lambda(_)) => {
@@ -91,9 +92,11 @@ fn get_prompt(environment: &mut Environment) -> String {
         environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
         let res = eval(environment, &exp);
         environment.save_exit_status = true;
-        res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
+        let ptext = res
+            .unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
             .as_string(environment)
-            .unwrap_or_else(|_| "ERROR".to_string())
+            .unwrap_or_else(|_| "ERROR".to_string());
+        Prompt::from(ptext)
     } else {
         // Nothing set, use a default.
         let hostname = match env::var("HOST") {
@@ -116,12 +119,13 @@ fn get_prompt(environment: &mut Environment) -> String {
         } else {
             "NO_NAME".to_string()
         };
-        format!(
+        let ptext = format!(
             "\x1b[32m{}:\x1b[34m{}\x1b[37m(sl-sh::{})\x1b[32m>\x1b[39m ",
             hostname,
             pwd.display(),
             namespace,
-        )
+        );
+        Prompt::from(ptext)
     }
 }
 
@@ -221,6 +225,10 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
     let mut ret = ReplSettings {
         key_bindings: Keys::Emacs,
         vi_esc_sequence: None,
+        vi_normal_prompt_prefix: None,
+        vi_normal_prompt_suffix: None,
+        vi_insert_prompt_prefix: None,
+        vi_insert_prompt_suffix: None,
     };
     if let Expression::HashMap(repl_settings) = &*repl_settings {
         if let Some(keybindings) = repl_settings.borrow().get(":keybindings") {
@@ -259,6 +267,30 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
                 eprintln!(
                     ":vi_esc_sequence first value should be a string (two key sequence for escape)"
                 );
+            }
+        }
+        if let Some(prefix) = repl_settings.borrow().get(":vi-normal-prompt-prefix") {
+            let prefix = prefix.clone();
+            if let Expression::Atom(Atom::String(prefix)) = &*prefix {
+                ret.vi_normal_prompt_prefix = Some(prefix.to_string());
+            }
+        }
+        if let Some(suffix) = repl_settings.borrow().get(":vi-normal-prompt-suffix") {
+            let suffix = suffix.clone();
+            if let Expression::Atom(Atom::String(suffix)) = &*suffix {
+                ret.vi_normal_prompt_suffix = Some(suffix.to_string());
+            }
+        }
+        if let Some(prefix) = repl_settings.borrow().get(":vi-insert-prompt-prefix") {
+            let prefix = prefix.clone();
+            if let Expression::Atom(Atom::String(prefix)) = &*prefix {
+                ret.vi_insert_prompt_prefix = Some(prefix.to_string());
+            }
+        }
+        if let Some(suffix) = repl_settings.borrow().get(":vi-insert-prompt-suffix") {
+            let suffix = suffix.clone();
+            if let Expression::Atom(Atom::String(suffix)) = &*suffix {
+                ret.vi_insert_prompt_suffix = Some(suffix.to_string());
             }
         }
     }
@@ -398,6 +430,10 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut current_repl_settings = ReplSettings {
         key_bindings: Keys::Emacs,
         vi_esc_sequence: None,
+        vi_normal_prompt_prefix: None,
+        vi_normal_prompt_suffix: None,
+        vi_insert_prompt_prefix: None,
+        vi_insert_prompt_suffix: None,
     };
     con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
@@ -409,13 +445,17 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                     if let Some((ch1, ch2, timeout)) = new_repl_settings.vi_esc_sequence {
                         vi.set_esc_sequence(ch1, ch2, timeout);
                     }
+                    vi.set_normal_prompt_prefix(new_repl_settings.vi_normal_prompt_prefix.clone());
+                    vi.set_normal_prompt_suffix(new_repl_settings.vi_normal_prompt_suffix.clone());
+                    vi.set_insert_prompt_prefix(new_repl_settings.vi_insert_prompt_prefix.clone());
+                    vi.set_insert_prompt_suffix(new_repl_settings.vi_insert_prompt_suffix.clone());
                     Box::new(vi)
                 }
                 Keys::Emacs => Box::new(keymap::Emacs::new()),
             };
             con.set_keymap(keymap);
         };
-        current_repl_settings = new_repl_settings;
+        current_repl_settings = new_repl_settings.clone();
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
         // Clear the SIGINT if one occured.
