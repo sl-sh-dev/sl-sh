@@ -130,7 +130,7 @@ impl ShellCompleter {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
                                 let s = match l.as_string(envir) {
-                                    Ok(s) => s,
+                                    Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
                                 };
                                 v.push(s);
@@ -141,7 +141,7 @@ impl ShellCompleter {
                             let mut v = Vec::new();
                             for l in res.iter() {
                                 let s = match l.as_string(envir) {
-                                    Ok(s) => s,
+                                    Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
                                 };
                                 v.push(s);
