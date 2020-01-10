@@ -4,10 +4,15 @@ This is a shell build around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
 
-It support quote and backquote (with , and ,@ expansion).
+It supports quote and backquote (with , and ,@ expansion).
 
-To install you need to copy the two files from the lisp subdirectory to ~/.config/slsh (otherwise you will not have any of the macros).
-The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example or the contrib directory for examples.
+The config directory is ~/.config/sl-sh.  The binary will have a built in config (lisp/slshrc),
+you can put your own slshrc file the config directory (~/.config/sl-sh).
+See the file slshrc.example (at least look at this one), lisp/slshrc (this is the built in config)
+or the contrib directory for example configs (contrib/gpwclark/ contains an example of using bash
+completions with sl-sh as well as other handy things).  The other files in lisp/ are also built
+into the binary but versions can be copied to ~/.config/sl-sh and those will be used instead.
+These files contain the lisp code for the shell (anything from the tables below that is not builtin).
 
 ## Building
 
@@ -17,7 +22,13 @@ The shell config file is ~/.config/slsh/slshrc , see the file slshrc.example or 
 - [ ] Test scripts to exercise everything.
 - [ ] Better Docs.
 
+## Examples
+Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
+
 ## Available forms:
+
+Note that builtins are somewhat stable but things (macros, etc) are more likely to change (some macros
+are just tossed together and need replacing- match to cond for instance).
 
 ### Core Forms
 Form | Args | Type | description
@@ -66,6 +77,7 @@ dyn | symbol value form | Sets dynamic var to symbol to value for the execution 
 '<=' | | builtin |
 setq | symbol/value | macro | Same as set but it quotes the parameter name for you ("set 'xx '(1 2 3)" == "setq xx '(1 2 3).
 defn | name/args_form/body | macro | Define a lambda.
+setfn | name/args_form/body | macro | Define a lambda and assign it to an existing symbol.
 loop | | macro |
 dotimes | | macro |
 dotimesi | | macro |
@@ -125,11 +137,10 @@ xdr! | pair/obj | builtin | Modifies pair by settings it's cdr to obj, produces 
 
 
 ### Vector Forms
-Currently slsh uses vectors not cons lists for its internal list structure.
-Forms ending in '!' are destructive and change the underlying vector other forms
+Forms ending in '!' are destructive and change the underlying vector, other forms
 do not make changes to the the provided vector.  They are usable in place of a
 list for purposes of lambda calls, parameters, etc (they work the same as a list
-made froms pairs but are vectors not linked lists).  Use #() to declare them in
+made from pairs but are vectors not linked lists).  Use #() to declare them in
 code (i.e. '#(1 2 3) or #(+ 1 2)).
 
 Builtins:
@@ -153,7 +164,7 @@ vec-slice | vector/start/end | builtin | Returns a new vector containing element
 These macros will work on either a vector or a pair made into a proper list
 (cons list).  Use these in preference to the vector/list specific versions when
 possible (ie first vs car).
-NOTE: list on this tables can be a vector or a list.
+NOTE: list on this table can be a vector or a list.
 
 Form | Args | Type | description
 -----|------|------|------------
