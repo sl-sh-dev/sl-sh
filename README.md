@@ -6,12 +6,12 @@ parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
 
 It supports quote and backquote (with , and ,@ expansion).
 
-The config directory is ~/.config/sl-sh.  The binary will have a built in config (lisp/slshrc),
-you can put your own slshrc file the config directory (~/.config/sl-sh).
+The config directory is i\~/.config/sl-sh.  The binary will have a built in config (lisp/slshrc),
+you can put your own slshrc file the config directory (\~/.config/sl-sh).
 See the file slshrc.example (at least look at this one), lisp/slshrc (this is the built in config)
 or the contrib directory for example configs (contrib/gpwclark/ contains an example of using bash
 completions with sl-sh as well as other handy things).  The other files in lisp/ are also built
-into the binary but versions can be copied to ~/.config/sl-sh and those will be used instead.
+into the binary but versions can be copied to \~/.config/sl-sh and those will be used instead.
 These files contain the lisp code for the shell (anything from the tables below that is not builtin).
 
 ## Building
