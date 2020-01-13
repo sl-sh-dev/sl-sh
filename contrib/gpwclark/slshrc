@@ -1,7 +1,14 @@
 ;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
 (core::ns-import 'core)
 (ns-import 'shell)
+
+;; gpwclark TODOs
+;; write macro to change "de-thread" ipipe macro
+;; cond and when!!!!
+
+;; bash-completions.lisp is located in contrib/gpwclark
 (load "~/.config/sl-sh/bash-completions.lisp")
+(load (str "~/.config/sl-sh/" (cat /etc/hostname) ".lisp"))
 
 ;; custom env settings {{{
 	;; use vi keybindings on cli
@@ -199,6 +206,8 @@
 					(1 (change-dir-if-arg-is-dir (first args-list)))
 					(nil cmd-to-execute))))
 ;; }}}
+
+(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-red*)
 
 ;; i'm fun {{{
 	(println "		Hey, hey, hey. Don't be mean.")

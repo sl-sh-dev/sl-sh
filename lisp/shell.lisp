@@ -147,6 +147,8 @@
 			(if (and (fs-exists? path)(not ret)) (set 'ret t)))))
 	ret))
 
+(defq set-tok-colors nil)
+
 ;; Turn on syntax highlighting at the repl.
 (defmacro syntax-on  () '(progn
 ; Syntax highlight the supplied line.
@@ -172,6 +174,8 @@
 				(if (= col 2) shell::*fg-yellow*
 					(if (= col 3) shell::*fg-blue*))))))
 
+
+
 	(defn my-sys-command? (command) (progn
 		(def 'ret nil)
 		(if (hash-haskey sys-syms command)
@@ -181,16 +185,30 @@
 				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
 		ret))
 
+	(defq tok-slsh-form-color shell::*fg-blue*)
+	(defq tok-slsh-fcn-color shell::*fg-cyan*)
+	(defq tok-default-color shell::*fg-default*)
+	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-invalid-color shell::*fg-red*)
+
+	(setfn set-tok-colors (slsh-form-color slsh-fcn-color default-color sys-command-color invalid-color)
+		(progn
+			(setq tok-slsh-form-color slsh-form-color)
+			(setq tok-slsh-fcn-color slsh-fcn-color)
+			(setq tok-default-color default-color)
+			(setq tok-sys-command-color sys-command-color)
+			(setq tok-invalid-color invalid-color)))
+
 	(defn command-color (command)
 		(if (not tok-command)
 			(if (def? (to-symbol command))
-				(str shell::*fg-blue* command shell::*fg-default*)
-				command)
+				(str tok-slsh-form-color command shell::*fg-default*)
+				(str tok-default-color command shell::*fg-default*))
 			(if (func? command)
-				(str shell::*fg-blue* command shell::*fg-default*)
+				(str tok-slsh-fcn-color command shell::*fg-default*)
 				(if (sys-command? command)
-					(str shell::*fg-white* command shell::*fg-default*)
-					(str shell::*fg-red* command shell::*fg-default*)))))
+					(str tok-sys-command-color command shell::*fg-default*)
+					(str tok-invalid-color command shell::*fg-default*)))))
 
 	(defn prtoken () (progn
 		(def 'ttok token)
@@ -238,5 +256,5 @@
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))
 
-(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off))
+(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off set-tok-colors))
 
