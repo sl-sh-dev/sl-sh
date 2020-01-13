@@ -127,6 +127,7 @@
 	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
 
 
+;; https://wiki-dev.bash-hackers.org/scripting/terminalcodes
 (def '*fg-default* "\x1b[39m")
 (def '*fg-black* "\x1b[30m")
 (def '*fg-red* "\x1b[31m")
@@ -136,6 +137,33 @@
 (def '*fg-magenta* "\x1b[35m")
 (def '*fg-cyan* "\x1b[36m")
 (def '*fg-white* "\x1b[37m")
+
+(def '*bg-default* "\x1b[49m")
+(def '*bg-black* "\x1b[40m")
+(def '*bg-red* "\x1b[41m")
+(def '*bg-green* "\x1b[42m")
+(def '*bg-yellow* "\x1b[43m")
+(def '*bg-blue* "\x1b[44m")
+(def '*bg-magenta* "\x1b[45m")
+(def '*bg-cyan* "\x1b[46m")
+(def '*bg-white* "\x1b[47m")
+
+;; given 3 numbers 0-255 representing RGB values,
+;; return corresponding ANSI font color code
+(defn fg-color-rgb (R G B)
+  (get-rgb-seq R G B :font))
+
+;; given 3 numbers 0-255 representing RGB values,
+;; return corresponding ANSI background color code
+(defn bg-color-rgb (R G B)
+  (get-rgb-seq R G B :bkrd))
+
+(defn get-rgb-seq (R G B color-type)
+      (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      (match color-type
+             (:font (make-color 38))
+             (:bkrd (make-color 48))
+             (nil (make-color 38)))))
 
 ;; True if the supplied command is a system command.
 (defn sys-command? (com) (progn
@@ -161,6 +189,7 @@
 	(token (str-buf ""))
 	(tok-command t))
 
+;; TODO make this a macro
 	(defn func? (com) (progn
 		(def 'com-sym (to-symbol com))
 		; Want the actual thing pointed to by the symbol in com for the test.
