@@ -210,8 +210,6 @@
 					(nil cmd-to-execute))))
 ;; }}}
 
-(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-red*)
-
 ;; i'm fun {{{
 	(println "		Hey, hey, hey. Don't be mean.")
 	(println "		We don't have to be mean because,")
