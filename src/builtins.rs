@@ -83,6 +83,7 @@ fn builtin_apply(
                 Box::new(list_borrow.iter())
             }
             Expression::Pair(_, _) => last_evaled.iter(),
+            Expression::Atom(Atom::Nil) => last_evaled.iter(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
