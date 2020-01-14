@@ -32,6 +32,7 @@ enum Keys {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReplSettings {
     key_bindings: Keys,
+    max_history: usize,
     vi_esc_sequence: Option<(char, char, u32)>,
     vi_normal_prompt_prefix: Option<String>,
     vi_normal_prompt_suffix: Option<String>,
@@ -224,6 +225,7 @@ fn handle_result(
 fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
     let mut ret = ReplSettings {
         key_bindings: Keys::Emacs,
+        max_history: 1000,
         vi_esc_sequence: None,
         vi_normal_prompt_prefix: None,
         vi_normal_prompt_suffix: None,
@@ -239,6 +241,18 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
                     ":emacs" => ret.key_bindings = Keys::Emacs,
                     _ => eprintln!("Invalid keybinding setting: {}", keybindings),
                 }
+            }
+        }
+        if let Some(max) = repl_settings.borrow().get(":max-history") {
+            let max = max.clone();
+            if let Expression::Atom(Atom::Int(max)) = &*max {
+                if *max >= 0 {
+                    ret.max_history = *max as usize;
+                } else {
+                    eprintln!("Max history must be positive: {}", max);
+                }
+            } else {
+                eprintln!("Max history must be a positive integer: {}", max);
             }
         }
         if let Some(vi_esc) = repl_settings.borrow().get(":vi_esc_sequence") {
@@ -429,6 +443,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         );
     let mut current_repl_settings = ReplSettings {
         key_bindings: Keys::Emacs,
+        max_history: 1000,
         vi_esc_sequence: None,
         vi_normal_prompt_prefix: None,
         vi_normal_prompt_suffix: None,
@@ -454,6 +469,8 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 Keys::Emacs => Box::new(keymap::Emacs::new()),
             };
             con.set_keymap(keymap);
+            con.history
+                .set_max_history_size(new_repl_settings.max_history);
         };
         current_repl_settings = new_repl_settings.clone();
         environment.borrow_mut().state.stdout_status = None;

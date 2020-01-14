@@ -78,6 +78,10 @@ Or setting the mode explicity to vi:
 ```
 	(hash-set! *repl-settings* :keybindings :vi)
 ```
+Setting the max number of history items (default 1000):
+```
+	(hash-set! *repl-settings* :max-history 1000)
+```
 
 #### vi mods
 For the convenience of vi users the vi escape char can be changed:
