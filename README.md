@@ -6,7 +6,7 @@ parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
 
 It supports quote and backquote (with , and ,@ expansion).
 
-It supports Common Lisp style keywork symbols with colon.
+It supports Common Lisp style keyword symbols with colon.
 
 The config directory is \~/.config/sl-sh.  The binary will have a built in config (lisp/slshrc),
 you can put your own slshrc file the config directory (\~/.config/sl-sh).
