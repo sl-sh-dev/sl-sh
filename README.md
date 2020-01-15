@@ -28,7 +28,7 @@ These files contain the lisp code for the shell (anything from the tables below 
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
 
 ## ~/.config/sl-sh/slshrc extensions
-The following section details functionality to extend and mofidy the behavior of
+The following section details functionality to extend and modify the behavior of
 the shell.
 
 ### Prompt/PS1
