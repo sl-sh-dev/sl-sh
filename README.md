@@ -133,30 +133,36 @@ five arguments defined in the order the defaults are listed above.
 The folowing
 colors are defined in the shell namespace:
 ```
-(def '*fg-default* "\x1b[39m")
-(def '*fg-black* "\x1b[30m")
-(def '*fg-red* "\x1b[31m")
-(def '*fg-green* "\x1b[32m")
-(def '*fg-yellow* "\x1b[33m")
-(def '*fg-blue* "\x1b[34m")
-(def '*fg-magenta* "\x1b[35m")
-(def '*fg-cyan* "\x1b[36m")
-(def '*fg-white* "\x1b[37m")
+	(def '*fg-default* "\x1b[39m")
+	(def '*fg-black* "\x1b[30m")
+	(def '*fg-red* "\x1b[31m")
+	(def '*fg-green* "\x1b[32m")
+	(def '*fg-yellow* "\x1b[33m")
+	(def '*fg-blue* "\x1b[34m")
+	(def '*fg-magenta* "\x1b[35m")
+	(def '*fg-cyan* "\x1b[36m")
+	(def '*fg-white* "\x1b[37m")
 
-(def '*bg-default* "\x1b[49m")
-(def '*bg-black* "\x1b[40m")
-(def '*bg-red* "\x1b[41m")
-(def '*bg-green* "\x1b[42m")
-(def '*bg-yellow* "\x1b[43m")
-(def '*bg-blue* "\x1b[44m")
-(def '*bg-magenta* "\x1b[45m")
-(def '*bg-cyan* "\x1b[46m")
-(def '*bg-white* "\x1b[47m")
+	(def '*bg-default* "\x1b[49m")
+	(def '*bg-black* "\x1b[40m")
+	(def '*bg-red* "\x1b[41m")
+	(def '*bg-green* "\x1b[42m")
+	(def '*bg-yellow* "\x1b[43m")
+	(def '*bg-blue* "\x1b[44m")
+	(def '*bg-magenta* "\x1b[45m")
+	(def '*bg-cyan* "\x1b[46m")
+	(def '*bg-white* "\x1b[47m")
 ```
 Functions that take rgb values are also defined `(fg-color-rgb)` and
 `(bg-color-rgb)`. For example:
 ```
-(println (str (fg-color-rgb 255 0 0) (bg-color-rgb 0 0 255) "I have red text and a blue background" shell::*fg-default* shell::*bg-default*))
+	(println 
+		(str 
+			(fg-color-rgb 255 0 0) 
+			(bg-color-rgb 0 0 255) 
+			"I have red text and a blue background" 
+			shell::*fg-default* 
+			shell::*bg-default*))
 ```
 Prints this "truth-telling" string while also not changing any chars printed after
 by setting the fg and bg back to the default.
