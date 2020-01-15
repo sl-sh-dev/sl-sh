@@ -285,5 +285,4 @@
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))
 
-(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off set-tok-colors))
-
+(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off set-tok-colors fg-color-rgb bg-color-rgb))

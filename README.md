@@ -53,7 +53,7 @@ will be evaluated as a sl-sh form. This is useful if you want to check all
 input and modify said input if it meets certain conditions. For instance, if
 one were to decide that inputting any valid path to sl-sh should result in the
 shell changing the current working directory to that directory:
-``
+```
 	(defn change-dir-if-arg-is-dir (cmd)
 			(if (fs-dir? cmd)
 				(str "cd " cmd)
@@ -84,6 +84,7 @@ Setting the max number of history items (default 1000):
 ```
 
 #### vi mods
+
 For the convenience of vi users the vi escape char can be changed:
 ```
 	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
@@ -109,11 +110,62 @@ background color codes and restoration to the default is desired.
 ### Look and Feel
 If syntax highlighting is desired it can be explicitly turned on:
 ```
-	(synax-on)
+	(syntax-on)
 ```
 The distinction is made between, sl-sh forms, invalid commands, valid
 executables, and any token that is not a sl-sh form and not the first string
 input as a command.
+
+Default colors are as follows:
+```
+	(defq tok-slsh-form-color shell::*fg-blue*)
+	(defq tok-slsh-fcn-color shell::*fg-cyan*)
+	(defq tok-default-color shell::*fg-default*)
+	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-invalid-color shell::*fg-red*)
+```
+
+The function `set-tok-colors` can be used to modify these, the function takes
+five arguments defined in the order the defaults are listed above.
+
+#### Color
+
+The folowing
+colors are defined in the shell namespace:
+```
+	(def '*fg-default* "\x1b[39m")
+	(def '*fg-black* "\x1b[30m")
+	(def '*fg-red* "\x1b[31m")
+	(def '*fg-green* "\x1b[32m")
+	(def '*fg-yellow* "\x1b[33m")
+	(def '*fg-blue* "\x1b[34m")
+	(def '*fg-magenta* "\x1b[35m")
+	(def '*fg-cyan* "\x1b[36m")
+	(def '*fg-white* "\x1b[37m")
+
+	(def '*bg-default* "\x1b[49m")
+	(def '*bg-black* "\x1b[40m")
+	(def '*bg-red* "\x1b[41m")
+	(def '*bg-green* "\x1b[42m")
+	(def '*bg-yellow* "\x1b[43m")
+	(def '*bg-blue* "\x1b[44m")
+	(def '*bg-magenta* "\x1b[45m")
+	(def '*bg-cyan* "\x1b[46m")
+	(def '*bg-white* "\x1b[47m")
+```
+Functions that take rgb values are also defined `(fg-color-rgb)` and
+`(bg-color-rgb)`. For example:
+```
+	(println
+		(str
+			(fg-color-rgb 255 0 0)
+			(bg-color-rgb 0 0 255)
+			"I have red text and a blue background"
+			shell::*fg-default*
+			shell::*bg-default*))
+```
+Prints this "truth-telling" string while also not changing any chars printed after
+by setting the fg and bg back to the default.
 
 ### Error reporting
 Use
