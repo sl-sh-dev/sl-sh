@@ -82,7 +82,7 @@
 	(defn __completion_hook (&rest args)
 		(match (first args)
 			("cd" 'path)
-			("ls" 'default)
+			("ls" 'path)
 			(nil
 				(progn
 					(defq possible-completions (check-bash-completion args))

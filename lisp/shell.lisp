@@ -127,6 +127,7 @@
 	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
 
 
+;; https://wiki-dev.bash-hackers.org/scripting/terminalcodes
 (def '*fg-default* "\x1b[39m")
 (def '*fg-black* "\x1b[30m")
 (def '*fg-red* "\x1b[31m")
@@ -137,6 +138,33 @@
 (def '*fg-cyan* "\x1b[36m")
 (def '*fg-white* "\x1b[37m")
 
+(def '*bg-default* "\x1b[49m")
+(def '*bg-black* "\x1b[40m")
+(def '*bg-red* "\x1b[41m")
+(def '*bg-green* "\x1b[42m")
+(def '*bg-yellow* "\x1b[43m")
+(def '*bg-blue* "\x1b[44m")
+(def '*bg-magenta* "\x1b[45m")
+(def '*bg-cyan* "\x1b[46m")
+(def '*bg-white* "\x1b[47m")
+
+;; given 3 numbers 0-255 representing RGB values,
+;; return corresponding ANSI font color code
+(defn fg-color-rgb (R G B)
+  (get-rgb-seq R G B :font))
+
+;; given 3 numbers 0-255 representing RGB values,
+;; return corresponding ANSI background color code
+(defn bg-color-rgb (R G B)
+  (get-rgb-seq R G B :bkrd))
+
+(defn get-rgb-seq (R G B color-type)
+      (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      (match color-type
+             (:font (make-color 38))
+             (:bkrd (make-color 48))
+             (nil (make-color 38)))))
+
 ;; True if the supplied command is a system command.
 (defn sys-command? (com) (progn
 	(def 'ret nil)
@@ -146,6 +174,8 @@
 			(def 'path (str p "/" com))
 			(if (and (fs-exists? path)(not ret)) (set 'ret t)))))
 	ret))
+
+(defq set-tok-colors nil)
 
 ;; Turn on syntax highlighting at the repl.
 (defmacro syntax-on  () '(progn
@@ -159,6 +189,7 @@
 	(token (str-buf ""))
 	(tok-command t))
 
+;; TODO make this a macro
 	(defn func? (com) (progn
 		(def 'com-sym (to-symbol com))
 		; Want the actual thing pointed to by the symbol in com for the test.
@@ -172,6 +203,8 @@
 				(if (= col 2) shell::*fg-yellow*
 					(if (= col 3) shell::*fg-blue*))))))
 
+
+
 	(defn my-sys-command? (command) (progn
 		(def 'ret nil)
 		(if (hash-haskey sys-syms command)
@@ -181,16 +214,30 @@
 				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
 		ret))
 
+	(defq tok-slsh-form-color shell::*fg-blue*)
+	(defq tok-slsh-fcn-color shell::*fg-cyan*)
+	(defq tok-default-color shell::*fg-default*)
+	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-invalid-color shell::*fg-red*)
+
+	(setfn set-tok-colors (slsh-form-color slsh-fcn-color default-color sys-command-color invalid-color)
+		(progn
+			(setq tok-slsh-form-color slsh-form-color)
+			(setq tok-slsh-fcn-color slsh-fcn-color)
+			(setq tok-default-color default-color)
+			(setq tok-sys-command-color sys-command-color)
+			(setq tok-invalid-color invalid-color)))
+
 	(defn command-color (command)
 		(if (not tok-command)
 			(if (def? (to-symbol command))
-				(str shell::*fg-blue* command shell::*fg-default*)
-				command)
+				(str tok-slsh-form-color command shell::*fg-default*)
+				(str tok-default-color command shell::*fg-default*))
 			(if (func? command)
-				(str shell::*fg-blue* command shell::*fg-default*)
+				(str tok-slsh-fcn-color command shell::*fg-default*)
 				(if (sys-command? command)
-					(str shell::*fg-white* command shell::*fg-default*)
-					(str shell::*fg-red* command shell::*fg-default*)))))
+					(str tok-sys-command-color command shell::*fg-default*)
+					(str tok-invalid-color command shell::*fg-default*)))))
 
 	(defn prtoken () (progn
 		(def 'ttok token)
@@ -238,5 +285,5 @@
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))
 
-(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off))
+(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off set-tok-colors))
 
