@@ -217,5 +217,5 @@
 	(println "		We don't have to be mean because,")
 	(println "		remember, no matter where you go,")
 	(println "		there you are.")
-	(println "			- Buckaroo Banzai")
+	(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
 ;; }}}
