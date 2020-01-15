@@ -24,6 +24,8 @@
 	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-red*)
 
 	(error-stack-on)
+
+	(hash-set! *repl-settings* :max-history 10000)
 ;; }}}
 
 ;; quality of life {{{
