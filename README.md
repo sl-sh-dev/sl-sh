@@ -109,7 +109,7 @@ background color codes and restoration to the default is desired.
 ### Look and Feel
 If syntax highlighting is desired it can be explicitly turned on:
 ```
-	(synax-on)
+	(syntax-on)
 ```
 The distinction is made between, sl-sh forms, invalid commands, valid
 executables, and any token that is not a sl-sh form and not the first string
