@@ -32,8 +32,8 @@ The following section details functionality to extend and modify the behavior of
 the shell.
 
 ### Prompt/PS1
-The command prompt for the shell is customizeable via the `__prompt` function. The
-function takes no arguments and expects a string to be returned. The canonincal
+The command prompt for the shell is customize-able via the `__prompt` function. The
+function takes no arguments and expects a string to be returned. The canonical
 prompt in sl-sh would simple be:
 ```
 	(defn __prompt()
@@ -74,7 +74,7 @@ explicitly to emacs:
 ```
 	(hash-set! *repl-settings* :keybindings :emacs)
 ```
-Or setting the mode explicity to vi:
+Or setting the mode explicitly to vi:
 ```
 	(hash-set! *repl-settings* :keybindings :vi)
 ```
@@ -94,7 +94,7 @@ seconds argument is the number of ms the readline library will wait to receive
 the full escape sequence.
 
 Because vi uses modal editing and because modal editing has state the readline
-library allows modifing the last line of PS1 in any way the user desires The
+library allows modifying the last line of PS1 in any way the user desires The
 following four settings apply:
 ```
 	(hash-set! *repl-settings* :vi-insert-prompt-prefix "")
@@ -130,7 +130,7 @@ five arguments defined in the order the defaults are listed above.
 
 #### Color
 
-The folowing
+The following
 colors are defined in the shell namespace:
 ```
 	(def '*fg-default* "\x1b[39m")
@@ -185,7 +185,7 @@ are just tossed together and need replacing- match to cond for instance).
 ### Core Forms
 Form | Args | Type | description
 -----|------|------|------------
-eval | Form or string to evalute | builtin | 
+eval | Form or string to evaluate | builtin | 
 fncall | fn form+ | builtin | Calls the first argument (lambda or builtin function) with the rest of the args.
 apply | fn form* list | builtin | Calls the first argument (lambda or builtin function) with the rest of the args and spreads the final arg out (must be a list).
 unwind-protect | form/form* | builtin | Evals the first form and returns it's result, all of the other forms will eval even if the first form error's out.
@@ -207,7 +207,7 @@ let | | macro |
 quote | | builtin |
 spawn | | builtin | Currently unavailable.  Use run-bg for background processes.
 and | form* | builtin | Evaluate each form left to right and stop on a nil (produce nil). Produce the last form's value if no nils.  Produce true on no arguments.
-or | form* | builtin | Evaluate each form left to right and produce the first non-nil result (stop evaluting). Produce nil on no arguments.
+or | form* | builtin | Evaluate each form left to right and produce the first non-nil result (stop evaluating). Produce nil on no arguments.
 not | | builtin |
 null | | builtin |
 def? | symbol | builtin | Return true if symbol is defined for current scope.
@@ -354,7 +354,7 @@ str | form* | builtin | Creates a new string with the values of it's arguments. 
 str-trim | string | builtin | Trims both left and right on string.
 str-ltrim | string | builtin | Left trims string.
 str-rtrim | string | builtin | Right trims string.
-str-replace | string/old/new | builtin | Produces a new string by replacing all occurances of old with new.
+str-replace | string/old/new | builtin | Produces a new string by replacing all occurrences of old with new.
 str-split | split_string/string | builtin | Produces a list by splitting the string on the provided split_string.
 str-rsplit | split_string/string | builtin | Produces a list by splitting the string on the provided split_string in reverse order.
 str-splitn | n/split_string/string | builtin | Produces a list by splitting the string on the provided split_string with at most n items.
@@ -372,7 +372,7 @@ str-map | lambda string | builtin | Creates a new string by applying the lambda 
 str-buf | form* | builtin | Creates a new string buffer with the values of it's arguments.  Any command's run under it will have stdout captured as a string.  Use a string buffer to build strings without excess allocations.
 str-buf-push! | form* | builtin | First form is a string buffer that the following forms are appended to.
 str-buf-clear! | string buffer | builtin | Clear the provided string buffer.
-str-buf-map | lambda string | builtin | Creates a new stringi buffer by applying the lambda to each character of the provided string (or string buffer).
+str-buf-map | lambda string | builtin | Creates a new string buffer by applying the lambda to each character of the provided string (or string buffer).
 
 
 ### Char Forms
