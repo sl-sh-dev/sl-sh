@@ -6,6 +6,8 @@ parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
 
 It supports quote and backquote (with , and ,@ expansion).
 
+It supports Common Lisp style keyword symbols with colon.
+
 The config directory is \~/.config/sl-sh.  The binary will have a built in config (lisp/slshrc),
 you can put your own slshrc file the config directory (\~/.config/sl-sh).
 See the file slshrc.example (at least look at this one), lisp/slshrc (this is the built in config)
@@ -24,6 +26,104 @@ These files contain the lisp code for the shell (anything from the tables below 
 
 ## Examples
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
+
+## ~/.config/sl-sh/slshrc extensions
+The following section details functionality to extend and modify the behavior of
+the shell.
+
+### Prompt/PS1
+The command prompt for the shell is customizeable via the `__prompt` function. The
+function takes no arguments and expects a string to be returned. The canonincal
+prompt in sl-sh would simple be:
+```
+	(defn __prompt()
+		(str "$ "))
+```
+
+### Command processing
+sl-sh offers two "hooks" for intercepting commands being executed:
+`__completion_hook` and `__exec_hook`.
+- `__completion_hook` is used to aid in tab completions. It takes a varargs and
+expects a list of string to be returned. For convenience 'path and 'default
+are also allowable return values. 'path represents the list of paths and
+'default is 'path concatenated with all valid sl-sh forms.
+- `__exec_hook` is an intercept function for every command sent to sl-sh. The
+function takes a string and expects a string to be returned. The string returned
+will be evaluated as a sl-sh form. This is useful if you want to check all
+input and modify said input if it meets certain conditions. For instance, if
+one were to decide that inputting any valid path to sl-sh should result in the
+shell changing the current working directory to that directory:
+``
+	(defn change-dir-if-arg-is-dir (cmd)
+			(if (fs-dir? cmd)
+				(str "cd " cmd)
+				cmd))
+
+	(defn __exec_hook (cmd-to-execute)
+		(let ((args-list (str-split " " cmd-to-execute)))
+				(match (length args-list)
+					(1 (change-dir-if-arg-is-dir (first args-list)))
+					(nil cmd-to-execute))))
+```
+
+
+### Readline Functionality
+sl-sh uses a readline-like library to make using the shell ergonomic. Like bash
+there are two "modes" vi and emacs, the default is emacs. Setting the mode
+explicitly to emacs:
+```
+	(hash-set! *repl-settings* :keybindings :emacs)
+```
+Or setting the mode explicity to vi:
+```
+	(hash-set! *repl-settings* :keybindings :vi)
+```
+Setting the max number of history items (default 1000):
+```
+	(hash-set! *repl-settings* :max-history 1000)
+```
+
+#### vi mods
+For the convenience of vi users the vi escape char can be changed:
+```
+	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
+```
+The first argument is the list of chars that indicate the esc sequence and the
+seconds argument is the number of ms the readline library will wait to receive
+the full escape sequence.
+
+Because vi uses modal editing and because modal editing has state the readline
+library allows modifing the last line of PS1 in any way the user desires The
+following four settings apply:
+```
+	(hash-set! *repl-settings* :vi-insert-prompt-prefix "")
+	(hash-set! *repl-settings* :vi-insert-prompt-suffix "")
+	(hash-set! *repl-settings* :vi-normal-prompt-prefix "")
+	(hash-set! *repl-settings* :vi-normal-prompt-suffix "")
+```
+In practice it is useful to extend the last line of PS1 in one or both of vi's
+editing modes to be prefixed or suffixed with strings To provide context to
+the user. The -suffix commands are especially useful if using foreground or
+background color codes and restoration to the default is desired.
+
+### Look and Feel
+If syntax highlighting is desired it can be explicitly turned on:
+```
+	(synax-on)
+```
+The distinction is made between, sl-sh forms, invalid commands, valid
+executables, and any token that is not a sl-sh form and not the first string
+input as a command.
+
+### Error reporting
+Use
+```
+	(error-stack-on)
+```
+if stack traces are desired. The default is
+```
+	(error-stack-off)
+```
 
 ## Available forms:
 
