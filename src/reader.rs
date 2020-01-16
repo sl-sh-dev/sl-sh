@@ -274,15 +274,13 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
             continue;
         }
         if ch == '\"' && last_ch != '\\' {
+            if !in_string {
+                save_token!(tokens, token, line, column);
+            }
             in_string = !in_string;
             token.push(ch);
             if !in_string {
-                tokens.push(Token {
-                    token,
-                    line,
-                    column,
-                });
-                token = String::new();
+                save_token!(tokens, token, line, column);
             } else {
                 in_escape_code = false;
                 escape_code.clear();
