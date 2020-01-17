@@ -192,7 +192,7 @@ fn builtin_read(environment: &mut Environment, args: &[Expression]) -> io::Resul
     if args.len() != 1 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "read takes one form (file)",
+            "read takes one form (file or string)",
         ))
     } else {
         let exp = &args[0];
@@ -203,10 +203,15 @@ fn builtin_read(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 Ok(ast) => Ok(ast),
                 Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
             }
+        } else if let Expression::Atom(Atom::String(string)) = &exp {
+            match read(&string, false) {
+                Ok(ast) => Ok(ast),
+                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+            }
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "read requires a file opened for reading",
+                "read requires a file opened for reading or string",
             ))
         }
     }
