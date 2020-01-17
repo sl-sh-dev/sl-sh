@@ -149,7 +149,9 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
                 _ => return input.to_string(),
             };
             environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with line_handler.
+            environment.borrow_mut().str_ignore_expand = true;
             let res = eval(&mut environment.borrow_mut(), &exp);
+            environment.borrow_mut().str_ignore_expand = false;
             environment.borrow_mut().save_exit_status = true;
             res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
                 .as_string(&environment.borrow())

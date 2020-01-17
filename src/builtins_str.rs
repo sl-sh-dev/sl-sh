@@ -722,6 +722,23 @@ fn builtin_str_buf_map(
     ))
 }
 
+pub fn builtin_str_ignore_expand(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let save_ignore = environment.str_ignore_expand;
+    environment.str_ignore_expand = true;
+    let mut ret = Ok(Expression::Atom(Atom::Nil));
+    for arg in args {
+        ret = eval(environment, &arg);
+        if ret.is_err() {
+            break;
+        }
+    }
+    environment.str_ignore_expand = save_ignore;
+    ret
+}
+
 fn builtin_char_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -945,6 +962,13 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_buf_map,
             "Make a new string by applying lambda to each char.",
+        )),
+    );
+    data.insert(
+        "str-ignore-expand".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_ignore_expand,
+            "Like progn but any strings in the form will not be expanded.",
         )),
     );
 

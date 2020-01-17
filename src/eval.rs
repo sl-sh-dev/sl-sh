@@ -190,7 +190,18 @@ fn fn_eval<'a>(
             } else if environment.form_type == FormType::ExternalOnly
                 || environment.form_type == FormType::Any
             {
-                do_command(environment, command, parts)
+                if command.starts_with('$') {
+                    if let Ok(Expression::Atom(Atom::String(command))) =
+                        str_process(environment, command)
+                    {
+                        do_command(environment, &command, parts)
+                    } else {
+                        let msg = format!("Not a valid form {}, not found.", command.to_string());
+                        Err(io::Error::new(io::ErrorKind::Other, msg))
+                    }
+                } else {
+                    do_command(environment, command, parts)
+                }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command.to_string());
                 Err(io::Error::new(io::ErrorKind::Other, msg))
@@ -239,6 +250,44 @@ fn fn_eval<'a>(
             );
             Err(io::Error::new(io::ErrorKind::Other, msg))
         }
+    }
+}
+
+fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expression> {
+    if !environment.str_ignore_expand && string.contains('$') {
+        let mut new_string = String::new();
+        let mut last_ch = '\0';
+        let mut in_var = false;
+        let mut var_start = 0;
+        for (i, ch) in string.chars().enumerate() {
+            if in_var {
+                if ch == ' ' || (ch == '$' && last_ch != '\\') {
+                    in_var = false;
+                    match env::var(&string[var_start + 1..i]) {
+                        Ok(val) => new_string.push_str(&val),
+                        Err(_) => new_string.push_str(""),
+                    }
+                }
+                if ch == ' ' {
+                    new_string.push(' ');
+                }
+            } else if ch == '$' && last_ch != '\\' {
+                in_var = true;
+                var_start = i;
+            } else {
+                new_string.push(ch);
+            }
+            last_ch = ch;
+        }
+        if in_var {
+            match env::var(&string[var_start + 1..]) {
+                Ok(val) => new_string.push_str(&val),
+                Err(_) => new_string.push_str(""),
+            }
+        }
+        Ok(Expression::Atom(Atom::String(new_string)))
+    } else {
+        Ok(Expression::Atom(Atom::String(string.to_string())))
     }
 }
 
@@ -298,13 +347,14 @@ fn internal_eval<'a>(
                     }
                 }
             } else if environment.loose_symbols {
-                Ok(Expression::Atom(Atom::String(s.clone())))
+                str_process(environment, s)
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
         Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
+        Expression::Atom(Atom::String(string)) => str_process(environment, &string),
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
         Expression::Function(_) => Ok(Expression::Atom(Atom::Nil)),

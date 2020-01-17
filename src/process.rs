@@ -464,7 +464,8 @@ pub fn do_command<'a>(
     let mut args = Vec::new();
     for a in parts {
         if let Expression::Atom(Atom::String(_)) = a {
-            args.push(a.clone());
+            let new_a = eval(environment, &a)?;
+            args.push(new_a);
         } else {
             let glob_expand = if let Expression::Atom(Atom::Symbol(_)) = a {
                 true
