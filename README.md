@@ -48,11 +48,12 @@ expects a list of string to be returned. For convenience 'path and 'default
 are also allowable return values. 'path represents the list of paths and
 'default is 'path concatenated with all valid sl-sh forms.
 - `__exec_hook` is an intercept function for every command sent to sl-sh. The
-function takes a string and expects a string to be returned. The string returned
-will be evaluated as a sl-sh form. This is useful if you want to check all
-input and modify said input if it meets certain conditions. For instance, if
-one were to decide that inputting any valid path to sl-sh should result in the
-shell changing the current working directory to that directory:
+function takes a string and expects a string or list to be returned. The string
+returned will be evaluated as a sl-sh form and a list will just be evaluated.
+This is useful if you want to check all input and modify said input if it meets
+certain conditions. For instance, if one were to decide that inputting any
+valid path to sl-sh should result in the shell changing the current working
+directory to that directory:
 ```
 	(defn change-dir-if-arg-is-dir (cmd)
 			(if (fs-dir? cmd)

@@ -303,7 +303,7 @@ fn builtin_is_list(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return  if let Expression::Atom(Atom::Nil) = arg {
+            return if let Expression::Atom(Atom::Nil) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else if is_proper_list(&arg) {
                 Ok(Expression::Atom(Atom::True))

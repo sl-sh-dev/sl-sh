@@ -313,40 +313,40 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
     ret
 }
 
-fn exec_hook(environment: &mut Environment, input: String) -> String {
+fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ParseError> {
+    fn read_add_parens(input: &str) -> Result<Expression, ParseError> {
+        let add_parens = !(input.starts_with('(')
+            || input.starts_with('\'')
+            || input.starts_with('`')
+            || input.starts_with('#'));
+        read(input, add_parens)
+    }
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
         let exp = match *exec_exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(2);
                 v.push(Expression::Atom(Atom::Symbol("__exec_hook".to_string())));
-                v.push(Expression::Atom(Atom::String(input.clone())));
+                v.push(Expression::Atom(Atom::String(input.to_string())));
                 Rc::new(Expression::with_list(v))
             }
             _ => {
                 eprintln!("WARNING: __exec_hook not a lambda, ignoring.");
-                return input;
+                return read_add_parens(input);
             }
         };
         match eval(environment, &exp) {
             Ok(res) => match res {
-                Expression::Atom(Atom::String(s)) => s,
-                Expression::Atom(Atom::StringBuf(s)) => s.borrow().clone(),
-                Expression::Atom(Atom::Nil) => "".to_string(),
-                _ => {
-                    eprintln!(
-                        "WARNING: unexpected result from __exec_hook, {:?}, ignoring.",
-                        res
-                    );
-                    input
-                }
+                Expression::Atom(Atom::String(s)) => read_add_parens(&s),
+                Expression::Atom(Atom::StringBuf(s)) => read_add_parens(&s.borrow()),
+                _ => Ok(res),
             },
             Err(err) => {
                 eprintln!("ERROR calling __exec_hook: {}", err);
-                input
+                read_add_parens(input)
             }
         }
     } else {
-        input
+        read_add_parens(input)
     }
 }
 
@@ -499,11 +499,6 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 if input.is_empty() {
                     continue;
                 }
-                let input = exec_hook(&mut environment.borrow_mut(), input.to_string());
-                let add_parens = !(input.starts_with('(')
-                    || input.starts_with('\'')
-                    || input.starts_with('`')
-                    || input.starts_with('#'));
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
                 environment
@@ -515,10 +510,10 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                         "*last-status*".to_string(),
                         Rc::new(Expression::Atom(Atom::Int(i64::from(0)))),
                     );
-                let ast = read(&input, add_parens);
+                let ast = exec_hook(&mut environment.borrow_mut(), &input);
                 match ast {
                     Ok(ast) => {
-                        if let Err(err) = con.history.push(input.clone().into()) {
+                        if let Err(err) = con.history.push(input.into()) {
                             eprintln!("Error saving history: {}", err);
                         }
                         environment.borrow_mut().loose_symbols = true;
