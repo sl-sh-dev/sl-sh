@@ -5,6 +5,9 @@
 (def 'defmacro (macro (name args body)
 	`(progn (def (quote ,name) (macro ,args ,body)) nil)))
 
+(def 'setmacro (macro (name args body)
+	`(progn (set (quote ,name) (macro ,args ,body)) nil)))
+
 (defmacro ns-export (symbol) `(progn
     (if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
     (if (symbol? ,symbol)
@@ -102,5 +105,5 @@
 
 (load "seq.lisp")
 
-(ns-export '(defmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq))
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq))
 

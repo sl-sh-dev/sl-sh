@@ -212,7 +212,8 @@ not | | builtin |
 null | | builtin |
 def? | symbol | builtin | Return true if symbol is defined for current scope.
 macro | | builtin |
-defmacro | | macro |
+defmacro | | macro | Defines a macro and puts in a symbol (def's it).
+setmacro | | macro | Defines a macro and update's an existing symbol to reference it (set's it).
 expand-macro | | builtin |
 recur | | builtin |
 gensym | | builtin |
@@ -332,6 +333,7 @@ nth | int list | builtin | Produces the element at the provided index (0 based),
 rest | list | macro | Produces the provided list minus the first element.  Nil if the list is empty or one element.
 reverse | list | macro | Returns a new list made by reversing the elements of the provided list.
 reverse! | list | macro | Modifies a list by reversing it's elements.
+seq? | obj | macro | Return true if the obj is a sequence.
 setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 
 

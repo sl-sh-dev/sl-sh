@@ -58,6 +58,7 @@
 
 (def 'append nil)
 (def 'append! nil)
+(def 'fn-append! nil)
 (def 'map nil)
 (let ((tseq))
     (defn copy-els (to l) (progn
@@ -101,7 +102,7 @@
         (set 'tseq nil)
         ret))
 
-    (setfn append! (ret &rest others) (progn
+    (setfn fn-append! (ret &rest others) (progn
         (def 'tret ret)
         (if (vec? ret)
             (progn
@@ -126,6 +127,16 @@
                 (err "append!: First element not a list or vector.")))
         (set 'tseq nil)
         ret))
+
+    ; If you have more then one reference to the same nil instance then only
+    ; the reference passed to append! will change (ie symbols pointing to nil
+    ; are unique even if one is set from the other).
+    ; If using an actual sequence with two or more symbols pointing to it then
+    ; all will be updated.
+    (setmacro append! (ret &rest others)
+        `(if (and (symbol? (quote ,ret)) (null ,ret))
+            (set (quote ,ret) (core::fn-append! ,ret ,@others))
+            (core::fn-append! ,ret ,@others)))
 
     (defn map-into (fun items new-items) (progn
         (def 'tcell nil)
