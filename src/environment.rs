@@ -339,6 +339,35 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Express
     }
 }
 
+pub fn overwrite_expression(environment: &mut Environment, key: &str, expression: Rc<Expression>) {
+    if environment.dynamic_scope.contains_key(key) {
+        environment
+            .dynamic_scope
+            .insert(key.to_string(), expression);
+    } else if key.contains("::") {
+        // namespace reference.
+        let mut key_i = key.splitn(2, "::");
+        if let Some(namespace) = key_i.next() {
+            if let Some(scope) = environment.namespaces.get(namespace) {
+                if let Some(key) = key_i.next() {
+                    if scope.borrow().data.contains_key(key) {
+                        scope.borrow_mut().data.insert(key.to_string(), expression);
+                    }
+                }
+            }
+        }
+    } else {
+        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        while let Some(scope) = loop_scope {
+            if scope.borrow().data.contains_key(key) {
+                scope.borrow_mut().data.insert(key.to_string(), expression);
+                return;
+            }
+            loop_scope = scope.borrow().outer.clone();
+        }
+    }
+}
+
 pub fn set_expression_current(
     environment: &mut Environment,
     key: String,

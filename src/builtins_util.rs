@@ -8,6 +8,7 @@ use crate::eval::*;
 use crate::types::*;
 
 pub fn is_proper_list(exp: &Expression) -> bool {
+    // does not detect empty (nil) lists on purpose.
     if let Expression::Pair(_e1, e2) = exp {
         if let Expression::Atom(Atom::Nil) = *e2.borrow() {
             true

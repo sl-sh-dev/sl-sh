@@ -98,16 +98,35 @@ fn builtin_xar(
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
+                let sym = match pair {
+                    Expression::Atom(Atom::Symbol(s)) => {
+                        if let Some(_exp) = get_expression(environment, &s[..]) {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
                 let arg = eval(environment, arg)?;
-                let pair = eval(environment, pair)?;
+                let mut pair = eval(environment, pair)?;
                 match &pair {
+                    Expression::Atom(Atom::Nil) => {
+                        pair = Expression::Pair(
+                            Rc::new(RefCell::new(arg)),
+                            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
+                        );
+                        if let Some(s) = sym {
+                            overwrite_expression(environment, &s[..], Rc::new(pair.clone()));
+                        }
+                    }
                     Expression::Pair(e1, _e2) => {
                         e1.replace(arg);
                     }
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
-                            "xar requires a pair for it's first form",
+                            "xar! requires a pair for it's first form",
                         ))
                     }
                 }
@@ -117,7 +136,7 @@ fn builtin_xar(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "xar takes two forms (pair and expression)",
+        "xar! takes two forms (pair and expression)",
     ))
 }
 
@@ -126,21 +145,38 @@ fn builtin_xdr(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    //let pair = args.next();
-    //let arg = args.next();
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
+                let sym = match pair {
+                    Expression::Atom(Atom::Symbol(s)) => {
+                        if let Some(_exp) = get_expression(environment, &s[..]) {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
                 let arg = eval(environment, arg)?;
-                let pair = eval(environment, pair)?;
+                let mut pair = eval(environment, pair)?;
                 match &pair {
+                    Expression::Atom(Atom::Nil) => {
+                        pair = Expression::Pair(
+                            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
+                            Rc::new(RefCell::new(arg)),
+                        );
+                        if let Some(s) = sym {
+                            overwrite_expression(environment, &s[..], Rc::new(pair.clone()));
+                        }
+                    }
                     Expression::Pair(_e1, e2) => {
                         e2.replace(arg);
                     }
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
-                            "xdr requires a pair for it's first form",
+                            "xdr! requires a pair for it's first form",
                         ))
                     }
                 }
@@ -150,7 +186,7 @@ fn builtin_xdr(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "xdr takes two forms (pair and expression)",
+        "xdr! takes two forms (pair and expression)",
     ))
 }
 

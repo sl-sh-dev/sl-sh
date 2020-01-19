@@ -1,5 +1,12 @@
 ;;; Forms that work with sequences (list or vectors).
 
+(defn seq? (obj)
+    (if (vec? obj)
+        t
+        (if (list? obj)
+            t
+            nil)))
+
 (defn first (obj)
     (if (vec? obj)
         (vec-nth 0 obj)
@@ -68,36 +75,55 @@
                 (recur (cdr obj)))
             (err "Not a list")))
 
-    (setfn append (l1 l2 &rest others) (progn
+    (setfn append (l1 &rest others) (progn
         (def 'ret nil)
         (if (vec? l1)
             (progn
                 (set 'ret (make-vec))
                 (for el l1 (vec-push! ret el))
-                (for el l2 (vec-push! ret el))
-                (for l others (for el l (vec-push! ret el))))
-            (if (or (list? l1) (null l1))
+                (for l others
+                    (if (seq? l)
+                        (for el l (vec-push! ret el))
+                        (vec-push! ret l))))
+            (if (list? l1)
                 (progn
                     (set 'ret (copy-els ret l1))
-                    (set 'ret (copy-els ret l2))
                     (for l others
-                        (set 'ret (copy-els ret l))))
-                (err "First element not a list or vector.")))
+                        (if (seq? l)
+                            (set 'ret (copy-els ret l))
+                            (progn
+                                (def 'tcell (join l nil))
+                                (xdr! tseq tcell)
+                                (set 'tseq tcell)
+                                (if (null ret) (set 'ret tseq))
+                                ))))
+                (err "append: First element not a list or vector.")))
         (set 'tseq nil)
         ret))
 
-    (setfn append! (ret l2 &rest others) (progn
+    (setfn append! (ret &rest others) (progn
+        (def 'tret ret)
         (if (vec? ret)
             (progn
-                (for el l2 (vec-push! ret el))
-                (for l others (for el l (vec-push! ret el))))
-            (if (or (list? ret) (null ret))
+                (for l others
+                    (if (seq? l)
+                        (for el l (vec-push! ret el))
+                        (vec-push! ret l))))
+            (if (list? ret)
                 (progn
-                    (set 'tseq (last-cell ret))
-                    (set 'ret (copy-els ret l2))
+                    (set 'tseq (last-cell tret))
                     (for l others
-                        (set 'ret (copy-els ret l))))
-                (err "First element not a list or vector.")))
+                        (if (seq? l)
+                            (set 'tret (copy-els tret l))
+                            (progn
+                                (def 'tcell (join l nil))
+                                (xdr! tseq tcell)
+                                (set 'tseq tcell)
+                                (if (null tret) (set 'tret tseq))
+                                )))
+                    (if (and (null ret) (not (null tret)))
+                        (progn (xar! ret (car tret))(xdr! ret (cdr tret)))))
+                (err "append!: First element not a list or vector.")))
         (set 'tseq nil)
         ret))
 
@@ -159,5 +185,5 @@
     (irev items 0 (- (length items) 1))
     items))
 
-(ns-export '(first rest last butlast setnth! nth append append! map map! reverse reverse!))
+(ns-export '(seq? first rest last butlast setnth! nth append append! map map! reverse reverse!))
 

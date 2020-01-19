@@ -296,14 +296,16 @@ fn builtin_is_hash(
     Err(io::Error::new(io::ErrorKind::Other, "hash? needs one form"))
 }
 
-fn builtin_is_proper_list(
+fn builtin_is_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if is_proper_list(&arg) {
+            return  if let Expression::Atom(Atom::Nil) = arg {
+                Ok(Expression::Atom(Atom::True))
+            } else if is_proper_list(&arg) {
                 Ok(Expression::Atom(Atom::True))
             } else {
                 Ok(Expression::Atom(Atom::Nil))
@@ -380,6 +382,6 @@ pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
     );
     data.insert(
         "list?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_proper_list, "")),
+        Rc::new(Expression::make_function(builtin_is_list, "")),
     );
 }
