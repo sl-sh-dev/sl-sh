@@ -472,7 +472,29 @@ pub fn do_command<'a>(
             } else {
                 false
             };
-            let new_a = eval(environment, &a)?;
+            // Free standing callables in a process call do not make sense so filter them out...
+            // Eval the strings below to make sure any expansions happen.
+            let new_a = match a {
+                Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                    Some(exp) => match &*exp {
+                        Expression::Func(_) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Function(_) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Atom(Atom::Lambda(_)) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Atom(Atom::Macro(_)) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        _ => eval(environment, &a)?,
+                    },
+                    _ => eval(environment, &a)?,
+                },
+                _ => eval(environment, &a)?,
+            };
             if let Expression::Atom(Atom::String(s)) = &new_a {
                 if glob_expand {
                     prep_string_arg(&s, &mut args)?;
