@@ -120,21 +120,21 @@ fn do_in_string(
 fn handle_char(
     tokens: &mut Vec<Token>,
     mut token: String,
-    ch: char,
-    last_ch: char,
+    mut ch: char,
+    last_ch: &mut char,
     last_comma: &mut bool,
     expect_char: &mut bool,
     line_column: (usize, usize),
 ) -> String {
     let (line, column) = line_column;
-    if last_ch == '#' && ch == '(' {
+    if *last_ch == '#' && ch == '(' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
             token: "#(".to_string(),
             line,
             column,
         });
-    } else if last_ch == '#' && ch == '\\' {
+    } else if *last_ch == '#' && ch == '\\' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
             token: "#\\".to_string(),
@@ -142,14 +142,14 @@ fn handle_char(
             column,
         });
         *expect_char = true;
-    } else if last_ch == '#' && ch == '<' {
+    } else if *last_ch == '#' && ch == '<' {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
             token: "#<".to_string(),
             line,
             column,
         });
-    } else if ch == '(' && last_ch == '\\' {
+    } else if ch == '(' && *last_ch == '\\' {
         token.push(ch);
     } else if ch == '(' {
         save_token!(tokens, token, line, column);
@@ -158,7 +158,7 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == ')' && last_ch == '\\' {
+    } else if ch == ')' && *last_ch == '\\' {
         token.push(ch);
     } else if ch == ')' {
         save_token!(tokens, token, line, column);
@@ -167,7 +167,7 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == '\'' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+    } else if ch == '\'' && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`')
     {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -175,7 +175,7 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == '`' && (last_ch == ' ' || last_ch == '(' || last_ch == '\'' || last_ch == '`') {
+    } else if ch == '`' && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`') {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
             token: "`".to_string(),
@@ -183,25 +183,32 @@ fn handle_char(
             column,
         });
     } else if ch == ','
-        && (is_whitespace(last_ch) || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+        && (is_whitespace(*last_ch) || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`')
     {
         *last_comma = true;
-    } else if last_ch == '\\' && is_whitespace(ch) {
+    } else if *last_ch == '\\' && is_whitespace(ch) {
         // Keep an escaped whitespace in token since this is a shell...
         token.push(ch);
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
-    } else if ch == '\\' || ch == '#' || ch == '\n' {
+    } else if (ch == '\\' && !*expect_char) || ch == '#' || ch == '\n' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
     } else {
-        if last_ch == '\\' && !*expect_char {
-            token.push(last_ch);
+        if *expect_char && ch == '\\' {
+            *expect_char = false;
+            token.push(ch);
+            // Get rid of the \ or there will be trouble...
+            ch = ' ';
+        } else if *last_ch == '\\' && !*expect_char {
+            token.push(*last_ch);
+            token.push(ch);
         } else {
             *expect_char = false;
+            token.push(ch);
         }
-        token.push(ch);
     }
+    *last_ch = ch;
     token
 }
 
@@ -312,12 +319,11 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
                 &mut tokens,
                 token,
                 ch,
-                last_ch,
+                &mut last_ch,
                 &mut last_comma,
                 &mut expect_char,
                 (line, column),
             );
-            last_ch = ch;
         }
     }
     let token = token.trim();
