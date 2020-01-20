@@ -173,8 +173,10 @@ fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Res
     Ok(())
 }
 
-fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
+fn builtin_pipe(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
     if environment.in_pipe {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -187,8 +189,10 @@ fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Resul
     environment.state.stdout_status = Some(IOState::Pipe);
     let mut error: Option<io::Result<Expression>> = None;
     let mut i = 1; // Meant 1 here.
-    for p in &args {
-        if i == args.len() {
+    let mut pipe = args.next();
+    while let Some(p) = pipe {
+        let next_pipe = args.next();
+        if next_pipe.is_none() {
             environment.state.stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
@@ -241,6 +245,7 @@ fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Resul
         }
         out = if let Ok(out) = res { out } else { out };
         i += 1;
+        pipe = next_pipe;
     }
     environment.data_in = None;
     environment.in_pipe = false;
@@ -253,57 +258,67 @@ fn builtin_pipe(environment: &mut Environment, args: &[Expression]) -> io::Resul
     }
 }
 
-fn builtin_wait(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "wait takes one form (a pid to wait on)",
-        ))
-    } else {
-        match args[0] {
-            Expression::Process(ProcessState::Running(pid)) => {
-                match wait_pid(environment, pid, None) {
+fn builtin_wait(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match arg0 {
+                Expression::Process(ProcessState::Running(pid)) => {
+                    match wait_pid(environment, pid, None) {
+                        Some(exit_status) => {
+                            Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
+                        }
+                        None => Ok(Expression::Atom(Atom::Nil)),
+                    }
+                }
+                Expression::Process(ProcessState::Over(_pid, exit_status)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
+                }
+                Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
                     Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
                     None => Ok(Expression::Atom(Atom::Nil)),
-                }
-            }
-            Expression::Process(ProcessState::Over(_pid, exit_status)) => {
-                Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
-            }
-            Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
-                Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
-                None => Ok(Expression::Atom(Atom::Nil)),
-            },
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "wait error: not a pid",
-            )),
+                },
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "wait error: not a pid",
+                )),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "wait takes one form (a pid to wait on)",
+    ))
 }
 
-fn builtin_pid(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "pid takes one form (a process)",
-        ))
-    } else {
-        match args[0] {
-            Expression::Process(ProcessState::Running(pid)) => {
-                Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-            }
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
-                Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "pid error: not a process",
-            )),
+fn builtin_pid(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match arg0 {
+                Expression::Process(ProcessState::Running(pid)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
+                }
+                Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "pid error: not a process",
+                )),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "pid takes one form (a process)",
+    ))
 }
 
 fn builtin_glob(
@@ -377,9 +392,27 @@ pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
             "Is the given path a directory?",
         )),
     );
-    data.insert("pipe".to_string(), Rc::new(Expression::Func(builtin_pipe)));
-    data.insert("wait".to_string(), Rc::new(Expression::Func(builtin_wait)));
-    data.insert("pid".to_string(), Rc::new(Expression::Func(builtin_pid)));
+    data.insert(
+        "pipe".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_pipe,
+            "Setup a pipe between processes.",
+        )),
+    );
+    data.insert(
+        "wait".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_wait,
+            "Wait for a process to end and return it's exit status.",
+        )),
+    );
+    data.insert(
+        "pid".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_pid,
+            "Return the pid of a process.",
+        )),
+    );
     data.insert(
         "glob".to_string(),
         Rc::new(Expression::make_function(
