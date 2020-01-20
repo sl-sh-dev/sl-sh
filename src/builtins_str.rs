@@ -563,7 +563,32 @@ fn builtin_str_starts_with(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "str-start-with takes two forms",
+        "str-start-with takes two forms (pattern string)",
+    ))
+}
+
+fn builtin_str_contains(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(pat) = args.next() {
+        if let Some(text) = args.next() {
+            if args.next().is_none() {
+                let pat = eval(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
+                let text = eval(environment, text)?;
+                let text = as_string(environment, &text)?;
+                return if text.contains(&pat) {
+                    Ok(Expression::Atom(Atom::True))
+                } else {
+                    Ok(Expression::Atom(Atom::Nil))
+                };
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-contains takes two forms (pattern string)",
     ))
 }
 
@@ -980,6 +1005,13 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
         Rc::new(Expression::make_function(
             builtin_str_starts_with,
             "True if the second form starts with the first (as strings).",
+        )),
+    );
+    data.insert(
+        "str-contains".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_str_contains,
+            "True if the second form contains the first (as strings).",
         )),
     );
     data.insert(

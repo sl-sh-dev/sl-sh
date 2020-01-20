@@ -170,9 +170,11 @@
 	(def 'ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
 		(if (fs-exists? com) (set 'ret t))
-		(for p (str-split ":" $PATH) (progn
-			(def 'path (str p "/" com))
-			(if (and (fs-exists? path)(not ret)) (set 'ret t)))))
+		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
+			(set 'ret t)
+			(for p (str-split ":" $PATH) (progn
+				(def 'path (str p "/" com))
+				(if (and (fs-exists? path)(not ret)) (set 'ret t))))))
 	ret))
 
 (defq set-tok-colors nil)
@@ -187,6 +189,7 @@
 	(sys-syms (make-hash))
 	(out (str-buf ""))
 	(token (str-buf ""))
+	(in-sys-command nil)
 	(tok-command t))
 
 ;; TODO make this a macro
@@ -218,27 +221,37 @@
 	(defq tok-slsh-fcn-color shell::*fg-cyan*)
 	(defq tok-default-color shell::*fg-default*)
 	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-string-color shell::*fg-magenta*)
 	(defq tok-invalid-color shell::*fg-red*)
 
-	(setfn set-tok-colors (slsh-form-color slsh-fcn-color default-color sys-command-color invalid-color)
+	(setfn set-tok-colors (slsh-form-color slsh-fcn-color default-color sys-command-color string-color invalid-color)
 		(progn
 			(setq tok-slsh-form-color slsh-form-color)
 			(setq tok-slsh-fcn-color slsh-fcn-color)
 			(setq tok-default-color default-color)
 			(setq tok-sys-command-color sys-command-color)
+			(setq tok-string-color string-color)
 			(setq tok-invalid-color invalid-color)))
 
 	(defn command-color (command)
 		(if (not tok-command)
 			(if (def? (to-symbol command))
-				(str tok-slsh-form-color command shell::*fg-default*)
+				(if (func? command)
+					(if in-sys-command
+						(str tok-default-color command shell::*fg-default*)
+						(str tok-slsh-fcn-color command shell::*fg-default*))
+					(str tok-slsh-form-color command shell::*fg-default*))
 				(str tok-default-color command shell::*fg-default*))
 			(if (func? command)
 				(str tok-slsh-fcn-color command shell::*fg-default*)
-				(if (sys-command? command)
-					(str tok-sys-command-color command shell::*fg-default*)
+				(if (my-sys-command? command)
+					(progn (set 'in-sys-command t)(str tok-sys-command-color command shell::*fg-default*))
 					(str tok-invalid-color command shell::*fg-default*)))))
 
+	(defn prrawtoken () (progn
+		(def 'ttok token)
+		(set 'token (str-buf ""))
+		ttok))
 	(defn prtoken () (progn
 		(def 'ttok token)
 		(set 'token (str-buf ""))
@@ -248,12 +261,13 @@
 		(set 'plev (+ plev 1))
 		(set 'tok-command t)
 		ret))
-	(defn paren-close ()
+	(defn paren-close () (progn
+		(set 'in-sys-command nil)
 		(if (> plev 0)
 			(progn
 				(set 'plev (- plev 1))
 				(str (prtoken) (paren-color plev) #\) shell::*fg-default*))
-			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
+			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*))))
 
 	(defn whitespace (ch) (progn
 		(def 'ret (str (prtoken) ch))
@@ -263,22 +277,37 @@
 		ret))
 
 	(setfn __line_handler (line) (progn
+		(def 'in-quote nil)
+		(def 'last-ch #\ )
 		(set 'plev 0)
 		(set 'ch nil)
 		(set 'token (str-buf ""))
 		(set 'tok-command t)
+		(set 'in-sys-command nil)
 		(if (<= (length line) 1) (progn
 			(hash-clear! bad-syms)
 			(hash-clear! sys-syms)))
 		(set 'out (str-buf-map (fn (ch) (progn
-			(if (char= ch #\()
-				(paren-open)
-				(if (char= ch #\))
-					(paren-close)
-					(if (char-whitespace? ch)
-						(whitespace ch)
-						(progn (str-buf-push! token ch) "")))))) line))
-		(str-buf-push! out (prtoken))
+			(def 'ret (if in-quote 
+				(progn
+					(str-buf-push! token ch)
+					(if (and (not (char= last-ch #\\))(char= ch #\"))
+						(progn
+							(set 'in-quote nil)
+							(str-buf-push! token shell::*fg-default*)
+							(prrawtoken))
+						""))
+				(if (and (not (char= last-ch #\\))(char= ch #\"))
+					(progn (str-buf-push! token (str tok-string-color ch))(set 'in-quote t) "")
+					(if (char= ch #\()
+						(paren-open)
+						(if (char= ch #\))
+							(paren-close)
+							(if (char-whitespace? ch)
+								(whitespace ch)
+								(progn (str-buf-push! token ch) "")))))))
+			(progn (set 'last-ch ch) ret))) line))
+		(if in-quote (str-buf-push! out (prrawtoken)) (str-buf-push! out (prtoken)))
 		(str out)))
 		nil)))
 

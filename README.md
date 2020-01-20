@@ -123,11 +123,12 @@ Default colors are as follows:
 	(defq tok-slsh-fcn-color shell::*fg-cyan*)
 	(defq tok-default-color shell::*fg-default*)
 	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-string-color shell::*fg-magenta*)
 	(defq tok-invalid-color shell::*fg-red*)
 ```
 
 The function `set-tok-colors` can be used to modify these, the function takes
-five arguments defined in the order the defaults are listed above.
+six arguments defined in the order the defaults are listed above.
 
 #### Color
 
@@ -371,6 +372,7 @@ str-lower | string | builtin | Return the all lowercase string for provided stri
 str-upper | string | builtin | Return the all uppercase string for provided string.
 str-bytes | string | builtin | Return the bytes in a string (can be more then the chars- utf8).
 str-starts-with | string string | builtin | Return true if the second string starts with the first.
+str-contains | string string | builtin | Return true if the second string contains the first.
 str-map | lambda string | builtin | Creates a new string by applying the lambda to each character of the provided string (or string buffer).
 str-buf | form* | builtin | Creates a new string buffer with the values of it's arguments.  Any command's run under it will have stdout captured as a string.  Use a string buffer to build strings without excess allocations.
 str-buf-push! | form* | builtin | First form is a string buffer that the following forms are appended to.

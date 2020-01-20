@@ -21,7 +21,7 @@
 	(syntax-on)
 
 	;; tweak token colors
-	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-red*)
+	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-yellow* shell::*fg-red*)
 
 	(error-stack-on)
 

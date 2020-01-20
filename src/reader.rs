@@ -167,7 +167,8 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == '\'' && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`')
+    } else if ch == '\''
+        && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`')
     {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
@@ -175,7 +176,9 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == '`' && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`') {
+    } else if ch == '`'
+        && (*last_ch == ' ' || *last_ch == '(' || *last_ch == '\'' || *last_ch == '`')
+    {
         save_token!(tokens, token, line, column);
         tokens.push(Token {
             token: "`".to_string(),
@@ -191,22 +194,20 @@ fn handle_char(
         token.push(ch);
     } else if is_whitespace(ch) {
         save_token!(tokens, token, line, column);
-    } else if (ch == '\\' && !*expect_char) || ch == '#' || ch == '\n' {
+    } else if *expect_char && ch == '\\' {
+        *expect_char = false;
+        token.push(ch);
+        // Get rid of the \ or there will be trouble...
+        ch = ' ';
+    } else if ch == '\\' || ch == '#' || ch == '\n' {
         // Do nothing...
         // # is reader macro char, do not save in tokens.
+    } else if *last_ch == '\\' && !*expect_char {
+        token.push(*last_ch);
+        token.push(ch);
     } else {
-        if *expect_char && ch == '\\' {
-            *expect_char = false;
-            token.push(ch);
-            // Get rid of the \ or there will be trouble...
-            ch = ' ';
-        } else if *last_ch == '\\' && !*expect_char {
-            token.push(*last_ch);
-            token.push(ch);
-        } else {
-            *expect_char = false;
-            token.push(ch);
-        }
+        *expect_char = false;
+        token.push(ch);
     }
     *last_ch = ch;
     token
