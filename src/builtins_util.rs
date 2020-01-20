@@ -142,6 +142,9 @@ pub fn expand_tilde(path: &str) -> Option<String> {
             }
             last_ch = ch;
         }
+        if last_ch == '\\' {
+            new_path.push('\\');
+        }
         Some(new_path)
     } else {
         None
