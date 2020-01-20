@@ -182,7 +182,9 @@ fn handle_char(
             line,
             column,
         });
-    } else if ch == ',' && (is_whitespace(last_ch) || last_ch == '(') {
+    } else if ch == ','
+        && (is_whitespace(last_ch) || last_ch == '(' || last_ch == '\'' || last_ch == '`')
+    {
         *last_comma = true;
     } else if last_ch == '\\' && is_whitespace(ch) {
         // Keep an escaped whitespace in token since this is a shell...
@@ -518,25 +520,31 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
             }
             _ => match stack.pop() {
                 Some(mut v) => {
+                    let mut is_comma = false;
                     if is_char {
                         v.vec.push(parse_char(&token_full)?);
                         is_char = false;
                     } else {
                         let token = token.trim();
                         if !token.is_empty() {
+                            if token == "," {
+                                is_comma = true;
+                            }
                             v.vec.push(parse_atom(&token));
                         }
                     }
                     stack.push(v);
-                    if let Some(quote_exit_level) = qexits.pop() {
-                        if level == quote_exit_level {
-                            if level == backtick_level {
-                                backtick_level = 0;
+                    if !is_comma {
+                        if let Some(quote_exit_level) = qexits.pop() {
+                            if level == quote_exit_level {
+                                if level == backtick_level {
+                                    backtick_level = 0;
+                                }
+                                level -= 1;
+                                close_list(level, &mut stack)?;
+                            } else {
+                                qexits.push(quote_exit_level);
                             }
-                            level -= 1;
-                            close_list(level, &mut stack)?;
-                        } else {
-                            qexits.push(quote_exit_level);
                         }
                     }
                 }

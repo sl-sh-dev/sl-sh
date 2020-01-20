@@ -892,21 +892,35 @@ fn builtin_bquote(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            return match arg {
-                Expression::Vector(list) => {
-                    replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
+    let ret = if let Some(arg) = args.next() {
+        match arg {
+            Expression::Atom(Atom::Symbol(s)) if s == "," => {
+                if let Some(exp) = args.next() {
+                    Ok(eval(environment, exp)?)
+                } else {
+                    Ok(Expression::Atom(Atom::Nil))
                 }
-                Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false),
-                _ => Ok(arg.clone()),
-            };
+            }
+            Expression::Vector(list) => {
+                replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
+            }
+            Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false),
+            _ => Ok(arg.clone()),
         }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "bquote takes one form",
+        ))
+    };
+    if args.next().is_some() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "bquote takes one form",
+        ))
+    } else {
+        ret
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "bquote takes one form",
-    ))
 }
 
 /*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
