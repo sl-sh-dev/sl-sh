@@ -4,7 +4,6 @@ use std::hash::BuildHasher;
 use std::io;
 use std::rc::Rc;
 
-use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
@@ -13,58 +12,81 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<Stri
     exp.as_string(environment)
 }
 
-fn builtin_str_trim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-trim takes one form",
-        ));
+fn builtin_str_trim(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            let arg = arg.as_string(environment)?;
+            return Ok(Expression::Atom(Atom::String(arg.trim().to_string())));
+        }
     }
-    let arg = as_string(environment, &args[0])?;
-    Ok(Expression::Atom(Atom::String(arg.trim().to_string())))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-trim takes one form",
+    ))
 }
 
-fn builtin_str_ltrim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-ltrim takes one form",
-        ));
+fn builtin_str_ltrim(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            let arg = arg.as_string(environment)?;
+            return Ok(Expression::Atom(Atom::String(arg.trim_start().to_string())));
+        }
     }
-    let arg = as_string(environment, &args[0])?;
-    Ok(Expression::Atom(Atom::String(arg.trim_start().to_string())))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-ltrim takes one form",
+    ))
 }
 
-fn builtin_str_rtrim(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-rtrim takes one form",
-        ));
+fn builtin_str_rtrim(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            let arg = arg.as_string(environment)?;
+            return Ok(Expression::Atom(Atom::String(arg.trim_end().to_string())));
+        }
     }
-    let arg = as_string(environment, &args[0])?;
-    Ok(Expression::Atom(Atom::String(arg.trim_end().to_string())))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-rtrim takes one form",
+    ))
 }
 
 fn builtin_str_replace(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 3 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-replace takes three forms",
-        ));
+    if let Some(arg0) = args.next() {
+        if let Some(arg1) = args.next() {
+            if let Some(arg2) = args.next() {
+                if args.next().is_none() {
+                    let arg0 = &eval(environment, arg0)?;
+                    let arg0 = arg0.as_string(environment)?;
+                    let arg1 = &eval(environment, arg1)?;
+                    let arg1 = arg1.as_string(environment)?;
+                    let arg2 = &eval(environment, arg2)?;
+                    let arg2 = arg2.as_string(environment)?;
+                    let new_str = arg0.replace(&arg1, &arg2);
+                    return Ok(Expression::Atom(Atom::String(new_str)));
+                }
+            }
+        }
     }
-    let arg0 = as_string(environment, &args[0])?;
-    let arg1 = as_string(environment, &args[1])?;
-    let arg2 = as_string(environment, &args[2])?;
-    let new_str = arg0.replace(&arg1, &arg2);
-    Ok(Expression::Atom(Atom::String(new_str)))
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-replace takes three forms",
+    ))
 }
 
 fn builtin_str_split(
@@ -255,81 +277,94 @@ fn builtin_str_cat_list(
     ))
 }
 
-fn builtin_str_sub(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 3 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-sub takes three forms (int, int String)",
-        ));
-    }
-    let start = if let Expression::Atom(Atom::Int(i)) = args[0] {
-        i as usize
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-sub first form must be an int",
-        ));
-    };
-    let len = if let Expression::Atom(Atom::Int(i)) = args[1] {
-        i as usize
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-sub second form must be an int",
-        ));
-    };
-    let arg3 = &args[2];
-    if let Expression::Atom(Atom::String(s)) = &arg3 {
-        if (start + len) <= s.len() {
-            Ok(Expression::Atom(Atom::String(
-                s.as_str()[start..(start + len)].to_string(),
-            )))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "str-sub index out of range",
-            ))
+fn builtin_str_sub(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if let Some(arg1) = args.next() {
+            if let Some(arg2) = args.next() {
+                if args.next().is_none() {
+                    let arg0 = eval(environment, arg0)?;
+                    let arg1 = eval(environment, arg1)?;
+                    let arg2 = eval(environment, arg2)?;
+                    let start = if let Expression::Atom(Atom::Int(i)) = arg0 {
+                        i as usize
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-sub first form must be an int",
+                        ));
+                    };
+                    let len = if let Expression::Atom(Atom::Int(i)) = arg1 {
+                        i as usize
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-sub second form must be an int",
+                        ));
+                    };
+                    if let Expression::Atom(Atom::String(s)) = &arg2 {
+                        if (start + len) <= s.len() {
+                            return Ok(Expression::Atom(Atom::String(
+                                s.as_str()[start..(start + len)].to_string(),
+                            )));
+                        } else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-sub index out of range",
+                            ));
+                        }
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-sub third form must be an String",
+                        ));
+                    }
+                }
+            }
         }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-sub third form must be an String",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-sub takes three forms (int, int String)",
+    ))
 }
 
 fn builtin_str_append(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-append takes two strings",
-        ));
-    }
-    let end = args.pop().unwrap();
-    let start = args.pop().unwrap();
-    if let Expression::Atom(Atom::String(end)) = end {
-        if let Expression::Atom(Atom::String(start)) = start {
-            let mut new_string = String::with_capacity(start.len() + end.len());
-            new_string.push_str(&start);
-            new_string.push_str(&end);
-            Ok(Expression::Atom(Atom::String(new_string)))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "str-append forms must both be strings",
-            ))
+    if let Some(start) = args.next() {
+        if let Some(end) = args.next() {
+            if args.next().is_none() {
+                let start = eval(environment, start)?;
+                let end = eval(environment, end)?;
+                if let Expression::Atom(Atom::String(end)) = end {
+                    if let Expression::Atom(Atom::String(start)) = start {
+                        let mut new_string = String::with_capacity(start.len() + end.len());
+                        new_string.push_str(&start);
+                        new_string.push_str(&end);
+                        return Ok(Expression::Atom(Atom::String(new_string)));
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "str-append forms must both be strings",
+                        ));
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "str-append forms must both be strings",
+                    ));
+                }
+            }
         }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-append forms must both be strings",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-append takes two strings",
+    ))
 }
 
 fn builtin_str(
@@ -823,19 +858,31 @@ fn char_test(
 pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "str-trim".to_string(),
-        Rc::new(Expression::Func(builtin_str_trim)),
+        Rc::new(Expression::make_function(
+            builtin_str_trim,
+            "Trim right and left whitespace from string.",
+        )),
     );
     data.insert(
         "str-ltrim".to_string(),
-        Rc::new(Expression::Func(builtin_str_ltrim)),
+        Rc::new(Expression::make_function(
+            builtin_str_ltrim,
+            "Trim left whitspace from string.",
+        )),
     );
     data.insert(
         "str-rtrim".to_string(),
-        Rc::new(Expression::Func(builtin_str_rtrim)),
+        Rc::new(Expression::make_function(
+            builtin_str_rtrim,
+            "Trim right whitespace from string.",
+        )),
     );
     data.insert(
         "str-replace".to_string(),
-        Rc::new(Expression::Func(builtin_str_replace)),
+        Rc::new(Expression::make_function(
+            builtin_str_replace,
+            "Replace occurances of second string with third in the first string.",
+        )),
     );
     data.insert(
         "str-split".to_string(),
@@ -874,11 +921,17 @@ pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     );
     data.insert(
         "str-sub".to_string(),
-        Rc::new(Expression::Func(builtin_str_sub)),
+        Rc::new(Expression::make_function(
+            builtin_str_sub,
+            "Return a substring from a string given start and length.",
+        )),
     );
     data.insert(
         "str-append".to_string(),
-        Rc::new(Expression::Func(builtin_str_append)),
+        Rc::new(Expression::make_function(
+            builtin_str_append,
+            "Make a new string by appending two strings.",
+        )),
     );
     data.insert(
         "str".to_string(),
