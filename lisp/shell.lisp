@@ -102,14 +102,14 @@
 				(progn
 					(vec-insert-nth! idx (nth 0 el) params)
 					(vec-insert-nth! idx nil bindings)
-					(vec-insert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+					(vec-insert-nth! idx (eval (to-symbol (str "\$" (nth 0 el)))) olds))
 				(if (= 2 (length el))
 					(progn
 						(def 'binding (nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
 						(vec-insert-nth! idx (nth 0 el) params)
 						(vec-insert-nth! idx binding bindings)
-						(vec-insert-nth! idx (eval (to-symbol (str "$" (nth 0 el)))) olds))
+						(vec-insert-nth! idx (eval (to-symbol (str "\$" (nth 0 el)))) olds))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect

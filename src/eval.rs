@@ -274,7 +274,10 @@ fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expres
             } else if ch == '$' && last_ch != '\\' {
                 in_var = true;
                 var_start = i;
-            } else {
+            } else if ch != '\\' {
+                if last_ch == '\\' && ch != '$' {
+                    new_string.push('\\');
+                }
                 new_string.push(ch);
             }
             last_ch = ch;
