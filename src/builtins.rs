@@ -559,72 +559,76 @@ fn builtin_set(
     }
 }
 
-fn builtin_export(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "export can only have two expressions",
-        ))
-    } else {
-        let mut args = args.iter();
-        let key = args.next().unwrap();
-        let key = match key {
-            Expression::Atom(Atom::Symbol(s)) => s.clone(),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "export's first form must evaluate to a symbol",
-                ));
+fn builtin_export(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(key) = args.next() {
+        if let Some(val) = args.next() {
+            if args.next().is_none() {
+                let key = eval(environment, key)?;
+                let val = eval(environment, val)?;
+                let key = match key {
+                    Expression::Atom(Atom::Symbol(s)) => s,
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "export: first form must evaluate to a symbol",
+                        ));
+                    }
+                };
+                let val = match val {
+                    Expression::Atom(Atom::Symbol(s)) => Expression::Atom(Atom::String(s)),
+                    Expression::Atom(Atom::String(s)) => Expression::Atom(Atom::String(s)),
+                    Expression::Atom(Atom::StringBuf(s)) => {
+                        Expression::Atom(Atom::String(s.borrow().clone()))
+                    }
+                    Expression::Process(ProcessState::Running(_pid)) => {
+                        Expression::Atom(Atom::String(
+                            val.as_string(environment)
+                                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                        ))
+                    }
+                    Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
+                        Expression::Atom(Atom::String(
+                            val.as_string(environment)
+                                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                        ))
+                    }
+                    Expression::File(FileState::Stdin) => Expression::Atom(Atom::String(
+                        val.as_string(environment)
+                            .unwrap_or_else(|_| "STDIN FAILED".to_string()),
+                    )),
+                    Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
+                        val.as_string(environment)
+                            .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
+                    )),
+                    _ => {
+                        println!("XXX {:?}", val);
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "export: value not valid",
+                        ));
+                    }
+                };
+                let val = val.as_string(environment)?;
+                let val = match expand_tilde(&val) {
+                    Some(v) => v,
+                    None => val,
+                };
+                if !val.is_empty() {
+                    env::set_var(key, val.clone());
+                } else {
+                    env::remove_var(key);
+                }
+                return Ok(Expression::Atom(Atom::String(val)));
             }
-        };
-        let val = args.next().unwrap();
-        let val = match val {
-            Expression::Process(ProcessState::Running(_pid)) => Expression::Atom(Atom::String(
-                val.as_string(environment)
-                    .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-            )),
-            Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
-                Expression::Atom(Atom::String(
-                    val.as_string(environment)
-                        .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-                ))
-            }
-            Expression::Func(_) => Expression::Atom(Atom::String("::FUNCTION::".to_string())),
-            Expression::File(FileState::Stdin) => Expression::Atom(Atom::String(
-                val.as_string(environment)
-                    .unwrap_or_else(|_| "STDIN FAILED".to_string()),
-            )),
-            Expression::File(FileState::Stdout) => {
-                Expression::Atom(Atom::String("::STDOUT::".to_string()))
-            }
-            Expression::File(FileState::Stderr) => {
-                Expression::Atom(Atom::String("::STDERR::".to_string()))
-            }
-            Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
-                val.as_string(environment)
-                    .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
-            )),
-            Expression::File(FileState::Write(_)) => {
-                Expression::Atom(Atom::String("::WRITE FILE::".to_string()))
-            }
-            Expression::File(FileState::Closed) => {
-                Expression::Atom(Atom::String("::CLOSED FILE::".to_string()))
-            }
-            _ => val.clone(),
-        };
-        let val = val.as_string(environment)?;
-        let val = match expand_tilde(&val) {
-            Some(v) => v,
-            None => val,
-        };
-        if !val.is_empty() {
-            env::set_var(key, val.clone());
-        } else {
-            env::remove_var(key);
         }
-        Ok(Expression::Atom(Atom::String(val)))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "export: can only have two expressions",
+    ))
 }
 
 fn builtin_unexport(
@@ -1672,7 +1676,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "export".to_string(),
-        Rc::new(Expression::Func(builtin_export)),
+        Rc::new(Expression::make_function(
+            builtin_export,
+            "Export a key and value to the shell environment.",
+        )),
     );
     data.insert(
         "unexport".to_string(),

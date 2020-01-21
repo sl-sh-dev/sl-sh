@@ -115,7 +115,7 @@ pub fn parse_list_of_strings(
 }
 
 pub fn expand_tilde(path: &str) -> Option<String> {
-    if path.contains('~') {
+    if path.ends_with('~') || path.contains("~/") {
         let mut home = match env::var("HOME") {
             Ok(val) => val,
             Err(_) => "/".to_string(),
@@ -126,7 +126,7 @@ pub fn expand_tilde(path: &str) -> Option<String> {
         let mut new_path = String::new();
         let mut last_ch = ' ';
         for ch in path.chars() {
-            if ch == '~' {
+            if ch == '~' && (last_ch == ' ' || last_ch == ':') {
                 if last_ch == '\\' {
                     new_path.push('~');
                 } else {

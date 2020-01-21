@@ -347,15 +347,7 @@ fn internal_eval<'a>(
                     }
                 }
             } else if environment.loose_symbols {
-                let s_exp = str_process(environment, s);
-                match s_exp {
-                    Ok(Expression::Atom(Atom::String(s))) => match expand_tilde(&s) {
-                        Some(inner) => Ok(Expression::Atom(Atom::String(inner))),
-                        None => Ok(Expression::Atom(Atom::String(s))),
-                    },
-                    Err(err) => Err(err),
-                    _ => s_exp,
-                }
+                str_process(environment, s)
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
