@@ -209,18 +209,18 @@
 
 	(defn prefixify-pipe-cmd (cmd-toks)
 		(let ((build-cmd (fn (cmd-list raw-list)
-		(progn
-			(defq next-tok (first raw-list))
-			(if (not next-tok)
-				cmd-list
 			(progn
-				(recur (if (= '| next-tok)
-				(progn (append! cmd-list (vec (make-vec))) cmd-list) ;;TODO should this right? (vec (make-vec))
-					(progn
-					(append! (last cmd-list) (vec next-tok))
-					cmd-list))
-					(rest raw-list))))))))
-	(build-cmd (vec '| (make-vec)) cmd-toks)))
+				(defq next-tok (first raw-list))
+				(if (not next-tok)
+					cmd-list
+				(progn
+					(recur (if (= '| next-tok)
+					(progn (append! cmd-list (vec (make-vec))) cmd-list) ;;TODO should this right? (vec (make-vec))
+						(progn
+						(append! (last cmd-list) (vec next-tok))
+						cmd-list))
+						(rest raw-list))))))))
+			(build-cmd (vec '| (make-vec)) cmd-toks)))
 
 	(defn ensure-surrounded-by-parens (cmd-to-execute)
 		(if (and
