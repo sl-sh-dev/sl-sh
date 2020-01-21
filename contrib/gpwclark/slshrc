@@ -8,7 +8,6 @@
 
 ;; bash-completions.lisp is located in contrib/gpwclark
 (load "~/.config/sl-sh/bash-completions.lisp")
-(load (str "~/.config/sl-sh/" (cat /etc/hostname) ".lisp"))
 
 ;; custom env settings {{{
 	;; use vi keybindings on cli
@@ -21,7 +20,7 @@
 	(syntax-on)
 
 	;; tweak token colors
-	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-yellow* shell::*fg-red*)
+	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* (fg-color-rgb 255 128 0) shell::*fg-red*)
 
 	(error-stack-on)
 
@@ -92,6 +91,10 @@
 				(progn
 					`(loose-symbols (vim ,@vimargs))))
 			(err "Only accepts 0 or 1 arguments")))
+
+	;; check spelling
+	(defn spl (word)
+		(println (str (| (echo (str word)) (aspell -a)))))
 ;; }}}
 
 ;; notification helpers {{{
@@ -158,6 +161,7 @@
 	(defn get_pwd ()
 		(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
 
+	;;TODO maybe a version of this that strips out all non first/last char consononants
 	(defn path_list_trunc (plist)
 		(if (> (length plist) 1)
 			(if (> (length (first plist)) 0)
@@ -199,18 +203,59 @@
 ;; execute hook fcns {{{
 
 	(defn change-dir-if-arg-is-dir (cmd)
-			(if (fs-dir? cmd)
-				(str "cd " cmd)
-				cmd))
+		(if (fs-dir? cmd)
+			(append! '() "root::cd " cmd)
+			cmd))
+
+	(defn prefixify-pipe-cmd (cmd-toks)
+		(let ((build-cmd (fn (cmd-list raw-list)
+		(progn
+			(defq next-tok (first raw-list))
+			(if (not next-tok)
+				cmd-list
+			(progn
+				(recur (if (= '| next-tok)
+				(progn (append! cmd-list (vec (make-vec))) cmd-list) ;;TODO should this right? (vec (make-vec))
+					(progn
+					(append! (last cmd-list) (vec next-tok))
+					cmd-list))
+					(rest raw-list))))))))
+	(build-cmd (vec '| (make-vec)) cmd-toks)))
+
+	(defn ensure-surrounded-by-parens (cmd-to-execute)
+		(if (and
+				(char= #\( (str-nth 0 cmd-to-execute))
+				(char= #\) (str-nth (- (length cmd-to-execute) 1) cmd-to-execute)))
+			cmd-to-execute
+			(str "(" cmd-to-execute ")")))
+
+	(defn check-prefixify-pipe-preconditions (trimmed-cmd cmd-as-list)
+		(let ((pipe-split-cmd (str-split "|" trimmed-cmd)))
+			(or ;; reasons to skip pre-processing
+
+				;; if string is empty
+				(str-empty? trimmed-cmd)
+
+				;; if string doesn't contain '|
+				(= 1 (length pipe-split-cmd))
+
+				;; if string is already in prefix notation
+				(= '| (first cmd-as-list)))))
+
+	(defn support-pipes-with-infix-notation (cmd-to-execute)
+		(progn
+				(defq trimmed-cmd (str-trim cmd-to-execute))
+				(defq cmd-as-list (read (ensure-surrounded-by-parens trimmed-cmd)))
+			(if (check-prefixify-pipe-preconditions trimmed-cmd cmd-as-list)
+				cmd-to-execute
+				(prefixify-pipe-cmd cmd-as-list))))
 
 	(defn __exec_hook (cmd-to-execute)
 		(let ((args-list (str-split " " cmd-to-execute)))
 				(match (length args-list)
 					(1 (change-dir-if-arg-is-dir (first args-list)))
-					(nil cmd-to-execute))))
+					(nil (support-pipes-with-infix-notation cmd-to-execute)))))
 ;; }}}
-
-(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* shell::*fg-red*)
 
 ;; i'm fun {{{
 	(println "		Hey, hey, hey. Don't be mean.")
@@ -219,3 +264,10 @@
 	(println "		there you are.")
 	(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
 ;; }}}
+
+;; machine specific {{{
+(defq custom-lisp-config (str "~/.config/sl-sh/" (cat /etc/hostname) ".lisp"))
+(if (fs-exists? custom-lisp-config)
+	(load custom-lisp-config)
+	(println (str shell::*fg-red* "Failed to load custom sl-sh config at " custom-lisp-config shell::*fg-default*)))
+;;}}}
