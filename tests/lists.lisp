@@ -48,3 +48,30 @@ Some stuff
     (setq l4 (car (cdr (cdr l3))))
     (assert-equal l4 '(a b c)))
 
+;; ensure mechanism for list creation doesn't affect how lists are updated
+(let ((long-list (list "A" (list "B")))
+    (short-list '("A" '("B")))
+    (model-list (list "A" (list "B" "C"))))
+    (assert-equal model-list (progn (append! (last long-list) "C") long-list))
+    (assert-equal model-list (progn (append! (last short-list) "C") short-list)))
+
+;; check mutability of nested lists
+(let ((list-of-lists (list (list "1") (list "A")))
+    (list-of-empty-lists (list (list) (list)))
+    (add-to-front-and-back-list (fn (target to-first to-last)
+        (progn
+            (append! (first target) to-first)
+            (append! (last target) to-last)
+            target))))
+    (assert-equal
+        (list (list "1" "2") (list "A" "B"))
+        (add-to-front-and-back-list list-of-lists "2" "B"))
+    (assert-equal
+        (list (list "1") (list "A"))
+        (add-to-front-and-back-list list-of-empty-lists "1" "A")))
+
+;; check adding lists to lists
+(let ((initial-list (list "A"))
+    (complete-list (list "A" "B")))
+    (assert-equal complete-list (append initial-list "B"))
+    (assert-equal (list "A" "B" (list "C")) (append complete-list (list (list "C")))))
