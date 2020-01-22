@@ -5,31 +5,47 @@ use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::eval::eval;
 use crate::types::*;
+
+fn make_args(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Vec<Expression>> {
+    let mut list: Vec<Expression> = Vec::new();
+    for arg in args {
+        list.push(eval(environment, arg)?);
+    }
+    Ok(list)
+}
 
 pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
     data.insert(
         "+".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args = list_to_args(environment, args, true)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
-                    //fold(0, |sum, a| sum + a);
                     Ok(Expression::Atom(Atom::Int(sum)))
                 } else {
                     let sum: f64 = parse_list_of_floats(environment, &mut args)?.iter().sum();
                     Ok(Expression::Atom(Atom::Float(sum)))
                 }
             },
+            "Plus",
         )),
     );
 
     data.insert(
         "*".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args = list_to_args(environment, args, true)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
                     Ok(Expression::Atom(Atom::Int(prod)))
@@ -40,14 +56,17 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
                     Ok(Expression::Atom(Atom::Float(prod)))
                 }
             },
+            "Multiply",
         )),
     );
 
     data.insert(
         "-".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args = list_to_args(environment, args, true)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
                         let sum_of_rest: i64 = ints[1..].iter().sum();
@@ -71,14 +90,17 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
                     }
                 }
             },
+            "Minus",
         )),
     );
 
     data.insert(
         "/".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args = list_to_args(environment, args, true)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if ints[1..].iter().any(|&x| x == 0) {
                         Err(io::Error::new(io::ErrorKind::Other, "can not divide by 0"))
@@ -110,14 +132,17 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
                     }
                 }
             },
+            "Divide",
         )),
     );
 
     data.insert(
         "%".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args = list_to_args(environment, args, true)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args = make_args(environment, args)?;
                 let ints = parse_list_of_ints(environment, &mut args)?;
                 if ints.len() != 2 {
                     Err(io::Error::new(io::ErrorKind::Other, "expected two ints"))
@@ -134,6 +159,7 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expressio
                     }
                 }
             },
+            "Modulo",
         )),
     );
 }
