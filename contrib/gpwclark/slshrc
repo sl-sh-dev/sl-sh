@@ -204,7 +204,7 @@
 
 	(defn change-dir-if-arg-is-dir (cmd)
 		(if (fs-dir? cmd)
-			(append! '() "root::cd " cmd)
+			(list root::cd cmd)
 			cmd))
 
 	(defn prefixify-pipe-cmd (cmd-toks)
