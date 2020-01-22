@@ -439,9 +439,7 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
 
 fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
-        return Err(ParseError {
-            reason: "No tokens".to_string(),
-        });
+        return Ok(Expression::Atom(Atom::Nil));
     }
     if tokens[0].token != "("
         && tokens[0].token != "#("

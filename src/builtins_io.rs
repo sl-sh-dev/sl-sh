@@ -187,33 +187,55 @@ fn builtin_read_line(environment: &mut Environment, args: &[Expression]) -> io::
     }
 }
 
-fn builtin_read(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "read takes one form (file or string)",
-        ))
-    } else {
-        let exp = &args[0];
+fn builtin_read(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut add_parens = false;
+    let mut exp = None;
+    for (i, arg) in args.enumerate() {
+        if i > 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "read: too many argument, file or string and optional :add-parens",
+            ));
+        }
+        match arg {
+            Expression::Atom(Atom::Symbol(s)) if s == ":add-parens" => add_parens = true,
+            _ if exp.is_none() => exp = Some(arg),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "read: too many argument, file or string and optional :add-parens",
+                ))
+            }
+        }
+    }
+    if let Some(exp) = exp {
+        let exp = eval(environment, exp)?;
         if let Expression::File(FileState::Read(file)) = &exp {
             let mut fstr = String::new();
             file.borrow_mut().read_to_string(&mut fstr)?;
-            match read(&fstr, false) {
+            match read(&fstr, add_parens) {
                 Ok(ast) => Ok(ast),
                 Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
             }
         } else if let Expression::Atom(Atom::String(string)) = &exp {
-            match read(&string, false) {
+            match read(&string, add_parens) {
                 Ok(ast) => Ok(ast),
                 Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
             }
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "read requires a file opened for reading or string",
+                "read: requires a file opened for reading or string",
             ))
         }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "read: takes a file or string and optional :add-parens",
+        ))
     }
 }
 
@@ -287,7 +309,13 @@ pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>
         "read-line".to_string(),
         Rc::new(Expression::Func(builtin_read_line)),
     );
-    data.insert("read".to_string(), Rc::new(Expression::Func(builtin_read)));
+    data.insert(
+        "read".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_read,
+            "Read a file or string and return the list representation.",
+        )),
+    );
     data.insert(
         "write-line".to_string(),
         Rc::new(Expression::Func(builtin_write_line)),
