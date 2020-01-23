@@ -12,9 +12,10 @@
 ;;		TODO support things like $2la for second to last arg, $3la, etc..
 
 	(defn change-dir-if-arg-is-dir (cmd)
-		(if (fs-dir? cmd)
-			(list root::cd cmd)
-			cmd))
+		(let ((cmd-str (str cmd)))
+			(if (fs-dir? cmd-str)
+				(list root::cd cmd-str)
+				cmd-str)))
 
 	(defn prefixify-cmd (cmd-toks infix-ast-pair)
 		(let ((build-cmd (fn (cmd-ast raw-list)
@@ -34,7 +35,7 @@
 			(build-cmd (cdr infix-ast-pair) cmd-toks)))
 
 	;; return true if cmd satisfies preconditions for prefixification
-	(defn satisfies-prefixify-preconditions (cmd-to-execute cmd-ast infix-ast-pair)
+	(defn satisfies-prefixify-preconditions (cmd-str cmd-ast infix-ast-pair)
 		(let ((infix-symbol (car infix-ast-pair)))
 			(not (or ;; reasons to skip pre-processing
 
@@ -42,7 +43,7 @@
 				(not cmd-ast)
 
 				;; if cmd doesn't contain symbol
-				(not (str-contains infix-symbol cmd-to-execute))
+				(not (str-contains infix-symbol cmd-str))
 
 				;; if already in prefix notation
 				;;TODO edge case, there are more infix-symbols in ast?
@@ -50,13 +51,13 @@
 
 ;; recurse over infix-symbol-base-ast-pairs return nil if there are none but
 ;; return the pair if it's valid
-	(defn confirm-prefix-eligible (cmd-to-execute cmd-ast symbol-ast-pairs)
+	(defn confirm-prefix-eligible (cmd-str cmd-ast symbol-ast-pairs)
 		(progn (defq next-pair (first symbol-ast-pairs))
 			(if (not next-pair)
 				nil
-				(if (satisfies-prefixify-preconditions cmd-to-execute cmd-ast next-pair)
+				(if (satisfies-prefixify-preconditions cmd-str cmd-ast next-pair)
 					next-pair
-					(recur cmd-to-execute cmd-ast (rest symbol-ast-pairs))))))
+					(recur cmd-str cmd-ast (rest symbol-ast-pairs))))))
 
 ;; to consider:
 ;; for out> and stuff there will need to be a distinction b/w variadic infix
@@ -67,25 +68,24 @@
 ;; TODO out> err> / other file forms are NOT variadic...
 
 	;; get cmd as ast and confirm it should be prefixified... then do it.
-	(defn check-for-infix-notation (cmd-to-execute)
+	(defn check-for-infix-notation (cmd-str cmd-ast)
 		(progn
-				(defq cmd-ast (read :add-parens cmd-to-execute))
 				(defq infix-symbol-base-ast-pairs ;; TODO so... is there state persisted if this is only defined once?
 					(list
 						(join '| (vec '| (make-vec)))
 						(join 'meow (vec 'progn (make-vec))))) ;; but meow should be ;
 				(defq eligible-pair
-					(confirm-prefix-eligible cmd-to-execute cmd-ast infix-symbol-base-ast-pairs))
+					(confirm-prefix-eligible cmd-str cmd-ast infix-symbol-base-ast-pairs))
 			(if (not eligible-pair)
-				cmd-to-execute
+				cmd-str
 				;; TODO remove this
-				;;(progn (str "not eligible: " cmd-to-execute) cmd-to-execute)
+				;;(progn (str "not eligible: " cmd-str) cmd-str)
 				(prefixify-cmd cmd-ast eligible-pair))))
 
-	(defn __exec_hook (cmd-to-execute)
-		(let ((args-list (read cmd-to-execute)))
-				(match (length args-list)
-					(1 (change-dir-if-arg-is-dir (first args-list)))
-					(nil (check-for-infix-notation cmd-to-execute)))))
+	(defn __exec_hook (cmd-str)
+		(let ((cmd-ast (read :add-parens cmd-str)))
+				(match (length cmd-ast)
+					(1 (change-dir-if-arg-is-dir (first cmd-ast)))
+					(nil (check-for-infix-notation cmd-str cmd-ast)))))
 
 ;; }}}
