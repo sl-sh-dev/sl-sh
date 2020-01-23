@@ -65,15 +65,15 @@
 ;; wait if it is not check to see if it's nil b/c that's false
 ;; GO ahead and do for ; as well... why not?
 ;; TODO out> err> / other file forms are NOT variadic...
-	(defq infix-symbol-base-ast-pairs
-		(list
-			(join '| (vec '| (make-vec)))
-			(join 'meow (vec 'progn (make-vec))))) ;; but meow should be ;
 
 	;; get cmd as ast and confirm it should be prefixified... then do it.
 	(defn check-for-infix-notation (cmd-to-execute)
 		(progn
 				(defq cmd-ast (read :add-parens cmd-to-execute))
+				(defq infix-symbol-base-ast-pairs ;; TODO so... is there state persisted if this is only defined once?
+					(list
+						(join '| (vec '| (make-vec)))
+						(join 'meow (vec 'progn (make-vec))))) ;; but meow should be ;
 				(defq eligible-pair
 					(confirm-prefix-eligible cmd-to-execute cmd-ast infix-symbol-base-ast-pairs))
 			(if (not eligible-pair)
@@ -83,7 +83,7 @@
 				(prefixify-cmd cmd-ast eligible-pair))))
 
 	(defn __exec_hook (cmd-to-execute)
-		(let ((args-list (str-split " " cmd-to-execute)))
+		(let ((args-list (read cmd-to-execute)))
 				(match (length args-list)
 					(1 (change-dir-if-arg-is-dir (first args-list)))
 					(nil (check-for-infix-notation cmd-to-execute)))))
