@@ -83,9 +83,9 @@
 				(prefixify-cmd cmd-ast eligible-pair))))
 
 	(defn __exec_hook (cmd-to-execute)
-		(let ((args-list (read cmd-to-execute)))
+		(let ((args-list (read cmd-to-execute :add-parens)))
 				(match (length args-list)
-					(1 (change-dir-if-arg-is-dir (first args-list)))
+					(1 (change-dir-if-arg-is-dir cmd-to-execute))
 					(nil (check-for-infix-notation cmd-to-execute)))))
 
 ;; }}}

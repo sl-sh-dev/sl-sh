@@ -224,6 +224,7 @@ error-stack-off | | builtin | Do not print the eval stack on error.
 get-error | form* | builtin | Like progn but on error return #(:error msg).
 global-scope? | | builtin | Is code running in the global (root) scope.
 to-symbol | form | builtin | Converts a string, int or float to a symbol.
+loose-symbols | form* | builtin | Allow loose symbols for any forms run under it (like the repl).
 dyn | symbol value form | Sets dynamic var to symbol to value for the execution of form.
 '=' | | builtin |
 '>' | | builtin |
@@ -445,7 +446,7 @@ open | file-name options* | builtin | Open the given file, see table below for o
 close | file | builtin | Close the file, if a file has multiple references they all must be closed.  Going out of scope also closes the file.
 flush | file | builtin | Flush the file to disk.
 read-line | file | builtin | Reads and returns a line.  Return nil if the file is at EOF.
-read | file | builtin | Reads the file and parses it into an Expression.
+read | file | builtin | Reads the file and parses it into an Expression (optional keyword :add-parens will add outer parens is needed).
 write-line | file line | builtin | Writes the line, adds a newline at end.
 write-string | file string | builtin | Writes the string, does not add a newline at end.
 

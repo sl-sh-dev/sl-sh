@@ -191,6 +191,20 @@ fn builtin_read(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
+    fn do_read(input: &str, mut add_parens: bool) -> io::Result<Expression> {
+        add_parens = if add_parens {
+            !(input.starts_with('(')
+                || input.starts_with('\'')
+                || input.starts_with('`')
+                || input.starts_with('#'))
+        } else {
+            false
+        };
+        match read(&input, add_parens) {
+            Ok(ast) => Ok(ast),
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+        }
+    }
     let mut add_parens = false;
     let mut exp = None;
     for (i, arg) in args.enumerate() {
@@ -214,17 +228,11 @@ fn builtin_read(
     if let Some(exp) = exp {
         let exp = eval(environment, exp)?;
         if let Expression::File(FileState::Read(file)) = &exp {
-            let mut fstr = String::new();
-            file.borrow_mut().read_to_string(&mut fstr)?;
-            match read(&fstr, add_parens) {
-                Ok(ast) => Ok(ast),
-                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-            }
-        } else if let Expression::Atom(Atom::String(string)) = &exp {
-            match read(&string, add_parens) {
-                Ok(ast) => Ok(ast),
-                Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-            }
+            let mut input = String::new();
+            file.borrow_mut().read_to_string(&mut input)?;
+            do_read(&input, add_parens)
+        } else if let Expression::Atom(Atom::String(input)) = &exp {
+            do_read(input, add_parens)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
