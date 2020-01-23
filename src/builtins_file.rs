@@ -72,7 +72,7 @@ fn builtin_cd(
     env::set_var("OLDPWD", env::current_dir()?);
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("Error changing to {}, {}", root.display(), e);
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     } else {
         env::set_var("PWD", env::current_dir()?);
         Ok(Expression::Atom(Atom::True))
@@ -110,7 +110,7 @@ fn file_test(
             if test(path) {
                 return Ok(Expression::Atom(Atom::True));
             } else {
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
         }
     }
@@ -142,7 +142,6 @@ fn builtin_is_dir(
 fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
     let mut do_write = false;
     match &environment.data_in {
-        Some(Expression::Atom(Atom::Nil)) => {}
         Some(Expression::Atom(_atom)) => {
             do_write = true;
         }
@@ -155,11 +154,13 @@ fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Res
         Some(Expression::File(FileState::Read(_file))) => {
             do_write = true;
         }
-        Some(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before file.",
-            ));
+        Some(val) => {
+            if !val.is_nil() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before file.",
+                ));
+            }
         }
         None => {}
     }
@@ -185,7 +186,7 @@ fn builtin_pipe(
     }
     let old_out_status = environment.state.stdout_status.clone();
     environment.in_pipe = true;
-    let mut out = Expression::Atom(Atom::Nil);
+    let mut out = Expression::nil();
     environment.state.stdout_status = Some(IOState::Pipe);
     let mut error: Option<io::Result<Expression>> = None;
     let mut i = 1; // Meant 1 here.
@@ -271,7 +272,7 @@ fn builtin_wait(
                         Some(exit_status) => {
                             Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
                         }
-                        None => Ok(Expression::Atom(Atom::Nil)),
+                        None => Ok(Expression::nil()),
                     }
                 }
                 Expression::Process(ProcessState::Over(_pid, exit_status)) => {
@@ -279,7 +280,7 @@ fn builtin_wait(
                 }
                 Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
                     Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
-                    None => Ok(Expression::Atom(Atom::Nil)),
+                    None => Ok(Expression::nil()),
                 },
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,

@@ -82,8 +82,7 @@ fn builtin_apply(
                 list_borrow = tlist.borrow();
                 Box::new(list_borrow.iter())
             }
-            Expression::Pair(_, _) => last_evaled.iter(),
-            Expression::Atom(Atom::Nil) => last_evaled.iter(),
+            Expression::Pair(_) => last_evaled.iter(), // Includes Nil.
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -122,7 +121,7 @@ fn builtin_unwind_protect(
         }
         result
     } else {
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -220,7 +219,8 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                                 }
                                 Expression::with_list(v)
                             }
-                            Expression::Pair(_, _) => {
+                            Expression::Pair(_) => {
+                                // Includes Nil...
                                 let mut v = Vec::with_capacity(list.len() + 1);
                                 v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
                                 for l in list.drain(..) {
@@ -271,7 +271,6 @@ fn builtin_length(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg {
-                Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Int(0))),
                 Expression::Atom(Atom::String(s)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
@@ -284,26 +283,32 @@ fn builtin_length(
                 Expression::Vector(list) => {
                     Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64)))
                 }
-                Expression::Pair(_e1, e2) => {
-                    let mut len = 0;
-                    let mut e_next = e2.clone();
-                    loop {
-                        match &*e_next.clone().borrow() {
-                            Expression::Pair(_e1, e2) => {
-                                e_next = e2.clone();
-                                len += 1;
-                            }
-                            Expression::Atom(Atom::Nil) => {
-                                len += 1;
-                                break;
-                            }
-                            _ => {
-                                len += 1;
-                                break;
+                Expression::Pair(p) => {
+                    if let Some((_e1, e2)) = &*p.borrow() {
+                        let mut len = 0;
+                        let mut e_next = e2.clone();
+                        loop {
+                            match e_next {
+                                Expression::Pair(p) => {
+                                    len += 1;
+                                    if let Some((_e1, e2)) = &*p.borrow() {
+                                        e_next = e2.clone();
+                                    } else {
+                                        // Nil
+                                        break;
+                                    }
+                                }
+                                _ => {
+                                    len += 1;
+                                    break;
+                                }
                             }
                         }
+                        Ok(Expression::Atom(Atom::Int(len)))
+                    } else {
+                        // Nil
+                        Ok(Expression::Atom(Atom::Int(0)))
                     }
-                    Ok(Expression::Atom(Atom::Int(len)))
                 }
                 Expression::HashMap(map) => {
                     Ok(Expression::Atom(Atom::Int(map.borrow().len() as i64)))
@@ -324,15 +329,14 @@ fn builtin_if(
 ) -> io::Result<Expression> {
     if let Some(if_form) = args.next() {
         if let Some(then_form) = args.next() {
-            return match eval(environment, if_form)? {
-                Expression::Atom(Atom::Nil) => {
-                    if let Some(else_form) = args.next() {
-                        eval(environment, else_form)
-                    } else {
-                        Ok(Expression::Atom(Atom::Nil))
-                    }
+            return if eval(environment, if_form)?.is_nil() {
+                if let Some(else_form) = args.next() {
+                    eval(environment, else_form)
+                } else {
+                    Ok(Expression::nil())
                 }
-                _ => eval(environment, then_form),
+            } else {
+                eval(environment, then_form)
             };
         }
     }
@@ -433,7 +437,7 @@ fn print(
             print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
         }
     };
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(Expression::nil())
 }
 
 pub fn eprint(
@@ -447,7 +451,7 @@ pub fn eprint(
             print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
         }
     };
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(Expression::nil())
 }
 
 fn builtin_print(
@@ -493,7 +497,7 @@ pub fn builtin_progn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::Atom(Atom::Nil);
+    let mut ret = Expression::nil();
     for arg in args {
         ret = eval(environment, &arg)?;
     }
@@ -640,7 +644,7 @@ fn builtin_unexport(
             let key = eval(environment, key)?;
             if let Expression::Atom(Atom::Symbol(k)) = key {
                 env::remove_var(k);
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
         }
     }
@@ -708,7 +712,7 @@ fn builtin_undef(
             let key = eval(environment, key)?;
             if let Expression::Atom(Atom::Symbol(k)) = key {
                 remove_expression_current(environment, &k);
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
         }
     }
@@ -757,7 +761,7 @@ fn builtin_is_global_scope(
     } else if environment.current_scope.len() == 1 {
         Ok(Expression::Atom(Atom::True))
     } else {
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -830,7 +834,7 @@ fn replace_commas(
             Expression::Vector(tlist) => {
                 replace_commas(environment, &mut tlist.borrow().iter(), is_vector)?
             }
-            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector)?,
+            Expression::Pair(_) => replace_commas(environment, &mut exp.iter(), is_vector)?,
             _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
@@ -847,7 +851,7 @@ fn replace_commas(
                     for item in new_list.borrow().iter() {
                         output.push(item.clone());
                     }
-                } else if let Expression::Pair(_, _) = nl {
+                } else if let Expression::Pair(_) = nl {
                     for item in nl.iter() {
                         output.push(item.clone());
                     }
@@ -870,7 +874,7 @@ fn replace_commas(
                 for item in new_list.borrow_mut().drain(..) {
                     output.push(item);
                 }
-            } else if let Expression::Pair(_, _) = nl {
+            } else if let Expression::Pair(_) = nl {
                 for item in nl.iter() {
                     output.push(item.clone());
                 }
@@ -902,13 +906,20 @@ fn builtin_bquote(
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
-                    Ok(Expression::Atom(Atom::Nil))
+                    Ok(Expression::nil())
                 }
             }
             Expression::Vector(list) => {
                 replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
             }
-            Expression::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false),
+            Expression::Pair(p) => {
+                if let Some((_, _)) = &*p.borrow() {
+                    replace_commas(environment, &mut arg.iter(), false)
+                } else {
+                    // Nil
+                    Ok(arg.clone())
+                }
+            }
             _ => Ok(arg.clone()),
         }
     } else {
@@ -945,7 +956,7 @@ fn builtin_bquote(
         }
     });
     //let res = child.join()
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(Expression::nil())
 }*/
 
 fn builtin_and(
@@ -955,9 +966,10 @@ fn builtin_and(
     let mut last_exp = Expression::Atom(Atom::True);
     for arg in args {
         let arg = eval(environment, &arg)?;
-        match arg {
-            Expression::Atom(Atom::Nil) => return Ok(Expression::Atom(Atom::Nil)),
-            _ => last_exp = arg,
+        if arg.is_nil() {
+            return Ok(Expression::nil());
+        } else {
+            last_exp = arg;
         }
     }
     Ok(last_exp)
@@ -969,12 +981,11 @@ fn builtin_or(
 ) -> io::Result<Expression> {
     for arg in args {
         let arg = eval(environment, &arg)?;
-        match arg {
-            Expression::Atom(Atom::Nil) => {}
-            _ => return Ok(arg),
+        if !arg.is_nil() {
+            return Ok(arg);
         }
     }
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(Expression::nil())
 }
 
 fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
@@ -982,10 +993,10 @@ fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result
     if args.len() != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "not takes one form"));
     }
-    if let Expression::Atom(Atom::Nil) = &args[0] {
+    if args[0].is_nil() {
         Ok(Expression::Atom(Atom::True))
     } else {
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -1001,7 +1012,7 @@ fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Res
         if is_expression(environment, &s) {
             Ok(Expression::Atom(Atom::True))
         } else {
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         }
     } else {
         Err(io::Error::new(
@@ -1093,9 +1104,15 @@ fn builtin_expand_macro(
                     }
                 };
                 do_expansion(environment, command, &mut parts.iter())
-            } else if let Expression::Pair(e1, e2) = arg0 {
-                //let parts = exp_to_args(environment, &*e2.borrow(), false)?;
-                do_expansion(environment, &e1.borrow(), &mut *e2.borrow().iter())
+            } else if let Expression::Pair(p) = arg0 {
+                if let Some((e1, e2)) = &*p.borrow() {
+                    do_expansion(environment, &e1, &mut *e2.iter())
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "expand-macro can only have one form (list defining the macro call)",
+                    ))
+                }
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1151,7 +1168,7 @@ fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Resu
             job.names
         );
     }
-    Ok(Expression::Atom(Atom::Nil))
+    Ok(Expression::nil())
 }
 
 fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option<u32> {
@@ -1203,7 +1220,7 @@ fn builtin_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<
                 mark_job_running(environment, pid);
             }
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -1230,7 +1247,7 @@ fn builtin_fg(environment: &mut Environment, args: &[Expression]) -> io::Result<
                 wait_pid(environment, pid, Some(&term_settings));
             }
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -1254,7 +1271,7 @@ fn builtin_command(
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::ExternalOnly;
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let mut last_eval = Ok(Expression::nil());
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1271,7 +1288,7 @@ fn builtin_run_bg(
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     environment.run_background = true;
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let mut last_eval = Ok(Expression::nil());
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1289,7 +1306,7 @@ fn builtin_form(
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::FormOnly;
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let mut last_eval = Ok(Expression::nil());
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1307,7 +1324,7 @@ fn builtin_loose_symbols(
 ) -> io::Result<Expression> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut last_eval = Ok(Expression::Atom(Atom::Nil));
+    let mut last_eval = Ok(Expression::nil());
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1329,7 +1346,7 @@ fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Resul
         Ordering::Equal => {
             if let Expression::Atom(Atom::Int(exit_code)) = &args[0] {
                 environment.exit_code = Some(*exit_code as i32);
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1339,7 +1356,7 @@ fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Resul
         }
         Ordering::Less => {
             environment.exit_code = Some(0);
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         }
     }
 }
@@ -1382,7 +1399,7 @@ fn builtin_ns_create(
                 Rc::new(Expression::Atom(Atom::String(key))),
             );
             environment.current_scope.push(scope);
-            return Ok(Expression::Atom(Atom::Nil));
+            return Ok(Expression::nil());
         }
     }
     Err(io::Error::new(
@@ -1428,7 +1445,7 @@ fn builtin_ns_enter(
                 }
             };
             environment.current_scope.push(scope);
-            return Ok(Expression::Atom(Atom::Nil));
+            return Ok(Expression::nil());
         }
     }
     Err(io::Error::new(
@@ -1456,7 +1473,7 @@ fn builtin_ns_exists(
             if environment.namespaces.contains_key(&key) {
                 return Ok(Expression::Atom(Atom::True));
             } else {
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
         }
     }
@@ -1489,7 +1506,7 @@ fn builtin_error_stack_on(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = true;
-        return Ok(Expression::Atom(Atom::Nil));
+        return Ok(Expression::nil());
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1503,7 +1520,7 @@ fn builtin_error_stack_off(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = false;
-        return Ok(Expression::Atom(Atom::Nil));
+        return Ok(Expression::nil());
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1515,7 +1532,7 @@ fn builtin_get_error(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::Atom(Atom::Nil);
+    let mut ret = Expression::nil();
     for arg in args {
         match eval(environment, &arg) {
             Ok(exp) => ret = exp,
@@ -1547,7 +1564,7 @@ macro_rules! ensure_tonicity {
         if f(first, rest) {
             Ok(Expression::Atom(Atom::True))
         } else {
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         }
     }};
 }

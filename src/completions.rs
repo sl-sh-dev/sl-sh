@@ -114,7 +114,7 @@ impl ShellCompleter {
             let envir = &mut self.environment.borrow_mut();
             match eval(envir, &exp) {
                 Ok(res) => {
-                    match res {
+                    match &res {
                         Expression::Atom(Atom::String(s)) | Expression::Atom(Atom::Symbol(s)) => {
                             match s.as_ref() {
                                 "path" => HookResult::Path,
@@ -125,7 +125,6 @@ impl ShellCompleter {
                                 }
                             }
                         }
-                        Expression::Atom(Atom::Nil) => HookResult::Default,
                         Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
@@ -137,16 +136,21 @@ impl ShellCompleter {
                             }
                             HookResult::UseList(v)
                         }
-                        Expression::Pair(_, _) => {
-                            let mut v = Vec::new();
-                            for l in res.iter() {
-                                let s = match l.as_string(envir) {
-                                    Ok(s) => s.trim().to_string(),
-                                    Err(_) => "ERROR".to_string(),
-                                };
-                                v.push(s);
+                        Expression::Pair(p) => {
+                            if let Some((_, _)) = &*p.borrow() {
+                                let mut v = Vec::new();
+                                for l in res.iter() {
+                                    let s = match l.as_string(envir) {
+                                        Ok(s) => s.trim().to_string(),
+                                        Err(_) => "ERROR".to_string(),
+                                    };
+                                    v.push(s);
+                                }
+                                HookResult::UseList(v)
+                            } else {
+                                // Nil
+                                HookResult::Default
                             }
-                            HookResult::UseList(v)
                         }
                         _ => {
                             eprintln!("WARNING: unexpected result from __completion_hook, {:?}, ignoring.", res);

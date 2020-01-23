@@ -117,9 +117,12 @@
                         (if (seq? l)
                             (set 'tret (copy-els tret l))
                             (progn
-                                (def 'tcell (join l nil))
-                                (xdr! tseq tcell)
-                                (set 'tseq tcell)
+                                (if (null tseq)
+                                    (xar! tseq l)
+                                    (progn
+                                        (def 'tcell (join l nil))
+                                        (xdr! tseq tcell)
+                                        (set 'tseq tcell)))
                                 (if (null tret) (set 'tret tseq))
                                 )))
                     (if (and (null ret) (not (null tret)))

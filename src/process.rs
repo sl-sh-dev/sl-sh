@@ -230,7 +230,7 @@ fn run_command(
                 };
                 match status {
                     Some(code) => Expression::Process(ProcessState::Over(pid, code as i32)),
-                    None => Expression::Atom(Atom::Nil),
+                    None => Expression::nil(),
                 }
             } else {
                 Expression::Process(ProcessState::Running(pid))
@@ -375,7 +375,6 @@ pub fn do_command<'a>(
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
     let stdin = match &environment.data_in {
-        Some(Expression::Atom(Atom::Nil)) => Stdio::inherit(),
         Some(Expression::Atom(atom)) => {
             data = Some(atom.clone());
             Stdio::piped()
@@ -423,11 +422,16 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (list).",
             ))
         }
-        Some(Expression::Pair(_, _)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (pair).",
-            ))
+        Some(Expression::Pair(p)) => {
+            if let Some((_, _)) = &*p.borrow() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (pair).",
+                ));
+            } else {
+                // Nil
+                Stdio::inherit()
+            }
         }
         Some(Expression::HashMap(_)) => {
             return Err(io::Error::new(

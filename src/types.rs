@@ -33,7 +33,6 @@ pub struct Macro {
 
 #[derive(Clone, Debug)]
 pub enum Atom {
-    Nil,
     True,
     Float(f64),
     Int(i64),
@@ -48,7 +47,6 @@ pub enum Atom {
 impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Atom::Nil => write!(f, "nil"),
             Atom::True => write!(f, "true"),
             Atom::Float(n) => write!(f, "{}", n),
             Atom::Int(i) => write!(f, "{}", i),
@@ -78,7 +76,6 @@ impl Atom {
 
     pub fn display_type(&self) -> String {
         match self {
-            Atom::Nil => "Nil".to_string(),
             Atom::True => "True".to_string(),
             Atom::Float(_) => "Float".to_string(),
             Atom::Int(_) => "Int".to_string(),
@@ -132,8 +129,12 @@ impl<'a> Iterator for PairIter<'a> {
             self.started = true;
         } else {
             self.current = if let Some(current) = &self.current {
-                if let Expression::Pair(_e1, e2) = current {
-                    Some(e2.borrow().clone())
+                if let Expression::Pair(p) = current {
+                    if let Some((_e1, e2)) = &*p.borrow() {
+                        Some(e2.clone())
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -142,10 +143,15 @@ impl<'a> Iterator for PairIter<'a> {
             };
         }
         if let Some(current) = &self.current {
-            if let Expression::Pair(e1, _e2) = current {
-                unsafe {
+            if let Expression::Pair(p) = current {
+                let pair = unsafe {
                     // Need an unbound lifetime to get 'a
-                    Some(&*e1.as_ptr())
+                    &*p.as_ptr()
+                };
+                if let Some((e1, _e2)) = pair {
+                    Some(e1)
+                } else {
+                    None
                 }
             } else {
                 None
@@ -181,7 +187,7 @@ pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
     Vector(Rc<RefCell<Vec<Expression>>>),
-    Pair(Rc<RefCell<Expression>>, Rc<RefCell<Expression>>),
+    Pair(Rc<RefCell<Option<(Expression, Expression)>>>),
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
     // Func is depricated use Function for new code.
     Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
@@ -194,7 +200,7 @@ impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = &Expression>) {
             let mut first = true;
-            let mut last_exp = &Expression::Atom(Atom::Nil);
+            let mut last_exp = &Expression::nil();
             for p in itr {
                 if !first {
                     if let Expression::Atom(Atom::Symbol(sym)) = last_exp {
@@ -229,42 +235,49 @@ impl fmt::Display for Expression {
                 res.push(')');
                 write!(f, "{}", res)
             }
-            Expression::Pair(e1, e2) => {
-                if is_proper_list(self) {
-                    match &*e1.borrow() {
-                        Expression::Atom(Atom::Symbol(sym)) if sym == "quote" => {
-                            f.write_str("'")?;
-                            // This will be a two element list or something is wrong...
-                            if let Expression::Pair(a2, _is_nil) = &*e2.borrow() {
-                                f.write_str(&a2.borrow().to_string())
-                            } else {
-                                f.write_str(&e2.borrow().to_string())
+            Expression::Pair(p) => {
+                if let Some((e1, e2)) = &*p.borrow() {
+                    if is_proper_list(self) {
+                        match e1 {
+                            Expression::Atom(Atom::Symbol(sym)) if sym == "quote" => {
+                                f.write_str("'")?;
+                                // This will be a two element list or something is wrong...
+                                if let Expression::Pair(p) = e2 {
+                                    if let Some((a2, _is_nil)) = &*p.borrow() {
+                                        f.write_str(&a2.to_string())
+                                    } else {
+                                        f.write_str(&e2.to_string())
+                                    }
+                                } else {
+                                    f.write_str(&e2.to_string())
+                                }
+                            }
+                            Expression::Atom(Atom::Symbol(sym)) if sym == "bquote" => {
+                                f.write_str("`")?;
+                                // This will be a two element list or something is wrong...
+                                if let Expression::Pair(p) = e2 {
+                                    if let Some((a2, _is_nil)) = &*p.borrow() {
+                                        f.write_str(&a2.to_string())
+                                    } else {
+                                        f.write_str(&e2.to_string())
+                                    }
+                                } else {
+                                    f.write_str(&e2.to_string())
+                                }
+                            }
+                            _ => {
+                                let mut res = String::new();
+                                res.push_str("(");
+                                list_out(&mut res, &mut self.iter());
+                                res.push(')');
+                                write!(f, "{}", res)
                             }
                         }
-                        Expression::Atom(Atom::Symbol(sym)) if sym == "bquote" => {
-                            f.write_str("`")?;
-                            // This will be a two element list or something is wrong...
-                            if let Expression::Pair(a2, _is_nil) = &*e2.borrow() {
-                                f.write_str(&a2.borrow().to_string())
-                            } else {
-                                f.write_str(&e2.borrow().to_string())
-                            }
-                        }
-                        _ => {
-                            let mut res = String::new();
-                            res.push_str("(");
-                            list_out(&mut res, &mut self.iter());
-                            res.push(')');
-                            write!(f, "{}", res)
-                        }
+                    } else {
+                        write!(f, "({} . {})", e1.to_string(), e2.to_string())
                     }
                 } else {
-                    write!(
-                        f,
-                        "({} . {})",
-                        e1.borrow().to_string(),
-                        e2.borrow().to_string()
-                    )
+                    f.write_str("nil")
                 }
             }
             Expression::HashMap(map) => {
@@ -291,8 +304,12 @@ impl fmt::Debug for Expression {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
             Expression::Vector(l) => write!(f, "Expression::Vector({:?})", l.borrow()),
-            Expression::Pair(e1, e2) => {
-                write!(f, "Expression::Pair({:?} . {:?})", e1.borrow(), e2.borrow())
+            Expression::Pair(p) => {
+                if let Some((e1, e2)) = &*p.borrow() {
+                    write!(f, "Expression::Pair({:?} . {:?})", e1, e2)
+                } else {
+                    write!(f, "Expression::Nil")
+                }
             }
             Expression::HashMap(map) => write!(f, "Expression::HashMap({:?})", map.borrow()),
             Expression::Func(_) => write!(f, "Expression::Func(_)"),
@@ -311,10 +328,26 @@ impl fmt::Debug for Expression {
 }
 
 impl Expression {
+    pub fn nil() -> Expression {
+        Expression::Pair(Rc::new(RefCell::new(None)))
+    }
+
+    pub fn is_nil(&self) -> bool {
+        if let Expression::Pair(p) = self {
+            p.borrow().is_none()
+        } else {
+            false
+        }
+    }
+
     pub fn iter(&self) -> Box<dyn Iterator<Item = &Expression>> {
         match self {
-            Expression::Pair(e1, e2) => {
-                Box::new(PairIter::new(Expression::Pair(e1.clone(), e2.clone())))
+            Expression::Pair(p) => {
+                if p.borrow().is_some() {
+                    Box::new(PairIter::new(Expression::Pair(p.clone())))
+                } else {
+                    Box::new(iter::empty())
+                }
             }
             //Expression::Vector(list) => {
             //    Box::new(list.clone().borrow().iter())
@@ -336,14 +369,14 @@ impl Expression {
     }
 
     pub fn cons_from_vec(v: &mut Vec<Expression>) -> Expression {
-        let mut last_pair = Expression::Atom(Atom::Nil);
+        let mut last_pair = Expression::nil();
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
-                last_pair = Expression::Pair(
-                    Rc::new(RefCell::new(v.remove(i))),
-                    Rc::new(RefCell::new(last_pair.clone())),
-                );
+                last_pair = Expression::Pair(Rc::new(RefCell::new(Some((
+                    v.remove(i),
+                    last_pair.clone(),
+                )))));
                 if i == 0 {
                     break;
                 }
@@ -360,7 +393,13 @@ impl Expression {
             Expression::Func(_) => "Function".to_string(),
             Expression::Function(_) => "Function".to_string(),
             Expression::Vector(_) => "Vector".to_string(),
-            Expression::Pair(_, _) => "Pair".to_string(),
+            Expression::Pair(p) => {
+                if let Some((_, _)) = &*p.borrow() {
+                    "Pair".to_string()
+                } else {
+                    "Nil".to_string()
+                }
+            }
             Expression::HashMap(_) => "HashMap".to_string(),
             Expression::File(_) => "File".to_string(),
         }
@@ -422,38 +461,37 @@ impl Expression {
                     writer.write_all(b")")?;
                 }
             }
-            Expression::Pair(e1, e2) => {
-                init_space(indent, writer)?;
-                let a_str = self.to_string();
-                if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
-                    writer.write_all(a_str.as_bytes())?;
-                } else if is_proper_list(self) {
-                    writer.write_all(b"(")?;
-                    let mut first = true;
-                    let mut last_p = &Expression::Atom(Atom::Nil);
-                    for p in self.iter() {
-                        if !first {
-                            if let Expression::Atom(Atom::Symbol(sym)) = last_p {
-                                if sym != "," && sym != ",@" {
+            Expression::Pair(p) => {
+                if let Some((e1, e2)) = &*p.borrow() {
+                    init_space(indent, writer)?;
+                    let a_str = self.to_string();
+                    if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
+                        writer.write_all(a_str.as_bytes())?;
+                    } else if is_proper_list(self) {
+                        writer.write_all(b"(")?;
+                        let mut first = true;
+                        let mut last_p = &Expression::nil();
+                        for p in self.iter() {
+                            if !first {
+                                if let Expression::Atom(Atom::Symbol(sym)) = last_p {
+                                    if sym != "," && sym != ",@" {
+                                        writer.write_all(b" ")?;
+                                    }
+                                } else {
                                     writer.write_all(b" ")?;
                                 }
                             } else {
-                                writer.write_all(b" ")?;
+                                first = false;
                             }
-                        } else {
-                            first = false;
+                            p.pretty_print_int(environment, indent + 1, writer)?;
+                            last_p = p;
                         }
-                        p.pretty_print_int(environment, indent + 1, writer)?;
-                        last_p = p;
+                        writer.write_all(b")")?;
+                    } else {
+                        write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
                     }
-                    writer.write_all(b")")?;
                 } else {
-                    write!(
-                        writer,
-                        "({} . {})",
-                        e1.borrow().to_string(),
-                        e2.borrow().to_string()
-                    )?;
+                    write!(writer, "nil")?;
                 }
             }
             Expression::HashMap(map) => {
@@ -518,7 +556,7 @@ impl Expression {
             Expression::Func(_) => Ok(self.to_string()),
             Expression::Function(_) => Ok(self.to_string()),
             Expression::Vector(_list) => Ok(self.to_string()),
-            Expression::Pair(_e1, _e2) => Ok(self.to_string()),
+            Expression::Pair(_) => Ok(self.to_string()),
             Expression::HashMap(_map) => Ok(self.to_string()),
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();
@@ -566,7 +604,7 @@ impl Expression {
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
@@ -591,7 +629,7 @@ impl Expression {
             Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
@@ -639,7 +677,7 @@ impl Expression {
             Expression::Func(_) => write!(writer, "{}", self.to_string())?,
             Expression::Function(_) => write!(writer, "{}", self.to_string())?,
             Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
-            Expression::Pair(_e1, _e2) => write!(writer, "{}", self.to_string())?,
+            Expression::Pair(_) => write!(writer, "{}", self.to_string())?,
             Expression::HashMap(_map) => write!(writer, "{}", self.to_string())?,
             Expression::File(FileState::Stdin) => {
                 let f = io::stdin();

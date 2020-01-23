@@ -13,24 +13,32 @@ fn build_map(
     assocs: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     for key_val in assocs {
-        if let Expression::Pair(key, val) = key_val {
-            match &*key.borrow() {
-                Expression::Atom(Atom::Symbol(sym)) => {
-                    map.insert(sym.to_string(), Rc::new(val.borrow().clone()))
-                }
-                Expression::Atom(Atom::String(s)) => {
-                    map.insert(s.to_string(), Rc::new(val.borrow().clone()))
-                }
-                Expression::Atom(Atom::StringBuf(s)) => {
-                    map.insert(s.borrow().to_string(), Rc::new(val.borrow().clone()))
-                }
-                _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "make-hash key can only be a symbol or string",
-                    ))
-                }
-            };
+        if let Expression::Pair(p) = key_val {
+            if let Some((key, val)) = &*p.borrow() {
+                match key {
+                    Expression::Atom(Atom::Symbol(sym)) => {
+                        map.insert(sym.to_string(), Rc::new(val.clone()))
+                    }
+                    Expression::Atom(Atom::String(s)) => {
+                        map.insert(s.to_string(), Rc::new(val.clone()))
+                    }
+                    Expression::Atom(Atom::StringBuf(s)) => {
+                        map.insert(s.borrow().to_string(), Rc::new(val.clone()))
+                    }
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "make-hash key can only be a symbol or string",
+                        ))
+                    }
+                };
+            } else {
+                // Nil
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "make-hash each association must be a pair (key . val)",
+                ));
+            }
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -49,10 +57,16 @@ fn builtin_make_hash(
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
             let assocs = eval(environment, assocs)?;
-            return match assocs {
-                Expression::Pair(_, _) => build_map(map, &mut *assocs.iter()),
+            return match &assocs {
+                Expression::Pair(p) => {
+                    if let Some((_, _)) = &*p.borrow() {
+                        build_map(map, &mut *assocs.iter())
+                    } else {
+                        // Nil
+                        Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
+                    }
+                }
                 Expression::Vector(list) => build_map(map, &mut *Box::new(list.borrow().iter())),
-                Expression::Atom(Atom::Nil) => Ok(Expression::HashMap(Rc::new(RefCell::new(map)))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "make-hash takes a sequence",
@@ -117,7 +131,7 @@ fn builtin_hash_remove(
             let exp = &*old;
             return Ok(exp.clone());
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
@@ -162,7 +176,7 @@ fn builtin_hash_get(
             let exp = &*old.clone();
             return Ok(exp.clone());
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
@@ -205,7 +219,7 @@ fn builtin_hash_haskey(
         if map.contains_key(sym) {
             Ok(Expression::Atom(Atom::True))
         } else {
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         }
     }
     if let Some(map) = args.next() {
@@ -275,7 +289,7 @@ fn builtin_hash_clear(
             let map = eval(environment, map)?;
             if let Expression::HashMap(map) = map {
                 map.borrow_mut().clear();
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
         }
     }

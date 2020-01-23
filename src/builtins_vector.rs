@@ -80,7 +80,7 @@ fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::
             if !list.is_empty() {
                 let len = list.len();
                 if start == len {
-                    return Ok(Expression::Atom(Atom::Nil));
+                    return Ok(Expression::nil());
                 }
                 if start > (len - 1) || end > len {
                     let msg = format!(
@@ -96,7 +96,7 @@ fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::
                 };
                 Ok(Expression::with_list(slice))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             }
         }
         _ => Err(io::Error::new(
@@ -212,7 +212,7 @@ fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Re
             if let Some(item) = list.borrow_mut().pop() {
                 Ok(item)
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             }
         }
         _ => Err(io::Error::new(
@@ -239,7 +239,7 @@ fn builtin_vec_is_empty(
             if list.borrow().is_empty() {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             }
         }
         _ => Err(io::Error::new(
@@ -265,7 +265,7 @@ fn builtin_vec_vclear(
     match list {
         Expression::Vector(list) => {
             list.borrow_mut().clear();
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         }
         _ => Err(io::Error::new(
             io::ErrorKind::Other,

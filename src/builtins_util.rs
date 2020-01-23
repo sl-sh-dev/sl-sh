@@ -9,11 +9,16 @@ use crate::types::*;
 
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
-    if let Expression::Pair(_e1, e2) = exp {
-        if let Expression::Atom(Atom::Nil) = *e2.borrow() {
-            true
+    if let Expression::Pair(p) = exp {
+        if let Some((_e1, e2)) = &*p.borrow() {
+            if e2.is_nil() {
+                true
+            } else {
+                is_proper_list(&e2)
+            }
         } else {
-            is_proper_list(&e2.borrow())
+            // Nil
+            false
         }
     } else {
         false
@@ -45,13 +50,17 @@ pub fn exp_to_args(
     if is_proper_list(parts) {
         let mut args: Vec<Expression> = Vec::new();
         let mut current = parts.clone();
-        while let Expression::Pair(e1, e2) = current {
-            if do_eval {
-                args.push(eval(environment, &e1.borrow())?);
+        while let Expression::Pair(p) = current {
+            if let Some((e1, e2)) = &*p.borrow() {
+                if do_eval {
+                    args.push(eval(environment, &e1)?);
+                } else {
+                    args.push(e1.clone());
+                }
+                current = e2.clone();
             } else {
-                args.push(e1.borrow().clone());
+                current = Expression::nil();
             }
-            current = e2.borrow().clone();
         }
         Ok(args)
     } else if do_eval {
@@ -215,15 +224,9 @@ fn setup_args_final<'a>(
         }
         if rest_data.is_empty() {
             if let Some(scope) = scope {
-                scope
-                    .data
-                    .insert(rest_name, Rc::new(Expression::Atom(Atom::Nil)));
+                scope.data.insert(rest_name, Rc::new(Expression::nil()));
             } else {
-                set_expression_current(
-                    environment,
-                    rest_name,
-                    Rc::new(Expression::Atom(Atom::Nil)),
-                );
+                set_expression_current(environment, rest_name, Rc::new(Expression::nil()));
             }
         } else if let Some(scope) = scope {
             scope

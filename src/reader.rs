@@ -370,7 +370,7 @@ fn parse_char(token_full: &Token) -> Result<Expression, ParseError> {
 
 fn parse_atom(token: &str) -> Expression {
     if token.is_empty() {
-        return Expression::Atom(Atom::Nil);
+        return Expression::nil();
     }
     if token.len() > 1 && token.starts_with('\"') && token.ends_with('\"') {
         let string = token[1..token.len() - 1].to_string();
@@ -380,7 +380,7 @@ fn parse_atom(token: &str) -> Expression {
     if token == "t" {
         Expression::Atom(Atom::True)
     } else if token == "nil" {
-        Expression::Atom(Atom::Nil)
+        Expression::nil()
     } else {
         let potential_int: Result<i64, ParseIntError> = token.parse();
         match potential_int {
@@ -412,10 +412,10 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
                         }
                         ListType::List => {
                             if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                                v2.vec.push(Expression::Pair(
-                                    Rc::new(RefCell::new(v.vec[0].clone())),
-                                    Rc::new(RefCell::new(v.vec[2].clone())),
-                                ));
+                                v2.vec.push(Expression::Pair(Rc::new(RefCell::new(Some((
+                                    v.vec[0].clone(),
+                                    v.vec[2].clone(),
+                                ))))));
                             } else {
                                 v2.vec.push(Expression::cons_from_vec(&mut v.vec));
                             }
@@ -439,7 +439,7 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
 
 fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
-        return Ok(Expression::Atom(Atom::Nil));
+        return Ok(Expression::nil());
     }
     if tokens[0].token != "("
         && tokens[0].token != "#("

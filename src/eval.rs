@@ -21,7 +21,7 @@ fn call_lambda<'a>(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let mut looping = true;
-    let mut last_eval = Expression::Atom(Atom::Nil);
+    let mut last_eval = Expression::nil();
     let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
         environment,
@@ -164,7 +164,7 @@ fn fn_eval<'a>(
     match command {
         Expression::Atom(Atom::Symbol(command)) => {
             if command.is_empty() {
-                return Ok(Expression::Atom(Atom::Nil));
+                return Ok(Expression::nil());
             }
             let form = if environment.form_type == FormType::Any
                 || environment.form_type == FormType::FormOnly
@@ -220,19 +220,26 @@ fn fn_eval<'a>(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         },
-        Expression::Pair(e1, e2) => {
-            match eval(environment, &Expression::Pair(e1.clone(), e2.clone()))? {
-                Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-                Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                Expression::Func(f) => {
-                    let parts: Vec<Expression> = parts.cloned().collect();
-                    f(environment, &parts)
+        Expression::Pair(p) => {
+            if let Some((_e1, _e2)) = &*p.borrow() {
+                match eval(environment, &Expression::Pair(p.clone()))? {
+                    Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                    Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                    Expression::Func(f) => {
+                        let parts: Vec<Expression> = parts.cloned().collect();
+                        f(environment, &parts)
+                    }
+                    Expression::Function(c) => (c.func)(environment, &mut *parts),
+                    _ => {
+                        let msg = format!("Not a valid command {:?}", command);
+                        Err(io::Error::new(io::ErrorKind::Other, msg))
+                    }
                 }
-                Expression::Function(c) => (c.func)(environment, &mut *parts),
-                _ => {
-                    let msg = format!("Not a valid command {:?}", command);
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
-                }
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Not a valid command: nil.",
+                ))
             }
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
@@ -306,7 +313,7 @@ fn internal_eval<'a>(
     }
     // exit was called so just return nil to unwind.
     if environment.exit_code.is_some() {
-        return Ok(Expression::Atom(Atom::Nil));
+        return Ok(Expression::nil());
     }
     let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {
@@ -329,14 +336,19 @@ fn internal_eval<'a>(
             let ib = box_slice_it(&parts);
             fn_eval(environment, command, ib)
         }
-        Expression::Pair(command, rest) => {
-            fn_eval(environment, &command.borrow(), rest.borrow().iter())
+        Expression::Pair(p) => {
+            if let Some((command, rest)) = &*p.borrow() {
+                fn_eval(environment, &command, rest.iter())
+            } else {
+                // Nil
+                Ok(Expression::nil())
+            }
         }
         Expression::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
                     Ok(val) => Ok(Expression::Atom(Atom::String(val))),
-                    Err(_) => Ok(Expression::Atom(Atom::Nil)),
+                    Err(_) => Ok(Expression::nil()),
                 }
             } else if s.starts_with(':') {
                 // Got a keyword, so just be you...
@@ -359,10 +371,10 @@ fn internal_eval<'a>(
         Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
         Expression::Atom(Atom::String(string)) => str_process(environment, &string),
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
-        Expression::Func(_) => Ok(Expression::Atom(Atom::Nil)),
-        Expression::Function(_) => Ok(Expression::Atom(Atom::Nil)),
+        Expression::Func(_) => Ok(Expression::nil()),
+        Expression::Function(_) => Ok(Expression::nil()),
         Expression::Process(state) => Ok(Expression::Process(*state)),
-        Expression::File(_) => Ok(Expression::Atom(Atom::Nil)),
+        Expression::File(_) => Ok(Expression::nil()),
     }
 }
 

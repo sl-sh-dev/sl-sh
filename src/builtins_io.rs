@@ -105,7 +105,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
             Ok(file) => file,
             Err(err) => {
                 if error_nil {
-                    return Ok(Expression::Atom(Atom::Nil));
+                    return Ok(Expression::nil());
                 } else {
                     return Err(err);
                 }
@@ -141,7 +141,7 @@ fn builtin_close(environment: &mut Environment, args: &[Expression]) -> io::Resu
             std::mem::swap(&mut args[0], &mut closed);
             return Ok(Expression::Atom(Atom::True));
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -158,7 +158,7 @@ fn builtin_flush(environment: &mut Environment, args: &[Expression]) -> io::Resu
             f.borrow_mut().get_ref().flush()?;
             return Ok(Expression::Atom(Atom::True));
         }
-        Ok(Expression::Atom(Atom::Nil))
+        Ok(Expression::nil())
     }
 }
 
@@ -174,7 +174,7 @@ fn builtin_read_line(environment: &mut Environment, args: &[Expression]) -> io::
         if let Expression::File(FileState::Read(file)) = &exp {
             let mut line = String::new();
             if 0 == file.borrow_mut().read_line(&mut line)? {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             } else {
                 Ok(Expression::Atom(Atom::String(line)))
             }
@@ -257,7 +257,7 @@ fn builtin_write_line(
                 "{}",
                 &args[1].as_string(environment)?
             )?;
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -285,7 +285,7 @@ fn builtin_write_string(
                 "{}",
                 &args[1].as_string(environment)?
             )?;
-            Ok(Expression::Atom(Atom::Nil))
+            Ok(Expression::nil())
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,

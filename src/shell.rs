@@ -132,7 +132,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
 
 fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosure> {
     let mut has_handle = false;
-    let mut exp = Rc::new(Expression::Atom(Atom::Nil));
+    let mut exp = Rc::new(Expression::nil());
     if let Some(lexp) = get_expression(&environment.borrow(), "__line_handler") {
         has_handle = true;
         exp = lexp;
@@ -184,7 +184,7 @@ fn handle_result(
                 );
             }
             match exp {
-                Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                Expression::Pair(_) if exp.is_nil() => { /* don't print nil */ }
                 Expression::File(_) => { /* don't print file contents */ }
                 Expression::Process(_) => { /* should have used stdout */ }
                 Expression::Atom(Atom::String(_)) => {
@@ -585,7 +585,7 @@ pub fn read_stdin() -> i32 {
                         match eval(&mut environment, &ast) {
                             Ok(exp) => {
                                 match exp {
-                                    Expression::Atom(Atom::Nil) => { /* don't print nil */ }
+                                    Expression::Pair(_) if exp.is_nil() => { /* don't print nil */ }
                                     Expression::Process(_) => { /* should have used stdout */ }
                                     _ => {
                                         if let Err(err) = exp.write(&environment) {

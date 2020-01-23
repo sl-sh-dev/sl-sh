@@ -28,10 +28,10 @@ fn builtin_is_nil(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Nil) = arg {
+            return if arg.is_nil() {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -48,7 +48,7 @@ fn builtin_is_true(
             return if let Expression::Atom(Atom::True) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -65,7 +65,7 @@ fn builtin_is_float(
             return if let Expression::Atom(Atom::Float(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -85,7 +85,7 @@ fn builtin_is_int(
             return if let Expression::Atom(Atom::Int(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -102,7 +102,7 @@ fn builtin_is_symbol(
             return if let Expression::Atom(Atom::Symbol(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -122,7 +122,7 @@ fn builtin_is_string(
             return if let Expression::Atom(Atom::String(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -142,7 +142,7 @@ fn builtin_is_char(
             return if let Expression::Atom(Atom::Char(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -159,7 +159,7 @@ fn builtin_is_lambda(
             return if let Expression::Atom(Atom::Lambda(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -179,7 +179,7 @@ fn builtin_is_macro(
             return if let Expression::Atom(Atom::Macro(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -199,7 +199,7 @@ fn builtin_is_vec(
             return if let Expression::Vector(_) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -213,10 +213,14 @@ fn builtin_is_pair(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Pair(_, _) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let Expression::Pair(p) = arg {
+                if let Some((_, _)) = &*p.borrow() {
+                    Ok(Expression::Atom(Atom::True))
+                } else {
+                    Ok(Expression::nil())
+                }
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -232,7 +236,7 @@ fn builtin_is_builtin(
             return match eval(environment, arg)? {
                 Expression::Func(_) => Ok(Expression::Atom(Atom::True)),
                 Expression::Function(_) => Ok(Expression::Atom(Atom::True)),
-                _ => Ok(Expression::Atom(Atom::Nil)),
+                _ => Ok(Expression::nil()),
             };
         }
     }
@@ -252,7 +256,7 @@ fn builtin_is_process(
             return if let Expression::Process(_) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -272,7 +276,7 @@ fn builtin_is_file(
             return if let Expression::File(_) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -289,7 +293,7 @@ fn builtin_is_hash(
             return if let Expression::HashMap(_) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -303,12 +307,10 @@ fn builtin_is_list(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Nil) = arg {
-                Ok(Expression::Atom(Atom::True))
-            } else if is_proper_list(&arg) {
+            return if arg.is_nil() || is_proper_list(&arg) {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }

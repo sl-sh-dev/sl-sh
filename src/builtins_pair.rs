@@ -17,10 +17,7 @@ fn builtin_join(
             if args.next().is_none() {
                 let arg0 = eval(environment, arg0)?;
                 let arg1 = eval(environment, arg1)?;
-                return Ok(Expression::Pair(
-                    Rc::new(RefCell::new(arg0)),
-                    Rc::new(RefCell::new(arg1)),
-                ));
+                return Ok(Expression::Pair(Rc::new(RefCell::new(Some((arg0, arg1))))));
             }
         }
     }
@@ -31,19 +28,19 @@ fn builtin_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut head = Expression::Atom(Atom::Nil);
+    let mut head = Expression::nil();
     let mut last = head.clone();
     for a in args {
         let a = eval(environment, a)?;
-        let pair = Expression::Pair(
-            Rc::new(RefCell::new(a)),
-            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-        );
-        if let Expression::Pair(_e1, e2) = last {
-            e2.replace(pair.clone());
+        let pair = Expression::Pair(Rc::new(RefCell::new(Some((a, Expression::nil())))));
+        if let Expression::Pair(p) = last {
+            let p = &mut *p.borrow_mut();
+            if let Some(p) = p {
+                p.1 = pair.clone();
+            }
         }
         last = pair;
-        if let Expression::Atom(Atom::Nil) = head {
+        if head.is_nil() {
             head = last.clone();
         }
     }
@@ -58,8 +55,14 @@ fn builtin_car(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg {
-                Expression::Pair(e1, _e2) => Ok(e1.borrow().clone()),
-                Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Nil)),
+                Expression::Pair(p) => {
+                    if let Some((e1, _e2)) = &*p.borrow() {
+                        Ok(e1.clone())
+                    } else {
+                        // Nil
+                        Ok(Expression::nil())
+                    }
+                }
                 _ => Err(io::Error::new(io::ErrorKind::Other, "car requires a pair")),
             };
         }
@@ -78,8 +81,13 @@ fn builtin_cdr(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg {
-                Expression::Pair(_e1, e2) => Ok(e2.borrow().clone()),
-                Expression::Atom(Atom::Nil) => Ok(Expression::Atom(Atom::Nil)),
+                Expression::Pair(p) => {
+                    if let Some((_e1, e2)) = &*p.borrow() {
+                        Ok(e2.clone())
+                    } else {
+                        Ok(Expression::nil())
+                    }
+                }
                 _ => Err(io::Error::new(io::ErrorKind::Other, "cdr requires a pair")),
             };
         }
@@ -98,37 +106,29 @@ fn builtin_xar(
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
-                let sym = match pair {
-                    Expression::Atom(Atom::Symbol(s)) => {
-                        if let Some(_exp) = get_expression(environment, &s[..]) {
-                            Some(s.clone())
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
                 let arg = eval(environment, arg)?;
-                let mut pair = eval(environment, pair)?;
-                match &pair {
-                    Expression::Atom(Atom::Nil) => {
-                        pair = Expression::Pair(
-                            Rc::new(RefCell::new(arg)),
-                            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-                        );
-                        if let Some(s) = sym {
-                            overwrite_expression(environment, &s[..], Rc::new(pair.clone()));
+                let pair = eval(environment, pair)?;
+                if let Expression::Pair(pair) = &pair {
+                    let mut new_pair = None;
+                    {
+                        let pair = &mut *pair.borrow_mut();
+                        match pair {
+                            None => {
+                                new_pair = Some((arg, Expression::nil()));
+                            }
+                            Some(pair) => {
+                                pair.0 = arg;
+                            }
                         }
                     }
-                    Expression::Pair(e1, _e2) => {
-                        e1.replace(arg);
+                    if new_pair.is_some() {
+                        pair.replace(new_pair);
                     }
-                    _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "xar! requires a pair for it's first form",
-                        ))
-                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "xar! requires a pair for it's first form",
+                    ));
                 }
                 return Ok(pair);
             }
@@ -148,37 +148,29 @@ fn builtin_xdr(
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
-                let sym = match pair {
-                    Expression::Atom(Atom::Symbol(s)) => {
-                        if let Some(_exp) = get_expression(environment, &s[..]) {
-                            Some(s.clone())
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
                 let arg = eval(environment, arg)?;
-                let mut pair = eval(environment, pair)?;
-                match &pair {
-                    Expression::Atom(Atom::Nil) => {
-                        pair = Expression::Pair(
-                            Rc::new(RefCell::new(Expression::Atom(Atom::Nil))),
-                            Rc::new(RefCell::new(arg)),
-                        );
-                        if let Some(s) = sym {
-                            overwrite_expression(environment, &s[..], Rc::new(pair.clone()));
+                let pair = eval(environment, pair)?;
+                if let Expression::Pair(pair) = &pair {
+                    let mut new_pair = None;
+                    {
+                        let pair = &mut *pair.borrow_mut();
+                        match pair {
+                            None => {
+                                new_pair = Some((Expression::nil(), arg));
+                            }
+                            Some(pair) => {
+                                pair.1 = arg;
+                            }
                         }
                     }
-                    Expression::Pair(_e1, e2) => {
-                        e2.replace(arg);
+                    if new_pair.is_some() {
+                        pair.replace(new_pair);
                     }
-                    _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "xdr! requires a pair for it's first form",
-                        ))
-                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "xdr! requires a pair for it's first form",
+                    ));
                 }
                 return Ok(pair);
             }

@@ -249,7 +249,8 @@ fn builtin_str_cat_list(
                             first = false;
                         }
                     }
-                    Expression::Pair(_, _) => {
+                    Expression::Pair(_) => {
+                        // Includes nil
                         let list = list.iter();
                         let mut first = true;
                         for s in list {
@@ -427,7 +428,7 @@ fn builtin_str_empty(
             return if string.is_empty() {
                 Ok(Expression::Atom(Atom::True))
             } else {
-                Ok(Expression::Atom(Atom::Nil))
+                Ok(Expression::nil())
             };
         }
     }
@@ -556,7 +557,7 @@ fn builtin_str_starts_with(
                 return if text.starts_with(&pat) {
                     Ok(Expression::Atom(Atom::True))
                 } else {
-                    Ok(Expression::Atom(Atom::Nil))
+                    Ok(Expression::nil())
                 };
             }
         }
@@ -581,7 +582,7 @@ fn builtin_str_contains(
                 return if text.contains(&pat) {
                     Ok(Expression::Atom(Atom::True))
                 } else {
-                    Ok(Expression::Atom(Atom::Nil))
+                    Ok(Expression::nil())
                 };
             }
         }
@@ -788,7 +789,7 @@ pub fn builtin_str_ignore_expand(
 ) -> io::Result<Expression> {
     let save_ignore = environment.str_ignore_expand;
     environment.str_ignore_expand = true;
-    let mut ret = Ok(Expression::Atom(Atom::Nil));
+    let mut ret = Ok(Expression::nil());
     for arg in args {
         ret = eval(environment, &arg);
         if ret.is_err() {
@@ -843,7 +844,7 @@ fn builtin_char_is_whitespace(
                 return if ch.is_whitespace() {
                     Ok(Expression::Atom(Atom::True))
                 } else {
-                    Ok(Expression::Atom(Atom::Nil))
+                    Ok(Expression::nil())
                 };
             }
         }
@@ -866,7 +867,7 @@ fn char_test(
         if let Expression::Atom(Atom::Char(ch)) = eval(environment, &arg)? {
             if let Some(last_ch) = last_ch {
                 if !ch_test(last_ch, ch) {
-                    return Ok(Expression::Atom(Atom::Nil));
+                    return Ok(Expression::nil());
                 }
             }
             last_ch = Some(ch);
