@@ -187,6 +187,9 @@ pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
     Vector(Rc<RefCell<Vec<Expression>>>),
+    // Nil is represented with a Pair that contains None.  May seem odd
+    // but allows nil to be transformed into a pair with xar!/xdr! and treated
+    // as a true empty list.
     Pair(Rc<RefCell<Option<(Expression, Expression)>>>),
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
     // Func is depricated use Function for new code.
