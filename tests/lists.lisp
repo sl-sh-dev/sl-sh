@@ -50,7 +50,7 @@ Some stuff
 
 ;; ensure mechanism for list creation doesn't affect how lists are updated
 (let ((long-list (list "A" (list "B")))
-    (short-list '("A" '("B")))
+    (short-list '("A" ("B")))
     (model-list (list "A" (list "B" "C"))))
     (assert-equal model-list (progn (append! (last long-list) "C") long-list))
     (assert-equal model-list (progn (append! (last short-list) "C") short-list)))
