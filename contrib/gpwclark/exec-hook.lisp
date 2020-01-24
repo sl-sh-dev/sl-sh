@@ -17,11 +17,13 @@
 				(list root::cd cmd-str)
 				cmd-str)))
 
-	(defn prefixify-cmd (cmd-toks infix-ast-pair)
+;;TODO organize fcns
+
+	(defn prefixify-cmd (cmd-toks an-infix-hashset)
 		(let ((build-cmd (fn (cmd-ast raw-list)
 				(progn
 					(defq next-tok (first raw-list))
-					(defq infix-symbol (hash-get infix-ast-pair :infix-symbol))
+					(defq infix-symbol (hash-get an-infix-hashset :infix-symbol))
 					(if (not next-tok)
 						cmd-ast
 						;;TODO remove this!
@@ -29,10 +31,17 @@
 						(progn
 							(recur
 								(if (= infix-symbol next-tok)
-									(progn (append! cmd-ast (vec (make-vec))) cmd-ast)
+									(progn (append!
+											cmd-ast
+											(vec ((hash-get an-infix-hashset :xform) (make-vec))))
+											cmd-ast)
 									(progn (append! (last cmd-ast) (vec next-tok)) cmd-ast))
 								(rest raw-list))))))))
-			(build-cmd (hash-get infix-ast-pair :base-ast) cmd-toks)))
+			(build-cmd
+				(vec
+					(hash-get an-infix-hashset :ast-base)
+					((hash-get an-infix-hashset :xform) (make-vec)))
+				cmd-toks)))
 
 	;; return true if cmd satisfies preconditions for prefixification
 	(defn satisfies-prefixify-preconditions (cmd-str cmd-ast infix-hash-set)
@@ -49,15 +58,15 @@
 				;;TODO edge case, there are more infix-symbols in ast?
 				(= infix-symbol (first cmd-ast))))))
 
-	(defn confirm-prefix-eligible (cmd-str cmd-ast symbol-ast-pairs)
-		;; recurse over infix-symbol-base-ast-pairs return nil if there are none but
+	(defn confirm-prefix-eligible (cmd-str cmd-ast infix-metadata)
+		;; recurse over infix-metadata return nil if there are none but
 		;; return the pair if it's valid
-		(progn (defq next-pair (first symbol-ast-pairs))
-			(if (not next-pair)
+		(progn (defq an-infix-hashset (first infix-metadata))
+			(if (not an-infix-hashset)
 				nil
-				(if (satisfies-prefixify-preconditions cmd-str cmd-ast next-pair)
-					next-pair
-					(recur cmd-str cmd-ast (rest symbol-ast-pairs))))))
+				(if (satisfies-prefixify-preconditions cmd-str cmd-ast an-infix-hashset)
+					an-infix-hashset
+					(recur cmd-str cmd-ast (rest infix-metadata))))))
 
 ;; to consider:
 ;; for out> and stuff there will need to be a distinction b/w variadic infix
@@ -66,29 +75,56 @@
 ;; wait if it is not check to see if it's nil b/c that's false
 ;; GO ahead and do for ; as well... why not?
 ;; TODO out> err> / other file forms are NOT variadic...
-	(defn make-infix-data (infix-symbol base-ast cmd-arity expects-procs)
+	(defn make-infix-data (infix-symbol ast-base cmd-arity xform)
 		(progn
 			(defq prefix-props (make-hash))
 			(hash-set! prefix-props :infix-symbol infix-symbol)
-			(hash-set! prefix-props :base-ast base-ast)
+			(hash-set! prefix-props :ast-base ast-base)
 			(hash-set! prefix-props :cmd-arity cmd-arity)
-			(hash-set! prefix-props :expects-procs expects-procs)
+			(hash-set! prefix-props :xform xform)
 			prefix-props))
+
+	(defn identity ()
+		(fn (x) x))
+
+	(defn proc-wait (consumer)
+		(fn (cmd)
+			(progn (defq cmd-proc (eval cmd)
+				(if (process? cmd-proc)
+					(progn (defq ret-code (wait cmd-proc))
+						 (consumer ret-code)))))))
+
+#|
+	(defmacro and-proc-handler (next)
+		(fn (ret-code)
+			(if (= 0 ret-code)
+				(if (not next) ret-code (next))
+				ret-code)))
+
+	(defn or-proc-handler ()
+		(fn (ret-code)
+			(if (= 0 ret-code)
+				ret-code
+				(if (not-next) ret-code (next)))))
+|#
 
 	(defn check-for-infix-notation (cmd-str cmd-ast)
 		;; confirm cmd ast needs prefixification ...then call prefixify.
 		(progn
-				(defq infix-symbol-base-ast-pairs ;; TODO so... is there state persisted if this is only defined once?
+				(defq infix-metadata ;; TODO so... is there state persisted if this is only defined once?
 					(list
-						(make-infix-data '| (vec '| (make-vec)) 0 nil)
-						(make-infix-data 'meow (vec 'progn (make-vec)) 0 nil))) ;; but meow should be ;
-				(defq eligible-pair
-					(confirm-prefix-eligible cmd-str cmd-ast infix-symbol-base-ast-pairs))
-			(if (not eligible-pair)
+						(make-infix-data '| '|  0 (identity))
+						(make-infix-data 'meow 'progn  0 (identity)))
+						;;(make-infix-data '&& 'and 0 (proc-wait (and-proc-handler)))
+						;;(make-infix-data '|| 'or 0 (proc-wait (or-proc-handler)))
+						) ;; but meow should be ;
+				(defq prefix-eligible
+					(confirm-prefix-eligible cmd-str cmd-ast infix-metadata))
+			(if (not prefix-eligible)
 				cmd-str
 				;; TODO remove this
 				;;(progn (str "not eligible: " cmd-str) cmd-str)
-				(prefixify-cmd cmd-ast eligible-pair))))
+				(prefixify-cmd cmd-ast prefix-eligible))))
 
 	(defn __exec_hook (cmd-str)
 		(let ((cmd-ast (read :add-parens cmd-str)))
