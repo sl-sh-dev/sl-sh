@@ -21,7 +21,7 @@
 		(let ((build-cmd (fn (cmd-ast raw-list)
 				(progn
 					(defq next-tok (first raw-list))
-					(defq infix-symbol (car infix-ast-pair))
+					(defq infix-symbol (hash-get infix-ast-pair :infix-symbol))
 					(if (not next-tok)
 						cmd-ast
 						;;TODO remove this!
@@ -32,11 +32,11 @@
 									(progn (append! cmd-ast (vec (make-vec))) cmd-ast)
 									(progn (append! (last cmd-ast) (vec next-tok)) cmd-ast))
 								(rest raw-list))))))))
-			(build-cmd (cdr infix-ast-pair) cmd-toks)))
+			(build-cmd (hash-get infix-ast-pair :base-ast) cmd-toks)))
 
 	;; return true if cmd satisfies preconditions for prefixification
-	(defn satisfies-prefixify-preconditions (cmd-str cmd-ast infix-ast-pair)
-		(let ((infix-symbol (car infix-ast-pair)))
+	(defn satisfies-prefixify-preconditions (cmd-str cmd-ast infix-hash-set)
+		(let ((infix-symbol (hash-get infix-hash-set :infix-symbol)))
 			(not (or ;; reasons to skip pre-processing
 
 				;; if read returns nil
@@ -49,9 +49,9 @@
 				;;TODO edge case, there are more infix-symbols in ast?
 				(= infix-symbol (first cmd-ast))))))
 
-;; recurse over infix-symbol-base-ast-pairs return nil if there are none but
-;; return the pair if it's valid
 	(defn confirm-prefix-eligible (cmd-str cmd-ast symbol-ast-pairs)
+		;; recurse over infix-symbol-base-ast-pairs return nil if there are none but
+		;; return the pair if it's valid
 		(progn (defq next-pair (first symbol-ast-pairs))
 			(if (not next-pair)
 				nil
@@ -66,14 +66,22 @@
 ;; wait if it is not check to see if it's nil b/c that's false
 ;; GO ahead and do for ; as well... why not?
 ;; TODO out> err> / other file forms are NOT variadic...
+	(defn make-infix-data (infix-symbol base-ast cmd-arity expects-procs)
+		(progn
+			(defq prefix-props (make-hash))
+			(hash-set! prefix-props :infix-symbol infix-symbol)
+			(hash-set! prefix-props :base-ast base-ast)
+			(hash-set! prefix-props :cmd-arity cmd-arity)
+			(hash-set! prefix-props :expects-procs expects-procs)
+			prefix-props))
 
-	;; get cmd as ast and confirm it should be prefixified... then do it.
 	(defn check-for-infix-notation (cmd-str cmd-ast)
+		;; confirm cmd ast needs prefixification ...then call prefixify.
 		(progn
 				(defq infix-symbol-base-ast-pairs ;; TODO so... is there state persisted if this is only defined once?
 					(list
-						(join '| (vec '| (make-vec)))
-						(join 'meow (vec 'progn (make-vec))))) ;; but meow should be ;
+						(make-infix-data '| (vec '| (make-vec)) 0 nil)
+						(make-infix-data 'meow (vec 'progn (make-vec)) 0 nil))) ;; but meow should be ;
 				(defq eligible-pair
 					(confirm-prefix-eligible cmd-str cmd-ast infix-symbol-base-ast-pairs))
 			(if (not eligible-pair)
