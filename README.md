@@ -34,7 +34,7 @@ the shell.
 ### Prompt/PS1
 The command prompt for the shell is customize-able via the `__prompt` function. The
 function takes no arguments and expects a string to be returned. The canonical
-prompt in sl-sh would simple be:
+prompt in sl-sh would simply be:
 ```
 	(defn __prompt()
 		(str "$ "))
