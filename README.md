@@ -224,6 +224,7 @@ error-stack-off | | builtin | Do not print the eval stack on error.
 get-error | form* | builtin | Like progn but on error return #(:error msg).
 global-scope? | | builtin | Is code running in the global (root) scope.
 to-symbol | form | builtin | Converts a string, int or float to a symbol.
+symbol-name | symbol | builtin | Convert a symbol to it's string name.
 loose-symbols | form* | builtin | Allow loose symbols for any forms run under it (like the repl).
 dyn | symbol value form | Sets dynamic var to symbol to value for the execution of form.
 '=' | | builtin |

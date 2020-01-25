@@ -5,7 +5,6 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap};
 use std::env;
 use std::fs;
@@ -765,30 +764,58 @@ fn builtin_is_global_scope(
     }
 }
 
-fn builtin_to_symbol(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "to-symbol take one form",
-        ))
-    } else {
-        match &args[0] {
-            Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
-            Expression::Atom(Atom::StringBuf(s)) => {
-                Ok(Expression::Atom(Atom::Symbol(s.borrow().clone())))
-            }
-            Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
-            Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(format!("{}", i)))),
-            Expression::Atom(Atom::Float(f)) => {
-                Ok(Expression::Atom(Atom::Symbol(format!("{}", f))))
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "to-symbol can only convert strings, symbols, ints and floats to a symbol",
-            )),
+fn builtin_to_symbol(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match &arg0 {
+                Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
+                Expression::Atom(Atom::StringBuf(s)) => {
+                    Ok(Expression::Atom(Atom::Symbol(s.borrow().clone())))
+                }
+                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
+                Expression::Atom(Atom::Int(i)) => {
+                    Ok(Expression::Atom(Atom::Symbol(format!("{}", i))))
+                }
+                Expression::Atom(Atom::Float(f)) => {
+                    Ok(Expression::Atom(Atom::Symbol(format!("{}", f))))
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "to-symbol can only convert strings, symbols, ints and floats to a symbol",
+                )),
+            };
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "to-symbol take one form",
+    ))
+}
+
+fn builtin_symbol_name(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match &arg0 {
+                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::String(s.clone()))),
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "symbol-name can only convert a symbol to a string",
+                )),
+            };
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "symbol-name take one form",
+    ))
 }
 
 fn builtin_fn(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
@@ -1336,29 +1363,31 @@ fn builtin_loose_symbols(
     last_eval
 }
 
-fn builtin_exit(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    match args.len().cmp(&1) {
-        Ordering::Greater => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "exit can only take an optional integer (exit code- defaults to 0)",
-        )),
-        Ordering::Equal => {
-            if let Expression::Atom(Atom::Int(exit_code)) = &args[0] {
-                environment.exit_code = Some(*exit_code as i32);
+fn builtin_exit(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(exit_code) = args.next() {
+        if args.next().is_none() {
+            let exit_code = eval(environment, exit_code)?;
+            return if let Expression::Atom(Atom::Int(exit_code)) = exit_code {
+                environment.exit_code = Some(exit_code as i32);
                 Ok(Expression::nil())
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
                     "exit can only take an optional integer (exit code- defaults to 0)",
                 ))
-            }
+            };
         }
-        Ordering::Less => {
-            environment.exit_code = Some(0);
-            Ok(Expression::nil())
-        }
+    } else {
+        environment.exit_code = Some(0);
+        return Ok(Expression::nil());
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "exit can only take an optional integer (exit code- defaults to 0)",
+    ))
 }
 
 fn builtin_ns_create(
@@ -1571,14 +1600,19 @@ macro_rules! ensure_tonicity {
 
 macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
-        |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-            let mut args: Vec<Expression> = list_to_args(environment, args, true)?;
-            if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
+        |environment: &mut Environment,
+         args: &mut dyn Iterator<Item = &Expression>|
+         -> io::Result<Expression> {
+            let mut list: Vec<Expression> = Vec::new();
+            for arg in args {
+                list.push(eval(environment, &arg)?);
+            }
+            if let Ok(ints) = parse_list_of_ints(environment, &mut list) {
                 ensure_tonicity!($check_fn, ints, &i64, i64)
-            } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
+            } else if let Ok(floats) = parse_list_of_floats(environment, &mut list) {
                 ensure_tonicity!($check_fn, floats, &f64, f64)
             } else {
-                let strings = parse_list_of_strings(environment, &mut args)?;
+                let strings = parse_list_of_strings(environment, &mut list)?;
                 ensure_tonicity!($check_fn, strings, &str, String)
             }
         }
@@ -1732,7 +1766,17 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "to-symbol".to_string(),
-        Rc::new(Expression::Func(builtin_to_symbol)),
+        Rc::new(Expression::make_function(
+            builtin_to_symbol,
+            "Convert a string, int or float to a symbol.",
+        )),
+    );
+    data.insert(
+        "symbol-name".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_symbol_name,
+            "Convert a symbol to its string representation.",
+        )),
     );
     data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
     data.insert(
@@ -1815,7 +1859,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
             "Within this form any undefined symbols become strings.",
         )),
     );
-    data.insert("exit".to_string(), Rc::new(Expression::Func(builtin_exit)));
+    data.insert(
+        "exit".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_exit,
+            "Exit with option status code.",
+        )),
+    );
     data.insert(
         "ns-create".to_string(),
         Rc::new(Expression::make_function(
@@ -1868,9 +1918,14 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
 
     data.insert(
         "=".to_string(),
-        Rc::new(Expression::Func(
-            |environment: &mut Environment, args: &[Expression]| -> io::Result<Expression> {
-                let mut args: Vec<Expression> = to_args(environment, args)?;
+        Rc::new(Expression::make_function(
+            |environment: &mut Environment,
+             parts: &mut dyn Iterator<Item = &Expression>|
+             -> io::Result<Expression> {
+                let mut args: Vec<Expression> = Vec::new();
+                for a in parts {
+                    args.push(eval(environment, &a)?);
+                }
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
                 } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
@@ -1880,22 +1935,35 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
                     ensure_tonicity!(|a, b| a == b, strings, &str, String)
                 }
             },
+            "Equals",
         )),
     );
     data.insert(
         ">".to_string(),
-        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a > b))),
+        Rc::new(Expression::make_function(
+            ensure_tonicity_all!(|a, b| a > b),
+            "Greater than.",
+        )),
     );
     data.insert(
         ">=".to_string(),
-        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a >= b))),
+        Rc::new(Expression::make_function(
+            ensure_tonicity_all!(|a, b| a >= b),
+            "Greater than or equal.",
+        )),
     );
     data.insert(
         "<".to_string(),
-        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a < b))),
+        Rc::new(Expression::make_function(
+            ensure_tonicity_all!(|a, b| a < b),
+            "Less than.",
+        )),
     );
     data.insert(
         "<=".to_string(),
-        Rc::new(Expression::Func(ensure_tonicity_all!(|a, b| a <= b))),
+        Rc::new(Expression::make_function(
+            ensure_tonicity_all!(|a, b| a <= b),
+            "Less than or equal.",
+        )),
     );
 }
