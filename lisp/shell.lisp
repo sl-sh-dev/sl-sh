@@ -189,9 +189,11 @@
 		(if (fs-exists? com) (set 'ret t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
 			(set 'ret t)
-			(for p (str-split ":" $PATH) (progn
-				(def 'path (str p "/" com))
-				(if (and (fs-exists? path)(not ret)) (set 'ret t))))))
+			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
+				(set 'ret t)
+				(for p (str-split ":" $PATH) (progn
+					(def 'path (str p "/" com))
+					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
 	ret))
 
 (defq register-alias nil)

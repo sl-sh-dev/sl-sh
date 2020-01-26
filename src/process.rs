@@ -123,6 +123,14 @@ fn run_command(
     for a in args {
         new_args.push(a.as_string(environment)?);
     }
+    let mut command = command;
+    let ncommand;
+    if command.starts_with('~') {
+        if let Some(c) = expand_tilde(command) {
+            ncommand = c;
+            command = &ncommand;
+        }
+    }
     let mut com_obj = Command::new(command);
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
