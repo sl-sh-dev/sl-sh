@@ -503,26 +503,6 @@ pub fn builtin_progn(
     Ok(ret)
 }
 
-fn proc_set_vars2(
-    _environment: &mut Environment,
-    key: Expression,
-    mut val: Expression,
-) -> io::Result<(String, Expression)> {
-    let key = match key {
-        Expression::Atom(Atom::Symbol(s)) => s,
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "first form (binding key) must evaluate to a symbol",
-            ));
-        }
-    };
-    if let Expression::Atom(Atom::String(vs)) = val {
-        val = Expression::Atom(Atom::String(vs));
-    }
-    Ok((key, val))
-}
-
 fn proc_set_vars(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -531,9 +511,17 @@ fn proc_set_vars(
     if let Some(key) = args.next() {
         if let Some(val) = args.next() {
             if !only_two || args.next().is_none() {
-                let key = eval(environment, key)?;
+                let key = match eval(environment, key)? {
+                    Expression::Atom(Atom::Symbol(s)) => s,
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "first form (binding key) must evaluate to a symbol",
+                        ));
+                    }
+                };
                 let val = eval(environment, val)?;
-                return proc_set_vars2(environment, key, val);
+                return Ok((key, val));
             }
         }
     }

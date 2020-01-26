@@ -51,11 +51,32 @@ fn builtin_cd(
     };
     let new_dir = if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?.as_string(environment)?;
-            if let Some(h) = expand_tilde(&arg) {
+            let new_arg = match arg {
+                Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                    Some(exp) => match &*exp {
+                        Expression::Func(_) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Function(_) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Atom(Atom::Lambda(_)) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        Expression::Atom(Atom::Macro(_)) => {
+                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                        }
+                        _ => eval(environment, &arg)?,
+                    },
+                    _ => eval(environment, &arg)?,
+                },
+                _ => eval(environment, &arg)?,
+            }
+            .as_string(environment)?;
+            if let Some(h) = expand_tilde(&new_arg) {
                 h
             } else {
-                arg
+                new_arg
             }
         } else {
             return Err(io::Error::new(

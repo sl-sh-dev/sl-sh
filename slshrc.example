@@ -39,6 +39,18 @@
 ;(alias vi (nvim))
 ;(alias vim (nvim))
 
+; Replace cd with a version that also runs ls after.
+; Macro to let un-expanded args go to root::cd.
+;(defmacro cd (&rest args) (progn
+;	(if (= (length args) 0)
+;		(and (root::cd) (ls .))
+;		(if (= (length args) 1)
+;			(and (root::cd (first args)) (ls .))
+;			(err "I take zero or one argument.")))
+;	nil))
+; Abuse register-alias to have better syntax highlighting for cd.
+;(register-alias 'cd)
+
 ;(export 'PATH (str "/bin:/usr/local/bin:" '~/bin))
 
 ;(if (fs-dir? "/home/sstanf/.cargo") (export 'PATH (str $PATH ":" '~/.cargo/bin)))

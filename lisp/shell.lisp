@@ -177,7 +177,7 @@
 	(def 'val (to-symbol ,com))
 	(if (def? val)
 		(set 'val (eval val)))
-	(if (macro? val) (progn ;get-error  ; If the next two lines fail it was not an alias...
+	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(def 'expansion (expand-macro (val)))
 		(set 'ret (sys-command? (symbol-name (first expansion))))))
 	ret))
@@ -331,6 +331,9 @@
 
 (ns-export '(
 	alias
+	register-alias
+	unregister-alias
+	alias?
 	out>>
 	out>
 	err>>
