@@ -4,9 +4,15 @@
 ;;; Macros to make working with the shell easier.
 
 ;; Create an alias, intended to be used with executables not lisp code (use defn for that).
-(defmacro alias (name body)
+(defmacro alias (name body) (progn
+	(shell::register-alias name)
 	`(defmacro ,name (&rest args)
-		(append (quote ,body) args)))
+		(append (quote ,body) args))))
+
+;; Remove an alias, this should be used instead of a raw undef for aliases.
+(defn unalias (name) (progn
+	(shell::unregister-alias name)
+	(undef name)))
 
 ;; Redirect stdout to file, append the output.
 (defmacro out>> (file body)
@@ -165,6 +171,17 @@
              (:bkrd (make-color 48))
              (nil (make-color 38)))))
 
+;; True if the supplied command is an alias for a system command.
+(defmacro sys-alias? (com) `(progn
+	(def 'ret nil)
+	(def 'val (to-symbol ,com))
+	(if (def? val)
+		(set 'val (eval val)))
+	(if (macro? val) (progn ;get-error  ; If the next two lines fail it was not an alias...
+		(def 'expansion (expand-macro (val)))
+		(set 'ret (sys-command? (symbol-name (first expansion))))))
+	ret))
+
 ;; True if the supplied command is a system command.
 (defn sys-command? (com) (progn
 	(def 'ret nil)
@@ -177,7 +194,21 @@
 				(if (and (fs-exists? path)(not ret)) (set 'ret t))))))
 	ret))
 
-(defq set-tok-colors nil)
+(defq register-alias nil)
+(defq unregister-alias nil)
+(defq alias? nil)
+(let ((alias (make-hash)))
+	(setfn register-alias (name) (hash-set! alias name t))
+	(setfn unregister-alias (name) (hash-remove! alias name))
+	(setfn alias? (name) (hash-haskey alias name)))
+
+(defq tok-slsh-form-color shell::*fg-blue*)
+(defq tok-slsh-fcn-color shell::*fg-cyan*)
+(defq tok-default-color shell::*fg-default*)
+(defq tok-sys-command-color shell::*fg-white*)
+(defq tok-sys-alias-color shell::*fg-default*)
+(defq tok-string-color shell::*fg-magenta*)
+(defq tok-invalid-color shell::*fg-red*)
 
 ;; Turn on syntax highlighting at the repl.
 (defmacro syntax-on  () '(progn
@@ -192,21 +223,19 @@
 	(in-sys-command nil)
 	(tok-command t))
 
-;; TODO make this a macro
 	(defn func? (com) (progn
 		(def 'com-sym (to-symbol com))
 		; Want the actual thing pointed to by the symbol in com for the test.
 		(if (def? (to-symbol com))
 			(set 'com (eval (to-symbol com))))
 		(or (builtin? com)(lambda? com)(macro? com))))
+
 	(defn paren-color (level) (progn
 		(def 'col (% level 4))
 		(if (= col 0) shell::*fg-white*
 			(if (= col 1) shell::*fg-cyan*
 				(if (= col 2) shell::*fg-yellow*
 					(if (= col 3) shell::*fg-blue*))))))
-
-
 
 	(defn my-sys-command? (command) (progn
 		(def 'ret nil)
@@ -216,22 +245,6 @@
 				(set 'ret (sys-command? command))
 				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
 		ret))
-
-	(defq tok-slsh-form-color shell::*fg-blue*)
-	(defq tok-slsh-fcn-color shell::*fg-cyan*)
-	(defq tok-default-color shell::*fg-default*)
-	(defq tok-sys-command-color shell::*fg-white*)
-	(defq tok-string-color shell::*fg-magenta*)
-	(defq tok-invalid-color shell::*fg-red*)
-
-	(setfn set-tok-colors (slsh-form-color slsh-fcn-color default-color sys-command-color string-color invalid-color)
-		(progn
-			(setq tok-slsh-form-color slsh-form-color)
-			(setq tok-slsh-fcn-color slsh-fcn-color)
-			(setq tok-default-color default-color)
-			(setq tok-sys-command-color sys-command-color)
-			(setq tok-string-color string-color)
-			(setq tok-invalid-color invalid-color)))
 
 	(defn command-color (command)
 		(if (not tok-command)
@@ -243,7 +256,9 @@
 					(str tok-slsh-form-color command shell::*fg-default*))
 				(str tok-default-color command shell::*fg-default*))
 			(if (func? command)
-				(str tok-slsh-fcn-color command shell::*fg-default*)
+				(if (or (shell::alias? command)(shell::sys-alias? command))
+					(progn (set 'in-sys-command t)(str tok-sys-alias-color command shell::*fg-default*))
+					(str tok-slsh-fcn-color command shell::*fg-default*))
 				(if (my-sys-command? command)
 					(progn (set 'in-sys-command t)(str tok-sys-command-color command shell::*fg-default*))
 					(str tok-invalid-color command shell::*fg-default*)))))
@@ -314,4 +329,35 @@
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))
 
-(ns-export '(alias out>> out> err>> err> out-err>> out-err> out>null err>null out-err>null | pushd popd dirs get-dirs clear-dirs set-dirs-max let-env sys-command? syntax-on syntax-off set-tok-colors fg-color-rgb bg-color-rgb))
+(ns-export '(
+	alias
+	out>>
+	out>
+	err>>
+	err>
+	out-err>>
+	out-err>
+	out>null
+	err>null
+	out-err>null
+	|
+	pushd
+	popd
+	dirs
+	get-dirs
+	clear-dirs
+	set-dirs-max
+	let-env
+	sys-command?
+	syntax-on
+	syntax-off
+	tok-slsh-form-color
+	tok-slsh-fcn-color
+	tok-default-color
+	tok-sys-command-color
+	tok-sys-alias-color
+	tok-string-color
+	tok-invalid-color
+	fg-color-rgb
+	bg-color-rgb))
+

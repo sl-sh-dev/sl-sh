@@ -123,12 +123,13 @@ Default colors are as follows:
 	(defq tok-slsh-fcn-color shell::*fg-cyan*)
 	(defq tok-default-color shell::*fg-default*)
 	(defq tok-sys-command-color shell::*fg-white*)
+	(defq tok-sys-alias-color shell::*fg-default*)
 	(defq tok-string-color shell::*fg-magenta*)
 	(defq tok-invalid-color shell::*fg-red*)
 ```
 
-The function `set-tok-colors` can be used to modify these, the function takes
-six arguments defined in the order the defaults are listed above.
+These symbols are exported from the shell namespace and can be set.  Example:
+(setq tok-sys-alias-color shell::*fg-green*)
 
 #### Color
 

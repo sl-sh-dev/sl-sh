@@ -25,7 +25,9 @@
 	(syntax-on)
 
 	;; tweak token colors
-	(set-tok-colors shell::*fg-blue* shell::*fg-cyan* shell::*fg-magenta* shell::*fg-green* (fg-color-rgb 255 128 0) shell::*fg-red*)
+	(setq tok-default-color shell::*fg-magenta*)
+	(setq tok-sys-command-color shell::*fg-green*)
+	(setq tok-string-color (fg-color-rgb 255 128 0))
 
 	(error-stack-on)
 
