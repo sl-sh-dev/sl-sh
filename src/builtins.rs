@@ -506,28 +506,38 @@ pub fn builtin_progn(
 fn proc_set_vars(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
-    only_two: bool,
-) -> io::Result<(String, Expression)> {
+) -> io::Result<(String, Option<String>, Expression)> {
     if let Some(key) = args.next() {
-        if let Some(val) = args.next() {
-            if !only_two || args.next().is_none() {
-                let key = match eval(environment, key)? {
-                    Expression::Atom(Atom::Symbol(s)) => s,
-                    _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "first form (binding key) must evaluate to a symbol",
-                        ));
-                    }
-                };
-                let val = eval(environment, val)?;
-                return Ok((key, val));
+        if let Some(arg1) = args.next() {
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(s)) => s,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "first form (binding key) must evaluate to a symbol",
+                    ));
+                }
+            };
+            if let Some(arg2) = args.next() {
+                if args.next().is_none() {
+                    let doc_str = if let Ok(docs) = eval(environment, arg1)?.as_string(environment)
+                    {
+                        Some(docs)
+                    } else {
+                        None
+                    };
+                    let val = eval(environment, arg2)?;
+                    return Ok((key, doc_str, val));
+                }
+            } else {
+                let val = eval(environment, arg1)?;
+                return Ok((key, None, val));
             }
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "def/set requires a key and value",
+        "def/set requires a key, optional docstring and value",
     ))
 }
 
@@ -535,12 +545,19 @@ fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let (key, val) = proc_set_vars(environment, args, true)?;
+    let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
         entry.insert(Rc::new(val.clone()));
         Ok(val)
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
-        scope.borrow_mut().data.insert(key, Rc::new(val.clone()));
+        let mut scope = scope.borrow_mut();
+        if let Some(doc_str) = doc_str {
+            scope.data.insert(key.clone(), Rc::new(val.clone()));
+            scope.doc.insert(key, doc_str);
+        } else {
+            scope.doc.remove(&key);
+            scope.data.insert(key, Rc::new(val.clone()));
+        }
         Ok(val)
     } else {
         Err(io::Error::new(
@@ -595,7 +612,6 @@ fn builtin_export(
                             .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
                     )),
                     _ => {
-                        println!("XXX {:?}", val);
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "export: value not valid",
@@ -645,7 +661,7 @@ fn builtin_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let (key, val) = proc_set_vars(environment, args, true)?;
+    let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
@@ -668,10 +684,13 @@ fn builtin_def(
                     let name = in_scope.borrow().name.clone();
                     if let Some(name) = name {
                         if name == namespace {
-                            in_scope
-                                .borrow_mut()
-                                .data
-                                .insert(key.to_string(), Rc::new(val.clone()));
+                            let mut in_scope = in_scope.borrow_mut();
+                            in_scope.data.insert(key.to_string(), Rc::new(val.clone()));
+                            if let Some(doc_str) = doc_str {
+                                in_scope.doc.insert(key.to_string(), doc_str);
+                            } else {
+                                in_scope.doc.remove(key);
+                            }
                             return Ok(val);
                         }
                     }
@@ -685,7 +704,7 @@ fn builtin_def(
         );
         Err(io::Error::new(io::ErrorKind::Other, msg))
     } else {
-        set_expression_current(environment, key, Rc::new(val.clone()));
+        set_expression_current(environment, key, doc_str, Rc::new(val.clone()));
         Ok(val)
     }
 }
@@ -713,7 +732,31 @@ fn builtin_dyn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let (key, val) = proc_set_vars(environment, args, false)?;
+    let (key, val) = if let Some(key) = args.next() {
+        if let Some(val) = args.next() {
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(s)) => s,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "first form (binding key) must evaluate to a symbol",
+                    ));
+                }
+            };
+            let val = eval(environment, val)?;
+            (key, val)
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "dyn requires a key and value",
+            ));
+        }
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "dyn requires a key and value",
+        ));
+    };
     let old_val = if environment.dynamic_scope.contains_key(&key) {
         Some(environment.dynamic_scope.remove(&key).unwrap())
     } else {
@@ -1565,6 +1608,60 @@ fn builtin_get_error(
     Ok(ret)
 }
 
+fn builtin_doc(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            let mut fn_docs = None;
+            let key = match eval(environment, key)? {
+                Expression::Atom(Atom::Symbol(s)) => {
+                    if let Some(exp) = get_expression(environment, &s) {
+                        if let Expression::Function(f) = &*exp {
+                            fn_docs = Some(f.doc_str.to_string());
+                        }
+                    }
+                    s
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "doc: first form must evaluate to a symbol",
+                    ));
+                }
+            };
+            if let Some(scope) = get_symbols_scope(environment, &key) {
+                let val = if let Some(doc_str) = scope.borrow().doc.get(&key) {
+                    if let Some(fn_docs) = fn_docs {
+                        let mut new_docs = String::with_capacity(doc_str.len() + fn_docs.len() + 2);
+                        new_docs.push_str(&fn_docs);
+                        new_docs.push_str("\n\n");
+                        new_docs.push_str(doc_str);
+                        Expression::Atom(Atom::String(new_docs))
+                    } else {
+                        Expression::Atom(Atom::String(doc_str.to_string()))
+                    }
+                } else if let Some(fn_docs) = fn_docs {
+                    Expression::Atom(Atom::String(fn_docs))
+                } else {
+                    Expression::nil()
+                };
+                return Ok(val);
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "doc: first form must evaluate to an existing symbol",
+                ));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "doc: requires a single symbol to lookup.",
+    ))
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -1901,6 +1998,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::make_function(
             builtin_get_error,
             "Evaluate each form (like progn) but on error return #(:error msg) instead of aborting.",
+        )),
+    );
+    data.insert(
+        "doc".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_doc,
+            "Return the doc string for a symbol or nil if no string.",
         )),
     );
 

@@ -201,9 +201,9 @@ eprint | | builtin |
 eprintln | | builtin |
 format | | builtin |
 progn | forms+ | builtin | Runs each form in turn left to right.
-def | symbol/value | builtin | Creates and sets a value into a symbol in the current scope.
+def | symbol doc_string? value | builtin | Creates and sets a value into a symbol in the current scope with an optional doc string.
 undef | symbol | builtin | Removes the symbol from the current scope (does not try any other scope if not in current).
-set | symbol/value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).
+set | symbol doc_string? value | builtin | Changes the value of an existing symbol in first enclosing scope.  Use quote to set a symbol directly (see setq).  Can also set doc_string.
 fn | args_form/body | builtin | Defines a lambda, has to be set into a symbol to have a name (see defn).
 length | form | builtin | Returns the length of the provided object.
 let | | macro |

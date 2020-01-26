@@ -62,6 +62,7 @@ pub enum FormType {
 #[derive(Clone, Debug)]
 pub struct Scope {
     pub data: HashMap<String, Rc<Expression>>,
+    pub doc: HashMap<String, String>,
     pub outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
     pub name: Option<String>,
@@ -70,6 +71,7 @@ pub struct Scope {
 impl Default for Scope {
     fn default() -> Self {
         let mut data = HashMap::new();
+        let doc = HashMap::new();
         add_builtins(&mut data);
         add_math_builtins(&mut data);
         add_str_builtins(&mut data);
@@ -97,6 +99,7 @@ impl Default for Scope {
         );
         Scope {
             data,
+            doc,
             outer: None,
             name: Some("root".to_string()),
         }
@@ -123,6 +126,7 @@ impl Scope {
         };
         Scope {
             data,
+            doc: HashMap::new(),
             outer,
             name: None,
         }
@@ -265,8 +269,10 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
 
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
     let data: HashMap<String, Rc<Expression>> = HashMap::new();
+    let doc: HashMap<String, String> = HashMap::new();
     Rc::new(RefCell::new(Scope {
         data,
+        doc,
         outer,
         name: None,
     }))
@@ -287,6 +293,7 @@ pub fn build_new_namespace(
         );
         let scope = Scope {
             data,
+            doc: HashMap::new(),
             outer: Some(environment.root_scope.clone()),
             name: Some(name.to_string()),
         };
@@ -342,15 +349,21 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Express
 pub fn set_expression_current(
     environment: &mut Environment,
     key: String,
+    doc_str: Option<String>,
     expression: Rc<Expression>,
 ) {
-    environment
+    let mut current_scope = environment
         .current_scope
         .last()
         .unwrap() // Always has at least root scope unless horribly broken.
-        .borrow_mut()
-        .data
-        .insert(key, expression);
+        .borrow_mut();
+    if let Some(doc_str) = doc_str {
+        current_scope.doc.insert(key.to_string(), doc_str);
+        current_scope.data.insert(key, expression);
+    } else {
+        current_scope.doc.remove(&key);
+        current_scope.data.insert(key, expression);
+    }
 }
 
 pub fn remove_expression_current(environment: &mut Environment, key: &str) {

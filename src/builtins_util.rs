@@ -209,7 +209,7 @@ fn setup_args_final<'a>(
             if let Some(scope) = scope {
                 scope.data.insert(k.unwrap().clone(), Rc::new(v2));
             } else {
-                set_expression_current(environment, k.unwrap().clone(), Rc::new(v2));
+                set_expression_current(environment, k.unwrap().clone(), None, Rc::new(v2));
             }
             params += 1;
         }
@@ -226,7 +226,7 @@ fn setup_args_final<'a>(
             if let Some(scope) = scope {
                 scope.data.insert(rest_name, Rc::new(Expression::nil()));
             } else {
-                set_expression_current(environment, rest_name, Rc::new(Expression::nil()));
+                set_expression_current(environment, rest_name, None, Rc::new(Expression::nil()));
             }
         } else if let Some(scope) = scope {
             scope
@@ -236,6 +236,7 @@ fn setup_args_final<'a>(
             set_expression_current(
                 environment,
                 rest_name,
+                None,
                 Rc::new(Expression::with_list(rest_data)),
             );
         }
@@ -266,7 +267,7 @@ fn setup_args_final<'a>(
             if let Some(scope) = scope {
                 scope.data.insert(k.unwrap().clone(), Rc::new(v2));
             } else {
-                set_expression_current(environment, k.unwrap().clone(), Rc::new(v2));
+                set_expression_current(environment, k.unwrap().clone(), None, Rc::new(v2));
             }
             params += 1;
         }
