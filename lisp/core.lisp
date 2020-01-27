@@ -2,11 +2,39 @@
 
 (if (def? '*ns-exports*) (vec-clear! *ns-exports*))
 
-(def 'defmacro (macro (name args body)
-	`(progn (def (quote ,name) (macro ,args ,body)) nil)))
+(def 'defmacro 
+"defmacro: create a macro and bind it to a symbol in the current scope
+	(defmacro sym doc-string? body) -> nil"
+	(macro (name &rest args) ((fn ()
+	(if (= (length args) 2)
+		(progn
+			(def 'ars (vec-nth 0 args))
+			(def 'body (vec-nth 1 args))
+			`(progn (def ',name (macro ,ars ,body)) nil))
+		(if (= (length args) 3)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'ars (vec-nth 1 args))
+				(def 'body (vec-nth 2 args))
+				`(progn (def ',name ,doc-str (macro ,ars ,body)) nil))
+			(err "defmacro: Wrong number of args.")))))))
 
-(def 'setmacro (macro (name args body)
-	`(progn (set (quote ,name) (macro ,args ,body)) nil)))
+(def 'setmacro 
+"setmacro: set a macro to an existing symbol
+	(setmacro sym doc-string? body) -> nil"
+	(macro (name &rest args) ((fn ()
+	(if (= (length args) 2)
+		(progn
+			(def 'ars (vec-nth 0 args))
+			(def 'body (vec-nth 1 args))
+			`(progn (set ',name (macro ,ars ,body)) nil))
+		(if (= (length args) 3)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'ars (vec-nth 1 args))
+				(def 'body (vec-nth 2 args))
+				`(progn (set ',name ,doc-str (macro ,ars ,body)) nil))
+			(err "setmacro: Wrong number of args.")))))))
 
 (defmacro ns-export (symbol) `(progn
     (if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
@@ -17,19 +45,71 @@
             (err "ns-export takes a symbol or sequence.")))))
 
 (defmacro ns-import (namespace)
-    `(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*"))) (def (to-symbol (str "ns::" sym)) (eval (to-symbol (str ,namespace "::" sym))))))
+	`(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
+		(if (doc (to-symbol (str ,namespace "::" sym)))
+			(def (to-symbol (str "ns::" sym)) (doc (to-symbol (str ,namespace "::" sym)))
+				(eval (to-symbol (str ,namespace "::" sym))))
+			(def (to-symbol (str "ns::" sym)) (eval (to-symbol (str ,namespace "::" sym)))))))
 
-(defmacro setq (sym bind)
-	`(set (quote ,sym) ,bind))
+(defmacro setq
+"setq: set an expession to a quoted symbol (ie set 'sym bind)
+	(setq sym doc-string? expression) -> expression"
+	(sym &rest args)
+	((fn ()
+	(if (= (length args) 1)
+		(progn
+			(def 'bind (vec-nth 0 args))
+			`(set ',sym ,bind))
+		(if (= (length args) 22)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'bind (vec-nth 1 args))
+				`(set ',sym ,doc-str ,bind))
+			(err "setq: Wrong number of args."))))))
 
-(defmacro defq (sym bind)
-	`(def (quote ,sym) ,bind))
+(defmacro defq
+"defq: defines an expession to a quoted symbol (ie def 'sym bind)
+	(defq sym doc-string? expression) -> expression"
+	(sym &rest args)
+	((fn ()
+	(if (= (length args) 1)
+		(progn
+			(def 'bind (vec-nth 0 args))
+			`(def ',sym ,bind))
+		(if (= (length args) 22)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'bind (vec-nth 1 args))
+				`(def ',sym ,doc-str ,bind))
+			(err "setq: Wrong number of args."))))))
 
-(defmacro defn (name args body)
-	`(defq ,name (fn ,args ,body)))
+(defmacro defn (name &rest args) (core::let ()
+	(if (= (length args) 2)
+		(progn
+			(def 'ars (vec-nth 0 args))
+			(def 'body (vec-nth 1 args))
+			`(def ',name (fn ,ars ,body)))
+		(if (= (length args) 3)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'ars (vec-nth 1 args))
+				(def 'body (vec-nth 2 args))
+				`(def ',name ,doc-str (fn ,ars ,body)))
+			(err "defn: Wrong number of args.")))))
 
-(defmacro setfn (name args body)
-	`(setq ,name (fn ,args ,body)))
+(defmacro setfn (name &rest args) (core::let ()
+	(if (= (length args) 2)
+		(progn
+			(def 'ars (vec-nth 0 args))
+			(def 'body (vec-nth 1 args))
+			`(set ',name (fn ,ars ,body)))
+		(if (= (length args) 3)
+			(progn
+				(def 'doc-str (vec-nth 0 args))
+				(def 'ars (vec-nth 1 args))
+				(def 'body (vec-nth 2 args))
+				`(set ',name ,doc-str (fn ,ars ,body)))
+			(err "setfn: Wrong number of args.")))))
 
 (defmacro loop (params bindings body)
 		`((fn ,params ,body) ,@bindings))

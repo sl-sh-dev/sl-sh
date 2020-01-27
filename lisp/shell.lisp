@@ -204,6 +204,9 @@
 	(setfn unregister-alias (name) (hash-remove! alias name))
 	(setfn alias? (name) (hash-haskey alias name)))
 
+; These will be imported with syntax-on (ie copied into another namespace).
+; Since syntax-on is a macro these copies are what will be read/used in that
+; namespace vs these originals changing.
 (defq tok-slsh-form-color shell::*fg-blue*)
 (defq tok-slsh-fcn-color shell::*fg-cyan*)
 (defq tok-default-color shell::*fg-default*)

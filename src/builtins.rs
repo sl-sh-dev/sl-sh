@@ -1631,7 +1631,34 @@ fn builtin_doc(
                     ));
                 }
             };
-            if let Some(scope) = get_symbols_scope(environment, &key) {
+            if key.contains("::") {
+                // namespace reference.
+                let mut key_i = key.splitn(2, "::");
+                if let Some(namespace) = key_i.next() {
+                    if let Some(key) = key_i.next() {
+                        let namespace = if namespace == "ns" {
+                            if let Some(exp) = get_expression(environment, "*ns*") {
+                                match &*exp {
+                                    Expression::Atom(Atom::String(s)) => s.to_string(),
+                                    _ => "NO_NAME".to_string(),
+                                }
+                            } else {
+                                "NO_NAME".to_string()
+                            }
+                        } else {
+                            namespace.to_string()
+                        };
+                        if let Some(scope) = get_namespace(environment, &namespace) {
+                            if let Some(doc_str) = scope.borrow().doc.get(key) {
+                                return Ok(Expression::Atom(Atom::String(doc_str.to_string())));
+                            } else {
+                                return Ok(Expression::nil());
+                            }
+                        }
+                    }
+                }
+                return Ok(Expression::nil());
+            } else if let Some(scope) = get_symbols_scope(environment, &key) {
                 let val = if let Some(doc_str) = scope.borrow().doc.get(&key) {
                     if let Some(fn_docs) = fn_docs {
                         let mut new_docs = String::with_capacity(doc_str.len() + fn_docs.len() + 2);
