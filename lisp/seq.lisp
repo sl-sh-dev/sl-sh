@@ -55,6 +55,13 @@
             (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
             (err "Not a vector or list"))))
 
+(defn in? (to-search item)
+  (progn
+    (defq first-arg (first to-search))
+    (if (nil? first-arg)
+      nil
+      (progn
+        (if (= item first-arg) #t (recur (rest to-search) item))))))
 
 (def 'append nil)
 (def 'append! nil)
@@ -199,5 +206,5 @@
     (irev items 0 (- (length items) 1))
     items))
 
-(ns-export '(seq? first rest last butlast setnth! nth append append! map map! reverse reverse!))
+(ns-export '(seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in?))
 

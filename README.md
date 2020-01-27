@@ -318,7 +318,7 @@ vec-setnth! | index/form/vector | builtin | Sets the nth element of a vector wit
 vec-slice | vector/start/end | builtin | Returns a new vector containing elements start (inclusive) so end (exclusive).
 
 
-### Macros that work on vectors or lists
+### Macros/Functions that work on vectors or lists
 These macros will work on either a vector or a pair made into a proper list
 (cons list).  Use these in preference to the vector/list specific versions when
 possible (ie first vs car).
@@ -340,6 +340,7 @@ reverse | list | macro | Returns a new list made by reversing the elements of th
 reverse! | list | macro | Modifies a list by reversing it's elements.
 seq? | obj | macro | Return true if the obj is a sequence.
 setnth! | idx/obj/list | macro | Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
+in? | list/obj | function | Returns true if obj is in list, false otherwise.
 
 
 ### HashMap Forms
