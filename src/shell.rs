@@ -46,10 +46,10 @@ fn load_user_env(environment: &mut Environment, home: &str) {
         "{}/.config/sl-sh",
         home
     ))));
-    environment.root_scope.borrow_mut().data.insert(
-        "*load-path*".to_string(),
-        Rc::new(Expression::with_list(load_path)),
-    );
+    environment
+        .root_scope
+        .borrow_mut()
+        .insert_exp("*load-path*".to_string(), Expression::with_list(load_path));
     if let Err(err) = load(environment, "slsh-std.lisp") {
         eprintln!(
             "WARNING: Failed to load standard macros script slsh-std.lisp: {}",
@@ -64,10 +64,9 @@ fn load_user_env(environment: &mut Environment, home: &str) {
                 "keybindings".to_string(),
                 Rc::new(Expression::Atom(Atom::Symbol("emacs".to_string()))),
             );
-            scope.borrow_mut().data.insert(
-                "*repl-settings*".to_string(),
-                Rc::new(Expression::HashMap(settings)),
-            );
+            scope
+                .borrow_mut()
+                .insert_exp("*repl-settings*".to_string(), Expression::HashMap(settings));
             environment.current_scope.push(scope);
         }
         Err(msg) => eprintln!(
@@ -82,13 +81,13 @@ fn load_user_env(environment: &mut Environment, home: &str) {
 
 fn get_prompt(environment: &mut Environment) -> Prompt {
     if let Some(exp) = get_expression(environment, "__prompt") {
-        let exp = match *exp {
+        let exp = match exp.exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
                 Rc::new(Expression::with_list(v))
             }
-            _ => exp,
+            _ => Rc::new(exp.exp.clone()),
         };
         environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
         let res = eval(environment, &exp);
@@ -113,7 +112,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
             }
         };
         let namespace = if let Some(exp) = get_expression(environment, "*ns*") {
-            match &*exp {
+            match &exp.exp {
                 Expression::Atom(Atom::String(s)) => s.to_string(),
                 _ => "NO_NAME".to_string(),
             }
@@ -135,7 +134,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
     let mut exp = Rc::new(Expression::nil());
     if let Some(lexp) = get_expression(&environment.borrow(), "__line_handler") {
         has_handle = true;
-        exp = lexp;
+        exp = Rc::new(lexp.exp.clone());
     }
     if has_handle {
         let line_color = move |input: &str| -> String {
@@ -178,9 +177,9 @@ fn handle_result(
                         eprintln!("Error saving history: {}", err);
                     }
                 }
-                environment.root_scope.borrow_mut().data.insert(
+                environment.root_scope.borrow_mut().insert_exp(
                     "*last-command*".to_string(),
-                    Rc::new(Expression::Atom(Atom::String(input.to_string()))),
+                    Expression::Atom(Atom::String(input.to_string())),
                 );
             }
             match exp {
@@ -224,7 +223,7 @@ fn handle_result(
     }
 }
 
-fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
+fn apply_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings {
         key_bindings: Keys::Emacs,
         max_history: 1000,
@@ -234,7 +233,7 @@ fn apply_repl_settings(repl_settings: Rc<Expression>) -> ReplSettings {
         vi_insert_prompt_prefix: None,
         vi_insert_prompt_suffix: None,
     };
-    if let Expression::HashMap(repl_settings) = &*repl_settings {
+    if let Expression::HashMap(repl_settings) = repl_settings {
         if let Some(keybindings) = repl_settings.borrow().get(":keybindings") {
             let keybindings = keybindings.clone();
             if let Expression::Atom(Atom::Symbol(keybindings)) = &*keybindings {
@@ -322,7 +321,7 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
         read(input, add_parens)
     }
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
-        let exp = match *exec_exp {
+        let exp = match exec_exp.exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(2);
                 v.push(Expression::Atom(Atom::Symbol("__exec_hook".to_string())));
@@ -429,20 +428,11 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         .borrow_mut()
         .root_scope
         .borrow_mut()
-        .data
-        .insert(
-            "*last-status*".to_string(),
-            Rc::new(Expression::Atom(Atom::Int(0))),
-        );
-    environment
-        .borrow_mut()
-        .root_scope
-        .borrow_mut()
-        .data
-        .insert(
-            "*last-command*".to_string(),
-            Rc::new(Expression::Atom(Atom::String("".to_string()))),
-        );
+        .insert_exp("*last-status*".to_string(), Expression::Atom(Atom::Int(0)));
+    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
+        "*last-command*".to_string(),
+        Expression::Atom(Atom::String("".to_string())),
+    );
     let mut current_repl_settings = ReplSettings {
         key_bindings: Keys::Emacs,
         max_history: 1000,
@@ -454,7 +444,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     };
     con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
-        let new_repl_settings = apply_repl_settings(repl_settings.clone());
+        let new_repl_settings = apply_repl_settings(&repl_settings.exp);
         if current_repl_settings != new_repl_settings {
             let keymap: Box<dyn keymap::KeyMap> = match new_repl_settings.key_bindings {
                 Keys::Vi => {
@@ -501,15 +491,10 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 }
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
-                environment
-                    .borrow_mut()
-                    .root_scope
-                    .borrow_mut()
-                    .data
-                    .insert(
-                        "*last-status*".to_string(),
-                        Rc::new(Expression::Atom(Atom::Int(i64::from(0)))),
-                    );
+                environment.borrow_mut().root_scope.borrow_mut().insert_exp(
+                    "*last-status*".to_string(),
+                    Expression::Atom(Atom::Int(i64::from(0))),
+                );
                 let ast = exec_hook(&mut environment.borrow_mut(), &input);
                 match ast {
                     Ok(ast) => {
@@ -715,8 +700,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     environment
         .root_scope
         .borrow_mut()
-        .data
-        .insert("args".to_string(), Rc::new(Expression::with_list(exp_args)));
+        .insert_exp("args".to_string(), Expression::with_list(exp_args));
     if let Err(err) = load(&mut environment, command) {
         eprintln!("Error running {}: {}", command, err);
         if environment.exit_code.is_none() {

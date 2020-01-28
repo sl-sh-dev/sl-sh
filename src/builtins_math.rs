@@ -19,7 +19,7 @@ fn make_args(
     Ok(list)
 }
 
-pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "+".to_string(),
         Rc::new(Expression::make_function(

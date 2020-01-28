@@ -182,7 +182,7 @@ fn builtin_xdr(
     ))
 }
 
-pub fn add_pair_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_pair_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "join".to_string(),
         Rc::new(Expression::make_function(builtin_join, "")),

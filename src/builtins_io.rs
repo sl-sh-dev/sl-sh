@@ -303,19 +303,46 @@ fn builtin_write_string(
     }
 }
 
-pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
-    data.insert("open".to_string(), Rc::new(Expression::Func(builtin_open)));
+pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+    data.insert(
+        "open".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_open),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
     data.insert(
         "close".to_string(),
-        Rc::new(Expression::Func(builtin_close)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_close),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "flush".to_string(),
-        Rc::new(Expression::Func(builtin_flush)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_flush),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "read-line".to_string(),
-        Rc::new(Expression::Func(builtin_read_line)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_read_line),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "read".to_string(),
@@ -326,10 +353,22 @@ pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>
     );
     data.insert(
         "write-line".to_string(),
-        Rc::new(Expression::Func(builtin_write_line)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_write_line),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "write-string".to_string(),
-        Rc::new(Expression::Func(builtin_write_string)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_write_string),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
 }

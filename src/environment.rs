@@ -60,9 +60,20 @@ pub enum FormType {
 }
 
 #[derive(Clone, Debug)]
+pub struct RefMetaData {
+    pub namespace: Option<String>,
+    pub doc_string: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Reference {
+    pub exp: Expression,
+    pub meta: RefMetaData,
+}
+
+#[derive(Clone, Debug)]
 pub struct Scope {
-    pub data: HashMap<String, Rc<Expression>>,
-    pub doc: HashMap<String, String>,
+    pub data: HashMap<String, Rc<Reference>>,
     pub outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
     pub name: Option<String>,
@@ -71,7 +82,6 @@ pub struct Scope {
 impl Default for Scope {
     fn default() -> Self {
         let mut data = HashMap::new();
-        let doc = HashMap::new();
         add_builtins(&mut data);
         add_math_builtins(&mut data);
         add_str_builtins(&mut data);
@@ -83,23 +93,46 @@ impl Default for Scope {
         add_type_builtins(&mut data);
         data.insert(
             "*stdin*".to_string(),
-            Rc::new(Expression::File(FileState::Stdin)),
+            Rc::new(Reference {
+                exp: Expression::File(FileState::Stdin),
+                meta: RefMetaData {
+                    namespace: Some("root".to_string()),
+                    doc_string: None,
+                },
+            }),
         );
         data.insert(
             "*stdout*".to_string(),
-            Rc::new(Expression::File(FileState::Stdout)),
+            Rc::new(Reference {
+                exp: Expression::File(FileState::Stdout),
+                meta: RefMetaData {
+                    namespace: Some("root".to_string()),
+                    doc_string: None,
+                },
+            }),
         );
         data.insert(
             "*stderr*".to_string(),
-            Rc::new(Expression::File(FileState::Stderr)),
+            Rc::new(Reference {
+                exp: Expression::File(FileState::Stderr),
+                meta: RefMetaData {
+                    namespace: Some("root".to_string()),
+                    doc_string: None,
+                },
+            }),
         );
         data.insert(
             "*ns*".to_string(),
-            Rc::new(Expression::Atom(Atom::String("root".to_string()))),
+            Rc::new(Reference {
+                exp: Expression::Atom(Atom::String("root".to_string())),
+                meta: RefMetaData {
+                    namespace: Some("root".to_string()),
+                    doc_string: None,
+                },
+            }),
         );
         Scope {
             data,
-            doc,
             outer: None,
             name: Some("root".to_string()),
         }
@@ -109,9 +142,9 @@ impl Default for Scope {
 impl Scope {
     pub fn with_data<S: ::std::hash::BuildHasher>(
         environment: Option<&Environment>,
-        mut data_in: HashMap<String, Rc<Expression>, S>,
+        mut data_in: HashMap<String, Rc<Reference>, S>,
     ) -> Scope {
-        let mut data: HashMap<String, Rc<Expression>> = HashMap::with_capacity(data_in.len());
+        let mut data: HashMap<String, Rc<Reference>> = HashMap::with_capacity(data_in.len());
         for (k, v) in data_in.drain() {
             data.insert(k, v);
         }
@@ -126,10 +159,36 @@ impl Scope {
         };
         Scope {
             data,
-            doc: HashMap::new(),
             outer,
             name: None,
         }
+    }
+
+    pub fn insert_exp(&mut self, key: String, exp: Expression) {
+        let reference = Rc::new(Reference {
+            exp,
+            meta: RefMetaData {
+                namespace: self.name.clone(),
+                doc_string: None,
+            },
+        });
+        self.data.insert(key, reference);
+    }
+
+    pub fn insert_exp_with_doc(
+        &mut self,
+        key: String,
+        exp: Expression,
+        doc_string: Option<String>,
+    ) {
+        let reference = Rc::new(Reference {
+            exp,
+            meta: RefMetaData {
+                namespace: self.name.clone(),
+                doc_string,
+            },
+        });
+        self.data.insert(key, reference);
     }
 }
 
@@ -223,15 +282,21 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
 }
 
 pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
-    mut data_in: HashMap<String, Expression, S>,
+    mut data_in: HashMap<String, Reference, S>,
     sig_int: Arc<AtomicBool>,
 ) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut state = EnvState::default();
-    let mut data: HashMap<String, Rc<Expression>> = HashMap::with_capacity(data_in.len());
+    let mut data: HashMap<String, Rc<Reference>> = HashMap::with_capacity(data_in.len());
     data.insert(
         "*ns*".to_string(),
-        Rc::new(Expression::Atom(Atom::String("root".to_string()))),
+        Rc::new(Reference {
+            exp: Expression::Atom(Atom::String("root".to_string())),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     for (k, v) in data_in.drain() {
         data.insert(k, Rc::new(v));
@@ -268,11 +333,9 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
 }
 
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
-    let data: HashMap<String, Rc<Expression>> = HashMap::new();
-    let doc: HashMap<String, String> = HashMap::new();
+    let data: HashMap<String, Rc<Reference>> = HashMap::new();
     Rc::new(RefCell::new(Scope {
         data,
-        doc,
         outer,
         name: None,
     }))
@@ -286,14 +349,19 @@ pub fn build_new_namespace(
         let msg = format!("Namespace {} already exists!", name);
         Err(msg)
     } else {
-        let mut data: HashMap<String, Rc<Expression>> = HashMap::new();
+        let mut data: HashMap<String, Rc<Reference>> = HashMap::new();
         data.insert(
             "*ns*".to_string(),
-            Rc::new(Expression::Atom(Atom::String(name.to_string()))),
+            Rc::new(Reference {
+                exp: Expression::Atom(Atom::String(name.to_string())),
+                meta: RefMetaData {
+                    namespace: Some(name.to_string()),
+                    doc_string: None,
+                },
+            }),
         );
         let scope = Scope {
             data,
-            doc: HashMap::new(),
             outer: Some(environment.root_scope.clone()),
             name: Some(name.to_string()),
         };
@@ -307,7 +375,7 @@ pub fn build_new_namespace(
 
 pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     scope: &Scope,
-    data_in: &mut HashMap<String, Expression, S>,
+    data_in: &mut HashMap<String, Reference, S>,
 ) {
     for (k, v) in &scope.data {
         let v = &**v;
@@ -318,9 +386,18 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     }
 }
 
-pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Expression>> {
-    if environment.dynamic_scope.contains_key(key) {
-        Some(environment.dynamic_scope.get(key).unwrap().clone())
+pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Reference>> {
+    if let Some(exp) = environment.dynamic_scope.get(key) {
+        let new_exp = &*exp.clone();
+        // WTF is going on here, should not need a clone of a clone...
+        let reference = Rc::new(Reference {
+            exp: new_exp.clone(),
+            meta: RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        });
+        Some(reference)
     } else if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
@@ -350,20 +427,21 @@ pub fn set_expression_current(
     environment: &mut Environment,
     key: String,
     doc_str: Option<String>,
-    expression: Rc<Expression>,
+    expression: Expression,
 ) {
     let mut current_scope = environment
         .current_scope
         .last()
         .unwrap() // Always has at least root scope unless horribly broken.
         .borrow_mut();
-    if let Some(doc_str) = doc_str {
-        current_scope.doc.insert(key.to_string(), doc_str);
-        current_scope.data.insert(key, expression);
-    } else {
-        current_scope.doc.remove(&key);
-        current_scope.data.insert(key, expression);
-    }
+    let reference = Rc::new(Reference {
+        exp: expression,
+        meta: RefMetaData {
+            namespace: current_scope.name.clone(),
+            doc_string: doc_str,
+        },
+    });
+    current_scope.data.insert(key, reference);
 }
 
 pub fn remove_expression_current(environment: &mut Environment, key: &str) {

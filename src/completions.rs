@@ -95,7 +95,7 @@ impl ShellCompleter {
         }
         let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
         if let Some(comp_exp) = comp_exp {
-            let exp = match *comp_exp {
+            let exp = match comp_exp.exp {
                 Expression::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     v.push(Expression::Atom(Atom::Symbol(
@@ -392,7 +392,7 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str
     for key in data.keys() {
         if key.starts_with(start) {
             let val = key.to_string();
-            match **data.get(key).unwrap() {
+            match data.get(key).unwrap().exp {
                 Expression::Func(_) => comps.push(val),
                 Expression::Function(_) => comps.push(val),
                 Expression::Atom(Atom::Lambda(_)) => comps.push(val),
@@ -417,7 +417,7 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
             } else {
                 key.to_string()
             };
-            match **data.get(key).unwrap() {
+            match data.get(key).unwrap().exp {
                 Expression::Atom(Atom::Lambda(_)) => {}
                 Expression::Atom(Atom::Macro(_)) => {}
                 Expression::Func(_) => {}

@@ -113,7 +113,7 @@ pub fn fn_call<'a>(
     match command {
         Expression::Atom(Atom::Symbol(command)) => {
             if let Some(exp) = get_expression(environment, &command) {
-                match &*exp {
+                match &exp.exp {
                     Expression::Func(f) => {
                         let parts: Vec<Expression> = args.cloned().collect();
                         f(environment, &parts)
@@ -174,7 +174,7 @@ fn fn_eval<'a>(
                 None
             };
             if let Some(exp) = form {
-                match &*exp {
+                match &exp.exp {
                     Expression::Func(f) => {
                         let parts: Vec<Expression> = parts.cloned().collect();
                         f(environment, &parts)
@@ -183,7 +183,7 @@ fn fn_eval<'a>(
                     Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, parts),
                     Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
                     _ => {
-                        let exp = exp.clone();
+                        let exp = exp.exp.clone();
                         eval(environment, &exp)
                     }
                 }
@@ -354,10 +354,10 @@ fn internal_eval<'a>(
                 // Got a keyword, so just be you...
                 Ok(Expression::Atom(Atom::Symbol(s.clone())))
             } else if let Some(exp) = get_expression(environment, &s[..]) {
-                match &*exp {
+                match &exp.exp {
                     Expression::Vector(l) => Ok(Expression::Vector(l.clone())),
                     _ => {
-                        let exp = &*exp;
+                        let exp = &exp.exp;
                         Ok(exp.clone())
                     }
                 }

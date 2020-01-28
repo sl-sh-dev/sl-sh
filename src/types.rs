@@ -168,15 +168,13 @@ type CallFunc =
 #[derive(Clone)]
 pub struct Callable {
     pub func: CallFunc,
-    pub doc_str: String,
     pub is_special_form: bool,
 }
 
 impl Callable {
-    pub fn new(func: CallFunc, doc_str: String, is_special_form: bool) -> Callable {
+    pub fn new(func: CallFunc, is_special_form: bool) -> Callable {
         Callable {
             func,
-            doc_str,
             is_special_form,
         }
     }
@@ -359,12 +357,24 @@ impl Expression {
         }
     }
 
-    pub fn make_function(func: CallFunc, doc_str: &str) -> Expression {
-        Expression::Function(Callable::new(func, doc_str.to_string(), false))
+    pub fn make_function(func: CallFunc, doc_str: &str) -> Reference {
+        Reference {
+            exp: Expression::Function(Callable::new(func, false)),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: Some(doc_str.to_string()),
+            },
+        }
     }
 
-    pub fn make_special(func: CallFunc, doc_str: &str) -> Expression {
-        Expression::Function(Callable::new(func, doc_str.to_string(), true))
+    pub fn make_special(func: CallFunc, doc_str: &str) -> Reference {
+        Reference {
+            exp: Expression::Function(Callable::new(func, true)),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: Some(doc_str.to_string()),
+            },
+        }
     }
 
     pub fn with_list(list: Vec<Expression>) -> Expression {
@@ -394,7 +404,13 @@ impl Expression {
             Expression::Atom(a) => a.display_type(),
             Expression::Process(_) => "Process".to_string(),
             Expression::Func(_) => "Function".to_string(),
-            Expression::Function(_) => "Function".to_string(),
+            Expression::Function(f) => {
+                if f.is_special_form {
+                    "SpecialForm".to_string()
+                } else {
+                    "Function".to_string()
+                }
+            }
             Expression::Vector(_) => "Vector".to_string(),
             Expression::Pair(p) => {
                 if let Some((_, _)) = &*p.borrow() {

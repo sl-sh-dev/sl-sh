@@ -317,7 +317,7 @@ fn builtin_is_list(
     Err(io::Error::new(io::ErrorKind::Other, "list? needs one form"))
 }
 
-pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "type".to_string(),
         Rc::new(Expression::make_function(builtin_type, "")),

@@ -46,8 +46,8 @@
 
 (defmacro ns-import (namespace)
 	`(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
-		(if (doc (to-symbol (str ,namespace "::" sym)))
-			(def (to-symbol (str "ns::" sym)) (doc (to-symbol (str ,namespace "::" sym)))
+		(if (doc-raw (to-symbol (str ,namespace "::" sym)))
+			(def (to-symbol (str "ns::" sym)) (doc-raw (to-symbol (str ,namespace "::" sym)))
 				(eval (to-symbol (str ,namespace "::" sym))))
 			(def (to-symbol (str "ns::" sym)) (eval (to-symbol (str ,namespace "::" sym)))))))
 

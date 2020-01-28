@@ -299,7 +299,7 @@ fn builtin_hash_clear(
     ))
 }
 
-pub fn add_hash_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_hash_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "make-hash".to_string(),
         Rc::new(Expression::make_function(

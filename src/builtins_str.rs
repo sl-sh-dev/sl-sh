@@ -881,7 +881,7 @@ fn char_test(
     Ok(Expression::Atom(Atom::True))
 }
 
-pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "str-trim".to_string(),
         Rc::new(Expression::make_function(

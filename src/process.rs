@@ -3,7 +3,6 @@ use std::io::{self, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
-use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
 use glob::glob;
@@ -82,9 +81,9 @@ pub fn wait_pid(
             if let Some(status) = status {
                 if environment.save_exit_status {
                     env::set_var("LAST_STATUS".to_string(), format!("{}", status));
-                    environment.root_scope.borrow_mut().data.insert(
+                    environment.root_scope.borrow_mut().insert_exp(
                         "*last-status*".to_string(),
-                        Rc::new(Expression::Atom(Atom::Int(i64::from(status)))),
+                        Expression::Atom(Atom::Int(i64::from(status))),
                     );
                 }
             }
@@ -279,7 +278,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let Expression::File(f) = &*out {
+            if let Expression::File(f) = &out.exp {
                 match f {
                     FileState::Stdout => {
                         if is_out {
@@ -488,7 +487,7 @@ pub fn do_command<'a>(
             // Eval the strings below to make sure any expansions happen.
             let new_a = match a {
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
-                    Some(exp) => match &*exp {
+                    Some(exp) => match &exp.exp {
                         Expression::Func(_) => {
                             eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
                         }

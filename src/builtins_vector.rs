@@ -353,15 +353,36 @@ fn builtin_vec_insert_nth(
     }
 }
 
-pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
-    data.insert("vec".to_string(), Rc::new(Expression::Func(builtin_vec)));
+pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+    data.insert(
+        "vec".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
     data.insert(
         "make-vec".to_string(),
-        Rc::new(Expression::Func(builtin_make_vec)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_make_vec),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-slice".to_string(),
-        Rc::new(Expression::Func(builtin_vec_slice)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_slice),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-nth".to_string(),
@@ -372,30 +393,72 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression
     );
     data.insert(
         "vec-setnth!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_setnth)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_setnth),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-push!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_push)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_push),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-pop!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_pop)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_pop),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-empty?".to_string(),
-        Rc::new(Expression::Func(builtin_vec_is_empty)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_is_empty),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-clear!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_vclear)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_vclear),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-remove-nth!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_remove_nth)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_remove_nth),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "vec-insert-nth!".to_string(),
-        Rc::new(Expression::Func(builtin_vec_insert_nth)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_vec_insert_nth),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
 }

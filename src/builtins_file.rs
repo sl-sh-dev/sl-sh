@@ -53,7 +53,7 @@ fn builtin_cd(
         if args.next().is_none() {
             let new_arg = match arg {
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
-                    Some(exp) => match &*exp {
+                    Some(exp) => match &exp.exp {
                         Expression::Func(_) => {
                             eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
                         }
@@ -388,7 +388,7 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
-pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "cd".to_string(),
         Rc::new(Expression::make_function(builtin_cd, "Change directory.")),

@@ -155,12 +155,12 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     };
     let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
         let vec_borrow;
-        let p_itr = match &*lp {
+        let p_itr = match &lp.exp {
             Expression::Vector(vec) => {
                 vec_borrow = vec.borrow();
                 Box::new(vec_borrow.iter())
             }
-            _ => lp.iter(),
+            _ => lp.exp.iter(),
         };
         let mut path_out = file_name.clone();
         for l in p_itr {
@@ -383,7 +383,7 @@ fn print_to_oe(
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let Expression::File(f) = &*out {
+            if let Expression::File(f) = &out.exp {
                 match f {
                     FileState::Stdout => {
                         let stdout = io::stdout();
@@ -551,13 +551,7 @@ fn builtin_set(
         Ok(val)
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
         let mut scope = scope.borrow_mut();
-        if let Some(doc_str) = doc_str {
-            scope.data.insert(key.clone(), Rc::new(val.clone()));
-            scope.doc.insert(key, doc_str);
-        } else {
-            scope.doc.remove(&key);
-            scope.data.insert(key, Rc::new(val.clone()));
-        }
+        scope.insert_exp_with_doc(key.clone(), val.clone(), doc_str);
         Ok(val)
     } else {
         Err(io::Error::new(
@@ -669,7 +663,7 @@ fn builtin_def(
             if let Some(key) = key_i.next() {
                 let namespace = if namespace == "ns" {
                     if let Some(exp) = get_expression(environment, "*ns*") {
-                        match &*exp {
+                        match &exp.exp {
                             Expression::Atom(Atom::String(s)) => s.to_string(),
                             _ => "NO_NAME".to_string(),
                         }
@@ -685,12 +679,7 @@ fn builtin_def(
                     if let Some(name) = name {
                         if name == namespace {
                             let mut in_scope = in_scope.borrow_mut();
-                            in_scope.data.insert(key.to_string(), Rc::new(val.clone()));
-                            if let Some(doc_str) = doc_str {
-                                in_scope.doc.insert(key.to_string(), doc_str);
-                            } else {
-                                in_scope.doc.remove(key);
-                            }
+                            in_scope.insert_exp_with_doc(key.to_string(), val.clone(), doc_str);
                             return Ok(val);
                         }
                     }
@@ -704,7 +693,7 @@ fn builtin_def(
         );
         Err(io::Error::new(io::ErrorKind::Other, msg))
     } else {
-        set_expression_current(environment, key, doc_str, Rc::new(val.clone()));
+        set_expression_current(environment, key, doc_str, val.clone());
         Ok(val)
     }
 }
@@ -1107,7 +1096,7 @@ fn do_expansion(
 ) -> io::Result<Expression> {
     if let Expression::Atom(Atom::Symbol(command)) = command {
         if let Some(exp) = get_expression(environment, &command) {
-            if let Expression::Atom(Atom::Macro(sh_macro)) = &*exp {
+            if let Expression::Atom(Atom::Macro(sh_macro)) = &exp.exp {
                 let new_scope = match environment.current_scope.last() {
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
@@ -1454,10 +1443,9 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
             };
-            scope.borrow_mut().data.insert(
-                "*ns*".to_string(),
-                Rc::new(Expression::Atom(Atom::String(key))),
-            );
+            scope
+                .borrow_mut()
+                .insert_exp("*ns*".to_string(), Expression::Atom(Atom::String(key)));
             environment.current_scope.push(scope);
             return Ok(Expression::nil());
         }
@@ -1608,22 +1596,15 @@ fn builtin_get_error(
     Ok(ret)
 }
 
-fn builtin_doc(
+fn get_doc(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
+    is_raw: bool,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let mut fn_docs = None;
             let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(s)) => {
-                    if let Some(exp) = get_expression(environment, &s) {
-                        if let Expression::Function(f) = &*exp {
-                            fn_docs = Some(f.doc_str.to_string());
-                        }
-                    }
-                    s
-                }
+                Expression::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -1638,7 +1619,7 @@ fn builtin_doc(
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = get_expression(environment, "*ns*") {
-                                match &*exp {
+                                match &exp.exp {
                                     Expression::Atom(Atom::String(s)) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
@@ -1649,32 +1630,54 @@ fn builtin_doc(
                             namespace.to_string()
                         };
                         if let Some(scope) = get_namespace(environment, &namespace) {
-                            if let Some(doc_str) = scope.borrow().doc.get(key) {
-                                return Ok(Expression::Atom(Atom::String(doc_str.to_string())));
-                            } else {
+                            if is_raw {
+                                if let Some(exp) = scope.borrow().data.get(key) {
+                                    if let Some(doc_string) = &exp.meta.doc_string {
+                                        return Ok(Expression::Atom(Atom::String(
+                                            doc_string.to_string(),
+                                        )));
+                                    } else {
+                                        return Ok(Expression::nil());
+                                    }
+                                }
                                 return Ok(Expression::nil());
+                            } else if let Some(exp) = scope.borrow().data.get(key) {
+                                let mut new_docs = String::new();
+                                new_docs.push_str(&key);
+                                new_docs.push('\n');
+                                new_docs.push_str(&exp.exp.display_type());
+                                if let Some(doc_str) = &exp.meta.doc_string {
+                                    new_docs.push_str("\n\n");
+                                    new_docs.push_str(&doc_str);
+                                }
+                                return Ok(Expression::Atom(Atom::String(new_docs)));
                             }
                         }
                     }
                 }
                 return Ok(Expression::nil());
             } else if let Some(scope) = get_symbols_scope(environment, &key) {
-                let val = if let Some(doc_str) = scope.borrow().doc.get(&key) {
-                    if let Some(fn_docs) = fn_docs {
-                        let mut new_docs = String::with_capacity(doc_str.len() + fn_docs.len() + 2);
-                        new_docs.push_str(&fn_docs);
-                        new_docs.push_str("\n\n");
-                        new_docs.push_str(doc_str);
-                        Expression::Atom(Atom::String(new_docs))
-                    } else {
-                        Expression::Atom(Atom::String(doc_str.to_string()))
+                if is_raw {
+                    if let Some(exp) = scope.borrow().data.get(&key) {
+                        if let Some(doc_string) = &exp.meta.doc_string {
+                            return Ok(Expression::Atom(Atom::String(doc_string.to_string())));
+                        } else {
+                            return Ok(Expression::nil());
+                        }
                     }
-                } else if let Some(fn_docs) = fn_docs {
-                    Expression::Atom(Atom::String(fn_docs))
-                } else {
-                    Expression::nil()
-                };
-                return Ok(val);
+                    return Ok(Expression::nil());
+                } else if let Some(exp) = scope.borrow().data.get(&key) {
+                    let mut new_docs = String::new();
+                    new_docs.push_str(&key);
+                    new_docs.push('\n');
+                    new_docs.push_str(&exp.exp.display_type());
+                    if let Some(doc_str) = &exp.meta.doc_string {
+                        new_docs.push_str("\n\n");
+                        new_docs.push_str(&doc_str);
+                    }
+                    new_docs.push('\n');
+                    return Ok(Expression::Atom(Atom::String(new_docs)));
+                }
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1687,6 +1690,20 @@ fn builtin_doc(
         io::ErrorKind::Other,
         "doc: requires a single symbol to lookup.",
     ))
+}
+
+fn builtin_doc(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    get_doc(environment, args, false)
+}
+
+fn builtin_doc_raw(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    get_doc(environment, args, true)
 }
 
 macro_rules! ensure_tonicity {
@@ -1731,7 +1748,7 @@ macro_rules! ensure_tonicity_all {
     }};
 }
 
-pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S>) {
+pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "eval".to_string(),
         Rc::new(Expression::make_function(
@@ -1874,7 +1891,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "global-scope?".to_string(),
-        Rc::new(Expression::Func(builtin_is_global_scope)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_is_global_scope),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "to-symbol".to_string(),
@@ -1890,7 +1913,16 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
             "Convert a symbol to its string representation.",
         )),
     );
-    data.insert("fn".to_string(), Rc::new(Expression::Func(builtin_fn)));
+    data.insert(
+        "fn".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_fn),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
     data.insert(
         "quote".to_string(),
         Rc::new(Expression::make_special(builtin_quote, "")),
@@ -1911,11 +1943,35 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         "or".to_string(),
         Rc::new(Expression::make_special(builtin_or, "")),
     );
-    data.insert("not".to_string(), Rc::new(Expression::Func(builtin_not)));
-    data.insert("null".to_string(), Rc::new(Expression::Func(builtin_not)));
+    data.insert(
+        "not".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_not),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
+    data.insert(
+        "null".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_not),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
     data.insert(
         "def?".to_string(),
-        Rc::new(Expression::Func(builtin_is_def)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_is_def),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
     data.insert(
         "macro".to_string(),
@@ -1931,11 +1987,44 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
     );
     data.insert(
         "gensym".to_string(),
-        Rc::new(Expression::Func(builtin_gensym)),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_gensym),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
     );
-    data.insert("jobs".to_string(), Rc::new(Expression::Func(builtin_jobs)));
-    data.insert("bg".to_string(), Rc::new(Expression::Func(builtin_bg)));
-    data.insert("fg".to_string(), Rc::new(Expression::Func(builtin_fg)));
+    data.insert(
+        "jobs".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_jobs),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
+    data.insert(
+        "bg".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_bg),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
+    data.insert(
+        "fg".to_string(),
+        Rc::new(Reference {
+            exp: Expression::Func(builtin_fg),
+            meta: RefMetaData {
+                namespace: Some("root".to_string()),
+                doc_string: None,
+            },
+        }),
+    );
     data.insert(
         "version".to_string(),
         Rc::new(Expression::make_function(
@@ -2032,6 +2121,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Expression>, S
         Rc::new(Expression::make_function(
             builtin_doc,
             "Return the doc string for a symbol or nil if no string.",
+        )),
+    );
+    data.insert(
+        "doc-raw".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_doc_raw,
+            "Return the raw (unexpanded) doc string for a symbol or nil if no string.",
         )),
     );
 

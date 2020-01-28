@@ -1,7 +1,6 @@
 use std::env;
 use std::io;
 use std::iter::FromIterator;
-use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -207,9 +206,9 @@ fn setup_args_final<'a>(
                 v.unwrap().clone()
             };
             if let Some(scope) = scope {
-                scope.data.insert(k.unwrap().clone(), Rc::new(v2));
+                scope.insert_exp(k.unwrap().clone(), v2);
             } else {
-                set_expression_current(environment, k.unwrap().clone(), None, Rc::new(v2));
+                set_expression_current(environment, k.unwrap().clone(), None, v2);
             }
             params += 1;
         }
@@ -224,20 +223,18 @@ fn setup_args_final<'a>(
         }
         if rest_data.is_empty() {
             if let Some(scope) = scope {
-                scope.data.insert(rest_name, Rc::new(Expression::nil()));
+                scope.insert_exp(rest_name, Expression::nil());
             } else {
-                set_expression_current(environment, rest_name, None, Rc::new(Expression::nil()));
+                set_expression_current(environment, rest_name, None, Expression::nil());
             }
         } else if let Some(scope) = scope {
-            scope
-                .data
-                .insert(rest_name, Rc::new(Expression::with_list(rest_data)));
+            scope.insert_exp(rest_name, Expression::with_list(rest_data));
         } else {
             set_expression_current(
                 environment,
                 rest_name,
                 None,
-                Rc::new(Expression::with_list(rest_data)),
+                Expression::with_list(rest_data),
             );
         }
     } else {
@@ -265,9 +262,9 @@ fn setup_args_final<'a>(
                 v.unwrap().clone()
             };
             if let Some(scope) = scope {
-                scope.data.insert(k.unwrap().clone(), Rc::new(v2));
+                scope.insert_exp(k.unwrap().clone(), v2);
             } else {
-                set_expression_current(environment, k.unwrap().clone(), None, Rc::new(v2));
+                set_expression_current(environment, k.unwrap().clone(), None, v2);
             }
             params += 1;
         }
