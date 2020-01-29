@@ -68,7 +68,7 @@
 				(not cmd-ast)
 
 				;; if cmd doesn't contain symbol
-				(not (str-contains infix-symbol cmd-str))
+				(not (in? cmd-ast infix-symbol))
 
 				;; if already in prefix notation
 				;;TODO edge case, there are more infix-symbols in ast? see note
