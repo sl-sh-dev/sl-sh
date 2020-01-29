@@ -3,8 +3,9 @@
 (if (def? '*ns-exports*) (vec-clear! *ns-exports*))
 
 (def 'defmacro 
-"defmacro: create a macro and bind it to a symbol in the current scope
-	(defmacro sym doc-string? body) -> nil"
+"Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope,"
 	(macro (name &rest args) ((fn ()
 	(if (= (length args) 2)
 		(progn
@@ -20,8 +21,9 @@
 			(err "defmacro: Wrong number of args.")))))))
 
 (def 'setmacro 
-"setmacro: set a macro to an existing symbol
-	(setmacro sym doc-string? body) -> nil"
+"Usage: (setmacro name doc_string? argument_list body)
+
+Set a macro to an existing symbol."
 	(macro (name &rest args) ((fn ()
 	(if (= (length args) 2)
 		(progn
@@ -36,24 +38,26 @@
 				`(progn (set ',name ,doc-str (macro ,ars ,body)) nil))
 			(err "setmacro: Wrong number of args.")))))))
 
-(defmacro ns-export (symbol) `(progn
-    (if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
-    (if (symbol? ,symbol)
-        (vec-push! *ns-exports* (quote ,symbol))
-        (if (or (list? ,symbol) (vec? ,symbol))
-            (for sym ,symbol (vec-push! *ns-exports* sym))
-            (err "ns-export takes a symbol or sequence.")))))
+(defmacro ns-export
+"Export a symbol or list of symbols to be imported into other namespaces."
+	(symbol_or_sequence) `(progn
+	(if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
+	(if (symbol? ,symbol_or_sequence)
+		(vec-push! *ns-exports* (quote ,symbol_or_sequence))
+		(if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
+			(for sym ,symbol_or_sequence (vec-push! *ns-exports* sym))
+			(err "ns-export takes a symbol or sequence.")))))
 
-(defmacro ns-import (namespace)
+(defmacro ns-import
+"Import any symbols exported from namespace into the current namespace."
+	(namespace)
 	`(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
-		(if (doc-raw (to-symbol (str ,namespace "::" sym)))
-			(def (to-symbol (str "ns::" sym)) (doc-raw (to-symbol (str ,namespace "::" sym)))
-				(eval (to-symbol (str ,namespace "::" sym))))
-			(def (to-symbol (str "ns::" sym)) (eval (to-symbol (str ,namespace "::" sym)))))))
+		(eval (core::append! (vec) '(def (to-symbol (str "ns::" sym))) (to-symbol (str ,namespace "::" sym))))))
 
 (defmacro setq
-"setq: set an expession to a quoted symbol (ie set 'sym bind)
-	(setq sym doc-string? expression) -> expression"
+"Usage: (setq sym doc-string? expression) -> expression
+
+Set an expession to a quoted symbol (ie set 'sym bind)"
 	(sym &rest args)
 	((fn ()
 	(if (= (length args) 1)
@@ -68,8 +72,9 @@
 			(err "setq: Wrong number of args."))))))
 
 (defmacro defq
-"defq: defines an expession to a quoted symbol (ie def 'sym bind)
-	(defq sym doc-string? expression) -> expression"
+"Usage: (defq sym doc-string? expression) -> expression
+
+Binds an expession to a quoted symbol (ie def 'sym bind)"
 	(sym &rest args)
 	((fn ()
 	(if (= (length args) 1)

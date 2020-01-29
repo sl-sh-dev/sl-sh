@@ -503,10 +503,10 @@ pub fn builtin_progn(
     Ok(ret)
 }
 
-fn proc_set_vars(
+fn proc_set_vars<'a>(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
-) -> io::Result<(String, Option<String>, Expression)> {
+    args: &'a mut dyn Iterator<Item = &Expression>,
+) -> io::Result<(String, Option<String>, &'a Expression)> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key = match eval(environment, key)? {
@@ -526,12 +526,10 @@ fn proc_set_vars(
                     } else {
                         None
                     };
-                    let val = eval(environment, arg2)?;
-                    return Ok((key, doc_str, val));
+                    return Ok((key, doc_str, arg2));
                 }
             } else {
-                let val = eval(environment, arg1)?;
-                return Ok((key, None, val));
+                return Ok((key, None, arg1));
             }
         }
     }
@@ -541,6 +539,43 @@ fn proc_set_vars(
     ))
 }
 
+fn val_to_reference(
+    environment: &mut Environment,
+    namespace: Option<String>,
+    doc_string: Option<String>,
+    val_in: &Expression,
+) -> io::Result<(Rc<Reference>, Expression)> {
+    if let Expression::Atom(Atom::Symbol(s)) = val_in {
+        if let Some(exp) = get_expression(environment, s) {
+            Ok((exp, eval(environment, val_in)?))
+        } else {
+            let val = eval(environment, &val_in)?;
+            Ok((
+                Rc::new(Reference {
+                    exp: val.clone(),
+                    meta: RefMetaData {
+                        namespace,
+                        doc_string,
+                    },
+                }),
+                val,
+            ))
+        }
+    } else {
+        let val = eval(environment, val_in)?;
+        Ok((
+            Rc::new(Reference {
+                exp: val.clone(),
+                meta: RefMetaData {
+                    namespace,
+                    doc_string,
+                },
+            }),
+            val,
+        ))
+    }
+}
+
 fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -548,10 +583,11 @@ fn builtin_set(
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
         entry.insert(Rc::new(val.clone()));
-        Ok(val)
+        Ok(val.clone())
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
-        let mut scope = scope.borrow_mut();
-        scope.insert_exp_with_doc(key.clone(), val.clone(), doc_str);
+        let name = scope.borrow().name.clone();
+        let (reference, val) = val_to_reference(environment, name, doc_str, val)?;
+        scope.borrow_mut().data.insert(key.clone(), reference);
         Ok(val)
     } else {
         Err(io::Error::new(
@@ -584,6 +620,12 @@ fn builtin_export(
                     Expression::Atom(Atom::String(s)) => Expression::Atom(Atom::String(s)),
                     Expression::Atom(Atom::StringBuf(s)) => {
                         Expression::Atom(Atom::String(s.borrow().clone()))
+                    }
+                    Expression::Atom(Atom::Int(i)) => {
+                        Expression::Atom(Atom::String(format!("{}", i)))
+                    }
+                    Expression::Atom(Atom::Float(f)) => {
+                        Expression::Atom(Atom::String(format!("{}", f)))
                     }
                     Expression::Process(ProcessState::Running(_pid)) => {
                         Expression::Atom(Atom::String(
@@ -655,21 +697,24 @@ fn builtin_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let (key, doc_str, val) = proc_set_vars(environment, args)?;
+    fn current_namespace(environment: &mut Environment) -> Option<String> {
+        if let Some(exp) = get_expression(environment, "*ns*") {
+            match &exp.exp {
+                Expression::Atom(Atom::String(s)) => Some(s.to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+    let (key, doc_string, val) = proc_set_vars(environment, args)?;
     if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
         if let Some(namespace) = key_i.next() {
             if let Some(key) = key_i.next() {
                 let namespace = if namespace == "ns" {
-                    if let Some(exp) = get_expression(environment, "*ns*") {
-                        match &exp.exp {
-                            Expression::Atom(Atom::String(s)) => s.to_string(),
-                            _ => "NO_NAME".to_string(),
-                        }
-                    } else {
-                        "NO_NAME".to_string()
-                    }
+                    current_namespace(environment).unwrap_or_else(|| "NO_NAME".to_string())
                 } else {
                     namespace.to_string()
                 };
@@ -678,8 +723,12 @@ fn builtin_def(
                     let name = in_scope.borrow().name.clone();
                     if let Some(name) = name {
                         if name == namespace {
-                            let mut in_scope = in_scope.borrow_mut();
-                            in_scope.insert_exp_with_doc(key.to_string(), val.clone(), doc_str);
+                            let (reference, val) =
+                                val_to_reference(environment, Some(name), doc_string, val)?;
+                            in_scope
+                                .borrow_mut()
+                                .data
+                                .insert(key.to_string(), reference);
                             return Ok(val);
                         }
                     }
@@ -693,7 +742,9 @@ fn builtin_def(
         );
         Err(io::Error::new(io::ErrorKind::Other, msg))
     } else {
-        set_expression_current(environment, key, doc_str, val.clone());
+        let ns = current_namespace(environment);
+        let (reference, val) = val_to_reference(environment, ns, doc_string, val)?;
+        set_expression_current_ref(environment, key, reference);
         Ok(val)
     }
 }
@@ -1596,6 +1647,58 @@ fn builtin_get_error(
     Ok(ret)
 }
 
+fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
+    let l;
+    let p_iter = match exp {
+        Expression::Atom(Atom::Lambda(f)) => match &*f.params {
+            Expression::Vector(li) => {
+                l = li.borrow();
+                Box::new(l.iter())
+            }
+            _ => f.params.iter(),
+        },
+        Expression::Atom(Atom::Macro(m)) => match &*m.params {
+            Expression::Vector(li) => {
+                l = li.borrow();
+                Box::new(l.iter())
+            }
+            _ => m.params.iter(),
+        },
+        _ => return,
+    };
+    doc_str.push_str("\n\nUsage: (");
+    doc_str.push_str(sym);
+    for arg in p_iter {
+        if let Expression::Atom(Atom::Symbol(s)) = arg {
+            doc_str.push(' ');
+            doc_str.push_str(s);
+        }
+    }
+    doc_str.push(')');
+}
+
+fn make_doc(exp: &Reference, key: &str) -> io::Result<Expression> {
+    let mut new_docs = String::new();
+    new_docs.push_str(key);
+    new_docs.push_str("\nType: ");
+    new_docs.push_str(&exp.exp.display_type());
+    if let Some(ns) = &exp.meta.namespace {
+        new_docs.push_str("\nNamespace: ");
+        new_docs.push_str(&ns);
+    }
+    if let Some(doc_str) = &exp.meta.doc_string {
+        if !doc_str.contains("Usage:") {
+            add_usage(&mut new_docs, key, &exp.exp);
+        }
+        new_docs.push_str("\n\n");
+        new_docs.push_str(&doc_str);
+    } else {
+        add_usage(&mut new_docs, key, &exp.exp);
+    }
+    new_docs.push('\n');
+    Ok(Expression::Atom(Atom::String(new_docs)))
+}
+
 fn get_doc(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -1642,15 +1745,7 @@ fn get_doc(
                                 }
                                 return Ok(Expression::nil());
                             } else if let Some(exp) = scope.borrow().data.get(key) {
-                                let mut new_docs = String::new();
-                                new_docs.push_str(&key);
-                                new_docs.push('\n');
-                                new_docs.push_str(&exp.exp.display_type());
-                                if let Some(doc_str) = &exp.meta.doc_string {
-                                    new_docs.push_str("\n\n");
-                                    new_docs.push_str(&doc_str);
-                                }
-                                return Ok(Expression::Atom(Atom::String(new_docs)));
+                                return make_doc(&exp, key);
                             }
                         }
                     }
@@ -1667,16 +1762,7 @@ fn get_doc(
                     }
                     return Ok(Expression::nil());
                 } else if let Some(exp) = scope.borrow().data.get(&key) {
-                    let mut new_docs = String::new();
-                    new_docs.push_str(&key);
-                    new_docs.push('\n');
-                    new_docs.push_str(&exp.exp.display_type());
-                    if let Some(doc_str) = &exp.meta.doc_string {
-                        new_docs.push_str("\n\n");
-                        new_docs.push_str(&doc_str);
-                    }
-                    new_docs.push('\n');
-                    return Ok(Expression::Atom(Atom::String(new_docs)));
+                    return make_doc(&exp, &key);
                 }
             } else {
                 return Err(io::Error::new(

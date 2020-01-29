@@ -444,6 +444,19 @@ pub fn set_expression_current(
     current_scope.data.insert(key, reference);
 }
 
+pub fn set_expression_current_ref(
+    environment: &mut Environment,
+    key: String,
+    reference: Rc<Reference>,
+) {
+    let mut current_scope = environment
+        .current_scope
+        .last()
+        .unwrap() // Always has at least root scope unless horribly broken.
+        .borrow_mut();
+    current_scope.data.insert(key, reference);
+}
+
 pub fn remove_expression_current(environment: &mut Environment, key: &str) {
     environment
         .current_scope
