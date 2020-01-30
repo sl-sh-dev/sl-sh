@@ -3,8 +3,17 @@
 (ns-import 'shell)
 
 ;; gpwclark TODOs
-;; write macro to change "de-thread" ipipe macro
-;; cond and when!!!!
+;; - cond and when!!!!
+;; - reduce
+;; - need clojure's threading macro support but you know, we'll call it
+;; "weaving" (which is sometimes used in AOP but not nearly as overlaoded as
+;; the word "thread" in programming.)
+;; - bash completion not working with git checkout and filepaths
+;; - rewrite bash so we don't have gpl in here?
+;; - write test for in?
+;; - CI on github? possible?
+;; - track bkrd processes in PS1
+;; - address exec-hook.lisp stuff
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
@@ -29,6 +38,7 @@
 	(setq tok-sys-command-color shell::*fg-green*)
 	(setq tok-string-color (fg-color-rgb 255 128 0))
 
+
 	(error-stack-on)
 
 	(hash-set! *repl-settings* :max-history 10000)
@@ -41,6 +51,20 @@
 
 	;; betterer ls
 	(alias ll (lsd -haltr))
+
+
+	;; Replace cd with a version that also runs ls after.
+	;; Macro to let un-expanded args go to root::cd.
+	(defmacro cd (&rest args) (progn
+		(if (= (length args) 0)
+			(and (root::cd) (ls .))
+			(if (= (length args) 1)
+				(and (root::cd (first args)) (ls .))
+				(err "I take zero or one argument.")))
+		nil))
+	;; Abuse register-alias to have better syntax highlighting for cd.
+	(register-alias 'cd)
+
 
 	(defn cd (&rest args)
 		(if (= (length args) 0)
