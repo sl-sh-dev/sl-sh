@@ -51,42 +51,27 @@ Set a macro to an existing symbol."
 (defmacro ns-import
 "Import any symbols exported from namespace into the current namespace."
 	(namespace)
-	`(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
-		(eval (core::append! (vec) '(def (to-symbol (str "ns::" sym))) (to-symbol (str ,namespace "::" sym))))))
+	`((fn () (progn
+		(def 'import (make-vec 3 'core::defq))
+		(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
+		(progn
+			(vec-setnth! 1 (to-symbol (str "ns::" sym)) import)
+			(vec-setnth! 2 (to-symbol (str ,namespace "::" sym)) import)
+			(eval import)))))))
 
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression
 
 Set an expession to a quoted symbol (ie set 'sym bind)"
 	(sym &rest args)
-	((fn ()
-	(if (= (length args) 1)
-		(progn
-			(def 'bind (vec-nth 0 args))
-			`(set ',sym ,bind))
-		(if (= (length args) 22)
-			(progn
-				(def 'doc-str (vec-nth 0 args))
-				(def 'bind (vec-nth 1 args))
-				`(set ',sym ,doc-str ,bind))
-			(err "setq: Wrong number of args."))))))
+	`(apply set ',sym ',args))
 
 (defmacro defq
 "Usage: (defq sym doc-string? expression) -> expression
 
 Binds an expession to a quoted symbol (ie def 'sym bind)"
 	(sym &rest args)
-	((fn ()
-	(if (= (length args) 1)
-		(progn
-			(def 'bind (vec-nth 0 args))
-			`(def ',sym ,bind))
-		(if (= (length args) 22)
-			(progn
-				(def 'doc-str (vec-nth 0 args))
-				(def 'bind (vec-nth 1 args))
-				`(def ',sym ,doc-str ,bind))
-			(err "setq: Wrong number of args."))))))
+	`(apply def ',sym ',args))
 
 (defmacro defn (name &rest args) (core::let ()
 	(if (= (length args) 2)

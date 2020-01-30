@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
@@ -20,4 +20,11 @@ chrono = "0.4.7"
 [profile.release]
 lto = true
 #opt-level = 'z'
+
+#[dev-dependencies]
+#criterion = "0.3"
+
+#[[bench]]
+#name = "start_benchmark"
+#harness = false
 
