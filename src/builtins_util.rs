@@ -1,6 +1,7 @@
 use std::env;
 use std::io;
 use std::iter::FromIterator;
+use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -174,6 +175,52 @@ pub fn compress_tilde(path: &str) -> Option<String> {
     }
 }
 
+fn set_arg(
+    environment: &mut Environment,
+    scope: &mut Option<&mut Scope>,
+    key: &str,
+    var: &Expression,
+    do_eval: bool,
+) -> io::Result<()> {
+    let v2 = if do_eval {
+        if let Expression::Atom(Atom::Symbol(s)) = var {
+            if let Some(reference) = get_expression(environment, s) {
+                reference.clone()
+            } else {
+                Rc::new(Reference {
+                    exp: eval(environment, var)?,
+                    meta: RefMetaData {
+                        namespace: None,
+                        doc_string: None,
+                    },
+                })
+            }
+        } else {
+            Rc::new(Reference {
+                exp: eval(environment, var)?,
+                meta: RefMetaData {
+                    namespace: None,
+                    doc_string: None,
+                },
+            })
+        }
+    } else {
+        Rc::new(Reference {
+            exp: var.clone(),
+            meta: RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        })
+    };
+    if let Some(scope) = scope {
+        scope.data.insert(key.to_string(), v2);
+    } else {
+        set_expression_current_ref(environment, key.to_string(), v2);
+    }
+    Ok(())
+}
+
 fn setup_args_final<'a>(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
@@ -200,16 +247,7 @@ fn setup_args_final<'a>(
                 );
                 return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
-            let v2 = if do_eval {
-                eval(environment, v.unwrap())?
-            } else {
-                v.unwrap().clone()
-            };
-            if let Some(scope) = scope {
-                scope.insert_exp(k.unwrap().clone(), v2);
-            } else {
-                set_expression_current(environment, k.unwrap().clone(), None, v2);
-            }
+            set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
         }
         let mut rest_data: Vec<Expression> = Vec::new();
@@ -256,16 +294,7 @@ fn setup_args_final<'a>(
                 );
                 return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
-            let v2 = if do_eval {
-                eval(environment, v.unwrap())?
-            } else {
-                v.unwrap().clone()
-            };
-            if let Some(scope) = scope {
-                scope.insert_exp(k.unwrap().clone(), v2);
-            } else {
-                set_expression_current(environment, k.unwrap().clone(), None, v2);
-            }
+            set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
         }
     }

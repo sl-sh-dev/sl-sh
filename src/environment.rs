@@ -387,7 +387,10 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
 }
 
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Reference>> {
-    if let Some(exp) = environment.dynamic_scope.get(key) {
+    if key.starts_with('$') || key.starts_with(':') {
+        // Can not lookup env vars or keywords...
+        None
+    } else if let Some(exp) = environment.dynamic_scope.get(key) {
         let new_exp = &*exp.clone();
         // WTF is going on here, should not need a clone of a clone...
         let reference = Rc::new(Reference {
