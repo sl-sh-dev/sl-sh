@@ -22,6 +22,11 @@
 ;; functionality for modifying forms on the repl before they're eval'd.
 (load "~/.config/sl-sh/exec-hook.lisp")
 
+;; helpers {{{
+	(defn all-items-by-whitespace (producer)
+		(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
+;; }}}
+
 
 ;; custom env settings {{{
 	;; use vi keybindings on cli
@@ -38,7 +43,6 @@
 	(setq tok-default-color shell::*fg-magenta*)
 	(setq tok-sys-command-color shell::*fg-green*)
 	(setq tok-string-color (fg-color-rgb 255 128 0))
-
 
 	(error-stack-on)
 
@@ -113,6 +117,7 @@
 		(| (find . -iname (str (nth 0 args))))
 		(err "Only accepts 0 or 1 arguments")))
 
+
 	;;results feed into vim
 	(defn vimifind (&rest args)
 		(if (< (length args) 2)
@@ -127,6 +132,9 @@
 	;; check spelling
 	(defn spl (word)
 		(println (str (| (echo (str word)) (aspell -a)))))
+
+	(defn weather()
+		(curl wttr.in))
 ;; }}}
 
 ;; notification helpers {{{
@@ -175,7 +183,7 @@
 
 ;; time helpers {{{
 	;; epoch in milliseconds
-	(alias epochms (| (date +%s%N) (cut -b1-13)))
+	(alias epochms (str-trim (| (date +%s%N) (cut -b1-13))))
 
 	(defn datest ()
 		(let-env ((TZ ":America/New_York"))

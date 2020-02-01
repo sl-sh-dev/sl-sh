@@ -60,7 +60,7 @@
 			prefixified-ast))
 
 	;; return true if cmd satisfies preconditions for prefixification
-	(defn satisfies-prefixify-preconditions (cmd-str cmd-ast infix-hash-set)
+	(defn satisfies-prefixify-preconditions (cmd-ast infix-hash-set)
 		(let ((infix-symbol (hash-get infix-hash-set :infix-symbol)))
 			(not (or ;; reasons to skip pre-processing
 
@@ -75,15 +75,15 @@
                 ;; in larger TODO block at top.
 				(= infix-symbol (first cmd-ast))))))
 
-	(defn confirm-prefix-eligible (cmd-str cmd-ast prefix-metadata)
+	(defn confirm-prefix-eligible (cmd-ast prefix-metadata)
 		;; recurse over prefix-metadata return nil if there are none but
 		;; return the pair if it's valid
 		(progn (defq prefix-props (first prefix-metadata))
 			(if (not prefix-props)
 				nil
-				(if (satisfies-prefixify-preconditions cmd-str cmd-ast prefix-props)
+				(if (satisfies-prefixify-preconditions cmd-ast prefix-props)
 					prefix-props
-					(recur cmd-str cmd-ast (rest prefix-metadata))))))
+					(recur cmd-ast (rest prefix-metadata))))))
 
 	(defn identity ()
 		(fn (x) x))
@@ -105,7 +105,7 @@
 
 	;; TODO this function could/should be applied recursively to handle any
 	;; prefixification needs in inner forms.
-	(defn check-for-infix-notation (cmd-str cmd-ast)
+	(defn check-for-infix-notation (cmd-ast)
 		;; confirm cmd ast needs prefixification ...then call prefixify.
 		(progn
 				(defq prefix-metadata
@@ -123,14 +123,30 @@
 						(gen-prefix-data 'out-err>> 'out-err>> identity :swap-last-for-first)
 						(gen-prefix-data 'out-err>null 'out-err>null identity :swap-last-for-first)))
 				(defq prefix-eligible
-					(confirm-prefix-eligible cmd-str cmd-ast prefix-metadata))
+					(confirm-prefix-eligible cmd-ast prefix-metadata))
+				;;TODO could loop by the infix symbols. this would allow us to
+				;; detect forms with infix symbols nested within infix symbols.
+				;; would start by finding the first instance of an infix symbol
+				;; in the ast. then group all forms after in list, until
+				;; occurrence of next of that infix symbol. then recursive
+				;; aplication could properly prefixify everything.
 			(if (not prefix-eligible)
-				cmd-str ;;(progn (println (str "not eligible: " cmd-str)) cmd-str)
+				cmd-ast
 				(prefixify-cmd cmd-ast prefix-eligible))))
+
+#|
+	(defn check-form-and-subforms-for-infix-notation (cmd-ast)
+		(progn
+            (defq fst (first cmd-ast))
+          (if (nil? fst)
+            cmd-ast
+            (if (list? cmd-ast)
+                  ))))
+|#
 
 	(defn __exec_hook (cmd-str)
 		(let ((cmd-ast (read :add-parens cmd-str)))
 				(match (length cmd-ast)
 					(1 (change-dir-if-arg-is-dir (first cmd-ast)))
-					(nil (check-for-infix-notation cmd-str cmd-ast)))))
+					(nil (check-for-infix-notation cmd-ast)))))
 ;; }}}
