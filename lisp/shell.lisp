@@ -308,7 +308,7 @@
 			(hash-clear! bad-syms)
 			(hash-clear! sys-syms)))
 		(set 'out (str-buf-map (fn (ch) (progn
-			(def 'ret (if in-quote 
+			(def 'ret (if in-quote
 				(progn
 					(str-buf-push! token ch)
 					(if (and (not (char= last-ch #\\))(char= ch #\"))
