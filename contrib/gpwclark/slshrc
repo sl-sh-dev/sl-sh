@@ -56,7 +56,6 @@
 	;; betterer ls
 	(alias ll (lsd -haltr))
 
-
 	;; Replace cd with a version that also runs ls after.
 	;; Macro to let un-expanded args go to root::cd.
 	(defmacro cd (&rest args) (progn
@@ -68,14 +67,6 @@
 		nil))
 	;; Abuse register-alias to have better syntax highlighting for cd.
 	(register-alias 'cd)
-
-
-	(defn cd (&rest args)
-		(if (= (length args) 0)
-			(and (root::cd) (ls .))
-			(if (= (length args) 1)
-				(and (root::cd (first args)) (ls .))
-				(err "I take zero or one argument."))))
 
 	;; stdin to clipboard
 	(alias sc (str-trim (xclip -selection c)))
