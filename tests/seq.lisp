@@ -11,6 +11,30 @@ Some stuff
 
 (load "tests/test.lisp")
 
+(let ((non-empty-vec (vec 'a))
+	(empty-vec (make-vec))
+	(non-empty-list (list 'a))
+	(empty-list (list)))
+;; test non empty vec
+	(assert-true (seq? non-empty-vec))
+	(assert-true (vec? non-empty-vec))
+	(assert-true (non-empty-seq? non-empty-vec))
+;; test empty vec
+	(assert-true (seq? empty-vec))
+	(assert-true (vec? empty-vec))
+	(assert-false (non-empty-seq? empty-vec))
+;; test non empty list
+	(assert-true (seq? non-empty-list))
+	(assert-true (list? non-empty-list))
+	(assert-true (non-empty-seq? non-empty-list))
+;; test empty list
+	(assert-true (seq? nil))
+	(assert-true (seq? empty-list))
+	(assert-true (list? empty-list))
+	(assert-true (list? nil))
+	(assert-false (non-empty-seq? empty-list))
+	(assert-false (non-empty-seq? nil)))
+
 (let ((l1 '#(1 2 3)) (l2 '#(a b c)) (l3 '#(1 2 #(a b c) 3)) (l4))
     (assert-equal (first l1) 1)
     (assert-equal l1 '(1 2 3))

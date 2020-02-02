@@ -7,6 +7,18 @@
             t
             nil)))
 
+(defn non-empty-seq?
+"Usage: (non-empty-seq? obj)
+
+`non-empty-seq?` returns true if a list or vector is non-empty and false
+otherwise. If a non list or non vector is passed in it returns false."
+	(obj)
+	(if (vec? obj)
+		(not (vec-empty? obj))
+		(if (list? obj)
+			(not (not obj))
+			nil)))
+
 (defn first (obj)
     (if (vec? obj)
         (vec-nth 0 obj)
@@ -206,5 +218,5 @@
     (irev items 0 (- (length items) 1))
     items))
 
-(ns-export '(seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in?))
+(ns-export '(seq? non-empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in?))
 
