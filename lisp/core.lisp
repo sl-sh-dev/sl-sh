@@ -2,7 +2,7 @@
 
 (if (def? '*ns-exports*) (vec-clear! *ns-exports*))
 
-(def 'defmacro 
+(def 'defmacro
 "Usage: (defmacro name doc_string? argument_list body)
 
 Create a macro and bind it to a symbol in the current scope,"
@@ -20,7 +20,7 @@ Create a macro and bind it to a symbol in the current scope,"
 				`(progn (def ',name ,doc-str (macro ,ars ,body)) nil))
 			(err "defmacro: Wrong number of args.")))))))
 
-(def 'setmacro 
+(def 'setmacro
 "Usage: (setmacro name doc_string? argument_list body)
 
 Set a macro to an existing symbol."
@@ -173,7 +173,43 @@ Binds an expession to a quoted symbol (ie def 'sym bind)"
                 head)
             (err "Not a list or vector."))))
 
+(defn reduce
+"Usage: (reduce reducing-fcn init-val coll)
+
+`reduce` is used to amalgamate a provided collection, coll, and an intitial value,
+init-val, according to the reducing function, reducing-fcn, provided. The
+reducing-fcn should be a function of two arguments. In the first iteration of
+reduce, the init-val will be used as the first argument to the reducing-fcn and
+(first coll) will be used as the second argument. For all subsequent iterations,
+The result from the previous application of the reducing-fcn will be used as the
+first argument to the reducing-fcn and the second argument will be the next item
+in the collection when the collection is empty reduce will return the
+amalgamated result.
+
+Example:
+(reduce + 0 (list 1 2 3 4 5))
+;; 15"
+	(reducing-fcn init-val coll)
+		(if (not (first coll))
+				init-val
+				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
+
+(defmacro when
+"Usage: (when provided-condition if-true)
+`when` is a convenience function used to check a form, provided-condition,
+and run some form, if-true, if the provided as the first argument evaluates
+to true.
+
+Example:
+(when #t (println \"that's so true!\")) ;; prints \"that's so true!\"
+
+(when (= 0 1) (println \"pigs can fly\")) ;; prints nothing
+"
+	(provided-condition if-true)
+	`(if ,provided-condition ,if-true))
+
+
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq))
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq reduce when))
 
