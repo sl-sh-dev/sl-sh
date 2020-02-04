@@ -1,4 +1,4 @@
-(ns-create 'core)
+(if (ns_exists? 'core) (ns-enter 'core) (ns-create 'core))
 
 (if (def? '*ns-exports*) (vec-clear! *ns-exports*))
 
