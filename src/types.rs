@@ -452,7 +452,7 @@ impl Expression {
         fn init_space(indent: usize, writer: &mut dyn Write) -> io::Result<()> {
             let mut i = 0;
             if indent > 0 {
-                writer.write_all("\n".as_bytes())?;
+                writer.write_all(b"\n")?;
             }
             while i < indent {
                 writer.write_all(b"    ")?;

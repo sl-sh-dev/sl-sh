@@ -367,7 +367,7 @@ fn args_out(
         }
     }
     if add_newline {
-        writer.write_all("\n".as_bytes())?;
+        writer.write_all(b"\n")?;
     }
     Ok(())
 }
