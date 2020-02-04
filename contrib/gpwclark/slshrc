@@ -28,6 +28,7 @@
 
 
 ;; custom env settings {{{
+	(export 'EDITOR "vim")
 	;; use vi keybindings on cli
 	(hash-set! *repl-settings* :keybindings :vi)
 	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
