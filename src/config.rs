@@ -9,14 +9,14 @@ pub struct Config {
 
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
-const HELP: &str = r#"slsh - Simple Lisp Shell
-Start the slsh shell.
+const HELP: &str = r#"sl-sh - Simple Lisp Shell
+Start the sl-sh shell.
 
 USAGE:
-    slsh [FLAGS] [OPTIONS] [args]
+    sl-sh [FLAGS] [OPTIONS] [args]
 
 FLAGS:
-    -v, --version  Print the version, platform and revision of server then exit.
+    -v, --version  Print the version, platform and revision of sl-sh then exit.
     -h, --help     Print help (this) and exit.
 
 OPTIONS:

@@ -40,7 +40,7 @@ struct ReplSettings {
     vi_insert_prompt_suffix: Option<String>,
 }
 
-fn load_user_env(environment: &mut Environment, home: &str) {
+fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
     let mut load_path = Vec::new();
     load_path.push(Expression::Atom(Atom::String(format!(
         "{}/.config/sl-sh",
@@ -74,8 +74,10 @@ fn load_user_env(environment: &mut Environment, home: &str) {
             msg
         ),
     }
-    if let Err(err) = load(environment, "slshrc") {
-        eprintln!("WARNING: Failed to load init script slshrc: {}", err);
+    if loadrc {
+        if let Err(err) = load(environment, "slshrc") {
+            eprintln!("WARNING: Failed to load init script slshrc: {}", err);
+        }
     }
 }
 
@@ -422,7 +424,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
-    load_user_env(&mut environment.borrow_mut(), &home);
+    load_user_env(&mut environment.borrow_mut(), &home, true);
     let repl_settings = get_expression(&environment.borrow(), "*repl-settings*").unwrap();
     environment
         .borrow_mut()
@@ -552,7 +554,7 @@ pub fn read_stdin() -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     environment.do_job_control = false;
     environment.is_tty = false;
-    load_user_env(&mut environment, &home);
+    load_user_env(&mut environment, &home, true);
 
     let mut input = String::new();
     loop {
@@ -691,7 +693,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    load_user_env(&mut environment, &home);
+    load_user_env(&mut environment, &home, false);
 
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {

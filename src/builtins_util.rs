@@ -185,7 +185,7 @@ fn set_arg(
     let v2 = if do_eval {
         if let Expression::Atom(Atom::Symbol(s)) = var {
             if let Some(reference) = get_expression(environment, s) {
-                reference.clone()
+                reference
             } else {
                 Rc::new(Reference {
                     exp: eval(environment, var)?,
