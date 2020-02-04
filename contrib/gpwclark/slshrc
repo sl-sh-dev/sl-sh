@@ -114,9 +114,9 @@
 			(let
 				((vimargs (str-split
 					" "
-					(str-trim (str (| (find . -iname (nth 0 args)) (tr "\n" " ")))))))
+					(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
 				(progn
-					`(loose-symbols (vim ,@vimargs))))
+					(eval `(vim ,@vimargs))))
 			(err "Only accepts 0 or 1 arguments")))
 
 	;; check spelling
