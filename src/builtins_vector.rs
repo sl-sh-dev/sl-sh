@@ -10,71 +10,89 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
-fn builtin_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if args.is_empty() {
-        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
+fn builtin_vec(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut new_args: Vec<Expression> = Vec::new();
+    for a in args {
+        new_args.push(eval(environment, a)?);
     }
-    let args = to_args(environment, args)?;
-    Ok(Expression::with_list(args))
+    Ok(Expression::with_list(new_args))
 }
 
-fn builtin_make_vec(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() > 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "make-vec takes at most two forms",
-        ));
-    }
-    if args.is_empty() {
-        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
-    }
-    let cap = if let Expression::Atom(Atom::Int(c)) = args[0] {
-        c
-    } else {
-        let msg = format!("make-vec first arg must be an integer, found {:?}", args[0]);
-        return Err(io::Error::new(io::ErrorKind::Other, msg));
-    };
-    let mut list = Vec::with_capacity(cap as usize);
-    if args.len() == 2 {
-        let v = &args[1];
-        for _ in 0..cap {
-            list.push(v.clone());
+fn builtin_make_vec(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let list = if let Some(cap) = args.next() {
+        let cap = eval(environment, cap)?;
+        let cap = if let Expression::Atom(Atom::Int(c)) = cap {
+            c
+        } else {
+            let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
+            return Err(io::Error::new(io::ErrorKind::Other, msg));
+        };
+        let mut list = Vec::with_capacity(cap as usize);
+        if let Some(item) = args.next() {
+            if args.next().is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "make-vec takes at most two forms",
+                ));
+            }
+            let item = eval(environment, item)?;
+            for _ in 0..cap {
+                list.push(item.clone());
+            }
         }
-    }
-
+        list
+    } else {
+        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
+    };
     Ok(Expression::with_list(list))
 }
 
-fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 && args.len() != 3 {
+fn builtin_vec_slice(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let (vec, start, end, has_end) = if let Some(vec) = args.next() {
+        if let Some(start) = args.next() {
+            let start = if let Expression::Atom(Atom::Int(i)) = eval(environment, start)? {
+                i as usize
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "vec-slice second arg must be an integer",
+                ));
+            };
+            if let Some(end) = args.next() {
+                let end = if let Expression::Atom(Atom::Int(i)) = eval(environment, end)? {
+                    i as usize
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "vec-slice third arg must be an integer",
+                    ));
+                };
+                (eval(environment, vec)?, start, end, true)
+            } else {
+                (eval(environment, vec)?, start, 0, false)
+            }
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "vec-slice takes two or three forms",
+            ));
+        }
+    } else {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "vec-slice takes two or three forms",
         ));
-    }
-    let start = if let Expression::Atom(Atom::Int(i)) = args[1] {
-        i as usize
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-slice second arg must be an integer",
-        ));
     };
-    let end = if args.len() == 3 {
-        if let Expression::Atom(Atom::Int(i)) = args[2] {
-            i as usize
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "vec-slice second arg must be an integer",
-            ));
-        }
-    } else {
-        0
-    };
-    match &args[0] {
+    match &vec {
         Expression::Vector(list) => {
             let list = list.borrow();
             if !list.is_empty() {
@@ -89,7 +107,7 @@ fn builtin_vec_slice(environment: &mut Environment, args: &[Expression]) -> io::
                     );
                     return Err(io::Error::new(io::ErrorKind::Other, msg));
                 }
-                let slice = if args.len() == 3 {
+                let slice = if has_end {
                     Vec::from_iter(list[start..end].iter().cloned())
                 } else {
                     Vec::from_iter(list[start..].iter().cloned())
@@ -356,39 +374,30 @@ fn builtin_vec_insert_nth(
 pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "vec".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec,
+            "Usage: (vec item1 item2 .. itemN)\n\nMake a new vector with items.",
+        )),
     );
     data.insert(
         "make-vec".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_make_vec),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_make_vec,
+            "Usage: (make-vec capacity default)\n\nMake a new vector with capacity and default item(s).",
+        )),
     );
     data.insert(
         "vec-slice".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_slice),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_slice,
+            "Usage: (vec-slice vector start end?)\n\nReturns a slice of a vector (0 based indexes).",
+        )),
     );
     data.insert(
         "vec-nth".to_string(),
         Rc::new(Expression::make_function(
             builtin_vec_nth,
-            "Get the nth element of a list.",
+            "Usage: (vec-nth index vector)\n\nGet the nth element (0 based) of a vector.",
         )),
     );
     data.insert(
