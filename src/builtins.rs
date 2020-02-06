@@ -819,22 +819,6 @@ fn builtin_dyn(
     }
 }
 
-fn builtin_is_global_scope(
-    environment: &mut Environment,
-    args: &[Expression],
-) -> io::Result<Expression> {
-    if !args.is_empty() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "global-scope? take no forms",
-        ))
-    } else if environment.current_scope.len() == 1 {
-        Ok(Expression::Atom(Atom::True))
-    } else {
-        Ok(Expression::nil())
-    }
-}
-
 fn builtin_to_symbol(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -889,22 +873,25 @@ fn builtin_symbol_name(
     ))
 }
 
-fn builtin_fn(environment: &mut Environment, parts: &[Expression]) -> io::Result<Expression> {
-    if parts.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fn can only have two forms",
-        ))
-    } else {
-        let mut parts = parts.iter();
-        let params = parts.next().unwrap();
-        let body = parts.next().unwrap();
-        Ok(Expression::Atom(Atom::Lambda(Lambda {
-            params: Box::new(params.clone()),
-            body: Box::new(body.clone()),
-            capture: environment.current_scope.last().unwrap().clone(),
-        })))
+fn builtin_fn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(params) = args.next() {
+        if let Some(body) = args.next() {
+            if args.next().is_none() {
+                return Ok(Expression::Atom(Atom::Lambda(Lambda {
+                    params: Box::new(params.clone()),
+                    body: Box::new(body.clone()),
+                    capture: environment.current_scope.last().unwrap().clone(),
+                })));
+            }
+        }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "fn can only have two forms",
+    ))
 }
 
 fn builtin_quote(
@@ -1086,38 +1073,48 @@ fn builtin_or(
     Ok(Expression::nil())
 }
 
-fn builtin_not(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "not takes one form"));
+fn builtin_not(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return if arg0.is_nil() {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::nil())
+            };
+        }
     }
-    if args[0].is_nil() {
-        Ok(Expression::Atom(Atom::True))
-    } else {
-        Ok(Expression::nil())
-    }
+    Err(io::Error::new(io::ErrorKind::Other, "not takes one form"))
 }
 
-fn builtin_is_def(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "def? takes one form (symbol)",
-        ));
-    }
-    if let Expression::Atom(Atom::Symbol(s)) = &args[0] {
-        if is_expression(environment, &s) {
-            Ok(Expression::Atom(Atom::True))
-        } else {
-            Ok(Expression::nil())
+fn builtin_is_def(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return if let Expression::Atom(Atom::Symbol(s)) = arg0 {
+                if is_expression(environment, &s) {
+                    Ok(Expression::Atom(Atom::True))
+                } else {
+                    Ok(Expression::nil())
+                }
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "def? takes a symbol to lookup",
+                ))
+            };
         }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "def? takes a symbol to lookup",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "def? takes one form (symbol)",
+    ))
 }
 
 fn builtin_macro(
@@ -1240,8 +1237,11 @@ fn builtin_recur(
     Ok(Expression::with_list(arg_list))
 }
 
-fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    if !args.is_empty() {
+fn builtin_gensym(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_some() {
         Err(io::Error::new(
             io::ErrorKind::Other,
             "gensym takes to arguments",
@@ -1256,24 +1256,33 @@ fn builtin_gensym(environment: &mut Environment, args: &[Expression]) -> io::Res
     }
 }
 
-fn builtin_jobs(environment: &mut Environment, _args: &[Expression]) -> io::Result<Expression> {
-    for (i, job) in environment.jobs.borrow().iter().enumerate() {
-        println!(
-            "[{}]\t{}\t{:?}\t{:?}",
-            i,
-            job.status.to_string(),
-            job.pids,
-            job.names
-        );
+fn builtin_jobs(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_some() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "jobs takes to arguments",
+        ))
+    } else {
+        for (i, job) in environment.jobs.borrow().iter().enumerate() {
+            println!(
+                "[{}]\t{}\t{:?}\t{:?}",
+                i,
+                job.status.to_string(),
+                job.pids,
+                job.names
+            );
+        }
+        Ok(Expression::nil())
     }
-    Ok(Expression::nil())
 }
 
-fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option<u32> {
-    if !args.is_empty() {
-        let arg = &args[0];
+fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Option<u32> {
+    if let Some(arg) = arg {
         if let Expression::Atom(Atom::Int(ji)) = arg {
-            let ji = *ji as usize;
+            let ji = ji as usize;
             let jobs = &*environment.jobs.borrow();
             if ji < jobs.len() {
                 let pid = jobs[ji].pids[0];
@@ -1301,52 +1310,64 @@ fn get_stopped_pid(environment: &mut Environment, args: &[Expression]) -> Option
     }
 }
 
-fn builtin_bg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() > 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "bg can only have one optional form (job id)",
-        ))
-    } else {
-        let opid = get_stopped_pid(environment, &args);
-        if let Some(pid) = opid {
-            let ppid = Pid::from_raw(pid as i32);
-            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
-                eprintln!("Error sending sigcont to wake up process: {}.", err);
-            } else {
-                mark_job_running(environment, pid);
-            }
+fn builtin_bg(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let arg = if let Some(arg) = args.next() {
+        if args.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "bg can only have one optional form (job id)",
+            ));
         }
-        Ok(Expression::nil())
+        Some(eval(environment, arg)?)
+    } else {
+        None
+    };
+    let opid = get_stopped_pid(environment, arg);
+    if let Some(pid) = opid {
+        let ppid = Pid::from_raw(pid as i32);
+        if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+            eprintln!("Error sending sigcont to wake up process: {}.", err);
+        } else {
+            mark_job_running(environment, pid);
+        }
     }
+    Ok(Expression::nil())
 }
 
-fn builtin_fg(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() > 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "fg can only have one optional form (job id)",
-        ))
-    } else {
-        let opid = get_stopped_pid(environment, &args);
-        if let Some(pid) = opid {
-            let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
-            let ppid = Pid::from_raw(pid as i32);
-            if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
-                eprintln!("Error sending sigcont to wake up process: {}.", err);
-            } else {
-                if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
-                    let msg = format!("Error making {} foreground in parent: {}", pid, err);
-                    eprintln!("{}", msg);
-                }
-                mark_job_running(environment, pid);
-                wait_pid(environment, pid, Some(&term_settings));
-            }
+fn builtin_fg(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let arg = if let Some(arg) = args.next() {
+        if args.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "fg can only have one optional form (job id)",
+            ));
         }
-        Ok(Expression::nil())
+        Some(eval(environment, arg)?)
+    } else {
+        None
+    };
+    let opid = get_stopped_pid(environment, arg);
+    if let Some(pid) = opid {
+        let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
+        let ppid = Pid::from_raw(pid as i32);
+        if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
+            eprintln!("Error sending sigcont to wake up process: {}.", err);
+        } else {
+            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
+                let msg = format!("Error making {} foreground in parent: {}", pid, err);
+                eprintln!("{}", msg);
+            }
+            mark_job_running(environment, pid);
+            wait_pid(environment, pid, Some(&term_settings));
+        }
     }
+    Ok(Expression::nil())
 }
 
 fn builtin_version(
@@ -1976,16 +1997,6 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         )),
     );
     data.insert(
-        "global-scope?".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_is_global_scope),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
-    );
-    data.insert(
         "to-symbol".to_string(),
         Rc::new(Expression::make_function(
             builtin_to_symbol,
@@ -2001,13 +2012,10 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
     );
     data.insert(
         "fn".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_fn),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_special(
+            builtin_fn,
+            "Create a function (lambda).",
+        )),
     );
     data.insert(
         "quote".to_string(),
@@ -2031,33 +2039,24 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
     );
     data.insert(
         "not".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_not),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_not,
+            "Return true if expression is nil.",
+        )),
     );
     data.insert(
         "null".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_not),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_not,
+            "Return true if expression is nil (null).",
+        )),
     );
     data.insert(
         "def?".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_is_def),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_is_def,
+            "Return true if symbol is defined.",
+        )),
     );
     data.insert(
         "macro".to_string(),
@@ -2073,43 +2072,31 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
     );
     data.insert(
         "gensym".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_gensym),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_gensym,
+            "Generate a unique symbol.",
+        )),
     );
     data.insert(
         "jobs".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_jobs),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_jobs,
+            "Print list of jobs.",
+        )),
     );
     data.insert(
         "bg".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_bg),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_bg,
+            "Put a job in the background.",
+        )),
     );
     data.insert(
         "fg".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_fg),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_fg,
+            "Put a job in the foreground.",
+        )),
     );
     data.insert(
         "version".to_string(),
