@@ -251,6 +251,7 @@ ns-exists? | name | builtin | True if name is a namespace, nil otherwise.
 ns-list | | builtin | Returns a vector of all the namespace names (strings).
 ns-import | namespace (string) | macro | Bring all the exported symbols from a namespace into the current namespace.
 ns-export | symbol or list of symbols| macro | Make the provided symbols importable.
+ns-pop | | builtin | If in a namespace return to the previous namespace.
 
 ### Type Forms
 These forms provide information/tests about an objects underlying type.

@@ -1630,6 +1630,13 @@ fn builtin_ns_pop(
             "ns-pop: takes no parameters",
         ));
     }
+
+    if environment.current_scope.len() < 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "ns-pop: no more namespaces",
+        ));
+    }
     if environment
         .current_scope
         .last()
@@ -1637,7 +1644,6 @@ fn builtin_ns_pop(
         .borrow()
         .name
         .is_none()
-        && environment.current_scope.len() > 1
     {
         return Err(io::Error::new(
             io::ErrorKind::Other,
