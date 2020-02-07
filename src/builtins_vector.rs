@@ -155,89 +155,101 @@ fn builtin_vec_nth(
 // Destructive
 fn builtin_vec_setnth(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 3 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-setnth! takes three forms (index, new element and list)",
-        ));
+    if let Some(idx) = args.next() {
+        if let Some(new_element) = args.next() {
+            if let Some(list) = args.next() {
+                if args.next().is_none() {
+                    let idx = if let Expression::Atom(Atom::Int(i)) = eval(environment, idx)? {
+                        i
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "vec-setnth! first form must be an int",
+                        ));
+                    };
+                    let new_element = eval(environment, new_element)?;
+                    return match eval(environment, list)? {
+                        Expression::Vector(list) => {
+                            if idx < 0 || idx >= list.borrow().len() as i64 {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "vec-setnth! index out of range",
+                                ));
+                            }
+                            list.borrow_mut()[idx as usize] = new_element;
+                            Ok(Expression::Vector(list))
+                        }
+                        _ => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "vec-setnth! third form must be a list",
+                        )),
+                    };
+                }
+            }
+        }
     }
-    let old_list = args.pop().unwrap();
-    let new_element = args.pop().unwrap();
-    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
-        i
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-setnth! first form must be an int",
-        ));
-    };
-    match old_list {
-        Expression::Vector(list) => {
-            if idx < 0 || idx >= list.borrow().len() as i64 {
-                return Err(io::Error::new(
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-setnth! takes three forms (index, new element and list)",
+    ))
+}
+
+// Destructive
+fn builtin_vec_push(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(list) = args.next() {
+        if let Some(new_item) = args.next() {
+            if args.next().is_none() {
+                let new_item = eval(environment, new_item)?;
+                return match eval(environment, list)? {
+                    Expression::Vector(list) => {
+                        list.borrow_mut().push(new_item);
+                        Ok(Expression::Vector(list))
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "vec-push!'s first form must be a list",
+                    )),
+                };
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-push! takes two forms (list and form)",
+    ))
+}
+
+// Destructive
+fn builtin_vec_pop(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(list) = args.next() {
+        if args.next().is_none() {
+            return match eval(environment, list)? {
+                Expression::Vector(list) => {
+                    if let Some(item) = list.borrow_mut().pop() {
+                        Ok(item)
+                    } else {
+                        Ok(Expression::nil())
+                    }
+                }
+                _ => Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "vec-setnth! index out of range",
-                ));
-            }
-            list.borrow_mut()[idx as usize] = new_element;
-            Ok(Expression::Vector(list))
+                    "vec-pop!'s first form must be a list",
+                )),
+            };
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-setnth! third form must be a list",
-        )),
     }
-}
-
-// Destructive
-fn builtin_vec_push(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-push! takes two forms (list and form)",
-        ));
-    }
-    let new_item = args.pop().unwrap();
-    let old_list = args.pop().unwrap();
-    match old_list {
-        Expression::Vector(list) => {
-            list.borrow_mut().push(new_item);
-            Ok(Expression::Vector(list))
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-push!'s first form must be a list",
-        )),
-    }
-}
-
-// Destructive
-fn builtin_vec_pop(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-pop! takes a list",
-        ));
-    }
-    let old_list = &args[0];
-    match old_list {
-        Expression::Vector(list) => {
-            if let Some(item) = list.borrow_mut().pop() {
-                Ok(item)
-            } else {
-                Ok(Expression::nil())
-            }
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-pop!'s first form must be a list",
-        )),
-    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-pop! takes a list",
+    ))
 }
 
 fn builtin_vec_is_empty(
@@ -376,59 +388,117 @@ pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>
         "vec".to_string(),
         Rc::new(Expression::make_function(
             builtin_vec,
-            "Usage: (vec item1 item2 .. itemN)\n\nMake a new vector with items.",
+            "Usage: (vec item1 item2 .. itemN)
+
+Make a new vector with items.
+
+Example:
+(test::assert-false (vec))
+(test::assert-equal '(1 2 3) (vec 1 2 3))
+",
         )),
     );
     data.insert(
         "make-vec".to_string(),
         Rc::new(Expression::make_function(
             builtin_make_vec,
-            "Usage: (make-vec capacity default)\n\nMake a new vector with capacity and default item(s).",
+            "Usage: (make-vec capacity default)
+
+Make a new vector with capacity and default item(s).
+
+Example:
+(test::assert-false (make-vec))
+(test::assert-equal '(x x x) (make-vec 3 'x))
+(test::assert-equal '(nil nil nil nil nil) (make-vec 5 nil))
+(test::assert-equal '() (make-vec 5))
+",
         )),
     );
     data.insert(
         "vec-slice".to_string(),
         Rc::new(Expression::make_function(
             builtin_vec_slice,
-            "Usage: (vec-slice vector start end?)\n\nReturns a slice of a vector (0 based indexes).",
+            "Usage: (vec-slice vector start end?)
+
+Returns a slice of a vector (0 based indexes, end is exclusive).
+
+Example:
+(test::assert-equal '(5 6) (vec-slice '#(1 2 3 4 5 6) 4 6))
+(test::assert-equal '(1 2 3) (vec-slice '#(1 2 3 4 5 6) 0 3))
+(test::assert-equal '(3 4 5) (vec-slice '#(1 2 3 4 5 6) 2 5))
+(test::assert-equal '(3 4 5 6) (vec-slice '#(1 2 3 4 5 6) 2))
+",
         )),
     );
     data.insert(
         "vec-nth".to_string(),
         Rc::new(Expression::make_function(
             builtin_vec_nth,
-            "Usage: (vec-nth index vector)\n\nGet the nth element (0 based) of a vector.",
+            "Usage: (vec-nth index vector)
+
+Get the nth element (0 based) of a vector.
+
+Example:
+(test::assert-equal 5 (vec-nth 4 '#(1 2 3 4 5 6)))
+(test::assert-equal 1 (vec-nth 0 '#(1 2 3 4 5 6)))
+(test::assert-equal 3 (vec-nth 2 '#(1 2 3 4 5 6)))
+(test::assert-equal 6 (vec-nth 5 '#(1 2 3 4 5 6)))
+",
         )),
     );
     data.insert(
         "vec-setnth!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_setnth),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_setnth,
+            "Usage: (vec-setnth! index value vector)
+
+Set the nth index (0 based) of a vector to value.  This is destructive!
+
+Example:
+(def 'test-setnth-vec (vec 1 2 3))
+(test::assert-equal '(1 5 3) (vec-setnth! 1 5 test-setnth-vec))
+(test::assert-equal '(7 5 3) (vec-setnth! 0 7 test-setnth-vec))
+(test::assert-equal '(7 5 9) (vec-setnth! 2 9 test-setnth-vec))
+",
+        )),
     );
     data.insert(
         "vec-push!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_push),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_push,
+            "Usage: (vec-push! vector object)
+
+Pushes the provided object onto the end of the vector.  This is destructive!
+
+Example:
+(def 'test-push-vec (vec))
+(test::assert-equal '(1) (vec-push! test-push-vec 1))
+(test::assert-equal '(1) test-push-vec)
+(test::assert-equal '(1 2) (vec-push! test-push-vec 2))
+(test::assert-equal '(1 2) test-push-vec)
+(test::assert-equal '(1 2 3) (vec-push! test-push-vec 3))
+(test::assert-equal '(1 2 3) test-push-vec)
+",
+        )),
     );
     data.insert(
         "vec-pop!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_pop),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_pop,
+            "Usage: (vec-pop! vector object)
+
+Pops the last object off of the end of the vector.  This is destructive!
+
+Example:
+(def 'test-pop-vec (vec 1 2 3))
+(test::assert-equal 3 (vec-pop! test-pop-vec))
+(test::assert-equal '(1 2) test-pop-vec)
+(test::assert-equal 2 (vec-pop! test-pop-vec))
+(test::assert-equal '(1) test-pop-vec)
+(test::assert-equal 1 (vec-pop! test-pop-vec))
+(test::assert-equal '() test-pop-vec)
+",
+        )),
     );
     data.insert(
         "vec-empty?".to_string(),

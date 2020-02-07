@@ -10,6 +10,8 @@ Some stuff
 |#
 
 (load "tests/test.lisp")
+(core::ns-import 'core)
+(ns-import 'test)
 
 (let ((non-empty-vec (vec 'a))
 	(empty-vec (make-vec))

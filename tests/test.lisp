@@ -1,4 +1,4 @@
-(ns-create 'test)
+(if (ns-exists? 'test) (ns-enter 'test) (ns-create 'test))
 (core::ns-import 'core)
 
 (defn lists= (list1 list2)
@@ -21,4 +21,10 @@
 (defn assert-false (value &rest args)
       (apply assert-equal nil value args))
 
-(ns-export '(assert-equal assert-true assert-false))
+(defn run-example (sym)
+	(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (progn "(vec-nth 1 (str-split "Example:" (doc sym))) "))")))
+
+(ns-export '(assert-equal assert-true assert-false run-example))
+
+(ns-pop)
+

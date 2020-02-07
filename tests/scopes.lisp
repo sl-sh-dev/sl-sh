@@ -1,4 +1,6 @@
 (load "tests/test.lisp")
+(core::ns-import 'core)
+(ns-import 'test)
 
 (defq inc_count nil)
 (defq dec_count nil)

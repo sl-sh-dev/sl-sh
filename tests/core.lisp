@@ -1,4 +1,6 @@
 (load "tests/test.lisp")
+(core::ns-import 'core)
+(ns-import 'test)
 
 ;; check list contains in? fcn
 (let ((vowels-list (list "a" "e" "i" "o" "u")))

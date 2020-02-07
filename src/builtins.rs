@@ -1620,6 +1620,51 @@ fn builtin_ns_list(
     ))
 }
 
+fn builtin_ns_pop(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "ns-pop: takes no parameters",
+        ));
+    }
+    if environment
+        .current_scope
+        .last()
+        .unwrap()
+        .borrow()
+        .name
+        .is_none()
+        && environment.current_scope.len() > 1
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "ns-pop: can only be used when not in a lexical scope (current scope must be a namespace)",
+        ));
+    }
+    if let Some(scope) = environment.current_scope.pop() {
+        if environment
+            .current_scope
+            .last()
+            .unwrap()
+            .borrow()
+            .name
+            .is_none()
+        {
+            environment.current_scope.push(scope);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "ns-pop: outer scope must be a namespace",
+            ));
+        }
+    } else {
+        return Err(io::Error::new(io::ErrorKind::Other, "ns-pop: NO SCOPES"));
+    }
+    Ok(Expression::nil())
+}
+
 fn builtin_error_stack_on(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -2166,6 +2211,13 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         Rc::new(Expression::make_function(
             builtin_ns_list,
             "Returns a vector of all namespaces.",
+        )),
+    );
+    data.insert(
+        "ns-pop".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_ns_pop,
+            "Returns to the previous namespace.",
         )),
     );
     data.insert(
