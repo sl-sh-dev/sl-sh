@@ -114,10 +114,6 @@ pub fn fn_call<'a>(
         Expression::Atom(Atom::Symbol(command)) => {
             if let Some(exp) = get_expression(environment, &command) {
                 match &exp.exp {
-                    Expression::Func(f) => {
-                        let parts: Vec<Expression> = args.cloned().collect();
-                        f(environment, &parts)
-                    }
                     Expression::Function(c) if !c.is_special_form => {
                         (c.func)(environment, &mut *args)
                     }
@@ -140,10 +136,6 @@ pub fn fn_call<'a>(
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args),
         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, args),
-        Expression::Func(f) => {
-            let parts: Vec<Expression> = args.cloned().collect();
-            f(environment, &parts)
-        }
         Expression::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
             let msg = format!(
@@ -175,10 +167,6 @@ fn fn_eval<'a>(
             };
             if let Some(exp) = form {
                 match &exp.exp {
-                    Expression::Func(f) => {
-                        let parts: Vec<Expression> = parts.cloned().collect();
-                        f(environment, &parts)
-                    }
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
                     Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, parts),
                     Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
@@ -210,10 +198,6 @@ fn fn_eval<'a>(
         Expression::Vector(list) => match eval(environment, &Expression::Vector(list.clone()))? {
             Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
             Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-            Expression::Func(f) => {
-                let parts: Vec<Expression> = parts.cloned().collect();
-                f(environment, &parts)
-            }
             Expression::Function(c) => (c.func)(environment, &mut *parts),
             _ => {
                 let msg = format!("Not a valid command {:?}", list);
@@ -225,10 +209,6 @@ fn fn_eval<'a>(
                 match eval(environment, &Expression::Pair(p.clone()))? {
                     Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
                     Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-                    Expression::Func(f) => {
-                        let parts: Vec<Expression> = parts.cloned().collect();
-                        f(environment, &parts)
-                    }
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
                     _ => {
                         let msg = format!("Not a valid command {:?}", command);
@@ -244,10 +224,6 @@ fn fn_eval<'a>(
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
         Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
-        Expression::Func(f) => {
-            let parts: Vec<Expression> = parts.cloned().collect();
-            f(environment, &parts)
-        }
         Expression::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
             let msg = format!(
@@ -371,7 +347,6 @@ fn internal_eval<'a>(
         Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
         Expression::Atom(Atom::String(string)) => str_process(environment, &string),
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
-        Expression::Func(_) => Ok(Expression::nil()),
         Expression::Function(_) => Ok(Expression::nil()),
         Expression::Process(state) => Ok(Expression::Process(*state)),
         Expression::File(_) => Ok(Expression::nil()),

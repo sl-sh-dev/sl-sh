@@ -411,12 +411,6 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (process is already done).",
             ))
         }
-        Some(Expression::Func(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (function).",
-            ))
-        }
         Some(Expression::Function(_)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -488,9 +482,6 @@ pub fn do_command<'a>(
             let new_a = match a {
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp {
-                        Expression::Func(_) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
-                        }
                         Expression::Function(_) => {
                             eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
                         }

@@ -393,7 +393,6 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str
         if key.starts_with(start) {
             let val = key.to_string();
             match data.get(key).unwrap().exp {
-                Expression::Func(_) => comps.push(val),
                 Expression::Function(_) => comps.push(val),
                 Expression::Atom(Atom::Lambda(_)) => comps.push(val),
                 Expression::Atom(Atom::Macro(_)) => comps.push(val),
@@ -420,7 +419,7 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
             match data.get(key).unwrap().exp {
                 Expression::Atom(Atom::Lambda(_)) => {}
                 Expression::Atom(Atom::Macro(_)) => {}
-                Expression::Func(_) => {}
+                Expression::Function(_) => {}
                 _ => {
                     comps.push(val);
                 }

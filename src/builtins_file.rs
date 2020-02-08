@@ -54,9 +54,6 @@ fn builtin_cd(
             let new_arg = match arg {
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp {
-                        Expression::Func(_) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
-                        }
                         Expression::Function(_) => {
                             eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
                         }

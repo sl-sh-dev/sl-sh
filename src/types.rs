@@ -190,8 +190,6 @@ pub enum Expression {
     // as a true empty list.
     Pair(Rc<RefCell<Option<(Expression, Expression)>>>),
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
-    // Func is depricated use Function for new code.
-    Func(fn(&mut Environment, &[Expression]) -> io::Result<Expression>),
     Function(Callable),
     Process(ProcessState),
     File(FileState),
@@ -227,7 +225,6 @@ impl fmt::Display for Expression {
                 "#<PID: {}, EXIT STATUS: {},  Complete>",
                 pid, exit_status
             ),
-            Expression::Func(_) => write!(f, "#<Function>"),
             Expression::Function(_) => write!(f, "#<Function>"),
             Expression::Vector(list) => {
                 let mut res = String::new();
@@ -313,7 +310,6 @@ impl fmt::Debug for Expression {
                 }
             }
             Expression::HashMap(map) => write!(f, "Expression::HashMap({:?})", map.borrow()),
-            Expression::Func(_) => write!(f, "Expression::Func(_)"),
             Expression::Function(_) => write!(f, "Expression::Function(_)"),
             Expression::Process(ProcessState::Running(pid)) => {
                 write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
@@ -403,7 +399,6 @@ impl Expression {
         match self {
             Expression::Atom(a) => a.display_type(),
             Expression::Process(_) => "Process".to_string(),
-            Expression::Func(_) => "Function".to_string(),
             Expression::Function(f) => {
                 if f.is_special_form {
                     "SpecialForm".to_string()
@@ -572,7 +567,6 @@ impl Expression {
             Expression::Process(ProcessState::Over(pid, _exit_status)) => {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
-            Expression::Func(_) => Ok(self.to_string()),
             Expression::Function(_) => Ok(self.to_string()),
             Expression::Vector(_list) => Ok(self.to_string()),
             Expression::Pair(_) => Ok(self.to_string()),
@@ -620,7 +614,6 @@ impl Expression {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
                 }
             }
-            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
@@ -645,7 +638,6 @@ impl Expression {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
                 }
             }
-            Expression::Func(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
@@ -693,7 +685,6 @@ impl Expression {
                 drop(procs);
                 wait_pid(environment, *pid, None);
             }
-            Expression::Func(_) => write!(writer, "{}", self.to_string())?,
             Expression::Function(_) => write!(writer, "{}", self.to_string())?,
             Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
             Expression::Pair(_) => write!(writer, "{}", self.to_string())?,

@@ -5,23 +5,17 @@ use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::rc::Rc;
 
-use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::reader::*;
 use crate::types::*;
 
-fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, false)?;
-    if args.is_empty() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "open takes at least one form (a file name)",
-        ))
-    } else {
-        let arg_len = args.len();
-        let mut args = args.iter();
-        let a = args.next().unwrap();
+fn builtin_open(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(a) = args.next() {
+        let a = eval(environment, a)?;
         if let Expression::Atom(Atom::Symbol(sym)) = &a {
             let ret = match &sym[..] {
                 ":stdin" => Some(Expression::File(FileState::Stdin)),
@@ -30,7 +24,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 _ => None,
             };
             if let Some(ret) = ret {
-                if arg_len > 1 {
+                if args.next().is_some() {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "open: if first form is a symbol then other forms not valid",
@@ -39,7 +33,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 return Ok(ret);
             }
         }
-        let file_name = match eval(environment, &a)? {
+        let file_name = match &a {
             Expression::Atom(Atom::String(name)) => name,
             _ => {
                 return Err(io::Error::new(
@@ -53,6 +47,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
         let mut is_write = false;
         let mut error_nil = false;
         for a in args {
+            let a = eval(environment, a)?;
             if let Expression::Atom(Atom::Symbol(sym)) = a {
                 match &sym[..] {
                     ":read" => {
@@ -90,6 +85,9 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
                         return Err(io::Error::new(io::ErrorKind::Other, msg));
                     }
                 };
+            } else {
+                let msg = format!("open: {} invalid", a);
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
         }
         if is_read && is_write {
@@ -111,7 +109,7 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
                 }
             }
         };
-        if !is_write {
+        return if !is_write {
             Ok(Expression::File(FileState::Read(Rc::new(RefCell::new(
                 BufReader::new(file),
             )))))
@@ -119,72 +117,86 @@ fn builtin_open(environment: &mut Environment, args: &[Expression]) -> io::Resul
             Ok(Expression::File(FileState::Write(Rc::new(RefCell::new(
                 BufWriter::new(file),
             )))))
-        }
+        };
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "open takes at least one form (a file name)",
+    ))
 }
 
-fn builtin_close(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "close takes one form (file to close)",
-        ))
-    } else {
-        let exp = &args[0];
-        if let Expression::File(FileState::Write(f)) = exp {
-            // Flush in case there are more then one references to this file, at least the data is flushed.
-            f.borrow_mut().get_ref().flush()?;
-        }
-        if let Expression::File(_) = exp {
-            let mut closed = Expression::File(FileState::Closed);
-            std::mem::swap(&mut args[0], &mut closed);
-            return Ok(Expression::Atom(Atom::True));
-        }
-        Ok(Expression::nil())
-    }
-}
-
-fn builtin_flush(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "flush takes one form (file to flush)",
-        ))
-    } else {
-        let exp = &args[0];
-        if let Expression::File(FileState::Write(f)) = exp {
-            f.borrow_mut().get_ref().flush()?;
-            return Ok(Expression::Atom(Atom::True));
-        }
-        Ok(Expression::nil())
-    }
-}
-
-fn builtin_read_line(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "read-line takes one form (file)",
-        ))
-    } else {
-        let exp = &args[0];
-        if let Expression::File(FileState::Read(file)) = &exp {
-            let mut line = String::new();
-            if 0 == file.borrow_mut().read_line(&mut line)? {
-                Ok(Expression::nil())
-            } else {
-                Ok(Expression::Atom(Atom::String(line)))
+fn builtin_close(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let mut exp = eval(environment, exp)?;
+            if let Expression::File(FileState::Write(f)) = &exp {
+                // Flush in case there are more then one references to this file, at least the data is flushed.
+                f.borrow_mut().get_ref().flush()?;
             }
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "read-line requires a file opened for reading",
-            ))
+            if let Expression::File(_) = exp {
+                let mut closed = Expression::File(FileState::Closed);
+                // XXX TODO- This is not working- do better.
+                std::mem::swap(&mut exp, &mut closed);
+                return Ok(Expression::Atom(Atom::True));
+            }
+            return Ok(Expression::nil());
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "close takes one form (file to close)",
+    ))
+}
+
+fn builtin_flush(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let exp = eval(environment, exp)?;
+            if let Expression::File(FileState::Write(f)) = exp {
+                f.borrow_mut().get_ref().flush()?;
+                return Ok(Expression::Atom(Atom::True));
+            }
+            return Ok(Expression::nil());
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "flush takes one form (file to flush)",
+    ))
+}
+
+fn builtin_read_line(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let exp = eval(environment, exp)?;
+            if let Expression::File(FileState::Read(file)) = &exp {
+                let mut line = String::new();
+                return if 0 == file.borrow_mut().read_line(&mut line)? {
+                    Ok(Expression::nil())
+                } else {
+                    Ok(Expression::Atom(Atom::String(line)))
+                };
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "read-line requires a file opened for reading",
+                ));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "read-line takes one form (file)",
+    ))
 }
 
 fn builtin_read(
@@ -249,100 +261,77 @@ fn builtin_read(
 
 fn builtin_write_line(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "write-line takes two forms (file and line)",
-        ))
-    } else {
-        let exp = &args[0];
-        if let Expression::File(FileState::Write(file)) = &exp {
-            writeln!(
-                &mut file.borrow_mut(),
-                "{}",
-                &args[1].as_string(environment)?
-            )?;
-            Ok(Expression::nil())
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "write-line requires a file opened for writing",
-            ))
+    if let Some(file) = args.next() {
+        if let Some(line) = args.next() {
+            if args.next().is_none() {
+                let file = eval(environment, file)?;
+                let line = eval(environment, line)?;
+                return if let Expression::File(FileState::Write(file)) = &file {
+                    writeln!(&mut file.borrow_mut(), "{}", line.as_string(environment)?)?;
+                    Ok(Expression::nil())
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "write-line requires a file opened for writing",
+                    ))
+                };
+            }
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "write-line takes two forms (file and line)",
+    ))
 }
 
 fn builtin_write_string(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "write-string takes two forms (file and string)",
-        ))
-    } else {
-        let exp = &args[0];
-        if let Expression::File(FileState::Write(file)) = &exp {
-            write!(
-                &mut file.borrow_mut(),
-                "{}",
-                &args[1].as_string(environment)?
-            )?;
-            Ok(Expression::nil())
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "write-string requires a file opened for writing",
-            ))
+    if let Some(file) = args.next() {
+        if let Some(string) = args.next() {
+            if args.next().is_none() {
+                let file = eval(environment, file)?;
+                let string = eval(environment, string)?;
+                return if let Expression::File(FileState::Write(file)) = &file {
+                    write!(&mut file.borrow_mut(), "{}", string.as_string(environment)?)?;
+                    Ok(Expression::nil())
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "write-string requires a file opened for writing",
+                    ))
+                };
+            }
         }
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "write-string takes two forms (file and string)",
+    ))
 }
 
 pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "open".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_open),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(builtin_open, "Open a file.")),
     );
     data.insert(
         "close".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_close),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(builtin_close, "Close a file.")),
     );
     data.insert(
         "flush".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_flush),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(builtin_flush, "Flush a file.")),
     );
     data.insert(
         "read-line".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_read_line),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_read_line,
+            "Read a line from a file.",
+        )),
     );
     data.insert(
         "read".to_string(),
@@ -353,22 +342,16 @@ pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>,
     );
     data.insert(
         "write-line".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_write_line),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_write_line,
+            "Write a line to a file.",
+        )),
     );
     data.insert(
         "write-string".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_write_string),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_write_string,
+            "Write a string to a file.",
+        )),
     );
 }

@@ -234,7 +234,6 @@ fn builtin_is_builtin(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             return match eval(environment, arg)? {
-                Expression::Func(_) => Ok(Expression::Atom(Atom::True)),
                 Expression::Function(_) => Ok(Expression::Atom(Atom::True)),
                 _ => Ok(Expression::nil()),
             };
