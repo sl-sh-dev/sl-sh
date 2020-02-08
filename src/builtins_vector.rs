@@ -5,7 +5,6 @@ use std::io;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
-use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
@@ -148,7 +147,7 @@ fn builtin_vec_nth(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "vec-nth takes two forms (int and list)",
+        "vec-nth takes two forms (int and vector)",
     ))
 }
 
@@ -183,7 +182,7 @@ fn builtin_vec_setnth(
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,
-                            "vec-setnth! third form must be a list",
+                            "vec-setnth! third form must be a vector",
                         )),
                     };
                 }
@@ -192,7 +191,7 @@ fn builtin_vec_setnth(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "vec-setnth! takes three forms (index, new element and list)",
+        "vec-setnth! takes three forms (index, new element and vector)",
     ))
 }
 
@@ -212,7 +211,7 @@ fn builtin_vec_push(
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "vec-push!'s first form must be a list",
+                        "vec-push!'s first form must be a vector",
                     )),
                 };
             }
@@ -220,7 +219,7 @@ fn builtin_vec_push(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "vec-push! takes two forms (list and form)",
+        "vec-push! takes two forms (vector and form)",
     ))
 }
 
@@ -241,146 +240,158 @@ fn builtin_vec_pop(
                 }
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "vec-pop!'s first form must be a list",
+                    "vec-pop!'s first form must be a vector",
                 )),
             };
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "vec-pop! takes a list",
+        "vec-pop! takes a vector",
     ))
 }
 
 fn builtin_vec_is_empty(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-empty? takes a list",
-        ));
-    }
-    let list = &args[0];
-    match list {
-        Expression::Vector(list) => {
-            if list.borrow().is_empty() {
-                Ok(Expression::Atom(Atom::True))
-            } else {
-                Ok(Expression::nil())
-            }
+    if let Some(list) = args.next() {
+        if args.next().is_none() {
+            let list = eval(environment, list)?;
+            return match list {
+                Expression::Vector(list) => {
+                    if list.borrow().is_empty() {
+                        Ok(Expression::Atom(Atom::True))
+                    } else {
+                        Ok(Expression::nil())
+                    }
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "vec-empty?'s first form must be a vector",
+                )),
+            };
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-empty?'s first form must be a list",
-        )),
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-empty? takes a vector",
+    ))
 }
 
 // Destructive
 fn builtin_vec_vclear(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let args = list_to_args(environment, args, true)?;
-    if args.len() != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-clear! takes a vector",
-        ));
-    }
-    let list = &args[0];
-    match list {
-        Expression::Vector(list) => {
-            list.borrow_mut().clear();
-            Ok(Expression::nil())
+    if let Some(list) = args.next() {
+        if args.next().is_none() {
+            let list = eval(environment, list)?;
+            return match list {
+                Expression::Vector(list) => {
+                    list.borrow_mut().clear();
+                    Ok(Expression::nil())
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "vec-clear!'s first form must be a vector",
+                )),
+            };
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-clear!'s first form must be a list",
-        )),
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-clear! takes a vector",
+    ))
 }
 
 // Destructive
 fn builtin_vec_remove_nth(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-remove-nth! takes two forms (index and list)",
-        ));
-    }
-    let list = args.pop().unwrap();
-    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
-        i
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-remove-nth! first form must be an int",
-        ));
-    };
-    match list {
-        Expression::Vector(list) => {
-            if idx < 0 || idx >= list.borrow().len() as i64 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "vec-remove-nth! index out of range",
-                ));
+    if let Some(idx) = args.next() {
+        if let Some(list) = args.next() {
+            if args.next().is_none() {
+                let idx = eval(environment, idx)?;
+                let list = eval(environment, list)?;
+                let idx = if let Expression::Atom(Atom::Int(i)) = idx {
+                    i
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "vec-remove-nth! first form must be an int",
+                    ));
+                };
+                return match list {
+                    Expression::Vector(list) => {
+                        if idx < 0 || idx >= list.borrow().len() as i64 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "vec-remove-nth! index out of range",
+                            ));
+                        }
+                        list.borrow_mut().remove(idx as usize);
+                        Ok(Expression::Vector(list))
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "vec-remove-nth! second form must be a vector",
+                    )),
+                };
             }
-            list.borrow_mut().remove(idx as usize);
-            Ok(Expression::Vector(list))
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-remove-nth! second form must be a list",
-        )),
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-remove-nth! takes two forms (index and vector)",
+    ))
 }
 
 // Destructive
 fn builtin_vec_insert_nth(
     environment: &mut Environment,
-    args: &[Expression],
+    args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut args = list_to_args(environment, args, true)?;
-    if args.len() != 3 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-insert-nth! takes three forms (index, new element and list)",
-        ));
-    }
-    let old_list = args.pop().unwrap();
-    let new_element = args.pop().unwrap();
-    let idx = if let Expression::Atom(Atom::Int(i)) = args.pop().unwrap() {
-        i
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-insert-nth! first form must be an int",
-        ));
-    };
-    match old_list {
-        Expression::Vector(list) => {
-            if idx < 0 || idx > list.borrow().len() as i64 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "vec-insert-nth! index out of range",
-                ));
+    if let Some(idx) = args.next() {
+        if let Some(new_element) = args.next() {
+            if let Some(list) = args.next() {
+                if args.next().is_none() {
+                    let idx = eval(environment, idx)?;
+                    let new_element = eval(environment, new_element)?;
+                    let list = eval(environment, list)?;
+                    let idx = if let Expression::Atom(Atom::Int(i)) = idx {
+                        i
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "vec-insert-nth! first form must be an int",
+                        ));
+                    };
+                    return match list {
+                        Expression::Vector(list) => {
+                            if idx < 0 || idx > list.borrow().len() as i64 {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "vec-insert-nth! index out of range",
+                                ));
+                            }
+                            list.borrow_mut().insert(idx as usize, new_element);
+                            Ok(Expression::Vector(list))
+                        }
+                        _ => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "vec-insert-nth! third form must be a vector",
+                        )),
+                    };
+                }
             }
-            list.borrow_mut().insert(idx as usize, new_element);
-            Ok(Expression::Vector(list))
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-insert-nth! third form must be a list",
-        )),
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "vec-insert-nth! takes three forms (index, new element and vector)",
+    ))
 }
 
 pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
@@ -502,42 +513,72 @@ Example:
     );
     data.insert(
         "vec-empty?".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_is_empty),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_is_empty,
+            "Usage: (vec-empty? vector)
+
+True if the vector is empty.
+
+Example:
+(test::assert-true (vec-empty? '#()))
+(test::assert-false (vec-empty? '#(1 2 3)))
+",
+        )),
     );
     data.insert(
         "vec-clear!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_vclear),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_vclear,
+            "Usage: (vec-clear! vector)
+
+Clears a vector.  This is destructive!
+
+Example:
+(def 'test-clear-vec (vec 1 2 3))
+(test::assert-false (vec-empty? test-clear-vec))
+(vec-clear! test-clear-vec)
+(test::assert-true (vec-empty? test-clear-vec))
+",
+        )),
     );
     data.insert(
         "vec-remove-nth!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_remove_nth),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_remove_nth,
+            "Usage: (vec-remove-nth! index vector)
+
+Remove the element at index from vector.  This is destructive!
+
+Example:
+(def 'test-remove-nth-vec (vec 1 2 3))
+(test::assert-equal '(1 2 3) test-remove-nth-vec)
+(vec-remove-nth! 1 test-remove-nth-vec)
+(test::assert-equal '(1 3) test-remove-nth-vec)
+(vec-remove-nth! 1 test-remove-nth-vec)
+(test::assert-equal '(1) test-remove-nth-vec)
+(vec-remove-nth! 0 test-remove-nth-vec)
+(test::assert-equal '() test-remove-nth-vec)
+",
+        )),
     );
     data.insert(
         "vec-insert-nth!".to_string(),
-        Rc::new(Reference {
-            exp: Expression::Func(builtin_vec_insert_nth),
-            meta: RefMetaData {
-                namespace: Some("root".to_string()),
-                doc_string: None,
-            },
-        }),
+        Rc::new(Expression::make_function(
+            builtin_vec_insert_nth,
+            "Usage: (vec-insert-nth! index new-element vector)
+
+Inserts new-element at index and moves following elements right in vector.  This is destructive!
+
+Example:
+(def 'test-insert-nth-vec (vec 1 2 3))
+(test::assert-equal '(1 2 3) test-insert-nth-vec)
+(vec-insert-nth! 1 5 test-insert-nth-vec)
+(test::assert-equal '(1 5 2 3) test-insert-nth-vec)
+(vec-insert-nth! 2 6 test-insert-nth-vec)
+(test::assert-equal '(1 5 6 2 3) test-insert-nth-vec)
+(vec-insert-nth! 0 4 test-insert-nth-vec)
+(test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
+",
+        )),
     );
 }

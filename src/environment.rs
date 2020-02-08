@@ -13,6 +13,7 @@ use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
+use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_types::add_type_builtins;
@@ -91,6 +92,7 @@ impl Default for Scope {
         add_pair_builtins(&mut data);
         add_hash_builtins(&mut data);
         add_type_builtins(&mut data);
+        add_namespace_builtins(&mut data);
         data.insert(
             "*stdin*".to_string(),
             Rc::new(Reference {
