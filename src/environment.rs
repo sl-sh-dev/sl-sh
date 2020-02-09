@@ -96,7 +96,7 @@ impl Default for Scope {
         data.insert(
             "*stdin*".to_string(),
             Rc::new(Reference {
-                exp: Expression::File(FileState::Stdin),
+                exp: Expression::File(Rc::new(RefCell::new(FileState::Stdin))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
                     doc_string: None,
@@ -106,7 +106,7 @@ impl Default for Scope {
         data.insert(
             "*stdout*".to_string(),
             Rc::new(Reference {
-                exp: Expression::File(FileState::Stdout),
+                exp: Expression::File(Rc::new(RefCell::new(FileState::Stdout))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
                     doc_string: None,
@@ -116,7 +116,7 @@ impl Default for Scope {
         data.insert(
             "*stderr*".to_string(),
             Rc::new(Reference {
-                exp: Expression::File(FileState::Stderr),
+                exp: Expression::File(Rc::new(RefCell::new(FileState::Stderr))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
                     doc_string: None,

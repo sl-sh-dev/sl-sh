@@ -316,7 +316,6 @@ fn internal_eval<'a>(
             if let Some((command, rest)) = &*p.borrow() {
                 fn_eval(environment, &command, rest.iter())
             } else {
-                // Nil
                 Ok(Expression::nil())
             }
         }
@@ -330,13 +329,8 @@ fn internal_eval<'a>(
                 // Got a keyword, so just be you...
                 Ok(Expression::Atom(Atom::Symbol(s.clone())))
             } else if let Some(exp) = get_expression(environment, &s[..]) {
-                match &exp.exp {
-                    Expression::Vector(l) => Ok(Expression::Vector(l.clone())),
-                    _ => {
-                        let exp = &exp.exp;
-                        Ok(exp.clone())
-                    }
-                }
+                let exp = &exp.exp;
+                Ok(exp.clone())
             } else if environment.loose_symbols {
                 str_process(environment, s)
             } else {

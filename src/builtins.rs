@@ -384,7 +384,7 @@ fn print_to_oe(
     match out {
         Some(out) => {
             if let Expression::File(f) = &out.exp {
-                match f {
+                match &*f.borrow_mut() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
                         let mut out = stdout.lock();
@@ -615,9 +615,13 @@ fn builtin_export(
                         ));
                     }
                 };
-                let val = match val {
-                    Expression::Atom(Atom::Symbol(s)) => Expression::Atom(Atom::String(s)),
-                    Expression::Atom(Atom::String(s)) => Expression::Atom(Atom::String(s)),
+                let val = match &val {
+                    Expression::Atom(Atom::Symbol(s)) => {
+                        Expression::Atom(Atom::String(s.to_string()))
+                    }
+                    Expression::Atom(Atom::String(s)) => {
+                        Expression::Atom(Atom::String(s.to_string()))
+                    }
                     Expression::Atom(Atom::StringBuf(s)) => {
                         Expression::Atom(Atom::String(s.borrow().clone()))
                     }
@@ -639,14 +643,22 @@ fn builtin_export(
                                 .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
                         ))
                     }
-                    Expression::File(FileState::Stdin) => Expression::Atom(Atom::String(
-                        val.as_string(environment)
-                            .unwrap_or_else(|_| "STDIN FAILED".to_string()),
-                    )),
-                    Expression::File(FileState::Read(_)) => Expression::Atom(Atom::String(
-                        val.as_string(environment)
-                            .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
-                    )),
+                    Expression::File(file) => match &*file.borrow() {
+                        FileState::Stdin => Expression::Atom(Atom::String(
+                            val.as_string(environment)
+                                .unwrap_or_else(|_| "STDIN FAILED".to_string()),
+                        )),
+                        FileState::Read(_) => Expression::Atom(Atom::String(
+                            val.as_string(environment)
+                                .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
+                        )),
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "export: value not valid",
+                            ))
+                        }
+                    },
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,

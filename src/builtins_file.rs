@@ -166,12 +166,15 @@ fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Res
         Some(Expression::Process(ProcessState::Running(_pid))) => {
             do_write = true;
         }
-        Some(Expression::File(FileState::Stdin)) => {
-            do_write = true;
-        }
-        Some(Expression::File(FileState::Read(_file))) => {
-            do_write = true;
-        }
+        Some(Expression::File(file)) => match &*file.borrow() {
+            FileState::Stdin => {
+                do_write = true;
+            }
+            FileState::Read(_file) => {
+                do_write = true;
+            }
+            _ => {}
+        },
         Some(val) => {
             if !val.is_nil() {
                 return Err(io::Error::new(
@@ -231,35 +234,55 @@ fn builtin_pipe(
                 environment.state.pipe_pgid = Some(pid);
             }
         }
-        if let Ok(Expression::File(FileState::Stdout)) = &res {
-            let stdout = io::stdout();
-            let mut handle = stdout.lock();
-            if let Err(err) = pipe_write_file(environment, &mut handle) {
-                error = Some(Err(err));
-                break;
-            }
-        }
-        if let Ok(Expression::File(FileState::Stderr)) = &res {
-            let stderr = io::stderr();
-            let mut handle = stderr.lock();
-            if let Err(err) = pipe_write_file(environment, &mut handle) {
-                error = Some(Err(err));
-                break;
-            }
-        }
-        if let Ok(Expression::File(FileState::Write(f))) = &res {
-            if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
-                error = Some(Err(err));
-                break;
-            }
-        }
-        if let Ok(Expression::File(FileState::Read(_))) = &res {
-            if i > 1 {
-                error = Some(Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Not a valid place for a read file (must be at start of pipe).",
-                )));
-                break;
+        if let Ok(Expression::File(file)) = &res {
+            match &*file.borrow() {
+                FileState::Stdout => {
+                    let stdout = io::stdout();
+                    let mut handle = stdout.lock();
+                    if let Err(err) = pipe_write_file(environment, &mut handle) {
+                        error = Some(Err(err));
+                        break;
+                    }
+                }
+                FileState::Stderr => {
+                    let stderr = io::stderr();
+                    let mut handle = stderr.lock();
+                    if let Err(err) = pipe_write_file(environment, &mut handle) {
+                        error = Some(Err(err));
+                        break;
+                    }
+                }
+                FileState::Write(f) => {
+                    if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
+                        error = Some(Err(err));
+                        break;
+                    }
+                }
+                FileState::Read(_) => {
+                    if i > 1 {
+                        error = Some(Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "Not a valid place for a read file (must be at start of pipe).",
+                        )));
+                        break;
+                    }
+                }
+                FileState::Stdin => {
+                    if i > 1 {
+                        error = Some(Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "Not a valid place for stdin.",
+                        )));
+                        break;
+                    }
+                }
+                FileState::Closed => {
+                    error = Some(Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Closed file not valid in pipe.",
+                    )));
+                    break;
+                }
             }
         }
         out = if let Ok(out) = res { out } else { out };

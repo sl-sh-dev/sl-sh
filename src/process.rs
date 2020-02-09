@@ -279,7 +279,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
     match out {
         Some(out) => {
             if let Expression::File(f) = &out.exp {
-                match f {
+                match &*f.borrow() {
                     FileState::Stdout => {
                         if is_out {
                             Ok(Stdio::inherit())
@@ -296,10 +296,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
                             unsafe { Ok(Stdio::from_raw_fd(io::stderr().as_raw_fd())) }
                         }
                     }
-                    FileState::Write(f) => {
-                        let f = f.borrow();
-                        Ok(Stdio::from(f.get_ref().try_clone()?))
-                    }
+                    FileState::Write(f) => Ok(Stdio::from(f.borrow().get_ref().try_clone()?)),
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Can not write to a non-writable file.",
@@ -440,17 +437,19 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (hashmap).",
             ))
         }
-        Some(Expression::File(FileState::Stdin)) => Stdio::inherit(),
-        Some(Expression::File(FileState::Read(file))) => {
-            // If there is ever a Windows version then use raw_handle instead of raw_fd.
-            unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
-        }
-        Some(Expression::File(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (not a readable file).",
-            ))
-        }
+        Some(Expression::File(file)) => match &*file.borrow() {
+            FileState::Stdin => Stdio::inherit(),
+            FileState::Read(file) => {
+                // If there is ever a Windows version then use raw_handle instead of raw_fd.
+                unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
+            }
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (not a readable file).",
+                ))
+            }
+        },
         None => {
             if foreground {
                 Stdio::inherit()

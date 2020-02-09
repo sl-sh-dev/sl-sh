@@ -95,13 +95,12 @@ pub enum ProcessState {
     Over(u32, i32), // pid and exit status
 }
 
-#[derive(Clone)]
 pub enum FileState {
     Stdin,
     Stdout,
     Stderr,
-    Read(Rc<RefCell<BufReader<File>>>),
-    Write(Rc<RefCell<BufWriter<File>>>),
+    Read(RefCell<BufReader<File>>),
+    Write(RefCell<BufWriter<File>>),
     Closed,
 }
 
@@ -192,7 +191,7 @@ pub enum Expression {
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
     Function(Callable),
     Process(ProcessState),
-    File(FileState),
+    File(Rc<RefCell<FileState>>),
 }
 
 impl fmt::Display for Expression {
@@ -287,12 +286,14 @@ impl fmt::Display for Expression {
                 res.push_str("))");
                 write!(f, "{}", res)
             }
-            Expression::File(FileState::Stdout) => write!(f, "#<STDOUT>"),
-            Expression::File(FileState::Stderr) => write!(f, "#<STDERR>"),
-            Expression::File(FileState::Stdin) => write!(f, "#<STDIN>"),
-            Expression::File(FileState::Closed) => write!(f, "#<CLOSED FILE>"),
-            Expression::File(FileState::Read(_file)) => write!(f, "#<READ FILE>"),
-            Expression::File(FileState::Write(_file)) => write!(f, "#<WRITE FILE>"),
+            Expression::File(file) => match &*file.borrow() {
+                FileState::Stdout => write!(f, "#<STDOUT>"),
+                FileState::Stderr => write!(f, "#<STDERR>"),
+                FileState::Stdin => write!(f, "#<STDIN>"),
+                FileState::Closed => write!(f, "#<CLOSED FILE>"),
+                FileState::Read(_file) => write!(f, "#<READ FILE>"),
+                FileState::Write(_file) => write!(f, "#<WRITE FILE>"),
+            },
         }
     }
 }
@@ -571,20 +572,21 @@ impl Expression {
             Expression::Vector(_list) => Ok(self.to_string()),
             Expression::Pair(_) => Ok(self.to_string()),
             Expression::HashMap(_map) => Ok(self.to_string()),
-            Expression::File(FileState::Stdin) => {
-                let f = io::stdin();
-                let mut f = f.lock();
-                let mut out_str = String::new();
-                f.read_to_string(&mut out_str)?;
-                Ok(out_str)
-            }
-            Expression::File(FileState::Read(file)) => {
-                let mut f = file.borrow_mut();
-                let mut out_str = String::new();
-                f.read_to_string(&mut out_str)?;
-                Ok(out_str)
-            }
-            Expression::File(_) => Ok(self.to_string()),
+            Expression::File(file) => match &*file.borrow_mut() {
+                FileState::Stdin => {
+                    let f = io::stdin();
+                    let mut f = f.lock();
+                    let mut out_str = String::new();
+                    f.read_to_string(&mut out_str)?;
+                    Ok(out_str)
+                }
+                FileState::Read(f) => {
+                    let mut out_str = String::new();
+                    f.borrow_mut().read_to_string(&mut out_str)?;
+                    Ok(out_str)
+                }
+                _ => Ok(self.to_string()),
+            },
         }
     }
 
@@ -689,30 +691,31 @@ impl Expression {
             Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
             Expression::Pair(_) => write!(writer, "{}", self.to_string())?,
             Expression::HashMap(_map) => write!(writer, "{}", self.to_string())?,
-            Expression::File(FileState::Stdin) => {
-                let f = io::stdin();
-                let mut f = f.lock();
-                let mut buf = [0; 1024];
-                loop {
-                    match f.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => writer.write_all(&buf[..n])?,
-                        Err(err) => return Err(err),
+            Expression::File(file) => match &*file.borrow_mut() {
+                FileState::Stdin => {
+                    let f = io::stdin();
+                    let mut f = f.lock();
+                    let mut buf = [0; 1024];
+                    loop {
+                        match f.read(&mut buf) {
+                            Ok(0) => break,
+                            Ok(n) => writer.write_all(&buf[..n])?,
+                            Err(err) => return Err(err),
+                        }
                     }
                 }
-            }
-            Expression::File(FileState::Read(file)) => {
-                let mut f = file.borrow_mut();
-                let mut buf = [0; 1024];
-                loop {
-                    match f.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => writer.write_all(&buf[..n])?,
-                        Err(err) => return Err(err),
+                FileState::Read(f) => {
+                    let mut buf = [0; 1024];
+                    loop {
+                        match f.borrow_mut().read(&mut buf) {
+                            Ok(0) => break,
+                            Ok(n) => writer.write_all(&buf[..n])?,
+                            Err(err) => return Err(err),
+                        }
                     }
                 }
-            }
-            Expression::File(_) => write!(writer, "{}", self.to_string())?,
+                _ => write!(writer, "{}", self.to_string())?,
+            },
         }
         writer.flush()?;
         Ok(())

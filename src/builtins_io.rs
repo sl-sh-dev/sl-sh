@@ -18,9 +18,9 @@ fn builtin_open(
         let a = eval(environment, a)?;
         if let Expression::Atom(Atom::Symbol(sym)) = &a {
             let ret = match &sym[..] {
-                ":stdin" => Some(Expression::File(FileState::Stdin)),
-                ":stdout" => Some(Expression::File(FileState::Stdout)),
-                ":stderr" => Some(Expression::File(FileState::Stderr)),
+                ":stdin" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stdin)))),
+                ":stdout" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stdout)))),
+                ":stderr" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stderr)))),
                 _ => None,
             };
             if let Some(ret) = ret {
@@ -110,12 +110,12 @@ fn builtin_open(
             }
         };
         return if !is_write {
-            Ok(Expression::File(FileState::Read(Rc::new(RefCell::new(
-                BufReader::new(file),
+            Ok(Expression::File(Rc::new(RefCell::new(FileState::Read(
+                RefCell::new(BufReader::new(file)),
             )))))
         } else {
-            Ok(Expression::File(FileState::Write(Rc::new(RefCell::new(
-                BufWriter::new(file),
+            Ok(Expression::File(Rc::new(RefCell::new(FileState::Write(
+                RefCell::new(BufWriter::new(file)),
             )))))
         };
     }
@@ -131,18 +131,17 @@ fn builtin_close(
 ) -> io::Result<Expression> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
-            let mut exp = eval(environment, exp)?;
-            if let Expression::File(FileState::Write(f)) = &exp {
-                // Flush in case there are more then one references to this file, at least the data is flushed.
-                f.borrow_mut().get_ref().flush()?;
-            }
-            if let Expression::File(_) = exp {
-                let mut closed = Expression::File(FileState::Closed);
-                // XXX TODO- This is not working- do better.
-                std::mem::swap(&mut exp, &mut closed);
-                return Ok(Expression::Atom(Atom::True));
-            }
-            return Ok(Expression::nil());
+            let exp = eval(environment, exp)?;
+            return if let Expression::File(file) = exp {
+                let closed = FileState::Closed;
+                file.replace(closed);
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "close requires a file",
+                ))
+            };
         }
     }
     Err(io::Error::new(
@@ -158,11 +157,27 @@ fn builtin_flush(
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            if let Expression::File(FileState::Write(f)) = exp {
-                f.borrow_mut().get_ref().flush()?;
-                return Ok(Expression::Atom(Atom::True));
-            }
-            return Ok(Expression::nil());
+            return if let Expression::File(file) = &exp {
+                match &mut *file.borrow_mut() {
+                    FileState::Write(f) => {
+                        f.borrow_mut().flush()?;
+                        Ok(Expression::Atom(Atom::True))
+                    }
+                    FileState::Stdout => {
+                        io::stdout().flush()?;
+                        Ok(Expression::Atom(Atom::True))
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "flush requires a writeable file",
+                    )),
+                }
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "flush requires a file",
+                ))
+            };
         }
     }
     Err(io::Error::new(
@@ -178,19 +193,35 @@ fn builtin_read_line(
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            if let Expression::File(FileState::Read(file)) = &exp {
-                let mut line = String::new();
-                return if 0 == file.borrow_mut().read_line(&mut line)? {
-                    Ok(Expression::nil())
-                } else {
-                    Ok(Expression::Atom(Atom::String(line)))
-                };
+            return if let Expression::File(file) = &exp {
+                match &*file.borrow() {
+                    FileState::Read(f) => {
+                        let mut line = String::new();
+                        if 0 == f.borrow_mut().read_line(&mut line)? {
+                            Ok(Expression::nil())
+                        } else {
+                            Ok(Expression::Atom(Atom::String(line)))
+                        }
+                    }
+                    FileState::Stdin => {
+                        let mut line = String::new();
+                        if 0 == io::stdin().read_line(&mut line)? {
+                            Ok(Expression::nil())
+                        } else {
+                            Ok(Expression::Atom(Atom::String(line)))
+                        }
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "read-line requires a file opened for reading",
+                    )),
+                }
             } else {
-                return Err(io::Error::new(
+                Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "read-line requires a file opened for reading",
-                ));
-            }
+                    "read-line takes a file",
+                ))
+            };
         }
     }
     Err(io::Error::new(
@@ -239,17 +270,28 @@ fn builtin_read(
     }
     if let Some(exp) = exp {
         let exp = eval(environment, exp)?;
-        if let Expression::File(FileState::Read(file)) = &exp {
-            let mut input = String::new();
-            file.borrow_mut().read_to_string(&mut input)?;
-            do_read(&input, add_parens)
-        } else if let Expression::Atom(Atom::String(input)) = &exp {
-            do_read(input, add_parens)
-        } else {
-            Err(io::Error::new(
+        match &exp {
+            Expression::File(file) => match &*file.borrow() {
+                FileState::Read(file) => {
+                    let mut input = String::new();
+                    file.borrow_mut().read_to_string(&mut input)?;
+                    do_read(&input, add_parens)
+                }
+                FileState::Stdin => {
+                    let mut input = String::new();
+                    io::stdin().read_to_string(&mut input)?;
+                    do_read(&input, add_parens)
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "read: requires a file opened for reading or string",
+                )),
+            },
+            Expression::Atom(Atom::String(input)) => do_read(input, add_parens),
+            _ => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "read: requires a file opened for reading or string",
-            ))
+            )),
         }
     } else {
         Err(io::Error::new(
@@ -268,9 +310,21 @@ fn builtin_write_line(
             if args.next().is_none() {
                 let file = eval(environment, file)?;
                 let line = eval(environment, line)?;
-                return if let Expression::File(FileState::Write(file)) = &file {
-                    writeln!(&mut file.borrow_mut(), "{}", line.as_string(environment)?)?;
-                    Ok(Expression::nil())
+                return if let Expression::File(file) = &file {
+                    match &*file.borrow() {
+                        FileState::Write(file) => {
+                            writeln!(file.borrow_mut(), "{}", line.as_string(environment)?)?;
+                            Ok(Expression::nil())
+                        }
+                        FileState::Stdout => {
+                            println!("{}", line.as_string(environment)?);
+                            Ok(Expression::nil())
+                        }
+                        _ => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "write-line requires a file opened for writing",
+                        )),
+                    }
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -295,9 +349,21 @@ fn builtin_write_string(
             if args.next().is_none() {
                 let file = eval(environment, file)?;
                 let string = eval(environment, string)?;
-                return if let Expression::File(FileState::Write(file)) = &file {
-                    write!(&mut file.borrow_mut(), "{}", string.as_string(environment)?)?;
-                    Ok(Expression::nil())
+                return if let Expression::File(file) = file {
+                    match &*file.borrow() {
+                        FileState::Write(file) => {
+                            write!(file.borrow_mut(), "{}", string.as_string(environment)?)?;
+                            Ok(Expression::nil())
+                        }
+                        FileState::Stdout => {
+                            print!("{}", string.as_string(environment)?);
+                            Ok(Expression::nil())
+                        }
+                        _ => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "write-string requires a file opened for writing",
+                        )),
+                    }
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
