@@ -40,9 +40,6 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
             };
-            scope
-                .borrow_mut()
-                .insert_exp("*ns*".to_string(), Expression::Atom(Atom::String(key)));
             environment.current_scope.push(scope);
             return Ok(Expression::nil());
         }
