@@ -382,42 +382,141 @@ fn builtin_write_string(
 pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "open".to_string(),
-        Rc::new(Expression::make_function(builtin_open, "Open a file.")),
+        Rc::new(Expression::make_function(
+            builtin_open,
+            "Usage: (open filename option*)
+
+Open a file.
+
+Options are:
+    :read
+    :write
+    :append
+    :truncate
+    :create
+    :create-new
+    :on-error-nil
+
+Example:
+(write-line (open \"/tmp/slsh-tst-open.txt\" :create :truncate) \"Test Line One\")
+(test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
+",
+        )),
     );
     data.insert(
         "close".to_string(),
-        Rc::new(Expression::make_function(builtin_close, "Close a file.")),
+        Rc::new(Expression::make_function(
+            builtin_close,
+            "Usage: (close file)
+
+Close a file.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"Test Line Two\")
+(close tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal \"Test Line Two\n\" (read-line tst-file))
+(close tst-file)
+",
+        )),
     );
     data.insert(
         "flush".to_string(),
-        Rc::new(Expression::make_function(builtin_flush, "Flush a file.")),
+        Rc::new(Expression::make_function(
+            builtin_flush,
+            "Usage: (flush file)
+
+Flush a file.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"Test Line Three\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal \"Test Line Three\n\" (read-line tst-file))
+(close tst-file)
+",
+        )),
     );
     data.insert(
         "read-line".to_string(),
         Rc::new(Expression::make_function(
             builtin_read_line,
-            "Read a line from a file.",
+            "Usage: (read-line file) -> string
+
+Read a line from a file.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"Test Line Read Line One\")
+(write-string tst-file \"Test Line Read Line Two\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal \"Test Line Read Line One\n\" (read-line tst-file))
+(test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
+(close tst-file)
+",
         )),
     );
     data.insert(
         "read".to_string(),
         Rc::new(Expression::make_function(
             builtin_read,
-            "Read a file or string and return the list representation.",
+            "Usage: (read file|string :add-parens?) -> list
+
+Read a file or string and return the list representation.
+
+If the final form is the keyword :add-parens then the outer parens will be added if missing.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"(1 2 3)\")
+;(write-string tst-file \"Test Line Read Line Two\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal '(1 2 3) (read tst-file))
+(close tst-file)
+(test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
+(test::assert-equal '(7 8 9) (read \"7 8 9\" :add-parens))
+(test::assert-equal '(x y z) (read \"(x y z)\" :add-parens))
+",
         )),
     );
     data.insert(
         "write-line".to_string(),
         Rc::new(Expression::make_function(
             builtin_write_line,
-            "Write a line to a file.",
+            "Usage: (write-line file string)
+
+Write a line to a file.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"Test Line Write Line\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
+(close tst-file)
+",
         )),
     );
     data.insert(
         "write-string".to_string(),
         Rc::new(Expression::make_function(
             builtin_write_string,
-            "Write a string to a file.",
+            "Usage: (write-string file string)
+
+Write a string to a file.
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-string tst-file \"Test Line Write String\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal \"Test Line Write String\" (read-line tst-file))
+(close tst-file)
+",
         )),
     );
 }
