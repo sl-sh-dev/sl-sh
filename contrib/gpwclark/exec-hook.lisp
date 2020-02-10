@@ -145,6 +145,18 @@
 								(vec fst)))
 					rst))))
 
+#|
+;; TODO need tests
+	(defq pipe-test-actual (recursively-check-for-infix-notation (list) (read :add-parens "(echo first-partAsecond-partBthird-part | cut -d \"A\" -f 2 | cut -d \"B\" -f 2)")))
+	(defq pipe-test-expected `(vec '| (vec echo first-partAsecond-partBthird-part) (vec cut -d "A" -f 2) (vec cut -d "B" -f 2)))
+	(println (str "expected " (pipe-test-expected)
+					"\nactual " pipe-test-actual
+					"\nactual == expected: " (= pipe-test-actual (pipe-test-expected))
+					"\nactual == actual " (= pipe-test-actual pipe-test-actual)
+				  ))
+|#
+
+
 	(defn __exec_hook (cmd-str)
 		(let ((cmd-ast (read :add-parens cmd-str)))
 				(match (length cmd-ast)
