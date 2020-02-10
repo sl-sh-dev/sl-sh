@@ -13,8 +13,9 @@ use std::sync::Arc;
 
 use liner::{keymap, Buffer, ColorClosure, Context, Prompt};
 
+use libc::uid_t;
 use nix::sys::signal::{self, SigHandler, Signal};
-use nix::unistd::gethostname;
+use nix::unistd::{gethostname, Uid};
 
 use crate::builtins::load;
 use crate::completions::*;
@@ -424,6 +425,18 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
+    let uid = Uid::current();
+    let euid = Uid::effective();
+    env::set_var("UID", format!("{}", uid));
+    env::set_var("EUID", format!("{}", euid));
+    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
+        "*uid*".to_string(),
+        Expression::Atom(Atom::Int(uid_t::from(uid) as i64)),
+    );
+    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
+        "*euid*".to_string(),
+        Expression::Atom(Atom::Int(uid_t::from(euid) as i64)),
+    );
     load_user_env(&mut environment.borrow_mut(), &home, true);
     let repl_settings = get_expression(&environment.borrow(), "*repl-settings*").unwrap();
     environment

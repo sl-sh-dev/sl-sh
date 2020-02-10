@@ -16,7 +16,9 @@
 	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
 
 (defn set_prompt_tail ()
-	(if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m ")))
+	(if (= *euid* 0)
+		(if (= *last-status* 0) "\x1b[31m#\x1b[39m " (format "\x1b[31m(" *last-status* ")#\x1b[39m "))
+		(if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m "))))
 
 (defn __prompt ()
 	(str "\x1b[32m[" *ns* "]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (set_prompt_tail)))
@@ -24,6 +26,4 @@
 (defn __completion_hook (&rest args)
 	(match (first args)
 		("cd" 'path)
-		("ls" 'default)
-		("git" 'default)
 		(nil 'default)))
