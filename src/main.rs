@@ -117,7 +117,7 @@ fn main() -> io::Result<()> {
 
                 let code = start_interactive(sig_int);
                 sig_int_stop.store(true, Ordering::Relaxed);
-                if let Err(err) = signal::kill(shell_pgid, Signal::SIGINT) {
+                if let Err(err) = signal::kill(unistd::getpid(), Signal::SIGINT) {
                     eprintln!(
                         "ERROR sending SIGINT to myself (to stop the SIGINT thread): {}.",
                         err
