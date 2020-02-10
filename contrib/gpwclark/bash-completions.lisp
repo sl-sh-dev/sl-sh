@@ -81,8 +81,8 @@
 	;; Completion hooks, the match is for the command and then custom completions can be returned.
 	(defn __completion_hook (&rest args)
 		(match (first args)
-			("cd" 'path)
-			("ls" 'path)
+			("cd" 'default)
+			("ls" 'default)
 			(nil
 				(progn
 					(defq possible-completions (check-bash-completion args))
