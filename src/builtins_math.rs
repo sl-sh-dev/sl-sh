@@ -35,7 +35,17 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
                     Ok(Expression::Atom(Atom::Float(sum)))
                 }
             },
-            "Plus",
+            "Usage: (+ number+)
+
+Add a sequence of numbers.
+
+Example:
+(test::assert-equal 5 (+ 5))
+(test::assert-equal 5 (+ 5.0))
+(test::assert-equal 6 (+ 1 5))
+(test::assert-equal 6.5 (+ 1 5.5))
+(test::assert-equal 7 (+ 1 2 4))
+",
         )),
     );
 
@@ -56,7 +66,22 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
                     Ok(Expression::Atom(Atom::Float(prod)))
                 }
             },
-            "Multiply",
+            "Usage: (* number+)
+
+Multiply a sequence of numbers.
+
+Example:
+(test::assert-equal 5 (* 5))
+(test::assert-equal 5 (* 1 5))
+(test::assert-equal 5.0 (* 1.0 5))
+(test::assert-equal 7.5 (* 1.5 5))
+(test::assert-equal 7.5 (* 1.5 5.0))
+(test::assert-equal 15 (* 3 5))
+(test::assert-equal 8 (* 1 2 4))
+(test::assert-equal 16 (* 2 2 4))
+(test::assert-equal 16.0 (* 2 2.0 4))
+(test::assert-equal 16.0 (* 2.0 2.0 4.0))
+",
         )),
     );
 
@@ -90,7 +115,18 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
                     }
                 }
             },
-            "Minus",
+            "Usage: (- number+)
+
+Subtract a sequence of numbers.
+
+Example:
+(test::assert-equal 5 (- 5))
+(test::assert-equal 5 (- 5.0))
+(test::assert-equal -4 (- 1 5))
+(test::assert-equal -4.5 (- 1 5.5))
+(test::assert-equal 4 (- 10 2 4))
+(test::assert-equal 4.9 (- 10.9 2 4))
+",
         )),
     );
 
@@ -132,7 +168,20 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
                     }
                 }
             },
-            "Divide",
+            "Usage: (/ number+)
+
+Divide a sequence of numbers.  Requires at least two numbers.
+
+Example:
+(test::assert-equal 5 (/ 50 10))
+(test::assert-equal 5 (/ 50.0 10.0))
+(test::assert-equal 0 (/ 1 5))
+(test::assert-equal .2 (/ 1.0 5))
+(test::assert-equal .2 (/ 1.0 5.0))
+(test::assert-equal 5.5 (/ 5.5 1))
+(test::assert-equal 2 (/ 16 2 4))
+(test::assert-equal 5 (/ 100 2 5 2))
+",
         )),
     );
 
@@ -159,7 +208,15 @@ pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
                     }
                 }
             },
-            "Modulo",
+            "Usage: (% int int)
+
+Remainder from dividing first int by the second.
+
+Example:
+(test::assert-equal 0 (% 50 10))
+(test::assert-equal 5 (% 55 10))
+(test::assert-equal 1 (% 1 2))
+",
         )),
     );
 }
