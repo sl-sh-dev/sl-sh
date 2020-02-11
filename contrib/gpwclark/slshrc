@@ -13,6 +13,8 @@
 ;; - CI on github? possible?
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - address exec-hook.lisp stuff
+;; - write some "tests" at bottom of each 'critical' file to make sure it's in
+;; working order, e.g. bash-completions & exec-hook
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
@@ -49,7 +51,7 @@
 	(hash-set! *repl-settings* :max-history 10000)
 ;; }}}
 
-;; quality of life {{{
+;; quality of shell life {{{
 	(alias :q (exit))
 
 	(alias ls (lsd))
@@ -119,7 +121,9 @@
 				(progn
 					(eval `(vim ,@vimargs))))
 			(err "Only accepts 0 or 1 arguments")))
+;; }}}
 
+;; quality of life {{{
 	;; check spelling
 	(defn spl (word)
 		(println (str (| (echo (str word)) (aspell -a)))))

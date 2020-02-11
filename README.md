@@ -2,7 +2,7 @@
 
 This is a shell build around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
-parentheses).  It is NOT a POSIX shell and makes to attempts to be one.
+parentheses).  It is NOT a POSIX shell and makes no attempts to be one.
 
 It supports quote and backquote (with , and ,@ expansion).
 
@@ -450,7 +450,7 @@ open | file-name options* | builtin | Open the given file, see table below for o
 close | file | builtin | Close the file, if a file has multiple references they all must be closed.  Going out of scope also closes the file.
 flush | file | builtin | Flush the file to disk.
 read-line | file | builtin | Reads and returns a line.  Return nil if the file is at EOF.
-read | file | builtin | Reads the file and parses it into an Expression (optional keyword :add-parens will add outer parens is needed).
+read | file | builtin | Reads the file and parses it into an Expression (optional keyword :add-parens will add outer parens if needed).
 write-line | file line | builtin | Writes the line, adds a newline at end.
 write-string | file string | builtin | Writes the string, does not add a newline at end.
 
