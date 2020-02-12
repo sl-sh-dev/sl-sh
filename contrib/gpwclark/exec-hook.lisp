@@ -250,19 +250,19 @@
 			cmd-str)))
 
 (defn __exec_hook (cmd-str)
-	(if (= :success
-		(get-error
-			(defq cmd-ast (read :add-parens cmd-str))
-			:success))
+	(progn
+		(defq parsed (get-error (defq cmd-ast (read :add-parens cmd-str)) :success))
+		(if (not (= parsed :success))
 		cmd-str
-		(match (length cmd-ast)
+		(progn
+			(match (length cmd-ast)
 			;; if string is of length 0 either nothing was typed or
 			;; everything was a comment
 			(0 cmd-ast)
 			;; check to see if this single argument is a filepath
 			(1 (change-dir-if-arg-is-dir (first cmd-ast)))
 			;; check for infix notation
-			(nil (apply-infix-modifications cmd-ast)))))
+			(nil (apply-infix-modifications cmd-ast)))))))
 
 #|
 ;; TODO need tests
