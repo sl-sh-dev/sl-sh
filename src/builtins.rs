@@ -1527,6 +1527,8 @@ fn builtin_get_error(
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     let mut ret = Expression::nil();
+    let old_err = environment.stack_on_error;
+    environment.stack_on_error = false;
     for arg in args {
         match eval(environment, &arg) {
             Ok(exp) => ret = exp,
@@ -1535,10 +1537,12 @@ fn builtin_get_error(
                 v.push(Expression::Atom(Atom::Symbol(":error".to_string())));
                 let msg = format!("{}", err);
                 v.push(Expression::Atom(Atom::String(msg)));
+                environment.stack_on_error = old_err;
                 return Ok(Expression::with_list(v));
             }
         }
     }
+    environment.stack_on_error = old_err;
     Ok(ret)
 }
 
