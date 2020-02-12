@@ -6,15 +6,25 @@
 
 ;; fcnality
 ;; 1. entering 1 arg on the CLI that is a valid directory results in changing
-;;		to that directory.
+;;	to that directory.
 ;; 2. support $la env variable which is set to the last argument of the previous
-;;		command input.
+;;	command input.
+;; 3. allows for use of infix notation. e.g.
+;; ```
+;; cat file | grep -i "username"
+;; or
+;; cat file | grep -i "username" out> users-file
+;; ```
+;; can use infix notation in any nested form as well.
+;; supports the bash equivalent of ; but use @@ instead (conflict with ; b/c it
+;; in lisp that indicates a comment.
+
 ;; TODOS
 ;; 1. support things like $2la for second to last arg, $3la, etc..
 ;; 2. organize fcns
-;; 3. how to handle mixing infix notation, e.g.
-;;		cat file | grep "stuff" out> afile
 ;; 3. use docstrings
+;; 4. need ability to include any number of exec hooks to allow for conditionally
+;;	adding completions.
 
 (defn identity ()
 	(fn (x) x))
@@ -176,7 +186,7 @@
 		(if (not nxt)
 			nil
 			(progn
-				(defq tok-match (if (non-empty-seq? nxt) nil (hash-get prefix-infix-map nxt)))
+				(defq tok-match (if (or (symbol? nxt) (string? nxt)) (hash-get prefix-infix-map nxt) nil))
 				(if (not tok-match)
 					(recur cmd-ast (+ 1 idx))
 					  (join tok-match idx)))))))
@@ -226,9 +236,13 @@
 (defn remove-any-mixed-infix-notation (cmd-ast)
 	(recursively-modify-if-mixed-infix-notation (make-vec) cmd-ast))
 
+;; entrypoint for all multiargument commands, used to allow use of infix
+;; notation.
 (defn apply-infix-modifications (cmd-ast)
 	(remove-any-infix-notation (remove-any-mixed-infix-notation cmd-ast)))
 
+;; entrypoint for all 1 arg commands... used to make filepaths cd commands
+;; to themselves.
 (defn change-dir-if-arg-is-dir (cmd)
 	(let ((cmd-str (str cmd)))
 		(if (fs-dir? cmd-str)
