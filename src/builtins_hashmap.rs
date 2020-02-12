@@ -57,7 +57,7 @@ fn builtin_make_hash(
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
             let assocs = eval(environment, assocs)?;
-            return match &assocs {
+            match &assocs {
                 Expression::Pair(p) => {
                     if let Some((_, _)) = &*p.borrow() {
                         build_map(map, &mut *assocs.iter())
@@ -71,10 +71,16 @@ fn builtin_make_hash(
                     io::ErrorKind::Other,
                     "make-hash takes a sequence",
                 )),
-            };
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "make-hash takes one form, a sequence",
+            ))
         }
+    } else {
+        Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
     }
-    Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
 }
 
 fn builtin_hash_set(
@@ -304,49 +310,175 @@ pub fn add_hash_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference
         "make-hash".to_string(),
         Rc::new(Expression::make_function(
             builtin_make_hash,
-            "Make a new hash map.",
+            "Usage (make-hash associations?)
+
+Make a new hash map.
+
+If associations is provided (makes an empty map if not) then it is a list of
+pairs (key . value) that populate the intial map.
+
+Example:
+(def 'tst-hash (make-hash))
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash ()))
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash nil))
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two\" (hash-get tst-hash key2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(def 'tst-hash (make-hash '#((:keyv1 . \"val one\")(keyv2 . \"val two\")(\"keyv3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
+(test::assert-equal \"val two\" (hash-get tst-hash keyv2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
+",
         )),
     );
     data.insert(
         "hash-set!".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_set,
-            "Add or update a hashmap key's value.",
+            "Usage (hash-set! hashmap key value)
+
+Add or update a hashmap key's value.  This is a destructive form!
+
+Example:
+(def 'tst-hash (make-hash))
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(hash-set! tst-hash :new-key '(1 2 3))
+(test::assert-equal 1 (length (hash-keys tst-hash)))
+(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two\" (hash-get tst-hash key2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(hash-set! tst-hash :new-key '(1 2 3))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two\" (hash-get tst-hash key2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+(hash-set! tst-hash key2 \"val two b\")
+(hash-set! tst-hash :key1 \"val one b\")
+(hash-set! tst-hash \"key3\" \"val three b\")
+(test::assert-equal 4 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one b\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two b\" (hash-get tst-hash key2))
+(test::assert-equal \"val three b\" (hash-get tst-hash \"key3\"))
+(test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
+",
         )),
     );
     data.insert(
         "hash-remove!".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_remove,
-            "Remove a key from a hashmap.",
+            "Usage (hash-remove! hashmap key)
+
+Remove a key from a hashmap.  This is a destructive form!
+
+Example:
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two\" (hash-get tst-hash key2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(hash-remove! tst-hash key2)
+(test::assert-equal 2 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(hash-remove! tst-hash :key1)
+(test::assert-equal 1 (length (hash-keys tst-hash)))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(hash-remove! tst-hash \"key3\")
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+",
         )),
     );
     data.insert(
         "hash-get".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_get,
-            "Gets a key from a hashmap.",
+            "Usage (hash-get hashmap key)
+
+Get a value for a key from a hashmap.
+
+Example:
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :key1))
+(test::assert-equal \"val two\" (hash-get tst-hash key2))
+(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+",
         )),
     );
     data.insert(
         "hash-haskey".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_haskey,
-            "Checks if a key is in a hashmap.",
+            "Usage (hash-haskey hashmap key)
+
+Checks if a key is in a hashmap.
+
+Example:
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-true (hash-haskey tst-hash :key1))
+(test::assert-true (hash-haskey tst-hash key2))
+(test::assert-true (hash-haskey tst-hash \"key3\"))
+(test::assert-false (hash-haskey tst-hash key1))
+(test::assert-false (hash-haskey tst-hash :key2))
+(test::assert-false (hash-haskey tst-hash \"keynone\"))
+(hash-remove! tst-hash :key1)
+(test::assert-false (hash-haskey tst-hash :key1))
+(hash-set! tst-hash :key1 \"val one b\")
+(test::assert-true (hash-haskey tst-hash :key1))
+",
         )),
     );
     data.insert(
         "hash-keys".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_keys,
-            "Returns a vector of all the hashmaps keys.",
+            "Usage (hash-keys hashmap)
+
+Returns a vector of all the hashmaps keys.  The keys will be unordered.
+
+Example:
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-true (in? (hash-keys tst-hash) :key1) \"Test :key1\")
+(test::assert-true (in? (hash-keys tst-hash) 'key2) \"Test key2\")
+; Note string used as a key will be a symbol in the hash-keys list...
+(test::assert-true (in? (hash-keys tst-hash) 'key3) \"Test key3\")
+(test::assert-false (in? (hash-keys tst-hash) :key4))
+",
         )),
     );
     data.insert(
         "hash-clear!".to_string(),
         Rc::new(Expression::make_function(
             builtin_hash_clear,
-            "Clears a hashmap.",
+            "Usage (hash-clear! hashmap)
+
+Clears a hashmap.  This is a destructive form!
+
+Example:
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-true (hash-haskey tst-hash :key1))
+(test::assert-true (hash-haskey tst-hash key2))
+(test::assert-true (hash-haskey tst-hash \"key3\"))
+(hash-clear! tst-hash)
+(test::assert-equal 0 (length (hash-keys tst-hash)))
+(test::assert-false (hash-haskey tst-hash :key1))
+(test::assert-false (hash-haskey tst-hash key2))
+(test::assert-false (hash-haskey tst-hash \"key3\"))
+",
         )),
     );
 }
