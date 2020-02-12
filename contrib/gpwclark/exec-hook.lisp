@@ -249,18 +249,20 @@
 			(list root::cd cmd-str)
 			cmd-str)))
 
-;;TODO if invalid syntax, i.e. unbalanced. need to handle err in read
-;;	and pass thru
 (defn __exec_hook (cmd-str)
-	(let ((cmd-ast (read :add-parens cmd-str)))
-			(match (length cmd-ast)
-				;; if string is of length 0 either nothing was typed or
-				;; everything was a comment
-				(0 cmd-ast)
-				;; check to see if this single argument is a filepath
-				(1 (change-dir-if-arg-is-dir (first cmd-ast)))
-				;; check for infix notation
-				(nil (apply-infix-modifications cmd-ast)))))
+	(if (= :success
+		(get-error
+			(defq cmd-ast (read :add-parens cmd-str))
+			:success))
+		cmd-str
+		(match (length cmd-ast)
+			;; if string is of length 0 either nothing was typed or
+			;; everything was a comment
+			(0 cmd-ast)
+			;; check to see if this single argument is a filepath
+			(1 (change-dir-if-arg-is-dir (first cmd-ast)))
+			;; check for infix notation
+			(nil (apply-infix-modifications cmd-ast)))))
 
 #|
 ;; TODO need tests
