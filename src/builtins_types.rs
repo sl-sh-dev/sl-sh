@@ -319,70 +319,309 @@ fn builtin_is_list(
 pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
     data.insert(
         "type".to_string(),
-        Rc::new(Expression::make_function(builtin_type, "")),
+        Rc::new(Expression::make_function(
+            builtin_type,
+            "Usage: (type expression)
+
+Return the type of the given expression as a string.
+
+Types are:
+    True
+    Float
+    Int
+    Symbol
+    String
+    StringBuf
+    Char
+    Lambda
+    Macro
+    Process
+    SpecialForm
+    Function
+    Vector
+    Pair
+    Nil
+    HashMap
+    File
+
+Example:
+(test::assert-equal \"True\" (type t))
+(test::assert-equal \"Float\" (type 1.1))
+(test::assert-equal \"Int\" (type 1))
+(test::assert-equal \"Symbol\" (type 'symbol))
+(def 'type-sym 'symbol)
+(test::assert-equal \"Symbol\" (type type-sym))
+(test::assert-equal \"String\" (type \"string\"))
+(test::assert-equal \"StringBuf\" (type (str-buf \"buffer\")))
+(test::assert-equal \"Char\" (type #\\a))
+(test::assert-equal \"Lambda\" (type (fn () ())))
+(test::assert-equal \"Macro\" (type (macro () ())))
+(test::assert-equal \"Process\" (type (true)))
+(test::assert-equal \"SpecialForm\" (type if))
+(test::assert-equal \"Function\" (type type))
+(test::assert-equal \"Vector\" (type '#(1 2 3)))
+(def 'type-vec '#(4 5 6))
+(test::assert-equal \"Vector\" (type type-vec))
+(test::assert-equal \"Pair\" (type '(1 . 2)))
+(test::assert-equal \"Pair\" (type '(1 2 3)))
+(test::assert-equal \"Nil\" (type nil))
+(test::assert-equal \"Nil\" (type '()))
+(test::assert-equal \"HashMap\" (type (make-hash)))
+(test::assert-equal \"File\" (type (open :stdin)))
+",
+        )),
     );
     data.insert(
         "nil?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_nil, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_nil,
+            "Usage: (nil? expression)
+
+True if the expression is nil, false otherwise.
+
+Example:
+(test::assert-true (nil? nil))
+(test::assert-false (nil? t))
+",
+        )),
     );
     data.insert(
         "true?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_true, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_true,
+            "Usage: (true? expression)
+
+True if the expression is true (true type NOT non-null), false otherwise.
+
+Example:
+(test::assert-true (true? t))
+(test::assert-false (true? nil))
+(test::assert-false (true? 1))
+(test::assert-false (true? \"str\"))
+",
+        )),
     );
     data.insert(
         "float?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_float, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_float,
+            "Usage: (float? expression)
+
+True if the expression is a float, false otherwise.
+
+Example:
+(test::assert-true (float? 1.5))
+(test::assert-false (float? 1))
+",
+        )),
     );
     data.insert(
         "int?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_int, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_int,
+            "Usage: (int? expression)
+
+True if the expression is an int, false otherwise.
+
+Example:
+(test::assert-true (int? 1))
+(test::assert-false (int? 1.5))
+",
+        )),
     );
     data.insert(
         "symbol?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_symbol, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_symbol,
+            "Usage: (symbol? expression)
+
+True if the expression is a symbol, false otherwise.
+
+Example:
+(test::assert-true (symbol? 'symbol))
+(test::assert-false (symbol? 1))
+",
+        )),
     );
     data.insert(
         "string?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_string, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_string,
+            "Usage: (string? expression)
+
+True if the expression is a string, false otherwise.
+
+Example:
+(test::assert-true (string? \"string\"))
+(test::assert-false (string? 1))
+",
+        )),
     );
     data.insert(
         "char?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_char, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_char,
+            "Usage: (char? expression)
+
+True if the expression is a char, false otherwise.
+
+Example:
+(test::assert-true (char? #\\a))
+(test::assert-false (char? 1))
+(test::assert-false (char? \"a\"))
+",
+        )),
     );
     data.insert(
         "lambda?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_lambda, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_lambda,
+            "Usage: (lambda? expression)
+
+True if the expression is a lambda, false otherwise.
+
+Example:
+(test::assert-true (lambda? (fn () ())))
+(test::assert-true (lambda? copy-seq))
+(test::assert-false (lambda? 1))
+(test::assert-false (lambda? if))
+",
+        )),
     );
     data.insert(
         "macro?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_macro, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_macro,
+            "Usage: (macro? expression)
+
+True if the expression is a macro, false otherwise.
+
+Example:
+(test::assert-true (macro? (macro () ())))
+(test::assert-true (macro? defn))
+(test::assert-false (macro? 1))
+(test::assert-false (macro? if))
+",
+        )),
     );
     data.insert(
         "vec?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_vec, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_vec,
+            "Usage: (vec? expression)
+
+True if the expression is a vector, false otherwise.
+
+Example:
+(test::assert-true (vec? '#(1 2 3)) \"reader macro\")
+(test::assert-true (vec? (make-vec)) \"make-vec\") 
+(test::assert-true (vec? (vec 1 2 3)) \"vec\") 
+(test::assert-false (vec? 1))
+(test::assert-false (vec? '(1 2 3)))
+(test::assert-false (vec? (list)))
+",
+        )),
     );
     data.insert(
         "pair?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_pair, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_pair,
+            "Usage: (pair? expression)
+
+True if the expression is a pair, false otherwise.
+
+Example:
+(test::assert-true (pair? '(1 . 2)) \"reader macro\")
+(test::assert-true (pair? (join 1 2)) \"join\") 
+(test::assert-true (pair? '(1 2)))
+(test::assert-false (pair? 1))
+(test::assert-false (pair? '#(1 2 3)))
+(test::assert-false (pair? (vec)))
+",
+        )),
     );
     data.insert(
         "builtin?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_builtin, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_builtin,
+            "Usage: (builtin? expression)
+
+True if the expression is a builtin function or special form, false otherwise.
+
+Example:
+(test::assert-true (builtin? type))
+(test::assert-true (builtin? if))
+(test::assert-false (builtin? (fn () ())))
+(test::assert-false (builtin? copy-seq))
+(test::assert-false (builtin? 1))
+",
+        )),
     );
     data.insert(
         "process?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_process, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_process,
+            "Usage: (process? expression)
+
+True if the expression is a process, false otherwise.
+
+Example:
+(test::assert-true (process? (true)))
+(test::assert-false (process? (fn () ())))
+(test::assert-false (process? copy-seq))
+(test::assert-false (process? 1))
+",
+        )),
     );
     data.insert(
         "file?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_file, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_file,
+            "Usage: (file? expression)
+
+True if the expression is a file, false otherwise.
+
+Example:
+(test::assert-true (file? (open :stdout)))
+(test::assert-false (file? (fn () ())))
+(test::assert-false (file? copy-seq))
+(test::assert-false (file? 1))
+",
+        )),
     );
     data.insert(
         "hash?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_hash, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_hash,
+            "Usage: (hash? expression)
+
+True if the expression is a hash map, false otherwise.
+
+Example:
+(test::assert-true (hash? (make-hash)) \"make-vec\") 
+(test::assert-false (hash? 1))
+(test::assert-false (hash? '(1 2 3)))
+(test::assert-false (hash? (list)))
+(test::assert-false (hash? (vec)))
+",
+        )),
     );
     data.insert(
         "list?".to_string(),
-        Rc::new(Expression::make_function(builtin_is_list, "")),
+        Rc::new(Expression::make_function(
+            builtin_is_list,
+            "Usage: (list? expression)
+
+True if the expression is a list, false otherwise.
+
+Example:
+(test::assert-true (list? '(1 2 3)) \"reader macro\")
+(test::assert-true (list? (list 1 2 3)) \"list\") 
+(test::assert-false (list? 1))
+(test::assert-false (list? '#(1 2 3)))
+(test::assert-false (list? (vec)))
+(test::assert-false (list? '(1 . 2)))
+",
+        )),
     );
 }

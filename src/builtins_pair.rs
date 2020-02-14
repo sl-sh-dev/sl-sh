@@ -221,8 +221,8 @@ Example:
 Return the car (first item) from a pair.  If used on a proper list this will be the first element.
 
 Example:
-(def 'tst-pairs-two (list x y z))
-(test::assert-equal \"x\" (car tst-pairs-two))
+(def 'tst-pairs-two (list 'x 'y 'z))
+(test::assert-equal 'x (car tst-pairs-two))
 (test::assert-equal 10 (car '(10)))
 (test::assert-equal 9 (car '(9 11 13)))
 ",
