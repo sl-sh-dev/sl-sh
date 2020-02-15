@@ -132,6 +132,26 @@ fn builtin_is_string(
     ))
 }
 
+fn builtin_is_string_buf(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            return if let Expression::Atom(Atom::StringBuf(_)) = arg {
+                Ok(Expression::Atom(Atom::True))
+            } else {
+                Ok(Expression::nil())
+            };
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "string-buf? needs one form",
+    ))
+}
+
 fn builtin_is_char(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
@@ -454,6 +474,21 @@ True if the expression is a string, false otherwise.
 Example:
 (test::assert-true (string? \"string\"))
 (test::assert-false (string? 1))
+",
+        )),
+    );
+    data.insert(
+        "string-buf?".to_string(),
+        Rc::new(Expression::make_function(
+            builtin_is_string_buf,
+            "Usage: (string-buf? expression)
+
+True if the expression is a string buffer, false otherwise.
+
+Example:
+(test::assert-true (string-buf? (str-buf \"string\")))
+(test::assert-false (string-buf? \"string\"))
+(test::assert-false (string-buf? 1))
 ",
         )),
     );

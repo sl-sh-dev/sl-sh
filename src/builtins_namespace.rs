@@ -268,6 +268,7 @@ Example:
 (test::assert-true (def? 'test-symbol))
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
+t
 ",
         )),
     );
@@ -275,7 +276,7 @@ Example:
         "ns-exists?".to_string(),
         Rc::new(Expression::make_function(
             builtin_ns_exists,
-            "Usage: (ns-exists namespace)
+            "Usage: (ns-exists? namespace)
 
 True if the supplied namespace exists (must evaluate to a string or symbol).
 
@@ -296,10 +297,11 @@ Example:
 Returns a vector of all namespaces.
 
 Example:
-(test::assert-not-includes \"ns-exists-test-namespace\" (ns-list))
-(ns-create 'ns-exists-test-namespace)
+(test::assert-not-includes \"ns-list-test-namespace\" (ns-list))
+(ns-create 'ns-list-test-namespace)
 (ns-pop)
-(test::assert-includes \"ns-exists-test-namespace\" (ns-list))
+(test::assert-includes \"ns-list-test-namespace\" (ns-list))
+t
 ",
         )),
     );
@@ -332,6 +334,7 @@ Example:
 (test::assert-includes 'loop (ns-symbols 'core))
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'root))
 (test::assert-includes 'car (ns-symbols 'root))
+t
 ",
         )),
     );

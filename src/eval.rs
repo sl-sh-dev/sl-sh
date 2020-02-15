@@ -244,15 +244,15 @@ fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expres
         let mut var_start = 0;
         for (i, ch) in string.chars().enumerate() {
             if in_var {
-                if ch == ' ' || (ch == '$' && last_ch != '\\') {
+                if ch == ' ' || ch == '"' || (ch == '$' && last_ch != '\\') {
                     in_var = false;
                     match env::var(&string[var_start + 1..i]) {
                         Ok(val) => new_string.push_str(&val),
                         Err(_) => new_string.push_str(""),
                     }
                 }
-                if ch == ' ' {
-                    new_string.push(' ');
+                if ch == ' ' || ch == '"' {
+                    new_string.push(ch);
                 }
             } else if ch == '$' && last_ch != '\\' {
                 in_var = true;
