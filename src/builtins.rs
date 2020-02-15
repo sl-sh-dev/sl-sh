@@ -239,7 +239,12 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                 }
                 _ => ast,
             };
-            eval(environment, &ast)
+            let old_loose_syms = environment.loose_symbols;
+            // Do not use loose symbols in scripts even if loading from the repl.
+            environment.loose_symbols = false;
+            let res = eval(environment, &ast);
+            environment.loose_symbols = old_loose_syms;
+            res
         }
         Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
     }
