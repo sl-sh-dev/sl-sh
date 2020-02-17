@@ -389,7 +389,7 @@ fn print_to_oe(
     match out {
         Some(out) => {
             if let Expression::File(f) = &out.exp {
-                match &*f.borrow_mut() {
+                match &*f.borrow() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
                         let mut out = stdout.lock();
@@ -1924,21 +1924,47 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         "not".to_string(),
         Rc::new(Expression::make_function(
             builtin_not,
-            "Return true if expression is nil.",
+            "Usage: (not expression)
+
+Return true if expression is nil.
+
+Example:
+(test::assert-true (not nil))
+(test::assert-false (not 10))
+(test::assert-false (not t))
+(test::assert-false (not (+ 1 2 3)))
+",
         )),
     );
     data.insert(
         "null".to_string(),
         Rc::new(Expression::make_function(
             builtin_not,
-            "Return true if expression is nil (null).",
+            "Usage: (null expression)
+
+Return true if expression is nil (null).
+
+Example:
+(test::assert-true (null nil))
+(test::assert-false (null 10))
+(test::assert-false (null t))
+(test::assert-false (null (+ 1 2 3)))
+",
         )),
     );
     data.insert(
         "def?".to_string(),
         Rc::new(Expression::make_function(
             builtin_is_def,
-            "Return true if symbol is defined.",
+            "Usage: (def? symbol)
+
+Return true if symbol is defined.
+
+Example:
+(def 'test-is-def t)
+(test::assert-true (def? 'test-is-def))
+(test::assert-false (def? 'test-is-def-not-defined))
+",
         )),
     );
     data.insert(
@@ -1992,70 +2018,118 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         "command".to_string(),
         Rc::new(Expression::make_special(
             builtin_command,
-            "Only execute system commands not forms within this form.",
+            "Usage: (command exp0 ... expN)
+
+Only execute system commands not forms within this form.
+
+Example:
+(test::assert-equal '#(:error \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
+(test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
+",
         )),
     );
     data.insert(
         "run-bg".to_string(),
         Rc::new(Expression::make_special(
             builtin_run_bg,
-            "Any system commands started within form will be in the background.",
+            "Usage: (run-bg exp0 ... expN)
+
+Like progn except any system commands started within form will be in the background.
+",
         )),
     );
     data.insert(
         "form".to_string(),
         Rc::new(Expression::make_special(
             builtin_form,
-            "Do not execute system commands within this form.",
+            "Usage: (form exp0 ... expN)
+
+Like progn but do not execute system commands within this form.
+
+Example:
+(test::assert-equal '#(:error \"Not a valid form true, not found.\") (get-error (form (true))))
+(test::assert-equal \"Some String\" (form (str \"Some String\")))
+",
         )),
     );
     data.insert(
         "loose-symbols".to_string(),
         Rc::new(Expression::make_special(
             builtin_loose_symbols,
-            "Within this form any undefined symbols become strings.",
+            "Usage: (loose-symbols exp0 ... expN)
+
+Within this form any undefined symbols become strings.
+
+Example:
+(test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
+",
         )),
     );
     data.insert(
         "exit".to_string(),
         Rc::new(Expression::make_function(
             builtin_exit,
-            "Exit with option status code.",
+            "Usage: (exit code?)
+
+Exit shell with optional status code.
+",
         )),
     );
     data.insert(
         "error-stack-on".to_string(),
         Rc::new(Expression::make_function(
             builtin_error_stack_on,
-            "Print the eval stack on error.",
+            "Usage: (error-stack-on)
+
+Print the eval stack on error.
+",
         )),
     );
     data.insert(
         "error-stack-off".to_string(),
         Rc::new(Expression::make_function(
             builtin_error_stack_off,
-            "Do not print the eval stack on error.",
+            "Usage: (error-stack-off)
+
+Do not print the eval stack on error.
+",
         )),
     );
     data.insert(
         "get-error".to_string(),
         Rc::new(Expression::make_function(
             builtin_get_error,
-            "Evaluate each form (like progn) but on error return #(:error msg) instead of aborting.",
+            "Usage: (get-error exp0 ... expN)
+
+Evaluate each form (like progn) but on error return #(:error msg) instead of aborting.
+
+If there is no error will return the value of the last expression.
+
+Example:
+(test::assert-equal '#(:error \"Some Error\") (get-error (err \"Some Error\")))
+(test::assert-equal \"Some String\" (get-error \"Some String\"))
+(test::assert-equal \"Some Other String\" (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
+",
         )),
     );
     data.insert(
         "doc".to_string(),
         Rc::new(Expression::make_function(
             builtin_doc,
-            "Return the doc string for a symbol or nil if no string.",
+            "Usage: (doc symbol)
+
+Return the doc string for a symbol or nil if no string.
+",
         )),
     );
     data.insert(
         "doc-raw".to_string(),
         Rc::new(Expression::make_function(
             builtin_doc_raw,
-            "Return the raw (unexpanded) doc string for a symbol or nil if no string.",
+            "Usage: (doc-raw symbol)
+
+Return the raw (unexpanded) doc string for a symbol or nil if no string.
+",
         )),
     );
 
@@ -2078,35 +2152,144 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
                     ensure_tonicity!(|a, b| a == b, strings, &str, String)
                 }
             },
-            "Equals",
+            "Usage: (= val0 ... valN)
+
+Equals.  Works for int, float or string.
+
+Example:
+(test::assert-false (= 1 2))
+(test::assert-true (= 2 2))
+(test::assert-true (= 2 2 2))
+(test::assert-false (= 3 2 2))
+(test::assert-false (= 3.0 2.0))
+(test::assert-true (= 2.0 2.0))
+(test::assert-true (= 2.0 2.0 2.0))
+(test::assert-false (= 3.0 2.0 2.0))
+(test::assert-false (= 2.1 2.0 3.0))
+(test::assert-false (= 2 1))
+(test::assert-false (= 3 2 1))
+(test::assert-false (= 1.1 1.0))
+(test::assert-true (= 1.1 1.1))
+(test::assert-false (= 3 2 3))
+(test::assert-false (= \"aab\" \"aaa\"))
+(test::assert-true (= \"aaa\" \"aaa\"))
+(test::assert-true (= \"aaa\" \"aaa\" \"aaa\"))
+(test::assert-false (= \"aaa\" \"aaaa\" \"aaa\"))
+(test::assert-false (= \"ccc\" \"aab\" \"aaa\"))
+(test::assert-false (= \"aaa\" \"aab\"))
+",
         )),
     );
     data.insert(
         ">".to_string(),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a > b),
-            "Greater than.",
+            "Usage: (> val0 ... valN)
+
+Greater than.  Works for int, float or string.
+
+Example:
+(test::assert-false (> 1 2))
+(test::assert-false (> 2 2))
+(test::assert-false (> 2 2 2))
+(test::assert-false (> 3 2 2))
+(test::assert-true (> 3.0 2.0))
+(test::assert-false (> 2.0 2.0))
+(test::assert-false (> 2.0 2.0 2.0))
+(test::assert-false (> 3.0 2.0 2.0))
+(test::assert-false (> 2.1 2.0 3.0))
+(test::assert-true (> 2 1))
+(test::assert-true (> 3 2 1))
+(test::assert-true (> 1.1 1.0))
+(test::assert-false (> 3 2 3))
+(test::assert-true (> \"aab\" \"aaa\"))
+(test::assert-false (> \"aaa\" \"aaa\"))
+(test::assert-true (> \"ccc\" \"aab\" \"aaa\"))
+(test::assert-false (> \"aaa\" \"aab\"))
+",
         )),
     );
     data.insert(
         ">=".to_string(),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a >= b),
-            "Greater than or equal.",
+            "Usage: (>= val0 ... valN)
+
+Greater than or equal.  Works for int, float or string.
+
+Example:
+(test::assert-false (>= 1 2))
+(test::assert-true (>= 2 2))
+(test::assert-true (>= 2 2 2))
+(test::assert-true (>= 3 2 2))
+(test::assert-true (>= 3.0 2.0))
+(test::assert-true (>= 2.0 2.0))
+(test::assert-true (>= 2.0 2.0 2.0))
+(test::assert-true (>= 3.0 2.0 2.0))
+(test::assert-false (>= 2.1 2.0 3.0))
+(test::assert-true (>= 2 1))
+(test::assert-true (>= 1.1 1.0))
+(test::assert-false (>= 3 2 3))
+(test::assert-true (>= \"aab\" \"aaa\"))
+(test::assert-true (>= \"aaa\" \"aaa\"))
+(test::assert-true (>= \"ccc\" \"aab\" \"aaa\"))
+(test::assert-false (>= \"aaa\" \"aab\"))
+",
         )),
     );
     data.insert(
         "<".to_string(),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a < b),
-            "Less than.",
+            "Usage: (< val0 ... valN)
+
+Less than.  Works for int, float or string.
+
+Example:
+(test::assert-true (< 1 2))
+(test::assert-true (< 1 2 3 4))
+(test::assert-false (< 2 2))
+(test::assert-false (< 2 2 2))
+(test::assert-false (< 2 2 3))
+(test::assert-true (< 1.0 2.0))
+(test::assert-false (< 2.0 2.0))
+(test::assert-false (< 2.0 2.0 2.0))
+(test::assert-false (< 2.0 2.0 3.0))
+(test::assert-false (< 2.1 2.0 3.0))
+(test::assert-false (< 2 1))
+(test::assert-false (< 3 2 3))
+(test::assert-true (< \"aaa\" \"aab\"))
+(test::assert-false (< \"aaa\" \"aaa\"))
+(test::assert-true (< \"aaa\" \"aab\" \"ccc\"))
+(test::assert-false (< \"baa\" \"aab\"))
+",
         )),
     );
     data.insert(
         "<=".to_string(),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a <= b),
-            "Less than or equal.",
+            "Usage: (<= val0 ... valN)
+
+Less than or equal.  Works for int, float or string.
+
+Example:
+(test::assert-true (<= 1 2))
+(test::assert-true (<= 2 2))
+(test::assert-true (<= 2 2 2))
+(test::assert-true (<= 2 2 3))
+(test::assert-true (<= 1.0 2.0))
+(test::assert-true (<= 2.0 2.0))
+(test::assert-true (<= 2.0 2.0 2.0))
+(test::assert-true (<= 2.0 2.0 3.0))
+(test::assert-false (<= 2.1 2.0 3.0))
+(test::assert-false (<= 2 1))
+(test::assert-false (<= 3 2 3))
+(test::assert-true (<= \"aaa\" \"aab\"))
+(test::assert-true (<= \"aaa\" \"aaa\"))
+(test::assert-true (<= \"aaa\" \"aab\" \"ccc\"))
+(test::assert-false (<= \"baa\" \"aab\"))
+",
         )),
     );
 }
