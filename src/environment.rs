@@ -99,7 +99,19 @@ impl Default for Scope {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdin))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
-                    doc_string: None,
+                    doc_string: Some("Usage: (read-line *stdin*)
+
+File that connects to standard in by default.
+
+Can be used in place of a read file object in any form that takes one.
+
+Example:
+(def 'stdin-test (open \"/tmp/sl-sh.stdin.test\" :create :truncate))
+(write-line stdin-test \"Test line\")
+(close stdin-test)
+; Use a file for stdin for test.
+(dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (test::assert-equal \"Test line\n\" (read-line *stdin*)))
+".to_string()),
                 },
             }),
         );
@@ -109,7 +121,18 @@ impl Default for Scope {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdout))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
-                    doc_string: None,
+                    doc_string: Some("Usage: (write-line *stdout*)
+
+File that connects to standard out by default.
+
+Can be used in place of a write file object in any form that takes one.  Used
+as the default for print and println.
+
+Example:
+; Use a file for stdout for test.
+(dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (write-line *stdout* \"Test out\"))
+(test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
+".to_string()),
                 },
             }),
         );
@@ -119,7 +142,18 @@ impl Default for Scope {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stderr))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
-                    doc_string: None,
+                    doc_string: Some("Usage: (write-line *stderr*)
+
+File that connects to standard error by default.
+
+Can be used in place of a write file object in any form that takes one.  Used
+as the default for eprint and eprintln.
+
+Example:
+; Use a file for stderr for test.
+(dyn '*stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (write-line *stderr* \"Test Error\"))
+(test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
+".to_string()),
                 },
             }),
         );
@@ -129,7 +163,21 @@ impl Default for Scope {
                 exp: Expression::Atom(Atom::String("root".to_string())),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
-                    doc_string: None,
+                    doc_string: Some(
+                        "Usage: (print *ns*)
+
+Symbol that contains the name of the current namespace.
+
+Can be used anywhere a symbol pointing to a string is valid.
+
+Example:
+(ns-enter 'root)
+(test::assert-equal \"root\" *ns*)
+(ns-pop)
+t
+"
+                        .to_string(),
+                    ),
                 },
             }),
         );

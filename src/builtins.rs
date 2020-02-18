@@ -1799,35 +1799,78 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         "print".to_string(),
         Rc::new(Expression::make_function(
             builtin_print,
-            "Print the arguments.",
+            "Usage: (print arg0 ... argN) -> nil
+
+Print the arguments (as strings) to *stdout*.
+
+Example:
+; Use a file for stdout for test.
+(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (print \"Print test out\"))
+(test::assert-equal \"Print test out\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
+",
         )),
     );
     data.insert(
         "println".to_string(),
         Rc::new(Expression::make_function(
             builtin_println,
-            "Print the arguments and then a newline.",
+            "Usage: (println arg0 ... argN) -> nil
+
+Print the arguments (as strings) to *stdout* and then a newline.
+
+Example:
+; Use a file for stdout for test.
+(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (println \"Println test out\"))
+(test::assert-equal \"Println test out\n\" (read-line (open \"/tmp/sl-sh.println.test\" :read)))
+",
         )),
     );
     data.insert(
         "eprint".to_string(),
         Rc::new(Expression::make_function(
             builtin_eprint,
-            "Print the arguments to stderr.",
+            "Usage: (eprint arg0 ... argN) -> nil
+
+Print the arguments (as strings) to *stderr*.
+
+Example:
+; Use a file for stderr for test.
+(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (eprint \"eprint test out\"))
+(test::assert-equal \"eprint test out\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
+",
         )),
     );
     data.insert(
         "eprintln".to_string(),
         Rc::new(Expression::make_function(
             builtin_eprintln,
-            "Print the arguments to stderr and then a newline.",
+            "Usage: (eprintln arg0 ... argN) -> nil
+
+Print the arguments (as strings) to *stderr* and then a newline.
+
+Example:
+; Use a file for stderr for test.
+(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (eprintln \"eprintln test out\"))
+(test::assert-equal \"eprintln test out\n\" (read-line (open \"/tmp/sl-sh.eprintln.test\" :read)))
+"
         )),
     );
     data.insert(
         "format".to_string(),
         Rc::new(Expression::make_function(
             builtin_format,
-            "Build a formatted string from arguments.",
+            "Usage: (format arg0 ... argN) -> string
+
+Build a formatted string from arguments.
+
+Arguments will be turned into strings.
+
+Example:
+(test::assert-equal \"stringsome\" (format \"string\" \"some\"))
+(test::assert-equal \"string\" (format \"string\" \"\"))
+(test::assert-equal \"string 50\" (format \"string\" \" \" 50))
+(test::assert-equal \"string 50 100.5\" (format \"string\" \" \" 50 \" \" 100.5))
+",
         )),
     );
     data.insert(
@@ -1876,7 +1919,21 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         "dyn".to_string(),
         Rc::new(Expression::make_function(
             builtin_dyn,
-            "Creates a dynamic binding and evals a form under it.",
+            "Usage: (dyn key value expression) -> nil
+
+Creates a dynamic binding for key, assigns value to it and evals expression under it.
+
+The binding is gone once the dyn form ends.  The binding will take precedent over
+any other binding in any scope with that name for any form that evalute as a 
+result of the dynamic binging (for instance creating a dynamic binding for
+*stdout* will cause all output to stdout to use the new binding in any print's
+used indirectly).
+
+Example:
+(defn test-dyn-fn () (print \"Print dyn out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+",
         )),
     );
     data.insert(
