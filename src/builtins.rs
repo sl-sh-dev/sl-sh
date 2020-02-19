@@ -1743,56 +1743,164 @@ pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>
         "eval".to_string(),
         Rc::new(Expression::make_function(
             builtin_eval,
-            "Evalute the provided expression",
+            "Usage: (eval expression)
+
+Evalute the provided expression.
+
+If expression is a string read it to make an ast first to evaluate otherwise
+evaluate the expression (note eval is a function not a special form, the
+provided expression will be evaluated as part of call).
+
+Example:
+(def 'test-eval-one nil)
+(eval \"(set 'test-eval-one \\\"ONE\\\")\")
+(test::assert-equal \"ONE\" test-eval-one)
+(eval '(set 'test-eval-one \"TWO\"))
+(test::assert-equal \"TWO\" test-eval-one)
+",
         )),
     );
     data.insert(
         "fncall".to_string(),
         Rc::new(Expression::make_function(
             builtin_fncall,
-            "Call the provided function with the suplied arguments",
+            "Usage: (fncall function arg0 ... argN)
+
+Call the provided function with the suplied arguments.
+
+Example:
+(def 'test-fncall-one nil)
+(fncall set 'test-fncall-one \"ONE\")
+(test::assert-equal \"ONE\" test-fncall-one)
+(test::assert-equal 10 (fncall + 1 2 7))
+",
         )),
     );
     data.insert(
         "apply".to_string(),
         Rc::new(Expression::make_function(
             builtin_apply,
-            "Call the provided function with the suplied arguments, last is a list that will be expanded",
+            "Usage: (apply function arg* list)
+
+Call the provided function with the suplied arguments, last is a list that will be expanded.
+
+Example:
+(def 'test-apply-one nil)
+(apply set '('test-apply-one \"ONE\"))
+(test::assert-equal \"ONE\" test-apply-one)
+(test::assert-equal 10 (apply + 1 '(2 7)))
+",
         )),
     );
     data.insert(
         "unwind-protect".to_string(),
         Rc::new(Expression::make_function(
             builtin_unwind_protect,
-            "After evaluation first form, make sure the following cleanup forms run (returns first form's result)"
+            "Usage: (unwind-protect protected cleanup*) -> [protected result]
+
+After evaluation first form, make sure the following cleanup forms run (returns first form's result).
+
+Example:
+(def 'test-unwind-one nil)
+(def 'test-unwind-err (get-error
+(unwind-protect (err \"Some protected error\") (set 'test-unwind-one \"got it\"))))
+(test::assert-equal '#(:error \"Some protected error\") test-unwind-err)
+(test::assert-equal \"got it\" test-unwind-one)
+
+(def 'test-unwind-one nil)
+(def 'test-unwind-two nil)
+(def 'test-unwind-three nil)
+(def 'test-unwind-four nil)
+(def 'test-unwind-err (get-error
+(unwind-protect
+    (progn (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
+    (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
+(test::assert-equal '#(:error \"Some protected error two\") test-unwind-err)
+(test::assert-equal \"set one\" test-unwind-one)
+(test::assert-equal nil test-unwind-two)
+(test::assert-equal \"set three\" test-unwind-three)
+(test::assert-equal \"set four\" test-unwind-four)
+",
         )),
     );
     data.insert(
         "err".to_string(),
         Rc::new(Expression::make_function(
             builtin_err,
-            "Raise an error with the supplied message",
+            "Usage: (err string) -> raises an error
+
+Raise an error with the supplied string.
+
+Example:
+(def 'test-err-err (get-error (err \"Test Error\")))
+(test::assert-equal '#(:error \"Test Error\") test-err-err)
+",
         )),
     );
     data.insert(
         "load".to_string(),
         Rc::new(Expression::make_function(
             builtin_load,
-            "Read and eval a file.",
+            "Usage: (load path) -> [last form value]
+
+Read and eval a file (from path- a string).
+
+Example:
+(def 'test-load-one nil)
+(def 'test-load-two nil)
+(write-line (open \"/tmp/slsh-test-load.testing\" :create :truncate) \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(set 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
+(test::assert-equal \"LOAD TEST\" test-load-one)
+(test::assert-equal '(1 2 3) test-load-two)
+",
         )),
     );
     data.insert(
         "length".to_string(),
         Rc::new(Expression::make_function(
             builtin_length,
-            "Return length of suplied expression.",
+            "Usage: (length expression) -> int
+
+Return length of suplied expression.
+
+Example:
+(test::assert-equal 0 (length nil))
+(test::assert-equal 5 (length \"12345\"))
+; Note the unicode symbol is only one char even though it is more then one byte.
+(test::assert-equal 6 (length \"12345Σ\"))
+(test::assert-equal 3 (length '(1 2 3)))
+(test::assert-equal 3 (length '#(1 2 3)))
+(test::assert-equal 3 (length (list 1 2 3)))
+(test::assert-equal 3 (length (vec 1 2 3)))
+(test::assert-equal 1 (length 100))
+(test::assert-equal 1 (length 100.0))
+(test::assert-equal 1 (length #\\x))
+",
         )),
     );
     data.insert(
         "if".to_string(),
         Rc::new(Expression::make_special(
             builtin_if,
-            "If then else conditional.",
+            "Usage: (if condition then-form else-form?) -> [evaled form result]
+
+If then else conditional.
+
+Example:
+(def 'test-if-one
+    (if t \"ONE TRUE\" \"ONE FALSE\"))
+(def 'test-if-two
+    (if nil \"TWO TRUE\" \"TWO FALSE\"))
+(test::assert-equal \"ONE TRUE\" test-if-one)
+(test::assert-equal \"TWO FALSE\" test-if-two)
+
+(def 'test-if-one2
+    (if t \"ONE2 TRUE\"))
+(def 'test-if-two2
+    (if nil \"TWO2 TRUE\"))
+(test::assert-equal \"ONE2 TRUE\" test-if-one2)
+(test::assert-equal nil test-if-two2)
+",
         )),
     );
     data.insert(
@@ -2068,7 +2176,13 @@ Example:
         "version".to_string(),
         Rc::new(Expression::make_function(
             builtin_version,
-            "Produce executable version as string.",
+            "Usage: (version)
+
+Produce executable version as string.
+
+Example:
+(test::assert-true (string? (version)))
+",
         )),
     );
     data.insert(
@@ -2092,6 +2206,9 @@ Example:
             "Usage: (run-bg exp0 ... expN)
 
 Like progn except any system commands started within form will be in the background.
+
+Example:
+;(run-bg gitk)
 ",
         )),
     );
@@ -2129,6 +2246,10 @@ Example:
             "Usage: (exit code?)
 
 Exit shell with optional status code.
+
+Example:
+;(exit)
+;(exit 0)
 ",
         )),
     );
@@ -2139,6 +2260,9 @@ Exit shell with optional status code.
             "Usage: (error-stack-on)
 
 Print the eval stack on error.
+
+Example:
+;(error-stack-on)
 ",
         )),
     );
@@ -2149,6 +2273,9 @@ Print the eval stack on error.
             "Usage: (error-stack-off)
 
 Do not print the eval stack on error.
+
+Example:
+;(error-stack-off)
 ",
         )),
     );
@@ -2176,6 +2303,9 @@ Example:
             "Usage: (doc symbol)
 
 Return the doc string for a symbol or nil if no string.
+
+Example:
+;(doc 'car)
 ",
         )),
     );
@@ -2186,6 +2316,9 @@ Return the doc string for a symbol or nil if no string.
             "Usage: (doc-raw symbol)
 
 Return the raw (unexpanded) doc string for a symbol or nil if no string.
+
+Example:
+;(doc-raw 'car)
 ",
         )),
     );
