@@ -1985,42 +1985,116 @@ Example:
         "progn".to_string(),
         Rc::new(Expression::make_special(
             builtin_progn,
-            "Evalutate each form and return the last.",
+            "Usage: (progn exp0 ... expN) -> expN
+
+Evalutate each form and return the last.
+
+Example:
+(def 'test-progn-one nil)
+(def 'test-progn-two nil)
+(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"Two\" test-progn-two)
+(test::assert-equal \"Three\" test-progn-three)
+",
         )),
     );
     data.insert(
         "set".to_string(),
         Rc::new(Expression::make_function(
             builtin_set,
-            "Sets an existing expression in the current scope(s).",
+            "Usage: (set symbol expression) -> expression
+
+Sets an existing expression in the current scope(s).  Return the expression that was set.
+
+Example:
+(def 'test-progn-one nil)
+(def 'test-progn-two nil)
+(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"Two\" test-progn-two)
+(test::assert-equal \"Three\" test-progn-three)
+(let ((test-progn-one nil))
+    ; set the currently scoped value.
+    (test::assert-equal \"1111\" (set 'test-progn-one \"1111\"))
+    (test::assert-equal \"1111\" test-progn-one))
+; Original outer scope not changed.
+(test::assert-equal \"One\" test-progn-one)
+",
         )),
     );
     data.insert(
         "export".to_string(),
         Rc::new(Expression::make_function(
             builtin_export,
-            "Export a key and value to the shell environment.",
+            "Usage: (export symbol string) -> string
+
+Export a key and value to the shell environment.  Second arg will be made a string and returned.
+
+Example:
+(test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
+(test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
+",
         )),
     );
     data.insert(
         "unexport".to_string(),
         Rc::new(Expression::make_function(
             builtin_unexport,
-            "Remove a var from the current shell environment.",
+            "Usage: (unexport symbol)
+
+Remove a var from the current shell environment.
+
+Example:
+(test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
+(test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
+(unexport 'TEST_EXPORT_ONE)
+(test::assert-false $TEST_EXPORT_ONE)
+",
         )),
     );
     data.insert(
         "def".to_string(),
         Rc::new(Expression::make_function(
             builtin_def,
-            "Adds an expression to the current scope.",
+            "Usage: (def symbol expression) -> expression
+
+Adds an expression to the current scope.  Return the expression that was defined.
+
+Example:
+(def 'test-progn-one nil)
+(def 'test-progn-two nil)
+(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"Two\" test-progn-two)
+(test::assert-equal \"Three\" test-progn-three)
+(let ((test-progn-one nil))
+    ; Add this to tthe let's scope (shadow the outer test-progn-two).
+    (test::assert-equal \"Default\" (def 'test-progn-two \"Default\"))
+    ; set the currently scoped value.
+    (set 'test-progn-one \"1111\")
+    (set 'test-progn-two \"2222\")
+    (test::assert-equal \"1111\" test-progn-one)
+    (test::assert-equal \"2222\" test-progn-two))
+; Original outer scope not changed.
+(test::assert-equal \"One\" test-progn-one)
+",
         )),
     );
     data.insert(
         "undef".to_string(),
         Rc::new(Expression::make_function(
             builtin_undef,
-            "Remove a symbol from the current scope (if it exists).",
+            "Usage: (undef symbol)
+
+Remove a symbol from the current scope (if it exists).
+
+Example:
+(def 'test-undef nil)
+(test::assert-true (def? 'test-undef))
+(undef 'test-undef)
+(test::assert-false (def? 'test-undef))
+",
         )),
     );
     data.insert(
@@ -2209,6 +2283,7 @@ Like progn except any system commands started within form will be in the backgro
 
 Example:
 ;(run-bg gitk)
+t
 ",
         )),
     );
@@ -2250,6 +2325,7 @@ Exit shell with optional status code.
 Example:
 ;(exit)
 ;(exit 0)
+t
 ",
         )),
     );
@@ -2263,6 +2339,7 @@ Print the eval stack on error.
 
 Example:
 ;(error-stack-on)
+t
 ",
         )),
     );
@@ -2276,6 +2353,7 @@ Do not print the eval stack on error.
 
 Example:
 ;(error-stack-off)
+t
 ",
         )),
     );
@@ -2306,6 +2384,7 @@ Return the doc string for a symbol or nil if no string.
 
 Example:
 ;(doc 'car)
+t
 ",
         )),
     );
@@ -2319,6 +2398,7 @@ Return the raw (unexpanded) doc string for a symbol or nil if no string.
 
 Example:
 ;(doc-raw 'car)
+t
 ",
         )),
     );
