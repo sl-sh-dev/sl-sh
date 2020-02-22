@@ -2141,11 +2141,40 @@ Example:
     );
     data.insert(
         "quote".to_string(),
-        Rc::new(Expression::make_special(builtin_quote, "")),
+        Rc::new(Expression::make_special(
+            builtin_quote,
+            "Usage: (quote expression) -> expression
+
+Return expression without evaluation.  The reader macro ' will expand to a quote form.
+
+Example:
+(test::assert-equal (list 1 2 3) (quote (1 2 3)))
+(test::assert-equal (list 1 2 3) '(1 2 3))
+(test::assert-equal '(1 2 3) (quote (1 2 3)))
+",
+        )),
     );
     data.insert(
         "bquote".to_string(),
-        Rc::new(Expression::make_special(builtin_bquote, "")),
+        Rc::new(Expression::make_special(
+            builtin_bquote,
+            "Usage: (bquote expression) -> expression
+
+Return expression without evaluation.  The reader macro ` will expand to a bquote form.
+
+The bquote form (unlike quote) allows for symbol/form evaluation using , or ,@.
+
+Example:
+(test::assert-equal (list 1 2 3) (bquote (1 2 3)))
+(test::assert-equal (list 1 2 3) `(1 2 3))
+(test::assert-equal `(1 2 3) (bquote (1 2 3)))
+(test::assert-equal `(1 2 3) '(1 2 3))
+(def 'test-bquote-one 1)
+(def 'test-bquote-list '(1 2 3))
+(test::assert-equal (list 1 2 3) (bquote (,test-bquote-one 2 3)))
+(test::assert-equal (list 1 2 3) (bquote (,@test-bquote-list)))
+",
+        )),
     );
     /*data.insert(
         "spawn".to_string(),
@@ -2153,11 +2182,40 @@ Example:
     );*/
     data.insert(
         "and".to_string(),
-        Rc::new(Expression::make_special(builtin_and, "")),
+        Rc::new(Expression::make_special(builtin_and,
+        "Usage: (and exp0 ... expN) -> [nil or expN result]
+
+Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
+
+The and form will stop evaluting when the first expression produces nil.
+
+Example:
+(test::assert-false (and nil (err \"and- can not happen\")))
+(test::assert-equal \"and- done\" (and t \"and- done\"))
+(test::assert-equal \"and- done\" (and t t \"and- done\"))
+(test::assert-equal 6 (and t t (+ 1 2 3)))
+(test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
+")),
     );
     data.insert(
         "or".to_string(),
-        Rc::new(Expression::make_special(builtin_or, "")),
+        Rc::new(Expression::make_special(
+            builtin_or,
+            "Usage: (or exp0 ... expN) -> [nil or first non nil expression]
+
+Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
+
+The or form will stop evaluting when the first expression produces non-nil.
+
+Example:
+(test::assert-true (or nil nil t (err \"and- can not happen\")))
+(test::assert-false (or nil nil nil))
+(test::assert-equal \"or- done\" (or nil \"or- done\"))
+(test::assert-equal \"or- done\" (or nil nil \"or- done\"))
+(test::assert-equal 6 (or nil nil (+ 1 2 3)))
+(test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))
+",
+        )),
     );
     data.insert(
         "not".to_string(),
