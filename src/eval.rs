@@ -4,6 +4,7 @@ use std::io;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
+use crate::builtins::expand_macro;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::process::*;
@@ -69,7 +70,7 @@ fn call_lambda<'a>(
     Ok(last_eval)
 }
 
-fn expand_macro<'a>(
+fn exec_macro<'a>(
     environment: &mut Environment,
     sh_macro: &Macro,
     args: Box<dyn Iterator<Item = &Expression> + 'a>,
@@ -135,7 +136,7 @@ pub fn fn_call<'a>(
             }
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args),
-        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, args),
+        Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
         Expression::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
             let msg = format!(
@@ -169,7 +170,7 @@ fn fn_eval<'a>(
                 match &exp.exp {
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
                     Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, parts),
-                    Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                    Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
                     _ => {
                         let exp = exp.exp.clone();
                         eval(environment, &exp)
@@ -197,7 +198,7 @@ fn fn_eval<'a>(
         }
         Expression::Vector(list) => match eval(environment, &Expression::Vector(list.clone()))? {
             Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-            Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+            Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
             Expression::Function(c) => (c.func)(environment, &mut *parts),
             _ => {
                 let msg = format!("Not a valid command {:?}", list);
@@ -208,7 +209,7 @@ fn fn_eval<'a>(
             if let Some((_e1, _e2)) = &*p.borrow() {
                 match eval(environment, &Expression::Pair(p.clone()))? {
                     Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-                    Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+                    Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
                     _ => {
                         let msg = format!("Not a valid command {:?}", command);
@@ -223,7 +224,7 @@ fn fn_eval<'a>(
             }
         }
         Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
-        Expression::Atom(Atom::Macro(m)) => expand_macro(environment, &m, parts),
+        Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
         Expression::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
             let msg = format!(
@@ -298,6 +299,30 @@ fn internal_eval<'a>(
             io::ErrorKind::Other,
             "Called recur in a non-tail position.",
         ));
+    }
+    // If we have a macro expand it and replace the expression with the expansion.
+    if let Some(exp) = expand_macro(environment, expression, false)? {
+        let mut nv = Vec::new();
+        if let Expression::Vector(list) = &exp {
+            for item in &*list.borrow() {
+                nv.push(item.clone());
+            }
+        } else if let Expression::Pair(_) = &exp {
+            for item in exp.iter() {
+                nv.push(item.clone());
+            }
+        }
+        match expression {
+            Expression::Vector(list) => {
+                list.replace(nv);
+            }
+            Expression::Pair(p) => {
+                if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+                    p.replace(np.borrow().clone());
+                }
+            }
+            _ => {}
+        }
     }
     match expression {
         Expression::Vector(parts) => {

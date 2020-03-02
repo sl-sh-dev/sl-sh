@@ -52,12 +52,12 @@ Set a macro to an existing symbol."
 "Import any symbols exported from namespace into the current namespace."
 	(namespace)
 	`((fn () (progn
-		(def 'import (make-vec 3 'core::defq))
+		(def 'import (make-vec 2 1))
 		(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
 		(progn
-			(vec-setnth! 1 (to-symbol (str "ns::" sym)) import)
-			(vec-setnth! 2 (to-symbol (str ,namespace "::" sym)) import)
-			(eval import)))))))
+			(vec-setnth! 0 '(to-symbol (str "ns::" sym)) import)
+			(vec-setnth! 1 (to-symbol (str ,namespace "::" sym)) import)
+			(apply def import)))))))
 
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression

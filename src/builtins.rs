@@ -1192,7 +1192,7 @@ fn do_expansion(
     }
 }
 
-fn expand_macro(
+pub fn expand_macro(
     environment: &mut Environment,
     arg: &Expression,
     one: bool,
@@ -2397,7 +2397,8 @@ Example:
     );
     data.insert(
         "expand-macro1".to_string(),
-        Rc::new(Expression::make_special(builtin_expand_macro1,
+        Rc::new(Expression::make_special(
+            builtin_expand_macro1,
             "Usage: (expand-macro1 expression)
 
 Expands a macro expression.  Only expand the first macro.
@@ -2421,11 +2422,12 @@ Example:
     (expand-macro1 (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
-)),
+        )),
     );
     data.insert(
         "expand-macro-all".to_string(),
-        Rc::new(Expression::make_special(builtin_expand_macro_all,
+        Rc::new(Expression::make_special(
+            builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
 
 Expands a macro expression like expand-macro but also expand any embedded macros.  
