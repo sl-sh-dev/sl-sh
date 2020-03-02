@@ -1158,7 +1158,7 @@ fn do_expansion(
     environment: &mut Environment,
     command: &Expression,
     parts: &mut dyn Iterator<Item = &Expression>,
-) -> io::Result<Expression> {
+) -> io::Result<Option<Expression>> {
     if let Expression::Atom(Atom::Symbol(command)) = command {
         if let Some(exp) = get_expression(environment, &command) {
             if let Expression::Atom(Atom::Macro(sh_macro)) = &exp.exp {
@@ -1180,21 +1180,105 @@ fn do_expansion(
                 }
                 let expansion = expansion.unwrap();
                 environment.current_scope.pop();
-                Ok(expansion)
+                Ok(Some(expansion))
             } else {
-                let msg = format!("expand-macro: {} not a macro", command);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                Ok(None)
             }
         } else {
-            let msg = format!("expand-macro: {} not a macro", command);
-            Err(io::Error::new(io::ErrorKind::Other, msg))
+            Ok(None)
         }
     } else {
-        let msg = format!(
-            "expand-macro first item must be a symbol, found {}",
-            command.to_string()
-        );
-        Err(io::Error::new(io::ErrorKind::Other, msg))
+        Ok(None)
+    }
+}
+
+fn expand_macro(
+    environment: &mut Environment,
+    arg: &Expression,
+    one: bool,
+) -> io::Result<Option<Expression>> {
+    return if let Expression::Vector(list) = arg {
+        let list = list.borrow();
+        let (command, parts) = match list.split_first() {
+            Some((c, p)) => (c, p),
+            None => {
+                return Ok(None);
+            }
+        };
+        let expansion = do_expansion(environment, command, &mut parts.iter())?;
+        if let Some(expansion) = expansion {
+            if !one {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                    Ok(Some(new_expansion))
+                } else {
+                    Ok(Some(expansion))
+                }
+            } else {
+                Ok(Some(expansion))
+            }
+        } else {
+            Ok(None)
+        }
+    } else if let Expression::Pair(p) = arg {
+        if let Some((e1, e2)) = &*p.borrow() {
+            let expansion = do_expansion(environment, &e1, &mut *e2.iter())?;
+            if let Some(expansion) = expansion {
+                if !one {
+                    if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                        Ok(Some(new_expansion))
+                    } else {
+                        Ok(Some(expansion))
+                    }
+                } else {
+                    Ok(Some(expansion))
+                }
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    };
+}
+
+fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
+    if let Some(exp) = expand_macro(environment, arg, false)? {
+        if let Expression::Vector(list) = &exp {
+            let mut nv = Vec::new();
+            for item in &*list.borrow() {
+                nv.push(expand_macro_all(environment, &item)?);
+            }
+            list.replace(nv);
+        } else if let Expression::Pair(p) = &exp {
+            let mut nv = Vec::new();
+            for item in exp.iter() {
+                nv.push(expand_macro_all(environment, &item)?);
+            }
+            if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+                p.replace(np.borrow().clone());
+            }
+        }
+        Ok(exp)
+    } else {
+        let arg = arg.clone();
+        if let Expression::Vector(list) = &arg {
+            let mut nv = Vec::new();
+            for item in &*list.borrow() {
+                nv.push(expand_macro_all(environment, &item)?);
+            }
+            list.replace(nv);
+        } else if let Expression::Pair(p) = &arg {
+            let mut nv = Vec::new();
+            for item in arg.iter() {
+                nv.push(expand_macro_all(environment, &item)?);
+            }
+            if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+                p.replace(np.borrow().clone());
+            }
+        }
+        Ok(arg)
     }
 }
 
@@ -1204,38 +1288,50 @@ fn builtin_expand_macro(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Expression::Vector(list) = arg0 {
-                let list = list.borrow();
-                let (command, parts) = match list.split_first() {
-                    Some((c, p)) => (c, p),
-                    None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expand-macro needs the macro name and parameters",
-                        ));
-                    }
-                };
-                do_expansion(environment, command, &mut parts.iter())
-            } else if let Expression::Pair(p) = arg0 {
-                if let Some((e1, e2)) = &*p.borrow() {
-                    do_expansion(environment, &e1, &mut *e2.iter())
-                } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "expand-macro can only have one form (list defining the macro call)",
-                    ))
-                }
+            return if let Some(exp) = expand_macro(environment, arg0, false)? {
+                Ok(exp)
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "expand-macro can only have one form (list defining the macro call)",
-                ))
+                Ok(arg0.clone())
             };
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
         "expand-macro can only have one form (list defining the macro call)",
+    ))
+}
+
+fn builtin_expand_macro1(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            return if let Some(exp) = expand_macro(environment, arg0, true)? {
+                Ok(exp)
+            } else {
+                Ok(arg0.clone())
+            };
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "expand-macro1 can only have one form (list defining the macro call)",
+    ))
+}
+
+fn builtin_expand_macro_all(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            return expand_macro_all(environment, arg0);
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "expand-macro-all can only have one form (list defining the macro call)",
     ))
 }
 
@@ -2270,7 +2366,93 @@ Example:
     );
     data.insert(
         "expand-macro".to_string(),
-        Rc::new(Expression::make_special(builtin_expand_macro, "")),
+        Rc::new(Expression::make_special(
+            builtin_expand_macro,
+            "Usage: (expand-macro expression)
+
+Expands a macro expression.  If that expansion is also a macro then expand it recursively.
+
+Just returns the expression if not a macro.
+
+Example:
+(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro (defq xx \"value\")))
+(test::assert-equal '(
+    (fn
+        #(i)
+        (progn
+            (if
+                (> (length '(1 2 3)) 0)
+                (core::loop
+                    (plist)
+                    ('(1 2 3))
+                    (progn
+                        (core::setq i (core::first plist)) nil
+                        (if
+                            (> (length plist) 1)
+                            (recur (core::rest plist)))))))) nil)
+    (expand-macro (for i '(1 2 3) ())))
+(test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
+",
+        )),
+    );
+    data.insert(
+        "expand-macro1".to_string(),
+        Rc::new(Expression::make_special(builtin_expand_macro1,
+            "Usage: (expand-macro1 expression)
+
+Expands a macro expression.  Only expand the first macro.
+
+Just returns the expression if not a macro.
+
+Example:
+(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro1 (defq xx \"value\")))
+(test::assert-equal '(core::let
+    ((i))
+    (if
+        (> (length '(1 2 3)) 0)
+        (core::loop
+            (plist)
+            ('(1 2 3))
+            (progn
+                (core::setq i (core::first plist)) nil
+                (if
+                    (> (length plist) 1)
+                    (recur (core::rest plist)))))))
+    (expand-macro1 (for i '(1 2 3) ())))
+(test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
+",
+)),
+    );
+    data.insert(
+        "expand-macro-all".to_string(),
+        Rc::new(Expression::make_special(builtin_expand_macro_all,
+            "Usage: (expand-macro-all expression)
+
+Expands a macro expression like expand-macro but also expand any embedded macros.  
+
+Just returns the expression if not a macro.
+
+Example:
+(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro-all (defq xx \"value\")))
+(test::assert-equal '(
+    (fn
+        #(i)
+        (progn
+            (if
+                (> (length '(1 2 3)) 0)
+                (
+                    (fn
+                        (plist)
+                        (progn
+                            (apply set 'i '#((core::first plist))) nil
+                            (if
+                                (> (length plist) 1)
+                                (recur (core::rest plist)))))
+                    '(1 2 3))))) nil)
+    (expand-macro-all (for i '(1 2 3) ())))
+(test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
+",
+        )),
     );
     data.insert(
         "recur".to_string(),
