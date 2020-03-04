@@ -1,7 +1,7 @@
 (core::ns-import 'core)
 (load "tests/test.lisp")
 
-(defn quick (lst) (progn
+#|(defn quick (lst) (progn
     ;(println "Sorting: " lst)
     (if (<= (length lst) 1)
         lst
@@ -13,7 +13,7 @@
             ;(println less " XXXX " pivot " XXXX " greater)
             (append! (quick less) pivot (quick greater))))))
             ;(progn (quick less) (quick greater)(vec)))))
-
+|#
 (def 'total-syms 0)
 (def 'total-tests 0)
 (println "Namespace forms:")
@@ -33,7 +33,7 @@
 	(print "*ns* ") (if (test::run-example 'root::*ns*) (println "PASSED") (println "FAILED")))
 (println)
 
-(def 'root-list (quick (ns-symbols 'root)))
+(def 'root-list (qsort (ns-symbols 'root)))
 
 (for sym root-list (progn
 	(if (not (or (str-starts-with "ns-" (str sym))(= "*ns*" (str sym)))) (progn

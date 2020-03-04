@@ -1,11 +1,20 @@
 ;;; Forms that work with sequences (list or vectors).
 
-(defn seq? (obj)
-    (if (vec? obj)
-        t
-        (if (list? obj)
-            t
-            nil)))
+(defn seq?
+"Usage: (seq? expression) -> t/nil
+
+True if expression is a sequence, nil otherwise.
+
+Example:
+(test::assert-true (seq? '(1 2 3)))
+(test::assert-true (seq? '#(1 2 3)))
+(test::assert-true (seq? '()))
+(test::assert-true (seq? '#()))
+(test::assert-false (seq? \"aaa\"))
+(test::assert-false (seq? 1))
+"
+    (obj)
+    (or (vec? obj)(list? obj)))
 
 (defn non-empty-seq?
 "Usage: (non-empty-seq? obj)
@@ -218,5 +227,68 @@ otherwise. If a non list or non vector is passed in it returns false."
     (irev items 0 (- (length items) 1))
     items))
 
-(ns-export '(seq? non-empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in?))
+(defn qsort
+"Usage: (qsort sequence comp-lambda?) -> [sorted vector]
+
+Sort a sequence using the quick sort algorithm.  Returns a vector of the sorted sequence.
+
+The comp-lambda argument is optional, if provided it should be a lambda or
+builtin that takes two arguments and return t or nil (it is the compare
+function for the sort).  Defaults to < if not provided.
+
+Example:
+(test::assert-equal '(1 2 3) (qsort '(2 3 1)))
+(test::assert-equal '(1 2 3) (qsort '#(2 3 1)))
+(test::assert-equal '(3 2 1) (qsort '(2 3 1) >))
+(test::assert-equal '(3 2 1) (qsort '#(2 3 1) (fn (a b) (< b a))))
+(test::assert-equal '(\"aaa\" \"aab\" \"aba\" \"baa\" \"bab\" \"ccc\")
+    (qsort '(\"aaa\" \"aab\" \"aba\" \"baa\" \"bab\" \"ccc\")))
+(test::assert-equal '(\"aaa\" \"aab\" \"aba\" \"baa\" \"bab\" \"ccc\")
+    (qsort '(\"ccc\" \"bab\" \"baa\" \"aba\" \"aab\" \"aaa\")))
+(test::assert-equal '(\"aaa\" \"aab\" \"aba\" \"baa\" \"bab\" \"ccc\")
+    (qsort '(\"aba\" \"bab\" \"aab\" \"ccc\" \"baa\" \"aaa\")))
+(test::assert-equal '(\"ccc\" \"bab\" \"baa\" \"aba\" \"aab\" \"aaa\")
+    (qsort '(\"aba\" \"bab\" \"aab\" \"ccc\" \"baa\" \"aaa\") >))
+(test::assert-equal '(\"ccc\" \"bab\" \"baa\" \"aba\" \"aab\" \"aaa\")
+    (qsort '(\"aba\" \"bab\" \"aab\" \"ccc\" \"baa\" \"aaa\") (fn (a b) (> a b))))
+(test::assert-equal '() (qsort '()))
+(test::assert-equal '() (qsort '#()))
+(test::assert-equal '#() (qsort '()))
+(test::assert-equal '#() (qsort '#()))
+"
+    (lst &rest comp) (progn
+    (defn quick-inner (comp-fn sorted to-sort) (progn
+        (if (> (length to-sort) 0) (progn
+            (def 'lst (vec-pop! to-sort))
+            (if (not (seq? lst))
+                (progn
+                    (vec-push! sorted lst)
+                    (recur comp-fn sorted to-sort))
+                (if (<= (length lst) 1)
+                    (progn
+                        (if (= (length lst) 1)
+                            (vec-push! sorted (vec-pop! lst)))
+                        (recur comp-fn sorted to-sort))
+                    (progn
+                        (def 'pivot (first lst))
+                        (def 'less (vec))
+                        (def 'greater (vec))
+                        (for i (rest lst)
+                            (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
+                        (vec-push! to-sort greater)
+                        (vec-push! to-sort pivot)
+                        (vec-push! to-sort less)
+                        (recur comp-fn sorted to-sort)))))
+            sorted)))
+
+    (if (> (length comp) 1) (err "qsort takes one option compare lambda"))
+    (def 'comp-fn (if (= (length comp) 1) (first comp) <))
+    (if (not (or (lambda? comp-fn)(builtin? comp-fn))) (err "compare must be a callable"))
+    (def 'sorted (vec))
+    (def 'to-sort (vec))
+    (vec-push! to-sort lst)
+    (quick-inner comp-fn sorted to-sort)
+    sorted))
+
+(ns-export '(seq? non-empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort))
 
