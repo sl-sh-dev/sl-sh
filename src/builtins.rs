@@ -1197,7 +1197,7 @@ pub fn expand_macro(
     arg: &Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    return if let Expression::Vector(list) = arg {
+    if let Expression::Vector(list) = arg {
         let list = list.borrow();
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
@@ -1240,7 +1240,7 @@ pub fn expand_macro(
         }
     } else {
         Ok(None)
-    };
+    }
 }
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
