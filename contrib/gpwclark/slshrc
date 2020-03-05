@@ -69,6 +69,12 @@
 	;; Abuse register-alias to have better syntax highlighting for cd.
 	(register-alias 'cd)
 
+	;; cd into the directory with the most recent timestamp
+	(defn cdt ()
+		(progn
+			(defq most-recent-dir (first (filter fs-dir? (str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))))
+			(eval `(cd ,most-recent-dir))))
+
 	;; stdin to clipboard
 	(alias sc (str-trim (xclip -selection c)))
 
@@ -154,7 +160,10 @@
 
 	;;tell me about it!
 	(defn tmai ()
-		(pnss (str "Last program exit status: " *last-status* ".")))
+		(progn
+			(defq last-ret-val *last-status*)
+			(pnss (str "Last program exit status: " last-ret-val  "."))
+			last-ret-val))
 ;; }}}
 
 ;; tmux aliases {{{

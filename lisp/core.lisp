@@ -212,8 +212,31 @@ Example:
 	(provided-condition if-true)
 	`(if ,provided-condition ,if-true))
 
+(defn filter
+"Usage: (reduce pred coll)
+
+`filter` is used to strip a collection, `coll`, of all values that do not
+pass the condition defined by the function, `pred`. Filter returns a new
+collection.
+
+Example:
+```
+(filter (fn (x) (= (% x 2) 0 )) (list 1 2 3 4 5))
+;; '(2 4)
+```"
+	(pred coll)
+		(progn
+			(defq filtering-fcn
+				(fn (pred filtered-coll coll-to-filter)
+					(progn (defq fst (first coll-to-filter))
+					(if (not fst)
+						filtered-coll
+						(recur
+							pred
+							(if (pred fst) (append filtered-coll fst) filtered-coll)
+							(rest coll-to-filter))))))
+			(filtering-fcn pred (list) coll)))
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq reduce when))
-
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq reduce when filter))
