@@ -297,6 +297,8 @@ pub struct Environment {
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
     // Map of all the created namespaces.
     pub namespaces: HashMap<String, Rc<RefCell<Scope>>>,
+    // Allow lazy functions (i.e. enable TCO).
+    pub allow_lazy_fn: bool,
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
@@ -328,6 +330,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         root_scope,
         current_scope,
         namespaces,
+        allow_lazy_fn: true,
     }
 }
 
@@ -379,6 +382,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         root_scope,
         current_scope,
         namespaces,
+        allow_lazy_fn: true,
     }
 }
 

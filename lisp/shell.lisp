@@ -1,4 +1,4 @@
-(ns-create 'shell)
+(if (ns-exists? 'shell) (ns-enter 'shell) (ns-create 'shell))
 (core::ns-import 'core)
 
 ;;; Macros to make working with the shell easier.

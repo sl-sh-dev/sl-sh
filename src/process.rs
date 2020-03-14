@@ -378,6 +378,9 @@ pub fn do_command<'a>(
     let mut data = None;
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
+    if let Some(Expression::LazyFn(_, _)) = &environment.data_in {
+        environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
+    }
     let stdin = match &environment.data_in {
         Some(Expression::Atom(atom)) => {
             data = Some(atom.clone());
@@ -450,6 +453,12 @@ pub fn do_command<'a>(
                 ))
             }
         },
+        Some(Expression::LazyFn(_, _)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Invalid expression state before command (lazyfn- this should be impossible...).",
+            ));
+        }
         None => {
             if foreground {
                 Stdio::inherit()

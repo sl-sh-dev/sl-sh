@@ -14,10 +14,11 @@ fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = &Expression>
     Box::new(v.iter())
 }
 
-fn call_lambda<'a>(
+pub fn call_lambda<'a>(
     environment: &mut Environment,
     lambda: &Lambda,
     args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    eval_args: bool,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
@@ -29,15 +30,23 @@ fn call_lambda<'a>(
         Some(&mut new_scope.borrow_mut()),
         &lambda.params,
         args,
-        true,
+        eval_args,
     ) {
         return Err(err);
     }
     environment.current_scope.push(new_scope);
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
+    let mut lambda = lambda;
+    let mut lambda_int;
     while looping {
-        last_eval = match eval(environment, &lambda.body) {
+        if environment.sig_int.load(Ordering::Relaxed) {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Lambda interupted by SIGINT.",
+            ));
+        }
+        last_eval = match eval_nr(environment, &lambda.body) {
             Ok(e) => e,
             Err(err) => {
                 environment.current_scope.pop();
@@ -63,11 +72,29 @@ fn call_lambda<'a>(
                     return Err(err);
                 }
             }
+        } else if environment.exit_code.is_none() {
+            if let Expression::LazyFn(lam, parts) = &last_eval {
+                lambda_int = lam.clone();
+                lambda = &lambda_int;
+                looping = true;
+                environment.current_scope.pop();
+                // scope is popped so can use ? in this if now.
+                let new_scope = build_new_scope(Some(lambda.capture.clone()));
+                let ib = Box::new(parts.iter());
+                setup_args(
+                    environment,
+                    Some(&mut new_scope.borrow_mut()),
+                    &lambda.params,
+                    ib,
+                    false,
+                )?;
+                environment.current_scope.push(new_scope);
+            }
         }
     }
     environment.loose_symbols = old_loose;
     environment.current_scope.pop();
-    Ok(last_eval)
+    Ok(last_eval.resolve(environment)?)
 }
 
 fn exec_macro<'a>(
@@ -91,15 +118,22 @@ fn exec_macro<'a>(
         }
     };
     new_scope.outer = Some(environment.current_scope.last().unwrap().clone());
+
     environment
         .current_scope
         .push(Rc::new(RefCell::new(new_scope)));
+    let lazy = environment.allow_lazy_fn;
+    environment.allow_lazy_fn = false;
     match eval(environment, &sh_macro.body) {
         Ok(expansion) => {
+            let expansion = expansion.resolve(environment)?;
             environment.current_scope.pop();
-            eval(environment, &expansion)
+            let res = eval(environment, &expansion);
+            environment.allow_lazy_fn = lazy;
+            res
         }
         Err(err) => {
+            environment.allow_lazy_fn = lazy;
             environment.current_scope.pop();
             Err(err)
         }
@@ -118,7 +152,7 @@ pub fn fn_call<'a>(
                     Expression::Function(c) if !c.is_special_form => {
                         (c.func)(environment, &mut *args)
                     }
-                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args),
+                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args, true),
                     _ => {
                         let msg = format!(
                             "Symbol {} is not callable (or is macro or special form).",
@@ -135,7 +169,7 @@ pub fn fn_call<'a>(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args),
+        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args, true),
         Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
         Expression::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
@@ -149,11 +183,56 @@ pub fn fn_call<'a>(
     }
 }
 
-fn fn_eval<'a>(
+fn make_lazy<'a>(
     environment: &mut Environment,
-    command: &Expression,
-    mut parts: Box<dyn Iterator<Item = &Expression> + 'a>,
+    lambda: &Lambda,
+    args: Box<dyn Iterator<Item = &Expression> + 'a>,
 ) -> io::Result<Expression> {
+    let mut parms = Vec::new();
+    for p in args {
+        parms.push(eval(environment, p)?);
+    }
+    Ok(Expression::LazyFn(lambda.clone(), parms))
+}
+
+fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+    let parts_int;
+    let p_int;
+    let p_bor;
+    let (command, mut parts) = match expression {
+        Expression::Vector(parts) => {
+            parts_int = parts.borrow();
+            let (command, parts) = match parts_int.split_first() {
+                Some((c, p)) => (c, p),
+                None => {
+                    return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
+                }
+            };
+            let ib = box_slice_it(&parts);
+            (command, ib)
+        }
+        Expression::Pair(p) => {
+            if p.borrow().is_none() {
+                return Ok(Expression::nil());
+            }
+            p_bor = p.borrow();
+            p_int = p_bor.as_ref().unwrap();
+            (&p_int.0, p_int.1.iter())
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Not a callable expression.",
+            ))
+        }
+    };
+    let com_int;
+    let command = if let Expression::LazyFn(_, _) = command {
+        com_int = command.clone().resolve(environment)?;
+        &com_int
+    } else {
+        command
+    };
     match command {
         Expression::Atom(Atom::Symbol(command)) => {
             if command.is_empty() {
@@ -169,7 +248,13 @@ fn fn_eval<'a>(
             if let Some(exp) = form {
                 match &exp.exp {
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
-                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, parts),
+                    Expression::Atom(Atom::Lambda(f)) => {
+                        if environment.allow_lazy_fn {
+                            make_lazy(environment, f, parts)
+                        } else {
+                            call_lambda(environment, &f, parts, true)
+                        }
+                    }
                     Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
                     _ => {
                         let exp = exp.exp.clone();
@@ -197,7 +282,13 @@ fn fn_eval<'a>(
             }
         }
         Expression::Vector(list) => match eval(environment, &Expression::Vector(list.clone()))? {
-            Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+            Expression::Atom(Atom::Lambda(l)) => {
+                if environment.allow_lazy_fn {
+                    make_lazy(environment, &l, parts)
+                } else {
+                    call_lambda(environment, &l, parts, true)
+                }
+            }
             Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
             Expression::Function(c) => (c.func)(environment, &mut *parts),
             _ => {
@@ -206,9 +297,15 @@ fn fn_eval<'a>(
             }
         },
         Expression::Pair(p) => {
-            if let Some((_e1, _e2)) = &*p.borrow() {
+            if p.borrow().is_some() {
                 match eval(environment, &Expression::Pair(p.clone()))? {
-                    Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+                    Expression::Atom(Atom::Lambda(l)) => {
+                        if environment.allow_lazy_fn {
+                            make_lazy(environment, &l, parts)
+                        } else {
+                            call_lambda(environment, &l, parts, true)
+                        }
+                    }
                     Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
                     Expression::Function(c) => (c.func)(environment, &mut *parts),
                     _ => {
@@ -223,7 +320,13 @@ fn fn_eval<'a>(
                 ))
             }
         }
-        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, parts),
+        Expression::Atom(Atom::Lambda(l)) => {
+            if environment.allow_lazy_fn {
+                make_lazy(environment, &l, parts)
+            } else {
+                call_lambda(environment, &l, parts, true)
+            }
+        }
         Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
         Expression::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
@@ -305,11 +408,21 @@ fn internal_eval<'a>(
         let mut nv = Vec::new();
         if let Expression::Vector(list) = &exp {
             for item in &*list.borrow() {
-                nv.push(item.clone());
+                let item = if let Expression::LazyFn(_, _) = item {
+                    item.clone().resolve(environment)?
+                } else {
+                    item.clone()
+                };
+                nv.push(item);
             }
         } else if let Expression::Pair(_) = &exp {
             for item in exp.iter() {
-                nv.push(item.clone());
+                let item = if let Expression::LazyFn(_, _) = item {
+                    item.clone().resolve(environment)?
+                } else {
+                    item.clone()
+                };
+                nv.push(item);
             }
         }
         match expression {
@@ -325,21 +438,10 @@ fn internal_eval<'a>(
         }
     }
     match expression {
-        Expression::Vector(parts) => {
-            let parts = parts.borrow();
-            let (command, parts) = match parts.split_first() {
-                Some((c, p)) => (c, p),
-                None => {
-                    eprintln!("No valid command.");
-                    return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
-                }
-            };
-            let ib = box_slice_it(&parts);
-            fn_eval(environment, command, ib)
-        }
+        Expression::Vector(_) => fn_eval_lazy(environment, expression),
         Expression::Pair(p) => {
-            if let Some((command, rest)) = &*p.borrow() {
-                fn_eval(environment, &command, rest.iter())
+            if p.borrow().is_some() {
+                fn_eval_lazy(environment, expression)
             } else {
                 Ok(Expression::nil())
             }
@@ -369,10 +471,14 @@ fn internal_eval<'a>(
         Expression::Function(_) => Ok(Expression::nil()),
         Expression::Process(state) => Ok(Expression::Process(*state)),
         Expression::File(_) => Ok(Expression::nil()),
+        Expression::LazyFn(_, _) => {
+            let int_exp = expression.clone().resolve(environment)?;
+            eval(environment, &int_exp)
+        }
     }
 }
 
-pub fn eval<'a>(
+pub fn eval_nr<'a>(
     environment: &mut Environment,
     expression: &'a Expression,
 ) -> io::Result<Expression> {
@@ -394,4 +500,16 @@ pub fn eval<'a>(
     }
     environment.state.eval_level -= 1;
     result
+}
+
+pub fn eval<'a>(
+    environment: &mut Environment,
+    expression: &'a Expression,
+) -> io::Result<Expression> {
+    let result = eval_nr(environment, expression);
+    if let Ok(res) = result {
+        res.resolve(environment)
+    } else {
+        result
+    }
 }

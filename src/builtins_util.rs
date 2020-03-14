@@ -182,6 +182,13 @@ fn set_arg(
     var: &Expression,
     do_eval: bool,
 ) -> io::Result<()> {
+    let res_var;
+    let var = if let Expression::LazyFn(_, _) = var {
+        res_var = var.clone().resolve(environment)?;
+        &res_var
+    } else {
+        var
+    };
     let v2 = if do_eval {
         if let Expression::Atom(Atom::Symbol(s)) = var {
             if let Some(reference) = get_expression(environment, s) {

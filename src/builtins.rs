@@ -335,12 +335,12 @@ fn builtin_if(
         if let Some(then_form) = args.next() {
             return if eval(environment, if_form)?.is_nil() {
                 if let Some(else_form) = args.next() {
-                    eval(environment, else_form)
+                    eval_nr(environment, else_form)
                 } else {
                     Ok(Expression::nil())
                 }
             } else {
-                eval(environment, then_form)
+                eval_nr(environment, then_form)
             };
         }
     }
@@ -503,7 +503,8 @@ pub fn builtin_progn(
 ) -> io::Result<Expression> {
     let mut ret = Expression::nil();
     for arg in args {
-        ret = eval(environment, &arg)?;
+        ret.resolve(environment)?;
+        ret = eval_nr(environment, &arg)?;
     }
     Ok(ret)
 }
@@ -587,6 +588,7 @@ fn builtin_set(
 ) -> io::Result<Expression> {
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
+        // XXX TODO, eval val here?
         entry.insert(Rc::new(val.clone()));
         Ok(val.clone())
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
@@ -1192,7 +1194,7 @@ fn do_expansion(
     }
 }
 
-pub fn expand_macro(
+fn expand_macro_internal(
     environment: &mut Environment,
     arg: &Expression,
     one: bool,
@@ -1241,6 +1243,18 @@ pub fn expand_macro(
     } else {
         Ok(None)
     }
+}
+
+pub fn expand_macro(
+    environment: &mut Environment,
+    arg: &Expression,
+    one: bool,
+) -> io::Result<Option<Expression>> {
+    let lazy = environment.allow_lazy_fn;
+    environment.allow_lazy_fn = false;
+    let res = expand_macro_internal(environment, arg, one);
+    environment.allow_lazy_fn = lazy;
+    res
 }
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {

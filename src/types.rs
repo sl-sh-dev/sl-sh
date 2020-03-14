@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use crate::builtins_util::is_proper_list;
 use crate::environment::*;
+use crate::eval::call_lambda;
 use crate::process::*;
 
 #[derive(Clone, Debug)]
@@ -192,6 +193,7 @@ pub enum Expression {
     Function(Callable),
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),
+    LazyFn(Lambda, Vec<Expression>),
 }
 
 impl fmt::Display for Expression {
@@ -294,6 +296,13 @@ impl fmt::Display for Expression {
                 FileState::Read(_file) => write!(f, "#<READ FILE>"),
                 FileState::Write(_file) => write!(f, "#<WRITE FILE>"),
             },
+            Expression::LazyFn(_, args) => {
+                let mut res = String::new();
+                res.push_str("#<LAZYFN<");
+                list_out(&mut res, &mut args.iter());
+                res.push_str(">>");
+                write!(f, "{}", res)
+            }
         }
     }
 }
@@ -321,11 +330,22 @@ impl fmt::Debug for Expression {
                 pid, exit_status
             ),
             Expression::File(_) => write!(f, "Expression::File(_)"),
+            Expression::LazyFn(_, exp) => write!(f, "Expression::LazyFn({:?})", exp),
         }
     }
 }
 
 impl Expression {
+    // If the expression is a lazy fn then resolve it to concrete expression.
+    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+        let mut res = self;
+        while let Expression::LazyFn(lambda, parts) = &res {
+            let ib = Box::new(parts.iter());
+            res = call_lambda(environment, &lambda, ib, false)?;
+        }
+        Ok(res)
+    }
+
     pub fn nil() -> Expression {
         Expression::Pair(Rc::new(RefCell::new(None)))
     }
@@ -417,6 +437,7 @@ impl Expression {
             }
             Expression::HashMap(_) => "HashMap".to_string(),
             Expression::File(_) => "File".to_string(),
+            Expression::LazyFn(_, _) => "Lambda".to_string(),
         }
     }
 
@@ -587,6 +608,7 @@ impl Expression {
                 }
                 _ => Ok(self.to_string()),
             },
+            Expression::LazyFn(_, _) => Ok(self.to_string()),
         }
     }
 
@@ -621,6 +643,7 @@ impl Expression {
             Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
 
@@ -645,6 +668,7 @@ impl Expression {
             Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
 
@@ -716,6 +740,7 @@ impl Expression {
                 }
                 _ => write!(writer, "{}", self.to_string())?,
             },
+            Expression::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;
         Ok(())

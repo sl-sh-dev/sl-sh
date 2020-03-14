@@ -41,11 +41,11 @@ Set a macro to an existing symbol."
 (defmacro ns-export
 "Export a symbol or list of symbols to be imported into other namespaces."
 	(symbol_or_sequence) `(progn
-	(if (not (def? '*ns-exports*)) (defq *ns-exports* (vec)))
+	(if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
 	(if (symbol? ,symbol_or_sequence)
 		(vec-push! *ns-exports* (quote ,symbol_or_sequence))
 		(if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
-			(for sym ,symbol_or_sequence (vec-push! *ns-exports* sym))
+			(core::for sym ,symbol_or_sequence (vec-push! *ns-exports* sym))
 			(err "ns-export takes a symbol or sequence.")))))
 
 (defmacro ns-import
