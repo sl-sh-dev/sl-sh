@@ -482,6 +482,9 @@ pub fn eval_nr<'a>(
     environment: &mut Environment,
     expression: &'a Expression,
 ) -> io::Result<Expression> {
+    if environment.state.eval_level > 500 {
+        return Err(io::Error::new(io::ErrorKind::Other, "Eval calls to deep."));
+    }
     environment.state.eval_level += 1;
     let result = internal_eval(environment, expression);
     if let Err(_err) = &result {
