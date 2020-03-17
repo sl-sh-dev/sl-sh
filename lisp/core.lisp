@@ -78,13 +78,13 @@ Binds an expession to a quoted symbol (ie def 'sym bind)"
 		(progn
 			(def 'ars (vec-nth 0 args))
 			(def 'body (vec-nth 1 args))
-			`(def ',name (fn ,ars ,body)))
+			`(def ',name (fn ,ars (block ,name ,body))))
 		(if (= (length args) 3)
 			(progn
 				(def 'doc-str (vec-nth 0 args))
 				(def 'ars (vec-nth 1 args))
 				(def 'body (vec-nth 2 args))
-				`(def ',name ,doc-str (fn ,ars ,body)))
+				`(def ',name ,doc-str (fn ,ars (block ,name ,body))))
 			(err "defn: Wrong number of args.")))))
 
 (defmacro setfn (name &rest args) (core::let ()

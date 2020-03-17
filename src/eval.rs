@@ -482,11 +482,23 @@ pub fn eval_nr<'a>(
     environment: &mut Environment,
     expression: &'a Expression,
 ) -> io::Result<Expression> {
+    if environment.return_val.is_some() {
+        return Ok(Expression::nil());
+    }
     if environment.state.eval_level > 500 {
         return Err(io::Error::new(io::ErrorKind::Other, "Eval calls to deep."));
     }
     environment.state.eval_level += 1;
-    let result = internal_eval(environment, expression);
+    let tres = internal_eval(environment, expression);
+    let result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
+        environment.return_val = None;
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Return without matching block.",
+        ))
+    } else {
+        tres
+    };
     if let Err(_err) = &result {
         if environment.error_expression.is_none() {
             environment.error_expression = Some(expression.clone());

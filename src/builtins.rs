@@ -1806,6 +1806,90 @@ fn builtin_doc_raw(
     get_doc(environment, args, true)
 }
 
+pub fn builtin_block(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut ret = Expression::nil();
+    if let Some(name) = args.next() {
+        let name = if let Expression::Atom(Atom::Symbol(n)) = name {
+            n.clone()
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "block: Name must be a symbol (not evaluted).",
+            ));
+        };
+        for arg in args {
+            ret = ret.resolve(environment)?;
+            if environment.return_val.is_none() {
+                ret = eval_nr(environment, &arg)?;
+            }
+            let mut returned = false;
+            if let Some((ret_name, exp)) = &environment.return_val {
+                if let Some(ret_name) = ret_name {
+                    if &name == ret_name {
+                        returned = true;
+                        ret = exp.clone();
+                    }
+                } else {
+                    returned = true;
+                    ret = exp.clone();
+                }
+            }
+            if returned {
+                environment.return_val = None;
+                return Ok(ret);
+            }
+            if environment.return_val.is_some() {
+                break;
+            }
+        }
+        Ok(ret)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "block: requires a name.",
+        ))
+    }
+}
+
+pub fn builtin_return_from(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    let mut ret = Expression::nil();
+    if let Some(name) = args.next() {
+        let name = if let Expression::Atom(Atom::Symbol(n)) = name {
+            Some(n.clone())
+        } else if name.is_nil() {
+            None
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "return-from: Name should be a symbol or nil (not evaluted).",
+            ));
+        };
+        if let Some(exp) = args.next() {
+            if args.next().is_none() {
+                ret = eval_nr(environment, exp)?;
+            } else {
+                return Err(io::Error::new(
+        io::ErrorKind::Other,
+        "return-from: Requires a block name and optional expression, provided extra form(s).",
+                ));
+            }
+        }
+        environment.return_val = Some((name, ret));
+        Ok(Expression::nil())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "block: requires a name.",
+        ))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -2655,6 +2739,43 @@ Return the raw (unexpanded) doc string for a symbol or nil if no string.
 Example:
 ;(doc-raw 'car)
 t
+",
+        )),
+    );
+
+    data.insert(
+        "block".to_string(),
+        Rc::new(Expression::make_special(
+            builtin_block,
+            "Usage: (block name form*)
+
+Create a block with name (name is not evaluted), if no return-from encountered then
+return last expression (like progn).
+
+Example:
+(test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
+(test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
+(test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
+(test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+",
+        )),
+    );
+
+    data.insert(
+        "return-from".to_string(),
+        Rc::new(Expression::make_special(
+            builtin_return_from,
+            "Usage: (return-from name expression?)
+
+Causes enclosing block with name (name is not evaluted) to evaluate to expression.
+
+Example:
+(test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
+(test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
+(test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
+(test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
 ",
         )),
     );
