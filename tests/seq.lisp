@@ -9,7 +9,6 @@
 Some stuff
 |#
 
-(load "tests/test.lisp")
 (core::ns-import 'core)
 (ns-import 'test)
 
