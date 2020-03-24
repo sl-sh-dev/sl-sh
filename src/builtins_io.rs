@@ -391,6 +391,7 @@ pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("open"),
         Rc::new(Expression::make_function(
@@ -412,6 +413,7 @@ Example:
 (write-line (open \"/tmp/slsh-tst-open.txt\" :create :truncate) \"Test Line One\")
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
 ",
+            root,
         )),
     );
     data.insert(
@@ -430,6 +432,7 @@ Example:
 (test::assert-equal \"Test Line Two\n\" (read-line tst-file))
 (close tst-file)
 ",
+            root,
         )),
     );
     data.insert(
@@ -448,6 +451,7 @@ Example:
 (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
 (close tst-file)
 ",
+            root,
         )),
     );
     data.insert(
@@ -468,6 +472,7 @@ Example:
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
 ",
+            root,
         )),
     );
     data.insert(
@@ -492,6 +497,7 @@ Example:
 (test::assert-equal '(7 8 9) (read \"7 8 9\" :add-parens))
 (test::assert-equal '(x y z) (read \"(x y z)\" :add-parens))
 ",
+            root,
         )),
     );
     data.insert(
@@ -510,6 +516,7 @@ Example:
 (test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
 (close tst-file)
 ",
+            root,
         )),
     );
     data.insert(
@@ -528,6 +535,7 @@ Example:
 (test::assert-equal \"Test Line Write String\" (read-line tst-file))
 (close tst-file)
 ",
+            root,
         )),
     );
 }

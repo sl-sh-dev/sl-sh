@@ -344,6 +344,7 @@ pub fn add_type_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("type"),
         Rc::new(Expression::make_function(
@@ -396,6 +397,7 @@ Example:
 (test::assert-equal \"HashMap\" (type (make-hash)))
 (test::assert-equal \"File\" (type (open :stdin)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -410,6 +412,7 @@ Example:
 (test::assert-true (nil? nil))
 (test::assert-false (nil? t))
 ",
+            root,
         )),
     );
     data.insert(
@@ -426,6 +429,7 @@ Example:
 (test::assert-false (true? 1))
 (test::assert-false (true? \"str\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -440,6 +444,7 @@ Example:
 (test::assert-true (float? 1.5))
 (test::assert-false (float? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -454,6 +459,7 @@ Example:
 (test::assert-true (int? 1))
 (test::assert-false (int? 1.5))
 ",
+            root,
         )),
     );
     data.insert(
@@ -468,6 +474,7 @@ Example:
 (test::assert-true (symbol? 'symbol))
 (test::assert-false (symbol? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -482,6 +489,7 @@ Example:
 (test::assert-true (string? \"string\"))
 (test::assert-false (string? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -497,6 +505,7 @@ Example:
 (test::assert-false (string-buf? \"string\"))
 (test::assert-false (string-buf? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -512,6 +521,7 @@ Example:
 (test::assert-false (char? 1))
 (test::assert-false (char? \"a\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -528,6 +538,7 @@ Example:
 (test::assert-false (lambda? 1))
 (test::assert-false (lambda? if))
 ",
+            root,
         )),
     );
     data.insert(
@@ -544,6 +555,7 @@ Example:
 (test::assert-false (macro? 1))
 (test::assert-false (macro? if))
 ",
+            root,
         )),
     );
     data.insert(
@@ -562,6 +574,7 @@ Example:
 (test::assert-false (vec? '(1 2 3)))
 (test::assert-false (vec? (list)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -580,6 +593,7 @@ Example:
 (test::assert-false (pair? '#(1 2 3)))
 (test::assert-false (pair? (vec)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -597,6 +611,7 @@ Example:
 (test::assert-false (builtin? copy-seq))
 (test::assert-false (builtin? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -613,6 +628,7 @@ Example:
 (test::assert-false (process? copy-seq))
 (test::assert-false (process? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -629,6 +645,7 @@ Example:
 (test::assert-false (file? copy-seq))
 (test::assert-false (file? 1))
 ",
+            root,
         )),
     );
     data.insert(
@@ -646,6 +663,7 @@ Example:
 (test::assert-false (hash? (list)))
 (test::assert-false (hash? (vec)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -664,6 +682,7 @@ Example:
 (test::assert-false (list? (vec)))
 (test::assert-false (list? '(1 . 2)))
 ",
+            root,
         )),
     );
 }

@@ -379,21 +379,21 @@ impl Expression {
         }
     }
 
-    pub fn make_function(func: CallFunc, doc_str: &str) -> Reference {
+    pub fn make_function(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
         Reference {
             exp: Expression::Function(Callable::new(func, false)),
             meta: RefMetaData {
-                namespace: Some("root".to_string()),
+                namespace: Some(namespace),
                 doc_string: Some(doc_str.to_string()),
             },
         }
     }
 
-    pub fn make_special(func: CallFunc, doc_str: &str) -> Reference {
+    pub fn make_special(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
         Reference {
             exp: Expression::Function(Callable::new(func, true)),
             meta: RefMetaData {
-                namespace: Some("root".to_string()),
+                namespace: Some(namespace),
                 doc_string: Some(doc_str.to_string()),
             },
         }

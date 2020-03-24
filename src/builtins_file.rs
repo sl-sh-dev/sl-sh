@@ -409,15 +409,21 @@ pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("cd"),
-        Rc::new(Expression::make_function(builtin_cd, "Change directory.")),
+        Rc::new(Expression::make_function(
+            builtin_cd,
+            "Change directory.",
+            root,
+        )),
     );
     data.insert(
         interner.intern("fs-exists?"),
         Rc::new(Expression::make_function(
             builtin_path_exists,
             "Does the given path exist?",
+            root,
         )),
     );
     data.insert(
@@ -425,6 +431,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_is_file,
             "Is the given path a file?",
+            root,
         )),
     );
     data.insert(
@@ -432,6 +439,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_is_dir,
             "Is the given path a directory?",
+            root,
         )),
     );
     data.insert(
@@ -439,6 +447,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_pipe,
             "Setup a pipe between processes.",
+            root,
         )),
     );
     data.insert(
@@ -446,6 +455,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_wait,
             "Wait for a process to end and return it's exit status.",
+            root,
         )),
     );
     data.insert(
@@ -453,6 +463,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_pid,
             "Return the pid of a process.",
+            root,
         )),
     );
     data.insert(
@@ -460,6 +471,7 @@ pub fn add_file_builtins<S: BuildHasher>(
         Rc::new(Expression::make_function(
             builtin_glob,
             "Takes a list of globs and return the list of them expanded.",
+            root,
         )),
     );
 }

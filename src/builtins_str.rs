@@ -958,6 +958,7 @@ pub fn add_str_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("str-trim"),
         Rc::new(Expression::make_function(
@@ -973,6 +974,7 @@ Example:
 (test::assert-equal \"some string\" (str-trim \"some string   \"))
 (test::assert-equal \"some string\" (str-trim \"some string\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -990,6 +992,7 @@ Example:
 (test::assert-equal \"some string   \" (str-ltrim \"some string   \"))
 (test::assert-equal \"some string\" (str-ltrim \"some string\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1007,6 +1010,7 @@ Example:
 (test::assert-equal \"some string\" (str-rtrim \"some string   \"))
 (test::assert-equal \"some string\" (str-rtrim \"some string\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1021,7 +1025,7 @@ Example:
 (test::assert-equal \"some yyy string\" (str-replace \"some xxx string\" \"xxx\" \"yyy\"))
 (test::assert-equal \"some yyy string yyy\" (str-replace \"some xxx string xxx\" \"xxx\" \"yyy\"))
 (test::assert-equal \"yyy some yyy string yyy\" (str-replace \"xxx some xxx string xxx\" \"xxx\" \"yyy\"))
-",
+", root
         )),
     );
     data.insert(
@@ -1039,7 +1043,7 @@ Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-split :whitespace \"some yyy string\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-split :whitespace \"somexxxyyyxxxstring\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-split \"zzz\" \"somexxxyyyxxxstring\"))
-",
+", root
         )),
     );
     data.insert(
@@ -1056,7 +1060,7 @@ Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \" \" \"string yyy some\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit :whitespace \"somexxxyyyxxxstring\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit \"zzz\" \"somexxxyyyxxxstring\"))
-",
+", root
         )),
     );
     data.insert(
@@ -1073,7 +1077,7 @@ Example:
 (test::assert-equal '(\"some\" \"yyy\" \"stringxxxother\") (str-splitn 3 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-splitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '() (str-splitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
-",
+", root
         )),
     );
     data.insert(
@@ -1090,7 +1094,7 @@ Example:
 (test::assert-equal '(\"other\" \"string\" \"somexxxyyy\") (str-rsplitn 3 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-rsplitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '() (str-rsplitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
-",
+", root
         )),
     );
     data.insert(
@@ -1106,6 +1110,7 @@ Example:
 (test::assert-equal \"string yyy some\" (str-cat-list \" \" '(\"string\" \"yyy\" \"some\")))
 (test::assert-equal \"stringyyysome\" (str-cat-list \"\" '(\"string\" \"yyy\" \"some\")))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1121,6 +1126,7 @@ Example:
 (test::assert-equal \"some\" (str-sub 15 4 \"stringxxxyyyxxxsome\"))
 (test::assert-equal \"yyy\" (str-sub 9 3 \"stringxxxyyyxxxsome\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1136,6 +1142,7 @@ Example:
 (test::assert-equal \"string\" (str-append \"string\" \"\"))
 (test::assert-equal \"string \" (str-append \"string\" \" \"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1155,6 +1162,7 @@ Example:
 (test::assert-equal \"string 50\" (str \"string\" \" \" 50))
 (test::assert-equal \"string 50 test\n\" (str \"string\" \" \" 50 \" \" (echo \"test\")))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1171,6 +1179,7 @@ Example:
 (test::assert-false (str-empty? \" \"))
 (test::assert-false (str-empty? \"string\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1186,6 +1195,7 @@ Example:
 (test::assert-equal #\\s (str-nth 0 \"stau\"))
 (test::assert-equal #\\u (str-nth 3 \"stau\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1203,6 +1213,7 @@ Example:
 (test::assert-equal \"stau\" (str-lower \"StaU\"))
 (test::assert-equal \"stau\" (str-lower \"sTaU\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1220,6 +1231,7 @@ Example:
 (test::assert-equal \"STAU\" (str-upper \"StaU\"))
 (test::assert-equal \"STAU\" (str-upper \"sTaU\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1238,6 +1250,7 @@ Example:
 ; Note 5 chars and 6 bytes because of the final char.
 (test::assert-equal 6 (str-bytes \"StauΣ\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1252,6 +1265,7 @@ Example:
 (test::assert-true (str-starts-with \"Stau\" \"Stausomething\"))
 (test::assert-false (str-starts-with \"StaU\" \"Stausomething\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1271,6 +1285,7 @@ Example:
 (test::assert-false (str-contains \"Thing\" \"Stausomething\"))
 (test::assert-true (str-contains \"someΣ\" \"StausomeΣthing\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1292,6 +1307,7 @@ Example:
 (test::assert-equal \"string 50\" (str-buf \"string\" \" \" 50))
 (test::assert-equal \"string 50 test\n\" (str-buf \"string\" \" \" 50 \" \" (echo \"test\")))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1310,6 +1326,7 @@ Example:
 (test::assert-equal \"def-stringsome\" (str-buf-push! test-str-buf-push \"some\"))
 (test::assert-equal \"def-stringsome\" test-str-buf-push)
 ",
+            root,
         )),
     );
     data.insert(
@@ -1328,6 +1345,7 @@ Example:
 (test::assert-equal \"\" (str-buf-clear! test-str-buf-clear))
 (test::assert-equal \"\" test-str-buf-clear)
 ",
+            root,
         )),
     );
     data.insert(
@@ -1346,7 +1364,7 @@ Example:
 (def 'test-str-map (str-map (fn (ch) (if (char= #\\x ch) #\\X ch)) (str-buf \"xstringxstrx\")))
 (test::assert-equal \"XstringXstrX\" test-str-map)
 (test::assert-true (string? test-str-map))
-",
+", root
         )),
     );
     data.insert(
@@ -1364,7 +1382,7 @@ Example:
 (def 'test-str-buf-map (str-buf-map (fn (ch) (if (char= #\\x ch) #\\X ch)) (str-buf \"xstringxstrx\")))
 (test::assert-equal \"XstringXstrX\" test-str-buf-map)
 (test::assert-true (string-buf? test-str-buf-map))
-",
+", root
         )),
     );
     data.insert(
@@ -1380,6 +1398,7 @@ Example:
 (test::assert-equal \"some TST stuff\" \"some $TST-IGNORE stuff\")
 (test::assert-equal \"some \\$TST-IGNORE stuff\" (str-ignore-expand \"some $TST-IGNORE stuff\"))
 ",
+            root,
         )),
     );
 
@@ -1396,6 +1415,7 @@ Example:
 (test::assert-equal #\\a (char-lower #\\a))
 (test::assert-not-equal #\\a (char-lower #\\Z))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1411,6 +1431,7 @@ Example:
 (test::assert-equal #\\A (char-upper #\\a))
 (test::assert-not-equal #\\A (char-upper #\\Z))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1426,6 +1447,7 @@ Example:
 (test::assert-true (char-whitespace? #\\tab))
 (test::assert-false (char-whitespace? #\\s))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1449,6 +1471,7 @@ Example:
 (test::assert-false (char= #\\z #\\Z))
 (test::assert-true (char= #\\a (char-lower #\\A)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1472,6 +1495,7 @@ Example:
 (test::assert-true (char!= #\\z #\\Z))
 (test::assert-false (char!= #\\a (char-lower #\\A)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1495,6 +1519,7 @@ Example:
 (test::assert-true (char> #\\z #\\Z))
 (test::assert-false (char> #\\a (char-lower #\\A)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1518,6 +1543,7 @@ Example:
 (test::assert-true (char< #\\Z #\\z))
 (test::assert-true (char< #\\A (char-lower #\\A)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1541,6 +1567,7 @@ Example:
 (test::assert-true (char>= #\\z #\\Z))
 (test::assert-true (char>= #\\a (char-lower #\\A)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -1565,6 +1592,7 @@ Example:
 (test::assert-true (char<= #\\Z #\\z))
 (test::assert-true (char<= #\\A (char-lower #\\A)))
 ",
+            root,
         )),
     );
 }

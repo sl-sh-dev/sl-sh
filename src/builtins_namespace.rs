@@ -138,7 +138,7 @@ fn builtin_ns_list(
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
-            ns_list.push(Expression::Atom(Atom::String(ns.to_string())));
+            ns_list.push(Expression::Atom(Atom::StringRef(ns)));
         }
         return Ok(Expression::with_list(ns_list));
     }
@@ -206,10 +206,10 @@ fn builtin_ns_symbols(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(sym)) => sym.to_string(),
-                Expression::Atom(Atom::String(s)) => s,
-                Expression::Atom(Atom::StringRef(s)) => s.to_string(),
-                Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
+                Expression::Atom(Atom::Symbol(sym)) => sym,
+                Expression::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                Expression::Atom(Atom::StringRef(s)) => s,
+                Expression::Atom(Atom::StringBuf(s)) => environment.interner.intern(&*s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -217,8 +217,8 @@ fn builtin_ns_symbols(
                     ))
                 }
             };
-            if environment.namespaces.contains_key(&key) {
-                if let Some(symbols) = environment.namespaces.get(&key) {
+            if environment.namespaces.contains_key(key) {
+                if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
                         ns_symbols.push(Expression::Atom(Atom::Symbol(sym)));
@@ -244,6 +244,7 @@ pub fn add_namespace_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("ns-create"),
         Rc::new(Expression::make_function(
@@ -259,6 +260,7 @@ Example:
 (ns-pop)
 (test::assert-false (def? 'test-symbol))
 ",
+            root,
         )),
     );
     data.insert(
@@ -281,6 +283,7 @@ Example:
 (ns-pop)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -297,6 +300,7 @@ Example:
 (ns-pop)
 (test::assert-true (ns-exists? 'ns-exists-test-namespace))
 ",
+            root,
         )),
     );
     data.insert(
@@ -314,6 +318,7 @@ Example:
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -330,6 +335,7 @@ Example:
 (ns-pop)
 (test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
 ",
+            root,
         )),
     );
     data.insert(
@@ -347,6 +353,7 @@ Example:
 (test::assert-includes 'car (ns-symbols 'root))
 t
 ",
+            root,
         )),
     );
 }

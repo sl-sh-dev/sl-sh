@@ -64,7 +64,7 @@ pub enum FormType {
 
 #[derive(Clone, Debug)]
 pub struct RefMetaData {
-    pub namespace: Option<String>,
+    pub namespace: Option<&'static str>,
     pub doc_string: Option<String>,
 }
 
@@ -79,7 +79,7 @@ pub struct Scope {
     pub data: HashMap<&'static str, Rc<Reference>>,
     pub outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
-    pub name: Option<String>,
+    pub name: Option<&'static str>,
 }
 
 impl Scope {
@@ -95,12 +95,13 @@ impl Scope {
         add_hash_builtins(interner, &mut data);
         add_type_builtins(interner, &mut data);
         add_namespace_builtins(interner, &mut data);
+        let root = interner.intern("root");
         data.insert(
             interner.intern("*stdin*"),
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdin))),
                 meta: RefMetaData {
-                    namespace: Some("root".to_string()),
+                    namespace: Some(root),
                     doc_string: Some("Usage: (read-line *stdin*)
 
 File that connects to standard in by default.
@@ -122,7 +123,7 @@ Example:
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdout))),
                 meta: RefMetaData {
-                    namespace: Some("root".to_string()),
+                    namespace: Some(root),
                     doc_string: Some("Usage: (write-line *stdout*)
 
 File that connects to standard out by default.
@@ -143,7 +144,7 @@ Example:
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stderr))),
                 meta: RefMetaData {
-                    namespace: Some("root".to_string()),
+                    namespace: Some(root),
                     doc_string: Some("Usage: (write-line *stderr*)
 
 File that connects to standard error by default.
@@ -164,7 +165,7 @@ Example:
             Rc::new(Reference {
                 exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
                 meta: RefMetaData {
-                    namespace: Some("root".to_string()),
+                    namespace: Some(root),
                     doc_string: Some(
                         "Usage: (print *ns*)
 
@@ -186,7 +187,7 @@ t
         Scope {
             data,
             outer: None,
-            name: Some("root".to_string()),
+            name: Some(interner.intern("root")),
         }
     }
 
@@ -218,7 +219,7 @@ t
         let reference = Rc::new(Reference {
             exp,
             meta: RefMetaData {
-                namespace: self.name.clone(),
+                namespace: self.name,
                 doc_string: None,
             },
         });
@@ -234,7 +235,7 @@ t
         let reference = Rc::new(Reference {
             exp,
             meta: RefMetaData {
-                namespace: self.name.clone(),
+                namespace: self.name,
                 doc_string,
             },
         });
@@ -343,7 +344,7 @@ pub struct Environment {
     // The actual lookups are done using the scope and it's outer chain NOT this stack.
     pub current_scope: Vec<Rc<RefCell<Scope>>>,
     // Map of all the created namespaces.
-    pub namespaces: HashMap<String, Rc<RefCell<Scope>>>,
+    pub namespaces: HashMap<&'static str, Rc<RefCell<Scope>>>,
     // Allow lazy functions (i.e. enable TCO).
     pub allow_lazy_fn: bool,
     // Used for block/return-from
@@ -359,7 +360,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     let mut namespaces = HashMap::new();
-    namespaces.insert("root".to_string(), root_scope.clone());
+    namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
         sig_int,
         state: EnvState::default(),
@@ -401,7 +402,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         Rc::new(Reference {
             exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
             meta: RefMetaData {
-                namespace: Some("root".to_string()),
+                namespace: Some(interner.intern("root")),
                 doc_string: None,
             },
         }),
@@ -414,7 +415,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     let mut namespaces = HashMap::new();
-    namespaces.insert("root".to_string(), root_scope.clone());
+    namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
         sig_int,
         state,
@@ -460,13 +461,14 @@ pub fn build_new_namespace(
         let msg = format!("Namespace {} already exists!", name);
         Err(msg)
     } else {
+        let name = environment.interner.intern(name);
         let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
         data.insert(
             environment.interner.intern("*ns*"),
             Rc::new(Reference {
-                exp: Expression::Atom(Atom::StringRef(environment.interner.intern(name))),
+                exp: Expression::Atom(Atom::StringRef(name)),
                 meta: RefMetaData {
-                    namespace: Some(name.to_string()),
+                    namespace: Some(name),
                     doc_string: None,
                 },
             }),
@@ -474,12 +476,10 @@ pub fn build_new_namespace(
         let scope = Scope {
             data,
             outer: Some(environment.root_scope.clone()),
-            name: Some(name.to_string()),
+            name: Some(name),
         };
         let scope = Rc::new(RefCell::new(scope));
-        environment
-            .namespaces
-            .insert(name.to_string(), scope.clone());
+        environment.namespaces.insert(name, scope.clone());
         Ok(scope)
     }
 }
@@ -551,7 +551,7 @@ pub fn set_expression_current(
     let reference = Rc::new(Reference {
         exp: expression,
         meta: RefMetaData {
-            namespace: current_scope.name.clone(),
+            namespace: current_scope.name,
             doc_string: doc_str,
         },
     });

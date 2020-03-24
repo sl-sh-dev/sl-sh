@@ -579,7 +579,7 @@ fn proc_set_vars<'a>(
 
 fn val_to_reference(
     environment: &mut Environment,
-    namespace: Option<String>,
+    namespace: Option<&'static str>,
     doc_string: Option<String>,
     val_in: &Expression,
 ) -> io::Result<(Rc<Reference>, Expression)> {
@@ -624,7 +624,7 @@ fn builtin_set(
         entry.insert(Rc::new(val.clone()));
         Ok(val.clone())
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
-        let name = scope.borrow().name.clone();
+        let name = scope.borrow().name;
         let (reference, val) = val_to_reference(environment, name, doc_str, val)?;
         scope.borrow_mut().data.insert(key, reference);
         Ok(val)
@@ -747,12 +747,14 @@ fn builtin_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    fn current_namespace(environment: &mut Environment) -> Option<String> {
+    fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp {
-                Expression::Atom(Atom::String(s)) => Some(s.to_string()),
-                Expression::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
-                Expression::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
+                Expression::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
+                Expression::Atom(Atom::StringRef(s)) => Some(s),
+                Expression::Atom(Atom::StringBuf(s)) => {
+                    Some(environment.interner.intern(&*s.borrow()))
+                }
                 _ => None,
             }
         } else {
@@ -766,13 +768,14 @@ fn builtin_def(
         if let Some(namespace) = key_i.next() {
             if let Some(key) = key_i.next() {
                 let namespace = if namespace == "ns" {
-                    current_namespace(environment).unwrap_or_else(|| "NO_NAME".to_string())
+                    current_namespace(environment)
+                        .unwrap_or_else(|| environment.interner.intern("NO_NAME"))
                 } else {
-                    namespace.to_string()
+                    namespace
                 };
                 let mut scope = Some(environment.current_scope.last().unwrap().clone());
                 while let Some(in_scope) = scope {
-                    let name = in_scope.borrow().name.clone();
+                    let name = in_scope.borrow().name;
                     if let Some(name) = name {
                         if name == namespace {
                             let (reference, val) =
@@ -1974,6 +1977,7 @@ pub fn add_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Rc<Reference>, S>,
 ) {
+    let root = interner.intern("root");
     data.insert(
         interner.intern("eval"),
         Rc::new(Expression::make_function(
@@ -1993,6 +1997,7 @@ Example:
 (eval '(set 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2009,6 +2014,7 @@ Example:
 (test::assert-equal \"ONE\" test-fncall-one)
 (test::assert-equal 10 (fncall + 1 2 7))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2025,6 +2031,7 @@ Example:
 (test::assert-equal \"ONE\" test-apply-one)
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2055,7 +2062,7 @@ Example:
 (test::assert-equal nil test-unwind-two)
 (test::assert-equal \"set three\" test-unwind-three)
 (test::assert-equal \"set four\" test-unwind-four)
-",
+", root
         )),
     );
     data.insert(
@@ -2070,6 +2077,7 @@ Example:
 (def 'test-err-err (get-error (err \"Test Error\")))
 (test::assert-equal '#(:error \"Test Error\") test-err-err)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2087,7 +2095,7 @@ Example:
 (set 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
-",
+", root
         )),
     );
     data.insert(
@@ -2111,6 +2119,7 @@ Example:
 (test::assert-equal 1 (length 100.0))
 (test::assert-equal 1 (length #\\x))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2136,6 +2145,7 @@ Example:
 (test::assert-equal \"ONE2 TRUE\" test-if-one2)
 (test::assert-equal nil test-if-two2)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2151,6 +2161,7 @@ Example:
 (dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (print \"Print test out\"))
 (test::assert-equal \"Print test out\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2166,6 +2177,7 @@ Example:
 (dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (println \"Println test out\"))
 (test::assert-equal \"Println test out\n\" (read-line (open \"/tmp/sl-sh.println.test\" :read)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2181,6 +2193,7 @@ Example:
 (dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (eprint \"eprint test out\"))
 (test::assert-equal \"eprint test out\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2195,7 +2208,7 @@ Example:
 ; Use a file for stderr for test.
 (dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (eprintln \"eprintln test out\"))
 (test::assert-equal \"eprintln test out\n\" (read-line (open \"/tmp/sl-sh.eprintln.test\" :read)))
-"
+", root
         )),
     );
     data.insert(
@@ -2214,6 +2227,7 @@ Example:
 (test::assert-equal \"string 50\" (format \"string\" \" \" 50))
 (test::assert-equal \"string 50 100.5\" (format \"string\" \" \" 50 \" \" 100.5))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2232,6 +2246,7 @@ Example:
 (test::assert-equal \"Two\" test-progn-two)
 (test::assert-equal \"Three\" test-progn-three)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2256,6 +2271,7 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-progn-one)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2270,6 +2286,7 @@ Example:
 (test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
 (test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2286,6 +2303,7 @@ Example:
 (unexport 'TEST_EXPORT_ONE)
 (test::assert-false $TEST_EXPORT_ONE)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2314,6 +2332,7 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-progn-one)
 ",
+            root,
         )),
     );
     data.insert(
@@ -2330,6 +2349,7 @@ Example:
 (undef 'test-undef)
 (test::assert-false (def? 'test-undef))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2351,6 +2371,7 @@ Example:
 (dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2358,6 +2379,7 @@ Example:
         Rc::new(Expression::make_function(
             builtin_to_symbol,
             "Convert a string, int or float to a symbol.",
+            root,
         )),
     );
     data.insert(
@@ -2365,6 +2387,7 @@ Example:
         Rc::new(Expression::make_function(
             builtin_symbol_name,
             "Convert a symbol to its string representation.",
+            root,
         )),
     );
     data.insert(
@@ -2372,6 +2395,7 @@ Example:
         Rc::new(Expression::make_special(
             builtin_fn,
             "Create a function (lambda).",
+            root,
         )),
     );
     data.insert(
@@ -2387,6 +2411,7 @@ Example:
 (test::assert-equal (list 1 2 3) '(1 2 3))
 (test::assert-equal '(1 2 3) (quote (1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2409,6 +2434,7 @@ Example:
 (test::assert-equal (list 1 2 3) (bquote (,test-bquote-one 2 3)))
 (test::assert-equal (list 1 2 3) (bquote (,@test-bquote-list)))
 ",
+            root,
         )),
     );
     /*data.insert(
@@ -2430,7 +2456,7 @@ Example:
 (test::assert-equal \"and- done\" (and t t \"and- done\"))
 (test::assert-equal 6 (and t t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
-")),
+", root)),
     );
     data.insert(
         interner.intern("or"),
@@ -2450,6 +2476,7 @@ Example:
 (test::assert-equal 6 (or nil nil (+ 1 2 3)))
 (test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2466,6 +2493,7 @@ Example:
 (test::assert-false (not t))
 (test::assert-false (not (+ 1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2482,6 +2510,7 @@ Example:
 (test::assert-false (null t))
 (test::assert-false (null (+ 1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2497,11 +2526,16 @@ Example:
 (test::assert-true (def? 'test-is-def))
 (test::assert-false (def? 'test-is-def-not-defined))
 ",
+            root,
         )),
     );
     data.insert(
         interner.intern("macro"),
-        Rc::new(Expression::make_function(builtin_macro, "Define a macro.")),
+        Rc::new(Expression::make_function(
+            builtin_macro,
+            "Define a macro.",
+            root,
+        )),
     );
     data.insert(
         interner.intern("expand-macro"),
@@ -2532,6 +2566,7 @@ Example:
     (expand-macro (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2561,6 +2596,7 @@ Example:
     (expand-macro1 (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2593,17 +2629,19 @@ Example:
     (expand-macro-all (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",
+            root,
         )),
     );
     data.insert(
         interner.intern("recur"),
-        Rc::new(Expression::make_function(builtin_recur, "")),
+        Rc::new(Expression::make_function(builtin_recur, "", root)),
     );
     data.insert(
         interner.intern("gensym"),
         Rc::new(Expression::make_function(
             builtin_gensym,
             "Generate a unique symbol.",
+            root,
         )),
     );
     data.insert(
@@ -2611,6 +2649,7 @@ Example:
         Rc::new(Expression::make_function(
             builtin_jobs,
             "Print list of jobs.",
+            root,
         )),
     );
     data.insert(
@@ -2618,6 +2657,7 @@ Example:
         Rc::new(Expression::make_function(
             builtin_bg,
             "Put a job in the background.",
+            root,
         )),
     );
     data.insert(
@@ -2625,6 +2665,7 @@ Example:
         Rc::new(Expression::make_function(
             builtin_fg,
             "Put a job in the foreground.",
+            root,
         )),
     );
     data.insert(
@@ -2638,6 +2679,7 @@ Produce executable version as string.
 Example:
 (test::assert-true (string? (version)))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2651,7 +2693,7 @@ Only execute system commands not forms within this form.
 Example:
 (test::assert-equal '#(:error \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
-",
+", root
         )),
     );
     data.insert(
@@ -2666,6 +2708,7 @@ Example:
 ;(run-bg gitk)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -2680,6 +2723,7 @@ Example:
 (test::assert-equal '#(:error \"Not a valid form true, not found.\") (get-error (form (true))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2693,6 +2737,7 @@ Within this form any undefined symbols become strings.
 Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2708,6 +2753,7 @@ Example:
 ;(exit 0)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -2722,6 +2768,7 @@ Example:
 ;(error-stack-on)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -2736,6 +2783,7 @@ Example:
 ;(error-stack-off)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -2752,7 +2800,7 @@ Example:
 (test::assert-equal '#(:error \"Some Error\") (get-error (err \"Some Error\")))
 (test::assert-equal \"Some String\" (get-error \"Some String\"))
 (test::assert-equal \"Some Other String\" (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
-",
+", root
         )),
     );
     data.insert(
@@ -2767,6 +2815,7 @@ Example:
 ;(doc 'car)
 t
 ",
+            root,
         )),
     );
     data.insert(
@@ -2781,6 +2830,7 @@ Example:
 ;(doc-raw 'car)
 t
 ",
+            root,
         )),
     );
 
@@ -2799,7 +2849,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-",
+", root
         )),
     );
 
@@ -2817,7 +2867,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-",
+", root
         )),
     );
 
@@ -2866,6 +2916,7 @@ Example:
 (test::assert-false (= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (= \"aaa\" \"aab\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2895,6 +2946,7 @@ Example:
 (test::assert-true (> \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (> \"aaa\" \"aab\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2923,6 +2975,7 @@ Example:
 (test::assert-true (>= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (>= \"aaa\" \"aab\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2951,6 +3004,7 @@ Example:
 (test::assert-true (< \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (< \"baa\" \"aab\"))
 ",
+            root,
         )),
     );
     data.insert(
@@ -2978,6 +3032,7 @@ Example:
 (test::assert-true (<= \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (<= \"baa\" \"aab\"))
 ",
+            root,
         )),
     );
 }
