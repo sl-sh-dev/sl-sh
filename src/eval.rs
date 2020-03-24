@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::env;
 use std::io;
 use std::rc::Rc;
@@ -104,7 +105,11 @@ fn exec_macro<'a>(
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
-    let mut new_scope = Scope::default();
+    let mut new_scope = Scope {
+        data: HashMap::new(),
+        outer: None,
+        name: None,
+    };
     match setup_args(
         environment,
         Some(&mut new_scope),
@@ -270,14 +275,14 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                     {
                         do_command(environment, &command, parts)
                     } else {
-                        let msg = format!("Not a valid form {}, not found.", command.to_string());
+                        let msg = format!("Not a valid form {}, not found.", command);
                         Err(io::Error::new(io::ErrorKind::Other, msg))
                     }
                 } else {
                     do_command(environment, command, parts)
                 }
             } else {
-                let msg = format!("Not a valid form {}, not found.", command.to_string());
+                let msg = format!("Not a valid form {}, not found.", command);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
@@ -375,7 +380,17 @@ fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expres
                 Err(_) => new_string.push_str(""),
             }
         }
-        Ok(Expression::Atom(Atom::String(new_string)))
+        if environment.interner.contains(&new_string) {
+            Ok(Expression::Atom(Atom::StringRef(
+                environment.interner.intern(&new_string),
+            )))
+        } else {
+            Ok(Expression::Atom(Atom::String(new_string)))
+        }
+    } else if environment.interner.contains(string) {
+        Ok(Expression::Atom(Atom::StringRef(
+            environment.interner.intern(string),
+        )))
     } else {
         Ok(Expression::Atom(Atom::String(string.to_string())))
     }
@@ -449,13 +464,15 @@ fn internal_eval<'a>(
         Expression::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
-                    Ok(val) => Ok(Expression::Atom(Atom::String(val))),
+                    Ok(val) => Ok(Expression::Atom(Atom::StringRef(
+                        environment.interner.intern(&val),
+                    ))),
                     Err(_) => Ok(Expression::nil()),
                 }
             } else if s.starts_with(':') {
                 // Got a keyword, so just be you...
-                Ok(Expression::Atom(Atom::Symbol(s.clone())))
-            } else if let Some(exp) = get_expression(environment, &s[..]) {
+                Ok(Expression::Atom(Atom::Symbol(s)))
+            } else if let Some(exp) = get_expression(environment, s) {
                 let exp = &exp.exp;
                 Ok(exp.clone())
             } else if environment.loose_symbols {
@@ -467,6 +484,7 @@ fn internal_eval<'a>(
         }
         Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
         Expression::Atom(Atom::String(string)) => str_process(environment, &string),
+        Expression::Atom(Atom::StringRef(string)) => str_process(environment, string),
         Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
         Expression::Function(_) => Ok(Expression::nil()),
         Expression::Process(state) => Ok(Expression::Process(*state)),

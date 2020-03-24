@@ -19,9 +19,12 @@ fn make_args(
     Ok(list)
 }
 
-pub fn add_math_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_math_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "+".to_string(),
+        interner.intern("+"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -50,7 +53,7 @@ Example:
     );
 
     data.insert(
-        "*".to_string(),
+        interner.intern("*"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -86,7 +89,7 @@ Example:
     );
 
     data.insert(
-        "-".to_string(),
+        interner.intern("-"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -131,7 +134,7 @@ Example:
     );
 
     data.insert(
-        "/".to_string(),
+        interner.intern("/"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -186,7 +189,7 @@ Example:
     );
 
     data.insert(
-        "%".to_string(),
+        interner.intern("%"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|

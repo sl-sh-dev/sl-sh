@@ -55,13 +55,13 @@ fn builtin_cd(
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp {
                         Expression::Function(_) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         Expression::Atom(Atom::Lambda(_)) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         Expression::Atom(Atom::Macro(_)) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         _ => eval(environment, &arg)?,
                     },
@@ -157,7 +157,7 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
+fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
     let mut do_write = false;
     match &environment.data_in {
         Some(Expression::Atom(_atom)) => {
@@ -186,11 +186,8 @@ fn pipe_write_file(environment: &Environment, writer: &mut dyn Write) -> io::Res
         None => {}
     }
     if do_write {
-        environment
-            .data_in
-            .as_ref()
-            .unwrap()
-            .writef(environment, writer)?;
+        let data_in = environment.data_in.as_ref().unwrap().clone();
+        data_in.writef(environment, writer)?;
     }
     Ok(())
 }
@@ -408,55 +405,58 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
-pub fn add_file_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_file_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "cd".to_string(),
+        interner.intern("cd"),
         Rc::new(Expression::make_function(builtin_cd, "Change directory.")),
     );
     data.insert(
-        "fs-exists?".to_string(),
+        interner.intern("fs-exists?"),
         Rc::new(Expression::make_function(
             builtin_path_exists,
             "Does the given path exist?",
         )),
     );
     data.insert(
-        "fs-file?".to_string(),
+        interner.intern("fs-file?"),
         Rc::new(Expression::make_function(
             builtin_is_file,
             "Is the given path a file?",
         )),
     );
     data.insert(
-        "fs-dir?".to_string(),
+        interner.intern("fs-dir?"),
         Rc::new(Expression::make_function(
             builtin_is_dir,
             "Is the given path a directory?",
         )),
     );
     data.insert(
-        "pipe".to_string(),
+        interner.intern("pipe"),
         Rc::new(Expression::make_function(
             builtin_pipe,
             "Setup a pipe between processes.",
         )),
     );
     data.insert(
-        "wait".to_string(),
+        interner.intern("wait"),
         Rc::new(Expression::make_function(
             builtin_wait,
             "Wait for a process to end and return it's exit status.",
         )),
     );
     data.insert(
-        "pid".to_string(),
+        interner.intern("pid"),
         Rc::new(Expression::make_function(
             builtin_pid,
             "Return the pid of a process.",
         )),
     );
     data.insert(
-        "glob".to_string(),
+        interner.intern("glob"),
         Rc::new(Expression::make_function(
             builtin_glob,
             "Takes a list of globs and return the list of them expanded.",

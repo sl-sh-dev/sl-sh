@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
+use crate::environment::*;
 use crate::types::*;
 
 enum ListType {
@@ -368,7 +369,7 @@ fn parse_char(token_full: &Token) -> Result<Expression, ParseError> {
     )))
 }
 
-fn parse_atom(token: &str) -> Expression {
+fn parse_atom(environment: &mut Environment, token: &str) -> Expression {
     if token.is_empty() {
         return Expression::nil();
     }
@@ -389,7 +390,7 @@ fn parse_atom(token: &str) -> Expression {
                 let potential_float: Result<f64, ParseFloatError> = token.parse();
                 match potential_float {
                     Ok(v) => Expression::Atom(Atom::Float(v)),
-                    Err(_) => Expression::Atom(Atom::Symbol(token.to_string())),
+                    Err(_) => Expression::Atom(Atom::Symbol(environment.interner.intern(token))),
                 }
             }
         }
@@ -437,7 +438,7 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
     Ok(())
 }
 
-fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
+fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
         return Ok(Expression::nil());
     }
@@ -462,7 +463,9 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                 level += 1;
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
-                quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
+                quoted.push(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern("quote"),
+                )));
                 stack.push(List {
                     list_type: ListType::List,
                     vec: quoted,
@@ -473,9 +476,13 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                 qexits.push(level);
                 let mut quoted = Vec::<Expression>::new();
                 if backtick_level > 0 {
-                    quoted.push(Expression::Atom(Atom::Symbol("quote".to_string())));
+                    quoted.push(Expression::Atom(Atom::Symbol(
+                        environment.interner.intern("quote"),
+                    )));
                 } else {
-                    quoted.push(Expression::Atom(Atom::Symbol("bquote".to_string())));
+                    quoted.push(Expression::Atom(Atom::Symbol(
+                        environment.interner.intern("bquote"),
+                    )));
                     backtick_level = level;
                 }
                 stack.push(List {
@@ -535,7 +542,7 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
                             if token == "," {
                                 is_comma = true;
                             }
-                            v.vec.push(parse_atom(&token));
+                            v.vec.push(parse_atom(environment, &token));
                         }
                     }
                     stack.push(v);
@@ -604,7 +611,11 @@ fn parse(tokens: &[Token]) -> Result<Expression, ParseError> {
     }
 }
 
-pub fn read(text: &str, add_parens: bool) -> Result<Expression, ParseError> {
+pub fn read(
+    environment: &mut Environment,
+    text: &str,
+    add_parens: bool,
+) -> Result<Expression, ParseError> {
     let tokens = tokenize(text, add_parens);
-    parse(&tokens)
+    parse(environment, &tokens)
 }

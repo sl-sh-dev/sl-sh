@@ -394,9 +394,12 @@ fn builtin_vec_insert_nth(
     ))
 }
 
-pub fn add_vec_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_vec_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "vec".to_string(),
+        interner.intern("vec"),
         Rc::new(Expression::make_function(
             builtin_vec,
             "Usage: (vec item1 item2 .. itemN)
@@ -410,7 +413,7 @@ Example:
         )),
     );
     data.insert(
-        "make-vec".to_string(),
+        interner.intern("make-vec"),
         Rc::new(Expression::make_function(
             builtin_make_vec,
             "Usage: (make-vec capacity default)
@@ -426,7 +429,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-slice".to_string(),
+        interner.intern("vec-slice"),
         Rc::new(Expression::make_function(
             builtin_vec_slice,
             "Usage: (vec-slice vector start end?)
@@ -442,7 +445,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-nth".to_string(),
+        interner.intern("vec-nth"),
         Rc::new(Expression::make_function(
             builtin_vec_nth,
             "Usage: (vec-nth index vector)
@@ -458,7 +461,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-setnth!".to_string(),
+        interner.intern("vec-setnth!"),
         Rc::new(Expression::make_function(
             builtin_vec_setnth,
             "Usage: (vec-setnth! index value vector)
@@ -474,7 +477,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-push!".to_string(),
+        interner.intern("vec-push!"),
         Rc::new(Expression::make_function(
             builtin_vec_push,
             "Usage: (vec-push! vector object)
@@ -493,7 +496,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-pop!".to_string(),
+        interner.intern("vec-pop!"),
         Rc::new(Expression::make_function(
             builtin_vec_pop,
             "Usage: (vec-pop! vector object)
@@ -512,7 +515,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-empty?".to_string(),
+        interner.intern("vec-empty?"),
         Rc::new(Expression::make_function(
             builtin_vec_is_empty,
             "Usage: (vec-empty? vector)
@@ -526,7 +529,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-clear!".to_string(),
+        interner.intern("vec-clear!"),
         Rc::new(Expression::make_function(
             builtin_vec_vclear,
             "Usage: (vec-clear! vector)
@@ -542,7 +545,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-remove-nth!".to_string(),
+        interner.intern("vec-remove-nth!"),
         Rc::new(Expression::make_function(
             builtin_vec_remove_nth,
             "Usage: (vec-remove-nth! index vector)
@@ -562,7 +565,7 @@ Example:
         )),
     );
     data.insert(
-        "vec-insert-nth!".to_string(),
+        interner.intern("vec-insert-nth!"),
         Rc::new(Expression::make_function(
             builtin_vec_insert_nth,
             "Usage: (vec-insert-nth! index new-element vector)

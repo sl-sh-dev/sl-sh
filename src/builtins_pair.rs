@@ -182,9 +182,12 @@ fn builtin_xdr(
     ))
 }
 
-pub fn add_pair_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_pair_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "join".to_string(),
+        interner.intern("join"),
         Rc::new(Expression::make_function(
             builtin_join,
             "Usage: (join car cdr)
@@ -200,7 +203,7 @@ Example:
         )),
     );
     data.insert(
-        "list".to_string(),
+        interner.intern("list"),
         Rc::new(Expression::make_function(
             builtin_list,
             "Usage: (list item0 item1 .. itemN)
@@ -213,7 +216,7 @@ Example:
         )),
     );
     data.insert(
-        "car".to_string(),
+        interner.intern("car"),
         Rc::new(Expression::make_function(
             builtin_car,
             "Usage: (car pair)
@@ -229,7 +232,7 @@ Example:
         )),
     );
     data.insert(
-        "cdr".to_string(),
+        interner.intern("cdr"),
         Rc::new(Expression::make_function(builtin_cdr, "Usage: (cdr pair)
 
 Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
@@ -243,7 +246,7 @@ Example:
 ")),
     );
     data.insert(
-        "xar!".to_string(),
+        interner.intern("xar!"),
         Rc::new(Expression::make_function(
             builtin_xar,
             "Usage: (xar! pair expression)
@@ -266,7 +269,7 @@ Example:
         )),
     );
     data.insert(
-        "xdr!".to_string(),
+        interner.intern("xdr!"),
         Rc::new(Expression::make_function(
             builtin_xdr,
             "Usage: (xdr! pair expression)

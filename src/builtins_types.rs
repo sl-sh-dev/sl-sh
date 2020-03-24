@@ -15,7 +15,9 @@ fn builtin_type(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return Ok(Expression::Atom(Atom::String(arg.display_type())));
+            return Ok(Expression::Atom(Atom::StringRef(
+                environment.interner.intern(&arg.display_type()),
+            )));
         }
     }
     Err(io::Error::new(io::ErrorKind::Other, "type takes one form"))
@@ -120,6 +122,8 @@ fn builtin_is_string(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return if let Expression::Atom(Atom::String(_)) = arg {
+                Ok(Expression::Atom(Atom::True))
+            } else if let Expression::Atom(Atom::StringRef(_)) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
                 Ok(Expression::nil())
@@ -336,9 +340,12 @@ fn builtin_is_list(
     Err(io::Error::new(io::ErrorKind::Other, "list? needs one form"))
 }
 
-pub fn add_type_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_type_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "type".to_string(),
+        interner.intern("type"),
         Rc::new(Expression::make_function(
             builtin_type,
             "Usage: (type expression)
@@ -392,7 +399,7 @@ Example:
         )),
     );
     data.insert(
-        "nil?".to_string(),
+        interner.intern("nil?"),
         Rc::new(Expression::make_function(
             builtin_is_nil,
             "Usage: (nil? expression)
@@ -406,7 +413,7 @@ Example:
         )),
     );
     data.insert(
-        "true?".to_string(),
+        interner.intern("true?"),
         Rc::new(Expression::make_function(
             builtin_is_true,
             "Usage: (true? expression)
@@ -422,7 +429,7 @@ Example:
         )),
     );
     data.insert(
-        "float?".to_string(),
+        interner.intern("float?"),
         Rc::new(Expression::make_function(
             builtin_is_float,
             "Usage: (float? expression)
@@ -436,7 +443,7 @@ Example:
         )),
     );
     data.insert(
-        "int?".to_string(),
+        interner.intern("int?"),
         Rc::new(Expression::make_function(
             builtin_is_int,
             "Usage: (int? expression)
@@ -450,7 +457,7 @@ Example:
         )),
     );
     data.insert(
-        "symbol?".to_string(),
+        interner.intern("symbol?"),
         Rc::new(Expression::make_function(
             builtin_is_symbol,
             "Usage: (symbol? expression)
@@ -464,7 +471,7 @@ Example:
         )),
     );
     data.insert(
-        "string?".to_string(),
+        interner.intern("string?"),
         Rc::new(Expression::make_function(
             builtin_is_string,
             "Usage: (string? expression)
@@ -478,7 +485,7 @@ Example:
         )),
     );
     data.insert(
-        "string-buf?".to_string(),
+        interner.intern("string-buf?"),
         Rc::new(Expression::make_function(
             builtin_is_string_buf,
             "Usage: (string-buf? expression)
@@ -493,7 +500,7 @@ Example:
         )),
     );
     data.insert(
-        "char?".to_string(),
+        interner.intern("char?"),
         Rc::new(Expression::make_function(
             builtin_is_char,
             "Usage: (char? expression)
@@ -508,7 +515,7 @@ Example:
         )),
     );
     data.insert(
-        "lambda?".to_string(),
+        interner.intern("lambda?"),
         Rc::new(Expression::make_function(
             builtin_is_lambda,
             "Usage: (lambda? expression)
@@ -524,7 +531,7 @@ Example:
         )),
     );
     data.insert(
-        "macro?".to_string(),
+        interner.intern("macro?"),
         Rc::new(Expression::make_function(
             builtin_is_macro,
             "Usage: (macro? expression)
@@ -540,7 +547,7 @@ Example:
         )),
     );
     data.insert(
-        "vec?".to_string(),
+        interner.intern("vec?"),
         Rc::new(Expression::make_function(
             builtin_is_vec,
             "Usage: (vec? expression)
@@ -558,7 +565,7 @@ Example:
         )),
     );
     data.insert(
-        "pair?".to_string(),
+        interner.intern("pair?"),
         Rc::new(Expression::make_function(
             builtin_is_pair,
             "Usage: (pair? expression)
@@ -576,7 +583,7 @@ Example:
         )),
     );
     data.insert(
-        "builtin?".to_string(),
+        interner.intern("builtin?"),
         Rc::new(Expression::make_function(
             builtin_is_builtin,
             "Usage: (builtin? expression)
@@ -593,7 +600,7 @@ Example:
         )),
     );
     data.insert(
-        "process?".to_string(),
+        interner.intern("process?"),
         Rc::new(Expression::make_function(
             builtin_is_process,
             "Usage: (process? expression)
@@ -609,7 +616,7 @@ Example:
         )),
     );
     data.insert(
-        "file?".to_string(),
+        interner.intern("file?"),
         Rc::new(Expression::make_function(
             builtin_is_file,
             "Usage: (file? expression)
@@ -625,7 +632,7 @@ Example:
         )),
     );
     data.insert(
-        "hash?".to_string(),
+        interner.intern("hash?"),
         Rc::new(Expression::make_function(
             builtin_is_hash,
             "Usage: (hash? expression)
@@ -642,7 +649,7 @@ Example:
         )),
     );
     data.insert(
-        "list?".to_string(),
+        interner.intern("list?"),
         Rc::new(Expression::make_function(
             builtin_is_list,
             "Usage: (list? expression)

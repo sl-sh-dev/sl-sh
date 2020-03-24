@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use std::io;
+use std::mem;
 use std::process::Child;
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
@@ -74,27 +76,27 @@ pub struct Reference {
 
 #[derive(Clone, Debug)]
 pub struct Scope {
-    pub data: HashMap<String, Rc<Reference>>,
+    pub data: HashMap<&'static str, Rc<Reference>>,
     pub outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
     pub name: Option<String>,
 }
 
-impl Default for Scope {
-    fn default() -> Self {
-        let mut data = HashMap::new();
-        add_builtins(&mut data);
-        add_math_builtins(&mut data);
-        add_str_builtins(&mut data);
-        add_vec_builtins(&mut data);
-        add_file_builtins(&mut data);
-        add_io_builtins(&mut data);
-        add_pair_builtins(&mut data);
-        add_hash_builtins(&mut data);
-        add_type_builtins(&mut data);
-        add_namespace_builtins(&mut data);
+impl Scope {
+    fn new_root(interner: &mut Interner) -> Self {
+        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
+        add_builtins(interner, &mut data);
+        add_math_builtins(interner, &mut data);
+        add_str_builtins(interner, &mut data);
+        add_vec_builtins(interner, &mut data);
+        add_file_builtins(interner, &mut data);
+        add_io_builtins(interner, &mut data);
+        add_pair_builtins(interner, &mut data);
+        add_hash_builtins(interner, &mut data);
+        add_type_builtins(interner, &mut data);
+        add_namespace_builtins(interner, &mut data);
         data.insert(
-            "*stdin*".to_string(),
+            interner.intern("*stdin*"),
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdin))),
                 meta: RefMetaData {
@@ -116,7 +118,7 @@ Example:
             }),
         );
         data.insert(
-            "*stdout*".to_string(),
+            interner.intern("*stdout*"),
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stdout))),
                 meta: RefMetaData {
@@ -137,7 +139,7 @@ Example:
             }),
         );
         data.insert(
-            "*stderr*".to_string(),
+            interner.intern("*stderr*"),
             Rc::new(Reference {
                 exp: Expression::File(Rc::new(RefCell::new(FileState::Stderr))),
                 meta: RefMetaData {
@@ -158,9 +160,9 @@ Example:
             }),
         );
         data.insert(
-            "*ns*".to_string(),
+            interner.intern("*ns*"),
             Rc::new(Reference {
-                exp: Expression::Atom(Atom::String("root".to_string())),
+                exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
                 meta: RefMetaData {
                     namespace: Some("root".to_string()),
                     doc_string: Some(
@@ -187,14 +189,12 @@ t
             name: Some("root".to_string()),
         }
     }
-}
 
-impl Scope {
     pub fn with_data<S: ::std::hash::BuildHasher>(
         environment: Option<&Environment>,
-        mut data_in: HashMap<String, Rc<Reference>, S>,
+        mut data_in: HashMap<&'static str, Rc<Reference>, S>,
     ) -> Scope {
-        let mut data: HashMap<String, Rc<Reference>> = HashMap::with_capacity(data_in.len());
+        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::with_capacity(data_in.len());
         for (k, v) in data_in.drain() {
             data.insert(k, v);
         }
@@ -214,7 +214,7 @@ impl Scope {
         }
     }
 
-    pub fn insert_exp(&mut self, key: String, exp: Expression) {
+    pub fn insert_exp(&mut self, key: &'static str, exp: Expression) {
         let reference = Rc::new(Reference {
             exp,
             meta: RefMetaData {
@@ -227,7 +227,7 @@ impl Scope {
 
     pub fn insert_exp_with_doc(
         &mut self,
-        key: String,
+        key: &'static str,
         exp: Expression,
         doc_string: Option<String>,
     ) {
@@ -254,6 +254,53 @@ impl fmt::Display for JobStatus {
             JobStatus::Running => write!(f, "Running"),
             JobStatus::Stopped => write!(f, "Stopped"),
         }
+    }
+}
+
+// This interner is initially based on this: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
+// Inspiration also from: https://github.com/CAD97/simple-interner/blob/master/src/interner.rs
+// See https://www.reddit.com/r/rust/comments/fn1jxf/blog_post_fast_and_simple_rust_interner/
+// This is a simple string interner.  It hands out &'static str and it WILL leak memory
+// to keep them valid.  Intended to live for the programs lifetime.
+#[derive(Clone, Debug)]
+pub struct Interner {
+    map: HashSet<&'static str>,
+    // Leak buffers to keep the static lifetimes we hand out valid.
+    buf: mem::ManuallyDrop<String>,
+}
+
+impl Interner {
+    pub fn with_capacity(cap: usize) -> Interner {
+        let cap = cap.next_power_of_two();
+        Interner {
+            map: HashSet::default(),
+            buf: mem::ManuallyDrop::new(String::with_capacity(cap)),
+        }
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.map.contains(name)
+    }
+
+    pub fn intern(&mut self, name: &str) -> &'static str {
+        if let Some(&id) = self.map.get(name) {
+            return id;
+        }
+        let name = {
+            let cap = self.buf.capacity();
+            if cap < self.buf.len() + name.len() {
+                let new_cap = (cap.max(name.len()) + 1).next_power_of_two();
+                let new_buf = mem::ManuallyDrop::new(String::with_capacity(new_cap));
+                // Leak memory to keep the static lifetimes valid.
+                let _old_buf = mem::replace(&mut self.buf, new_buf);
+            }
+
+            let start = self.buf.len();
+            self.buf.push_str(name);
+            unsafe { &*(&self.buf[start..] as *const str) }
+        };
+        self.map.insert(name);
+        name
     }
 }
 
@@ -287,7 +334,7 @@ pub struct Environment {
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
     // bindings.
-    pub dynamic_scope: HashMap<String, Rc<Expression>>,
+    pub dynamic_scope: HashMap<&'static str, Rc<Expression>>,
     // This is the environment's root (global scope), it will also be part of
     // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
@@ -300,12 +347,15 @@ pub struct Environment {
     // Allow lazy functions (i.e. enable TCO).
     pub allow_lazy_fn: bool,
     // Used for block/return-from
-    pub return_val: Option<(Option<String>, Expression)>,
+    pub return_val: Option<(Option<&'static str>, Expression)>,
+    // Interner for symbols and some strings.
+    pub interner: Interner,
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    let root_scope = Rc::new(RefCell::new(Scope::default()));
+    let mut interner = Interner::with_capacity(102_400);
+    let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     let mut namespaces = HashMap::new();
@@ -334,20 +384,22 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         namespaces,
         allow_lazy_fn: true,
         return_val: None,
+        interner,
     }
 }
 
 pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
-    mut data_in: HashMap<String, Reference, S>,
+    mut data_in: HashMap<&'static str, Reference, S>,
     sig_int: Arc<AtomicBool>,
 ) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut state = EnvState::default();
-    let mut data: HashMap<String, Rc<Reference>> = HashMap::with_capacity(data_in.len());
+    let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::with_capacity(data_in.len());
+    let mut interner = Interner::with_capacity(102_400);
     data.insert(
-        "*ns*".to_string(),
+        interner.intern("*ns*"),
         Rc::new(Reference {
-            exp: Expression::Atom(Atom::String("root".to_string())),
+            exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
             meta: RefMetaData {
                 namespace: Some("root".to_string()),
                 doc_string: None,
@@ -387,11 +439,12 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         namespaces,
         allow_lazy_fn: true,
         return_val: None,
+        interner,
     }
 }
 
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
-    let data: HashMap<String, Rc<Reference>> = HashMap::new();
+    let data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
     Rc::new(RefCell::new(Scope {
         data,
         outer,
@@ -407,11 +460,11 @@ pub fn build_new_namespace(
         let msg = format!("Namespace {} already exists!", name);
         Err(msg)
     } else {
-        let mut data: HashMap<String, Rc<Reference>> = HashMap::new();
+        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
         data.insert(
-            "*ns*".to_string(),
+            environment.interner.intern("*ns*"),
             Rc::new(Reference {
-                exp: Expression::Atom(Atom::String(name.to_string())),
+                exp: Expression::Atom(Atom::StringRef(environment.interner.intern(name))),
                 meta: RefMetaData {
                     namespace: Some(name.to_string()),
                     doc_string: None,
@@ -433,11 +486,11 @@ pub fn build_new_namespace(
 
 pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     scope: &Scope,
-    data_in: &mut HashMap<String, Reference, S>,
+    data_in: &mut HashMap<&'static str, Reference, S>,
 ) {
     for (k, v) in &scope.data {
         let v = &**v;
-        data_in.insert(k.clone(), v.clone());
+        data_in.insert(k, v.clone());
     }
     if let Some(outer) = &scope.outer {
         clone_symbols(&outer.borrow(), data_in);
@@ -486,7 +539,7 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Referen
 
 pub fn set_expression_current(
     environment: &mut Environment,
-    key: String,
+    key: &'static str,
     doc_str: Option<String>,
     expression: Expression,
 ) {
@@ -507,7 +560,7 @@ pub fn set_expression_current(
 
 pub fn set_expression_current_ref(
     environment: &mut Environment,
-    key: String,
+    key: &'static str,
     reference: Rc<Reference>,
 ) {
     let mut current_scope = environment

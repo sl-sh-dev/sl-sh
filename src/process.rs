@@ -53,7 +53,7 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
 }
 
 pub fn wait_pid(
-    environment: &Environment,
+    environment: &mut Environment,
     pid: u32,
     term_settings: Option<&termios::Termios>,
 ) -> Option<i32> {
@@ -82,7 +82,7 @@ pub fn wait_pid(
                 if environment.save_exit_status {
                     env::set_var("LAST_STATUS".to_string(), format!("{}", status));
                     environment.root_scope.borrow_mut().insert_exp(
-                        "*last-status*".to_string(),
+                        environment.interner.intern("*last-status*"),
                         Expression::Atom(Atom::Int(i64::from(status))),
                     );
                 }
@@ -333,7 +333,11 @@ fn get_output(
     Ok((out_res, err_res))
 }
 
-pub fn prep_string_arg(s: &str, nargs: &mut Vec<Expression>) -> io::Result<()> {
+fn prep_string_arg(
+    _environment: &mut Environment,
+    s: &str,
+    nargs: &mut Vec<Expression>,
+) -> io::Result<()> {
     let s = match expand_tilde(&s) {
         Some(p) => p,
         None => s.to_string(), // XXX not great.
@@ -491,13 +495,13 @@ pub fn do_command<'a>(
                 Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp {
                         Expression::Function(_) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         Expression::Atom(Atom::Lambda(_)) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         Expression::Atom(Atom::Macro(_)) => {
-                            eval(environment, &Expression::Atom(Atom::String(s.to_string())))?
+                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
                         }
                         _ => eval(environment, &a)?,
                     },
@@ -507,7 +511,7 @@ pub fn do_command<'a>(
             };
             if let Expression::Atom(Atom::String(s)) = &new_a {
                 if glob_expand {
-                    prep_string_arg(&s, &mut args)?;
+                    prep_string_arg(environment, &s, &mut args)?;
                 } else {
                     args.push(new_a.clone());
                 }

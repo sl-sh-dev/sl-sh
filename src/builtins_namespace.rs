@@ -28,7 +28,9 @@ fn builtin_ns_create(
         if args.next().is_none() {
             let key = match eval(environment, key)? {
                 Expression::Atom(Atom::Symbol(sym)) => sym,
-                Expression::Atom(Atom::String(s)) => s,
+                Expression::Atom(Atom::StringRef(s)) => s,
+                Expression::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                Expression::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -36,7 +38,7 @@ fn builtin_ns_create(
                     ))
                 }
             };
-            let scope = match build_new_namespace(environment, &key) {
+            let scope = match build_new_namespace(environment, key) {
                 Ok(scope) => scope,
                 Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
             };
@@ -71,7 +73,9 @@ fn builtin_ns_enter(
         if args.next().is_none() {
             let key = match eval(environment, key)? {
                 Expression::Atom(Atom::Symbol(sym)) => sym,
-                Expression::Atom(Atom::String(s)) => s,
+                Expression::Atom(Atom::StringRef(s)) => s,
+                Expression::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                Expression::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -79,7 +83,7 @@ fn builtin_ns_enter(
                     ))
                 }
             };
-            let scope = match get_namespace(environment, &key) {
+            let scope = match get_namespace(environment, key) {
                 Some(scope) => scope,
                 None => {
                     let msg = format!("Error, namespace {} does not exist!", key);
@@ -104,7 +108,9 @@ fn builtin_ns_exists(
         if args.next().is_none() {
             let key = match eval(environment, key)? {
                 Expression::Atom(Atom::Symbol(sym)) => sym,
-                Expression::Atom(Atom::String(s)) => s,
+                Expression::Atom(Atom::StringRef(s)) => s,
+                Expression::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                Expression::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -112,7 +118,7 @@ fn builtin_ns_exists(
                     ))
                 }
             };
-            if environment.namespaces.contains_key(&key) {
+            if environment.namespaces.contains_key(key) {
                 return Ok(Expression::Atom(Atom::True));
             } else {
                 return Ok(Expression::nil());
@@ -200,8 +206,10 @@ fn builtin_ns_symbols(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(sym)) => sym,
+                Expression::Atom(Atom::Symbol(sym)) => sym.to_string(),
                 Expression::Atom(Atom::String(s)) => s,
+                Expression::Atom(Atom::StringRef(s)) => s.to_string(),
+                Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -213,7 +221,7 @@ fn builtin_ns_symbols(
                 if let Some(symbols) = environment.namespaces.get(&key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::Atom(Atom::Symbol(sym.to_string())));
+                        ns_symbols.push(Expression::Atom(Atom::Symbol(sym)));
                     }
                     return Ok(Expression::with_list(ns_symbols));
                 }
@@ -232,9 +240,12 @@ fn builtin_ns_symbols(
     ))
 }
 
-pub fn add_namespace_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_namespace_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "ns-create".to_string(),
+        interner.intern("ns-create"),
         Rc::new(Expression::make_function(
             builtin_ns_create,
             "Usage: (ns-create namespace)
@@ -251,7 +262,7 @@ Example:
         )),
     );
     data.insert(
-        "ns-enter".to_string(),
+        interner.intern("ns-enter"),
         Rc::new(Expression::make_function(
             builtin_ns_enter,
             "Usage: (ns-enter namespace)
@@ -273,7 +284,7 @@ t
         )),
     );
     data.insert(
-        "ns-exists?".to_string(),
+        interner.intern("ns-exists?"),
         Rc::new(Expression::make_function(
             builtin_ns_exists,
             "Usage: (ns-exists? namespace)
@@ -289,7 +300,7 @@ Example:
         )),
     );
     data.insert(
-        "ns-list".to_string(),
+        interner.intern("ns-list"),
         Rc::new(Expression::make_function(
             builtin_ns_list,
             "Usage: (ns-list)
@@ -306,7 +317,7 @@ t
         )),
     );
     data.insert(
-        "ns-pop".to_string(),
+        interner.intern("ns-pop"),
         Rc::new(Expression::make_function(
             builtin_ns_pop,
             "Usage: (ns-pop)
@@ -322,7 +333,7 @@ Example:
         )),
     );
     data.insert(
-        "ns-symbols".to_string(),
+        interner.intern("ns-symbols"),
         Rc::new(Expression::make_function(
             builtin_ns_symbols,
             "Usage: (ns-symbols namespace)

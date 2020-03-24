@@ -234,7 +234,11 @@ fn builtin_read(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    fn do_read(input: &str, mut add_parens: bool) -> io::Result<Expression> {
+    fn do_read(
+        environment: &mut Environment,
+        input: &str,
+        mut add_parens: bool,
+    ) -> io::Result<Expression> {
         add_parens = if add_parens {
             !(input.starts_with('(')
                 || input.starts_with('\'')
@@ -243,7 +247,7 @@ fn builtin_read(
         } else {
             false
         };
-        match read(&input, add_parens) {
+        match read(environment, &input, add_parens) {
             Ok(ast) => Ok(ast),
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
@@ -258,7 +262,7 @@ fn builtin_read(
             ));
         }
         match arg {
-            Expression::Atom(Atom::Symbol(s)) if s == ":add-parens" => add_parens = true,
+            Expression::Atom(Atom::Symbol(s)) if s == &":add-parens" => add_parens = true,
             _ if exp.is_none() => exp = Some(arg),
             _ => {
                 return Err(io::Error::new(
@@ -275,19 +279,23 @@ fn builtin_read(
                 FileState::Read(file) => {
                     let mut input = String::new();
                     file.borrow_mut().read_to_string(&mut input)?;
-                    do_read(&input, add_parens)
+                    do_read(environment, &input, add_parens)
                 }
                 FileState::Stdin => {
                     let mut input = String::new();
                     io::stdin().read_to_string(&mut input)?;
-                    do_read(&input, add_parens)
+                    do_read(environment, &input, add_parens)
                 }
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",
                 )),
             },
-            Expression::Atom(Atom::String(input)) => do_read(input, add_parens),
+            Expression::Atom(Atom::String(input)) => do_read(environment, input, add_parens),
+            Expression::Atom(Atom::StringRef(input)) => do_read(environment, input, add_parens),
+            Expression::Atom(Atom::StringBuf(input)) => {
+                do_read(environment, &input.borrow(), add_parens)
+            }
             _ => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "read: requires a file opened for reading or string",
@@ -379,9 +387,12 @@ fn builtin_write_string(
     ))
 }
 
-pub fn add_io_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_io_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "open".to_string(),
+        interner.intern("open"),
         Rc::new(Expression::make_function(
             builtin_open,
             "Usage: (open filename option*)
@@ -404,7 +415,7 @@ Example:
         )),
     );
     data.insert(
-        "close".to_string(),
+        interner.intern("close"),
         Rc::new(Expression::make_function(
             builtin_close,
             "Usage: (close file)
@@ -422,7 +433,7 @@ Example:
         )),
     );
     data.insert(
-        "flush".to_string(),
+        interner.intern("flush"),
         Rc::new(Expression::make_function(
             builtin_flush,
             "Usage: (flush file)
@@ -440,7 +451,7 @@ Example:
         )),
     );
     data.insert(
-        "read-line".to_string(),
+        interner.intern("read-line"),
         Rc::new(Expression::make_function(
             builtin_read_line,
             "Usage: (read-line file) -> string
@@ -460,7 +471,7 @@ Example:
         )),
     );
     data.insert(
-        "read".to_string(),
+        interner.intern("read"),
         Rc::new(Expression::make_function(
             builtin_read,
             "Usage: (read file|string :add-parens?) -> list
@@ -484,7 +495,7 @@ Example:
         )),
     );
     data.insert(
-        "write-line".to_string(),
+        interner.intern("write-line"),
         Rc::new(Expression::make_function(
             builtin_write_line,
             "Usage: (write-line file string)
@@ -502,7 +513,7 @@ Example:
         )),
     );
     data.insert(
-        "write-string".to_string(),
+        interner.intern("write-string"),
         Rc::new(Expression::make_function(
             builtin_write_string,
             "Usage: (write-string file string)

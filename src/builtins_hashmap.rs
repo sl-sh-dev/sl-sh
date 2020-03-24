@@ -17,10 +17,13 @@ fn build_map(
             if let Some((key, val)) = &*p.borrow() {
                 match key {
                     Expression::Atom(Atom::Symbol(sym)) => {
-                        map.insert(sym.to_string(), Rc::new(val.clone()))
+                        map.insert((*sym).to_string(), Rc::new(val.clone()))
                     }
                     Expression::Atom(Atom::String(s)) => {
                         map.insert(s.to_string(), Rc::new(val.clone()))
+                    }
+                    Expression::Atom(Atom::StringRef(s)) => {
+                        map.insert((*s).to_string(), Rc::new(val.clone()))
                     }
                     Expression::Atom(Atom::StringBuf(s)) => {
                         map.insert(s.borrow().to_string(), Rc::new(val.clone()))
@@ -97,11 +100,15 @@ fn builtin_hash_set(
                     if let Expression::HashMap(map) = map {
                         match key {
                             Expression::Atom(Atom::Symbol(sym)) => {
-                                map.borrow_mut().insert(sym, Rc::new(val));
+                                map.borrow_mut().insert(sym.to_string(), Rc::new(val));
                                 return Ok(Expression::HashMap(map));
                             }
                             Expression::Atom(Atom::String(s)) => {
                                 map.borrow_mut().insert(s, Rc::new(val));
+                                return Ok(Expression::HashMap(map));
+                            }
+                            Expression::Atom(Atom::StringRef(s)) => {
+                                map.borrow_mut().insert(s.to_string(), Rc::new(val));
                                 return Ok(Expression::HashMap(map));
                             }
                             Expression::Atom(Atom::StringBuf(s)) => {
@@ -147,10 +154,13 @@ fn builtin_hash_remove(
                 if let Expression::HashMap(map) = map {
                     match key {
                         Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_rem(&mut map.borrow_mut(), &sym);
+                            return do_rem(&mut map.borrow_mut(), sym);
                         }
                         Expression::Atom(Atom::String(s)) => {
                             return do_rem(&mut map.borrow_mut(), &s);
+                        }
+                        Expression::Atom(Atom::StringRef(s)) => {
+                            return do_rem(&mut map.borrow_mut(), s);
                         }
                         Expression::Atom(Atom::StringBuf(s)) => {
                             return do_rem(&mut map.borrow_mut(), &s.borrow());
@@ -192,10 +202,13 @@ fn builtin_hash_get(
                 if let Expression::HashMap(map) = map {
                     match key {
                         Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_get(&map.borrow(), &sym);
+                            return do_get(&map.borrow(), sym);
                         }
                         Expression::Atom(Atom::String(s)) => {
                             return do_get(&map.borrow(), &s);
+                        }
+                        Expression::Atom(Atom::StringRef(s)) => {
+                            return do_get(&map.borrow(), s);
                         }
                         Expression::Atom(Atom::StringBuf(s)) => {
                             return do_get(&map.borrow(), &s.borrow());
@@ -236,10 +249,13 @@ fn builtin_hash_haskey(
                 if let Expression::HashMap(map) = map {
                     match key {
                         Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_has(&map.borrow(), &sym);
+                            return do_has(&map.borrow(), sym);
                         }
                         Expression::Atom(Atom::String(s)) => {
                             return do_has(&map.borrow(), &s);
+                        }
+                        Expression::Atom(Atom::StringRef(s)) => {
+                            return do_has(&map.borrow(), s);
                         }
                         Expression::Atom(Atom::StringBuf(s)) => {
                             return do_has(&map.borrow(), &s.borrow());
@@ -274,7 +290,9 @@ fn builtin_hash_keys(
             if let Expression::HashMap(map) = map {
                 let mut key_list = Vec::with_capacity(map.borrow().len());
                 for key in map.borrow().keys() {
-                    key_list.push(Expression::Atom(Atom::Symbol(key.to_string())));
+                    key_list.push(Expression::Atom(Atom::Symbol(
+                        environment.interner.intern(key),
+                    )));
                 }
                 return Ok(Expression::with_list(key_list));
             }
@@ -305,9 +323,12 @@ fn builtin_hash_clear(
     ))
 }
 
-pub fn add_hash_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_hash_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "make-hash".to_string(),
+        interner.intern("make-hash"),
         Rc::new(Expression::make_function(
             builtin_make_hash,
             "Usage (make-hash associations?)
@@ -338,7 +359,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-set!".to_string(),
+        interner.intern("hash-set!"),
         Rc::new(Expression::make_function(
             builtin_hash_set,
             "Usage (hash-set! hashmap key value)
@@ -374,7 +395,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-remove!".to_string(),
+        interner.intern("hash-remove!"),
         Rc::new(Expression::make_function(
             builtin_hash_remove,
             "Usage (hash-remove! hashmap key)
@@ -400,7 +421,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-get".to_string(),
+        interner.intern("hash-get"),
         Rc::new(Expression::make_function(
             builtin_hash_get,
             "Usage (hash-get hashmap key)
@@ -417,7 +438,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-haskey".to_string(),
+        interner.intern("hash-haskey"),
         Rc::new(Expression::make_function(
             builtin_hash_haskey,
             "Usage (hash-haskey hashmap key)
@@ -441,7 +462,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-keys".to_string(),
+        interner.intern("hash-keys"),
         Rc::new(Expression::make_function(
             builtin_hash_keys,
             "Usage (hash-keys hashmap)
@@ -460,7 +481,7 @@ Example:
         )),
     );
     data.insert(
-        "hash-clear!".to_string(),
+        interner.intern("hash-clear!"),
         Rc::new(Expression::make_function(
             builtin_hash_clear,
             "Usage (hash-clear! hashmap)

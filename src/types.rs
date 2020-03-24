@@ -37,7 +37,8 @@ pub enum Atom {
     True,
     Float(f64),
     Int(i64),
-    Symbol(String),
+    Symbol(&'static str),
+    StringRef(&'static str),
     String(String),
     StringBuf(Rc<RefCell<String>>),
     Char(char),
@@ -52,6 +53,7 @@ impl fmt::Display for Atom {
             Atom::Float(n) => write!(f, "{}", n),
             Atom::Int(i) => write!(f, "{}", i),
             Atom::Symbol(s) => write!(f, "{}", s),
+            Atom::StringRef(s) => write!(f, "\"{}\"", s),
             Atom::String(s) => write!(f, "\"{}\"", s),
             Atom::StringBuf(s) => write!(f, "\"{}\"", s.borrow()),
             Atom::Char(c) => write!(f, "#\\{}", c),
@@ -64,7 +66,9 @@ impl fmt::Display for Atom {
 impl Atom {
     // Like to_string but don't put quotes around strings or #\ in front of chars.
     pub fn as_string(&self) -> String {
-        if let Atom::String(s) = self {
+        if let Atom::StringRef(s) = self {
+            (*s).to_string()
+        } else if let Atom::String(s) = self {
             s.to_string()
         } else if let Atom::StringBuf(s) = self {
             s.borrow().to_string()
@@ -82,6 +86,7 @@ impl Atom {
             Atom::Int(_) => "Int".to_string(),
             Atom::Symbol(_) => "Symbol".to_string(),
             Atom::String(_) => "String".to_string(),
+            Atom::StringRef(_) => "String".to_string(),
             Atom::StringBuf(_) => "StringBuf".to_string(),
             Atom::Char(_) => "Char".to_string(),
             Atom::Lambda(_) => "Lambda".to_string(),
@@ -204,7 +209,7 @@ impl fmt::Display for Expression {
             for p in itr {
                 if !first {
                     if let Expression::Atom(Atom::Symbol(sym)) = last_exp {
-                        if sym != "," && sym != ",@" {
+                        if sym != &"," && sym != &",@" {
                             res.push_str(" ");
                         }
                     } else {
@@ -238,7 +243,7 @@ impl fmt::Display for Expression {
                 if let Some((e1, e2)) = &*p.borrow() {
                     if is_proper_list(self) {
                         match e1 {
-                            Expression::Atom(Atom::Symbol(sym)) if sym == "quote" => {
+                            Expression::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
                                 f.write_str("'")?;
                                 // This will be a two element list or something is wrong...
                                 if let Expression::Pair(p) = e2 {
@@ -251,7 +256,7 @@ impl fmt::Display for Expression {
                                     f.write_str(&e2.to_string())
                                 }
                             }
-                            Expression::Atom(Atom::Symbol(sym)) if sym == "bquote" => {
+                            Expression::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
                                 f.write_str("`")?;
                                 // This will be a two element list or something is wrong...
                                 if let Expression::Pair(p) = e2 {
@@ -510,7 +515,7 @@ impl Expression {
                         for p in self.iter() {
                             if !first {
                                 if let Expression::Atom(Atom::Symbol(sym)) = last_p {
-                                    if sym != "," && sym != ",@" {
+                                    if sym != &"," && sym != &",@" {
                                         writer.write_all(b" ")?;
                                     }
                                 } else {
@@ -672,7 +677,7 @@ impl Expression {
         }
     }
 
-    pub fn writef(&self, environment: &Environment, writer: &mut dyn Write) -> io::Result<()> {
+    pub fn writef(&self, environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
         match self {
             Expression::Atom(a) => write!(writer, "{}", a.as_string())?,
             Expression::Process(ps) => {
@@ -746,7 +751,7 @@ impl Expression {
         Ok(())
     }
 
-    pub fn write(&self, environment: &Environment) -> io::Result<()> {
+    pub fn write(&self, environment: &mut Environment) -> io::Result<()> {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         self.writef(environment, &mut handle)

@@ -29,7 +29,16 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, &arg)?;
             return match arg {
-                Expression::Atom(Atom::String(s)) => match read(&s, false) {
+                Expression::Atom(Atom::String(s)) => match read(environment, &s, false) {
+                    Ok(ast) => eval(environment, &ast),
+                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                },
+                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, false) {
+                    Ok(ast) => eval(environment, &ast),
+                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                },
+                Expression::Atom(Atom::StringBuf(s)) => match read(environment, &s.borrow(), false)
+                {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
@@ -165,8 +174,10 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         let mut path_out = file_name.clone();
         for l in p_itr {
             let path_name = match l {
-                Expression::Atom(Atom::Symbol(sym)) => Some(sym),
-                Expression::Atom(Atom::String(s)) => Some(s),
+                Expression::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
+                Expression::Atom(Atom::String(s)) => Some(s.to_string()),
+                Expression::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
+                Expression::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
                 _ => None,
             };
             if let Some(path_name) = path_name {
@@ -189,14 +200,14 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     let path = Path::new(&file_path);
     let ast = if path.exists() {
         let contents = fs::read_to_string(file_path)?;
-        read(&contents, false)
+        read(environment, &contents, false)
     } else {
         match &file_path[..] {
-            "core.lisp" => read(&String::from_utf8_lossy(core_lisp), false),
-            "seq.lisp" => read(&String::from_utf8_lossy(seq_lisp), false),
-            "shell.lisp" => read(&String::from_utf8_lossy(shell_lisp), false),
-            "slsh-std.lisp" => read(&String::from_utf8_lossy(slsh_std_lisp), false),
-            "slshrc" => read(&String::from_utf8_lossy(slshrc), false),
+            "core.lisp" => read(environment, &String::from_utf8_lossy(core_lisp), false),
+            "seq.lisp" => read(environment, &String::from_utf8_lossy(seq_lisp), false),
+            "shell.lisp" => read(environment, &String::from_utf8_lossy(shell_lisp), false),
+            "slsh-std.lisp" => read(environment, &String::from_utf8_lossy(slsh_std_lisp), false),
+            "slshrc" => read(environment, &String::from_utf8_lossy(slshrc), false),
             _ => {
                 let msg = format!("{} not found", file_path);
                 return Err(io::Error::new(io::ErrorKind::Other, msg));
@@ -212,7 +223,9 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                         match first {
                             Expression::Vector(_) => {
                                 let mut v = Vec::with_capacity(list.len() + 1);
-                                v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                v.push(Expression::Atom(Atom::Symbol(
+                                    environment.interner.intern("progn"),
+                                )));
                                 for l in list.drain(..) {
                                     v.push(l);
                                 }
@@ -221,7 +234,9 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                             Expression::Pair(_) => {
                                 // Includes Nil...
                                 let mut v = Vec::with_capacity(list.len() + 1);
-                                v.push(Expression::Atom(Atom::Symbol("progn".to_string())));
+                                v.push(Expression::Atom(Atom::Symbol(
+                                    environment.interner.intern("progn"),
+                                )));
                                 for l in list.drain(..) {
                                     v.push(l);
                                 }
@@ -279,6 +294,22 @@ fn builtin_length(
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in s.chars() {
+                        i += 1;
+                    }
+                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
+                }
+                Expression::Atom(Atom::StringRef(s)) => {
+                    let mut i = 0;
+                    // Need to walk the chars to get the length in utf8 chars not bytes.
+                    for _ in s.chars() {
+                        i += 1;
+                    }
+                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
+                }
+                Expression::Atom(Atom::StringBuf(s)) => {
+                    let mut i = 0;
+                    // Need to walk the chars to get the length in utf8 chars not bytes.
+                    for _ in s.borrow().chars() {
                         i += 1;
                     }
                     Ok(Expression::Atom(Atom::Int(i64::from(i))))
@@ -360,10 +391,11 @@ fn args_out(
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
-        let pretty = if let Expression::Atom(Atom::String(_)) = aa {
-            false
-        } else {
-            pretty
+        let pretty = match aa {
+            Expression::Atom(Atom::String(_)) => false,
+            Expression::Atom(Atom::StringRef(_)) => false,
+            Expression::Atom(Atom::StringBuf(_)) => false,
+            _ => pretty,
         };
         if pretty {
             aa.pretty_printf(environment, writer)?;
@@ -512,7 +544,7 @@ pub fn builtin_progn(
 fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = &Expression>,
-) -> io::Result<(String, Option<String>, &'a Expression)> {
+) -> io::Result<(&'static str, Option<String>, &'a Expression)> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key = match eval(environment, key)? {
@@ -587,14 +619,14 @@ fn builtin_set(
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
-    if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key.clone()) {
+    if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
         // XXX TODO, eval val here?
         entry.insert(Rc::new(val.clone()));
         Ok(val.clone())
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
         let name = scope.borrow().name.clone();
         let (reference, val) = val_to_reference(environment, name, doc_str, val)?;
-        scope.borrow_mut().data.insert(key.clone(), reference);
+        scope.borrow_mut().data.insert(key, reference);
         Ok(val)
     } else {
         Err(io::Error::new(
@@ -623,9 +655,8 @@ fn builtin_export(
                     }
                 };
                 let val = match &val {
-                    Expression::Atom(Atom::Symbol(s)) => {
-                        Expression::Atom(Atom::String(s.to_string()))
-                    }
+                    Expression::Atom(Atom::Symbol(s)) => Expression::Atom(Atom::StringRef(s)),
+                    Expression::Atom(Atom::StringRef(s)) => Expression::Atom(Atom::StringRef(s)),
                     Expression::Atom(Atom::String(s)) => {
                         Expression::Atom(Atom::String(s.to_string()))
                     }
@@ -720,6 +751,8 @@ fn builtin_def(
         if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp {
                 Expression::Atom(Atom::String(s)) => Some(s.to_string()),
+                Expression::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
+                Expression::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
                 _ => None,
             }
         } else {
@@ -744,10 +777,7 @@ fn builtin_def(
                         if name == namespace {
                             let (reference, val) =
                                 val_to_reference(environment, Some(name), doc_string, val)?;
-                            in_scope
-                                .borrow_mut()
-                                .data
-                                .insert(key.to_string(), reference);
+                            in_scope.borrow_mut().data.insert(key, reference);
                             return Ok(val);
                         }
                     }
@@ -822,7 +852,7 @@ fn builtin_dyn(
         None
     };
     if let Some(exp) = args.next() {
-        environment.dynamic_scope.insert(key.clone(), Rc::new(val));
+        environment.dynamic_scope.insert(key, Rc::new(val));
         let res = eval(environment, exp);
         if let Some(old_val) = old_val {
             environment.dynamic_scope.insert(key, old_val);
@@ -846,17 +876,20 @@ fn builtin_to_symbol(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0 {
-                Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
-                Expression::Atom(Atom::StringBuf(s)) => {
-                    Ok(Expression::Atom(Atom::Symbol(s.borrow().clone())))
-                }
-                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s.clone()))),
-                Expression::Atom(Atom::Int(i)) => {
-                    Ok(Expression::Atom(Atom::Symbol(format!("{}", i))))
-                }
-                Expression::Atom(Atom::Float(f)) => {
-                    Ok(Expression::Atom(Atom::Symbol(format!("{}", f))))
-                }
+                Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern(s),
+                ))),
+                Expression::Atom(Atom::StringRef(s)) => Ok(Expression::Atom(Atom::Symbol(s))),
+                Expression::Atom(Atom::StringBuf(s)) => Ok(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern(&s.borrow()),
+                ))),
+                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s))),
+                Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern(&format!("{}", i)),
+                ))),
+                Expression::Atom(Atom::Float(f)) => Ok(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern(&format!("{}", f)),
+                ))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "to-symbol can only convert strings, symbols, ints and floats to a symbol",
@@ -878,7 +911,7 @@ fn builtin_symbol_name(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0 {
-                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::String(s.clone()))),
+                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::StringRef(s))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "symbol-name can only convert a symbol to a string",
@@ -942,9 +975,9 @@ fn replace_commas(
             _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
-            if symbol == "," {
+            if symbol == &"," {
                 comma_next = true;
-            } else if symbol == ",@" {
+            } else if symbol == &",@" {
                 amp_next = true;
             } else if comma_next {
                 output.push(eval(environment, &exp)?);
@@ -1006,7 +1039,7 @@ fn builtin_bquote(
 ) -> io::Result<Expression> {
     let ret = if let Some(arg) = args.next() {
         match arg {
-            Expression::Atom(Atom::Symbol(s)) if s == "," => {
+            Expression::Atom(Atom::Symbol(s)) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
@@ -1376,10 +1409,11 @@ fn builtin_gensym(
     } else {
         let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
-        Ok(Expression::Atom(Atom::Symbol(format!(
-            "gs::{}",
-            *gensym_count
-        ))))
+        Ok(Expression::Atom(Atom::Symbol(
+            environment
+                .interner
+                .intern(&format!("gs::{}", *gensym_count)),
+        )))
     }
 }
 
@@ -1507,7 +1541,7 @@ fn builtin_version(
             "version takes no arguments",
         ))
     } else {
-        Ok(Expression::Atom(Atom::String(VERSION_STRING.to_string())))
+        Ok(Expression::Atom(Atom::StringRef(VERSION_STRING)))
     }
 }
 
@@ -1649,7 +1683,9 @@ fn builtin_get_error(
             Ok(exp) => ret = exp,
             Err(err) => {
                 let mut v = Vec::new();
-                v.push(Expression::Atom(Atom::Symbol(":error".to_string())));
+                v.push(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern(":error"),
+                )));
                 let msg = format!("{}", err);
                 v.push(Expression::Atom(Atom::String(msg)));
                 environment.stack_on_error = old_err;
@@ -1738,6 +1774,8 @@ fn get_doc(
                             if let Some(exp) = get_expression(environment, "*ns*") {
                                 match &exp.exp {
                                     Expression::Atom(Atom::String(s)) => s.to_string(),
+                                    Expression::Atom(Atom::StringRef(s)) => (*s).to_string(),
+                                    Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
                             } else {
@@ -1813,7 +1851,7 @@ pub fn builtin_block(
     let mut ret = Expression::nil();
     if let Some(name) = args.next() {
         let name = if let Expression::Atom(Atom::Symbol(n)) = name {
-            n.clone()
+            n
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -1828,7 +1866,7 @@ pub fn builtin_block(
             let mut returned = false;
             if let Some((ret_name, exp)) = &environment.return_val {
                 if let Some(ret_name) = ret_name {
-                    if &name == ret_name {
+                    if name == ret_name {
                         returned = true;
                         ret = exp.clone();
                     }
@@ -1861,7 +1899,7 @@ pub fn builtin_return_from(
     let mut ret = Expression::nil();
     if let Some(name) = args.next() {
         let name = if let Expression::Atom(Atom::Symbol(n)) = name {
-            Some(n.clone())
+            Some(*n)
         } else if name.is_nil() {
             None
         } else {
@@ -1932,9 +1970,12 @@ macro_rules! ensure_tonicity_all {
     }};
 }
 
-pub fn add_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "eval".to_string(),
+        interner.intern("eval"),
         Rc::new(Expression::make_function(
             builtin_eval,
             "Usage: (eval expression)
@@ -1955,7 +1996,7 @@ Example:
         )),
     );
     data.insert(
-        "fncall".to_string(),
+        interner.intern("fncall"),
         Rc::new(Expression::make_function(
             builtin_fncall,
             "Usage: (fncall function arg0 ... argN)
@@ -1971,7 +2012,7 @@ Example:
         )),
     );
     data.insert(
-        "apply".to_string(),
+        interner.intern("apply"),
         Rc::new(Expression::make_function(
             builtin_apply,
             "Usage: (apply function arg* list)
@@ -1987,7 +2028,7 @@ Example:
         )),
     );
     data.insert(
-        "unwind-protect".to_string(),
+        interner.intern("unwind-protect"),
         Rc::new(Expression::make_function(
             builtin_unwind_protect,
             "Usage: (unwind-protect protected cleanup*) -> [protected result]
@@ -2018,7 +2059,7 @@ Example:
         )),
     );
     data.insert(
-        "err".to_string(),
+        interner.intern("err"),
         Rc::new(Expression::make_function(
             builtin_err,
             "Usage: (err string) -> raises an error
@@ -2032,7 +2073,7 @@ Example:
         )),
     );
     data.insert(
-        "load".to_string(),
+        interner.intern("load"),
         Rc::new(Expression::make_function(
             builtin_load,
             "Usage: (load path) -> [last form value]
@@ -2050,7 +2091,7 @@ Example:
         )),
     );
     data.insert(
-        "length".to_string(),
+        interner.intern("length"),
         Rc::new(Expression::make_function(
             builtin_length,
             "Usage: (length expression) -> int
@@ -2073,7 +2114,7 @@ Example:
         )),
     );
     data.insert(
-        "if".to_string(),
+        interner.intern("if"),
         Rc::new(Expression::make_special(
             builtin_if,
             "Usage: (if condition then-form else-form?) -> [evaled form result]
@@ -2098,7 +2139,7 @@ Example:
         )),
     );
     data.insert(
-        "print".to_string(),
+        interner.intern("print"),
         Rc::new(Expression::make_function(
             builtin_print,
             "Usage: (print arg0 ... argN) -> nil
@@ -2113,7 +2154,7 @@ Example:
         )),
     );
     data.insert(
-        "println".to_string(),
+        interner.intern("println"),
         Rc::new(Expression::make_function(
             builtin_println,
             "Usage: (println arg0 ... argN) -> nil
@@ -2128,7 +2169,7 @@ Example:
         )),
     );
     data.insert(
-        "eprint".to_string(),
+        interner.intern("eprint"),
         Rc::new(Expression::make_function(
             builtin_eprint,
             "Usage: (eprint arg0 ... argN) -> nil
@@ -2143,7 +2184,7 @@ Example:
         )),
     );
     data.insert(
-        "eprintln".to_string(),
+        interner.intern("eprintln"),
         Rc::new(Expression::make_function(
             builtin_eprintln,
             "Usage: (eprintln arg0 ... argN) -> nil
@@ -2158,7 +2199,7 @@ Example:
         )),
     );
     data.insert(
-        "format".to_string(),
+        interner.intern("format"),
         Rc::new(Expression::make_function(
             builtin_format,
             "Usage: (format arg0 ... argN) -> string
@@ -2176,7 +2217,7 @@ Example:
         )),
     );
     data.insert(
-        "progn".to_string(),
+        interner.intern("progn"),
         Rc::new(Expression::make_special(
             builtin_progn,
             "Usage: (progn exp0 ... expN) -> expN
@@ -2194,7 +2235,7 @@ Example:
         )),
     );
     data.insert(
-        "set".to_string(),
+        interner.intern("set"),
         Rc::new(Expression::make_function(
             builtin_set,
             "Usage: (set symbol expression) -> expression
@@ -2218,7 +2259,7 @@ Example:
         )),
     );
     data.insert(
-        "export".to_string(),
+        interner.intern("export"),
         Rc::new(Expression::make_function(
             builtin_export,
             "Usage: (export symbol string) -> string
@@ -2232,7 +2273,7 @@ Example:
         )),
     );
     data.insert(
-        "unexport".to_string(),
+        interner.intern("unexport"),
         Rc::new(Expression::make_function(
             builtin_unexport,
             "Usage: (unexport symbol)
@@ -2248,7 +2289,7 @@ Example:
         )),
     );
     data.insert(
-        "def".to_string(),
+        interner.intern("def"),
         Rc::new(Expression::make_function(
             builtin_def,
             "Usage: (def symbol expression) -> expression
@@ -2276,7 +2317,7 @@ Example:
         )),
     );
     data.insert(
-        "undef".to_string(),
+        interner.intern("undef"),
         Rc::new(Expression::make_function(
             builtin_undef,
             "Usage: (undef symbol)
@@ -2292,7 +2333,7 @@ Example:
         )),
     );
     data.insert(
-        "dyn".to_string(),
+        interner.intern("dyn"),
         Rc::new(Expression::make_function(
             builtin_dyn,
             "Usage: (dyn key value expression) -> nil
@@ -2313,28 +2354,28 @@ Example:
         )),
     );
     data.insert(
-        "to-symbol".to_string(),
+        interner.intern("to-symbol"),
         Rc::new(Expression::make_function(
             builtin_to_symbol,
             "Convert a string, int or float to a symbol.",
         )),
     );
     data.insert(
-        "symbol-name".to_string(),
+        interner.intern("symbol-name"),
         Rc::new(Expression::make_function(
             builtin_symbol_name,
             "Convert a symbol to its string representation.",
         )),
     );
     data.insert(
-        "fn".to_string(),
+        interner.intern("fn"),
         Rc::new(Expression::make_special(
             builtin_fn,
             "Create a function (lambda).",
         )),
     );
     data.insert(
-        "quote".to_string(),
+        interner.intern("quote"),
         Rc::new(Expression::make_special(
             builtin_quote,
             "Usage: (quote expression) -> expression
@@ -2349,7 +2390,7 @@ Example:
         )),
     );
     data.insert(
-        "bquote".to_string(),
+        interner.intern("bquote"),
         Rc::new(Expression::make_special(
             builtin_bquote,
             "Usage: (bquote expression) -> expression
@@ -2371,11 +2412,11 @@ Example:
         )),
     );
     /*data.insert(
-        "spawn".to_string(),
+        "spawn"),
         Rc::new(Expression::Func(builtin_spawn)),
     );*/
     data.insert(
-        "and".to_string(),
+        interner.intern("and"),
         Rc::new(Expression::make_special(builtin_and,
         "Usage: (and exp0 ... expN) -> [nil or expN result]
 
@@ -2392,7 +2433,7 @@ Example:
 ")),
     );
     data.insert(
-        "or".to_string(),
+        interner.intern("or"),
         Rc::new(Expression::make_special(
             builtin_or,
             "Usage: (or exp0 ... expN) -> [nil or first non nil expression]
@@ -2412,7 +2453,7 @@ Example:
         )),
     );
     data.insert(
-        "not".to_string(),
+        interner.intern("not"),
         Rc::new(Expression::make_function(
             builtin_not,
             "Usage: (not expression)
@@ -2428,7 +2469,7 @@ Example:
         )),
     );
     data.insert(
-        "null".to_string(),
+        interner.intern("null"),
         Rc::new(Expression::make_function(
             builtin_not,
             "Usage: (null expression)
@@ -2444,7 +2485,7 @@ Example:
         )),
     );
     data.insert(
-        "def?".to_string(),
+        interner.intern("def?"),
         Rc::new(Expression::make_function(
             builtin_is_def,
             "Usage: (def? symbol)
@@ -2459,11 +2500,11 @@ Example:
         )),
     );
     data.insert(
-        "macro".to_string(),
+        interner.intern("macro"),
         Rc::new(Expression::make_function(builtin_macro, "Define a macro.")),
     );
     data.insert(
-        "expand-macro".to_string(),
+        interner.intern("expand-macro"),
         Rc::new(Expression::make_special(
             builtin_expand_macro,
             "Usage: (expand-macro expression)
@@ -2494,7 +2535,7 @@ Example:
         )),
     );
     data.insert(
-        "expand-macro1".to_string(),
+        interner.intern("expand-macro1"),
         Rc::new(Expression::make_special(
             builtin_expand_macro1,
             "Usage: (expand-macro1 expression)
@@ -2523,7 +2564,7 @@ Example:
         )),
     );
     data.insert(
-        "expand-macro-all".to_string(),
+        interner.intern("expand-macro-all"),
         Rc::new(Expression::make_special(
             builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
@@ -2555,39 +2596,39 @@ Example:
         )),
     );
     data.insert(
-        "recur".to_string(),
+        interner.intern("recur"),
         Rc::new(Expression::make_function(builtin_recur, "")),
     );
     data.insert(
-        "gensym".to_string(),
+        interner.intern("gensym"),
         Rc::new(Expression::make_function(
             builtin_gensym,
             "Generate a unique symbol.",
         )),
     );
     data.insert(
-        "jobs".to_string(),
+        interner.intern("jobs"),
         Rc::new(Expression::make_function(
             builtin_jobs,
             "Print list of jobs.",
         )),
     );
     data.insert(
-        "bg".to_string(),
+        interner.intern("bg"),
         Rc::new(Expression::make_function(
             builtin_bg,
             "Put a job in the background.",
         )),
     );
     data.insert(
-        "fg".to_string(),
+        interner.intern("fg"),
         Rc::new(Expression::make_function(
             builtin_fg,
             "Put a job in the foreground.",
         )),
     );
     data.insert(
-        "version".to_string(),
+        interner.intern("version"),
         Rc::new(Expression::make_function(
             builtin_version,
             "Usage: (version)
@@ -2600,7 +2641,7 @@ Example:
         )),
     );
     data.insert(
-        "command".to_string(),
+        interner.intern("command"),
         Rc::new(Expression::make_special(
             builtin_command,
             "Usage: (command exp0 ... expN)
@@ -2614,7 +2655,7 @@ Example:
         )),
     );
     data.insert(
-        "run-bg".to_string(),
+        interner.intern("run-bg"),
         Rc::new(Expression::make_special(
             builtin_run_bg,
             "Usage: (run-bg exp0 ... expN)
@@ -2628,7 +2669,7 @@ t
         )),
     );
     data.insert(
-        "form".to_string(),
+        interner.intern("form"),
         Rc::new(Expression::make_special(
             builtin_form,
             "Usage: (form exp0 ... expN)
@@ -2642,7 +2683,7 @@ Example:
         )),
     );
     data.insert(
-        "loose-symbols".to_string(),
+        interner.intern("loose-symbols"),
         Rc::new(Expression::make_special(
             builtin_loose_symbols,
             "Usage: (loose-symbols exp0 ... expN)
@@ -2655,7 +2696,7 @@ Example:
         )),
     );
     data.insert(
-        "exit".to_string(),
+        interner.intern("exit"),
         Rc::new(Expression::make_function(
             builtin_exit,
             "Usage: (exit code?)
@@ -2670,7 +2711,7 @@ t
         )),
     );
     data.insert(
-        "error-stack-on".to_string(),
+        interner.intern("error-stack-on"),
         Rc::new(Expression::make_function(
             builtin_error_stack_on,
             "Usage: (error-stack-on)
@@ -2684,7 +2725,7 @@ t
         )),
     );
     data.insert(
-        "error-stack-off".to_string(),
+        interner.intern("error-stack-off"),
         Rc::new(Expression::make_function(
             builtin_error_stack_off,
             "Usage: (error-stack-off)
@@ -2698,7 +2739,7 @@ t
         )),
     );
     data.insert(
-        "get-error".to_string(),
+        interner.intern("get-error"),
         Rc::new(Expression::make_function(
             builtin_get_error,
             "Usage: (get-error exp0 ... expN)
@@ -2715,7 +2756,7 @@ Example:
         )),
     );
     data.insert(
-        "doc".to_string(),
+        interner.intern("doc"),
         Rc::new(Expression::make_function(
             builtin_doc,
             "Usage: (doc symbol)
@@ -2729,7 +2770,7 @@ t
         )),
     );
     data.insert(
-        "doc-raw".to_string(),
+        interner.intern("doc-raw"),
         Rc::new(Expression::make_function(
             builtin_doc_raw,
             "Usage: (doc-raw symbol)
@@ -2744,7 +2785,7 @@ t
     );
 
     data.insert(
-        "block".to_string(),
+        interner.intern("block"),
         Rc::new(Expression::make_special(
             builtin_block,
             "Usage: (block name form*)
@@ -2763,7 +2804,7 @@ Example:
     );
 
     data.insert(
-        "return-from".to_string(),
+        interner.intern("return-from"),
         Rc::new(Expression::make_special(
             builtin_return_from,
             "Usage: (return-from name expression?)
@@ -2781,7 +2822,7 @@ Example:
     );
 
     data.insert(
-        "=".to_string(),
+        interner.intern("="),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              parts: &mut dyn Iterator<Item = &Expression>|
@@ -2828,7 +2869,7 @@ Example:
         )),
     );
     data.insert(
-        ">".to_string(),
+        interner.intern(">"),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a > b),
             "Usage: (> val0 ... valN)
@@ -2857,7 +2898,7 @@ Example:
         )),
     );
     data.insert(
-        ">=".to_string(),
+        interner.intern(">="),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a >= b),
             "Usage: (>= val0 ... valN)
@@ -2885,7 +2926,7 @@ Example:
         )),
     );
     data.insert(
-        "<".to_string(),
+        interner.intern("<"),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a < b),
             "Usage: (< val0 ... valN)
@@ -2913,7 +2954,7 @@ Example:
         )),
     );
     data.insert(
-        "<=".to_string(),
+        interner.intern("<="),
         Rc::new(Expression::make_function(
             ensure_tonicity_all!(|a, b| a <= b),
             "Usage: (<= val0 ... valN)

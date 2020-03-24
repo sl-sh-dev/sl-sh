@@ -316,6 +316,29 @@ fn builtin_str_sub(
                                 "str-sub index out of range",
                             ));
                         }
+                    } else if let Expression::Atom(Atom::StringRef(s)) = &arg2 {
+                        if (start + len) <= s.len() {
+                            return Ok(Expression::Atom(Atom::String(
+                                s[start..(start + len)].to_string(),
+                            )));
+                        } else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-sub index out of range",
+                            ));
+                        }
+                    } else if let Expression::Atom(Atom::StringBuf(s)) = &arg2 {
+                        let s = s.borrow();
+                        if (start + len) <= s.len() {
+                            return Ok(Expression::Atom(Atom::String(
+                                s.as_str()[start..(start + len)].to_string(),
+                            )));
+                        } else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-sub index out of range",
+                            ));
+                        }
                     } else {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -420,12 +443,13 @@ fn builtin_str_empty(
 ) -> io::Result<Expression> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            let string = match eval(environment, &string)? {
-                Expression::Atom(Atom::String(string)) => string,
-                Expression::Atom(Atom::StringBuf(string)) => string.borrow().to_string(),
-                _ => "".to_string(),
+            let empty = match eval(environment, &string)? {
+                Expression::Atom(Atom::String(string)) => string.is_empty(),
+                Expression::Atom(Atom::StringRef(string)) => string.is_empty(),
+                Expression::Atom(Atom::StringBuf(string)) => string.borrow().is_empty(),
+                _ => true,
             };
-            return if string.is_empty() {
+            return if empty {
                 Ok(Expression::Atom(Atom::True))
             } else {
                 Ok(Expression::nil())
@@ -446,16 +470,35 @@ fn builtin_str_nth(
         if let Some(string) = args.next() {
             if args.next().is_none() {
                 if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
-                    let string = match eval(environment, &string)? {
-                        Expression::Atom(Atom::String(string)) => string,
-                        Expression::Atom(Atom::StringBuf(string)) => string.borrow().to_string(),
-                        _ => "".to_string(),
-                    };
-                    for (i, ch) in string.chars().enumerate() {
-                        if i as i64 == idx {
-                            return Ok(Expression::Atom(Atom::Char(ch)));
+                    match eval(environment, &string)? {
+                        Expression::Atom(Atom::String(string)) => {
+                            for (i, ch) in string.chars().enumerate() {
+                                if i as i64 == idx {
+                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                }
+                            }
                         }
-                    }
+                        Expression::Atom(Atom::StringRef(string)) => {
+                            for (i, ch) in string.chars().enumerate() {
+                                if i as i64 == idx {
+                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                }
+                            }
+                        }
+                        Expression::Atom(Atom::StringBuf(string)) => {
+                            for (i, ch) in string.borrow().chars().enumerate() {
+                                if i as i64 == idx {
+                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "str-nth second argument not a string",
+                            ));
+                        }
+                    };
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "str-nth index out of range",
@@ -478,6 +521,9 @@ fn builtin_str_lower(
         if args.next().is_none() {
             match eval(environment, &string)? {
                 Expression::Atom(Atom::String(string)) => {
+                    return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())))
+                }
+                Expression::Atom(Atom::StringRef(string)) => {
                     return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())))
                 }
                 Expression::Atom(Atom::StringBuf(string)) => {
@@ -505,6 +551,9 @@ fn builtin_str_upper(
                 Expression::Atom(Atom::String(string)) => {
                     return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())))
                 }
+                Expression::Atom(Atom::StringRef(string)) => {
+                    return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())))
+                }
                 Expression::Atom(Atom::StringBuf(string)) => {
                     return Ok(Expression::Atom(Atom::String(
                         string.borrow().to_ascii_uppercase(),
@@ -528,6 +577,9 @@ fn builtin_str_bytes(
         if args.next().is_none() {
             match eval(environment, &arg)? {
                 Expression::Atom(Atom::String(string)) => {
+                    return Ok(Expression::Atom(Atom::Int(string.len() as i64)))
+                }
+                Expression::Atom(Atom::StringRef(string)) => {
                     return Ok(Expression::Atom(Atom::Int(string.len() as i64)))
                 }
                 Expression::Atom(Atom::StringBuf(string)) => {
@@ -727,6 +779,13 @@ fn builtin_str_map(
                                 &string,
                             )?)));
                         }
+                        Expression::Atom(Atom::StringRef(string)) => {
+                            return Ok(Expression::Atom(Atom::String(str_map_inner(
+                                environment,
+                                func,
+                                string,
+                            )?)));
+                        }
                         Expression::Atom(Atom::StringBuf(string)) => {
                             return Ok(Expression::Atom(Atom::String(str_map_inner(
                                 environment,
@@ -759,6 +818,12 @@ fn builtin_str_buf_map(
                     match string {
                         Expression::Atom(Atom::String(string)) => {
                             let res = str_map_inner(environment, func, &string)?;
+                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
+                                res,
+                            )))));
+                        }
+                        Expression::Atom(Atom::StringRef(string)) => {
+                            let res = str_map_inner(environment, func, string)?;
                             return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
                                 res,
                             )))));
@@ -889,9 +954,12 @@ fn char_test(
     char_test_short(environment, args, ch_test, false)
 }
 
-pub fn add_str_builtins<S: BuildHasher>(data: &mut HashMap<String, Rc<Reference>, S>) {
+pub fn add_str_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+) {
     data.insert(
-        "str-trim".to_string(),
+        interner.intern("str-trim"),
         Rc::new(Expression::make_function(
             builtin_str_trim,
             "Usage: (str-trim string) -> string
@@ -908,7 +976,7 @@ Example:
         )),
     );
     data.insert(
-        "str-ltrim".to_string(),
+        interner.intern("str-ltrim"),
         Rc::new(Expression::make_function(
             builtin_str_ltrim,
             "Usage: (str-ltrim string) -> string
@@ -925,7 +993,7 @@ Example:
         )),
     );
     data.insert(
-        "str-rtrim".to_string(),
+        interner.intern("str-rtrim"),
         Rc::new(Expression::make_function(
             builtin_str_rtrim,
             "Usage: (str-rtrim string) -> string
@@ -942,7 +1010,7 @@ Example:
         )),
     );
     data.insert(
-        "str-replace".to_string(),
+        interner.intern("str-replace"),
         Rc::new(Expression::make_function(
             builtin_str_replace,
             "Usage: (str-replace string old-pattern new-pattern) -> string
@@ -957,7 +1025,7 @@ Example:
         )),
     );
     data.insert(
-        "str-split".to_string(),
+        interner.intern("str-split"),
         Rc::new(Expression::make_function(
             builtin_str_split,
             "Usage: (str-split split-pattern string) -> vector
@@ -975,7 +1043,7 @@ Example:
         )),
     );
     data.insert(
-        "str-rsplit".to_string(),
+        interner.intern("str-rsplit"),
         Rc::new(Expression::make_function(
             builtin_str_rsplit,
             "Usage: (str-rsplit split-pattern string) -> vector
@@ -992,7 +1060,7 @@ Example:
         )),
     );
     data.insert(
-        "str-splitn".to_string(),
+        interner.intern("str-splitn"),
         Rc::new(Expression::make_function(
             builtin_str_splitn,
             "Usage: (str-splitn n split-pattern string) -> vector
@@ -1009,7 +1077,7 @@ Example:
         )),
     );
     data.insert(
-        "str-rsplitn".to_string(),
+        interner.intern("str-rsplitn"),
         Rc::new(Expression::make_function(
             builtin_str_rsplitn,
             "Usage: (str-rsplitn n split-pattern string) -> vector
@@ -1026,7 +1094,7 @@ Example:
         )),
     );
     data.insert(
-        "str-cat-list".to_string(),
+        interner.intern("str-cat-list"),
         Rc::new(Expression::make_function(
             builtin_str_cat_list,
             "Usage: (str-cat-list join-pattern sequence) -> string
@@ -1041,7 +1109,7 @@ Example:
         )),
     );
     data.insert(
-        "str-sub".to_string(),
+        interner.intern("str-sub"),
         Rc::new(Expression::make_function(
             builtin_str_sub,
             "Usage: (str-sub start length string) -> string
@@ -1056,7 +1124,7 @@ Example:
         )),
     );
     data.insert(
-        "str-append".to_string(),
+        interner.intern("str-append"),
         Rc::new(Expression::make_function(
             builtin_str_append,
             "Usage: (str-append string string) -> string
@@ -1071,7 +1139,7 @@ Example:
         )),
     );
     data.insert(
-        "str".to_string(),
+        interner.intern("str"),
         Rc::new(Expression::make_function(
             builtin_str,
             "Usage: (str arg0 ... argN) -> string
@@ -1090,7 +1158,7 @@ Example:
         )),
     );
     data.insert(
-        "str-empty?".to_string(),
+        interner.intern("str-empty?"),
         Rc::new(Expression::make_function(
             builtin_str_empty,
             "Usage: (str-empty?) -> t/nil
@@ -1106,7 +1174,7 @@ Example:
         )),
     );
     data.insert(
-        "str-nth".to_string(),
+        interner.intern("str-nth"),
         Rc::new(Expression::make_function(
             builtin_str_nth,
             "Usage: (str-nth n string) -> char
@@ -1121,7 +1189,7 @@ Example:
         )),
     );
     data.insert(
-        "str-lower".to_string(),
+        interner.intern("str-lower"),
         Rc::new(Expression::make_function(
             builtin_str_lower,
             "Usage: (str-lower string) -> string
@@ -1138,7 +1206,7 @@ Example:
         )),
     );
     data.insert(
-        "str-upper".to_string(),
+        interner.intern("str-upper"),
         Rc::new(Expression::make_function(
             builtin_str_upper,
             "Usage: (str-upper string) -> string
@@ -1155,7 +1223,7 @@ Example:
         )),
     );
     data.insert(
-        "str-bytes".to_string(),
+        interner.intern("str-bytes"),
         Rc::new(Expression::make_function(
             builtin_str_bytes,
             "Usage: (str-bytes string) -> int
@@ -1173,7 +1241,7 @@ Example:
         )),
     );
     data.insert(
-        "str-starts-with".to_string(),
+        interner.intern("str-starts-with"),
         Rc::new(Expression::make_function(
             builtin_str_starts_with,
             "Usage: (str-starts-with pattern string) -> t/nil
@@ -1187,7 +1255,7 @@ Example:
         )),
     );
     data.insert(
-        "str-contains".to_string(),
+        interner.intern("str-contains"),
         Rc::new(Expression::make_function(
             builtin_str_contains,
             "Usage: (str-contains pattern string) -> t/nil
@@ -1206,7 +1274,7 @@ Example:
         )),
     );
     data.insert(
-        "str-buf".to_string(),
+        interner.intern("str-buf"),
         Rc::new(Expression::make_function(
             builtin_str_buf,
             "Usage: (str-buf arg0 ... argN) -> string-buffer
@@ -1227,7 +1295,7 @@ Example:
         )),
     );
     data.insert(
-        "str-buf-push!".to_string(),
+        interner.intern("str-buf-push!"),
         Rc::new(Expression::make_function(
             builtin_str_buf_push,
             "Usage: (str-buf-push! string-buffer arg0 ... argN) -> string-buffer
@@ -1245,7 +1313,7 @@ Example:
         )),
     );
     data.insert(
-        "str-buf-clear!".to_string(),
+        interner.intern("str-buf-clear!"),
         Rc::new(Expression::make_function(
             builtin_str_buf_clear,
             "Usage: (str-buf-clear! string-buffer) -> string-buffer
@@ -1263,7 +1331,7 @@ Example:
         )),
     );
     data.insert(
-        "str-map".to_string(),
+        interner.intern("str-map"),
         Rc::new(Expression::make_function(
             builtin_str_map,
             "Usage: (str-map lambda string) -> string
@@ -1282,7 +1350,7 @@ Example:
         )),
     );
     data.insert(
-        "str-buf-map".to_string(),
+        interner.intern("str-buf-map"),
         Rc::new(Expression::make_function(
             builtin_str_buf_map,
             "Usage: (str-buf-map lambda string) -> string-buffer
@@ -1300,7 +1368,7 @@ Example:
         )),
     );
     data.insert(
-        "str-ignore-expand".to_string(),
+        interner.intern("str-ignore-expand"),
         Rc::new(Expression::make_function(
             builtin_str_ignore_expand,
             "Usage: (str-ignore-expand exp0 ... expN) -> [final expression]
@@ -1316,7 +1384,7 @@ Example:
     );
 
     data.insert(
-        "char-lower".to_string(),
+        interner.intern("char-lower"),
         Rc::new(Expression::make_function(
             builtin_char_lower,
             "Usage: (char-lower char) -> char
@@ -1331,7 +1399,7 @@ Example:
         )),
     );
     data.insert(
-        "char-upper".to_string(),
+        interner.intern("char-upper"),
         Rc::new(Expression::make_function(
             builtin_char_upper,
             "Usage: (char-upper char) -> char
@@ -1346,7 +1414,7 @@ Example:
         )),
     );
     data.insert(
-        "char-whitespace?".to_string(),
+        interner.intern("char-whitespace?"),
         Rc::new(Expression::make_function(
             builtin_char_is_whitespace,
             "Usage: (char-whitespace? char) -> t/nil
@@ -1361,7 +1429,7 @@ Example:
         )),
     );
     data.insert(
-        "char=".to_string(),
+        interner.intern("char="),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -1384,7 +1452,7 @@ Example:
         )),
     );
     data.insert(
-        "char!=".to_string(),
+        interner.intern("char!="),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -1407,7 +1475,7 @@ Example:
         )),
     );
     data.insert(
-        "char>".to_string(),
+        interner.intern("char>"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -1430,7 +1498,7 @@ Example:
         )),
     );
     data.insert(
-        "char<".to_string(),
+        interner.intern("char<"),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -1453,7 +1521,7 @@ Example:
         )),
     );
     data.insert(
-        "char>=".to_string(),
+        interner.intern("char>="),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|
@@ -1476,7 +1544,7 @@ Example:
         )),
     );
     data.insert(
-        "char<=".to_string(),
+        interner.intern("char<="),
         Rc::new(Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = &Expression>|

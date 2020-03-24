@@ -43,14 +43,15 @@ struct ReplSettings {
 
 fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
     let mut load_path = Vec::new();
-    load_path.push(Expression::Atom(Atom::String(format!(
-        "{}/.config/sl-sh",
-        home
-    ))));
-    environment
-        .root_scope
-        .borrow_mut()
-        .insert_exp("*load-path*".to_string(), Expression::with_list(load_path));
+    load_path.push(Expression::Atom(Atom::StringRef(
+        environment
+            .interner
+            .intern(&format!("{}/.config/sl-sh", home)),
+    )));
+    environment.root_scope.borrow_mut().insert_exp(
+        environment.interner.intern("*load-path*"),
+        Expression::with_list(load_path),
+    );
     if let Err(err) = load(environment, "slsh-std.lisp") {
         eprintln!(
             "WARNING: Failed to load standard macros script slsh-std.lisp: {}",
@@ -63,11 +64,14 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
             let settings = Rc::new(RefCell::new(HashMap::new()));
             settings.borrow_mut().insert(
                 "keybindings".to_string(),
-                Rc::new(Expression::Atom(Atom::Symbol("emacs".to_string()))),
+                Rc::new(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern("emacs"),
+                ))),
             );
-            scope
-                .borrow_mut()
-                .insert_exp("*repl-settings*".to_string(), Expression::HashMap(settings));
+            scope.borrow_mut().insert_exp(
+                environment.interner.intern("*repl-settings*"),
+                Expression::HashMap(settings),
+            );
             environment.current_scope.push(scope);
         }
         Err(msg) => eprintln!(
@@ -87,7 +91,9 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
         let exp = match exp.exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
-                v.push(Expression::Atom(Atom::Symbol("__prompt".to_string())));
+                v.push(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern("__prompt"),
+                )));
                 Rc::new(Expression::with_list(v))
             }
             _ => Rc::new(exp.exp.clone()),
@@ -141,22 +147,25 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
     }
     if has_handle {
         let line_color = move |input: &str| -> String {
+            let mut environment = environment.borrow_mut();
             let exp = match *exp {
                 Expression::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1);
-                    v.push(Expression::Atom(Atom::Symbol("__line_handler".to_string())));
+                    v.push(Expression::Atom(Atom::Symbol(
+                        environment.interner.intern("__line_handler"),
+                    )));
                     v.push(Expression::Atom(Atom::String(input.to_string())));
                     Rc::new(Expression::with_list(v))
                 }
                 _ => return input.to_string(),
             };
-            environment.borrow_mut().save_exit_status = false; // Do not overwrite last exit status with line_handler.
-            environment.borrow_mut().str_ignore_expand = true;
-            let res = eval(&mut environment.borrow_mut(), &exp);
-            environment.borrow_mut().str_ignore_expand = false;
-            environment.borrow_mut().save_exit_status = true;
+            environment.save_exit_status = false; // Do not overwrite last exit status with line_handler.
+            environment.str_ignore_expand = true;
+            let res = eval(&mut environment, &exp);
+            environment.str_ignore_expand = false;
+            environment.save_exit_status = true;
             res.unwrap_or_else(|e| Expression::Atom(Atom::String(format!("ERROR: {}", e))))
-                .as_string(&environment.borrow())
+                .as_string(&environment)
                 .unwrap_or_else(|_| "ERROR".to_string())
         };
         Some(Box::new(line_color))
@@ -181,7 +190,7 @@ fn handle_result(
                     }
                 }
                 environment.root_scope.borrow_mut().insert_exp(
-                    "*last-command*".to_string(),
+                    environment.interner.intern("*last-command*"),
                     Expression::Atom(Atom::String(input.to_string())),
                 );
             }
@@ -316,39 +325,45 @@ fn apply_repl_settings(repl_settings: &Expression) -> ReplSettings {
 }
 
 fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ParseError> {
-    fn read_add_parens(input: &str) -> Result<Expression, ParseError> {
+    fn read_add_parens(
+        environment: &mut Environment,
+        input: &str,
+    ) -> Result<Expression, ParseError> {
         let add_parens = !(input.starts_with('(')
             || input.starts_with('\'')
             || input.starts_with('`')
             || input.starts_with('#'));
-        read(input, add_parens)
+        read(environment, input, add_parens)
     }
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
         let exp = match exec_exp.exp {
             Expression::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(2);
-                v.push(Expression::Atom(Atom::Symbol("__exec_hook".to_string())));
+                v.push(Expression::Atom(Atom::Symbol(
+                    environment.interner.intern("__exec_hook"),
+                )));
                 v.push(Expression::Atom(Atom::String(input.to_string())));
                 Rc::new(Expression::with_list(v))
             }
             _ => {
                 eprintln!("WARNING: __exec_hook not a lambda, ignoring.");
-                return read_add_parens(input);
+                return read_add_parens(environment, input);
             }
         };
         match eval(environment, &exp) {
             Ok(res) => match res {
-                Expression::Atom(Atom::String(s)) => read_add_parens(&s),
-                Expression::Atom(Atom::StringBuf(s)) => read_add_parens(&s.borrow()),
+                Expression::Atom(Atom::String(s)) => read_add_parens(environment, &s),
+                Expression::Atom(Atom::StringRef(s)) => read_add_parens(environment, s),
+                Expression::Atom(Atom::StringBuf(s)) => read_add_parens(environment, &s.borrow()),
                 _ => Ok(res),
             },
             Err(err) => {
                 eprintln!("ERROR calling __exec_hook: {}", err);
-                read_add_parens(input)
+                read_add_parens(environment, input)
             }
         }
     } else {
-        read_add_parens(input)
+        read_add_parens(environment, input)
     }
 }
 
@@ -429,24 +444,28 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let euid = Uid::effective();
     env::set_var("UID", format!("{}", uid));
     env::set_var("EUID", format!("{}", euid));
-    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
-        "*uid*".to_string(),
+    let mut env = environment.borrow_mut();
+    let mut interned_sym = env.interner.intern("*uid*");
+    env.root_scope.borrow_mut().insert_exp(
+        interned_sym,
         Expression::Atom(Atom::Int(uid_t::from(uid) as i64)),
     );
-    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
-        "*euid*".to_string(),
+    interned_sym = env.interner.intern("*euid*");
+    env.root_scope.borrow_mut().insert_exp(
+        interned_sym,
         Expression::Atom(Atom::Int(uid_t::from(euid) as i64)),
     );
-    load_user_env(&mut environment.borrow_mut(), &home, true);
-    let repl_settings = get_expression(&environment.borrow(), "*repl-settings*").unwrap();
-    environment
+    load_user_env(&mut env, &home, true);
+    let repl_settings = get_expression(&env, "*repl-settings*").unwrap();
+    interned_sym = env.interner.intern("*last-status*");
+    env.root_scope
         .borrow_mut()
-        .root_scope
-        .borrow_mut()
-        .insert_exp("*last-status*".to_string(), Expression::Atom(Atom::Int(0)));
-    environment.borrow_mut().root_scope.borrow_mut().insert_exp(
-        "*last-command*".to_string(),
-        Expression::Atom(Atom::String("".to_string())),
+        .insert_exp(interned_sym, Expression::Atom(Atom::Int(0)));
+    interned_sym = env.interner.intern("*last-command*");
+    let interned_sym2 = env.interner.intern("");
+    env.root_scope.borrow_mut().insert_exp(
+        interned_sym,
+        Expression::Atom(Atom::StringRef(interned_sym2)),
     );
     let mut current_repl_settings = ReplSettings {
         key_bindings: Keys::Emacs,
@@ -457,6 +476,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         vi_insert_prompt_prefix: None,
         vi_insert_prompt_suffix: None,
     };
+    drop(env);
     con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
         let new_repl_settings = apply_repl_settings(&repl_settings.exp);
@@ -506,21 +526,23 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 }
                 // Clear the last status once something new is entered.
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
-                environment.borrow_mut().root_scope.borrow_mut().insert_exp(
-                    "*last-status*".to_string(),
-                    Expression::Atom(Atom::Int(i64::from(0))),
-                );
-                let ast = exec_hook(&mut environment.borrow_mut(), &input);
+                let mut environment = environment.borrow_mut();
+                interned_sym = environment.interner.intern("*last-status*");
+                environment
+                    .root_scope
+                    .borrow_mut()
+                    .insert_exp(interned_sym, Expression::Atom(Atom::Int(i64::from(0))));
+                let ast = exec_hook(&mut environment, &input);
                 match ast {
                     Ok(ast) => {
                         if let Err(err) = con.history.push(input.into()) {
                             eprintln!("Error saving history: {}", err);
                         }
-                        environment.borrow_mut().loose_symbols = true;
-                        environment.borrow_mut().error_expression = None;
-                        let res = eval(&mut environment.borrow_mut(), &ast);
-                        handle_result(&mut environment.borrow_mut(), res, &mut con, &input, false);
-                        environment.borrow_mut().loose_symbols = false;
+                        environment.loose_symbols = true;
+                        environment.error_expression = None;
+                        let res = eval(&mut environment, &ast);
+                        handle_result(&mut environment, res, &mut con, &input, false);
+                        environment.loose_symbols = false;
                     }
                     Err(err) => {
                         if !input.is_empty() {
@@ -578,7 +600,7 @@ pub fn read_stdin() -> i32 {
                 environment.state.stdout_status = None;
                 let add_parens =
                     !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
-                let ast = read(input, add_parens);
+                let ast = read(&mut environment, input, add_parens);
                 match ast {
                     Ok(ast) => {
                         environment.loose_symbols = true;
@@ -588,7 +610,7 @@ pub fn read_stdin() -> i32 {
                                     Expression::Pair(_) if exp.is_nil() => { /* don't print nil */ }
                                     Expression::Process(_) => { /* should have used stdout */ }
                                     _ => {
-                                        if let Err(err) = exp.write(&environment) {
+                                        if let Err(err) = exp.write(&mut environment) {
                                             eprintln!("Error writing result: {}", err);
                                         }
                                     }
@@ -710,12 +732,14 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
 
     let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
-        exp_args.push(Expression::Atom(Atom::String(a.clone())));
+        exp_args.push(Expression::Atom(Atom::StringRef(
+            environment.interner.intern(a),
+        )));
     }
-    environment
-        .root_scope
-        .borrow_mut()
-        .insert_exp("args".to_string(), Expression::with_list(exp_args));
+    environment.root_scope.borrow_mut().insert_exp(
+        environment.interner.intern("args"),
+        Expression::with_list(exp_args),
+    );
     if let Err(err) = load(&mut environment, command) {
         eprintln!("Error running {}: {}", command, err);
         if environment.exit_code.is_none() {

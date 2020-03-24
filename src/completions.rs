@@ -99,7 +99,10 @@ impl ShellCompleter {
                 Expression::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     v.push(Expression::Atom(Atom::Symbol(
-                        "__completion_hook".to_string(),
+                        self.environment
+                            .borrow_mut()
+                            .interner
+                            .intern("__completion_hook"),
                     )));
                     for a in self.args.drain(..) {
                         v.push(Expression::Atom(Atom::String(a)));
@@ -115,16 +118,31 @@ impl ShellCompleter {
             match eval(envir, &exp) {
                 Ok(res) => {
                     match &res {
-                        Expression::Atom(Atom::String(s)) | Expression::Atom(Atom::Symbol(s)) => {
-                            match s.as_ref() {
-                                "path" => HookResult::Path,
-                                "default" => HookResult::Default,
-                                _ => {
-                                    eprintln!("ERROR: unknown completion hook command, {}", s);
-                                    HookResult::Default
-                                }
+                        Expression::Atom(Atom::StringRef(s))
+                        | Expression::Atom(Atom::Symbol(s)) => match *s {
+                            "path" => HookResult::Path,
+                            "default" => HookResult::Default,
+                            _ => {
+                                eprintln!("ERROR: unknown completion hook command, {}", s);
+                                HookResult::Default
                             }
-                        }
+                        },
+                        Expression::Atom(Atom::String(s)) => match s.as_ref() {
+                            "path" => HookResult::Path,
+                            "default" => HookResult::Default,
+                            _ => {
+                                eprintln!("ERROR: unknown completion hook command, {}", s);
+                                HookResult::Default
+                            }
+                        },
+                        Expression::Atom(Atom::StringBuf(s)) => match s.borrow().as_ref() {
+                            "path" => HookResult::Path,
+                            "default" => HookResult::Default,
+                            _ => {
+                                eprintln!("ERROR: unknown completion hook command, {}", s.borrow());
+                                HookResult::Default
+                            }
+                        },
                         Expression::Vector(list) => {
                             let mut v = Vec::with_capacity(list.borrow().len());
                             for l in list.borrow_mut().drain(..) {
@@ -391,7 +409,7 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str
     let data = &environment.root_scope.borrow().data;
     for key in data.keys() {
         if key.starts_with(start) {
-            let val = key.to_string();
+            let val = (*key).to_string();
             match data.get(key).unwrap().exp {
                 Expression::Function(_) => comps.push(val),
                 Expression::Atom(Atom::Lambda(_)) => comps.push(val),
@@ -414,7 +432,7 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
             let val = if need_quote {
                 format!("'{}", key)
             } else {
-                key.to_string()
+                (*key).to_string()
             };
             match data.get(key).unwrap().exp {
                 Expression::Atom(Atom::Lambda(_)) => {}

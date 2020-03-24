@@ -178,7 +178,7 @@ pub fn compress_tilde(path: &str) -> Option<String> {
 fn set_arg(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
-    key: &str,
+    key: &'static str,
     var: &Expression,
     do_eval: bool,
 ) -> io::Result<()> {
@@ -221,9 +221,9 @@ fn set_arg(
         })
     };
     if let Some(scope) = scope {
-        scope.data.insert(key.to_string(), v2);
+        scope.data.insert(key, v2);
     } else {
-        set_expression_current_ref(environment, key.to_string(), v2);
+        set_expression_current_ref(environment, key, v2);
     }
     Ok(())
 }
@@ -231,7 +231,7 @@ fn set_arg(
 fn setup_args_final<'a>(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
-    var_names: &mut Vec<String>,
+    var_names: &mut Vec<&'static str>,
     mut vars: Box<dyn Iterator<Item = &Expression> + 'a>,
     min_params: usize,
     use_rest: bool,
@@ -323,13 +323,13 @@ pub fn setup_args<'a>(
         }
         _ => params.iter(),
     };
-    let mut var_names: Vec<String> = Vec::new(); //with_capacity(l.len());
+    let mut var_names: Vec<&'static str> = Vec::new(); //with_capacity(l.len());
     let mut use_rest = false;
     let mut post_rest_cnt = 0;
     let mut min_params = 0;
     for arg in p_iter {
         if let Expression::Atom(Atom::Symbol(s)) = arg {
-            match &s[..] {
+            match *s {
                 "&rest" => {
                     if use_rest {
                         return Err(io::Error::new(
@@ -351,7 +351,7 @@ pub fn setup_args<'a>(
                     } else {
                         min_params += 1;
                     }
-                    var_names.push(s.clone());
+                    var_names.push(s);
                 }
             }
         } else {
