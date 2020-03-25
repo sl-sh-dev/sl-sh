@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
+use crate::interner::*;
 use crate::types::*;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<String> {

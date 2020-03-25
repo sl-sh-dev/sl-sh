@@ -17,6 +17,7 @@ use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
 use crate::eval::*;
+use crate::interner::*;
 use crate::process::*;
 use crate::reader::*;
 use crate::types::*;

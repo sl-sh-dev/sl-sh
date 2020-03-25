@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::eval;
+use crate::interner::*;
 use crate::types::*;
 
 fn make_args(

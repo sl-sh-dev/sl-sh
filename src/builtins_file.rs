@@ -10,6 +10,7 @@ use glob::glob;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
+use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
 

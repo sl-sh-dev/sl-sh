@@ -59,3 +59,6 @@ pub use crate::builtins_namespace::*;
 
 pub mod process;
 pub use crate::process::*;
+
+pub mod interner;
+pub use crate::interner::*;

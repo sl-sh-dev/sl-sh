@@ -1,10 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use std::io;
-use std::mem;
 use std::process::Child;
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
@@ -20,6 +18,7 @@ use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_types::add_type_builtins;
 use crate::builtins_vector::add_vec_builtins;
+use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
 
@@ -255,53 +254,6 @@ impl fmt::Display for JobStatus {
             JobStatus::Running => write!(f, "Running"),
             JobStatus::Stopped => write!(f, "Stopped"),
         }
-    }
-}
-
-// This interner is initially based on this: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
-// Inspiration also from: https://github.com/CAD97/simple-interner/blob/master/src/interner.rs
-// See https://www.reddit.com/r/rust/comments/fn1jxf/blog_post_fast_and_simple_rust_interner/
-// This is a simple string interner.  It hands out &'static str and it WILL leak memory
-// to keep them valid.  Intended to live for the programs lifetime.
-#[derive(Clone, Debug)]
-pub struct Interner {
-    map: HashSet<&'static str>,
-    // Leak buffers to keep the static lifetimes we hand out valid.
-    buf: mem::ManuallyDrop<String>,
-}
-
-impl Interner {
-    pub fn with_capacity(cap: usize) -> Interner {
-        let cap = cap.next_power_of_two();
-        Interner {
-            map: HashSet::default(),
-            buf: mem::ManuallyDrop::new(String::with_capacity(cap)),
-        }
-    }
-
-    pub fn contains(&self, name: &str) -> bool {
-        self.map.contains(name)
-    }
-
-    pub fn intern(&mut self, name: &str) -> &'static str {
-        if let Some(&id) = self.map.get(name) {
-            return id;
-        }
-        let name = {
-            let cap = self.buf.capacity();
-            if cap < self.buf.len() + name.len() {
-                let new_cap = (cap.max(name.len()) + 1).next_power_of_two();
-                let new_buf = mem::ManuallyDrop::new(String::with_capacity(new_cap));
-                // Leak memory to keep the static lifetimes valid.
-                let _old_buf = mem::replace(&mut self.buf, new_buf);
-            }
-
-            let start = self.buf.len();
-            self.buf.push_str(name);
-            unsafe { &*(&self.buf[start..] as *const str) }
-        };
-        self.map.insert(name);
-        name
     }
 }
 
