@@ -1150,26 +1150,31 @@ fn builtin_is_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
+    fn get_ret(environment: &mut Environment, name: &str) -> io::Result<Expression> {
+        if is_expression(environment, name) {
+            Ok(Expression::Atom(Atom::True))
+        } else {
+            Ok(Expression::nil())
+        }
+    }
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return if let Expression::Atom(Atom::Symbol(s)) = arg0 {
-                if is_expression(environment, &s) {
-                    Ok(Expression::Atom(Atom::True))
-                } else {
-                    Ok(Expression::nil())
-                }
-            } else {
-                Err(io::Error::new(
+            return match arg0 {
+                Expression::Atom(Atom::Symbol(s)) => get_ret(environment, s),
+                Expression::Atom(Atom::StringRef(s)) => get_ret(environment, s),
+                Expression::Atom(Atom::String(s)) => get_ret(environment, &s),
+                Expression::Atom(Atom::StringBuf(s)) => get_ret(environment, &s.borrow()),
+                _ => Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "def? takes a symbol to lookup",
-                ))
+                    "def? takes a symbol or string (will be treated as a symbol) to lookup",
+                )),
             };
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "def? takes one form (symbol)",
+        "def? takes one form (symbol or string)",
     ))
 }
 
@@ -1416,7 +1421,7 @@ fn builtin_gensym(
         Ok(Expression::Atom(Atom::Symbol(
             environment
                 .interner
-                .intern(&format!("gs::{}", *gensym_count)),
+                .intern(&format!("gs@@{}", *gensym_count)),
         )))
     }
 }
@@ -1428,7 +1433,7 @@ fn builtin_jobs(
     if args.next().is_some() {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "jobs takes to arguments",
+            "jobs takes no arguments",
         ))
     } else {
         for (i, job) in environment.jobs.borrow().iter().enumerate() {
@@ -1932,6 +1937,26 @@ pub fn builtin_return_from(
     }
 }
 
+pub fn builtin_intern_stats(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_some() {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "intern-stats: takes no arguments.",
+        ))
+    } else {
+        println!(
+            "allocated bytes: {}\nused bytes: {}\nsymbols interned: {}",
+            environment.interner.capacity(),
+            environment.interner.used(),
+            environment.interner.len()
+        );
+        Ok(Expression::nil())
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -2379,7 +2404,21 @@ Example:
         interner.intern("to-symbol"),
         Rc::new(Expression::make_function(
             builtin_to_symbol,
-            "Convert a string, int or float to a symbol.",
+            "Usage: (to-symbol expression) -> symbol
+
+Convert a string, symbol, int or float to a symbol.
+
+If the symbol is new it will be interned.
+
+Example:
+(def 'test-to-symbol-sym nil)
+(test::assert-true (symbol? (to-symbol 55)))
+(test::assert-true (symbol? (to-symbol 55.0)))
+(test::assert-true (symbol? (to-symbol \"to-symbol-test-new-symbol\")))
+(test::assert-true (symbol? (to-symbol (str-buf \"to-symbol-test-new-symbol-buf\"))))
+(test::assert-true (symbol? (to-symbol 'test-to-symbol-sym)))
+(test::assert-true (symbol? (to-symbol (symbol-name 'test-to-symbol-sym))))
+",
             root,
         )),
     );
@@ -2387,7 +2426,17 @@ Example:
         interner.intern("symbol-name"),
         Rc::new(Expression::make_function(
             builtin_symbol_name,
-            "Convert a symbol to its string representation.",
+            "Usage: (symbol-name symbol) -> string
+
+Convert a symbol to its string representation.
+
+The string will be the symbol name as a string.
+
+Example:
+(def 'test-symbol-name-sym nil)
+(test::assert-true (string? (symbol-name 'test-symbol-name-sym)))
+(test::assert-equal \"test-symbol-name-sym\" (symbol-name 'test-symbol-name-sym))
+",
             root,
         )),
     );
@@ -2518,14 +2567,20 @@ Example:
         interner.intern("def?"),
         Rc::new(Expression::make_function(
             builtin_is_def,
-            "Usage: (def? symbol)
+            "Usage: (def? expression) -> t|nil
 
 Return true if symbol is defined.
+
+Expression will be evaluated and if a symbol or string it will look up that
+name in the symbol table and return true if it exists.
 
 Example:
 (def 'test-is-def t)
 (test::assert-true (def? 'test-is-def))
+(test::assert-true (def? \"test-is-def\"))
+(test::assert-true (def? (symbol-name 'test-is-def)))
 (test::assert-false (def? 'test-is-def-not-defined))
+(test::assert-false (def? \"test-is-def-not-defined\"))
 ",
             root,
         )),
@@ -2641,7 +2696,25 @@ Example:
         interner.intern("gensym"),
         Rc::new(Expression::make_function(
             builtin_gensym,
-            "Generate a unique symbol.",
+            "Usage: (gensym) -> symbol
+
+Generate a unique symbol.
+
+Gensym uses a prefix of gs@@ followed by an incrementing counter.
+It is useful to generate unique symbol names when writing macros (for instance).
+
+Example:
+(def 'test-gensym-one (gensym))
+(def 'test-gensym-two (gensym))
+(def 'test-gensym-three (gensym))
+(test::assert-equal \"gs@@1\" (symbol-name test-gensym-one))
+(test::assert-equal \"gs@@2\" (symbol-name test-gensym-two))
+(test::assert-equal \"gs@@3\" (symbol-name test-gensym-three))
+(test::assert-true (symbol? (gensym)))
+(test::assert-true (symbol? test-gensym-one))
+(test::assert-true (symbol? test-gensym-two))
+(test::assert-true (symbol? test-gensym-three))
+",
             root,
         )),
     );
@@ -2649,7 +2722,14 @@ Example:
         interner.intern("jobs"),
         Rc::new(Expression::make_function(
             builtin_jobs,
-            "Print list of jobs.",
+            "Usage: (jobs)
+
+Print list of jobs with ids.
+
+Example:
+;(jobs)
+t
+",
             root,
         )),
     );
@@ -2657,7 +2737,16 @@ Example:
         interner.intern("bg"),
         Rc::new(Expression::make_function(
             builtin_bg,
-            "Put a job in the background.",
+            "Usage: (bg job-id?)
+
+Put a job in the background.
+
+If no job id is specified use the last job.
+
+Example:
+;(bg)
+t
+",
             root,
         )),
     );
@@ -2665,7 +2754,16 @@ Example:
         interner.intern("fg"),
         Rc::new(Expression::make_function(
             builtin_fg,
-            "Put a job in the foreground.",
+            "Usage: (fg job-id?)
+
+Put a job in the foreground.
+
+If no job id is specified use the last job.
+
+Example:
+;(fg)
+t
+",
             root,
         )),
     );
@@ -2869,6 +2967,22 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
 ", root
+        )),
+    );
+
+    data.insert(
+        interner.intern("intern-stats"),
+        Rc::new(Expression::make_special(
+            builtin_intern_stats,
+            "Usage: (intern-stats)
+
+Prints the stats for interned symbols.
+
+Example:
+;(intern-stats)
+t
+",
+            root,
         )),
     );
 

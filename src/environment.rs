@@ -307,7 +307,7 @@ pub struct Environment {
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    let mut interner = Interner::with_capacity(102_400);
+    let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
@@ -348,7 +348,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut state = EnvState::default();
     let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::with_capacity(data_in.len());
-    let mut interner = Interner::with_capacity(102_400);
+    let mut interner = Interner::with_capacity(8192);
     data.insert(
         interner.intern("*ns*"),
         Rc::new(Reference {

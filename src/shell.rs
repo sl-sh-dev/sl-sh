@@ -48,9 +48,21 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
             .interner
             .intern(&format!("{}/.config/sl-sh", home)),
     )));
-    environment.root_scope.borrow_mut().insert_exp(
+    environment.root_scope.borrow_mut().insert_exp_with_doc(
         environment.interner.intern("*load-path*"),
         Expression::with_list(load_path),
+        Some(
+            "Usage: (set '*load-path* '(\"/path/one\" \"/path/two\"))
+
+Set the a list of paths to search for loading scripts with the load form.
+
+Example:
+;(set '*load-path '(\"/path\"))
+;(load \"script-in-path\")
+t
+"
+            .to_string(),
+        ),
     );
     if let Err(err) = load(environment, "slsh-std.lisp") {
         eprintln!(

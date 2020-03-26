@@ -229,9 +229,8 @@
 	(tok-command t))
 
 	(defn func? (com) (progn
-		(def 'com-sym (to-symbol com))
 		; Want the actual thing pointed to by the symbol in com for the test.
-		(if (def? (to-symbol com))
+		(if (def? com)
 			(set 'com (eval (to-symbol com))))
 		(or (builtin? com)(lambda? com)(macro? com))))
 
@@ -253,7 +252,7 @@
 
 	(defn command-color (command)
 		(if (not tok-command)
-			(if (def? (to-symbol command))
+			(if (def? command)
 				(if (func? command)
 					(if in-sys-command
 						(str tok-default-color command shell::*fg-default*)
