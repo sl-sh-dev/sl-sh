@@ -405,19 +405,79 @@ fn get_env_matches(start: &str) -> Vec<String> {
     ret
 }
 
-fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str) {
-    let data = &environment.root_scope.borrow().data;
-    for key in data.keys() {
-        if key.starts_with(start) {
-            let val = (*key).to_string();
-            match data.get(key).unwrap().exp {
-                Expression::Function(_) => comps.push(val),
-                Expression::Atom(Atom::Lambda(_)) => comps.push(val),
-                Expression::Atom(Atom::Macro(_)) => comps.push(val),
-                _ => {}
+fn find_lisp_things(
+    environment: &Environment,
+    comps: &mut Vec<String>,
+    start: &str,
+    symbols: bool,
+    need_quote: bool,
+) {
+    fn save_val(comps: &mut Vec<String>, data: &Expression, val: String, symbols: bool) {
+        match data {
+            Expression::Atom(Atom::Lambda(_)) => {
+                if !symbols {
+                    comps.push(val);
+                }
+            }
+            Expression::Atom(Atom::Macro(_)) => {
+                if !symbols {
+                    comps.push(val);
+                }
+            }
+            Expression::Function(_) => {
+                if !symbols {
+                    comps.push(val);
+                }
+            }
+            _ => {
+                if symbols {
+                    comps.push(val);
+                }
             }
         }
     }
+
+    if start.contains("::") {
+        // namespace reference.
+        let mut key_i = start.splitn(2, "::");
+        if let Some(namespace) = key_i.next() {
+            if let Some(scope) = environment.namespaces.get(namespace) {
+                if let Some(start) = key_i.next() {
+                    let data = &scope.borrow().data;
+                    for key in data.keys() {
+                        if key.starts_with(start) {
+                            let val = if need_quote {
+                                format!("'{}::{}", namespace, key)
+                            } else {
+                                format!("{}::{}", namespace, key)
+                            };
+                            save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        while let Some(scope) = loop_scope {
+            let data = &scope.borrow().data;
+            for key in data.keys() {
+                if key.starts_with(start) {
+                    let val = if need_quote {
+                        format!("'{}", key)
+                    } else {
+                        (*key).to_string()
+                    };
+                    save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                }
+            }
+            loop_scope = scope.borrow().outer.clone();
+        }
+    }
+}
+
+fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str) {
+    find_lisp_things(environment, comps, start, false, false)
 }
 
 fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_start: &str) {
@@ -426,24 +486,7 @@ fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_sta
     } else {
         (org_start, false)
     };
-    let data = &environment.root_scope.borrow().data;
-    for key in data.keys() {
-        if key.starts_with(start) {
-            let val = if need_quote {
-                format!("'{}", key)
-            } else {
-                (*key).to_string()
-            };
-            match data.get(key).unwrap().exp {
-                Expression::Atom(Atom::Lambda(_)) => {}
-                Expression::Atom(Atom::Macro(_)) => {}
-                Expression::Function(_) => {}
-                _ => {
-                    comps.push(val);
-                }
-            }
-        }
-    }
+    find_lisp_things(environment, comps, start, true, need_quote)
 }
 
 fn find_exes(comps: &mut Vec<String>, start: &str) {
