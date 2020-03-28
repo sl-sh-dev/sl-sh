@@ -421,13 +421,13 @@ pub fn do_command<'a>(
                 "Invalid expression state before command (function).",
             ))
         }
-        Some(Expression::Vector(_)) => {
+        Some(Expression::Vector(_, _)) => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (list).",
             ))
         }
-        Some(Expression::Pair(p)) => {
+        Some(Expression::Pair(p, _)) => {
             if let Some((_, _)) = &*p.borrow() {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,

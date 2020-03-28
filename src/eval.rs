@@ -58,7 +58,7 @@ pub fn call_lambda<'a>(
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
-            if let Expression::Vector(new_args) = &last_eval {
+            if let Expression::Vector(new_args, _) = &last_eval {
                 if recur_args != new_args.borrow().len() {
                     environment.current_scope.pop();
                     return Err(io::Error::new(
@@ -205,7 +205,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
     let p_int;
     let p_bor;
     let (command, mut parts) = match expression {
-        Expression::Vector(parts) => {
+        Expression::Vector(parts, _) => {
             parts_int = parts.borrow();
             let (command, parts) = match parts_int.split_first() {
                 Some((c, p)) => (c, p),
@@ -216,7 +216,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let ib = box_slice_it(&parts);
             (command, ib)
         }
-        Expression::Pair(p) => {
+        Expression::Pair(p, _) => {
             if p.borrow().is_none() {
                 return Ok(Expression::nil());
             }
@@ -286,24 +286,26 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::Vector(list) => match eval(environment, &Expression::Vector(list.clone()))? {
-            Expression::Atom(Atom::Lambda(l)) => {
-                if environment.allow_lazy_fn {
-                    make_lazy(environment, &l, parts)
-                } else {
-                    call_lambda(environment, &l, parts, true)
+        Expression::Vector(list, _) => {
+            match eval(environment, &Expression::Vector(list.clone(), None))? {
+                Expression::Atom(Atom::Lambda(l)) => {
+                    if environment.allow_lazy_fn {
+                        make_lazy(environment, &l, parts)
+                    } else {
+                        call_lambda(environment, &l, parts, true)
+                    }
+                }
+                Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
+                Expression::Function(c) => (c.func)(environment, &mut *parts),
+                _ => {
+                    let msg = format!("Not a valid command {:?}", list);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
                 }
             }
-            Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
-            Expression::Function(c) => (c.func)(environment, &mut *parts),
-            _ => {
-                let msg = format!("Not a valid command {:?}", list);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        },
-        Expression::Pair(p) => {
+        }
+        Expression::Pair(p, _) => {
             if p.borrow().is_some() {
-                match eval(environment, &Expression::Pair(p.clone()))? {
+                match eval(environment, &Expression::Pair(p.clone(), None))? {
                     Expression::Atom(Atom::Lambda(l)) => {
                         if environment.allow_lazy_fn {
                             make_lazy(environment, &l, parts)
@@ -421,7 +423,7 @@ fn internal_eval<'a>(
     // If we have a macro expand it and replace the expression with the expansion.
     if let Some(exp) = expand_macro(environment, expression, false)? {
         let mut nv = Vec::new();
-        if let Expression::Vector(list) = &exp {
+        if let Expression::Vector(list, _) = &exp {
             for item in &*list.borrow() {
                 let item = if let Expression::LazyFn(_, _) = item {
                     item.clone().resolve(environment)?
@@ -430,7 +432,7 @@ fn internal_eval<'a>(
                 };
                 nv.push(item);
             }
-        } else if let Expression::Pair(_) = &exp {
+        } else if let Expression::Pair(_, _) = &exp {
             for item in exp.iter() {
                 let item = if let Expression::LazyFn(_, _) = item {
                     item.clone().resolve(environment)?
@@ -441,11 +443,11 @@ fn internal_eval<'a>(
             }
         }
         match expression {
-            Expression::Vector(list) => {
+            Expression::Vector(list, _) => {
                 list.replace(nv);
             }
-            Expression::Pair(p) => {
-                if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+            Expression::Pair(p, _) => {
+                if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
                     p.replace(np.borrow().clone());
                 }
             }
@@ -453,8 +455,8 @@ fn internal_eval<'a>(
         }
     }
     match expression {
-        Expression::Vector(_) => fn_eval_lazy(environment, expression),
-        Expression::Pair(p) => {
+        Expression::Vector(_, _) => fn_eval_lazy(environment, expression),
+        Expression::Pair(p, _) => {
             if p.borrow().is_some() {
                 fn_eval_lazy(environment, expression)
             } else {
@@ -528,7 +530,29 @@ pub fn eval_nr<'a>(
             if let Err(err) = expression.pretty_printf(environment, &mut handle) {
                 eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
             }
+            match expression {
+                Expression::Vector(_, Some(meta)) => eprint!(
+                    "\n[[[ {}, line: {}, column: {} ]]]",
+                    meta.file, meta.line, meta.col
+                ),
+                Expression::Pair(_, Some(meta)) => eprint!(
+                    "\n[[[ {}, line: {}, column: {} ]]]",
+                    meta.file, meta.line, meta.col
+                ),
+                _ => {}
+            }
             eprintln!("\n=============================================================");
+        }
+        if environment.error_meta.is_none() {
+            match expression {
+                Expression::Vector(_, Some(meta)) => {
+                    environment.error_meta = Some(meta.clone());
+                }
+                Expression::Pair(_, Some(meta)) => {
+                    environment.error_meta = Some(meta.clone());
+                }
+                _ => {}
+            }
         }
     }
     environment.state.eval_level -= 1;

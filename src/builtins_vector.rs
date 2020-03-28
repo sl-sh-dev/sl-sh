@@ -48,7 +48,7 @@ fn builtin_make_vec(
         }
         list
     } else {
-        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new()))));
+        return Ok(Expression::Vector(Rc::new(RefCell::new(Vec::new())), None));
     };
     Ok(Expression::with_list(list))
 }
@@ -93,7 +93,7 @@ fn builtin_vec_slice(
         ));
     };
     match &vec {
-        Expression::Vector(list) => {
+        Expression::Vector(list, _) => {
             let list = list.borrow();
             if !list.is_empty() {
                 let len = list.len();
@@ -132,7 +132,7 @@ fn builtin_vec_nth(
         if let Some(list) = args.next() {
             if args.next().is_none() {
                 if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
-                    if let Expression::Vector(list) = eval(environment, &list)? {
+                    if let Expression::Vector(list, _) = eval(environment, &list)? {
                         let list = list.borrow();
                         if idx < 0 || idx >= list.len() as i64 {
                             return Err(io::Error::new(
@@ -171,7 +171,7 @@ fn builtin_vec_setnth(
                     };
                     let new_element = eval(environment, new_element)?;
                     return match eval(environment, list)? {
-                        Expression::Vector(list) => {
+                        Expression::Vector(list, _) => {
                             if idx < 0 || idx >= list.borrow().len() as i64 {
                                 return Err(io::Error::new(
                                     io::ErrorKind::Other,
@@ -179,7 +179,7 @@ fn builtin_vec_setnth(
                                 ));
                             }
                             list.borrow_mut()[idx as usize] = new_element;
-                            Ok(Expression::Vector(list))
+                            Ok(Expression::Vector(list, None))
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -206,9 +206,9 @@ fn builtin_vec_push(
             if args.next().is_none() {
                 let new_item = eval(environment, new_item)?;
                 return match eval(environment, list)? {
-                    Expression::Vector(list) => {
+                    Expression::Vector(list, _) => {
                         list.borrow_mut().push(new_item);
-                        Ok(Expression::Vector(list))
+                        Ok(Expression::Vector(list, None))
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -232,7 +232,7 @@ fn builtin_vec_pop(
     if let Some(list) = args.next() {
         if args.next().is_none() {
             return match eval(environment, list)? {
-                Expression::Vector(list) => {
+                Expression::Vector(list, _) => {
                     if let Some(item) = list.borrow_mut().pop() {
                         Ok(item)
                     } else {
@@ -260,7 +260,7 @@ fn builtin_vec_is_empty(
         if args.next().is_none() {
             let list = eval(environment, list)?;
             return match list {
-                Expression::Vector(list) => {
+                Expression::Vector(list, _) => {
                     if list.borrow().is_empty() {
                         Ok(Expression::Atom(Atom::True))
                     } else {
@@ -289,7 +289,7 @@ fn builtin_vec_vclear(
         if args.next().is_none() {
             let list = eval(environment, list)?;
             return match list {
-                Expression::Vector(list) => {
+                Expression::Vector(list, _) => {
                     list.borrow_mut().clear();
                     Ok(Expression::nil())
                 }
@@ -325,7 +325,7 @@ fn builtin_vec_remove_nth(
                     ));
                 };
                 return match list {
-                    Expression::Vector(list) => {
+                    Expression::Vector(list, _) => {
                         if idx < 0 || idx >= list.borrow().len() as i64 {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -333,7 +333,7 @@ fn builtin_vec_remove_nth(
                             ));
                         }
                         list.borrow_mut().remove(idx as usize);
-                        Ok(Expression::Vector(list))
+                        Ok(Expression::Vector(list, None))
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -370,7 +370,7 @@ fn builtin_vec_insert_nth(
                         ));
                     };
                     return match list {
-                        Expression::Vector(list) => {
+                        Expression::Vector(list, _) => {
                             if idx < 0 || idx > list.borrow().len() as i64 {
                                 return Err(io::Error::new(
                                     io::ErrorKind::Other,
@@ -378,7 +378,7 @@ fn builtin_vec_insert_nth(
                                 ));
                             }
                             list.borrow_mut().insert(idx as usize, new_element);
-                            Ok(Expression::Vector(list))
+                            Ok(Expression::Vector(list, None))
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,

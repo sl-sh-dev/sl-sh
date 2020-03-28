@@ -30,19 +30,20 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, &arg)?;
             return match arg {
-                Expression::Atom(Atom::String(s)) => match read(environment, &s, false) {
+                Expression::Atom(Atom::String(s)) => match read(environment, &s, false, None) {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, false) {
+                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, false, None) {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                Expression::Atom(Atom::StringBuf(s)) => match read(environment, &s.borrow(), false)
-                {
-                    Ok(ast) => eval(environment, &ast),
-                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-                },
+                Expression::Atom(Atom::StringBuf(s)) => {
+                    match read(environment, &s.borrow(), false, None) {
+                        Ok(ast) => eval(environment, &ast),
+                        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                    }
+                }
                 _ => eval(environment, &arg),
             };
         }
@@ -86,12 +87,12 @@ fn builtin_apply(
     if let Some(alist) = last_arg {
         last_evaled = eval(environment, alist)?;
         let itr = match last_evaled {
-            Expression::Vector(list) => {
+            Expression::Vector(list, _) => {
                 tlist = list;
                 list_borrow = tlist.borrow();
                 Box::new(list_borrow.iter())
             }
-            Expression::Pair(_) => last_evaled.iter(), // Includes Nil.
+            Expression::Pair(_, _) => last_evaled.iter(), // Includes Nil.
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -166,7 +167,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
         let vec_borrow;
         let p_itr = match &lp.exp {
-            Expression::Vector(vec) => {
+            Expression::Vector(vec, _) => {
                 vec_borrow = vec.borrow();
                 Box::new(vec_borrow.iter())
             }
@@ -199,16 +200,42 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         file_name
     };
     let path = Path::new(&file_path);
+    let file_name = Some(file_path.to_string());
     let ast = if path.exists() {
         let contents = fs::read_to_string(file_path)?;
-        read(environment, &contents, false)
+        read(environment, &contents, false, file_name)
     } else {
         match &file_path[..] {
-            "core.lisp" => read(environment, &String::from_utf8_lossy(core_lisp), false),
-            "seq.lisp" => read(environment, &String::from_utf8_lossy(seq_lisp), false),
-            "shell.lisp" => read(environment, &String::from_utf8_lossy(shell_lisp), false),
-            "slsh-std.lisp" => read(environment, &String::from_utf8_lossy(slsh_std_lisp), false),
-            "slshrc" => read(environment, &String::from_utf8_lossy(slshrc), false),
+            "core.lisp" => read(
+                environment,
+                &String::from_utf8_lossy(core_lisp),
+                false,
+                file_name,
+            ),
+            "seq.lisp" => read(
+                environment,
+                &String::from_utf8_lossy(seq_lisp),
+                false,
+                file_name,
+            ),
+            "shell.lisp" => read(
+                environment,
+                &String::from_utf8_lossy(shell_lisp),
+                false,
+                file_name,
+            ),
+            "slsh-std.lisp" => read(
+                environment,
+                &String::from_utf8_lossy(slsh_std_lisp),
+                false,
+                file_name,
+            ),
+            "slshrc" => read(
+                environment,
+                &String::from_utf8_lossy(slshrc),
+                false,
+                file_name,
+            ),
             _ => {
                 let msg = format!("{} not found", file_path);
                 return Err(io::Error::new(io::ErrorKind::Other, msg));
@@ -218,11 +245,11 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     match ast {
         Ok(ast) => {
             let ast = match ast {
-                Expression::Vector(olist) => {
+                Expression::Vector(olist, _) => {
                     let mut list = olist.borrow_mut();
                     if let Some(first) = list.get(0) {
                         match first {
-                            Expression::Vector(_) => {
+                            Expression::Vector(_, _) => {
                                 let mut v = Vec::with_capacity(list.len() + 1);
                                 v.push(Expression::Atom(Atom::Symbol(
                                     environment.interner.intern("progn"),
@@ -232,7 +259,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                                 }
                                 Expression::with_list(v)
                             }
-                            Expression::Pair(_) => {
+                            Expression::Pair(_, _) => {
                                 // Includes Nil...
                                 let mut v = Vec::with_capacity(list.len() + 1);
                                 v.push(Expression::Atom(Atom::Symbol(
@@ -245,12 +272,12 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                             }
                             _ => {
                                 drop(list);
-                                Expression::Vector(olist)
+                                Expression::Vector(olist, None)
                             }
                         }
                     } else {
                         drop(list);
-                        Expression::Vector(olist)
+                        Expression::Vector(olist, None)
                     }
                 }
                 _ => ast,
@@ -316,16 +343,16 @@ fn builtin_length(
                     Ok(Expression::Atom(Atom::Int(i64::from(i))))
                 }
                 Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-                Expression::Vector(list) => {
+                Expression::Vector(list, _) => {
                     Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64)))
                 }
-                Expression::Pair(p) => {
+                Expression::Pair(p, _) => {
                     if let Some((_e1, e2)) = &*p.borrow() {
                         let mut len = 0;
                         let mut e_next = e2.clone();
                         loop {
                             match e_next {
-                                Expression::Pair(p) => {
+                                Expression::Pair(p, _) => {
                                     len += 1;
                                     if let Some((_e1, e2)) = &*p.borrow() {
                                         e_next = e2.clone();
@@ -972,10 +999,10 @@ fn replace_commas(
     let mut amp_next = false;
     for exp in list {
         let exp = match exp {
-            Expression::Vector(tlist) => {
+            Expression::Vector(tlist, _) => {
                 replace_commas(environment, &mut tlist.borrow().iter(), is_vector)?
             }
-            Expression::Pair(_) => replace_commas(environment, &mut exp.iter(), is_vector)?,
+            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector)?,
             _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
@@ -988,11 +1015,11 @@ fn replace_commas(
                 comma_next = false;
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
-                if let Expression::Vector(new_list) = nl {
+                if let Expression::Vector(new_list, _) = nl {
                     for item in new_list.borrow().iter() {
                         output.push(item.clone());
                     }
-                } else if let Expression::Pair(_) = nl {
+                } else if let Expression::Pair(_, _) = nl {
                     for item in nl.iter() {
                         output.push(item.clone());
                     }
@@ -1011,11 +1038,11 @@ fn replace_commas(
             comma_next = false;
         } else if amp_next {
             let nl = eval(environment, &exp)?;
-            if let Expression::Vector(new_list) = nl {
+            if let Expression::Vector(new_list, _) = nl {
                 for item in new_list.borrow_mut().drain(..) {
                     output.push(item);
                 }
-            } else if let Expression::Pair(_) = nl {
+            } else if let Expression::Pair(_, _) = nl {
                 for item in nl.iter() {
                     output.push(item.clone());
                 }
@@ -1033,7 +1060,7 @@ fn replace_commas(
     if is_vector {
         Ok(Expression::with_list(output))
     } else {
-        Ok(Expression::cons_from_vec(&mut output))
+        Ok(Expression::cons_from_vec(&mut output, None))
     }
 }
 
@@ -1050,10 +1077,10 @@ fn builtin_bquote(
                     Ok(Expression::nil())
                 }
             }
-            Expression::Vector(list) => {
+            Expression::Vector(list, _) => {
                 replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
             }
-            Expression::Pair(p) => {
+            Expression::Pair(p, _) => {
                 if let Some((_, _)) = &*p.borrow() {
                     replace_commas(environment, &mut arg.iter(), false)
                 } else {
@@ -1241,7 +1268,7 @@ fn expand_macro_internal(
     arg: &Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    if let Expression::Vector(list) = arg {
+    if let Expression::Vector(list, _) = arg {
         let list = list.borrow();
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
@@ -1263,7 +1290,7 @@ fn expand_macro_internal(
         } else {
             Ok(None)
         }
-    } else if let Expression::Pair(p) = arg {
+    } else if let Expression::Pair(p, _) = arg {
         if let Some((e1, e2)) = &*p.borrow() {
             let expansion = do_expansion(environment, &e1, &mut *e2.iter())?;
             if let Some(expansion) = expansion {
@@ -1301,36 +1328,36 @@ pub fn expand_macro(
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
     if let Some(exp) = expand_macro(environment, arg, false)? {
-        if let Expression::Vector(list) = &exp {
+        if let Expression::Vector(list, _) = &exp {
             let mut nv = Vec::new();
             for item in &*list.borrow() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
             list.replace(nv);
-        } else if let Expression::Pair(p) = &exp {
+        } else if let Expression::Pair(p, _) = &exp {
             let mut nv = Vec::new();
             for item in exp.iter() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+            if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
                 p.replace(np.borrow().clone());
             }
         }
         Ok(exp)
     } else {
         let arg = arg.clone();
-        if let Expression::Vector(list) = &arg {
+        if let Expression::Vector(list, _) = &arg {
             let mut nv = Vec::new();
             for item in &*list.borrow() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
             list.replace(nv);
-        } else if let Expression::Pair(p) = &arg {
+        } else if let Expression::Pair(p, _) = &arg {
             let mut nv = Vec::new();
             for item in arg.iter() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            if let Expression::Pair(np) = Expression::cons_from_vec(&mut nv) {
+            if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
                 p.replace(np.borrow().clone());
             }
         }
@@ -1710,14 +1737,14 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     let l;
     let p_iter = match exp {
         Expression::Atom(Atom::Lambda(f)) => match &*f.params {
-            Expression::Vector(li) => {
+            Expression::Vector(li, _) => {
                 l = li.borrow();
                 Box::new(l.iter())
             }
             _ => f.params.iter(),
         },
         Expression::Atom(Atom::Macro(m)) => match &*m.params {
-            Expression::Vector(li) => {
+            Expression::Vector(li, _) => {
                 l = li.borrow();
                 Box::new(l.iter())
             }

@@ -221,7 +221,7 @@ fn builtin_is_vec(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Vector(_) = arg {
+            return if let Expression::Vector(_, _) = arg {
                 Ok(Expression::Atom(Atom::True))
             } else {
                 Ok(Expression::nil())
@@ -238,7 +238,7 @@ fn builtin_is_pair(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Pair(p) = arg {
+            return if let Expression::Pair(p, _) = arg {
                 if let Some((_, _)) = &*p.borrow() {
                     Ok(Expression::Atom(Atom::True))
                 } else {

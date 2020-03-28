@@ -248,7 +248,7 @@ fn builtin_read(
         } else {
             false
         };
-        match read(environment, &input, add_parens) {
+        match read(environment, &input, add_parens, None) {
             Ok(ast) => Ok(ast),
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }

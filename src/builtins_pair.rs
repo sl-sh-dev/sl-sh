@@ -18,7 +18,10 @@ fn builtin_join(
             if args.next().is_none() {
                 let arg0 = eval(environment, arg0)?;
                 let arg1 = eval(environment, arg1)?;
-                return Ok(Expression::Pair(Rc::new(RefCell::new(Some((arg0, arg1))))));
+                return Ok(Expression::Pair(
+                    Rc::new(RefCell::new(Some((arg0, arg1)))),
+                    None,
+                ));
             }
         }
     }
@@ -33,8 +36,8 @@ fn builtin_list(
     let mut last = head.clone();
     for a in args {
         let a = eval(environment, a)?;
-        let pair = Expression::Pair(Rc::new(RefCell::new(Some((a, Expression::nil())))));
-        if let Expression::Pair(p) = last {
+        let pair = Expression::Pair(Rc::new(RefCell::new(Some((a, Expression::nil())))), None);
+        if let Expression::Pair(p, None) = last {
             let p = &mut *p.borrow_mut();
             if let Some(p) = p {
                 p.1 = pair.clone();
@@ -56,7 +59,7 @@ fn builtin_car(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg {
-                Expression::Pair(p) => {
+                Expression::Pair(p, _) => {
                     if let Some((e1, _e2)) = &*p.borrow() {
                         Ok(e1.clone())
                     } else {
@@ -82,7 +85,7 @@ fn builtin_cdr(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg {
-                Expression::Pair(p) => {
+                Expression::Pair(p, _) => {
                     if let Some((_e1, e2)) = &*p.borrow() {
                         Ok(e2.clone())
                     } else {
@@ -109,7 +112,7 @@ fn builtin_xar(
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
-                if let Expression::Pair(pair) = &pair {
+                if let Expression::Pair(pair, _) = &pair {
                     let mut new_pair = None;
                     {
                         let pair = &mut *pair.borrow_mut();
@@ -151,7 +154,7 @@ fn builtin_xdr(
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
-                if let Expression::Pair(pair) = &pair {
+                if let Expression::Pair(pair, _) = &pair {
                     let mut new_pair = None;
                     {
                         let pair = &mut *pair.borrow_mut();

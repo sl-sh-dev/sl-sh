@@ -134,7 +134,7 @@ impl<'a> Iterator for PairIter<'a> {
             self.started = true;
         } else {
             self.current = if let Some(current) = &self.current {
-                if let Expression::Pair(p) = current {
+                if let Expression::Pair(p, _) = current {
                     if let Some((_e1, e2)) = &*p.borrow() {
                         Some(e2.clone())
                     } else {
@@ -148,7 +148,7 @@ impl<'a> Iterator for PairIter<'a> {
             };
         }
         if let Some(current) = &self.current {
-            if let Expression::Pair(p) = current {
+            if let Expression::Pair(p, _) = current {
                 let pair = unsafe {
                     // Need an unbound lifetime to get 'a
                     &*p.as_ptr()
@@ -185,15 +185,25 @@ impl Callable {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ExpMeta {
+    pub file: String,
+    pub line: usize,
+    pub col: usize,
+}
+
 #[derive(Clone)]
 pub enum Expression {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
-    Vector(Rc<RefCell<Vec<Expression>>>),
+    Vector(Rc<RefCell<Vec<Expression>>>, Option<ExpMeta>),
     // Nil is represented with a Pair that contains None.  May seem odd
     // but allows nil to be transformed into a pair with xar!/xdr! and treated
     // as a true empty list.
-    Pair(Rc<RefCell<Option<(Expression, Expression)>>>),
+    Pair(
+        Rc<RefCell<Option<(Expression, Expression)>>>,
+        Option<ExpMeta>,
+    ),
     HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
     Function(Callable),
     Process(ProcessState),
@@ -232,21 +242,21 @@ impl fmt::Display for Expression {
                 pid, exit_status
             ),
             Expression::Function(_) => write!(f, "#<Function>"),
-            Expression::Vector(list) => {
+            Expression::Vector(list, _) => {
                 let mut res = String::new();
                 res.push_str("#(");
                 list_out(&mut res, &mut list.borrow().iter());
                 res.push(')');
                 write!(f, "{}", res)
             }
-            Expression::Pair(p) => {
+            Expression::Pair(p, _) => {
                 if let Some((e1, e2)) = &*p.borrow() {
                     if is_proper_list(self) {
                         match e1 {
                             Expression::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
                                 f.write_str("'")?;
                                 // This will be a two element list or something is wrong...
-                                if let Expression::Pair(p) = e2 {
+                                if let Expression::Pair(p, _) = e2 {
                                     if let Some((a2, _is_nil)) = &*p.borrow() {
                                         f.write_str(&a2.to_string())
                                     } else {
@@ -259,7 +269,7 @@ impl fmt::Display for Expression {
                             Expression::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
                                 f.write_str("`")?;
                                 // This will be a two element list or something is wrong...
-                                if let Expression::Pair(p) = e2 {
+                                if let Expression::Pair(p, _) = e2 {
                                     if let Some((a2, _is_nil)) = &*p.borrow() {
                                         f.write_str(&a2.to_string())
                                     } else {
@@ -316,8 +326,8 @@ impl fmt::Debug for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
-            Expression::Vector(l) => write!(f, "Expression::Vector({:?})", l.borrow()),
-            Expression::Pair(p) => {
+            Expression::Vector(l, _) => write!(f, "Expression::Vector({:?})", l.borrow()),
+            Expression::Pair(p, _) => {
                 if let Some((e1, e2)) = &*p.borrow() {
                     write!(f, "Expression::Pair({:?} . {:?})", e1, e2)
                 } else {
@@ -352,11 +362,11 @@ impl Expression {
     }
 
     pub fn nil() -> Expression {
-        Expression::Pair(Rc::new(RefCell::new(None)))
+        Expression::Pair(Rc::new(RefCell::new(None)), None)
     }
 
     pub fn is_nil(&self) -> bool {
-        if let Expression::Pair(p) = self {
+        if let Expression::Pair(p, _) = self {
             p.borrow().is_none()
         } else {
             false
@@ -365,9 +375,9 @@ impl Expression {
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = &Expression>> {
         match self {
-            Expression::Pair(p) => {
+            Expression::Pair(p, _) => {
                 if p.borrow().is_some() {
-                    Box::new(PairIter::new(Expression::Pair(p.clone())))
+                    Box::new(PairIter::new(Expression::Pair(p.clone(), None)))
                 } else {
                     Box::new(iter::empty())
                 }
@@ -400,22 +410,33 @@ impl Expression {
     }
 
     pub fn with_list(list: Vec<Expression>) -> Expression {
-        Expression::Vector(Rc::new(RefCell::new(list)))
+        Expression::Vector(Rc::new(RefCell::new(list)), None)
     }
 
-    pub fn cons_from_vec(v: &mut Vec<Expression>) -> Expression {
+    pub fn with_list_meta(list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
+        Expression::Vector(Rc::new(RefCell::new(list)), meta)
+    }
+
+    pub fn cons_from_vec(v: &mut Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
         let mut last_pair = Expression::nil();
+        //let mut meta = meta;
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
-                last_pair = Expression::Pair(Rc::new(RefCell::new(Some((
-                    v.remove(i),
-                    last_pair.clone(),
-                )))));
                 if i == 0 {
+                    last_pair = Expression::Pair(
+                        Rc::new(RefCell::new(Some((v.remove(i), last_pair.clone())))),
+                        meta,
+                    );
                     break;
+                } else {
+                    last_pair = Expression::Pair(
+                        Rc::new(RefCell::new(Some((v.remove(i), last_pair.clone())))),
+                        None,
+                    );
                 }
                 i -= 1;
+                //meta = None;
             }
         }
         last_pair
@@ -432,8 +453,8 @@ impl Expression {
                     "Function".to_string()
                 }
             }
-            Expression::Vector(_) => "Vector".to_string(),
-            Expression::Pair(p) => {
+            Expression::Vector(_, _) => "Vector".to_string(),
+            Expression::Pair(p, _) => {
                 if let Some((_, _)) = &*p.borrow() {
                     "Pair".to_string()
                 } else {
@@ -483,7 +504,7 @@ impl Expression {
             Ok(())
         }
         match self {
-            Expression::Vector(list) => {
+            Expression::Vector(list, _) => {
                 init_space(indent, writer)?;
                 let a_str = self.to_string();
                 if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
@@ -502,7 +523,7 @@ impl Expression {
                     writer.write_all(b")")?;
                 }
             }
-            Expression::Pair(p) => {
+            Expression::Pair(p, _) => {
                 if let Some((e1, e2)) = &*p.borrow() {
                     init_space(indent, writer)?;
                     let a_str = self.to_string();
@@ -595,8 +616,8 @@ impl Expression {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
             Expression::Function(_) => Ok(self.to_string()),
-            Expression::Vector(_list) => Ok(self.to_string()),
-            Expression::Pair(_) => Ok(self.to_string()),
+            Expression::Vector(_, _) => Ok(self.to_string()),
+            Expression::Pair(_, _) => Ok(self.to_string()),
             Expression::HashMap(_map) => Ok(self.to_string()),
             Expression::File(file) => match &*file.borrow_mut() {
                 FileState::Stdin => {
@@ -644,8 +665,8 @@ impl Expression {
                 }
             }
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Vector(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
@@ -669,8 +690,8 @@ impl Expression {
                 }
             }
             Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Pair(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Vector(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
@@ -717,8 +738,8 @@ impl Expression {
                 wait_pid(environment, *pid, None);
             }
             Expression::Function(_) => write!(writer, "{}", self.to_string())?,
-            Expression::Vector(_list) => write!(writer, "{}", self.to_string())?,
-            Expression::Pair(_) => write!(writer, "{}", self.to_string())?,
+            Expression::Vector(_, _) => write!(writer, "{}", self.to_string())?,
+            Expression::Pair(_, _) => write!(writer, "{}", self.to_string())?,
             Expression::HashMap(_map) => write!(writer, "{}", self.to_string())?,
             Expression::File(file) => match &*file.borrow_mut() {
                 FileState::Stdin => {

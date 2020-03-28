@@ -240,7 +240,7 @@ fn builtin_str_cat_list(
                 let mut new_str = String::new();
                 let list = eval(environment, list)?;
                 match list {
-                    Expression::Vector(list) => {
+                    Expression::Vector(list, _) => {
                         let mut first = true;
                         for s in list.borrow().iter() {
                             if !first {
@@ -250,7 +250,7 @@ fn builtin_str_cat_list(
                             first = false;
                         }
                     }
-                    Expression::Pair(_) => {
+                    Expression::Pair(_, _) => {
                         // Includes nil
                         let list = list.iter();
                         let mut first = true;

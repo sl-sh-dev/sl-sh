@@ -397,7 +397,11 @@ fn parse_atom(environment: &mut Environment, token: &str) -> Expression {
     }
 }
 
-fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
+fn close_list(
+    level: i32,
+    stack: &mut Vec<List>,
+    exp_meta: Option<ExpMeta>,
+) -> Result<(), ParseError> {
     if level < 0 {
         return Err(ParseError {
             reason: "Unexpected `)`".to_string(),
@@ -413,12 +417,15 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
                         }
                         ListType::List => {
                             if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                                v2.vec.push(Expression::Pair(Rc::new(RefCell::new(Some((
-                                    v.vec[0].clone(),
-                                    v.vec[2].clone(),
-                                ))))));
+                                v2.vec.push(Expression::Pair(
+                                    Rc::new(RefCell::new(Some((
+                                        v.vec[0].clone(),
+                                        v.vec[2].clone(),
+                                    )))),
+                                    exp_meta,
+                                ));
                             } else {
-                                v2.vec.push(Expression::cons_from_vec(&mut v.vec));
+                                v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
                             }
                         }
                     }
@@ -438,10 +445,15 @@ fn close_list(level: i32, stack: &mut Vec<List>) -> Result<(), ParseError> {
     Ok(())
 }
 
-fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, ParseError> {
-    if tokens.is_empty() {
-        return Ok(Expression::nil());
+fn get_meta(name: Option<String>, line: usize, col: usize) -> Option<ExpMeta> {
+    if let Some(file) = name {
+        Some(ExpMeta { file, line, col })
+    } else {
+        None
     }
+}
+
+fn check_tokens(tokens: &[Token]) -> Result<(), ParseError> {
     if tokens[0].token != "("
         && tokens[0].token != "#("
         && tokens[0].token != "'"
@@ -451,6 +463,18 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
             reason: "Not a list".to_string(),
         });
     }
+    Ok(())
+}
+
+fn parse(
+    environment: &mut Environment,
+    tokens: &[Token],
+    name: Option<String>,
+) -> Result<Expression, ParseError> {
+    if tokens.is_empty() {
+        return Ok(Expression::nil());
+    }
+    check_tokens(tokens)?;
     let mut stack: Vec<List> = Vec::new();
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
@@ -506,14 +530,22 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
             }
             ")" if !is_char => {
                 level -= 1;
-                close_list(level, &mut stack)?;
+                close_list(
+                    level,
+                    &mut stack,
+                    get_meta(name.clone(), token_full.line, token_full.column),
+                )?;
                 while let Some(quote_exit_level) = qexits.pop() {
                     if level == quote_exit_level {
                         if level == backtick_level {
                             backtick_level = 0;
                         }
                         level -= 1;
-                        close_list(level, &mut stack)?;
+                        close_list(
+                            level,
+                            &mut stack,
+                            get_meta(name.clone(), token_full.line, token_full.column),
+                        )?;
                     } else {
                         qexits.push(quote_exit_level);
                         break;
@@ -553,7 +585,11 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
                                     backtick_level = 0;
                                 }
                                 level -= 1;
-                                close_list(level, &mut stack)?;
+                                close_list(
+                                    level,
+                                    &mut stack,
+                                    get_meta(name.clone(), token_full.line, token_full.column),
+                                )?;
                             } else {
                                 qexits.push(quote_exit_level);
                             }
@@ -575,7 +611,7 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
         for quote_exit_level in qexits.drain(..) {
             if level == quote_exit_level {
                 level -= 1;
-                close_list(level, &mut stack)?;
+                close_list(level, &mut stack, get_meta(name.clone(), 0, 0))?;
             }
         }
     }
@@ -584,16 +620,17 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
             reason: "Unclosed list(s)".to_string(),
         });
     }
+    let exp_meta = get_meta(name, 0, 0);
     if stack.len() > 1 {
         let mut v: Vec<Expression> = Vec::new();
         for s in stack.iter_mut() {
             match s.list_type {
                 ListType::Vector => {
                     // XXX do something about this stupid clone...
-                    v.push(Expression::with_list(s.vec.clone()));
+                    v.push(Expression::with_list_meta(s.vec.clone(), exp_meta.clone()));
                 }
                 ListType::List => {
-                    v.push(Expression::cons_from_vec(&mut s.vec));
+                    v.push(Expression::cons_from_vec(&mut s.vec, exp_meta.clone()));
                 }
             }
         }
@@ -601,8 +638,8 @@ fn parse(environment: &mut Environment, tokens: &[Token]) -> Result<Expression, 
     } else {
         match stack.pop() {
             Some(mut v) => match v.list_type {
-                ListType::Vector => Ok(Expression::with_list(v.vec)),
-                ListType::List => Ok(Expression::cons_from_vec(&mut v.vec)),
+                ListType::Vector => Ok(Expression::with_list_meta(v.vec, exp_meta)),
+                ListType::List => Ok(Expression::cons_from_vec(&mut v.vec, exp_meta)),
             },
             None => Err(ParseError {
                 reason: "Empty results".to_string(),
@@ -615,7 +652,8 @@ pub fn read(
     environment: &mut Environment,
     text: &str,
     add_parens: bool,
+    name: Option<String>,
 ) -> Result<Expression, ParseError> {
     let tokens = tokenize(text, add_parens);
-    parse(environment, &tokens)
+    parse(environment, &tokens, name)
 }

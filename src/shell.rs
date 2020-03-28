@@ -207,7 +207,7 @@ fn handle_result(
                 );
             }
             match exp {
-                Expression::Pair(_) if exp.is_nil() => { /* don't print nil */ }
+                Expression::Pair(_, _) if exp.is_nil() => { /* don't print nil */ }
                 Expression::File(_) => { /* don't print file contents */ }
                 Expression::Process(_) => { /* should have used stdout */ }
                 Expression::Atom(Atom::String(_)) => {
@@ -236,6 +236,12 @@ fn handle_result(
                     let mut handle = stderr.lock();
                     if let Err(err) = exp.pretty_printf(environment, &mut handle) {
                         eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
+                    }
+                    if let Some(meta) = &environment.error_meta {
+                        eprint!(
+                            "\n[[[ {}, line: {}, column: {} ]]]",
+                            meta.file, meta.line, meta.col
+                        )
                     }
                     eprintln!("");
                 }
@@ -284,7 +290,7 @@ fn apply_repl_settings(repl_settings: &Expression) -> ReplSettings {
             let vi_esc = vi_esc.clone();
             let vl_i;
             let mut i = match &*vi_esc {
-                Expression::Vector(vl) => {
+                Expression::Vector(vl, _) => {
                     vl_i = vl.borrow();
                     Box::new(vl_i.iter())
                 }
@@ -345,7 +351,7 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
             || input.starts_with('\'')
             || input.starts_with('`')
             || input.starts_with('#'));
-        read(environment, input, add_parens)
+        read(environment, input, add_parens, None)
     }
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
         let exp = match exec_exp.exp {
@@ -552,6 +558,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                         }
                         environment.loose_symbols = true;
                         environment.error_expression = None;
+                        environment.error_meta = None;
                         let res = eval(&mut environment, &ast);
                         handle_result(&mut environment, res, &mut con, &input, false);
                         environment.loose_symbols = false;
@@ -612,14 +619,15 @@ pub fn read_stdin() -> i32 {
                 environment.state.stdout_status = None;
                 let add_parens =
                     !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
-                let ast = read(&mut environment, input, add_parens);
+                let ast = read(&mut environment, input, add_parens, None);
                 match ast {
                     Ok(ast) => {
                         environment.loose_symbols = true;
                         match eval(&mut environment, &ast) {
                             Ok(exp) => {
                                 match exp {
-                                    Expression::Pair(_) if exp.is_nil() => { /* don't print nil */ }
+                                    Expression::Pair(_, _) if exp.is_nil() => { /* don't print nil */
+                                    }
                                     Expression::Process(_) => { /* should have used stdout */ }
                                     _ => {
                                         if let Err(err) = exp.write(&mut environment) {

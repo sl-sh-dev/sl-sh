@@ -14,7 +14,7 @@ fn build_map(
     assocs: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     for key_val in assocs {
-        if let Expression::Pair(p) = key_val {
+        if let Expression::Pair(p, _) = key_val {
             if let Some((key, val)) = &*p.borrow() {
                 match key {
                     Expression::Atom(Atom::Symbol(sym)) => {
@@ -62,7 +62,7 @@ fn builtin_make_hash(
         if args.next().is_none() {
             let assocs = eval(environment, assocs)?;
             match &assocs {
-                Expression::Pair(p) => {
+                Expression::Pair(p, _) => {
                     if let Some((_, _)) = &*p.borrow() {
                         build_map(map, &mut *assocs.iter())
                     } else {
@@ -70,7 +70,7 @@ fn builtin_make_hash(
                         Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
                     }
                 }
-                Expression::Vector(list) => build_map(map, &mut *Box::new(list.borrow().iter())),
+                Expression::Vector(list, _) => build_map(map, &mut *Box::new(list.borrow().iter())),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "make-hash takes a sequence",

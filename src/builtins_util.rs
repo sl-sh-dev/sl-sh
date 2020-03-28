@@ -9,7 +9,7 @@ use crate::types::*;
 
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
-    if let Expression::Pair(p) = exp {
+    if let Expression::Pair(p, _) = exp {
         if let Some((_e1, e2)) = &*p.borrow() {
             if e2.is_nil() {
                 true
@@ -50,7 +50,7 @@ pub fn exp_to_args(
     if is_proper_list(parts) {
         let mut args: Vec<Expression> = Vec::new();
         let mut current = parts.clone();
-        while let Expression::Pair(p) = current {
+        while let Expression::Pair(p, _) = current {
             if let Some((e1, e2)) = &*p.borrow() {
                 if do_eval {
                     args.push(eval(environment, &e1)?);
@@ -317,7 +317,7 @@ pub fn setup_args<'a>(
 ) -> io::Result<()> {
     let l;
     let p_iter = match params {
-        Expression::Vector(li) => {
+        Expression::Vector(li, _) => {
             l = li.borrow();
             Box::new(l.iter())
         }
