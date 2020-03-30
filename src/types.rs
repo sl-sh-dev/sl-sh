@@ -187,7 +187,7 @@ impl Callable {
 
 #[derive(Clone, Debug)]
 pub struct ExpMeta {
-    pub file: String,
+    pub file: &'static str,
     pub line: usize,
     pub col: usize,
 }

@@ -432,7 +432,7 @@ fn close_list(
     Ok(())
 }
 
-fn get_meta(name: Option<String>, line: usize, col: usize) -> Option<ExpMeta> {
+fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMeta> {
     if let Some(file) = name {
         Some(ExpMeta { file, line, col })
     } else {
@@ -443,7 +443,7 @@ fn get_meta(name: Option<String>, line: usize, col: usize) -> Option<ExpMeta> {
 fn parse(
     environment: &mut Environment,
     tokens: &[Token],
-    name: Option<String>,
+    name: Option<&'static str>,
     always_wrap: bool,
 ) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
@@ -511,7 +511,7 @@ fn parse(
                 close_list(
                     level,
                     &mut stack,
-                    get_meta(name.clone(), token_full.line, token_full.column),
+                    get_meta(name, token_full.line, token_full.column),
                 )?;
                 while let Some(quote_exit_level) = qexits.pop() {
                     if level == quote_exit_level {
@@ -522,7 +522,7 @@ fn parse(
                         close_list(
                             level,
                             &mut stack,
-                            get_meta(name.clone(), token_full.line, token_full.column),
+                            get_meta(name, token_full.line, token_full.column),
                         )?;
                     } else {
                         qexits.push(quote_exit_level);
@@ -566,7 +566,7 @@ fn parse(
                                 close_list(
                                     level,
                                     &mut stack,
-                                    get_meta(name.clone(), token_full.line, token_full.column),
+                                    get_meta(name, token_full.line, token_full.column),
                                 )?;
                             } else {
                                 qexits.push(quote_exit_level);
@@ -589,7 +589,7 @@ fn parse(
         for quote_exit_level in qexits.drain(..) {
             if level == quote_exit_level {
                 level -= 1;
-                close_list(level, &mut stack, get_meta(name.clone(), 0, 0))?;
+                close_list(level, &mut stack, get_meta(name, 0, 0))?;
             }
         }
     }
@@ -612,7 +612,7 @@ fn parse(
                         reason: "Empty results".to_string(),
                     })
                 } else if v.vec.len() == 1 && !always_wrap {
-                    // If fe only have one thing and it is a vector or list then
+                    // If we only have one thing and it is a vector or list then
                     // remove the outer list that was added (unless always_wrap
                     // is set).
                     let exp = v.vec.pop().unwrap();
@@ -638,7 +638,7 @@ fn parse(
 pub fn read(
     environment: &mut Environment,
     text: &str,
-    name: Option<String>,
+    name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
     let tokens = tokenize(text);
     parse(environment, &tokens, name, false)
@@ -649,7 +649,7 @@ pub fn read(
 pub fn read_list_wrap(
     environment: &mut Environment,
     text: &str,
-    name: Option<String>,
+    name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
     let tokens = tokenize(text);
     parse(environment, &tokens, name, true)

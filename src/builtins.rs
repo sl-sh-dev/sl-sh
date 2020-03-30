@@ -200,7 +200,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         file_name
     };
     let path = Path::new(&file_path);
-    let file_name = Some(file_path.to_string());
+    let file_name = Some(environment.interner.intern(&file_path));
     let ast = if path.exists() {
         let contents = fs::read_to_string(file_path)?;
         read_list_wrap(environment, &contents, file_name)
