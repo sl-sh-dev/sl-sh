@@ -419,7 +419,6 @@ impl Expression {
 
     pub fn cons_from_vec(v: &mut Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
         let mut last_pair = Expression::nil();
-        //let mut meta = meta;
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
@@ -436,7 +435,6 @@ impl Expression {
                     );
                 }
                 i -= 1;
-                //meta = None;
             }
         }
         last_pair

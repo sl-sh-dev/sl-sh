@@ -450,7 +450,7 @@ open | file-name options* | builtin | Open the given file, see table below for o
 close | file | builtin | Close the file, if a file has multiple references they all must be closed.  Going out of scope also closes the file.
 flush | file | builtin | Flush the file to disk.
 read-line | file | builtin | Reads and returns a line.  Return nil if the file is at EOF.
-read | file | builtin | Reads the file and parses it into an Expression (optional keyword :add-parens will add outer parens if needed).
+read | file | builtin | Reads the file and parses it into an Expression.
 write-line | file line | builtin | Writes the line, adds a newline at end.
 write-string | file string | builtin | Writes the string, does not add a newline at end.
 

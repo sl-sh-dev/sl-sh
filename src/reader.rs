@@ -49,11 +49,17 @@ fn char_to_hex_num(ch: char) -> u8 {
     } else {
         match ch {
             'a' => 10,
+            'A' => 10,
             'b' => 11,
+            'B' => 11,
             'c' => 12,
+            'C' => 12,
             'd' => 13,
+            'D' => 13,
             'e' => 14,
+            'E' => 14,
             'f' => 15,
+            'F' => 15,
             _ => 0,
         }
     }
@@ -214,7 +220,7 @@ fn handle_char(
     token
 }
 
-fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
+fn tokenize(text: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut in_string = false;
     let mut token = String::new();
@@ -227,13 +233,6 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
     let mut line = 1;
     let mut column = 0;
     let mut expect_char = false;
-    if add_parens {
-        tokens.push(Token {
-            token: "(".to_string(),
-            line,
-            column,
-        });
-    }
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         in_comment = true;
@@ -336,13 +335,6 @@ fn tokenize(text: &str, add_parens: bool) -> Vec<Token> {
             column,
         });
     }
-    if add_parens {
-        tokens.push(Token {
-            token: ")".to_string(),
-            line,
-            column,
-        });
-    }
     tokens
 }
 
@@ -407,39 +399,34 @@ fn close_list(
             reason: "Unexpected `)`".to_string(),
         });
     }
-    if level > 0 {
-        match stack.pop() {
-            Some(mut v) => match stack.pop() {
-                Some(mut v2) => {
-                    match v.list_type {
-                        ListType::Vector => {
-                            v2.vec.push(Expression::with_list(v.vec));
-                        }
-                        ListType::List => {
-                            if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                                v2.vec.push(Expression::Pair(
-                                    Rc::new(RefCell::new(Some((
-                                        v.vec[0].clone(),
-                                        v.vec[2].clone(),
-                                    )))),
-                                    exp_meta,
-                                ));
-                            } else {
-                                v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
-                            }
+    match stack.pop() {
+        Some(mut v) => match stack.pop() {
+            Some(mut v2) => {
+                match v.list_type {
+                    ListType::Vector => {
+                        v2.vec.push(Expression::with_list(v.vec));
+                    }
+                    ListType::List => {
+                        if v.vec.len() == 3 && v.vec[1].to_string() == "." {
+                            v2.vec.push(Expression::Pair(
+                                Rc::new(RefCell::new(Some((v.vec[0].clone(), v.vec[2].clone())))),
+                                exp_meta,
+                            ));
+                        } else {
+                            v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
                         }
                     }
-                    stack.push(v2);
                 }
-                None => {
-                    stack.push(v);
-                }
-            },
-            None => {
-                return Err(ParseError {
-                    reason: "Unexpected `)`".to_string(),
-                });
+                stack.push(v2);
             }
+            None => {
+                stack.push(v);
+            }
+        },
+        None => {
+            return Err(ParseError {
+                reason: "Unexpected `)`".to_string(),
+            });
         }
     }
     Ok(())
@@ -453,29 +440,20 @@ fn get_meta(name: Option<String>, line: usize, col: usize) -> Option<ExpMeta> {
     }
 }
 
-fn check_tokens(tokens: &[Token]) -> Result<(), ParseError> {
-    if tokens[0].token != "("
-        && tokens[0].token != "#("
-        && tokens[0].token != "'"
-        && tokens[0].token != "`"
-    {
-        return Err(ParseError {
-            reason: "Not a list".to_string(),
-        });
-    }
-    Ok(())
-}
-
 fn parse(
     environment: &mut Environment,
     tokens: &[Token],
     name: Option<String>,
+    always_wrap: bool,
 ) -> Result<Expression, ParseError> {
     if tokens.is_empty() {
         return Ok(Expression::nil());
     }
-    check_tokens(tokens)?;
     let mut stack: Vec<List> = Vec::new();
+    stack.push(List {
+        list_type: ListType::Vector,
+        vec: Vec::<Expression>::new(),
+    });
     let mut level = 0;
     let mut qexits: Vec<i32> = Vec::new();
     let mut backtick_level = 0;
@@ -621,28 +599,37 @@ fn parse(
         });
     }
     let exp_meta = get_meta(name, 0, 0);
+    close_list(level, &mut stack, exp_meta.clone())?;
     if stack.len() > 1 {
-        let mut v: Vec<Expression> = Vec::new();
-        for s in stack.iter_mut() {
-            match s.list_type {
-                ListType::Vector => {
-                    // XXX do something about this stupid clone...
-                    v.push(Expression::with_list_meta(s.vec.clone(), exp_meta.clone()));
-                }
-                ListType::List => {
-                    v.push(Expression::cons_from_vec(&mut s.vec, exp_meta.clone()));
-                }
-            }
-        }
-        Ok(Expression::with_list(v))
+        Err(ParseError {
+            reason: "WTF?".to_string(),
+        })
     } else {
         match stack.pop() {
-            Some(mut v) => match v.list_type {
-                ListType::Vector => Ok(Expression::with_list_meta(v.vec, exp_meta)),
-                ListType::List => Ok(Expression::cons_from_vec(&mut v.vec, exp_meta)),
-            },
+            Some(mut v) => {
+                if v.vec.is_empty() {
+                    Err(ParseError {
+                        reason: "Empty results".to_string(),
+                    })
+                } else if v.vec.len() == 1 && !always_wrap {
+                    // If fe only have one thing and it is a vector or list then
+                    // remove the outer list that was added (unless always_wrap
+                    // is set).
+                    let exp = v.vec.pop().unwrap();
+                    match exp {
+                        Expression::Vector(_, _) => Ok(exp),
+                        Expression::Pair(_, _) => Ok(exp),
+                        _ => {
+                            v.vec.push(exp);
+                            Ok(Expression::with_list_meta(v.vec, exp_meta))
+                        }
+                    }
+                } else {
+                    Ok(Expression::with_list_meta(v.vec, exp_meta))
+                }
+            }
             None => Err(ParseError {
-                reason: "Empty results".to_string(),
+                reason: "WTF, Empty results".to_string(),
             }),
         }
     }
@@ -651,9 +638,92 @@ fn parse(
 pub fn read(
     environment: &mut Environment,
     text: &str,
-    add_parens: bool,
     name: Option<String>,
 ) -> Result<Expression, ParseError> {
-    let tokens = tokenize(text, add_parens);
-    parse(environment, &tokens, name)
+    let tokens = tokenize(text);
+    parse(environment, &tokens, name, false)
+}
+
+// Read the text but always wrap in an outer list even if text is one list.
+// Useful for loading scripts.
+pub fn read_list_wrap(
+    environment: &mut Environment,
+    text: &str,
+    name: Option<String>,
+) -> Result<Expression, ParseError> {
+    let tokens = tokenize(text);
+    parse(environment, &tokens, name, true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tokenize() {
+        let tokens = tokenize("one two three \"four\" 5 6");
+        assert!(tokens[0].token == "one");
+        assert!(tokens[1].token == "two");
+        assert!(tokens[2].token == "three");
+        assert!(tokens[3].token == "\"four\"");
+        assert!(tokens[4].token == "5");
+        assert!(tokens[5].token == "6");
+        let tokens = tokenize("(1 2 3)");
+        assert!(tokens[0].token == "(");
+        assert!(tokens[1].token == "1");
+        assert!(tokens[2].token == "2");
+        assert!(tokens[3].token == "3");
+        assert!(tokens[4].token == ")");
+        let tokens = tokenize("'(1 2 3)");
+        assert!(tokens[0].token == "'");
+        assert!(tokens[1].token == "(");
+        assert!(tokens[2].token == "1");
+        assert!(tokens[3].token == "2");
+        assert!(tokens[4].token == "3");
+        assert!(tokens[5].token == ")");
+        let tokens = tokenize("`(1 2 ,3)");
+        assert!(tokens[0].token == "`");
+        assert!(tokens[1].token == "(");
+        assert!(tokens[2].token == "1");
+        assert!(tokens[3].token == "2");
+        assert!(tokens[4].token == ",");
+        assert!(tokens[5].token == "3");
+        assert!(tokens[6].token == ")");
+        let tokens = tokenize("`(1 2 ,@3)");
+        assert!(tokens[0].token == "`");
+        assert!(tokens[1].token == "(");
+        assert!(tokens[2].token == "1");
+        assert!(tokens[3].token == "2");
+        assert!(tokens[4].token == ",@");
+        assert!(tokens[5].token == "3");
+        assert!(tokens[6].token == ")");
+        let tokens = tokenize("  (  1    2\t3   )  ");
+        assert!(tokens[0].token == "(");
+        assert!(tokens[1].token == "1");
+        assert!(tokens[2].token == "2");
+        assert!(tokens[3].token == "3");
+        assert!(tokens[4].token == ")");
+        let tokens = tokenize("#(#\\A 2 3)");
+        assert!(tokens[0].token == "#(");
+        assert!(tokens[1].token == "#\\");
+        assert!(tokens[2].token == "A");
+        assert!(tokens[3].token == "2");
+        assert!(tokens[4].token == "3");
+        assert!(tokens[5].token == ")");
+    }
+
+    #[test]
+    fn test_tok_strings() {
+        let tokens = tokenize(
+            "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"",
+        );
+        assert!(tokens[0].token == "\"on\te\ntwo\"");
+        assert!(tokens[1].token == "two");
+        assert!(tokens[2].token == "\"th\rree\"");
+        assert!(tokens[3].token == "\"fo\"u\\r\"");
+        assert!(tokens[4].token == "5");
+        assert!(tokens[5].token == "6");
+        println!("XXXX {}", tokens[6].token);
+        assert!(tokens[6].token == "\"slash/x/:;\"");
+    }
 }

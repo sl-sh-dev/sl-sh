@@ -483,6 +483,12 @@ pub fn do_command<'a>(
         if let Expression::Atom(Atom::String(_)) = a {
             let new_a = eval(environment, &a)?;
             args.push(new_a);
+        } else if let Expression::Atom(Atom::StringRef(_)) = a {
+            let new_a = eval(environment, &a)?;
+            args.push(new_a);
+        } else if let Expression::Atom(Atom::StringBuf(_)) = a {
+            let new_a = eval(environment, &a)?;
+            args.push(new_a);
         } else {
             let glob_expand = if let Expression::Atom(Atom::Symbol(_)) = a {
                 true
@@ -512,6 +518,18 @@ pub fn do_command<'a>(
             if let Expression::Atom(Atom::String(s)) = &new_a {
                 if glob_expand {
                     prep_string_arg(environment, &s, &mut args)?;
+                } else {
+                    args.push(new_a.clone());
+                }
+            } else if let Expression::Atom(Atom::StringRef(s)) = &new_a {
+                if glob_expand {
+                    prep_string_arg(environment, s, &mut args)?;
+                } else {
+                    args.push(new_a.clone());
+                }
+            } else if let Expression::Atom(Atom::StringBuf(s)) = &new_a {
+                if glob_expand {
+                    prep_string_arg(environment, &s.borrow(), &mut args)?;
                 } else {
                     args.push(new_a.clone());
                 }

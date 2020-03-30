@@ -35,7 +35,9 @@ fn builtin_open(
             }
         }
         let file_name = match &a {
-            Expression::Atom(Atom::String(name)) => name,
+            Expression::Atom(Atom::String(name)) => name.to_string(),
+            Expression::Atom(Atom::StringRef(name)) => (*name).to_string(),
+            Expression::Atom(Atom::StringBuf(name)) => name.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -235,79 +237,46 @@ fn builtin_read(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    fn do_read(
-        environment: &mut Environment,
-        input: &str,
-        mut add_parens: bool,
-    ) -> io::Result<Expression> {
-        add_parens = if add_parens {
-            !(input.starts_with('(')
-                || input.starts_with('\'')
-                || input.starts_with('`')
-                || input.starts_with('#'))
-        } else {
-            false
-        };
-        match read(environment, &input, add_parens, None) {
+    fn do_read(environment: &mut Environment, input: &str) -> io::Result<Expression> {
+        match read(environment, &input, None) {
             Ok(ast) => Ok(ast),
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
     }
-    let mut add_parens = false;
-    let mut exp = None;
-    for (i, arg) in args.enumerate() {
-        if i > 1 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "read: too many argument, file or string and optional :add-parens",
-            ));
-        }
-        match arg {
-            Expression::Atom(Atom::Symbol(s)) if s == &":add-parens" => add_parens = true,
-            _ if exp.is_none() => exp = Some(arg),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "read: too many argument, file or string and optional :add-parens",
-                ))
-            }
-        }
-    }
-    if let Some(exp) = exp {
-        let exp = eval(environment, exp)?;
-        match &exp {
-            Expression::File(file) => match &*file.borrow() {
-                FileState::Read(file) => {
-                    let mut input = String::new();
-                    file.borrow_mut().read_to_string(&mut input)?;
-                    do_read(environment, &input, add_parens)
-                }
-                FileState::Stdin => {
-                    let mut input = String::new();
-                    io::stdin().read_to_string(&mut input)?;
-                    do_read(environment, &input, add_parens)
-                }
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let exp = eval(environment, exp)?;
+            return match &exp {
+                Expression::File(file) => match &*file.borrow() {
+                    FileState::Read(file) => {
+                        let mut input = String::new();
+                        file.borrow_mut().read_to_string(&mut input)?;
+                        do_read(environment, &input)
+                    }
+                    FileState::Stdin => {
+                        let mut input = String::new();
+                        io::stdin().read_to_string(&mut input)?;
+                        do_read(environment, &input)
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "read: requires a file opened for reading or string",
+                    )),
+                },
+                Expression::Atom(Atom::String(input)) => do_read(environment, input),
+                Expression::Atom(Atom::StringRef(input)) => do_read(environment, input),
+                Expression::Atom(Atom::StringBuf(input)) => do_read(environment, &input.borrow()),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",
                 )),
-            },
-            Expression::Atom(Atom::String(input)) => do_read(environment, input, add_parens),
-            Expression::Atom(Atom::StringRef(input)) => do_read(environment, input, add_parens),
-            Expression::Atom(Atom::StringBuf(input)) => {
-                do_read(environment, &input.borrow(), add_parens)
-            }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "read: requires a file opened for reading or string",
-            )),
+            };
         }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "read: takes a file or string and optional :add-parens",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "read: takes a file or string",
+    ))
 }
 
 fn builtin_write_line(
@@ -480,11 +449,12 @@ Example:
         interner.intern("read"),
         Rc::new(Expression::make_function(
             builtin_read,
-            "Usage: (read file|string :add-parens?) -> list
+            "Usage: (read file|string) -> list
 
 Read a file or string and return the list representation.
 
-If the final form is the keyword :add-parens then the outer parens will be added if missing.
+Unlike most lisp readers this one will put loose symbols in a list (i.e. you
+enter things at the repl without the enclosing parens).
 
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
@@ -495,8 +465,8 @@ Example:
 (test::assert-equal '(1 2 3) (read tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
-(test::assert-equal '(7 8 9) (read \"7 8 9\" :add-parens))
-(test::assert-equal '(x y z) (read \"(x y z)\" :add-parens))
+(test::assert-equal '(7 8 9) (read \"7 8 9\"))
+(test::assert-equal '(x y z) (read \"(x y z)\"))
 ",
             root,
         )),

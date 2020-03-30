@@ -343,16 +343,6 @@ fn apply_repl_settings(repl_settings: &Expression) -> ReplSettings {
 }
 
 fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ParseError> {
-    fn read_add_parens(
-        environment: &mut Environment,
-        input: &str,
-    ) -> Result<Expression, ParseError> {
-        let add_parens = !(input.starts_with('(')
-            || input.starts_with('\'')
-            || input.starts_with('`')
-            || input.starts_with('#'));
-        read(environment, input, add_parens, None)
-    }
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
         let exp = match exec_exp.exp {
             Expression::Atom(Atom::Lambda(_)) => {
@@ -365,23 +355,23 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
             }
             _ => {
                 eprintln!("WARNING: __exec_hook not a lambda, ignoring.");
-                return read_add_parens(environment, input);
+                return read(environment, input, None);
             }
         };
         match eval(environment, &exp) {
             Ok(res) => match res {
-                Expression::Atom(Atom::String(s)) => read_add_parens(environment, &s),
-                Expression::Atom(Atom::StringRef(s)) => read_add_parens(environment, s),
-                Expression::Atom(Atom::StringBuf(s)) => read_add_parens(environment, &s.borrow()),
+                Expression::Atom(Atom::String(s)) => read(environment, &s, None),
+                Expression::Atom(Atom::StringRef(s)) => read(environment, s, None),
+                Expression::Atom(Atom::StringBuf(s)) => read(environment, &s.borrow(), None),
                 _ => Ok(res),
             },
             Err(err) => {
                 eprintln!("ERROR calling __exec_hook: {}", err);
-                read_add_parens(environment, input)
+                read(environment, input, None)
             }
         }
     } else {
-        read_add_parens(environment, input)
+        read(environment, input, None)
     }
 }
 
@@ -617,9 +607,7 @@ pub fn read_stdin() -> i32 {
             Ok(_n) => {
                 let input = input.trim();
                 environment.state.stdout_status = None;
-                let add_parens =
-                    !(input.starts_with('(') || input.starts_with('\'') || input.starts_with('`'));
-                let ast = read(&mut environment, input, add_parens, None);
+                let ast = read(&mut environment, input, None);
                 match ast {
                     Ok(ast) => {
                         environment.loose_symbols = true;

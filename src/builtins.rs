@@ -30,16 +30,16 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, &arg)?;
             return match arg {
-                Expression::Atom(Atom::String(s)) => match read(environment, &s, false, None) {
+                Expression::Atom(Atom::String(s)) => match read(environment, &s, None) {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, false, None) {
+                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, None) {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
                 Expression::Atom(Atom::StringBuf(s)) => {
-                    match read(environment, &s.borrow(), false, None) {
+                    match read(environment, &s.borrow(), None) {
                         Ok(ast) => eval(environment, &ast),
                         Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                     }
@@ -203,39 +203,24 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     let file_name = Some(file_path.to_string());
     let ast = if path.exists() {
         let contents = fs::read_to_string(file_path)?;
-        read(environment, &contents, false, file_name)
+        read_list_wrap(environment, &contents, file_name)
     } else {
         match &file_path[..] {
-            "core.lisp" => read(
-                environment,
-                &String::from_utf8_lossy(core_lisp),
-                false,
-                file_name,
-            ),
-            "seq.lisp" => read(
-                environment,
-                &String::from_utf8_lossy(seq_lisp),
-                false,
-                file_name,
-            ),
-            "shell.lisp" => read(
-                environment,
-                &String::from_utf8_lossy(shell_lisp),
-                false,
-                file_name,
-            ),
-            "slsh-std.lisp" => read(
+            "core.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(core_lisp), file_name)
+            }
+            "seq.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(seq_lisp), file_name)
+            }
+            "shell.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(shell_lisp), file_name)
+            }
+            "slsh-std.lisp" => read_list_wrap(
                 environment,
                 &String::from_utf8_lossy(slsh_std_lisp),
-                false,
                 file_name,
             ),
-            "slshrc" => read(
-                environment,
-                &String::from_utf8_lossy(slshrc),
-                false,
-                file_name,
-            ),
+            "slshrc" => read_list_wrap(environment, &String::from_utf8_lossy(slshrc), file_name),
             _ => {
                 let msg = format!("{} not found", file_path);
                 return Err(io::Error::new(io::ErrorKind::Other, msg));
@@ -244,50 +229,27 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     };
     match ast {
         Ok(ast) => {
-            let ast = match ast {
-                Expression::Vector(olist, _) => {
-                    let mut list = olist.borrow_mut();
-                    if let Some(first) = list.get(0) {
-                        match first {
-                            Expression::Vector(_, _) => {
-                                let mut v = Vec::with_capacity(list.len() + 1);
-                                v.push(Expression::Atom(Atom::Symbol(
-                                    environment.interner.intern("progn"),
-                                )));
-                                for l in list.drain(..) {
-                                    v.push(l);
-                                }
-                                Expression::with_list(v)
-                            }
-                            Expression::Pair(_, _) => {
-                                // Includes Nil...
-                                let mut v = Vec::with_capacity(list.len() + 1);
-                                v.push(Expression::Atom(Atom::Symbol(
-                                    environment.interner.intern("progn"),
-                                )));
-                                for l in list.drain(..) {
-                                    v.push(l);
-                                }
-                                Expression::with_list(v)
-                            }
-                            _ => {
-                                drop(list);
-                                Expression::Vector(olist, None)
-                            }
-                        }
-                    } else {
-                        drop(list);
-                        Expression::Vector(olist, None)
-                    }
-                }
-                _ => ast,
-            };
             let old_loose_syms = environment.loose_symbols;
             // Do not use loose symbols in scripts even if loading from the repl.
             environment.loose_symbols = false;
-            let res = eval(environment, &ast);
+            let mut res = Expression::nil();
+            match ast {
+                Expression::Vector(list, _) => {
+                    for l in list.borrow_mut().drain(..) {
+                        res = eval(environment, &l)?;
+                    }
+                }
+                Expression::Pair(_, _) => {
+                    for l in ast.iter() {
+                        res = eval(environment, &l)?;
+                    }
+                }
+                _ => {
+                    res = eval(environment, &ast)?;
+                }
+            }
             environment.loose_symbols = old_loose_syms;
-            res
+            Ok(res)
         }
         Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
     }

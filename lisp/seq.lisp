@@ -16,6 +16,18 @@ Example:
     (obj)
     (or (vec? obj)(list? obj)))
 
+(defn empty-seq?
+"Usage: (empty-seq? obj)
+
+`empty-seq?` returns true if a list or vector is empty and false
+otherwise. If a non list or non vector is passed in it returns false."
+	(obj)
+	(if (vec? obj)
+		(vec-empty? obj)
+		(if (list? obj)
+			(not obj)
+			nil)))
+
 (defn non-empty-seq?
 "Usage: (non-empty-seq? obj)
 
@@ -30,7 +42,7 @@ otherwise. If a non list or non vector is passed in it returns false."
 
 (defn first (obj)
     (if (vec? obj)
-        (vec-nth 0 obj)
+        (if (vec-empty? obj) nil (vec-nth 0 obj))
         (if (list? obj)
             (car obj)
             (err "Not a vector or list"))))
@@ -290,5 +302,5 @@ Example:
     (quick-inner comp-fn sorted to-sort)
     sorted))
 
-(ns-export '(seq? non-empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort))
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort))
 
