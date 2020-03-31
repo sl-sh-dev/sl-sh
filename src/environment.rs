@@ -304,6 +304,8 @@ pub struct Environment {
     pub return_val: Option<(Option<&'static str>, Expression)>,
     // Interner for symbols and some strings.
     pub interner: Interner,
+    // Save the meta data for the last expression evalled.
+    pub last_meta: Option<ExpMeta>,
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
@@ -340,6 +342,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         allow_lazy_fn: true,
         return_val: None,
         interner,
+        last_meta: None,
     }
 }
 
@@ -396,6 +399,7 @@ pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
         allow_lazy_fn: true,
         return_val: None,
         interner,
+        last_meta: None,
     }
 }
 

@@ -455,8 +455,12 @@ fn internal_eval<'a>(
         }
     }
     match expression {
-        Expression::Vector(_, _) => fn_eval_lazy(environment, expression),
-        Expression::Pair(p, _) => {
+        Expression::Vector(_, meta) => {
+            environment.last_meta = meta.clone();
+            fn_eval_lazy(environment, expression)
+        }
+        Expression::Pair(p, meta) => {
+            environment.last_meta = meta.clone();
             if p.borrow().is_some() {
                 fn_eval_lazy(environment, expression)
             } else {
@@ -556,6 +560,7 @@ pub fn eval_nr<'a>(
         }
     }
     environment.state.eval_level -= 1;
+    environment.last_meta = None;
     result
 }
 

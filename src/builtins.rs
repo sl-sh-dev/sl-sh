@@ -1946,6 +1946,24 @@ pub fn builtin_intern_stats(
     }
 }
 
+pub fn builtin_line_no(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        if let Some(meta) = &environment.last_meta {
+            Ok(Expression::Atom(Atom::Int(meta.line as i64)))
+        } else {
+            Ok(Expression::nil())
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "line-no: takes no arguments.",
+        ))
+    }
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -2969,6 +2987,22 @@ Prints the stats for interned symbols.
 
 Example:
 ;(intern-stats)
+t
+",
+            root,
+        )),
+    );
+
+    data.insert(
+        interner.intern("line-no"),
+        Rc::new(Expression::make_special(
+            builtin_line_no,
+            "Usage: (line-no)
+
+Line number from the file this came from.
+
+Example:
+;(line-no)
 t
 ",
             root,
