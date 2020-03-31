@@ -4,6 +4,8 @@
 
 ;; gpwclark TODOs
 ;; finish writing script that runs tests.
+;; USE empty-seq? instead of (when not nil) for looping over list
+
 ;; - make cond macro?
 ;; - need clojure's threading macro support but you know, we'll call it
 ;; "weaving" (which is sometimes used in AOP but not nearly as overlaoded as
@@ -248,6 +250,7 @@
 	(println "		remember, no matter where you go,")
 	(println "		there you are.")
 	(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
+	(intern-stats)
 ;; }}}
 
 ;; machine specific {{{
