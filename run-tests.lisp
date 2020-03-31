@@ -10,8 +10,13 @@
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
 
-
-(defq test-list (str-split " " (all-items-by-whitespace (fn () (ls tests-dir)))))
+(defq test-list
+	(reduce
+		(fn (lst filename) (append! lst (fn () (load (str tests-dir "/" filename)))))
+		'()
+		(filter
+		(fn (filename) (not (= filename "test.lisp")))
+			(str-split " " (all-items-by-whitespace (fn () (ls tests-dir)))))))
 
 (defn print-test-output (outfile)
 	(progn
@@ -41,18 +46,18 @@
 ;; we know the test failed.
 
 (defn report-test-results (tests)
-	(dyn 'exit (fn (x) x)
+(progn
+	(defq exit-status #t)
+	(dyn 'exit (fn (x) (progn (println (str "mm: " (line-no))) (when (not (= x "0")) (setq exit-status nil)) x))
 	(progn
 		(defq fst (first tests))
 		(when fst
 			(progn
-				(defq fp (str tests-dir "/" fst))
-				(when (not (= fp "tests/test.lisp"))
 				(progn
+					;; TODO only make 1 outfile
 					(defq outfile (str (mktemp "/tmp/sl-sh.test-log.XXXXXXXXX")))
-					(defq res nil)
-					(out> outfile (defq res (= #t (load fp))))
-					(report-pretty-printer res fp)
+					(out-err> outfile (fst))
+					(report-pretty-printer exit-status fst)
 					(print-test-output outfile)
 					(rm outfile)
 					(recur (rest tests)))))))))
