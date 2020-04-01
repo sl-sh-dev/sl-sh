@@ -161,7 +161,7 @@
 	(progn
 		(defq fst (first orig-ast))
 		(defq rst (rest orig-ast))
-		(if (not fst)
+		(if (empty-seq? orig-ast)
 			(check-for-infix-notation new-ast)
 			(recur (append new-ast
 						(if (non-empty-seq? fst)
@@ -222,10 +222,10 @@
 (defn recursively-modify-if-mixed-infix-notation
 	(new-ast orig-ast)
 	(progn
-		(defq fst (first orig-ast))
-		(if (not fst)
+		(if (empty-seq? orig-ast)
 			(modify-if-mixed-infix-notation new-ast 0 nil)
 			(progn
+				(defq fst (first orig-ast))
 				(defq rst (rest orig-ast))
 				(defq found-seq (non-empty-seq? fst))
 				(if found-seq
@@ -236,10 +236,19 @@
 (defn remove-any-mixed-infix-notation (cmd-ast)
 	(recursively-modify-if-mixed-infix-notation (make-vec) cmd-ast))
 
+(defn handle-parens (result cmd-ast) (progn
+	(if (empty-seq? cmd-ast) (return-from handle-parens nil))
+	(if (non-empty-seq? (first cmd-ast))
+		(vec-push! result (apply-infix-modifications (first cmd-ast)))
+		(vec-push! result (first cmd-ast)))
+	(recur result (rest cmd-ast))))
+
 ;; entrypoint for all multiargument commands, used to allow use of infix
 ;; notation.
-(defn apply-infix-modifications (cmd-ast)
-	(remove-any-infix-notation (remove-any-mixed-infix-notation cmd-ast)))
+(defn apply-infix-modifications (cmd-ast) (progn
+	(defq cmd-ast-parens (make-vec))
+	(handle-parens cmd-ast-parens cmd-ast)
+	(remove-any-infix-notation (remove-any-mixed-infix-notation cmd-ast-parens))))
 
 ;; entrypoint for all 1 arg commands... used to make filepaths cd commands
 ;; to themselves.
@@ -251,7 +260,7 @@
 
 (defn __exec_hook (cmd-str)
 	(progn
-		(defq parsed (get-error (defq cmd-ast (read :add-parens cmd-str)) :success))
+		(defq parsed (get-error (defq cmd-ast (read cmd-str)) :success))
 		(if (not (= parsed :success))
 		cmd-str
 		(progn
@@ -266,7 +275,7 @@
 
 #|
 ;; TODO need tests
-	(defq pipe-test-actual (recursively-check-for-infix-notation (list) (read :add-parens "(echo first-partAsecond-partBthird-part | cut -d \"A\" -f 2 | cut -d \"B\" -f 2)")))
+	(defq pipe-test-actual (recursively-check-for-infix-notation (list) (read "(echo first-partAsecond-partBthird-part | cut -d \"A\" -f 2 | cut -d \"B\" -f 2)")))
 	(defq pipe-test-expected `(vec '| (vec echo first-partAsecond-partBthird-part) (vec cut -d "A" -f 2) (vec cut -d "B" -f 2)))
 	(println (str "expected " (pipe-test-expected)
 					"\nactual " pipe-test-actual
