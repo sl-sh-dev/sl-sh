@@ -253,7 +253,7 @@ fn handle_result(
     }
 }
 
-fn apply_repl_settings(repl_settings: &Expression) -> ReplSettings {
+fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings {
         key_bindings: Keys::Emacs,
         max_history: 1000,
@@ -412,6 +412,25 @@ fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
     res
 }
 
+fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
+    let keymap: Box<dyn keymap::KeyMap> = match repl_settings.key_bindings {
+        Keys::Vi => {
+            let mut vi = keymap::Vi::new();
+            if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
+                vi.set_esc_sequence(ch1, ch2, timeout);
+            }
+            vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
+            vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
+            vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
+            vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());
+            Box::new(vi)
+        }
+        Keys::Emacs => Box::new(keymap::Emacs::new()),
+    };
+    con.set_keymap(keymap);
+    con.history.set_max_history_size(repl_settings.max_history);
+}
+
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut con = Context::new();
     con.set_word_divider(Box::new(get_liner_words));
@@ -441,12 +460,6 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             share_dir, err
         );
     }
-    if let Err(err) = con
-        .history
-        .set_file_name_and_load_history(format!("{}/history", share_dir))
-    {
-        eprintln!("WARNING: Unable to load history: {}", err);
-    }
     let environment = Rc::new(RefCell::new(build_default_environment(sig_int)));
     let uid = Uid::current();
     let euid = Uid::effective();
@@ -475,39 +488,23 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         interned_sym,
         Expression::Atom(Atom::StringRef(interned_sym2)),
     );
-    let mut current_repl_settings = ReplSettings {
-        key_bindings: Keys::Emacs,
-        max_history: 1000,
-        vi_esc_sequence: None,
-        vi_normal_prompt_prefix: None,
-        vi_normal_prompt_suffix: None,
-        vi_insert_prompt_prefix: None,
-        vi_insert_prompt_suffix: None,
-    };
+    let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
+    apply_repl_settings(&mut con, &current_repl_settings);
+    let mut new_repl_settings;
+    if let Err(err) = con
+        .history
+        .set_file_name_and_load_history(format!("{}/history", share_dir))
+    {
+        eprintln!("WARNING: Unable to load history: {}", err);
+    }
     drop(env);
     con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
-        let new_repl_settings = apply_repl_settings(&repl_settings.exp);
+        new_repl_settings = load_repl_settings(&repl_settings.exp);
         if current_repl_settings != new_repl_settings {
-            let keymap: Box<dyn keymap::KeyMap> = match new_repl_settings.key_bindings {
-                Keys::Vi => {
-                    let mut vi = keymap::Vi::new();
-                    if let Some((ch1, ch2, timeout)) = new_repl_settings.vi_esc_sequence {
-                        vi.set_esc_sequence(ch1, ch2, timeout);
-                    }
-                    vi.set_normal_prompt_prefix(new_repl_settings.vi_normal_prompt_prefix.clone());
-                    vi.set_normal_prompt_suffix(new_repl_settings.vi_normal_prompt_suffix.clone());
-                    vi.set_insert_prompt_prefix(new_repl_settings.vi_insert_prompt_prefix.clone());
-                    vi.set_insert_prompt_suffix(new_repl_settings.vi_insert_prompt_suffix.clone());
-                    Box::new(vi)
-                }
-                Keys::Emacs => Box::new(keymap::Emacs::new()),
-            };
-            con.set_keymap(keymap);
-            con.history
-                .set_max_history_size(new_repl_settings.max_history);
+            apply_repl_settings(&mut con, &new_repl_settings);
         };
-        current_repl_settings = new_repl_settings.clone();
+        current_repl_settings = new_repl_settings;
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
         // Clear the SIGINT if one occured.
