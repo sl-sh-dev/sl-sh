@@ -112,16 +112,12 @@ pub fn wait_pid(
 fn run_command(
     environment: &mut Environment,
     command: &str,
-    args: &mut Vec<Expression>,
+    args: Vec<String>,
     stdin: Stdio,
     stdout: Stdio,
     stderr: Stdio,
     data_in: Option<Atom>,
 ) -> io::Result<Expression> {
-    let mut new_args: Vec<String> = Vec::new();
-    for a in args {
-        new_args.push(a.as_string(environment)?);
-    }
     let mut command = command;
     let ncommand;
     if command.starts_with('~') {
@@ -135,7 +131,7 @@ fn run_command(
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
     let shell_terminal = nix::libc::STDIN_FILENO;
     com_obj
-        .args(&new_args)
+        .args(&args)
         .stdin(stdin)
         .stdout(stdout)
         .stderr(stderr);
@@ -248,7 +244,7 @@ fn run_command(
         Err(e) => {
             let mut err_msg = String::new();
             err_msg.push_str(&format!("Failed to execute [{}", command));
-            for n in new_args {
+            for n in args {
                 err_msg.push_str(&format!(" {}", n));
             }
             err_msg.push_str(&format!("]: {}", e));
@@ -336,7 +332,7 @@ fn get_output(
 fn prep_string_arg(
     _environment: &mut Environment,
     s: &str,
-    nargs: &mut Vec<Expression>,
+    nargs: &mut Vec<String>,
 ) -> io::Result<()> {
     let s = match expand_tilde(&s) {
         Some(p) => p,
@@ -351,7 +347,7 @@ fn prep_string_arg(
                         Ok(p) => {
                             i += 1;
                             if let Some(p) = p.to_str() {
-                                nargs.push(Expression::Atom(Atom::String(p.to_string())));
+                                nargs.push(p.to_string());
                             }
                         }
                         Err(err) => {
@@ -361,15 +357,15 @@ fn prep_string_arg(
                     }
                 }
                 if i == 0 {
-                    nargs.push(Expression::Atom(Atom::String(s)));
+                    nargs.push(s);
                 }
             }
             Err(_err) => {
-                nargs.push(Expression::Atom(Atom::String(s)));
+                nargs.push(s);
             }
         }
     } else {
-        nargs.push(Expression::Atom(Atom::String(s)));
+        nargs.push(s);
     }
     Ok(())
 }
@@ -482,19 +478,14 @@ pub fn do_command<'a>(
     for a in parts {
         if let Expression::Atom(Atom::String(_)) = a {
             let new_a = eval(environment, &a)?;
-            args.push(new_a);
+            args.push(new_a.as_string(environment)?);
         } else if let Expression::Atom(Atom::StringRef(_)) = a {
             let new_a = eval(environment, &a)?;
-            args.push(new_a);
+            args.push(new_a.as_string(environment)?);
         } else if let Expression::Atom(Atom::StringBuf(_)) = a {
             let new_a = eval(environment, &a)?;
-            args.push(new_a);
+            args.push(new_a.as_string(environment)?);
         } else {
-            let glob_expand = if let Expression::Atom(Atom::Symbol(_)) = a {
-                true
-            } else {
-                false
-            };
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
             let new_a = match a {
@@ -516,28 +507,16 @@ pub fn do_command<'a>(
                 _ => eval(environment, &a)?,
             };
             if let Expression::Atom(Atom::String(s)) = &new_a {
-                if glob_expand {
-                    prep_string_arg(environment, &s, &mut args)?;
-                } else {
-                    args.push(new_a.clone());
-                }
+                prep_string_arg(environment, &s, &mut args)?;
             } else if let Expression::Atom(Atom::StringRef(s)) = &new_a {
-                if glob_expand {
-                    prep_string_arg(environment, s, &mut args)?;
-                } else {
-                    args.push(new_a.clone());
-                }
+                prep_string_arg(environment, s, &mut args)?;
             } else if let Expression::Atom(Atom::StringBuf(s)) = &new_a {
-                if glob_expand {
-                    prep_string_arg(environment, &s.borrow(), &mut args)?;
-                } else {
-                    args.push(new_a.clone());
-                }
+                prep_string_arg(environment, &s.borrow(), &mut args)?;
             } else {
-                args.push(new_a.clone());
+                args.push(new_a.as_string(environment)?);
             }
         }
     }
     environment.loose_symbols = old_loose_syms;
-    run_command(environment, command, &mut args, stdin, stdout, stderr, data)
+    run_command(environment, command, args, stdin, stdout, stderr, data)
 }

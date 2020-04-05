@@ -369,6 +369,7 @@ fn builtin_glob(
     for pat in args {
         let pat = match eval(environment, pat)? {
             Expression::Atom(Atom::String(s)) => s,
+            Expression::Atom(Atom::StringRef(s)) => s.to_string(),
             Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
