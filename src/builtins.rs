@@ -158,6 +158,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     let core_lisp = include_bytes!("../lisp/core.lisp");
     let seq_lisp = include_bytes!("../lisp/seq.lisp");
     let shell_lisp = include_bytes!("../lisp/shell.lisp");
+    let endfix_lisp = include_bytes!("../lisp/endfix.lisp");
     let slsh_std_lisp = include_bytes!("../lisp/slsh-std.lisp");
     let slshrc = include_bytes!("../lisp/slshrc");
     let file_name = match expand_tilde(&file_name) {
@@ -215,6 +216,11 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             "shell.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(shell_lisp), file_name)
             }
+            "endfix.lisp" => read_list_wrap(
+                environment,
+                &String::from_utf8_lossy(endfix_lisp),
+                file_name,
+            ),
             "slsh-std.lisp" => read_list_wrap(
                 environment,
                 &String::from_utf8_lossy(slsh_std_lisp),

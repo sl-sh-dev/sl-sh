@@ -19,9 +19,7 @@
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
 
-;; exec-hook.lisp is located in `contrib/gpwclark.` provides useful
-;; functionality for modifying forms on the repl before they're eval'd.
-(load "~/.config/sl-sh/exec-hook.lisp")
+(endfix-on)
 
 ;; helpers {{{
 	(defn all-items-by-whitespace (producer)

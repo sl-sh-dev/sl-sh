@@ -1,7 +1,3 @@
-;; This is a sl-sh file for people named price, you would put it in ~/.exec-hook.lisp to use it.
-(core::ns-import 'core)
-(ns-import 'shell)
-
 ;; exec hook fcn {{{
 
 ;; fcnality
@@ -258,7 +254,7 @@
 			(list root::cd cmd-str)
 			cmd-str)))
 
-(defn __exec_hook (cmd-str)
+(defn endfix-hook (cmd-str)
 	(progn
 		(defq parsed (get-error (defq cmd-ast (read cmd-str)) :success))
 		(if (not (= parsed :success))

@@ -333,6 +333,9 @@
 ;; Turn off syntax highlighting at the repl.
 (defmacro syntax-off () '(undef '__line_handler))
 
+(load "endfix.lisp")
+(defmacro endfix-on () '(def '__exec_hook shell::endfix-hook))
+
 (ns-export '(
 	alias
 	register-alias
@@ -366,5 +369,6 @@
 	tok-string-color
 	tok-invalid-color
 	fg-color-rgb
-	bg-color-rgb))
+	bg-color-rgb
+	endfix-on))
 
