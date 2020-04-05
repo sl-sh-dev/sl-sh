@@ -692,6 +692,21 @@ mod tests {
         tokens
     }
 
+    fn tokenize_wrap(
+        environment: &mut Environment,
+        input: &str,
+        name: Option<&'static str>,
+    ) -> Vec<String> {
+        let exp = read_list_wrap(environment, input, name);
+        let mut tokens = Vec::new();
+        if let Ok(exp) = exp {
+            to_strs(&mut tokens, &exp);
+        } else {
+            assert!(false);
+        }
+        tokens
+    }
+
     #[test]
     fn test_tokenize() {
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
@@ -850,6 +865,152 @@ mod tests {
         assert!(tokens[13] == "Int:3");
         assert!(tokens[14] == ")");
         assert!(tokens[15] == ")");
+    }
+
+    #[test]
+    fn test_types() {
+        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let tokens = tokenize(
+            &mut environment,
+            "(one 2 3.0 \"four\" #\\B #t nil 3.5 ())",
+            None,
+        );
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:one");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Float:3");
+        assert!(tokens[4] == "String:\"four\"");
+        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[6] == "True:true");
+        assert!(tokens[7] == "nil");
+        assert!(tokens[8] == "Float:3.5");
+        assert!(tokens[9] == "nil");
+        assert!(tokens[10] == ")");
+
+        let tokens = tokenize(
+            &mut environment,
+            "#(one 2 3.0 \"four\" #\\B #t nil 3.5 ())",
+            None,
+        );
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Symbol:one");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Float:3");
+        assert!(tokens[4] == "String:\"four\"");
+        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[6] == "True:true");
+        assert!(tokens[7] == "nil");
+        assert!(tokens[8] == "Float:3.5");
+        assert!(tokens[9] == "nil");
+        assert!(tokens[10] == ")");
+
+        let tokens = tokenize(
+            &mut environment,
+            "one 2 3.0 \"four\" #\\B #t nil 3.5 ()",
+            None,
+        );
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Symbol:one");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Float:3");
+        assert!(tokens[4] == "String:\"four\"");
+        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[6] == "True:true");
+        assert!(tokens[7] == "nil");
+        assert!(tokens[8] == "Float:3.5");
+        assert!(tokens[9] == "nil");
+        assert!(tokens[10] == ")");
+    }
+
+    #[test]
+    fn test_wrap() {
+        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let tokens = tokenize(&mut environment, "(1 2 3)", None);
+        assert!(tokens.len() == 5);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Int:1");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Int:3");
+        assert!(tokens[4] == ")");
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3)", None);
+        assert!(tokens.len() == 7);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "(");
+        assert!(tokens[2] == "Int:1");
+        assert!(tokens[3] == "Int:2");
+        assert!(tokens[4] == "Int:3");
+        assert!(tokens[5] == ")");
+        assert!(tokens[6] == ")");
+
+        let tokens = tokenize(&mut environment, "1 2 3", None);
+        assert!(tokens.len() == 5);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Int:1");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Int:3");
+        assert!(tokens[4] == ")");
+        let tokens = tokenize_wrap(&mut environment, "1 2 3", None);
+        assert!(tokens.len() == 5);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Int:1");
+        assert!(tokens[2] == "Int:2");
+        assert!(tokens[3] == "Int:3");
+        assert!(tokens[4] == ")");
+
+        let tokens = tokenize(&mut environment, "(1 2 3) (4 5 6)", None);
+        assert!(tokens.len() == 12);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "(");
+        assert!(tokens[2] == "Int:1");
+        assert!(tokens[3] == "Int:2");
+        assert!(tokens[4] == "Int:3");
+        assert!(tokens[5] == ")");
+        assert!(tokens[6] == "(");
+        assert!(tokens[7] == "Int:4");
+        assert!(tokens[8] == "Int:5");
+        assert!(tokens[9] == "Int:6");
+        assert!(tokens[10] == ")");
+        assert!(tokens[11] == ")");
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3) (4 5 6)", None);
+        assert!(tokens.len() == 12);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "(");
+        assert!(tokens[2] == "Int:1");
+        assert!(tokens[3] == "Int:2");
+        assert!(tokens[4] == "Int:3");
+        assert!(tokens[5] == ")");
+        assert!(tokens[6] == "(");
+        assert!(tokens[7] == "Int:4");
+        assert!(tokens[8] == "Int:5");
+        assert!(tokens[9] == "Int:6");
+        assert!(tokens[10] == ")");
+        assert!(tokens[11] == ")");
+
+        let tokens = tokenize(&mut environment, "'(1 2 3)", None);
+        assert!(tokens.len() == 8);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:quote");
+        assert!(tokens[2] == "(");
+        assert!(tokens[3] == "Int:1");
+        assert!(tokens[4] == "Int:2");
+        assert!(tokens[5] == "Int:3");
+        assert!(tokens[6] == ")");
+        assert!(tokens[7] == ")");
+        let tokens = tokenize_wrap(&mut environment, "'(1 2 3)", None);
+        assert!(tokens.len() == 10);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "(");
+        assert!(tokens[2] == "Symbol:quote");
+        assert!(tokens[3] == "(");
+        assert!(tokens[4] == "Int:1");
+        assert!(tokens[5] == "Int:2");
+        assert!(tokens[6] == "Int:3");
+        assert!(tokens[7] == ")");
+        assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
     }
 
     #[test]
