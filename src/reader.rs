@@ -368,8 +368,7 @@ fn read_inner<P>(
     chars: &mut P,
     stack: &mut Vec<List>,
     buffer: &mut String,
-    line: &mut usize,
-    column: &mut usize,
+    line_col: (&mut usize, &mut usize),
     name: Option<&'static str>,
     in_bquote: bool,
 ) -> Result<bool, ParseError>
@@ -379,6 +378,7 @@ where
     let mut level = 0;
     let mut next_chars = next2(chars);
     let mut read_next = false;
+    let (line, column) = line_col;
     while next_chars.is_some() {
         let (mut ch, mut peek_ch) = next_chars.unwrap();
 
@@ -427,8 +427,7 @@ where
                     chars,
                     stack,
                     buffer,
-                    line,
-                    column,
+                    (line, column),
                     name,
                     in_bquote,
                 )?;
@@ -449,7 +448,15 @@ where
                     list_type: ListType::List,
                     vec: quoted,
                 });
-                read_inner(environment, chars, stack, buffer, line, column, name, true)?;
+                read_inner(
+                    environment,
+                    chars,
+                    stack,
+                    buffer,
+                    (line, column),
+                    name,
+                    true,
+                )?;
                 close_list(stack, get_meta(name, *line, *column))?;
             }
             ',' => {
@@ -568,8 +575,7 @@ fn read2(
         &mut chars,
         &mut stack,
         &mut buffer,
-        &mut line,
-        &mut column,
+        (&mut line, &mut column),
         name,
         false,
     )? {}
