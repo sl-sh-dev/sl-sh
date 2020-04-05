@@ -113,6 +113,12 @@ fn file_test(
                         None => p.to_string(), // XXX not great.
                     }
                 }
+                Expression::Atom(Atom::StringRef(p)) => {
+                    match expand_tilde(p) {
+                        Some(p) => p,
+                        None => p.to_string(), // XXX not great.
+                    }
+                }
                 Expression::Atom(Atom::StringBuf(p)) => {
                     let pb = p.borrow();
                     match expand_tilde(&pb) {
