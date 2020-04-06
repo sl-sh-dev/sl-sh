@@ -1017,6 +1017,23 @@ mod tests {
         assert!(tokens[7] == ")");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
+
+        let tokens = tokenize(&mut environment, "nil", None);
+        assert!(tokens.len() == 1);
+        assert!(tokens[0] == "nil");
+        let tokens = tokenize(&mut environment, "()", None);
+        assert!(tokens.len() == 1);
+        assert!(tokens[0] == "nil");
+        let tokens = tokenize_wrap(&mut environment, "nil", None);
+        assert!(tokens.len() == 3);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "nil");
+        assert!(tokens[2] == ")");
+        let tokens = tokenize_wrap(&mut environment, "()", None);
+        assert!(tokens.len() == 3);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "nil");
+        assert!(tokens[2] == ")");
     }
 
     #[test]

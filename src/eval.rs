@@ -398,10 +398,8 @@ fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expres
     }
 }
 
-fn internal_eval<'a>(
-    environment: &mut Environment,
-    expression: &'a Expression,
-) -> io::Result<Expression> {
+fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+    let mut expression = expression;
     if environment.sig_int.load(Ordering::Relaxed) {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -421,6 +419,8 @@ fn internal_eval<'a>(
         ));
     }
     // If we have a macro expand it and replace the expression with the expansion.
+    let texpression;
+    let mut macro_replace = true;
     if let Some(exp) = expand_macro(environment, expression, false)? {
         let mut nv = Vec::new();
         if let Expression::Vector(list, _) = &exp {
@@ -432,26 +432,38 @@ fn internal_eval<'a>(
                 };
                 nv.push(item);
             }
-        } else if let Expression::Pair(_, _) = &exp {
-            for item in exp.iter() {
-                let item = if let Expression::LazyFn(_, _) = item {
-                    item.clone().resolve(environment)?
-                } else {
-                    item.clone()
-                };
-                nv.push(item);
-            }
-        }
-        match expression {
-            Expression::Vector(list, _) => {
-                list.replace(nv);
-            }
-            Expression::Pair(p, _) => {
-                if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
-                    p.replace(np.borrow().clone());
+        } else if let Expression::Pair(p, _) = &exp {
+            if p.borrow().is_some() {
+                for item in exp.iter() {
+                    let item = if let Expression::LazyFn(_, _) = item {
+                        item.clone().resolve(environment)?
+                    } else {
+                        item.clone()
+                    };
+                    nv.push(item);
                 }
+            } else {
+                texpression = exp.clone();
+                expression = &texpression;
+                macro_replace = false;
             }
-            _ => {}
+        } else {
+            texpression = exp.clone();
+            expression = &texpression;
+            macro_replace = false;
+        }
+        if macro_replace {
+            match expression {
+                Expression::Vector(list, _) => {
+                    list.replace(nv);
+                }
+                Expression::Pair(p, _) => {
+                    if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
+                        p.replace(np.borrow().clone());
+                    }
+                }
+                _ => {}
+            }
         }
     }
     match expression {
