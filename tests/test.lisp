@@ -10,10 +10,10 @@
                 nil
                 (recur (rest list1) (rest list2))))))
 
-(defn assert-equal (expected-val right-val &rest args)
-      (if (or (list? expected-val)(vec? expected-val))
-          (if (lists= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
-          (if (= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))))
+(defmacro assert-equal (expected-val right-val &rest args)
+      `(if (or (list? ,expected-val)(vec? ,expected-val))
+          (if (lists= ,expected-val ,right-val) t (progn (println (apply str "Expected " ,expected-val " got " ,right-val ,args (meta-file-name)(meta-line-no)(meta-column-no)))(exit 2)))
+          (if (= ,expected-val ,right-val) t (progn (println (apply str "Expected " ,expected-val " got " ,right-val (meta-file-name)(meta-line-no)": "(meta-column-no),args))(exit 1)))))
 
 (defn assert-not-equal (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))

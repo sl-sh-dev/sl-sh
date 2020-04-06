@@ -429,7 +429,25 @@ fn print_to_oe(
                         args_out(environment, args, add_newline, pretty, &mut out)?;
                     }
                     FileState::Write(f) => {
-                        args_out(environment, args, add_newline, pretty, &mut *f.borrow_mut())?;
+                        // Don't call args_out here our we will buy a borrow error...
+                        for a in args {
+                            let aa = eval(environment, a)?;
+                            // If we have a standalone string do not quote it...
+                            let pretty = match aa {
+                                Expression::Atom(Atom::String(_)) => false,
+                                Expression::Atom(Atom::StringRef(_)) => false,
+                                Expression::Atom(Atom::StringBuf(_)) => false,
+                                _ => pretty,
+                            };
+                            if pretty {
+                                aa.pretty_printf(environment, &mut *f.borrow_mut())?;
+                            } else {
+                                aa.writef(environment, &mut *f.borrow_mut())?;
+                            }
+                        }
+                        if add_newline {
+                            (&mut *f.borrow_mut()).write_all(b"\n")?;
+                        }
                     }
                     _ => {
                         return Err(io::Error::new(
@@ -1952,7 +1970,7 @@ pub fn builtin_intern_stats(
     }
 }
 
-pub fn builtin_line_no(
+pub fn builtin_meta_line_no(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
@@ -1965,7 +1983,43 @@ pub fn builtin_line_no(
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "line-no: takes no arguments.",
+            "meta-line-no: takes no arguments.",
+        ))
+    }
+}
+
+pub fn builtin_meta_column_no(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        if let Some(meta) = &environment.last_meta {
+            Ok(Expression::Atom(Atom::Int(meta.col as i64)))
+        } else {
+            Ok(Expression::nil())
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "meta-column-no: takes no arguments.",
+        ))
+    }
+}
+
+pub fn builtin_meta_file_name(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = &Expression>,
+) -> io::Result<Expression> {
+    if args.next().is_none() {
+        if let Some(meta) = &environment.last_meta {
+            Ok(Expression::Atom(Atom::StringRef(meta.file)))
+        } else {
+            Ok(Expression::nil())
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "meta-file-name: takes no arguments.",
         ))
     }
 }
@@ -3000,15 +3054,47 @@ t
     );
 
     data.insert(
-        interner.intern("line-no"),
+        interner.intern("meta-line-no"),
         Rc::new(Expression::make_special(
-            builtin_line_no,
-            "Usage: (line-no)
+            builtin_meta_line_no,
+            "Usage: (meta-line-no)
 
 Line number from the file this came from.
 
 Example:
-;(line-no)
+;(meta-line-no)
+t
+",
+            root,
+        )),
+    );
+
+    data.insert(
+        interner.intern("meta-column-no"),
+        Rc::new(Expression::make_special(
+            builtin_meta_column_no,
+            "Usage: (meta-column-no)
+
+Column number from the file this came from.
+
+Example:
+;(meta-column-no)
+t
+",
+            root,
+        )),
+    );
+
+    data.insert(
+        interner.intern("meta-file-name"),
+        Rc::new(Expression::make_special(
+            builtin_meta_file_name,
+            "Usage: (meta-file-name)
+
+File name of the file this came from.
+
+Example:
+;(meta-file-name)
 t
 ",
             root,

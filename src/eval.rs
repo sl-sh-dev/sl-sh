@@ -457,8 +457,10 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
                 Expression::Vector(list, _) => {
                     list.replace(nv);
                 }
-                Expression::Pair(p, _) => {
-                    if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
+                Expression::Pair(p, meta) => {
+                    if let Expression::Pair(np, _) =
+                        Expression::cons_from_vec(&mut nv, meta.clone())
+                    {
                         p.replace(np.borrow().clone());
                     }
                 }
