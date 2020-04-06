@@ -979,16 +979,22 @@ fn replace_commas(
     environment: &mut Environment,
     list: &mut dyn Iterator<Item = &Expression>,
     is_vector: bool,
+    meta: Option<ExpMeta>,
 ) -> io::Result<Expression> {
     let mut output: Vec<Expression> = Vec::new(); //with_capacity(list.len());
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
         let exp = match exp {
-            Expression::Vector(tlist, _) => {
-                replace_commas(environment, &mut tlist.borrow().iter(), is_vector)?
+            Expression::Vector(tlist, m) => replace_commas(
+                environment,
+                &mut tlist.borrow().iter(),
+                is_vector,
+                m.clone(),
+            )?,
+            Expression::Pair(_, m) => {
+                replace_commas(environment, &mut exp.iter(), is_vector, m.clone())?
             }
-            Expression::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector)?,
             _ => exp.clone(),
         };
         if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
@@ -1044,9 +1050,9 @@ fn replace_commas(
         }
     }
     if is_vector {
-        Ok(Expression::with_list(output))
+        Ok(Expression::with_list_meta(output, meta))
     } else {
-        Ok(Expression::cons_from_vec(&mut output, None))
+        Ok(Expression::cons_from_vec(&mut output, meta))
     }
 }
 
@@ -1063,12 +1069,15 @@ fn builtin_bquote(
                     Ok(Expression::nil())
                 }
             }
-            Expression::Vector(list, _) => {
-                replace_commas(environment, &mut Box::new(list.borrow().iter()), true)
-            }
-            Expression::Pair(p, _) => {
+            Expression::Vector(list, meta) => replace_commas(
+                environment,
+                &mut Box::new(list.borrow().iter()),
+                true,
+                meta.clone(),
+            ),
+            Expression::Pair(p, meta) => {
                 if let Some((_, _)) = &*p.borrow() {
-                    replace_commas(environment, &mut arg.iter(), false)
+                    replace_commas(environment, &mut arg.iter(), false, meta.clone())
                 } else {
                     // Nil
                     Ok(arg.clone())
