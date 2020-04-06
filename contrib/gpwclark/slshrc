@@ -21,6 +21,7 @@
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
 
+;; overrides exec hook to use endfix notation
 (endfix-on)
 
 ;; helpers {{{

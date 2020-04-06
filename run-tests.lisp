@@ -14,7 +14,7 @@
 	(reduce
 		(fn (lst filename) (append! lst (progn
 										(defq name (str tests-dir "/" filename))
-										(defq load-fcn (fn () (load filepath)))
+										(defq load-fcn (fn () (load name)))
 										(defq test-hash (make-hash))
 										(hash-set! test-hash :name name)
 										(hash-set! test-hash :load-fcn load-fcn)
@@ -75,8 +75,8 @@
 			(progn
 				;; TODO only make 1 outfile
 				(defq outfile (str (mktemp "/tmp/sl-sh.test-log.XXXXXXXXX")))
-				(out-err> outfile (:load-fcn fst))
-				(report-pretty-printer exit-status (:name fst))
+				(out-err> outfile ((hash-get fst :load-fcn)))
+				(report-pretty-printer exit-status (hash-get fst :name))
 				(print-test-output outfile)
 				(rm outfile)
 				(recur (rest tests)))))))))
