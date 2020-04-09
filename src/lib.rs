@@ -6,8 +6,14 @@ extern crate nix;
 pub mod types;
 pub use crate::types::*;
 
+pub mod gc_types;
+pub use crate::gc_types::*;
+
 pub mod environment;
 pub use crate::environment::*;
+
+pub mod gc_environment;
+pub use crate::gc_environment::*;
 
 pub mod shell;
 pub use crate::shell::*;
@@ -62,3 +68,4 @@ pub use crate::process::*;
 
 pub mod interner;
 pub use crate::interner::*;
+
