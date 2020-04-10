@@ -11,23 +11,10 @@ use std::rc::Rc;
 
 use broom::prelude::*;
 
-//use crate::builtins_util::is_proper_list;
+use crate::gc_builtins_util::is_proper_list;
 use crate::gc_environment::*;
-use crate::eval::call_lambda;
+use crate::gc_eval::call_lambda;
 use crate::process::*;
-
-fn is_proper_list(exp: &Expression) -> bool {
-    // does not detect empty (nil) lists on purpose.
-    if let ExpEnum::Pair(_e1, e2) = exp.get() {
-            if e2.is_nil() {
-                true
-            } else {
-                is_proper_list(e2)
-            }
-    } else {
-        false
-    }
-}
 
 pub type GC = Heap<ExpObj>;
 
@@ -147,10 +134,10 @@ impl<'a> Iterator for PairIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = &mut self.current {
-                let current = unsafe {
-                    // Need an unbound lifetime to get 'a
-                    &*current.as_ptr()
-                };
+            let current = unsafe {
+                // Need an unbound lifetime to get 'a
+                &*current.as_ptr()
+            };
             if let ExpEnum::Pair(e1, e2) = current.data {
                 self.current = Some(e2);
                 let e1 = unsafe {
@@ -206,6 +193,47 @@ pub enum ExpEnum {
     Nil,
 }
 
+impl ExpEnum {
+    pub fn replace(&mut self, new_data: ExpEnum) {
+        *self = new_data;
+    }
+
+    pub fn cons_from_vec(gc: &mut GC, v: &mut Vec<Expression>) -> ExpEnum {
+        let mut last_pair = ExpEnum::Nil;
+        if !v.is_empty() {
+            let mut i = v.len() - 1;
+            loop {
+                if i == 0 {
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
+                    );
+                    break;
+                } else {
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
+                    );
+                }
+                i -= 1;
+            }
+        }
+        last_pair
+    }
+}
+
 pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
@@ -233,7 +261,7 @@ impl Trace<ExpObj> for ExpEnum {
                 mac.params.trace(tracer);
                 mac.body.trace(tracer);
             }
-            _ => {},
+            _ => {}
         }
     }
 }
@@ -259,6 +287,11 @@ impl Expression {
         Expression { obj }
     }
 
+    pub fn alloc_data(gc: &mut GC, data: ExpEnum) -> Expression {
+        let obj = gc.insert_temp(ExpObj { data, meta: None });
+        Expression { obj }
+    }
+
     pub fn get(&self) -> &ExpEnum {
         unsafe { &self.obj.get_unchecked().data }
     }
@@ -277,9 +310,7 @@ impl Expression {
 
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression>> {
         match self.get() {
-            ExpEnum::Pair(_, _) => {
-                Box::new(PairIter::new(*self))
-            }
+            ExpEnum::Pair(_, _) => Box::new(PairIter::new(*self)),
             //ExpEnum::Vector(list, _) => {
             //    Box::new(list.iter())
             //}
@@ -296,59 +327,110 @@ impl Expression {
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
-    /*pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
         let mut res = self;
         while let ExpEnum::LazyFn(lambda, parts) = &res.get() {
             let ib = Box::new(parts.iter());
             res = call_lambda(environment, &lambda, ib, false)?;
         }
         Ok(res)
-    }*/
-    pub fn make_function(gc: &mut GC, func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(gc,
+    }
+
+    pub fn make_function(
+        gc: &mut GC,
+        func: CallFunc,
+        doc_str: &str,
+        namespace: &'static str,
+    ) -> Reference {
+        Reference::new(
+            gc,
             ExpEnum::Function(Callable::new(func, false)),
             RefMetaData {
                 namespace: Some(namespace),
                 doc_string: Some(doc_str.to_string()),
-            })
+            },
+        )
     }
 
-    pub fn make_special(gc: &mut GC, func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(gc,
+    pub fn make_special(
+        gc: &mut GC,
+        func: CallFunc,
+        doc_str: &str,
+        namespace: &'static str,
+    ) -> Reference {
+        Reference::new(
+            gc,
             ExpEnum::Function(Callable::new(func, true)),
             RefMetaData {
                 namespace: Some(namespace),
                 doc_string: Some(doc_str.to_string()),
-            })
+            },
+        )
     }
 
     pub fn with_list(gc: &mut GC, list: Vec<Expression>) -> Expression {
-        Expression::alloc(gc, ExpObj { data: ExpEnum::Vector(list), meta: None })
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: ExpEnum::Vector(list),
+                meta: None,
+            },
+        )
     }
 
     pub fn with_list_meta(gc: &mut GC, list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
-        Expression::alloc(gc, ExpObj { data: ExpEnum::Vector(list), meta: None })
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: ExpEnum::Vector(list),
+                meta: None,
+            },
+        )
     }
 
-    pub fn cons_from_vec(gc: &mut GC, v: &mut Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
+    pub fn cons_from_vec(
+        gc: &mut GC,
+        v: &mut Vec<Expression>,
+        meta: Option<ExpMeta>,
+    ) -> Expression {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
                 if i == 0 {
                     last_pair = ExpEnum::Pair(
-                        v.remove(i), Expression::alloc(gc, ExpObj { data: last_pair.clone(), meta: None })
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
                     );
                     break;
                 } else {
                     last_pair = ExpEnum::Pair(
-                        v.remove(i), Expression::alloc(gc, ExpObj { data: last_pair.clone(), meta: None })
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
                     );
                 }
                 i -= 1;
             }
         }
-        Expression::alloc(gc, ExpObj { data: last_pair, meta: meta })
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: last_pair,
+                meta: meta,
+            },
+        )
     }
 
     pub fn display_type(&self) -> String {
@@ -363,9 +445,7 @@ impl Expression {
                 }
             }
             ExpEnum::Vector(_) => "Vector".to_string(),
-            ExpEnum::Pair(_, _) => {
-                    "Pair".to_string()
-            }
+            ExpEnum::Pair(_, _) => "Pair".to_string(),
             ExpEnum::HashMap(_) => "HashMap".to_string(),
             ExpEnum::File(_) => "File".to_string(),
             ExpEnum::LazyFn(_, _) => "Lambda".to_string(),
@@ -430,33 +510,33 @@ impl Expression {
                 }
             }
             ExpEnum::Pair(e1, e2) => {
-                    init_space(indent, writer)?;
-                    let a_str = self.to_string();
-                    if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
-                        writer.write_all(a_str.as_bytes())?;
-                    } else if is_proper_list(self) {
-                        writer.write_all(b"(")?;
-                        let mut first = true;
-                        let mut last_p = &ExpEnum::Nil;
-                        for p in self.iter() {
-                            if !first {
-                                if let ExpEnum::Atom(Atom::Symbol(sym)) = last_p {
-                                    if sym != &"," && sym != &",@" {
-                                        writer.write_all(b" ")?;
-                                    }
-                                } else {
+                init_space(indent, writer)?;
+                let a_str = self.to_string();
+                if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
+                    writer.write_all(a_str.as_bytes())?;
+                } else if is_proper_list(self) {
+                    writer.write_all(b"(")?;
+                    let mut first = true;
+                    let mut last_p = &ExpEnum::Nil;
+                    for p in self.iter() {
+                        if !first {
+                            if let ExpEnum::Atom(Atom::Symbol(sym)) = last_p {
+                                if sym != &"," && sym != &",@" {
                                     writer.write_all(b" ")?;
                                 }
                             } else {
-                                first = false;
+                                writer.write_all(b" ")?;
                             }
-                            p.pretty_print_int(environment, indent + 1, writer)?;
-                            last_p = p.get();
+                        } else {
+                            first = false;
                         }
-                        writer.write_all(b")")?;
-                    } else {
-                        write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
+                        p.pretty_print_int(environment, indent + 1, writer)?;
+                        last_p = p.get();
                     }
+                    writer.write_all(b")")?;
+                } else {
+                    write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
+                }
             }
             ExpEnum::Nil => write!(writer, "nil")?,
             ExpEnum::HashMap(map) => {
@@ -706,7 +786,9 @@ impl AsRef<ExpEnum> for Expression {
 
 impl From<Rooted<ExpObj>> for Expression {
     fn from(rooted: Rooted<ExpObj>) -> Self {
-        Expression { obj: rooted.handle() }
+        Expression {
+            obj: rooted.handle(),
+        }
     }
 }
 
@@ -749,37 +831,37 @@ impl fmt::Display for Expression {
                 write!(f, "{}", res)
             }
             ExpEnum::Pair(e1, e2) => {
-                    if is_proper_list(self) {
-                        match e1.get() {
-                            ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
-                                f.write_str("'")?;
-                                // This will be a two element list or something is wrong...
-                                if let ExpEnum::Pair(a2, _) = e2.get() {
-                                        f.write_str(&a2.to_string())
-                                } else {
-                                    f.write_str(&e2.to_string())
-                                }
-                            }
-                            ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
-                                f.write_str("`")?;
-                                // This will be a two element list or something is wrong...
-                                if let ExpEnum::Pair(a2, _) = e2.get() {
-                                    f.write_str(&a2.to_string())
-                                } else {
-                                    f.write_str(&e2.to_string())
-                                }
-                            }
-                            _ => {
-                                let mut res = String::new();
-                                res.push_str("(");
-                                list_out(&mut res, &mut self.iter());
-                                res.push(')');
-                                write!(f, "{}", res)
+                if is_proper_list(self) {
+                    match e1.get() {
+                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
+                            f.write_str("'")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = e2.get() {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
                             }
                         }
-                    } else {
-                        write!(f, "({} . {})", e1.to_string(), e2.to_string())
+                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
+                            f.write_str("`")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = e2.get() {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        _ => {
+                            let mut res = String::new();
+                            res.push_str("(");
+                            list_out(&mut res, &mut self.iter());
+                            res.push(')');
+                            write!(f, "{}", res)
+                        }
                     }
+                } else {
+                    write!(f, "({} . {})", e1.to_string(), e2.to_string())
+                }
             }
             ExpEnum::Nil => f.write_str("nil"),
             ExpEnum::HashMap(map) => {
@@ -815,9 +897,7 @@ impl fmt::Debug for Expression {
         match self.get() {
             ExpEnum::Atom(a) => write!(f, "ExpEnum::Atom({:?})", a),
             ExpEnum::Vector(l) => write!(f, "ExpEnum::Vector({:?})", l),
-            ExpEnum::Pair(e1, e2) => {
-                write!(f, "ExpEnum::Pair({:?} . {:?})", e1, e2)
-            }
+            ExpEnum::Pair(e1, e2) => write!(f, "ExpEnum::Pair({:?} . {:?})", e1, e2),
             ExpEnum::HashMap(map) => write!(f, "ExpEnum::HashMap({:?})", map),
             ExpEnum::Function(_) => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::Process(ProcessState::Running(pid)) => {
@@ -834,4 +914,3 @@ impl fmt::Debug for Expression {
         }
     }
 }
-

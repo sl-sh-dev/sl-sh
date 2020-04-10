@@ -21,6 +21,9 @@ pub use crate::shell::*;
 pub mod eval;
 pub use crate::eval::*;
 
+pub mod gc_eval;
+pub use crate::gc_eval::*;
+
 pub mod config;
 pub use crate::config::*;
 
@@ -29,6 +32,9 @@ pub use crate::completions::*;
 
 pub mod reader;
 pub use crate::reader::*;
+
+pub mod gc_reader;
+pub use crate::gc_reader::*;
 
 pub mod builtins_math;
 pub use crate::builtins_math::*;
@@ -42,12 +48,17 @@ pub use crate::builtins_vector::*;
 pub mod builtins;
 pub use crate::builtins::*;
 
+pub mod gc_builtins;
+pub use crate::gc_builtins::*;
+
 pub mod builtins_util;
 pub use crate::builtins_util::*;
 
+pub mod gc_builtins_util;
+pub use crate::gc_builtins_util::*;
+
 pub mod builtins_file;
 pub use crate::builtins_file::*;
-
 pub mod builtins_io;
 pub use crate::builtins_io::*;
 
@@ -68,4 +79,3 @@ pub use crate::process::*;
 
 pub mod interner;
 pub use crate::interner::*;
-
