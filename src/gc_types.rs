@@ -308,12 +308,14 @@ impl Expression {
         unsafe { &self.obj.get_unchecked().meta }
     }
 
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression>> {
+//fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = &Expression> + 'a> {
+    //pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression>> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expression> +'a> {
         match self.get() {
             ExpEnum::Pair(_, _) => Box::new(PairIter::new(*self)),
-            //ExpEnum::Vector(list, _) => {
-            //    Box::new(list.iter())
-            //}
+            ExpEnum::Vector(list) => {
+                Box::new(list.iter())
+            }
             _ => Box::new(iter::empty()),
         }
     }

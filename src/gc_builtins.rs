@@ -29,7 +29,7 @@ fn builtin_eval(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, &arg)?;
-            return match arg {
+            return match arg.get() {
                 ExpEnum::Atom(Atom::String(s)) => match read(environment, &s, None) {
                     Ok(ast) => eval(environment, &ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
@@ -79,18 +79,16 @@ fn builtin_apply(
         }
         last_arg = Some(arg);
     }
-    let tlist;
-    let list_borrow;
     let last_evaled;
     if let Some(alist) = last_arg {
         last_evaled = eval(environment, alist)?;
-        let itr = match last_evaled {
-            ExpEnum::Vector(list, _) => {
-                tlist = list;
-                list_borrow = tlist.borrow();
-                Box::new(list_borrow.iter())
-            }
-            ExpEnum::Pair(_, _) => last_evaled.iter(), // Includes Nil.
+        let itr = match last_evaled.get() {
+            //ExpEnum::Vector(list) => {
+            //    Box::new(list.iter())
+            //}
+            ExpEnum::Vector(_) => last_evaled.iter(),
+            ExpEnum::Pair(_, _) => last_evaled.iter(),
+            ExpEnum::Nil => last_evaled.iter(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -129,7 +127,7 @@ fn builtin_unwind_protect(
         }
         result
     } else {
-        Ok(ExpEnum::nil())
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
     }
 }
 
@@ -164,17 +162,16 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         None => file_name.to_string(),
     };
     let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
-        let vec_borrow;
-        let p_itr = match &lp.exp {
-            ExpEnum::Vector(vec, _) => {
+        let p_itr = lp.exp.iter();/*match &lp.exp.get() {
+            ExpEnum::Vector(vec) => {
                 vec_borrow = vec.borrow();
                 Box::new(vec_borrow.iter())
             }
             _ => lp.exp.iter(),
-        };
+        };*/
         let mut path_out = file_name.clone();
         for l in p_itr {
-            let path_name = match l {
+            let path_name = match l.get() {
                 ExpEnum::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
                 ExpEnum::Atom(Atom::String(s)) => Some(s.to_string()),
                 ExpEnum::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
@@ -236,10 +233,10 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             let old_loose_syms = environment.loose_symbols;
             // Do not use loose symbols in scripts even if loading from the repl.
             environment.loose_symbols = false;
-            let mut res = ExpEnum::nil();
-            match ast {
-                ExpEnum::Vector(list, _) => {
-                    for l in list.borrow_mut().drain(..) {
+            let mut res;// = ExpEnum::nil();
+            match ast.get() {
+                ExpEnum::Vector(list) => {
+                    for l in list.drain(..) {
                         res = eval(environment, &l)?;
                     }
                 }
@@ -283,14 +280,15 @@ fn builtin_length(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match &arg {
+            let gc = &mut environment.gc;
+            return match arg.get() {
                 ExpEnum::Atom(Atom::String(s)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in s.chars() {
                         i += 1;
                     }
-                    Ok(ExpEnum::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(i64::from(i)))))
                 }
                 ExpEnum::Atom(Atom::StringRef(s)) => {
                     let mut i = 0;
@@ -298,7 +296,7 @@ fn builtin_length(
                     for _ in s.chars() {
                         i += 1;
                     }
-                    Ok(ExpEnum::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(i64::from(i)))))
                 }
                 ExpEnum::Atom(Atom::StringBuf(s)) => {
                     let mut i = 0;
@@ -306,26 +304,20 @@ fn builtin_length(
                     for _ in s.borrow().chars() {
                         i += 1;
                     }
-                    Ok(ExpEnum::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(i64::from(i)))))
                 }
-                ExpEnum::Atom(_) => Ok(ExpEnum::Atom(Atom::Int(1))),
-                ExpEnum::Vector(list, _) => {
-                    Ok(ExpEnum::Atom(Atom::Int(list.borrow().len() as i64)))
+                ExpEnum::Atom(_) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(1)))),
+                ExpEnum::Vector(list) => {
+                    Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(list.len() as i64))))
                 }
-                ExpEnum::Pair(p, _) => {
-                    if let Some((_e1, e2)) = &*p.borrow() {
+                ExpEnum::Pair(_, e2) => {
                         let mut len = 0;
-                        let mut e_next = e2.clone();
+                        let mut e_next = e2;
                         loop {
-                            match e_next {
-                                ExpEnum::Pair(p, _) => {
+                            match e_next.get() {
+                                ExpEnum::Pair(_, e2) => {
                                     len += 1;
-                                    if let Some((_e1, e2)) = &*p.borrow() {
-                                        e_next = e2.clone();
-                                    } else {
-                                        // Nil
-                                        break;
-                                    }
+                                        e_next = e2;
                                 }
                                 _ => {
                                     len += 1;
@@ -333,14 +325,11 @@ fn builtin_length(
                                 }
                             }
                         }
-                        Ok(ExpEnum::Atom(Atom::Int(len)))
-                    } else {
-                        // Nil
-                        Ok(ExpEnum::Atom(Atom::Int(0)))
-                    }
+                        Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(len))))
                 }
-                ExpEnum::HashMap(map) => Ok(ExpEnum::Atom(Atom::Int(map.borrow().len() as i64))),
-                _ => Ok(ExpEnum::Atom(Atom::Int(0))),
+                ExpEnum::Nil => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(0)))),
+                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(map.len() as i64)))),
+                _ => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(0)))),
             };
         }
     }
@@ -360,7 +349,7 @@ fn builtin_if(
                 if let Some(else_form) = args.next() {
                     eval_nr(environment, else_form)
                 } else {
-                    Ok(ExpEnum::nil())
+                    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
                 }
             } else {
                 eval_nr(environment, then_form)
@@ -383,7 +372,7 @@ fn args_out(
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
-        let pretty = match aa {
+        let pretty = match aa.get() {
             ExpEnum::Atom(Atom::String(_)) => false,
             ExpEnum::Atom(Atom::StringRef(_)) => false,
             ExpEnum::Atom(Atom::StringBuf(_)) => false,
@@ -412,7 +401,7 @@ fn print_to_oe(
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let ExpEnum::File(f) = &out.exp {
+            if let ExpEnum::File(f) = out.exp.get() {
                 match &*f.borrow() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
@@ -429,7 +418,7 @@ fn print_to_oe(
                         for a in args {
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
-                            let pretty = match aa {
+                            let pretty = match aa.get() {
                                 ExpEnum::Atom(Atom::String(_)) => false,
                                 ExpEnum::Atom(Atom::StringRef(_)) => false,
                                 ExpEnum::Atom(Atom::StringBuf(_)) => false,
@@ -483,7 +472,7 @@ fn print(
             print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
         }
     };
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }
 
 pub fn eprint(
@@ -497,7 +486,7 @@ pub fn eprint(
             print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
         }
     };
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }
 
 fn builtin_print(
@@ -536,14 +525,14 @@ fn builtin_format(
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
-    Ok(ExpEnum::Atom(Atom::String(res)))
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(res))))
 }
 
 pub fn builtin_progn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = ExpEnum::nil();
+    let mut ret: Expression;
     for arg in args {
         ret.resolve(environment)?;
         ret = eval_nr(environment, &arg)?;
@@ -557,7 +546,7 @@ fn proc_set_vars<'a>(
 ) -> io::Result<(&'static str, Option<String>, &'a Expression)> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
-            let key = match eval(environment, key)? {
+            let key = match eval(environment, key)?.get() {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
@@ -592,33 +581,34 @@ fn val_to_reference(
     namespace: Option<&'static str>,
     doc_string: Option<String>,
     val_in: &Expression,
-) -> io::Result<(Rc<Reference>, Expression)> {
-    if let ExpEnum::Atom(Atom::Symbol(s)) = val_in {
+) -> io::Result<(Reference, Expression)> {
+    let gc = &mut environment.gc;
+    if let ExpEnum::Atom(Atom::Symbol(s)) = val_in.get() {
         if let Some(exp) = get_expression(environment, s) {
             Ok((exp, eval(environment, val_in)?))
         } else {
             let val = eval(environment, &val_in)?;
             Ok((
-                Rc::new(Reference {
-                    exp: val.clone(),
-                    meta: RefMetaData {
-                        namespace,
-                        doc_string,
-                    },
-                }),
+            Reference::new_rooted(gc,
+                val,
+                RefMetaData {
+                    namespace,
+                    doc_string,
+                },
+            ),
                 val,
             ))
         }
     } else {
         let val = eval(environment, val_in)?;
         Ok((
-            Rc::new(Reference {
-                exp: val.clone(),
-                meta: RefMetaData {
+            Reference::new_rooted(gc,
+                val,
+                RefMetaData {
                     namespace,
                     doc_string,
                 },
-            }),
+            ),
             val,
         ))
     }
@@ -631,7 +621,7 @@ fn builtin_set(
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
         // XXX TODO, eval val here?
-        entry.insert(Rc::new(val.clone()));
+        entry.insert(Reference::new_rooted(&mut environment.gc, *val, RefMetaData { namespace: None, doc_string: None }));
         Ok(val.clone())
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
         let name = scope.borrow().name;
@@ -655,7 +645,7 @@ fn builtin_export(
             if args.next().is_none() {
                 let key = eval(environment, key)?;
                 let val = eval(environment, val)?;
-                let key = match key {
+                let key = match key.get() {
                     ExpEnum::Atom(Atom::Symbol(s)) => s,
                     _ => {
                         return Err(io::Error::new(
@@ -664,7 +654,7 @@ fn builtin_export(
                         ));
                     }
                 };
-                let val = match &val {
+                let val = match val.get() {
                     ExpEnum::Atom(Atom::Symbol(s)) => ExpEnum::Atom(Atom::StringRef(s)),
                     ExpEnum::Atom(Atom::StringRef(s)) => ExpEnum::Atom(Atom::StringRef(s)),
                     ExpEnum::Atom(Atom::String(s)) => ExpEnum::Atom(Atom::String(s.to_string())),
@@ -706,7 +696,7 @@ fn builtin_export(
                         ));
                     }
                 };
-                let val = val.as_string(environment)?;
+                let val = Expression::alloc_data(&mut environment.gc, val).as_string(environment)?;
                 let val = match expand_tilde(&val) {
                     Some(v) => v,
                     None => val,
@@ -716,7 +706,7 @@ fn builtin_export(
                 } else {
                     env::remove_var(key);
                 }
-                return Ok(ExpEnum::Atom(Atom::String(val)));
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(val))));
             }
         }
     }
@@ -733,9 +723,9 @@ fn builtin_unexport(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
-            if let ExpEnum::Atom(Atom::Symbol(k)) = key {
+            if let ExpEnum::Atom(Atom::Symbol(k)) = key.get() {
                 env::remove_var(k);
-                return Ok(ExpEnum::nil());
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
             }
         }
     }
@@ -751,7 +741,7 @@ fn builtin_def(
 ) -> io::Result<Expression> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
-            match &exp.exp {
+            match exp.exp.get() {
                 ExpEnum::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
                 ExpEnum::Atom(Atom::StringRef(s)) => Some(s),
                 ExpEnum::Atom(Atom::StringBuf(s)) => {
@@ -810,9 +800,9 @@ fn builtin_undef(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
-            if let ExpEnum::Atom(Atom::Symbol(k)) = key {
+            if let ExpEnum::Atom(Atom::Symbol(k)) = key.get() {
                 remove_expression_current(environment, &k);
-                return Ok(ExpEnum::nil());
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
             }
         }
     }
@@ -828,7 +818,7 @@ fn builtin_dyn(
 ) -> io::Result<Expression> {
     let (key, val) = if let Some(key) = args.next() {
         if let Some(val) = args.next() {
-            let key = match eval(environment, key)? {
+            let key = match eval(environment, key)?.get() {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
@@ -851,18 +841,18 @@ fn builtin_dyn(
             "dyn requires a key and value",
         ));
     };
-    let old_val = if environment.dynamic_scope.contains_key(&key) {
-        Some(environment.dynamic_scope.remove(&key).unwrap())
+    let old_val = if environment.dynamic_scope.contains_key(key) {
+        Some(environment.dynamic_scope.remove(key).unwrap())
     } else {
         None
     };
     if let Some(exp) = args.next() {
-        environment.dynamic_scope.insert(key, Rc::new(val));
+        environment.dynamic_scope.insert(key, Reference::new_rooted(&mut environment.gc, val, RefMetaData { namespace: None, doc_string: None }));
         let res = eval(environment, exp);
         if let Some(old_val) = old_val {
             environment.dynamic_scope.insert(key, old_val);
         } else {
-            environment.dynamic_scope.remove(&key);
+            environment.dynamic_scope.remove(key);
         }
         res
     } else {
@@ -880,21 +870,22 @@ fn builtin_to_symbol(
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match &arg0 {
+            let gc = &mut environment.gc;
+            return match arg0.get() {
                 ExpEnum::Atom(Atom::String(s)) => {
-                    Ok(ExpEnum::Atom(Atom::Symbol(environment.interner.intern(s))))
+                    Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(environment.interner.intern(s)))))
                 }
-                ExpEnum::Atom(Atom::StringRef(s)) => Ok(ExpEnum::Atom(Atom::Symbol(s))),
-                ExpEnum::Atom(Atom::StringBuf(s)) => Ok(ExpEnum::Atom(Atom::Symbol(
+                ExpEnum::Atom(Atom::StringRef(s)) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(s)))),
+                ExpEnum::Atom(Atom::StringBuf(s)) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(&s.borrow()),
-                ))),
-                ExpEnum::Atom(Atom::Symbol(s)) => Ok(ExpEnum::Atom(Atom::Symbol(s))),
-                ExpEnum::Atom(Atom::Int(i)) => Ok(ExpEnum::Atom(Atom::Symbol(
+                )))),
+                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(s)))),
+                ExpEnum::Atom(Atom::Int(i)) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(&format!("{}", i)),
-                ))),
-                ExpEnum::Atom(Atom::Float(f)) => Ok(ExpEnum::Atom(Atom::Symbol(
+                )))),
+                ExpEnum::Atom(Atom::Float(f)) => Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(&format!("{}", f)),
-                ))),
+                )))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "to-symbol can only convert strings, symbols, ints and floats to a symbol",
@@ -915,8 +906,8 @@ fn builtin_symbol_name(
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match &arg0 {
-                ExpEnum::Atom(Atom::Symbol(s)) => Ok(ExpEnum::Atom(Atom::StringRef(s))),
+            return match arg0.get() {
+                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::StringRef(s)))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "symbol-name can only convert a symbol to a string",
@@ -937,11 +928,11 @@ fn builtin_fn(
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
-                return Ok(ExpEnum::Atom(Atom::Lambda(Lambda {
-                    params: Box::new(params.clone()),
-                    body: Box::new(body.clone()),
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Lambda(Lambda {
+                    params: *params,
+                    body: *body,
                     capture: environment.current_scope.last().unwrap().clone(),
-                })));
+                }))));
             }
         }
     }
@@ -973,19 +964,19 @@ fn replace_commas(
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
-        let exp = match exp {
-            ExpEnum::Vector(tlist, m) => replace_commas(
+        let exp = match exp.get() {
+            ExpEnum::Vector(tlist) => replace_commas(
                 environment,
-                &mut tlist.borrow().iter(),
+                &mut tlist.iter(),
                 is_vector,
-                m.clone(),
+                exp.meta().clone(),
             )?,
-            ExpEnum::Pair(_, m) => {
-                replace_commas(environment, &mut exp.iter(), is_vector, m.clone())?
+            ExpEnum::Pair(_, _) => {
+                replace_commas(environment, &mut exp.iter(), is_vector, exp.meta().clone())?
             }
             _ => exp.clone(),
         };
-        if let ExpEnum::Atom(Atom::Symbol(symbol)) = &exp {
+        if let ExpEnum::Atom(Atom::Symbol(symbol)) = exp.get() {
             if symbol == &"," {
                 comma_next = true;
             } else if symbol == &",@" {
@@ -995,11 +986,11 @@ fn replace_commas(
                 comma_next = false;
             } else if amp_next {
                 let nl = eval(environment, &exp)?;
-                if let ExpEnum::Vector(new_list, _) = nl {
-                    for item in new_list.borrow().iter() {
+                if let ExpEnum::Vector(new_list) = nl.get() {
+                    for item in new_list.iter() {
                         output.push(item.clone());
                     }
-                } else if let ExpEnum::Pair(_, _) = nl {
+                } else if let ExpEnum::Pair(_, _) = nl.get() {
                     for item in nl.iter() {
                         output.push(item.clone());
                     }
@@ -1018,11 +1009,11 @@ fn replace_commas(
             comma_next = false;
         } else if amp_next {
             let nl = eval(environment, &exp)?;
-            if let ExpEnum::Vector(new_list, _) = nl {
-                for item in new_list.borrow_mut().drain(..) {
+            if let ExpEnum::Vector(new_list) = nl.get() {
+                for item in new_list.drain(..) {
                     output.push(item);
                 }
-            } else if let ExpEnum::Pair(_, _) = nl {
+            } else if let ExpEnum::Pair(_, _) = nl.get() {
                 for item in nl.iter() {
                     output.push(item.clone());
                 }
@@ -1038,9 +1029,9 @@ fn replace_commas(
         }
     }
     if is_vector {
-        Ok(ExpEnum::with_list_meta(output, meta))
+        Ok(Expression::with_list_meta(&mut environment.gc, output, meta))
     } else {
-        Ok(ExpEnum::cons_from_vec(&mut output, meta))
+        Ok(Expression::cons_from_vec(&mut environment.gc, &mut output, meta))
     }
 }
 
@@ -1049,27 +1040,22 @@ fn builtin_bquote(
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     let ret = if let Some(arg) = args.next() {
-        match arg {
+        match arg.get() {
             ExpEnum::Atom(Atom::Symbol(s)) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
-                    Ok(ExpEnum::nil())
+                    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
                 }
             }
-            ExpEnum::Vector(list, meta) => replace_commas(
+            ExpEnum::Vector(list) => replace_commas(
                 environment,
-                &mut Box::new(list.borrow().iter()),
+                &mut Box::new(list.iter()),
                 true,
-                meta.clone(),
+                arg.meta().clone(),
             ),
-            ExpEnum::Pair(p, meta) => {
-                if let Some((_, _)) = &*p.borrow() {
-                    replace_commas(environment, &mut arg.iter(), false, meta.clone())
-                } else {
-                    // Nil
-                    Ok(arg.clone())
-                }
+            ExpEnum::Pair(_, _) => {
+                    replace_commas(environment, &mut arg.iter(), false, arg.meta().clone())
             }
             _ => Ok(arg.clone()),
         }
@@ -1107,18 +1093,18 @@ fn builtin_bquote(
         }
     });
     //let res = child.join()
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }*/
 
 fn builtin_and(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut last_exp = ExpEnum::Atom(Atom::True);
+    let mut last_exp;// = ExpEnum::Atom(Atom::True);
     for arg in args {
         let arg = eval(environment, &arg)?;
         if arg.is_nil() {
-            return Ok(ExpEnum::nil());
+            return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
         } else {
             last_exp = arg;
         }
@@ -1136,7 +1122,7 @@ fn builtin_or(
             return Ok(arg);
         }
     }
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }
 
 fn builtin_not(
@@ -1147,9 +1133,9 @@ fn builtin_not(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return if arg0.is_nil() {
-                Ok(ExpEnum::Atom(Atom::True))
+                Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::True)))
             } else {
-                Ok(ExpEnum::nil())
+                Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
             };
         }
     }
@@ -1162,15 +1148,15 @@ fn builtin_is_def(
 ) -> io::Result<Expression> {
     fn get_ret(environment: &mut Environment, name: &str) -> io::Result<Expression> {
         if is_expression(environment, name) {
-            Ok(ExpEnum::Atom(Atom::True))
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::True)))
         } else {
-            Ok(ExpEnum::nil())
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
         }
     }
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match arg0 {
+            return match arg0.get() {
                 ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
                 ExpEnum::Atom(Atom::StringRef(s)) => get_ret(environment, s),
                 ExpEnum::Atom(Atom::String(s)) => get_ret(environment, &s),
@@ -1189,16 +1175,16 @@ fn builtin_is_def(
 }
 
 fn builtin_macro(
-    _environment: &mut Environment,
+    environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
-                return Ok(ExpEnum::Atom(Atom::Macro(Macro {
-                    params: Box::new(params.clone()),
-                    body: Box::new(body.clone()),
-                })));
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Macro(Macro {
+                    params: *params,
+                    body: *body,
+                }))));
             }
         }
     }
@@ -1213,9 +1199,9 @@ fn do_expansion(
     command: &Expression,
     parts: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Option<Expression>> {
-    if let ExpEnum::Atom(Atom::Symbol(command)) = command {
+    if let ExpEnum::Atom(Atom::Symbol(command)) = command.get() {
         if let Some(exp) = get_expression(environment, &command) {
-            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp {
+            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = exp.exp.get() {
                 let new_scope = match environment.current_scope.last() {
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
@@ -1251,8 +1237,7 @@ fn expand_macro_internal(
     arg: &Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    if let ExpEnum::Vector(list, _) = arg {
-        let list = list.borrow();
+    if let ExpEnum::Vector(list) = arg.get() {
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
@@ -1273,8 +1258,7 @@ fn expand_macro_internal(
         } else {
             Ok(None)
         }
-    } else if let ExpEnum::Pair(p, _) = arg {
-        if let Some((e1, e2)) = &*p.borrow() {
+    } else if let ExpEnum::Pair(e1, e2) = arg.get() {
             let expansion = do_expansion(environment, &e1, &mut *e2.iter())?;
             if let Some(expansion) = expansion {
                 if !one {
@@ -1289,9 +1273,6 @@ fn expand_macro_internal(
             } else {
                 Ok(None)
             }
-        } else {
-            Ok(None)
-        }
     } else {
         Ok(None)
     }
@@ -1311,40 +1292,36 @@ pub fn expand_macro(
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
     if let Some(exp) = expand_macro(environment, arg, false)? {
-        if let ExpEnum::Vector(list, _) = &exp {
+        if let ExpEnum::Vector(list) = exp.get() {
             let mut nv = Vec::new();
-            for item in &*list.borrow() {
+            for item in list {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            list.replace(nv);
-        } else if let ExpEnum::Pair(p, _) = &exp {
+            exp.get_mut().replace(ExpEnum::Vector(nv));
+        } else if let ExpEnum::Pair(_, _) = exp.get() {
             let mut nv = Vec::new();
             for item in exp.iter() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            if let ExpEnum::Pair(np, _) = ExpEnum::cons_from_vec(&mut nv, None) {
-                p.replace(np.borrow().clone());
-            }
+            exp.get_mut().replace(ExpEnum::cons_from_vec(&mut environment.gc, &mut nv));
         }
         Ok(exp)
     } else {
-        let arg = arg.clone();
-        if let ExpEnum::Vector(list, _) = &arg {
+        //let arg = arg.clone();
+        if let ExpEnum::Vector(list) = arg.get() {
             let mut nv = Vec::new();
-            for item in &*list.borrow() {
+            for item in list {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            list.replace(nv);
-        } else if let ExpEnum::Pair(p, _) = &arg {
+            arg.get_mut().replace(ExpEnum::Vector(nv));
+        } else if let ExpEnum::Pair(_, _) = arg.get() {
             let mut nv = Vec::new();
             for item in arg.iter() {
                 nv.push(expand_macro_all(environment, &item)?);
             }
-            if let ExpEnum::Pair(np, _) = ExpEnum::cons_from_vec(&mut nv, None) {
-                p.replace(np.borrow().clone());
-            }
+            arg.get_mut().replace(ExpEnum::cons_from_vec(&mut environment.gc, &mut nv));
         }
-        Ok(arg)
+        Ok(*arg)
     }
 }
 
@@ -1413,7 +1390,7 @@ fn builtin_recur(
         arg_num += 1;
     }
     environment.state.recur_num_args = Some(arg_num);
-    Ok(ExpEnum::with_list(arg_list))
+    Ok(Expression::with_list(&mut environment.gc, arg_list))
 }
 
 fn builtin_gensym(
@@ -1428,11 +1405,11 @@ fn builtin_gensym(
     } else {
         let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
-        Ok(ExpEnum::Atom(Atom::Symbol(
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Symbol(
             environment
                 .interner
                 .intern(&format!("gs@@{}", *gensym_count)),
-        )))
+        ))))
     }
 }
 
@@ -1455,14 +1432,14 @@ fn builtin_jobs(
                 job.names
             );
         }
-        Ok(ExpEnum::nil())
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
     }
 }
 
 fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Option<u32> {
     if let Some(arg) = arg {
-        if let ExpEnum::Atom(Atom::Int(ji)) = arg {
-            let ji = ji as usize;
+        if let ExpEnum::Atom(Atom::Int(ji)) = arg.get() {
+            let ji = *ji as usize;
             let jobs = &*environment.jobs.borrow();
             if ji < jobs.len() {
                 let pid = jobs[ji].pids[0];
@@ -1514,7 +1491,7 @@ fn builtin_bg(
             mark_job_running(environment, pid);
         }
     }
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }
 
 fn builtin_fg(
@@ -1547,11 +1524,11 @@ fn builtin_fg(
             wait_pid(environment, pid, Some(&term_settings));
         }
     }
-    Ok(ExpEnum::nil())
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
 }
 
 fn builtin_version(
-    _environment: &mut Environment,
+    environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
@@ -1560,7 +1537,7 @@ fn builtin_version(
             "version takes no arguments",
         ))
     } else {
-        Ok(ExpEnum::Atom(Atom::StringRef(VERSION_STRING)))
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::StringRef(VERSION_STRING))))
     }
 }
 
@@ -1570,7 +1547,7 @@ fn builtin_command(
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::ExternalOnly;
-    let mut last_eval = Ok(ExpEnum::nil());
+    let mut last_eval = Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1587,7 +1564,7 @@ fn builtin_run_bg(
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
     environment.run_background = true;
-    let mut last_eval = Ok(ExpEnum::nil());
+    let mut last_eval = Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1605,7 +1582,7 @@ fn builtin_form(
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::FormOnly;
-    let mut last_eval = Ok(ExpEnum::nil());
+    let mut last_eval = Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1623,7 +1600,7 @@ fn builtin_loose_symbols(
 ) -> io::Result<Expression> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut last_eval = Ok(ExpEnum::nil());
+    let mut last_eval = Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1642,9 +1619,9 @@ fn builtin_exit(
     if let Some(exit_code) = args.next() {
         if args.next().is_none() {
             let exit_code = eval(environment, exit_code)?;
-            return if let ExpEnum::Atom(Atom::Int(exit_code)) = exit_code {
-                environment.exit_code = Some(exit_code as i32);
-                Ok(ExpEnum::nil())
+            return if let ExpEnum::Atom(Atom::Int(exit_code)) = exit_code.get() {
+                environment.exit_code = Some(*exit_code as i32);
+                Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1654,7 +1631,7 @@ fn builtin_exit(
         }
     } else {
         environment.exit_code = Some(0);
-        return Ok(ExpEnum::nil());
+        return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1668,7 +1645,7 @@ fn builtin_error_stack_on(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = true;
-        return Ok(ExpEnum::nil());
+        return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1682,7 +1659,7 @@ fn builtin_error_stack_off(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = false;
-        return Ok(ExpEnum::nil());
+        return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1694,7 +1671,7 @@ fn builtin_get_error(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = ExpEnum::nil();
+    let mut ret;
     let old_err = environment.stack_on_error;
     environment.stack_on_error = false;
     for arg in args {
@@ -1702,13 +1679,13 @@ fn builtin_get_error(
             Ok(exp) => ret = exp,
             Err(err) => {
                 let mut v = Vec::new();
-                v.push(ExpEnum::Atom(Atom::Symbol(
+                v.push(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(":error"),
-                )));
+                ))));
                 let msg = format!("{}", err);
-                v.push(ExpEnum::Atom(Atom::String(msg)));
+                v.push(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(msg))));
                 environment.stack_on_error = old_err;
-                return Ok(ExpEnum::with_list(v));
+                return Ok(Expression::with_list(&mut environment.gc, v));
             }
         }
     }
@@ -1717,28 +1694,15 @@ fn builtin_get_error(
 }
 
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
-    let l;
-    let p_iter = match exp {
-        ExpEnum::Atom(Atom::Lambda(f)) => match &*f.params {
-            ExpEnum::Vector(li, _) => {
-                l = li.borrow();
-                Box::new(l.iter())
-            }
-            _ => f.params.iter(),
-        },
-        ExpEnum::Atom(Atom::Macro(m)) => match &*m.params {
-            ExpEnum::Vector(li, _) => {
-                l = li.borrow();
-                Box::new(l.iter())
-            }
-            _ => m.params.iter(),
-        },
+    let p_iter = match exp.get() {
+        ExpEnum::Atom(Atom::Lambda(f)) => f.params.iter(),
+        ExpEnum::Atom(Atom::Macro(m)) => m.params.iter(),
         _ => return,
     };
     doc_str.push_str("\n\nUsage: (");
     doc_str.push_str(sym);
     for arg in p_iter {
-        if let ExpEnum::Atom(Atom::Symbol(s)) = arg {
+        if let ExpEnum::Atom(Atom::Symbol(s)) = arg.get() {
             doc_str.push(' ');
             doc_str.push_str(s);
         }
@@ -1746,7 +1710,7 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     doc_str.push(')');
 }
 
-fn make_doc(exp: &Reference, key: &str) -> io::Result<Expression> {
+fn make_doc(environment: &mut Environment, exp: &Reference, key: &str) -> io::Result<Expression> {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
@@ -1765,7 +1729,7 @@ fn make_doc(exp: &Reference, key: &str) -> io::Result<Expression> {
         add_usage(&mut new_docs, key, &exp.exp);
     }
     new_docs.push('\n');
-    Ok(ExpEnum::Atom(Atom::String(new_docs)))
+    Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(new_docs))))
 }
 
 fn get_doc(
@@ -1775,7 +1739,7 @@ fn get_doc(
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)? {
+            let key = match eval(environment, key)?.get() {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
@@ -1791,7 +1755,7 @@ fn get_doc(
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = get_expression(environment, "*ns*") {
-                                match &exp.exp {
+                                match exp.exp.get() {
                                     ExpEnum::Atom(Atom::String(s)) => s.to_string(),
                                     ExpEnum::Atom(Atom::StringRef(s)) => (*s).to_string(),
                                     ExpEnum::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
@@ -1807,33 +1771,33 @@ fn get_doc(
                             if is_raw {
                                 if let Some(exp) = scope.borrow().data.get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
-                                        return Ok(ExpEnum::Atom(Atom::String(
+                                        return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(
                                             doc_string.to_string(),
-                                        )));
+                                        ))));
                                     } else {
-                                        return Ok(ExpEnum::nil());
+                                        return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
                                     }
                                 }
-                                return Ok(ExpEnum::nil());
+                                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
                             } else if let Some(exp) = scope.borrow().data.get(key) {
-                                return make_doc(&exp, key);
+                                return make_doc(environment, &exp, key);
                             }
                         }
                     }
                 }
-                return Ok(ExpEnum::nil());
+                return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
             } else if let Some(scope) = get_symbols_scope(environment, &key) {
                 if is_raw {
-                    if let Some(exp) = scope.borrow().data.get(&key) {
+                    if let Some(exp) = scope.borrow().data.get(key) {
                         if let Some(doc_string) = &exp.meta.doc_string {
-                            return Ok(ExpEnum::Atom(Atom::String(doc_string.to_string())));
+                            return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::String(doc_string.to_string()))));
                         } else {
-                            return Ok(ExpEnum::nil());
+                            return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
                         }
                     }
-                    return Ok(ExpEnum::nil());
-                } else if let Some(exp) = scope.borrow().data.get(&key) {
-                    return make_doc(&exp, &key);
+                    return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
+                } else if let Some(exp) = scope.borrow().data.get(key) {
+                    return make_doc(environment, &exp, &key);
                 }
             } else {
                 return Err(io::Error::new(
@@ -1867,9 +1831,9 @@ pub fn builtin_block(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = ExpEnum::nil();
+    let mut ret: Expression;
     if let Some(name) = args.next() {
-        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name {
+        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name.get() {
             n
         } else {
             return Err(io::Error::new(
@@ -1915,9 +1879,9 @@ pub fn builtin_return_from(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = ExpEnum::nil();
+    let mut ret: Expression;
     if let Some(name) = args.next() {
-        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name {
+        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name.get() {
             Some(*n)
         } else if name.is_nil() {
             None
@@ -1938,7 +1902,7 @@ pub fn builtin_return_from(
             }
         }
         environment.return_val = Some((name, ret));
-        Ok(ExpEnum::nil())
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -1963,7 +1927,7 @@ pub fn builtin_intern_stats(
             environment.interner.used(),
             environment.interner.len()
         );
-        Ok(ExpEnum::nil())
+        Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
     }
 }
 
@@ -1973,9 +1937,9 @@ pub fn builtin_meta_line_no(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(ExpEnum::Atom(Atom::Int(meta.line as i64)))
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Int(meta.line as i64))))
         } else {
-            Ok(ExpEnum::nil())
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -1991,9 +1955,9 @@ pub fn builtin_meta_column_no(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(ExpEnum::Atom(Atom::Int(meta.col as i64)))
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Int(meta.col as i64))))
         } else {
-            Ok(ExpEnum::nil())
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -2009,9 +1973,9 @@ pub fn builtin_meta_file_name(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(ExpEnum::Atom(Atom::StringRef(meta.file)))
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::StringRef(meta.file))))
         } else {
-            Ok(ExpEnum::nil())
+            Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -2022,7 +1986,7 @@ pub fn builtin_meta_file_name(
 }
 
 macro_rules! ensure_tonicity {
-    ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
+    ($gc:expr, $check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
             io::ErrorKind::Other,
             "expected at least one value",
@@ -2035,9 +1999,9 @@ macro_rules! ensure_tonicity {
             }
         };
         if f(first, rest) {
-            Ok(ExpEnum::Atom(Atom::True))
+            Ok(Expression::alloc_data(&mut $gc, ExpEnum::Atom(Atom::True)))
         } else {
-            Ok(ExpEnum::nil())
+            Ok(Expression::alloc_data(&mut $gc, ExpEnum::Nil))
         }
     }};
 }
@@ -2052,12 +2016,12 @@ macro_rules! ensure_tonicity_all {
                 list.push(eval(environment, &arg)?);
             }
             if let Ok(ints) = parse_list_of_ints(environment, &mut list) {
-                ensure_tonicity!($check_fn, ints, &i64, i64)
+                ensure_tonicity!(environment.gc, $check_fn, ints, &i64, i64)
             } else if let Ok(floats) = parse_list_of_floats(environment, &mut list) {
-                ensure_tonicity!($check_fn, floats, &f64, f64)
+                ensure_tonicity!(environment.gc, $check_fn, floats, &f64, f64)
             } else {
                 let strings = parse_list_of_strings(environment, &mut list)?;
-                ensure_tonicity!($check_fn, strings, &str, String)
+                ensure_tonicity!(environment.gc, $check_fn, strings, &str, String)
             }
         }
     }};
@@ -3148,12 +3112,12 @@ t
                     args.push(eval(environment, &a)?);
                 }
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
+                    ensure_tonicity!(gc, |a, b| a == b, ints, &i64, i64)
                 } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
-                    ensure_tonicity!(|a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
+                    ensure_tonicity!(gc, |a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
                 } else {
                     let strings = parse_list_of_strings(environment, &mut args)?;
-                    ensure_tonicity!(|a, b| a == b, strings, &str, String)
+                    ensure_tonicity!(gc, |a, b| a == b, strings, &str, String)
                 }
             },
             "Usage: (= val0 ... valN)
