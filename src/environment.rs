@@ -9,7 +9,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::builtins::add_builtins;
-use crate::builtins_file::add_file_builtins;
+/*use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
@@ -17,7 +17,7 @@ use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_types::add_type_builtins;
-use crate::builtins_vector::add_vec_builtins;
+use crate::builtins_vector::add_vec_builtins;*/
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
@@ -70,36 +70,60 @@ pub struct RefMetaData {
 #[derive(Clone, Debug)]
 pub struct Reference {
     pub exp: Expression,
+    pub rc: Rc<()>, // This is the Rc that keeps expression from being garbage collected.
     pub meta: RefMetaData,
+}
+
+impl Reference {
+    pub fn new(gc: &mut GC, exp: ExpEnum, meta: RefMetaData) -> Reference {
+        let root = gc.insert(ExpObj {
+            data: exp,
+            meta: None,
+        });
+        Reference {
+            exp: Expression::new(root.handle()),
+            rc: root.rc(),
+            meta,
+        }
+    }
+
+    pub fn new_rooted(gc: &mut GC, exp: Expression, meta: RefMetaData) -> Reference {
+        let root = gc.make_rooted(exp);
+        Reference {
+            exp: Expression::new(root.handle()),
+            rc: root.rc(),
+            meta,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Scope {
-    pub data: HashMap<&'static str, Rc<Reference>>,
+    pub data: HashMap<&'static str, Reference>,
     pub outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
     pub name: Option<&'static str>,
 }
 
 impl Scope {
-    fn new_root(interner: &mut Interner) -> Self {
-        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
-        add_builtins(interner, &mut data);
-        add_math_builtins(interner, &mut data);
-        add_str_builtins(interner, &mut data);
-        add_vec_builtins(interner, &mut data);
-        add_file_builtins(interner, &mut data);
-        add_io_builtins(interner, &mut data);
-        add_pair_builtins(interner, &mut data);
-        add_hash_builtins(interner, &mut data);
-        add_type_builtins(interner, &mut data);
-        add_namespace_builtins(interner, &mut data);
+    fn new_root(gc: &mut GC, interner: &mut Interner) -> Self {
+        let mut data: HashMap<&'static str, Reference> = HashMap::new();
+        add_builtins(gc, interner, &mut data);
+        //add_math_builtins(interner, &mut data);
+        //add_str_builtins(interner, &mut data);
+        //add_vec_builtins(interner, &mut data);
+        //add_file_builtins(interner, &mut data);
+        //add_io_builtins(interner, &mut data);
+        //add_pair_builtins(interner, &mut data);
+        //add_hash_builtins(interner, &mut data);
+        //add_type_builtins(interner, &mut data);
+        //add_namespace_builtins(interner, &mut data);
         let root = interner.intern("root");
         data.insert(
             interner.intern("*stdin*"),
-            Rc::new(Reference {
-                exp: Expression::File(Rc::new(RefCell::new(FileState::Stdin))),
-                meta: RefMetaData {
+            Reference::new(gc,
+                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))),
+                RefMetaData {
                     namespace: Some(root),
                     doc_string: Some("Usage: (read-line *stdin*)
 
@@ -115,13 +139,13 @@ Example:
 (dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (test::assert-equal \"Test line\n\" (read-line *stdin*)))
 ".to_string()),
                 },
-            }),
+            ),
         );
         data.insert(
             interner.intern("*stdout*"),
-            Rc::new(Reference {
-                exp: Expression::File(Rc::new(RefCell::new(FileState::Stdout))),
-                meta: RefMetaData {
+            Reference::new(gc,
+                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))),
+                RefMetaData {
                     namespace: Some(root),
                     doc_string: Some("Usage: (write-line *stdout*)
 
@@ -136,13 +160,13 @@ Example:
 (test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
 ".to_string()),
                 },
-            }),
+            ),
         );
         data.insert(
             interner.intern("*stderr*"),
-            Rc::new(Reference {
-                exp: Expression::File(Rc::new(RefCell::new(FileState::Stderr))),
-                meta: RefMetaData {
+            Reference::new(gc,
+                ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr))),
+                RefMetaData {
                     namespace: Some(root),
                     doc_string: Some("Usage: (write-line *stderr*)
 
@@ -157,13 +181,14 @@ Example:
 (test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
 ".to_string()),
                 },
-            }),
+            ),
         );
         data.insert(
             interner.intern("*ns*"),
-            Rc::new(Reference {
-                exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
-                meta: RefMetaData {
+            Reference::new(
+                gc,
+                ExpEnum::Atom(Atom::StringRef(interner.intern("root"))),
+                RefMetaData {
                     namespace: Some(root),
                     doc_string: Some(
                         "Usage: (print *ns*)
@@ -181,7 +206,7 @@ t
                         .to_string(),
                     ),
                 },
-            }),
+            ),
         );
         Scope {
             data,
@@ -192,9 +217,9 @@ t
 
     pub fn with_data<S: ::std::hash::BuildHasher>(
         environment: Option<&Environment>,
-        mut data_in: HashMap<&'static str, Rc<Reference>, S>,
+        mut data_in: HashMap<&'static str, Reference, S>,
     ) -> Scope {
-        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::with_capacity(data_in.len());
+        let mut data: HashMap<&'static str, Reference> = HashMap::with_capacity(data_in.len());
         for (k, v) in data_in.drain() {
             data.insert(k, v);
         }
@@ -214,30 +239,45 @@ t
         }
     }
 
-    pub fn insert_exp(&mut self, key: &'static str, exp: Expression) {
-        let reference = Rc::new(Reference {
+    pub fn insert_exp(&mut self, gc: &mut GC, key: &'static str, exp: Expression) {
+        let reference = Reference::new_rooted(
+            gc,
             exp,
-            meta: RefMetaData {
+            RefMetaData {
                 namespace: self.name,
                 doc_string: None,
             },
-        });
+        );
+        self.data.insert(key, reference);
+    }
+
+    pub fn insert_exp_data(&mut self, gc: &mut GC, key: &'static str, data: ExpEnum) {
+        let reference = Reference::new(
+            gc,
+            data,
+            RefMetaData {
+                namespace: self.name,
+                doc_string: None,
+            },
+        );
         self.data.insert(key, reference);
     }
 
     pub fn insert_exp_with_doc(
         &mut self,
+        gc: &mut GC,
         key: &'static str,
         exp: Expression,
         doc_string: Option<String>,
     ) {
-        let reference = Rc::new(Reference {
+        let reference = Reference::new_rooted(
+            gc,
             exp,
-            meta: RefMetaData {
+            RefMetaData {
                 namespace: self.name,
                 doc_string,
             },
-        });
+        );
         self.data.insert(key, reference);
     }
 }
@@ -264,8 +304,9 @@ pub struct Job {
     pub status: JobStatus,
 }
 
-#[derive(Clone, Debug)]
+//#[derive(Clone, Debug)]
 pub struct Environment {
+    pub gc: GC,
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
@@ -288,7 +329,7 @@ pub struct Environment {
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
     // bindings.
-    pub dynamic_scope: HashMap<&'static str, Rc<Expression>>,
+    pub dynamic_scope: HashMap<&'static str, Reference>,
     // This is the environment's root (global scope), it will also be part of
     // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
@@ -308,15 +349,28 @@ pub struct Environment {
     pub last_meta: Option<ExpMeta>,
 }
 
+impl Environment {
+    pub fn insert_into_root_scope(&mut self, symbol: &'static str, data: Expression) {
+    self.root_scope.borrow_mut().insert_exp(
+        &mut self.gc,
+        symbol,
+        data,
+    );
+    }
+
+}
+
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
+    let mut gc = GC::new();
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
-    let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
+    let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut gc, &mut interner)));
     let mut current_scope = Vec::new();
     current_scope.push(root_scope.clone());
     let mut namespaces = HashMap::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
+        gc,
         sig_int,
         state: EnvState::default(),
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
@@ -346,65 +400,8 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     }
 }
 
-pub fn build_new_spawn_scope<S: ::std::hash::BuildHasher>(
-    mut data_in: HashMap<&'static str, Reference, S>,
-    sig_int: Arc<AtomicBool>,
-) -> Environment {
-    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
-    let mut state = EnvState::default();
-    let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::with_capacity(data_in.len());
-    let mut interner = Interner::with_capacity(8192);
-    data.insert(
-        interner.intern("*ns*"),
-        Rc::new(Reference {
-            exp: Expression::Atom(Atom::StringRef(interner.intern("root"))),
-            meta: RefMetaData {
-                namespace: Some(interner.intern("root")),
-                doc_string: None,
-            },
-        }),
-    );
-    for (k, v) in data_in.drain() {
-        data.insert(k, Rc::new(v));
-    }
-    state.is_spawn = true;
-    let root_scope = Rc::new(RefCell::new(Scope::with_data(None, data)));
-    let mut current_scope = Vec::new();
-    current_scope.push(root_scope.clone());
-    let mut namespaces = HashMap::new();
-    namespaces.insert(interner.intern("root"), root_scope.clone());
-    Environment {
-        sig_int,
-        state,
-        stopped_procs: Rc::new(RefCell::new(Vec::new())),
-        jobs: Rc::new(RefCell::new(Vec::new())),
-        in_pipe: false,
-        run_background: false,
-        is_tty: false,
-        do_job_control: false,
-        loose_symbols: false,
-        str_ignore_expand: false,
-        procs,
-        data_in: None,
-        form_type: FormType::Any,
-        save_exit_status: true,
-        stack_on_error: false,
-        error_expression: None,
-        error_meta: None,
-        exit_code: None,
-        dynamic_scope: HashMap::new(),
-        root_scope,
-        current_scope,
-        namespaces,
-        allow_lazy_fn: true,
-        return_val: None,
-        interner,
-        last_meta: None,
-    }
-}
-
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
-    let data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
+    let data: HashMap<&'static str, Reference> = HashMap::new();
     Rc::new(RefCell::new(Scope {
         data,
         outer,
@@ -421,16 +418,17 @@ pub fn build_new_namespace(
         Err(msg)
     } else {
         let name = environment.interner.intern(name);
-        let mut data: HashMap<&'static str, Rc<Reference>> = HashMap::new();
+        let mut data: HashMap<&'static str, Reference> = HashMap::new();
         data.insert(
             environment.interner.intern("*ns*"),
-            Rc::new(Reference {
-                exp: Expression::Atom(Atom::StringRef(name)),
-                meta: RefMetaData {
+            Reference::new(
+                &mut environment.gc,
+                ExpEnum::Atom(Atom::StringRef(name)),
+                RefMetaData {
                     namespace: Some(name),
                     doc_string: None,
                 },
-            }),
+            ),
         );
         let scope = Scope {
             data,
@@ -448,7 +446,7 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     data_in: &mut HashMap<&'static str, Reference, S>,
 ) {
     for (k, v) in &scope.data {
-        let v = &**v;
+        //let v = &**v;
         data_in.insert(k, v.clone());
     }
     if let Some(outer) = &scope.outer {
@@ -456,21 +454,12 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     }
 }
 
-pub fn get_expression(environment: &Environment, key: &str) -> Option<Rc<Reference>> {
+pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference> {
     if key.starts_with('$') || key.starts_with(':') {
         // Can not lookup env vars or keywords...
         None
-    } else if let Some(exp) = environment.dynamic_scope.get(key) {
-        let new_exp = &*exp.clone();
-        // WTF is going on here, should not need a clone of a clone...
-        let reference = Rc::new(Reference {
-            exp: new_exp.clone(),
-            meta: RefMetaData {
-                namespace: None,
-                doc_string: None,
-            },
-        });
-        Some(reference)
+    } else if let Some(reference) = environment.dynamic_scope.get(key) {
+        Some(reference.clone())
     } else if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
@@ -507,20 +496,43 @@ pub fn set_expression_current(
         .last()
         .unwrap() // Always has at least root scope unless horribly broken.
         .borrow_mut();
-    let reference = Rc::new(Reference {
-        exp: expression,
-        meta: RefMetaData {
+    let reference = Reference::new_rooted(
+        &mut environment.gc,
+        expression,
+        RefMetaData {
             namespace: current_scope.name,
             doc_string: doc_str,
         },
-    });
+    );
+    current_scope.data.insert(key, reference);
+}
+
+pub fn set_expression_current_data(
+    environment: &mut Environment,
+    key: &'static str,
+    doc_str: Option<String>,
+    data: ExpEnum,
+) {
+    let mut current_scope = environment
+        .current_scope
+        .last()
+        .unwrap() // Always has at least root scope unless horribly broken.
+        .borrow_mut();
+    let reference = Reference::new(
+        &mut environment.gc,
+        data,
+        RefMetaData {
+            namespace: current_scope.name,
+            doc_string: doc_str,
+        },
+    );
     current_scope.data.insert(key, reference);
 }
 
 pub fn set_expression_current_ref(
     environment: &mut Environment,
     key: &'static str,
-    reference: Rc<Reference>,
+    reference: Reference,
 ) {
     let mut current_scope = environment
         .current_scope

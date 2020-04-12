@@ -9,27 +9,26 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
+use broom::prelude::*;
+
 use crate::builtins_util::is_proper_list;
 use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::process::*;
 
-#[derive(Clone, Debug)]
-pub struct ParseError {
-    pub reason: String,
-}
+pub type GC = Heap<ExpObj>;
 
 #[derive(Clone, Debug)]
 pub struct Lambda {
-    pub params: Box<Expression>,
-    pub body: Box<Expression>,
+    pub params: Expression,
+    pub body: Expression,
     pub capture: Rc<RefCell<Scope>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Macro {
-    pub params: Box<Expression>,
-    pub body: Box<Expression>,
+    pub params: Expression,
+    pub body: Expression,
 }
 
 #[derive(Clone, Debug)]
@@ -112,7 +111,6 @@ pub enum FileState {
 
 pub struct PairIter<'a> {
     current: Option<Expression>,
-    started: bool,
     _marker: marker::PhantomData<&'a Expression>,
 }
 
@@ -120,7 +118,6 @@ impl<'a> PairIter<'a> {
     fn new(exp: Expression) -> PairIter<'a> {
         PairIter {
             current: Some(exp),
-            started: false,
             _marker: marker::PhantomData,
         }
     }
@@ -130,34 +127,18 @@ impl<'a> Iterator for PairIter<'a> {
     type Item = &'a Expression;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.started {
-            self.started = true;
-        } else {
-            self.current = if let Some(current) = &self.current {
-                if let Expression::Pair(p, _) = current {
-                    if let Some((_e1, e2)) = &*p.borrow() {
-                        Some(e2.clone())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
+        if let Some(current) = &mut self.current {
+            let current = unsafe {
+                // Need an unbound lifetime to get 'a
+                &*current.as_ptr()
             };
-        }
-        if let Some(current) = &self.current {
-            if let Expression::Pair(p, _) = current {
-                let pair = unsafe {
-                    // Need an unbound lifetime to get 'a
-                    &*p.as_ptr()
+            if let ExpEnum::Pair(e1, e2) = current.data {
+                self.current = Some(e2);
+                let e1 = unsafe {
+                    let e: *const Expression = &e1;
+                    &*e
                 };
-                if let Some((e1, _e2)) = pair {
-                    Some(e1)
-                } else {
-                    None
-                }
+                Some(e1)
             } else {
                 None
             }
@@ -193,245 +174,51 @@ pub struct ExpMeta {
 }
 
 #[derive(Clone)]
-pub enum Expression {
+pub enum ExpEnum {
     Atom(Atom),
     // RefCell the vector to allow destructive forms.
-    Vector(Rc<RefCell<Vec<Expression>>>, Option<ExpMeta>),
-    // Nil is represented with a Pair that contains None.  May seem odd
-    // but allows nil to be transformed into a pair with xar!/xdr! and treated
-    // as a true empty list.
-    Pair(
-        Rc<RefCell<Option<(Expression, Expression)>>>,
-        Option<ExpMeta>,
-    ),
-    HashMap(Rc<RefCell<HashMap<String, Rc<Expression>>>>),
+    Vector(Vec<Expression>),
+    Pair(Expression, Expression),
+    HashMap(HashMap<String, Expression>),
     Function(Callable),
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),
     LazyFn(Lambda, Vec<Expression>),
+    Nil,
 }
 
-impl fmt::Display for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = &Expression>) {
-            let mut first = true;
-            let mut last_exp = &Expression::nil();
-            for p in itr {
-                if !first {
-                    if let Expression::Atom(Atom::Symbol(sym)) = last_exp {
-                        if sym != &"," && sym != &",@" {
-                            res.push_str(" ");
-                        }
-                    } else {
-                        res.push_str(" ");
-                    }
-                } else {
-                    first = false;
-                }
-                res.push_str(&p.to_string());
-                last_exp = p;
-            }
-        }
-
-        match self {
-            Expression::Atom(a) => write!(f, "{}", a),
-            Expression::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
-            Expression::Process(ProcessState::Over(pid, exit_status)) => write!(
-                f,
-                "#<PID: {}, EXIT STATUS: {},  Complete>",
-                pid, exit_status
-            ),
-            Expression::Function(_) => write!(f, "#<Function>"),
-            Expression::Vector(list, _) => {
-                let mut res = String::new();
-                res.push_str("#(");
-                list_out(&mut res, &mut list.borrow().iter());
-                res.push(')');
-                write!(f, "{}", res)
-            }
-            Expression::Pair(p, _) => {
-                if let Some((e1, e2)) = &*p.borrow() {
-                    if is_proper_list(self) {
-                        match e1 {
-                            Expression::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
-                                f.write_str("'")?;
-                                // This will be a two element list or something is wrong...
-                                if let Expression::Pair(p, _) = e2 {
-                                    if let Some((a2, _is_nil)) = &*p.borrow() {
-                                        f.write_str(&a2.to_string())
-                                    } else {
-                                        f.write_str(&e2.to_string())
-                                    }
-                                } else {
-                                    f.write_str(&e2.to_string())
-                                }
-                            }
-                            Expression::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
-                                f.write_str("`")?;
-                                // This will be a two element list or something is wrong...
-                                if let Expression::Pair(p, _) = e2 {
-                                    if let Some((a2, _is_nil)) = &*p.borrow() {
-                                        f.write_str(&a2.to_string())
-                                    } else {
-                                        f.write_str(&e2.to_string())
-                                    }
-                                } else {
-                                    f.write_str(&e2.to_string())
-                                }
-                            }
-                            _ => {
-                                let mut res = String::new();
-                                res.push_str("(");
-                                list_out(&mut res, &mut self.iter());
-                                res.push(')');
-                                write!(f, "{}", res)
-                            }
-                        }
-                    } else {
-                        write!(f, "({} . {})", e1.to_string(), e2.to_string())
-                    }
-                } else {
-                    f.write_str("nil")
-                }
-            }
-            Expression::HashMap(map) => {
-                let mut res = String::new();
-                res.push_str("(make-hash (");
-                for (key, val) in map.borrow().iter() {
-                    res.push_str(&format!("({} . {})", key, val));
-                }
-                res.push_str("))");
-                write!(f, "{}", res)
-            }
-            Expression::File(file) => match &*file.borrow() {
-                FileState::Stdout => write!(f, "#<STDOUT>"),
-                FileState::Stderr => write!(f, "#<STDERR>"),
-                FileState::Stdin => write!(f, "#<STDIN>"),
-                FileState::Closed => write!(f, "#<CLOSED FILE>"),
-                FileState::Read(_file) => write!(f, "#<READ FILE>"),
-                FileState::Write(_file) => write!(f, "#<WRITE FILE>"),
-            },
-            Expression::LazyFn(_, args) => {
-                let mut res = String::new();
-                res.push_str("#<LAZYFN<");
-                list_out(&mut res, &mut args.iter());
-                res.push_str(">>");
-                write!(f, "{}", res)
-            }
-        }
-    }
-}
-
-impl fmt::Debug for Expression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Expression::Atom(a) => write!(f, "Expression::Atom({:?})", a),
-            Expression::Vector(l, _) => write!(f, "Expression::Vector({:?})", l.borrow()),
-            Expression::Pair(p, _) => {
-                if let Some((e1, e2)) = &*p.borrow() {
-                    write!(f, "Expression::Pair({:?} . {:?})", e1, e2)
-                } else {
-                    write!(f, "Expression::Nil")
-                }
-            }
-            Expression::HashMap(map) => write!(f, "Expression::HashMap({:?})", map.borrow()),
-            Expression::Function(_) => write!(f, "Expression::Function(_)"),
-            Expression::Process(ProcessState::Running(pid)) => {
-                write!(f, "Expression::Process(ProcessStats::Running({}))", pid)
-            }
-            Expression::Process(ProcessState::Over(pid, exit_status)) => write!(
-                f,
-                "Expression::Process(ProcessState::Over({}, {}))",
-                pid, exit_status
-            ),
-            Expression::File(_) => write!(f, "Expression::File(_)"),
-            Expression::LazyFn(_, exp) => write!(f, "Expression::LazyFn({:?})", exp),
-        }
-    }
-}
-
-impl Expression {
-    // If the expression is a lazy fn then resolve it to concrete expression.
-    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
-        let mut res = self;
-        while let Expression::LazyFn(lambda, parts) = &res {
-            let ib = Box::new(parts.iter());
-            res = call_lambda(environment, &lambda, ib, false)?;
-        }
-        Ok(res)
+impl ExpEnum {
+    pub fn replace(&mut self, new_data: ExpEnum) {
+        *self = new_data;
     }
 
-    pub fn nil() -> Expression {
-        Expression::Pair(Rc::new(RefCell::new(None)), None)
-    }
-
-    pub fn is_nil(&self) -> bool {
-        if let Expression::Pair(p, _) = self {
-            p.borrow().is_none()
-        } else {
-            false
-        }
-    }
-
-    pub fn iter(&self) -> Box<dyn Iterator<Item = &Expression>> {
-        match self {
-            Expression::Pair(p, _) => {
-                if p.borrow().is_some() {
-                    Box::new(PairIter::new(Expression::Pair(p.clone(), None)))
-                } else {
-                    Box::new(iter::empty())
-                }
-            }
-            //Expression::Vector(list) => {
-            //    Box::new(list.clone().borrow().iter())
-            //}
-            _ => Box::new(iter::empty()),
-        }
-    }
-
-    pub fn make_function(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference {
-            exp: Expression::Function(Callable::new(func, false)),
-            meta: RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        }
-    }
-
-    pub fn make_special(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference {
-            exp: Expression::Function(Callable::new(func, true)),
-            meta: RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        }
-    }
-
-    pub fn with_list(list: Vec<Expression>) -> Expression {
-        Expression::Vector(Rc::new(RefCell::new(list)), None)
-    }
-
-    pub fn with_list_meta(list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
-        Expression::Vector(Rc::new(RefCell::new(list)), meta)
-    }
-
-    pub fn cons_from_vec(v: &mut Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
-        let mut last_pair = Expression::nil();
+    pub fn cons_from_vec(gc: &mut GC, v: &mut Vec<Expression>) -> ExpEnum {
+        let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
                 if i == 0 {
-                    last_pair = Expression::Pair(
-                        Rc::new(RefCell::new(Some((v.remove(i), last_pair.clone())))),
-                        meta,
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
                     );
                     break;
                 } else {
-                    last_pair = Expression::Pair(
-                        Rc::new(RefCell::new(Some((v.remove(i), last_pair.clone())))),
-                        None,
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
                     );
                 }
                 i -= 1;
@@ -439,29 +226,234 @@ impl Expression {
         }
         last_pair
     }
+}
+
+pub struct ExpObj {
+    pub data: ExpEnum,
+    pub meta: Option<ExpMeta>,
+}
+
+impl Trace<ExpObj> for ExpEnum {
+    fn trace(&self, tracer: &mut Tracer<ExpObj>) {
+        match self {
+            Self::Vector(list) => list.trace(tracer),
+            Self::Pair(p1, p2) => {
+                p1.trace(tracer);
+                p2.trace(tracer);
+            }
+            Self::HashMap(map) => map.trace(tracer),
+            Self::LazyFn(lambda, exp) => {
+                lambda.params.trace(tracer);
+                lambda.body.trace(tracer);
+                exp.trace(tracer);
+            }
+            Self::Atom(Atom::Lambda(lambda)) => {
+                lambda.params.trace(tracer);
+                lambda.body.trace(tracer);
+            }
+            Self::Atom(Atom::Macro(mac)) => {
+                mac.params.trace(tracer);
+                mac.body.trace(tracer);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Trace<Self> for ExpObj {
+    fn trace(&self, tracer: &mut Tracer<Self>) {
+        self.data.trace(tracer);
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Expression {
+    obj: Handle<ExpObj>,
+}
+
+impl Expression {
+    pub fn new(obj: Handle<ExpObj>) -> Expression {
+        Expression { obj }
+    }
+
+    pub fn alloc(gc: &mut GC, obj: ExpObj) -> Expression {
+        let obj = gc.insert_temp(obj);
+        Expression { obj }
+    }
+
+    pub fn alloc_data(gc: &mut GC, data: ExpEnum) -> Expression {
+        let obj = gc.insert_temp(ExpObj { data, meta: None });
+        Expression { obj }
+    }
+
+    pub fn make_nil(gc: &mut GC) -> Expression {
+        let obj = gc.insert_temp(ExpObj { data: ExpEnum::Nil, meta: None });
+        Expression { obj }
+    }
+
+    pub fn make_true(gc: &mut GC) -> Expression {
+        let obj = gc.insert_temp(ExpObj { data: ExpEnum::Atom(Atom::True), meta: None });
+        Expression { obj }
+    }
+
+    pub fn get(&self) -> &ExpEnum {
+        unsafe { &self.obj.get_unchecked().data }
+    }
+
+    pub fn get_mut(&self) -> &mut ExpEnum {
+        unsafe { &mut self.obj.get_mut_unchecked().data }
+    }
+
+    pub fn as_ptr(&mut self) -> *mut ExpObj {
+        self.obj.as_ptr()
+    }
+
+    pub fn meta(&self) -> &Option<ExpMeta> {
+        unsafe { &self.obj.get_unchecked().meta }
+    }
+
+    //fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = &Expression> + 'a> {
+    //pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression>> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expression> + 'a> {
+        match self.get() {
+            ExpEnum::Pair(_, _) => Box::new(PairIter::new(*self)),
+            ExpEnum::Vector(list) => Box::new(list.iter()),
+            _ => Box::new(iter::empty()),
+        }
+    }
+
+    pub fn is_nil(&self) -> bool {
+        if let ExpEnum::Nil = self.get() {
+            true
+        } else {
+            false
+        }
+    }
+
+    // If the expression is a lazy fn then resolve it to concrete expression.
+    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+        let mut res = self;
+        while let ExpEnum::LazyFn(lambda, parts) = &res.get() {
+            let ib = Box::new(parts.iter());
+            res = call_lambda(environment, &lambda, ib, false)?;
+        }
+        Ok(res)
+    }
+
+    pub fn make_function(
+        gc: &mut GC,
+        func: CallFunc,
+        doc_str: &str,
+        namespace: &'static str,
+    ) -> Reference {
+        Reference::new(
+            gc,
+            ExpEnum::Function(Callable::new(func, false)),
+            RefMetaData {
+                namespace: Some(namespace),
+                doc_string: Some(doc_str.to_string()),
+            },
+        )
+    }
+
+    pub fn make_special(
+        gc: &mut GC,
+        func: CallFunc,
+        doc_str: &str,
+        namespace: &'static str,
+    ) -> Reference {
+        Reference::new(
+            gc,
+            ExpEnum::Function(Callable::new(func, true)),
+            RefMetaData {
+                namespace: Some(namespace),
+                doc_string: Some(doc_str.to_string()),
+            },
+        )
+    }
+
+    pub fn with_list(gc: &mut GC, list: Vec<Expression>) -> Expression {
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: ExpEnum::Vector(list),
+                meta: None,
+            },
+        )
+    }
+
+    pub fn with_list_meta(gc: &mut GC, list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: ExpEnum::Vector(list),
+                meta,
+            },
+        )
+    }
+
+    pub fn cons_from_vec(
+        gc: &mut GC,
+        v: &mut Vec<Expression>,
+        meta: Option<ExpMeta>,
+    ) -> Expression {
+        let mut last_pair = ExpEnum::Nil;
+        if !v.is_empty() {
+            let mut i = v.len() - 1;
+            loop {
+                if i == 0 {
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
+                    );
+                    break;
+                } else {
+                    last_pair = ExpEnum::Pair(
+                        v.remove(i),
+                        Expression::alloc(
+                            gc,
+                            ExpObj {
+                                data: last_pair.clone(),
+                                meta: None,
+                            },
+                        ),
+                    );
+                }
+                i -= 1;
+            }
+        }
+        Expression::alloc(
+            gc,
+            ExpObj {
+                data: last_pair,
+                meta: meta,
+            },
+        )
+    }
 
     pub fn display_type(&self) -> String {
-        match self {
-            Expression::Atom(a) => a.display_type(),
-            Expression::Process(_) => "Process".to_string(),
-            Expression::Function(f) => {
+        match self.get() {
+            ExpEnum::Atom(a) => a.display_type(),
+            ExpEnum::Process(_) => "Process".to_string(),
+            ExpEnum::Function(f) => {
                 if f.is_special_form {
                     "SpecialForm".to_string()
                 } else {
                     "Function".to_string()
                 }
             }
-            Expression::Vector(_, _) => "Vector".to_string(),
-            Expression::Pair(p, _) => {
-                if let Some((_, _)) = &*p.borrow() {
-                    "Pair".to_string()
-                } else {
-                    "Nil".to_string()
-                }
-            }
-            Expression::HashMap(_) => "HashMap".to_string(),
-            Expression::File(_) => "File".to_string(),
-            Expression::LazyFn(_, _) => "Lambda".to_string(),
+            ExpEnum::Vector(_) => "Vector".to_string(),
+            ExpEnum::Pair(_, _) => "Pair".to_string(),
+            ExpEnum::HashMap(_) => "HashMap".to_string(),
+            ExpEnum::File(_) => "File".to_string(),
+            ExpEnum::LazyFn(_, _) => "Lambda".to_string(),
+            ExpEnum::Nil => "Nil".to_string(),
         }
     }
 
@@ -501,8 +493,8 @@ impl Expression {
             }
             Ok(())
         }
-        match self {
-            Expression::Vector(list, _) => {
+        match self.get() {
+            ExpEnum::Vector(list) => {
                 init_space(indent, writer)?;
                 let a_str = self.to_string();
                 if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
@@ -510,7 +502,7 @@ impl Expression {
                 } else {
                     writer.write_all(b"#(")?;
                     let mut first = true;
-                    for exp in list.borrow().iter() {
+                    for exp in list.iter() {
                         if !first {
                             writer.write_all(b" ")?;
                         } else {
@@ -521,68 +513,65 @@ impl Expression {
                     writer.write_all(b")")?;
                 }
             }
-            Expression::Pair(p, _) => {
-                if let Some((e1, e2)) = &*p.borrow() {
-                    init_space(indent, writer)?;
-                    let a_str = self.to_string();
-                    if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
-                        writer.write_all(a_str.as_bytes())?;
-                    } else if is_proper_list(self) {
-                        writer.write_all(b"(")?;
-                        let mut first = true;
-                        let mut last_p = &Expression::nil();
-                        for p in self.iter() {
-                            if !first {
-                                if let Expression::Atom(Atom::Symbol(sym)) = last_p {
-                                    if sym != &"," && sym != &",@" {
-                                        writer.write_all(b" ")?;
-                                    }
-                                } else {
+            ExpEnum::Pair(e1, e2) => {
+                init_space(indent, writer)?;
+                let a_str = self.to_string();
+                if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
+                    writer.write_all(a_str.as_bytes())?;
+                } else if is_proper_list(self) {
+                    writer.write_all(b"(")?;
+                    let mut first = true;
+                    let mut last_p = &ExpEnum::Nil;
+                    for p in self.iter() {
+                        if !first {
+                            if let ExpEnum::Atom(Atom::Symbol(sym)) = last_p {
+                                if sym != &"," && sym != &",@" {
                                     writer.write_all(b" ")?;
                                 }
                             } else {
-                                first = false;
+                                writer.write_all(b" ")?;
                             }
-                            p.pretty_print_int(environment, indent + 1, writer)?;
-                            last_p = p;
+                        } else {
+                            first = false;
                         }
-                        writer.write_all(b")")?;
-                    } else {
-                        write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
+                        p.pretty_print_int(environment, indent + 1, writer)?;
+                        last_p = p.get();
                     }
+                    writer.write_all(b")")?;
                 } else {
-                    write!(writer, "nil")?;
+                    write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
                 }
             }
-            Expression::HashMap(map) => {
+            ExpEnum::Nil => write!(writer, "nil")?,
+            ExpEnum::HashMap(map) => {
                 init_space(indent, writer)?;
                 let a_str = self.to_string();
                 if a_str.len() < 40 {
                     writer.write_all(a_str.as_bytes())?;
                 } else {
                     writer.write_all(b"(make-hash (")?;
-                    for (key, val) in map.borrow().iter() {
+                    for (key, val) in map.iter() {
                         init_space(indent + 1, writer)?;
                         write!(writer, "({} . {})", key, val)?;
                     }
                     write!(writer, "))")?;
                 }
             }
-            Expression::Atom(Atom::String(_s)) => {
+            ExpEnum::Atom(Atom::String(_s)) => {
                 write!(writer, "{}", self.to_string())?;
             }
-            Expression::Atom(Atom::StringBuf(_s)) => {
+            ExpEnum::Atom(Atom::StringBuf(_s)) => {
                 write!(writer, "(str-buf {})", self.to_string())?;
             }
-            Expression::Atom(Atom::Char(_c)) => {
+            ExpEnum::Atom(Atom::Char(_c)) => {
                 write!(writer, "{}", self.to_string())?;
             }
-            Expression::Atom(Atom::Lambda(l)) => {
+            ExpEnum::Atom(Atom::Lambda(l)) => {
                 write!(writer, "(fn {}", l.params.to_string())?;
                 l.body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
-            Expression::Atom(Atom::Macro(m)) => {
+            ExpEnum::Atom(Atom::Macro(m)) => {
                 write!(writer, "(macro {}", m.params.to_string())?;
                 m.body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
@@ -607,17 +596,18 @@ impl Expression {
     }
 
     pub fn make_string(&self, environment: &Environment) -> io::Result<String> {
-        match self {
-            Expression::Atom(a) => Ok(a.to_string()),
-            Expression::Process(ProcessState::Running(_pid)) => Ok(self.to_string()),
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+        match self.get() {
+            ExpEnum::Atom(a) => Ok(a.to_string()),
+            ExpEnum::Process(ProcessState::Running(_pid)) => Ok(self.to_string()),
+            ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
-            Expression::Function(_) => Ok(self.to_string()),
-            Expression::Vector(_, _) => Ok(self.to_string()),
-            Expression::Pair(_, _) => Ok(self.to_string()),
-            Expression::HashMap(_map) => Ok(self.to_string()),
-            Expression::File(file) => match &*file.borrow_mut() {
+            ExpEnum::Function(_) => Ok(self.to_string()),
+            ExpEnum::Vector(_) => Ok(self.to_string()),
+            ExpEnum::Pair(_, _) => Ok(self.to_string()),
+            ExpEnum::Nil => Ok(self.to_string()),
+            ExpEnum::HashMap(_map) => Ok(self.to_string()),
+            ExpEnum::File(file) => match &*file.borrow_mut() {
                 FileState::Stdin => {
                     let f = io::stdin();
                     let mut f = f.lock();
@@ -632,13 +622,13 @@ impl Expression {
                 }
                 _ => Ok(self.to_string()),
             },
-            Expression::LazyFn(_, _) => Ok(self.to_string()),
+            ExpEnum::LazyFn(_, _) => Ok(self.to_string()),
         }
     }
 
     // Like make_string but don't put quotes around strings.
     pub fn as_string(&self, environment: &Environment) -> io::Result<String> {
-        if let Expression::Atom(a) = self {
+        if let ExpEnum::Atom(a) = self.get() {
             Ok(a.as_string())
         } else {
             self.make_string(environment)
@@ -646,15 +636,15 @@ impl Expression {
     }
 
     pub fn make_float(&self, environment: &Environment) -> io::Result<f64> {
-        match self {
-            Expression::Atom(Atom::Float(f)) => Ok(*f),
-            Expression::Atom(Atom::Int(i)) => Ok(*i as f64),
-            Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
+        match self.get() {
+            ExpEnum::Atom(Atom::Float(f)) => Ok(*f),
+            ExpEnum::Atom(Atom::Int(i)) => Ok(*i as f64),
+            ExpEnum::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Not a number (process still running!)",
             )),
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+            ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_float: Result<f64, ParseFloatError> = buffer.parse();
                 match potential_float {
@@ -662,24 +652,25 @@ impl Expression {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
                 }
             }
-            Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Vector(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
         }
     }
 
     pub fn make_int(&self, environment: &Environment) -> io::Result<i64> {
-        match self {
-            Expression::Atom(Atom::Int(i)) => Ok(*i),
-            Expression::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
+        match self.get() {
+            ExpEnum::Atom(Atom::Int(i)) => Ok(*i),
+            ExpEnum::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Not an integer (process still running!)",
             )),
-            Expression::Process(ProcessState::Over(pid, _exit_status)) => {
+            ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_int: Result<i64, ParseIntError> = buffer.parse();
                 match potential_int {
@@ -687,19 +678,20 @@ impl Expression {
                     Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
                 }
             }
-            Expression::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Vector(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            Expression::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
         }
     }
 
     pub fn writef(&self, environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
-        match self {
-            Expression::Atom(a) => write!(writer, "{}", a.as_string())?,
-            Expression::Process(ps) => {
+        match self.get() {
+            ExpEnum::Atom(a) => write!(writer, "{}", a.as_string())?,
+            ExpEnum::Process(ps) => {
                 let pid = match ps {
                     ProcessState::Running(pid) => pid,
                     ProcessState::Over(pid, _exit_status) => pid,
@@ -735,11 +727,12 @@ impl Expression {
                 drop(procs);
                 wait_pid(environment, *pid, None);
             }
-            Expression::Function(_) => write!(writer, "{}", self.to_string())?,
-            Expression::Vector(_, _) => write!(writer, "{}", self.to_string())?,
-            Expression::Pair(_, _) => write!(writer, "{}", self.to_string())?,
-            Expression::HashMap(_map) => write!(writer, "{}", self.to_string())?,
-            Expression::File(file) => match &*file.borrow_mut() {
+            ExpEnum::Function(_) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Vector(_) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Pair(_, _) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Nil => write!(writer, "{}", self.to_string())?,
+            ExpEnum::HashMap(_map) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::File(file) => match &*file.borrow_mut() {
                 FileState::Stdin => {
                     let f = io::stdin();
                     let mut f = f.lock();
@@ -764,7 +757,7 @@ impl Expression {
                 }
                 _ => write!(writer, "{}", self.to_string())?,
             },
-            Expression::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;
         Ok(())
@@ -774,5 +767,154 @@ impl Expression {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         self.writef(environment, &mut handle)
+    }
+}
+
+impl Trace<ExpObj> for Expression {
+    fn trace(&self, tracer: &mut Tracer<ExpObj>) {
+        self.obj.trace(tracer);
+    }
+}
+
+impl AsRef<Handle<ExpObj>> for Expression {
+    fn as_ref(&self) -> &Handle<ExpObj> {
+        &self.obj
+    }
+}
+
+impl AsRef<ExpEnum> for Expression {
+    fn as_ref(&self) -> &ExpEnum {
+        &self.get()
+    }
+}
+
+impl From<Rooted<ExpObj>> for Expression {
+    fn from(rooted: Rooted<ExpObj>) -> Self {
+        Expression {
+            obj: rooted.handle(),
+        }
+    }
+}
+
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = &Expression>) {
+            let mut first = true;
+            let mut last_exp = &ExpEnum::Nil;
+            for p in itr {
+                if !first {
+                    if let ExpEnum::Atom(Atom::Symbol(sym)) = last_exp {
+                        if sym != &"," && sym != &",@" {
+                            res.push_str(" ");
+                        }
+                    } else {
+                        res.push_str(" ");
+                    }
+                } else {
+                    first = false;
+                }
+                res.push_str(&p.to_string());
+                last_exp = p.get();
+            }
+        }
+
+        match self.get() {
+            ExpEnum::Atom(a) => write!(f, "{}", a),
+            ExpEnum::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
+            ExpEnum::Process(ProcessState::Over(pid, exit_status)) => write!(
+                f,
+                "#<PID: {}, EXIT STATUS: {},  Complete>",
+                pid, exit_status
+            ),
+            ExpEnum::Function(_) => write!(f, "#<Function>"),
+            ExpEnum::Vector(list) => {
+                let mut res = String::new();
+                res.push_str("#(");
+                list_out(&mut res, &mut list.iter());
+                res.push(')');
+                write!(f, "{}", res)
+            }
+            ExpEnum::Pair(e1, e2) => {
+                if is_proper_list(self) {
+                    match e1.get() {
+                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
+                            f.write_str("'")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = e2.get() {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
+                            f.write_str("`")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = e2.get() {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        _ => {
+                            let mut res = String::new();
+                            res.push_str("(");
+                            list_out(&mut res, &mut self.iter());
+                            res.push(')');
+                            write!(f, "{}", res)
+                        }
+                    }
+                } else {
+                    write!(f, "({} . {})", e1.to_string(), e2.to_string())
+                }
+            }
+            ExpEnum::Nil => f.write_str("nil"),
+            ExpEnum::HashMap(map) => {
+                let mut res = String::new();
+                res.push_str("(make-hash (");
+                for (key, val) in map.iter() {
+                    res.push_str(&format!("({} . {})", key, val));
+                }
+                res.push_str("))");
+                write!(f, "{}", res)
+            }
+            ExpEnum::File(file) => match &*file.borrow() {
+                FileState::Stdout => write!(f, "#<STDOUT>"),
+                FileState::Stderr => write!(f, "#<STDERR>"),
+                FileState::Stdin => write!(f, "#<STDIN>"),
+                FileState::Closed => write!(f, "#<CLOSED FILE>"),
+                FileState::Read(_file) => write!(f, "#<READ FILE>"),
+                FileState::Write(_file) => write!(f, "#<WRITE FILE>"),
+            },
+            ExpEnum::LazyFn(_, args) => {
+                let mut res = String::new();
+                res.push_str("#<LAZYFN<");
+                list_out(&mut res, &mut args.iter());
+                res.push_str(">>");
+                write!(f, "{}", res)
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.get() {
+            ExpEnum::Atom(a) => write!(f, "ExpEnum::Atom({:?})", a),
+            ExpEnum::Vector(l) => write!(f, "ExpEnum::Vector({:?})", l),
+            ExpEnum::Pair(e1, e2) => write!(f, "ExpEnum::Pair({:?} . {:?})", e1, e2),
+            ExpEnum::HashMap(map) => write!(f, "ExpEnum::HashMap({:?})", map),
+            ExpEnum::Function(_) => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::Process(ProcessState::Running(pid)) => {
+                write!(f, "ExpEnum::Process(ProcessStats::Running({}))", pid)
+            }
+            ExpEnum::Process(ProcessState::Over(pid, exit_status)) => write!(
+                f,
+                "ExpEnum::Process(ProcessState::Over({}, {}))",
+                pid, exit_status
+            ),
+            ExpEnum::File(_) => write!(f, "ExpEnum::File(_)"),
+            ExpEnum::LazyFn(_, exp) => write!(f, "ExpEnum::LazyFn({:?})", exp),
+            ExpEnum::Nil => write!(f, "ExpEnum::Nil"),
+        }
     }
 }
