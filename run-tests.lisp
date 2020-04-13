@@ -87,28 +87,21 @@
 ;;TODO handle :no-test form keyword.
 (defq final-test-report '())
 
+(defn run-tests-for (test-name test-list test-report)
+	(progn
+		(defq test-data (make-hash))
+		(hash-set! test-data :name "module tests")
+		(hash-set! test-data :total 0)
+		(hash-set! test-data :failed 0)
+		(report-test-results test-list test-data)
+		(append! test-report test-data)))
+
 (printer "Tests from test directory")
+(run-tests-for "module tests" file-test-list final-test-report)
 
-(defq file-test-report (make-hash))
-
-(hash-set! file-test-report :name "module tests")
-(hash-set! file-test-report :total 0)
-(hash-set! file-test-report :failed 0)
-
-(report-test-results file-test-list file-test-report)
-(append! final-test-report file-test-report)
-
-;;TODO de-dupe this pattern
 (printer "Tests from root namespace")
 (defq root-list (qsort (ns-symbols 'root)))
 (defq root-list (make-test-list-from-symbols root-list))
-
-(defq root-test-report (make-hash))
-(hash-set! root-test-report :name "root namespace unit test")
-(hash-set! root-test-report :total 0)
-(hash-set! root-test-report :failed 0)
-
-(report-test-results root-list root-test-report)
-(append! final-test-report root-test-report)
+(run-tests-for "Root namespace unit tests" root-list final-test-report)
 
 (println final-test-report)
