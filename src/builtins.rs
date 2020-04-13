@@ -550,7 +550,7 @@ pub fn builtin_progn(
     let mut ret: Option<Expression> = None;
     for arg in args {
         if let Some(ret) = ret {
-             ret.resolve(environment)?;
+            ret.resolve(environment)?;
         }
         ret = Some(eval_nr(environment, &arg)?);
     }
@@ -1994,7 +1994,7 @@ pub fn builtin_return_from(
         if let Some(exp) = args.next() {
             if args.next().is_none() {
                 let ret = eval_nr(environment, exp)?;
-        environment.return_val = Some((name, ret));
+                environment.return_val = Some((name, ret));
             } else {
                 return Err(io::Error::new(
         io::ErrorKind::Other,

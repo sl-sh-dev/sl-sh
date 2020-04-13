@@ -228,6 +228,7 @@ impl ExpEnum {
     }
 }
 
+#[derive(Clone)]
 pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
@@ -268,7 +269,7 @@ impl Trace<Self> for ExpObj {
 
 #[derive(Clone, Copy)]
 pub struct Expression {
-    obj: Handle<ExpObj>,
+    pub obj: Handle<ExpObj>,
 }
 
 impl Expression {
@@ -287,13 +288,23 @@ impl Expression {
     }
 
     pub fn make_nil(gc: &mut GC) -> Expression {
-        let obj = gc.insert_temp(ExpObj { data: ExpEnum::Nil, meta: None });
+        let obj = gc.insert_temp(ExpObj {
+            data: ExpEnum::Nil,
+            meta: None,
+        });
         Expression { obj }
     }
 
     pub fn make_true(gc: &mut GC) -> Expression {
-        let obj = gc.insert_temp(ExpObj { data: ExpEnum::Atom(Atom::True), meta: None });
+        let obj = gc.insert_temp(ExpObj {
+            data: ExpEnum::Atom(Atom::True),
+            meta: None,
+        });
         Expression { obj }
+    }
+
+    pub fn replace(&mut self, new_data: Expression) {
+        self.obj = new_data.obj;
     }
 
     pub fn get(&self) -> &ExpEnum {

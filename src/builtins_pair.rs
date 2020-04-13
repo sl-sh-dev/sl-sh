@@ -1,8 +1,6 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
-use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -18,9 +16,9 @@ fn builtin_join(
             if args.next().is_none() {
                 let arg0 = eval(environment, arg0)?;
                 let arg1 = eval(environment, arg1)?;
-                return Ok(Expression::Pair(
-                    Rc::new(RefCell::new(Some((arg0, arg1)))),
-                    None,
+                return Ok(Expression::alloc_data(
+                    &mut environment.gc,
+                    ExpEnum::Pair(arg0, arg1),
                 ));
             }
         }
@@ -32,23 +30,28 @@ fn builtin_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = &Expression>,
 ) -> io::Result<Expression> {
-    let mut head = Expression::nil();
+    let mut head: Option<Expression> = None;
     let mut last = head.clone();
     for a in args {
         let a = eval(environment, a)?;
-        let pair = Expression::Pair(Rc::new(RefCell::new(Some((a, Expression::nil())))), None);
-        if let Expression::Pair(p, None) = last {
-            let p = &mut *p.borrow_mut();
-            if let Some(p) = p {
-                p.1 = pair.clone();
+        if let Some(inner_last) = last {
+            if let ExpEnum::Pair(_, e2) = inner_last.get() {
+                e2.get_mut()
+                    .replace(ExpEnum::Pair(a, Expression::make_nil(&mut environment.gc)));
+                last = Some(*e2);
             }
+        } else {
+            let nil = Expression::make_nil(&mut environment.gc);
+            last = Some(Expression::alloc_data(
+                &mut environment.gc,
+                ExpEnum::Pair(a, nil),
+            ));
         }
-        last = pair;
-        if head.is_nil() {
-            head = last.clone();
+        if head.is_none() {
+            head = last;
         }
     }
-    Ok(head)
+    Ok(head.unwrap_or_else(|| Expression::make_nil(&mut environment.gc)))
 }
 
 fn builtin_car(
@@ -58,15 +61,9 @@ fn builtin_car(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match &arg {
-                Expression::Pair(p, _) => {
-                    if let Some((e1, _e2)) = &*p.borrow() {
-                        Ok(e1.clone())
-                    } else {
-                        // Nil
-                        Ok(Expression::nil())
-                    }
-                }
+            return match arg.get() {
+                ExpEnum::Pair(e1, _) => Ok(*e1),
+                ExpEnum::Nil => Ok(arg),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "car requires a pair")),
             };
         }
@@ -84,14 +81,9 @@ fn builtin_cdr(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match &arg {
-                Expression::Pair(p, _) => {
-                    if let Some((_e1, e2)) = &*p.borrow() {
-                        Ok(e2.clone())
-                    } else {
-                        Ok(Expression::nil())
-                    }
-                }
+            return match arg.get() {
+                ExpEnum::Pair(_, e2) => Ok(*e2),
+                ExpEnum::Nil => Ok(arg),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "cdr requires a pair")),
             };
         }
@@ -112,27 +104,22 @@ fn builtin_xar(
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
-                if let Expression::Pair(pair, _) = &pair {
-                    let mut new_pair = None;
-                    {
-                        let pair = &mut *pair.borrow_mut();
-                        match pair {
-                            None => {
-                                new_pair = Some((arg, Expression::nil()));
-                            }
-                            Some(pair) => {
-                                pair.0 = arg;
-                            }
-                        }
+                match pair.get_mut() {
+                    ExpEnum::Pair(e1, _) => {
+                        e1.replace(arg);
                     }
-                    if new_pair.is_some() {
-                        pair.replace(new_pair);
+                    ExpEnum::Nil => {
+                        pair.get_mut().replace(ExpEnum::Pair(
+                            arg,
+                            Expression::make_nil(&mut environment.gc),
+                        ));
                     }
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "xar! requires a pair for it's first form",
-                    ));
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "xar! requires a pair for it's first form",
+                        ));
+                    }
                 }
                 return Ok(pair);
             }
@@ -154,27 +141,22 @@ fn builtin_xdr(
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
-                if let Expression::Pair(pair, _) = &pair {
-                    let mut new_pair = None;
-                    {
-                        let pair = &mut *pair.borrow_mut();
-                        match pair {
-                            None => {
-                                new_pair = Some((Expression::nil(), arg));
-                            }
-                            Some(pair) => {
-                                pair.1 = arg;
-                            }
-                        }
+                match pair.get_mut() {
+                    ExpEnum::Pair(_, e2) => {
+                        e2.replace(arg);
                     }
-                    if new_pair.is_some() {
-                        pair.replace(new_pair);
+                    ExpEnum::Nil => {
+                        pair.get_mut().replace(ExpEnum::Pair(
+                            Expression::make_nil(&mut environment.gc),
+                            arg,
+                        ));
                     }
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "xdr! requires a pair for it's first form",
-                    ));
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "xdr! requires a pair for it's first form",
+                        ));
+                    }
                 }
                 return Ok(pair);
             }
@@ -187,13 +169,15 @@ fn builtin_xdr(
 }
 
 pub fn add_pair_builtins<S: BuildHasher>(
+    gc: &mut GC,
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("join"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_join,
             "Usage: (join car cdr)
  
@@ -206,11 +190,12 @@ Example:
 (test::assert-equal '(1 2 3) (join 1 (join 2 (join 3 nil))))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("list"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_list,
             "Usage: (list item0 item1 .. itemN)
 
@@ -220,11 +205,12 @@ Example:
 (test::assert-equal '(1 2 3) (list 1 2 3))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("car"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_car,
             "Usage: (car pair)
 
@@ -237,11 +223,11 @@ Example:
 (test::assert-equal 9 (car '(9 11 13)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("cdr"),
-        Rc::new(Expression::make_function(builtin_cdr, "Usage: (cdr pair)
+        Expression::make_function(gc,builtin_cdr, "Usage: (cdr pair)
 
 Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
 
@@ -251,11 +237,12 @@ Example:
 (test::assert-equal nil (cdr '(10)))
 (test::assert-equal '(13) (cdr '(9 13)))
 (test::assert-equal '(11 13) (cdr '(9 11 13)))
-", root)),
+", root),
     );
     data.insert(
         interner.intern("xar!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_xar,
             "Usage: (xar! pair expression)
 
@@ -275,11 +262,12 @@ Example:
 (test::assert-equal '(t) tst-pairs-four)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("xdr!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_xdr,
             "Usage: (xdr! pair expression)
 
@@ -299,6 +287,6 @@ Example:
 (test::assert-equal '(nil . v) tst-pairs-six)
 ",
             root,
-        )),
+        ),
     );
 }

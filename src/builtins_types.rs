@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
-use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -16,9 +15,12 @@ fn builtin_type(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return Ok(Expression::Atom(Atom::StringRef(
-                environment.interner.intern(&arg.display_type()),
-            )));
+            return Ok(Expression::alloc_data(
+                &mut environment.gc,
+                ExpEnum::Atom(Atom::StringRef(
+                    environment.interner.intern(&arg.display_type()),
+                )),
+            ));
         }
     }
     Err(io::Error::new(io::ErrorKind::Other, "type takes one form"))
@@ -32,9 +34,9 @@ fn builtin_is_nil(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return if arg.is_nil() {
-                Ok(Expression::Atom(Atom::True))
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -48,10 +50,10 @@ fn builtin_is_true(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::True) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::True) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -65,10 +67,10 @@ fn builtin_is_float(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Float(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Float(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -85,10 +87,10 @@ fn builtin_is_int(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Int(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Int(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -102,10 +104,10 @@ fn builtin_is_symbol(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Symbol(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Symbol(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -122,12 +124,12 @@ fn builtin_is_string(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::String(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
-            } else if let Expression::Atom(Atom::StringRef(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::String(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
+            } else if let ExpEnum::Atom(Atom::StringRef(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -144,10 +146,10 @@ fn builtin_is_string_buf(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::StringBuf(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::StringBuf(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -164,10 +166,10 @@ fn builtin_is_char(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Char(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Char(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -181,10 +183,10 @@ fn builtin_is_lambda(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Lambda(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Lambda(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -201,10 +203,10 @@ fn builtin_is_macro(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Atom(Atom::Macro(_)) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Atom(Atom::Macro(_)) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -221,10 +223,10 @@ fn builtin_is_vec(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Vector(_, _) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Vector(_) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -238,14 +240,10 @@ fn builtin_is_pair(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Pair(p, _) = arg {
-                if let Some((_, _)) = &*p.borrow() {
-                    Ok(Expression::Atom(Atom::True))
-                } else {
-                    Ok(Expression::nil())
-                }
+            return if let ExpEnum::Pair(_, _) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -258,9 +256,9 @@ fn builtin_is_builtin(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            return match eval(environment, arg)? {
-                Expression::Function(_) => Ok(Expression::Atom(Atom::True)),
-                _ => Ok(Expression::nil()),
+            return match eval(environment, arg)?.get() {
+                ExpEnum::Function(_) => Ok(Expression::make_true(&mut environment.gc)),
+                _ => Ok(Expression::make_nil(&mut environment.gc)),
             };
         }
     }
@@ -277,10 +275,10 @@ fn builtin_is_process(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::Process(_) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::Process(_) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -297,10 +295,10 @@ fn builtin_is_file(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::File(_) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::File(_) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -314,10 +312,10 @@ fn builtin_is_hash(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let Expression::HashMap(_) = arg {
-                Ok(Expression::Atom(Atom::True))
+            return if let ExpEnum::HashMap(_) = arg.get() {
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -332,9 +330,9 @@ fn builtin_is_list(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return if arg.is_nil() || is_proper_list(&arg) {
-                Ok(Expression::Atom(Atom::True))
+                Ok(Expression::make_true(&mut environment.gc))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil(&mut environment.gc))
             };
         }
     }
@@ -342,13 +340,15 @@ fn builtin_is_list(
 }
 
 pub fn add_type_builtins<S: BuildHasher>(
+    gc: &mut GC,
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("type"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_type,
             "Usage: (type expression)
 
@@ -399,11 +399,12 @@ Example:
 (test::assert-equal \"File\" (type (open :stdin)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("nil?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_nil,
             "Usage: (nil? expression)
 
@@ -414,11 +415,12 @@ Example:
 (test::assert-false (nil? t))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("true?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_true,
             "Usage: (true? expression)
 
@@ -431,11 +433,12 @@ Example:
 (test::assert-false (true? \"str\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("float?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_float,
             "Usage: (float? expression)
 
@@ -446,11 +449,12 @@ Example:
 (test::assert-false (float? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("int?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_int,
             "Usage: (int? expression)
 
@@ -461,11 +465,12 @@ Example:
 (test::assert-false (int? 1.5))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("symbol?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_symbol,
             "Usage: (symbol? expression)
 
@@ -476,11 +481,12 @@ Example:
 (test::assert-false (symbol? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("string?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_string,
             "Usage: (string? expression)
 
@@ -491,11 +497,12 @@ Example:
 (test::assert-false (string? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("string-buf?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_string_buf,
             "Usage: (string-buf? expression)
 
@@ -507,11 +514,12 @@ Example:
 (test::assert-false (string-buf? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_char,
             "Usage: (char? expression)
 
@@ -523,11 +531,12 @@ Example:
 (test::assert-false (char? \"a\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("lambda?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_lambda,
             "Usage: (lambda? expression)
 
@@ -540,11 +549,12 @@ Example:
 (test::assert-false (lambda? if))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("macro?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_macro,
             "Usage: (macro? expression)
 
@@ -557,11 +567,12 @@ Example:
 (test::assert-false (macro? if))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("vec?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_vec,
             "Usage: (vec? expression)
 
@@ -576,11 +587,12 @@ Example:
 (test::assert-false (vec? (list)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("pair?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_pair,
             "Usage: (pair? expression)
 
@@ -595,11 +607,12 @@ Example:
 (test::assert-false (pair? (vec)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("builtin?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_builtin,
             "Usage: (builtin? expression)
 
@@ -613,11 +626,12 @@ Example:
 (test::assert-false (builtin? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("process?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_process,
             "Usage: (process? expression)
 
@@ -630,11 +644,12 @@ Example:
 (test::assert-false (process? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("file?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_file,
             "Usage: (file? expression)
 
@@ -647,11 +662,12 @@ Example:
 (test::assert-false (file? 1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_hash,
             "Usage: (hash? expression)
 
@@ -665,11 +681,12 @@ Example:
 (test::assert-false (hash? (vec)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("list?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
+            gc,
             builtin_is_list,
             "Usage: (list? expression)
 
@@ -684,6 +701,6 @@ Example:
 (test::assert-false (list? '(1 . 2)))
 ",
             root,
-        )),
+        ),
     );
 }

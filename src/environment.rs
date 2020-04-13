@@ -9,15 +9,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::builtins::add_builtins;
-/*use crate::builtins_file::add_file_builtins;
+//use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
-use crate::builtins_io::add_io_builtins;
+//use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
-use crate::builtins_str::add_str_builtins;
+//use crate::builtins_str::add_str_builtins;
 use crate::builtins_types::add_type_builtins;
-use crate::builtins_vector::add_vec_builtins;*/
+use crate::builtins_vector::add_vec_builtins;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
@@ -109,15 +109,15 @@ impl Scope {
     fn new_root(gc: &mut GC, interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, Reference> = HashMap::new();
         add_builtins(gc, interner, &mut data);
-        //add_math_builtins(interner, &mut data);
+        add_math_builtins(gc, interner, &mut data);
         //add_str_builtins(interner, &mut data);
-        //add_vec_builtins(interner, &mut data);
+        add_vec_builtins(gc, interner, &mut data);
         //add_file_builtins(interner, &mut data);
         //add_io_builtins(interner, &mut data);
-        //add_pair_builtins(interner, &mut data);
-        //add_hash_builtins(interner, &mut data);
-        //add_type_builtins(interner, &mut data);
-        //add_namespace_builtins(interner, &mut data);
+        add_pair_builtins(gc, interner, &mut data);
+        add_hash_builtins(gc, interner, &mut data);
+        add_type_builtins(gc, interner, &mut data);
+        add_namespace_builtins(gc, interner, &mut data);
         let root = interner.intern("root");
         data.insert(
             interner.intern("*stdin*"),
@@ -351,13 +351,10 @@ pub struct Environment {
 
 impl Environment {
     pub fn insert_into_root_scope(&mut self, symbol: &'static str, data: Expression) {
-    self.root_scope.borrow_mut().insert_exp(
-        &mut self.gc,
-        symbol,
-        data,
-    );
+        self.root_scope
+            .borrow_mut()
+            .insert_exp(&mut self.gc, symbol, data);
     }
-
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {

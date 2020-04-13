@@ -91,7 +91,9 @@ pub fn call_lambda<'a>(
     }
     environment.loose_symbols = old_loose;
     environment.current_scope.pop();
-    Ok(llast_eval.unwrap_or_else(|| Expression::make_nil(&mut environment.gc)).resolve(environment)?)
+    Ok(llast_eval
+        .unwrap_or_else(|| Expression::make_nil(&mut environment.gc))
+        .resolve(environment)?)
 }
 
 fn exec_macro<'a>(

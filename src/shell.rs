@@ -82,10 +82,7 @@ t
             let data = ExpEnum::Atom(Atom::Symbol(environment.interner.intern("emacs")));
             settings.insert(
                 "keybindings".to_string(),
-                Expression::alloc_data(
-                    &mut environment.gc,
-                    data,
-                ),
+                Expression::alloc_data(&mut environment.gc, data),
             );
             let data = Expression::alloc_data(&mut environment.gc, ExpEnum::HashMap(settings));
             scope.borrow_mut().insert_exp(
@@ -225,7 +222,8 @@ fn handle_result(
                     }
                 }
                 let interned_sym = environment.interner.intern("*last-command*");
-                let data = Expression::alloc_data(gc, ExpEnum::Atom(Atom::String(input.to_string())));
+                let data =
+                    Expression::alloc_data(gc, ExpEnum::Atom(Atom::String(input.to_string())));
                 environment.insert_into_root_scope(interned_sym, data);
             }
             match exp.get() {
@@ -493,25 +491,33 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let mut env = environment.borrow_mut();
     let mut interned_sym = env.interner.intern("*uid*");
     let data = Expression::alloc_data(
-            &mut env.gc,
-            ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)),
-        );
-    environment.borrow_mut().insert_into_root_scope(interned_sym, data);
+        &mut env.gc,
+        ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)),
+    );
+    environment
+        .borrow_mut()
+        .insert_into_root_scope(interned_sym, data);
     interned_sym = env.interner.intern("*euid*");
     let data = Expression::alloc_data(
-            &mut env.gc,
-            ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)),
-        );
-    environment.borrow_mut().insert_into_root_scope(interned_sym, data);
+        &mut env.gc,
+        ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)),
+    );
+    environment
+        .borrow_mut()
+        .insert_into_root_scope(interned_sym, data);
     load_user_env(&mut env, &home, true);
     let repl_settings = get_expression(&env, "*repl-settings*").unwrap();
     interned_sym = env.interner.intern("*last-status*");
     let data = Expression::alloc_data(&mut env.gc, ExpEnum::Atom(Atom::Int(0)));
-    environment.borrow_mut().insert_into_root_scope(interned_sym, data);
+    environment
+        .borrow_mut()
+        .insert_into_root_scope(interned_sym, data);
     interned_sym = env.interner.intern("*last-command*");
     let interned_sym2 = env.interner.intern("");
     let data = Expression::alloc_data(&mut env.gc, ExpEnum::Atom(Atom::StringRef(interned_sym2)));
-    environment.borrow_mut().insert_into_root_scope(interned_sym, data);
+    environment
+        .borrow_mut()
+        .insert_into_root_scope(interned_sym, data);
     let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
     apply_repl_settings(&mut con, &current_repl_settings);
     let mut new_repl_settings;
@@ -557,8 +563,11 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 env::set_var("LAST_STATUS".to_string(), format!("{}", 0));
                 let mut environment = environment.borrow_mut();
                 interned_sym = environment.interner.intern("*last-status*");
-                let data = Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::Int(i64::from(0))));
-    environment.insert_into_root_scope(interned_sym, data);
+                let data = Expression::alloc_data(
+                    &mut environment.gc,
+                    ExpEnum::Atom(Atom::Int(i64::from(0))),
+                );
+                environment.insert_into_root_scope(interned_sym, data);
                 let ast = exec_hook(&mut environment, &input);
                 match ast {
                     Ok(ast) => {

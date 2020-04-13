@@ -100,12 +100,9 @@ impl ShellCompleter {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     let mut environment = self.environment.borrow_mut();
                     let data = ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern("__completion_hook"),
-                        ));
-                    v.push(Expression::alloc_data(
-                        &mut environment.gc,
-                        data,
+                        environment.interner.intern("__completion_hook"),
                     ));
+                    v.push(Expression::alloc_data(&mut environment.gc, data));
                     for a in self.args.drain(..) {
                         v.push(Expression::alloc_data(
                             &mut environment.gc,
