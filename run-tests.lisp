@@ -72,7 +72,6 @@
 				(when (not (= x "0"))
 					(progn
 						(setq exit-status nil)
-						;;(inc (hash-get test-report :failed))
 						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))
 					))
 				x))
@@ -80,10 +79,10 @@
 	(defq fst (first tests))
 	(when fst
 		(progn
-			(progn
-				((hash-get fst :load-fcn))
-				(report-pretty-printer exit-status (hash-get fst :name))
-				(recur (rest tests) test-report))))))))
+			(hash-set! test-report :total (+ 1 (hash-get test-report :total)))
+			((hash-get fst :load-fcn))
+			(report-pretty-printer exit-status (hash-get fst :name))
+			(recur (rest tests) test-report)))))))
 
 ;;TODO handle :no-test form keyword.
 (defq final-test-report '())
@@ -91,10 +90,11 @@
 (printer "Tests from test directory")
 
 (defq file-test-report (make-hash))
-(hash-set! file-test-report :name "tests")
+
+(hash-set! file-test-report :name "module tests")
 (hash-set! file-test-report :total 0)
-(hash-set! file-test-report :passed 0)
 (hash-set! file-test-report :failed 0)
+
 (report-test-results file-test-list file-test-report)
 (append! final-test-report file-test-report)
 
@@ -102,11 +102,12 @@
 (printer "Tests from root namespace")
 (defq root-list (qsort (ns-symbols 'root)))
 (defq root-list (make-test-list-from-symbols root-list))
+
 (defq root-test-report (make-hash))
-(hash-set! root-test-report :name "root namespace tests")
+(hash-set! root-test-report :name "root namespace unit test")
 (hash-set! root-test-report :total 0)
-(hash-set! root-test-report :passed 0)
 (hash-set! root-test-report :failed 0)
+
 (report-test-results root-list root-test-report)
 (append! final-test-report root-test-report)
 
