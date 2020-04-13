@@ -63,24 +63,18 @@
 			shell::*fg-default* shell::*bg-default*
 			" " test-name))))
 
-(defmacro inc (item)
-	`(setq ,item (+ ,item 1)))
-
 ;; use internal state of dyn, if it gets a non zero error code
 ;; we know the test failed.
-(defn report-test-results (tests)
+(defn report-test-results (tests test-report)
 (progn
 	(defq exit-status #t)
-	(defq total 0)
-	(defq passed 0)
-	(defq failed 0)
 	(dyn 'exit (fn (x) (progn
-				(setq total (+ 1 total))
-				(if (not (= x "0"))
+				(when (not (= x "0"))
 					(progn
-						(setq exit-status nil))
-						(inc passed)
-				(inc failed))
+						(setq exit-status nil)
+						;;(inc (hash-get test-report :failed))
+						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))
+					))
 				x))
 	(progn
 	(defq fst (first tests))
@@ -89,33 +83,31 @@
 			(progn
 				((hash-get fst :load-fcn))
 				(report-pretty-printer exit-status (hash-get fst :name))
-				(recur (rest tests)))))))))
-
-				;;(hash-set! test-report :total total)
-				;;(hash-set! test-report :passed passed)
-				;;(hash-set! test-report :failed failed)
+				(recur (rest tests) test-report))))))))
 
 ;;TODO handle :no-test form keyword.
 (defq final-test-report '())
 
 (printer "Tests from test directory")
 
-;;(defq file-test-report (make-hash))
-;;(hash-set! file-test-report :name "tests")
-;;(hash-set! file-test-report :report (make-hash))
-;;(report-test-results file-test-list (hash-get file-test-report :report))
-(report-test-results file-test-list)
-;;(append! final-test-report file-test-report)
+(defq file-test-report (make-hash))
+(hash-set! file-test-report :name "tests")
+(hash-set! file-test-report :total 0)
+(hash-set! file-test-report :passed 0)
+(hash-set! file-test-report :failed 0)
+(report-test-results file-test-list file-test-report)
+(append! final-test-report file-test-report)
 
 ;;TODO de-dupe this pattern
 (printer "Tests from root namespace")
 (defq root-list (qsort (ns-symbols 'root)))
 (defq root-list (make-test-list-from-symbols root-list))
-;;(defq root-test-report (make-hash))
-;;(hash-set! root-test-report :name "root namespace tests")
-;;(hash-set! root-test-report :report (make-hash))
-;;(report-test-results root-list (hash-get root-test-report :report))
-(report-test-results root-list)
-;;(append! final-test-report file-test-report)
+(defq root-test-report (make-hash))
+(hash-set! root-test-report :name "root namespace tests")
+(hash-set! root-test-report :total 0)
+(hash-set! root-test-report :passed 0)
+(hash-set! root-test-report :failed 0)
+(report-test-results root-list root-test-report)
+(append! final-test-report root-test-report)
 
-;;(println final-test-report)
+(println final-test-report)
