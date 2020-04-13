@@ -380,7 +380,7 @@ fn prep_string_arg(
 pub fn do_command<'a>(
     environment: &mut Environment,
     command: &str,
-    parts: Box<dyn Iterator<Item = &Expression> + 'a>,
+    parts: Box<dyn Iterator<Item = &mut Expression> + 'a>,
 ) -> io::Result<Expression> {
     let mut data = None;
     let foreground =
@@ -481,16 +481,16 @@ pub fn do_command<'a>(
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
     let mut args = Vec::new();
-    for a_exp in parts {
+    for mut a_exp in parts {
         let a = a_exp.get();
         if let ExpEnum::Atom(Atom::String(_)) = a {
-            let new_a = eval(environment, &a_exp)?;
+            let new_a = eval(environment, &mut a_exp)?;
             args.push(new_a.as_string(environment)?);
         } else if let ExpEnum::Atom(Atom::StringRef(_)) = a {
-            let new_a = eval(environment, &a_exp)?;
+            let new_a = eval(environment, &mut a_exp)?;
             args.push(new_a.as_string(environment)?);
         } else if let ExpEnum::Atom(Atom::StringBuf(_)) = a {
-            let new_a = eval(environment, &a_exp)?;
+            let new_a = eval(environment, &mut a_exp)?;
             args.push(new_a.as_string(environment)?);
         } else {
             // Free standing callables in a process call do not make sense so filter them out...
@@ -507,11 +507,11 @@ pub fn do_command<'a>(
                         ExpEnum::Atom(Atom::Macro(_)) => {
                             eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
-                        _ => eval(environment, &a_exp)?,
+                        _ => eval(environment, &mut a_exp)?,
                     },
-                    _ => eval(environment, &a_exp)?,
+                    _ => eval(environment, &mut a_exp)?,
                 },
-                _ => eval(environment, &a_exp)?,
+                _ => eval(environment, &mut a_exp)?,
             };
             if let ExpEnum::Atom(Atom::String(s)) = new_a.get() {
                 prep_string_arg(environment, &s, &mut args)?;

@@ -10,7 +10,7 @@ use crate::types::*;
 fn build_map(
     environment: &mut Environment,
     mut map: HashMap<String, Expression>,
-    assocs: &mut dyn Iterator<Item = &Expression>,
+    assocs: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = key_val.get() {
@@ -41,19 +41,19 @@ fn build_map(
 
 fn builtin_make_hash(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let map: HashMap<String, Expression> = HashMap::new();
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
-            let assocs = eval(environment, assocs)?;
-            match assocs.get() {
-                ExpEnum::Pair(_, _) => build_map(environment, map, &mut assocs.iter()),
+            let mut assocs = eval(environment, assocs)?;
+            match assocs.get_mut() {
+                ExpEnum::Pair(_, _) => build_map(environment, map, &mut assocs.iter_mut()),
                 ExpEnum::Nil => Ok(Expression::alloc_data(
                     &mut environment.gc,
                     ExpEnum::HashMap(map),
                 )),
-                ExpEnum::Vector(list) => build_map(environment, map, &mut *Box::new(list.iter())),
+                ExpEnum::Vector(list) => build_map(environment, map, &mut *Box::new(list.iter_mut())),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "make-hash takes a sequence",
@@ -75,13 +75,13 @@ fn builtin_make_hash(
 
 fn builtin_hash_set(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if let Some(val) = args.next() {
                 if args.next().is_none() {
-                    let exp_map = eval(environment, map)?;
+                    let mut exp_map = eval(environment, map)?;
                     let key = eval(environment, key)?;
                     let val = eval(environment, val)?;
                     if let ExpEnum::HashMap(map) = exp_map.get_mut() {
@@ -122,7 +122,7 @@ fn builtin_hash_set(
 
 fn builtin_hash_remove(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     fn do_rem(
         environment: &mut Environment,
@@ -139,7 +139,7 @@ fn builtin_hash_remove(
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if args.next().is_none() {
-                let map = eval(environment, map)?;
+                let mut map = eval(environment, map)?;
                 let key = eval(environment, key)?;
                 if let ExpEnum::HashMap(map) = map.get_mut() {
                     match key.get() {
@@ -174,7 +174,7 @@ fn builtin_hash_remove(
 
 fn builtin_hash_get(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     fn do_get(
         environment: &mut Environment,
@@ -226,7 +226,7 @@ fn builtin_hash_get(
 
 fn builtin_hash_haskey(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     fn do_has(
         environment: &mut Environment,
@@ -280,7 +280,7 @@ fn builtin_hash_haskey(
 
 fn builtin_hash_keys(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
@@ -305,11 +305,11 @@ fn builtin_hash_keys(
 
 fn builtin_hash_clear(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
-            let map = eval(environment, map)?;
+            let mut map = eval(environment, map)?;
             if let ExpEnum::HashMap(inner_map) = map.get_mut() {
                 inner_map.clear();
                 return Ok(map);

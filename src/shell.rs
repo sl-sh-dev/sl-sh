@@ -106,7 +106,7 @@ t
 
 fn get_prompt(environment: &mut Environment) -> Prompt {
     if let Some(exp) = get_expression(environment, "__prompt") {
-        let exp = match exp.exp.get() {
+        let mut exp = match exp.exp.get() {
             ExpEnum::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::alloc_data(
@@ -118,7 +118,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
             _ => exp.exp.clone(),
         };
         environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
-        let res = eval(environment, &exp);
+        let res = eval(environment, &mut exp);
         environment.save_exit_status = true;
         let ptext = res
             .unwrap_or_else(|e| {
@@ -169,7 +169,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
         let exp = exp.exp;
         let line_color = move |input: &str| -> String {
             let mut environment = environment.borrow_mut();
-            let exp = match exp.get() {
+            let mut exp = match exp.get() {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1);
                     let sym = environment.interner.intern("__line_handler");
@@ -187,7 +187,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
             };
             environment.save_exit_status = false; // Do not overwrite last exit status with line_handler.
             environment.str_ignore_expand = true;
-            let res = eval(&mut environment, &exp);
+            let res = eval(&mut environment, &mut exp);
             environment.str_ignore_expand = false;
             environment.save_exit_status = true;
             res.unwrap_or_else(|e| {
@@ -362,8 +362,8 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
 }
 
 fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ParseError> {
-    if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
-        let exp = match exec_exp.exp.get() {
+    if let Some(mut exec_exp) = get_expression(&environment, "__exec_hook") {
+        let mut exp = match exec_exp.exp.get_mut() {
             ExpEnum::Atom(Atom::Lambda(_)) => {
                 let mut v = Vec::with_capacity(2);
                 v.push(Expression::alloc_data(
@@ -381,7 +381,7 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
                 return read(environment, input, None);
             }
         };
-        match eval(environment, &exp) {
+        match eval(environment, &mut exp) {
             Ok(res) => match res.get() {
                 ExpEnum::Atom(Atom::String(s)) => read(environment, &s, None),
                 ExpEnum::Atom(Atom::StringRef(s)) => read(environment, s, None),
@@ -455,6 +455,7 @@ fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
 }
 
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
+        println!("XXXX 1");
     let mut con = Context::new();
     con.set_word_divider(Box::new(get_liner_words));
     // Initialize the HOST variable
@@ -494,30 +495,26 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         &mut env.gc,
         ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)),
     );
-    environment
-        .borrow_mut()
-        .insert_into_root_scope(interned_sym, data);
+        println!("XXXX 2");
+    env.insert_into_root_scope(interned_sym, data);
     interned_sym = env.interner.intern("*euid*");
     let data = Expression::alloc_data(
         &mut env.gc,
         ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)),
     );
-    environment
-        .borrow_mut()
-        .insert_into_root_scope(interned_sym, data);
+    env.insert_into_root_scope(interned_sym, data);
+        println!("XXXX 2.1");
     load_user_env(&mut env, &home, true);
+        println!("XXXX 2.2");
     let repl_settings = get_expression(&env, "*repl-settings*").unwrap();
     interned_sym = env.interner.intern("*last-status*");
     let data = Expression::alloc_data(&mut env.gc, ExpEnum::Atom(Atom::Int(0)));
-    environment
-        .borrow_mut()
-        .insert_into_root_scope(interned_sym, data);
+    env.insert_into_root_scope(interned_sym, data);
+        println!("XXXX 3");
     interned_sym = env.interner.intern("*last-command*");
     let interned_sym2 = env.interner.intern("");
     let data = Expression::alloc_data(&mut env.gc, ExpEnum::Atom(Atom::StringRef(interned_sym2)));
-    environment
-        .borrow_mut()
-        .insert_into_root_scope(interned_sym, data);
+    env.insert_into_root_scope(interned_sym, data);
     let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
     apply_repl_settings(&mut con, &current_repl_settings);
     let mut new_repl_settings;
@@ -570,14 +567,14 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 environment.insert_into_root_scope(interned_sym, data);
                 let ast = exec_hook(&mut environment, &input);
                 match ast {
-                    Ok(ast) => {
+                    Ok(mut ast) => {
                         if let Err(err) = con.history.push(input.into()) {
                             eprintln!("Error saving history: {}", err);
                         }
                         environment.loose_symbols = true;
                         environment.error_expression = None;
                         environment.error_meta = None;
-                        let res = eval(&mut environment, &ast);
+                        let res = eval(&mut environment, &mut ast);
                         handle_result(&mut environment, res, &mut con, &input, false);
                         environment.loose_symbols = false;
                     }
@@ -637,9 +634,9 @@ pub fn read_stdin() -> i32 {
                 environment.state.stdout_status = None;
                 let ast = read(&mut environment, input, None);
                 match ast {
-                    Ok(ast) => {
+                    Ok(mut ast) => {
                         environment.loose_symbols = true;
-                        match eval(&mut environment, &ast) {
+                        match eval(&mut environment, &mut ast) {
                             Ok(exp) => {
                                 match exp.get() {
                                     ExpEnum::Nil => { /* don't print nil */ }

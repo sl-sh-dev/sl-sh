@@ -9,7 +9,7 @@ use crate::types::*;
 
 fn builtin_join(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
@@ -28,14 +28,14 @@ fn builtin_join(
 
 fn builtin_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut head: Option<Expression> = None;
     let mut last = head.clone();
     for a in args {
         let a = eval(environment, a)?;
-        if let Some(inner_last) = last {
-            if let ExpEnum::Pair(_, e2) = inner_last.get() {
+        if let Some(mut inner_last) = last {
+            if let ExpEnum::Pair(_, e2) = inner_last.get_mut() {
                 e2.get_mut()
                     .replace(ExpEnum::Pair(a, Expression::make_nil(&mut environment.gc)));
                 last = Some(*e2);
@@ -56,7 +56,7 @@ fn builtin_list(
 
 fn builtin_car(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -76,7 +76,7 @@ fn builtin_car(
 
 fn builtin_cdr(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -97,13 +97,13 @@ fn builtin_cdr(
 // Destructive
 fn builtin_xar(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
-                let pair = eval(environment, pair)?;
+                let mut pair = eval(environment, pair)?;
                 match pair.get_mut() {
                     ExpEnum::Pair(e1, _) => {
                         e1.replace(arg);
@@ -134,13 +134,13 @@ fn builtin_xar(
 // Destructive
 fn builtin_xdr(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
-                let pair = eval(environment, pair)?;
+                let mut pair = eval(environment, pair)?;
                 match pair.get_mut() {
                     ExpEnum::Pair(_, e2) => {
                         e2.replace(arg);

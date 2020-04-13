@@ -95,7 +95,7 @@ impl ShellCompleter {
         }
         let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
         if let Some(comp_exp) = comp_exp {
-            let exp = match comp_exp.exp.get() {
+            let mut exp = match comp_exp.exp.get() {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     let mut environment = self.environment.borrow_mut();
@@ -117,8 +117,8 @@ impl ShellCompleter {
                 }
             };
             let envir = &mut self.environment.borrow_mut();
-            match eval(envir, &exp) {
-                Ok(res) => {
+            match eval(envir, &mut exp) {
+                Ok(mut res) => {
                     match res.get_mut() {
                         ExpEnum::Atom(Atom::StringRef(s)) | ExpEnum::Atom(Atom::Symbol(s)) => {
                             match *s {

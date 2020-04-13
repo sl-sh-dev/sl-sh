@@ -21,7 +21,7 @@ pub fn is_proper_list(exp: &Expression) -> bool {
 
 pub fn list_to_args(
     environment: &mut Environment,
-    parts: &[Expression],
+    parts: &mut [Expression],
     do_eval: bool,
 ) -> io::Result<Vec<Expression>> {
     if do_eval {
@@ -125,13 +125,13 @@ fn set_arg(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
     key: &'static str,
-    var: &Expression,
+    var: &mut Expression,
     do_eval: bool,
 ) -> io::Result<()> {
-    let res_var;
+    let mut res_var;
     let var = if let ExpEnum::LazyFn(_, _) = var.get() {
         res_var = var.resolve(environment)?;
-        &res_var
+        &mut res_var
     } else {
         var
     };
@@ -183,7 +183,8 @@ fn setup_args_final<'a>(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
     var_names: &mut Vec<&'static str>,
-    mut vars: Box<dyn Iterator<Item = &Expression> + 'a>,
+    //mut vars: Box<dyn Iterator<Item = &mut Expression> + 'a>,
+    vars: &mut dyn Iterator<Item = &mut Expression>,
     min_params: usize,
     use_rest: bool,
     do_eval: bool,
@@ -259,13 +260,13 @@ fn setup_args_final<'a>(
 pub fn setup_args<'a>(
     environment: &mut Environment,
     mut new_scope: Option<&mut Scope>,
-    params: &Expression,
-    args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    params: &mut Expression,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     eval_args: bool,
 ) -> io::Result<()> {
-    let p_iter = match params.get() {
-        ExpEnum::Vector(li) => Box::new(li.iter()),
-        _ => params.iter(),
+    let p_iter = match params.get_mut() {
+        ExpEnum::Vector(li) => Box::new(li.iter_mut()),
+        _ => params.iter_mut(),
     };
     let mut var_names: Vec<&'static str> = Vec::new(); //with_capacity(l.len());
     let mut use_rest = false;

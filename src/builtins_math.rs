@@ -10,7 +10,7 @@ use crate::types::*;
 
 fn make_args(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Vec<Expression>> {
     let mut list: Vec<Expression> = Vec::new();
     for arg in args {
@@ -30,7 +30,7 @@ pub fn add_math_builtins<S: BuildHasher>(
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -67,7 +67,7 @@ Example:
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -111,7 +111,7 @@ Example:
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -164,7 +164,7 @@ Example:
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -227,7 +227,7 @@ Example:
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 let ints = parse_list_of_ints(environment, &mut args)?;

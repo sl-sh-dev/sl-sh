@@ -23,25 +23,25 @@ use crate::types::*;
 
 fn builtin_eval(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
-    if let Some(arg) = args.next() {
+    if let Some(mut arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, &arg)?;
+            let mut arg = eval(environment, &mut arg)?;
             return match arg.get() {
                 ExpEnum::Atom(Atom::String(s)) => match read(environment, &s, None) {
-                    Ok(ast) => eval(environment, &ast),
+                    Ok(mut ast) => eval(environment, &mut ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
                 ExpEnum::Atom(Atom::StringRef(s)) => match read(environment, s, None) {
-                    Ok(ast) => eval(environment, &ast),
+                    Ok(mut ast) => eval(environment, &mut ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
                 ExpEnum::Atom(Atom::StringBuf(s)) => match read(environment, &s.borrow(), None) {
-                    Ok(ast) => eval(environment, &ast),
+                    Ok(mut ast) => eval(environment, &mut ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                _ => eval(environment, &arg),
+                _ => eval(environment, &mut arg),
             };
         }
     }
@@ -53,28 +53,25 @@ fn builtin_eval(
 
 fn builtin_fncall(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
-    let mut call_list = Vec::new();
-    for arg in args {
-        call_list.push(arg.clone());
+    if let Some(command) = args.next() {
+    let mut command = eval(environment, command)?;
+    fn_call(environment, &mut command, args)
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"))
     }
-    if call_list.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"));
-    }
-    let command = eval(environment, &call_list[0])?;
-    fn_call(environment, &command, Box::new(call_list[1..].iter()))
 }
 
 fn builtin_apply(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut call_list = Vec::new();
-    let mut last_arg: Option<&Expression> = None;
+    let mut last_arg: Option<&mut Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(a);
+            call_list.push(*a);
         }
         last_arg = Some(arg);
     }
@@ -82,9 +79,6 @@ fn builtin_apply(
     if let Some(alist) = last_arg {
         last_evaled = eval(environment, alist)?;
         let itr = match last_evaled.get() {
-            //ExpEnum::Vector(list) => {
-            //    Box::new(list.iter())
-            //}
             ExpEnum::Vector(_) => last_evaled.iter(),
             ExpEnum::Pair(_, _) => last_evaled.iter(),
             ExpEnum::Nil => last_evaled.iter(),
@@ -96,23 +90,25 @@ fn builtin_apply(
             }
         };
         for a in itr {
-            call_list.push(a);
+            call_list.push(*a);
         }
     }
-    if call_list.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"));
-    }
-    let command = eval(environment, &call_list[0])?;
+    let mut args = box_slice_it(&mut call_list[..]);
+    if let Some(command) = args.next() {
+    let mut command = eval(environment, command)?;
     fn_call(
         environment,
-        &command,
-        Box::new(call_list[1..].iter().copied()),
+        &mut command,
+        &mut args,
     )
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"))
+    }
 }
 
 fn builtin_unwind_protect(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(protected) = args.next() {
         let result = eval(environment, protected);
@@ -132,7 +128,7 @@ fn builtin_unwind_protect(
 
 fn builtin_err(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -150,6 +146,7 @@ fn builtin_err(
 }
 
 pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expression> {
+        //println!("XXXX load {} 1", file_name);
     let core_lisp = include_bytes!("../lisp/core.lisp");
     let seq_lisp = include_bytes!("../lisp/seq.lisp");
     let shell_lisp = include_bytes!("../lisp/shell.lisp");
@@ -194,12 +191,14 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
     } else {
         file_name
     };
+        //println!("XXXX load {} 2", file_path);
     let path = Path::new(&file_path);
     let file_name = Some(environment.interner.intern(&file_path));
     let ast = if path.exists() {
         let contents = fs::read_to_string(file_path)?;
         read_list_wrap(environment, &contents, file_name)
     } else {
+        //println!("XXXX load {:?} 2.2", file_name);
         match &file_path[..] {
             "core.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(core_lisp), file_name)
@@ -227,25 +226,26 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             }
         }
     };
+        //println!("XXXX load {:?} 3", file_name);
     match ast {
-        Ok(ast) => {
+        Ok(mut ast) => {
             let old_loose_syms = environment.loose_symbols;
             // Do not use loose symbols in scripts even if loading from the repl.
             environment.loose_symbols = false;
             let mut res: Option<Expression> = None;
             match ast.get_mut() {
                 ExpEnum::Vector(list) => {
-                    for l in list.drain(..) {
-                        res = Some(eval(environment, &l)?);
+                    for mut l in list.drain(..) {
+                        res = Some(eval(environment, &mut l)?);
                     }
                 }
                 ExpEnum::Pair(_, _) => {
-                    for l in ast.iter() {
-                        res = Some(eval(environment, &l)?);
+                    for mut l in ast.iter_mut() {
+                        res = Some(eval(environment, &mut l)?);
                     }
                 }
                 _ => {
-                    res = Some(eval(environment, &ast)?);
+                    res = Some(eval(environment, &mut ast)?);
                 }
             }
             environment.loose_symbols = old_loose_syms;
@@ -257,7 +257,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
 
 fn builtin_load(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -274,7 +274,7 @@ fn builtin_load(
 
 fn builtin_length(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -353,7 +353,7 @@ fn builtin_length(
 
 fn builtin_if(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(if_form) = args.next() {
         if let Some(then_form) = args.next() {
@@ -376,7 +376,7 @@ fn builtin_if(
 
 fn args_out(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     add_newline: bool,
     pretty: bool,
     writer: &mut dyn Write,
@@ -404,7 +404,7 @@ fn args_out(
 
 fn print_to_oe(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     add_newline: bool,
     pretty: bool,
     default_error: bool,
@@ -475,7 +475,7 @@ fn print_to_oe(
 
 fn print(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stdout_status {
@@ -489,7 +489,7 @@ fn print(
 
 pub fn eprint(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stderr_status {
@@ -503,35 +503,35 @@ pub fn eprint(
 
 fn builtin_print(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     print(environment, args, false)
 }
 
 fn builtin_println(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     print(environment, args, true)
 }
 
 fn builtin_eprint(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     eprint(environment, args, false)
 }
 
 fn builtin_eprintln(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     eprint(environment, args, true)
 }
 
 fn builtin_format(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut res = String::new();
     for a in args {
@@ -545,22 +545,22 @@ fn builtin_format(
 
 pub fn builtin_progn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut ret: Option<Expression> = None;
-    for arg in args {
+    for mut arg in args {
         if let Some(ret) = ret {
             ret.resolve(environment)?;
         }
-        ret = Some(eval_nr(environment, &arg)?);
+        ret = Some(eval_nr(environment, &mut arg)?);
     }
     Ok(ret.unwrap_or_else(|| Expression::make_nil(&mut environment.gc)))
 }
 
 fn proc_set_vars<'a>(
     environment: &mut Environment,
-    args: &'a mut dyn Iterator<Item = &Expression>,
-) -> io::Result<(&'static str, Option<String>, &'a Expression)> {
+    args: &'a mut dyn Iterator<Item = &mut Expression>,
+) -> io::Result<(&'static str, Option<String>, &'a mut Expression)> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key = match eval(environment, key)?.get() {
@@ -597,13 +597,13 @@ fn val_to_reference(
     environment: &mut Environment,
     namespace: Option<&'static str>,
     doc_string: Option<String>,
-    val_in: &Expression,
+    val_in: &mut Expression,
 ) -> io::Result<(Reference, Expression)> {
     if let ExpEnum::Atom(Atom::Symbol(s)) = val_in.get() {
         if let Some(exp) = get_expression(environment, s) {
             Ok((exp, eval(environment, val_in)?))
         } else {
-            let val = eval(environment, &val_in)?;
+            let val = eval(environment, val_in)?;
             Ok((
                 Reference::new_rooted(
                     &mut environment.gc,
@@ -634,7 +634,7 @@ fn val_to_reference(
 
 fn builtin_set(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
@@ -663,7 +663,7 @@ fn builtin_set(
 
 fn builtin_export(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if let Some(val) = args.next() {
@@ -747,7 +747,7 @@ fn builtin_export(
 
 fn builtin_unexport(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
@@ -766,7 +766,7 @@ fn builtin_unexport(
 
 fn builtin_def(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
@@ -824,7 +824,7 @@ fn builtin_def(
 
 fn builtin_undef(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
@@ -843,10 +843,10 @@ fn builtin_undef(
 
 fn builtin_dyn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
-    let (key, val) = if let Some(key) = args.next() {
-        let key = eval(environment, &key)?;
+    let (key, val) = if let Some(mut key) = args.next() {
+        let key = eval(environment, &mut key)?;
         if let Some(val) = args.next() {
             let key = match key.get() {
                 ExpEnum::Atom(Atom::Symbol(s)) => *s,
@@ -905,7 +905,7 @@ fn builtin_dyn(
 
 fn builtin_to_symbol(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -949,7 +949,7 @@ fn builtin_to_symbol(
 
 fn builtin_symbol_name(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -974,7 +974,7 @@ fn builtin_symbol_name(
 
 fn builtin_fn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
@@ -998,7 +998,7 @@ fn builtin_fn(
 
 fn builtin_quote(
     _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -1010,7 +1010,7 @@ fn builtin_quote(
 
 fn replace_commas(
     environment: &mut Environment,
-    list: &mut dyn Iterator<Item = &Expression>,
+    list: &mut dyn Iterator<Item = &mut Expression>,
     is_vector: bool,
     meta: Option<ExpMeta>,
 ) -> io::Result<Expression> {
@@ -1018,15 +1018,16 @@ fn replace_commas(
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
-        let exp = match exp.get() {
+        let meta = exp.meta().clone();
+        let mut exp = match exp.get_mut() {
             ExpEnum::Vector(tlist) => replace_commas(
                 environment,
-                &mut tlist.iter(),
+                &mut tlist.iter_mut(),
                 is_vector,
-                exp.meta().clone(),
+                meta,
             )?,
             ExpEnum::Pair(_, _) => {
-                replace_commas(environment, &mut exp.iter(), is_vector, exp.meta().clone())?
+                replace_commas(environment, &mut exp.iter_mut(), is_vector, meta)?
             }
             _ => exp.clone(),
         };
@@ -1036,10 +1037,10 @@ fn replace_commas(
             } else if symbol == &",@" {
                 amp_next = true;
             } else if comma_next {
-                output.push(eval(environment, &exp)?);
+                output.push(eval(environment, &mut exp)?);
                 comma_next = false;
             } else if amp_next {
-                let nl = eval(environment, &exp)?;
+                let nl = eval(environment, &mut exp)?;
                 if let ExpEnum::Vector(new_list) = nl.get() {
                     for item in new_list.iter() {
                         output.push(item.clone());
@@ -1059,10 +1060,10 @@ fn replace_commas(
                 output.push(exp);
             }
         } else if comma_next {
-            output.push(eval(environment, &exp)?);
+            output.push(eval(environment, &mut exp)?);
             comma_next = false;
         } else if amp_next {
-            let nl = eval(environment, &exp)?;
+            let mut nl = eval(environment, &mut exp)?;
             if let ExpEnum::Vector(new_list) = nl.get_mut() {
                 for item in new_list.drain(..) {
                     output.push(item);
@@ -1099,10 +1100,11 @@ fn replace_commas(
 
 fn builtin_bquote(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let ret = if let Some(arg) = args.next() {
-        match arg.get() {
+        let meta = arg.meta().clone();
+        match arg.get_mut() {
             ExpEnum::Atom(Atom::Symbol(s)) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
@@ -1112,12 +1114,12 @@ fn builtin_bquote(
             }
             ExpEnum::Vector(list) => replace_commas(
                 environment,
-                &mut Box::new(list.iter()),
+                &mut Box::new(list.iter_mut()),
                 true,
-                arg.meta().clone(),
+                meta,
             ),
             ExpEnum::Pair(_, _) => {
-                replace_commas(environment, &mut arg.iter(), false, arg.meta().clone())
+                replace_commas(environment, &mut arg.iter_mut(), false, meta)
             }
             _ => Ok(arg.clone()),
         }
@@ -1160,11 +1162,11 @@ fn builtin_bquote(
 
 fn builtin_and(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut last_exp = None; // = ExpEnum::Atom(Atom::True);
-    for arg in args {
-        let arg = eval(environment, &arg)?;
+    for mut arg in args {
+        let arg = eval(environment, &mut arg)?;
         if arg.is_nil() {
             return Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
         } else {
@@ -1176,10 +1178,10 @@ fn builtin_and(
 
 fn builtin_or(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
-    for arg in args {
-        let arg = eval(environment, &arg)?;
+    for mut arg in args {
+        let arg = eval(environment, &mut arg)?;
         if !arg.is_nil() {
             return Ok(arg);
         }
@@ -1189,7 +1191,7 @@ fn builtin_or(
 
 fn builtin_not(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -1209,7 +1211,7 @@ fn builtin_not(
 
 fn builtin_is_def(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     fn get_ret(environment: &mut Environment, name: &str) -> io::Result<Expression> {
         if is_expression(environment, name) {
@@ -1244,7 +1246,7 @@ fn builtin_is_def(
 
 fn builtin_macro(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
@@ -1268,23 +1270,24 @@ fn builtin_macro(
 fn do_expansion(
     environment: &mut Environment,
     command: &Expression,
-    parts: &mut dyn Iterator<Item = &Expression>,
+    parts: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Option<Expression>> {
     if let ExpEnum::Atom(Atom::Symbol(command)) = command.get() {
-        if let Some(exp) = get_expression(environment, &command) {
-            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = exp.exp.get() {
+        if let Some(mut exp) = get_expression(environment, &command) {
+            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = exp.exp.get_mut() {
                 let new_scope = match environment.current_scope.last() {
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
                 };
                 environment.current_scope.push(new_scope);
-                let args: Vec<Expression> = parts.cloned().collect();
-                let ib: Box<(dyn Iterator<Item = &Expression>)> = Box::new(args.iter());
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, ib, false) {
+                //let args: Vec<Expression> = parts.cloned().collect();
+                //let ib: Box<(dyn Iterator<Item = &mut Expression>)> = Box::new(args.iter_mut());
+                //if let Err(err) = setup_args(environment, None, &sh_macro.params, &mut ib, false) {
+                if let Err(err) = setup_args(environment, None, &mut sh_macro.params, parts, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
-                let expansion = eval(environment, &sh_macro.body);
+                let expansion = eval(environment, &mut sh_macro.body);
                 if let Err(err) = expansion {
                     environment.current_scope.pop();
                     return Err(err);
@@ -1305,20 +1308,20 @@ fn do_expansion(
 
 fn expand_macro_internal(
     environment: &mut Environment,
-    arg: &Expression,
+    arg: &mut Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    if let ExpEnum::Vector(list) = arg.get() {
-        let (command, parts) = match list.split_first() {
+    if let ExpEnum::Vector(list) = arg.get_mut() {
+        let (command, parts) = match list.split_first_mut() {
             Some((c, p)) => (c, p),
             None => {
                 return Ok(None);
             }
         };
-        let expansion = do_expansion(environment, command, &mut parts.iter())?;
-        if let Some(expansion) = expansion {
+        let expansion = do_expansion(environment, command, &mut parts.iter_mut())?;
+        if let Some(mut expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &mut expansion, one)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1329,11 +1332,11 @@ fn expand_macro_internal(
         } else {
             Ok(None)
         }
-    } else if let ExpEnum::Pair(e1, e2) = arg.get() {
-        let expansion = do_expansion(environment, &e1, &mut *e2.iter())?;
-        if let Some(expansion) = expansion {
+    } else if let ExpEnum::Pair(e1, e2) = arg.get_mut() {
+        let expansion = do_expansion(environment, &e1, &mut *e2.iter_mut())?;
+        if let Some(mut expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &mut expansion, one)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1351,7 +1354,7 @@ fn expand_macro_internal(
 
 pub fn expand_macro(
     environment: &mut Environment,
-    arg: &Expression,
+    arg: &mut Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
     let lazy = environment.allow_lazy_fn;
@@ -1361,18 +1364,18 @@ pub fn expand_macro(
     res
 }
 
-fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
-    if let Some(exp) = expand_macro(environment, arg, false)? {
-        if let ExpEnum::Vector(list) = exp.get() {
+fn expand_macro_all(environment: &mut Environment, arg: &mut Expression) -> io::Result<Expression> {
+    if let Some(mut exp) = expand_macro(environment, arg, false)? {
+        if let ExpEnum::Vector(list) = exp.get_mut() {
             let mut nv = Vec::new();
-            for item in list {
-                nv.push(expand_macro_all(environment, &item)?);
+            for mut item in list {
+                nv.push(expand_macro_all(environment, &mut item)?);
             }
             exp.get_mut().replace(ExpEnum::Vector(nv));
         } else if let ExpEnum::Pair(_, _) = exp.get() {
             let mut nv = Vec::new();
-            for item in exp.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
+            for mut item in exp.iter_mut() {
+                nv.push(expand_macro_all(environment, &mut item)?);
             }
             exp.get_mut()
                 .replace(ExpEnum::cons_from_vec(&mut environment.gc, &mut nv));
@@ -1380,16 +1383,16 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
         Ok(exp)
     } else {
         //let arg = arg.clone();
-        if let ExpEnum::Vector(list) = arg.get() {
+        if let ExpEnum::Vector(list) = arg.get_mut() {
             let mut nv = Vec::new();
-            for item in list {
-                nv.push(expand_macro_all(environment, &item)?);
+            for mut item in list {
+                nv.push(expand_macro_all(environment, &mut item)?);
             }
             arg.get_mut().replace(ExpEnum::Vector(nv));
         } else if let ExpEnum::Pair(_, _) = arg.get() {
             let mut nv = Vec::new();
-            for item in arg.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
+            for mut item in arg.iter_mut() {
+                nv.push(expand_macro_all(environment, &mut item)?);
             }
             arg.get_mut()
                 .replace(ExpEnum::cons_from_vec(&mut environment.gc, &mut nv));
@@ -1400,7 +1403,7 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
 
 fn builtin_expand_macro(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -1419,7 +1422,7 @@ fn builtin_expand_macro(
 
 fn builtin_expand_macro1(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -1438,7 +1441,7 @@ fn builtin_expand_macro1(
 
 fn builtin_expand_macro_all(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
@@ -1453,7 +1456,7 @@ fn builtin_expand_macro_all(
 
 fn builtin_recur(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut arg_list: Vec<Expression> = Vec::new();
     let mut arg_num = 0;
@@ -1468,7 +1471,7 @@ fn builtin_recur(
 
 fn builtin_gensym(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1491,7 +1494,7 @@ fn builtin_gensym(
 
 fn builtin_jobs(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1545,7 +1548,7 @@ fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Op
 
 fn builtin_bg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
@@ -1572,7 +1575,7 @@ fn builtin_bg(
 
 fn builtin_fg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
@@ -1605,7 +1608,7 @@ fn builtin_fg(
 
 fn builtin_version(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1622,7 +1625,7 @@ fn builtin_version(
 
 fn builtin_command(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::ExternalOnly;
@@ -1640,7 +1643,7 @@ fn builtin_command(
 
 fn builtin_run_bg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     environment.run_background = true;
     let mut last_eval = Ok(Expression::alloc_data(&mut environment.gc, ExpEnum::Nil));
@@ -1657,7 +1660,7 @@ fn builtin_run_bg(
 
 fn builtin_form(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::FormOnly;
@@ -1675,7 +1678,7 @@ fn builtin_form(
 
 fn builtin_loose_symbols(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
@@ -1693,7 +1696,7 @@ fn builtin_loose_symbols(
 
 fn builtin_exit(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(exit_code) = args.next() {
         if args.next().is_none() {
@@ -1720,7 +1723,7 @@ fn builtin_exit(
 
 fn builtin_error_stack_on(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = true;
@@ -1734,7 +1737,7 @@ fn builtin_error_stack_on(
 
 fn builtin_error_stack_off(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = false;
@@ -1748,13 +1751,13 @@ fn builtin_error_stack_off(
 
 fn builtin_get_error(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut ret = None;
     let old_err = environment.stack_on_error;
     environment.stack_on_error = false;
-    for arg in args {
-        match eval(environment, &arg) {
+    for mut arg in args {
+        match eval(environment, &mut arg) {
             Ok(exp) => ret = Some(exp),
             Err(err) => {
                 let mut v = Vec::new();
@@ -1820,7 +1823,7 @@ fn make_doc(environment: &mut Environment, exp: &Reference, key: &str) -> io::Re
 
 fn get_doc(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
     is_raw: bool,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
@@ -1912,21 +1915,21 @@ fn get_doc(
 
 fn builtin_doc(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     get_doc(environment, args, false)
 }
 
 fn builtin_doc_raw(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     get_doc(environment, args, true)
 }
 
 pub fn builtin_block(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
@@ -1938,14 +1941,14 @@ pub fn builtin_block(
                 "block: Name must be a symbol (not evaluted).",
             ));
         };
-        for arg in args {
+        for mut arg in args {
             ret = if let Some(ret) = ret {
                 Some(ret.resolve(environment)?)
             } else {
                 None
             };
             if environment.return_val.is_none() {
-                ret = Some(eval_nr(environment, &arg)?);
+                ret = Some(eval_nr(environment, &mut arg)?);
             }
             let mut returned = false;
             if let Some((ret_name, exp)) = &environment.return_val {
@@ -1978,7 +1981,7 @@ pub fn builtin_block(
 
 pub fn builtin_return_from(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(name) = args.next() {
         let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name.get() {
@@ -2013,7 +2016,7 @@ pub fn builtin_return_from(
 
 pub fn builtin_intern_stats(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -2033,7 +2036,7 @@ pub fn builtin_intern_stats(
 
 pub fn builtin_meta_line_no(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
@@ -2054,7 +2057,7 @@ pub fn builtin_meta_line_no(
 
 pub fn builtin_meta_column_no(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
@@ -2075,7 +2078,7 @@ pub fn builtin_meta_column_no(
 
 pub fn builtin_meta_file_name(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
@@ -2118,11 +2121,11 @@ macro_rules! ensure_tonicity {
 macro_rules! ensure_tonicity_all {
     ($check_fn:expr) => {{
         |environment: &mut Environment,
-         args: &mut dyn Iterator<Item = &Expression>|
+         args: &mut dyn Iterator<Item = &mut Expression>|
          -> io::Result<Expression> {
             let mut list: Vec<Expression> = Vec::new();
-            for arg in args {
-                list.push(eval(environment, &arg)?);
+            for mut arg in args {
+                list.push(eval(environment, &mut arg)?);
             }
             if let Ok(ints) = parse_list_of_ints(environment, &mut list) {
                 ensure_tonicity!(environment.gc, $check_fn, ints, &i64, i64)
@@ -3214,11 +3217,11 @@ t
         Expression::make_function(
             gc,
             |environment: &mut Environment,
-             parts: &mut dyn Iterator<Item = &Expression>|
+             parts: &mut dyn Iterator<Item = &mut Expression>|
              -> io::Result<Expression> {
                 let mut args: Vec<Expression> = Vec::new();
-                for a in parts {
-                    args.push(eval(environment, &a)?);
+                for mut a in parts {
+                    args.push(eval(environment, &mut a)?);
                 }
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     ensure_tonicity!(environment.gc, |a, b| a == b, ints, &i64, i64)

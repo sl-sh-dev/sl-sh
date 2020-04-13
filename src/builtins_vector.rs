@@ -10,7 +10,7 @@ use crate::types::*;
 
 fn builtin_vec(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let mut new_args: Vec<Expression> = Vec::new();
     for a in args {
@@ -21,7 +21,7 @@ fn builtin_vec(
 
 fn builtin_make_vec(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let list = if let Some(cap) = args.next() {
         let cap = eval(environment, cap)?;
@@ -62,7 +62,7 @@ fn builtin_make_vec(
 
 fn builtin_vec_slice(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     let (vec, start, end, has_end) = if let Some(vec) = args.next() {
         if let Some(start) = args.next() {
@@ -132,13 +132,13 @@ fn builtin_vec_slice(
 
 fn builtin_vec_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
-    if let Some(idx) = args.next() {
-        if let Some(list) = args.next() {
+    if let Some(mut idx) = args.next() {
+        if let Some(mut list) = args.next() {
             if args.next().is_none() {
-                if let ExpEnum::Atom(Atom::Int(idx)) = eval(environment, &idx)?.get() {
-                    if let ExpEnum::Vector(list) = eval(environment, &list)?.get() {
+                if let ExpEnum::Atom(Atom::Int(idx)) = eval(environment, &mut idx)?.get() {
+                    if let ExpEnum::Vector(list) = eval(environment, &mut list)?.get() {
                         if *idx < 0 || *idx >= list.len() as i64 {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -160,7 +160,7 @@ fn builtin_vec_nth(
 // Destructive
 fn builtin_vec_setnth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
@@ -175,7 +175,7 @@ fn builtin_vec_setnth(
                         ));
                     };
                     let new_element = eval(environment, new_element)?;
-                    let vec = eval(environment, list)?;
+                    let mut vec = eval(environment, list)?;
                     return match vec.get_mut() {
                         ExpEnum::Vector(list) => {
                             if idx < 0 || idx >= list.len() as i64 {
@@ -205,13 +205,13 @@ fn builtin_vec_setnth(
 // Destructive
 fn builtin_vec_push(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if let Some(new_item) = args.next() {
             if args.next().is_none() {
                 let new_item = eval(environment, new_item)?;
-                let vec = eval(environment, list)?;
+                let mut vec = eval(environment, list)?;
                 return match vec.get_mut() {
                     ExpEnum::Vector(list) => {
                         list.push(new_item);
@@ -234,7 +234,7 @@ fn builtin_vec_push(
 // Destructive
 fn builtin_vec_pop(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
@@ -261,7 +261,7 @@ fn builtin_vec_pop(
 
 fn builtin_vec_is_empty(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
@@ -290,11 +290,11 @@ fn builtin_vec_is_empty(
 // Destructive
 fn builtin_vec_vclear(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
-            let list = eval(environment, list)?;
+            let mut list = eval(environment, list)?;
             return match list.get_mut() {
                 ExpEnum::Vector(list) => {
                     list.clear();
@@ -316,13 +316,13 @@ fn builtin_vec_vclear(
 // Destructive
 fn builtin_vec_remove_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(list) = args.next() {
             if args.next().is_none() {
                 let idx = eval(environment, idx)?;
-                let list = eval(environment, list)?;
+                let mut list = eval(environment, list)?;
                 let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get() {
                     *i
                 } else {
@@ -359,7 +359,7 @@ fn builtin_vec_remove_nth(
 // Destructive
 fn builtin_vec_insert_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
@@ -367,7 +367,7 @@ fn builtin_vec_insert_nth(
                 if args.next().is_none() {
                     let idx = eval(environment, idx)?;
                     let new_element = eval(environment, new_element)?;
-                    let list = eval(environment, list)?;
+                    let mut list = eval(environment, list)?;
                     let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get() {
                         *i
                     } else {

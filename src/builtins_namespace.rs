@@ -9,7 +9,7 @@ use crate::types::*;
 
 fn builtin_ns_create(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if environment
         .current_scope
@@ -54,7 +54,7 @@ fn builtin_ns_create(
 
 fn builtin_ns_enter(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if environment
         .current_scope
@@ -102,7 +102,7 @@ fn builtin_ns_enter(
 
 fn builtin_ns_exists(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
@@ -133,7 +133,7 @@ fn builtin_ns_exists(
 
 fn builtin_ns_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
@@ -153,7 +153,7 @@ fn builtin_ns_list(
 
 fn builtin_ns_pop(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         return Err(io::Error::new(
@@ -204,7 +204,7 @@ fn builtin_ns_pop(
 
 fn builtin_ns_symbols(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = &mut Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {

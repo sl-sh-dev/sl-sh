@@ -148,8 +148,47 @@ impl<'a> Iterator for PairIter<'a> {
     }
 }
 
+pub struct PairIterMut<'a> {
+    current: Option<Expression>,
+    _marker: marker::PhantomData<&'a mut Expression>,
+}
+
+impl<'a> PairIterMut<'a> {
+    fn new(exp: Expression) -> PairIterMut<'a> {
+        PairIterMut {
+            current: Some(exp),
+            _marker: marker::PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for PairIterMut<'a> {
+    type Item = &'a mut Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = &mut self.current {
+            let current = unsafe {
+                // Need an unbound lifetime to get 'a
+                &*current.as_ptr()
+            };
+            if let ExpEnum::Pair(mut e1, e2) = current.data {
+                self.current = Some(e2);
+                let e1 = unsafe {
+                    let e: *mut Expression = &mut e1;
+                    &mut *e
+                };
+                Some(e1)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 type CallFunc =
-    fn(&mut Environment, &mut dyn Iterator<Item = &Expression>) -> io::Result<Expression>;
+    fn(&mut Environment, &mut dyn Iterator<Item = &mut Expression>) -> io::Result<Expression>;
 
 #[derive(Clone)]
 pub struct Callable {
@@ -311,7 +350,7 @@ impl Expression {
         unsafe { &self.obj.get_unchecked().data }
     }
 
-    pub fn get_mut(&self) -> &mut ExpEnum {
+    pub fn get_mut(&mut self) -> &mut ExpEnum {
         unsafe { &mut self.obj.get_mut_unchecked().data }
     }
 
@@ -333,6 +372,15 @@ impl Expression {
         }
     }
 
+    pub fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &mut Expression> + 'a> {
+        let exp = *self;
+        match self.get_mut() {
+            ExpEnum::Pair(_, _) => Box::new(PairIterMut::new(exp)),
+            ExpEnum::Vector(list) => Box::new(list.iter_mut()),
+            _ => Box::new(iter::empty()),
+        }
+    }
+
     pub fn is_nil(&self) -> bool {
         if let ExpEnum::Nil = self.get() {
             true
@@ -344,9 +392,10 @@ impl Expression {
     // If the expression is a lazy fn then resolve it to concrete expression.
     pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
         let mut res = self;
-        while let ExpEnum::LazyFn(lambda, parts) = &res.get() {
-            let ib = Box::new(parts.iter());
-            res = call_lambda(environment, &lambda, ib, false)?;
+        while let ExpEnum::LazyFn(lambda, parts) = res.get_mut() {
+            let mut lambda = lambda.clone();
+            let ib = &mut Box::new(parts.iter_mut());
+            res = call_lambda(environment, &mut lambda, ib, false)?;
         }
         Ok(res)
     }
