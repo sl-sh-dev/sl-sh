@@ -220,10 +220,8 @@ pass the condition defined by the function, `pred`. Filter returns a new
 collection.
 
 Example:
-```
-(filter (fn (x) (= (% x 2) 0 )) (list 1 2 3 4 5))
-;; '(2 4)
-```"
+(assert-equals '(2 4) (filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
+"
 	(pred coll)
 		(progn
 			(defq filtering-fcn

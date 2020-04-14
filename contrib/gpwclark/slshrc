@@ -3,9 +3,10 @@
 (ns-import 'shell)
 
 ;; gpwclark TODOs
+;; - remind slsh bdfl to make error-stack-on an envronment variable so error-stack-on can be automatic for scripts
 ;; finish writing script that runs tests.
 ;; USE empty-seq? instead of (when not nil) for looping over list
-
+;; - range? fcn
 ;; - make cond macro?
 ;; - need clojure's threading macro support but you know, we'll call it
 ;; "weaving" (which is sometimes used in AOP but not nearly as overlaoded as
@@ -26,7 +27,7 @@
 
 ;; helpers {{{
 	(defn all-items-by-whitespace (producer)
-		(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
+		(str-trim (str (| (producer) (tr "\n" " ") (tr -s "[:blank:]")))))
 ;; }}}
 
 
@@ -35,9 +36,8 @@
 	;; use vi keybindings on cli
 	(hash-set! *repl-settings* :keybindings :vi)
 	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
-
-;;TODO in normal mode, complementary colors?
-	(hash-set! *repl-settings* :vi-normal-prompt-prefix (str (fg-color-rgb 0 204 0) "[N] :: " shell::*fg-default*))
+	(hash-set! *repl-settings* :vi-normal-prompt-prefix (str (bg-color-rgb 255 140 0)))
+	(hash-set! *repl-settings* :vi-normal-prompt-suffix (str shell::*bg-default*))
 
 	;; syntax highlighting
 	(syntax-on)

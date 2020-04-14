@@ -1,3 +1,5 @@
+#!/bin/sl-sh
+
 (core::ns-import 'core)
 (load "tests/test.lisp")
 

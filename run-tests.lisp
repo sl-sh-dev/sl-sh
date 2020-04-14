@@ -5,24 +5,26 @@
 (load "tests/test.lisp")
 (ns-import 'test)
 
+;;TODO remove this error stack on call when "it" becomes an environment variable
+(error-stack-on)
+
 (defq tests-dir "tests")
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
 
-(defn make-test-list-from-symbols (symbols-list)
+(defn make-test-list-from-symbols (symbols-list prepend)
   (progn
 	(defq test-list '())
 	(for sym symbols-list (progn
-	(if (not (or (str-starts-with "ns-" (str sym))(= "*ns*" (str sym)))) (progn
-		;;(set 'total-syms (+ 1 total-syms))
-		(if (str-contains "Example:" (doc (to-symbol (str "root::" sym))))
+	(when (not (or
+				(str-starts-with "ns-" (str sym))
+				(= "*ns*" (str sym)))) (progn
+		(if (str-contains "Example:" (doc (to-symbol (str prepend "::" sym))))
 			(progn
-				;;(set 'total-tests (+ 1 total-tests))
-				;;(print sym " ")
 				(defq test-set-item (make-hash))
 				(hash-set! test-set-item :name (str sym))
-				(hash-set! test-set-item :load-fcn (fn () (test::run-example (to-symbol (str "root::" sym)))))
+				(hash-set! test-set-item :load-fcn (fn () (test::run-example (to-symbol (str prepend "::" sym)))))
 				(append! test-list test-set-item))
 			(progn
 				(defq test-set-item (make-hash))
@@ -90,7 +92,7 @@
 (defn run-tests-for (test-name test-list test-report)
 	(progn
 		(defq test-data (make-hash))
-		(hash-set! test-data :name "module tests")
+		(hash-set! test-data :name test-name)
 		(hash-set! test-data :total 0)
 		(hash-set! test-data :failed 0)
 		(report-test-results test-list test-data)
@@ -99,9 +101,13 @@
 (printer "Tests from test directory")
 (run-tests-for "module tests" file-test-list final-test-report)
 
-(printer "Tests from root namespace")
-(defq root-list (qsort (ns-symbols 'root)))
-(defq root-list (make-test-list-from-symbols root-list))
-(run-tests-for "Root namespace unit tests" root-list final-test-report)
+(for a-ns (filter (fn (x) (and (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
+	(printer (str "Tests from " a-ns " namspace"))
+	(defq sym-list (qsort (ns-symbols (to-symbol a-ns))))
+	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
+	(run-tests-for (str a-ns " namespace unit tests") sym-list final-test-report)))
 
+;;TODO import ns tests from run-root-test.lisp
+
+;;TODO make pretty final report
 (println final-test-report)
