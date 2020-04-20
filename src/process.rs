@@ -82,7 +82,6 @@ pub fn wait_pid(
                 if environment.save_exit_status {
                     env::set_var("LAST_STATUS".to_string(), format!("{}", status));
                     environment.root_scope.borrow_mut().insert_exp_data(
-                        &mut environment.gc,
                         environment.interner.intern("*last-status*"),
                         ExpEnum::Atom(Atom::Int(i64::from(status))),
                     );
@@ -233,17 +232,14 @@ fn run_command(
                     wait_pid(environment, proc.id(), None)
                 };
                 match status {
-                    Some(code) => Expression::alloc_data(
-                        &mut environment.gc,
-                        ExpEnum::Process(ProcessState::Over(pid, code as i32)),
-                    ),
-                    None => Expression::alloc_data(&mut environment.gc, ExpEnum::Nil),
+                    Some(code) => Expression::alloc_data(ExpEnum::Process(ProcessState::Over(
+                        pid,
+                        code as i32,
+                    ))),
+                    None => Expression::alloc_data(ExpEnum::Nil),
                 }
             } else {
-                Expression::alloc_data(
-                    &mut environment.gc,
-                    ExpEnum::Process(ProcessState::Running(pid)),
-                )
+                Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)))
             };
             add_process(environment, proc);
             Ok(result)
@@ -281,7 +277,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let ExpEnum::File(f) = &out.exp.get() {
+            if let ExpEnum::File(f) = &out.exp.get().data {
                 match &*f.borrow() {
                     FileState::Stdout => {
                         if is_out {
@@ -377,21 +373,21 @@ fn prep_string_arg(
     Ok(())
 }
 
-pub fn do_command<'a>(
+pub fn do_command(
     environment: &mut Environment,
     command: &str,
-    parts: Box<dyn Iterator<Item = &mut Expression> + 'a>,
+    parts: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut data = None;
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
-    if let Some(data_in) = &environment.data_in {
-        if let ExpEnum::LazyFn(_, _) = data_in.get() {
+    if let Some(data_in) = environment.data_in {
+        if let ExpEnum::LazyFn(_, _) = &data_in.get().data {
             environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
         }
     }
     let stdin = if let Some(data_in) = &environment.data_in {
-        match data_in.get() {
+        match &data_in.get().data {
             ExpEnum::Atom(atom) => {
                 data = Some(atom.clone());
                 Stdio::piped()
@@ -466,12 +462,10 @@ pub fn do_command<'a>(
             ));
             }
         }
+    } else if foreground {
+        Stdio::inherit()
     } else {
-        if foreground {
-            Stdio::inherit()
-        } else {
-            Stdio::null()
-        }
+        Stdio::null()
     };
     let (stdout, stderr) = get_output(
         environment,
@@ -481,43 +475,57 @@ pub fn do_command<'a>(
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
     let mut args = Vec::new();
-    for mut a_exp in parts {
-        let a = a_exp.get();
-        if let ExpEnum::Atom(Atom::String(_)) = a {
-            let new_a = eval(environment, &mut a_exp)?;
+    for a_exp in parts {
+        let a_exp2 = a_exp;
+        let a_exp_a = a_exp.get();
+        if let ExpEnum::Atom(Atom::String(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
-        } else if let ExpEnum::Atom(Atom::StringRef(_)) = a {
-            let new_a = eval(environment, &mut a_exp)?;
+        } else if let ExpEnum::Atom(Atom::StringRef(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
-        } else if let ExpEnum::Atom(Atom::StringBuf(_)) = a {
-            let new_a = eval(environment, &mut a_exp)?;
+        } else if let ExpEnum::Atom(Atom::StringBuf(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
         } else {
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
-            let new_a = match a {
+            let new_a = match a_exp_a.data {
                 ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
-                    Some(exp) => match exp.exp.get() {
+                    Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => {
+                            drop(a_exp_a);
                             eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
                         ExpEnum::Atom(Atom::Lambda(_)) => {
+                            drop(a_exp_a);
                             eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
                         ExpEnum::Atom(Atom::Macro(_)) => {
+                            drop(a_exp_a);
                             eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
-                        _ => eval(environment, &mut a_exp)?,
+                        _ => {
+                            drop(a_exp_a);
+                            eval(environment, a_exp2)?
+                        }
                     },
-                    _ => eval(environment, &mut a_exp)?,
+                    _ => {
+                        drop(a_exp_a);
+                        eval(environment, a_exp2)?
+                    }
                 },
-                _ => eval(environment, &mut a_exp)?,
+                _ => {
+                    drop(a_exp_a);
+                    eval(environment, a_exp2)?
+                }
             };
-            if let ExpEnum::Atom(Atom::String(s)) = new_a.get() {
+            let new_a_a = new_a.get();
+            if let ExpEnum::Atom(Atom::String(s)) = &new_a_a.data {
                 prep_string_arg(environment, &s, &mut args)?;
-            } else if let ExpEnum::Atom(Atom::StringRef(s)) = new_a.get() {
+            } else if let ExpEnum::Atom(Atom::StringRef(s)) = &new_a_a.data {
                 prep_string_arg(environment, s, &mut args)?;
-            } else if let ExpEnum::Atom(Atom::StringBuf(s)) = new_a.get() {
+            } else if let ExpEnum::Atom(Atom::StringBuf(s)) = &new_a_a.data {
                 prep_string_arg(environment, &s.borrow(), &mut args)?;
             } else {
                 args.push(new_a.as_string(environment)?);

@@ -72,30 +72,22 @@ fn escape_to_char(escape_code: &[char]) -> char {
     ch_n as char
 }
 
-fn close_list(
-    gc: &mut GC,
-    stack: &mut Vec<List>,
-    exp_meta: Option<ExpMeta>,
-) -> Result<(), ParseError> {
+fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ParseError> {
     match stack.pop() {
         Some(mut v) => match stack.pop() {
             Some(mut v2) => {
                 match v.list_type {
                     ListType::Vector => {
-                        v2.vec.push(Expression::with_list(gc, v.vec));
+                        v2.vec.push(Expression::with_list(v.vec));
                     }
                     ListType::List => {
                         if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                            v2.vec.push(Expression::alloc(
-                                gc,
-                                ExpObj {
-                                    data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
-                                    meta: exp_meta,
-                                },
-                            ));
+                            v2.vec.push(Expression::alloc(ExpObj {
+                                data: ExpEnum::Pair(v.vec[0], v.vec[2]),
+                                meta: exp_meta,
+                            }));
                         } else {
-                            v2.vec
-                                .push(Expression::cons_from_vec(gc, &mut v.vec, exp_meta));
+                            v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
                         }
                     }
                 }
@@ -178,24 +170,18 @@ fn end_symbol(ch: char) -> bool {
     }
 }
 
-fn do_char(
-    gc: &mut GC,
-    symbol: &str,
-    line: usize,
-    column: usize,
-) -> Result<Expression, ParseError> {
+fn do_char(symbol: &str, line: usize, column: usize) -> Result<Expression, ParseError> {
     match &symbol.to_lowercase()[..] {
-        "space" => return Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Char(' ')))),
-        "tab" => return Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Char('\t')))),
+        "space" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(' ')))),
+        "tab" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\t')))),
         // newline should be the platform line end.
-        "newline" => return Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Char('\n')))),
-        "linefeed" => return Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Char('\n')))),
-        "return" => return Ok(Expression::alloc_data(gc, ExpEnum::Atom(Atom::Char('\r')))),
+        "newline" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
+        "linefeed" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
+        "return" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\r')))),
         "backspace" => {
-            return Ok(Expression::alloc_data(
-                gc,
-                ExpEnum::Atom(Atom::Char('\u{0008}')),
-            ))
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                '\u{0008}',
+            ))))
         }
         _ => {}
     }
@@ -206,14 +192,12 @@ fn do_char(
         );
         return Err(ParseError { reason });
     }
-    Ok(Expression::alloc_data(
-        gc,
-        ExpEnum::Atom(Atom::Char(symbol.chars().next().unwrap())),
-    ))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+        symbol.chars().next().unwrap(),
+    ))))
 }
 
 fn read_string<P>(
-    gc: &mut GC,
     chars: &mut P,
     symbol: &mut String,
     line: &mut usize,
@@ -276,33 +260,30 @@ where
             ch
         }
     }
-    Ok(Expression::alloc_data(
-        gc,
-        ExpEnum::Atom(Atom::String(symbol.clone())),
-    ))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        symbol.clone(),
+    ))))
 }
 
 fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
-    let gc = &mut environment.gc;
     if symbol.is_empty() {
-        return Expression::alloc_data(gc, ExpEnum::Nil);
+        return Expression::alloc_data(ExpEnum::Nil);
     }
     if symbol == "t" {
-        Expression::alloc_data(gc, ExpEnum::Atom(Atom::True))
+        Expression::alloc_data(ExpEnum::Atom(Atom::True))
     } else if symbol == "nil" {
-        Expression::alloc_data(gc, ExpEnum::Nil)
+        Expression::alloc_data(ExpEnum::Nil)
     } else {
         let potential_int: Result<i64, ParseIntError> = symbol.parse();
         match potential_int {
-            Ok(v) => Expression::alloc_data(gc, ExpEnum::Atom(Atom::Int(v))),
+            Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Int(v))),
             Err(_) => {
                 let potential_float: Result<f64, ParseFloatError> = symbol.parse();
                 match potential_float {
-                    Ok(v) => Expression::alloc_data(gc, ExpEnum::Atom(Atom::Float(v))),
-                    Err(_) => Expression::alloc_data(
-                        gc,
-                        ExpEnum::Atom(Atom::Symbol(environment.interner.intern(symbol))),
-                    ),
+                    Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Float(v))),
+                    Err(_) => Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern(symbol),
+                    ))),
                 }
             }
         }
@@ -440,17 +421,16 @@ where
             '"' => {
                 push_stack(
                     stack,
-                    read_string(&mut environment.gc, chars, buffer, line, column)?,
+                    read_string(chars, buffer, line, column)?,
                     *line,
                     *column,
                 )?;
             }
             '\'' => {
                 let mut quoted = Vec::<Expression>::new();
-                quoted.push(Expression::alloc_data(
-                    &mut environment.gc,
-                    ExpEnum::Atom(Atom::Symbol(environment.interner.intern("quote"))),
-                ));
+                quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                    environment.interner.intern("quote"),
+                ))));
                 stack.push(List {
                     list_type: ListType::List,
                     vec: quoted,
@@ -464,20 +444,18 @@ where
                     name,
                     in_bquote,
                 )?;
-                close_list(&mut environment.gc, stack, get_meta(name, *line, *column))?;
+                close_list(stack, get_meta(name, *line, *column))?;
             }
             '`' => {
                 let mut quoted = Vec::<Expression>::new();
                 if in_bquote {
-                    quoted.push(Expression::alloc_data(
-                        &mut environment.gc,
-                        ExpEnum::Atom(Atom::Symbol(environment.interner.intern("quote"))),
-                    ));
+                    quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern("quote"),
+                    ))));
                 } else {
-                    quoted.push(Expression::alloc_data(
-                        &mut environment.gc,
-                        ExpEnum::Atom(Atom::Symbol(environment.interner.intern("bquote"))),
-                    ));
+                    quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern("bquote"),
+                    ))));
                 }
                 stack.push(List {
                     list_type: ListType::List,
@@ -492,7 +470,7 @@ where
                     name,
                     true,
                 )?;
-                close_list(&mut environment.gc, stack, get_meta(name, *line, *column))?;
+                close_list(stack, get_meta(name, *line, *column))?;
             }
             ',' => {
                 read_next = true; // , always needs the symbol after
@@ -500,20 +478,18 @@ where
                     chars.next();
                     push_stack(
                         stack,
-                        Expression::alloc_data(
-                            &mut environment.gc,
-                            ExpEnum::Atom(Atom::Symbol(environment.interner.intern(",@"))),
-                        ),
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern(",@"),
+                        ))),
                         *line,
                         *column,
                     )?;
                 } else {
                     push_stack(
                         stack,
-                        Expression::alloc_data(
-                            &mut environment.gc,
-                            ExpEnum::Atom(Atom::Symbol(environment.interner.intern(","))),
-                        ),
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern(","),
+                        ))),
                         *line,
                         *column,
                     )?;
@@ -526,12 +502,7 @@ where
                     '\\' => {
                         buffer.clear();
                         read_symbol(buffer, chars, line, column, true);
-                        push_stack(
-                            stack,
-                            do_char(&mut environment.gc, buffer, *line, *column)?,
-                            *line,
-                            *column,
-                        )?;
+                        push_stack(stack, do_char(buffer, *line, *column)?, *line, *column)?;
                     }
                     '<' => {
                         let reason =
@@ -547,7 +518,7 @@ where
                     }
                     't' => push_stack(
                         stack,
-                        Expression::alloc_data(&mut environment.gc, ExpEnum::Atom(Atom::True)),
+                        Expression::alloc_data(ExpEnum::Atom(Atom::True)),
                         *line,
                         *column,
                     )?,
@@ -574,7 +545,7 @@ where
                     });
                 }
                 level -= 1;
-                close_list(&mut environment.gc, stack, get_meta(name, *line, *column))?;
+                close_list(stack, get_meta(name, *line, *column))?;
             }
             ';' => {
                 consume_line_comment(chars, line, column);
@@ -638,7 +609,7 @@ fn read2(
         return Err(ParseError { reason });
     }
     let exp_meta = get_meta(name, 0, 0);
-    close_list(&mut environment.gc, &mut stack, exp_meta.clone())?;
+    close_list(&mut stack, exp_meta.clone())?;
     if stack.len() > 1 {
         Err(ParseError {
             reason: "WTF?".to_string(),
@@ -655,25 +626,18 @@ fn read2(
                     // remove the outer list that was added (unless always_wrap
                     // is set).
                     let exp = v.vec.pop().unwrap();
-                    match exp.get() {
+                    let exp_d = &exp.get().data;
+                    match exp_d {
                         ExpEnum::Vector(_) => Ok(exp),
                         ExpEnum::Pair(_, _) => Ok(exp),
                         ExpEnum::Nil => Ok(exp),
                         _ => {
                             v.vec.push(exp);
-                            Ok(Expression::with_list_meta(
-                                &mut environment.gc,
-                                v.vec,
-                                exp_meta,
-                            ))
+                            Ok(Expression::with_list_meta(v.vec, exp_meta))
                         }
                     }
                 } else {
-                    Ok(Expression::with_list_meta(
-                        &mut environment.gc,
-                        v.vec,
-                        exp_meta,
-                    ))
+                    Ok(Expression::with_list_meta(v.vec, exp_meta))
                 }
             }
             None => Err(ParseError {
@@ -710,7 +674,7 @@ mod tests {
     use crate::builtins_util::is_proper_list;
 
     fn to_strs(output: &mut Vec<String>, exp: &Expression) {
-        match exp.get() {
+        match &exp.get().data {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {

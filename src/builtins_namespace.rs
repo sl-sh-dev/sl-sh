@@ -9,7 +9,7 @@ use crate::types::*;
 
 fn builtin_ns_create(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if environment
         .current_scope
@@ -26,7 +26,7 @@ fn builtin_ns_create(
     }
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)?.get() {
+            let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
@@ -43,7 +43,7 @@ fn builtin_ns_create(
                 Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
             };
             environment.current_scope.push(scope);
-            return Ok(Expression::make_nil(&mut environment.gc));
+            return Ok(Expression::make_nil());
         }
     }
     Err(io::Error::new(
@@ -54,7 +54,7 @@ fn builtin_ns_create(
 
 fn builtin_ns_enter(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if environment
         .current_scope
@@ -71,7 +71,7 @@ fn builtin_ns_enter(
     }
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)?.get() {
+            let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
@@ -91,7 +91,7 @@ fn builtin_ns_enter(
                 }
             };
             environment.current_scope.push(scope);
-            return Ok(Expression::make_nil(&mut environment.gc));
+            return Ok(Expression::make_nil());
         }
     }
     Err(io::Error::new(
@@ -102,11 +102,11 @@ fn builtin_ns_enter(
 
 fn builtin_ns_exists(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)?.get() {
+            let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
@@ -119,9 +119,9 @@ fn builtin_ns_exists(
                 }
             };
             if environment.namespaces.contains_key(key) {
-                return Ok(Expression::make_true(&mut environment.gc));
+                return Ok(Expression::make_true());
             } else {
-                return Ok(Expression::make_nil(&mut environment.gc));
+                return Ok(Expression::make_nil());
             }
         }
     }
@@ -133,17 +133,14 @@ fn builtin_ns_exists(
 
 fn builtin_ns_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
-            ns_list.push(Expression::alloc_data(
-                &mut environment.gc,
-                ExpEnum::Atom(Atom::StringRef(ns)),
-            ));
+            ns_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(ns))));
         }
-        return Ok(Expression::with_list(&mut environment.gc, ns_list));
+        return Ok(Expression::with_list(ns_list));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -153,7 +150,7 @@ fn builtin_ns_list(
 
 fn builtin_ns_pop(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         return Err(io::Error::new(
@@ -199,16 +196,16 @@ fn builtin_ns_pop(
     } else {
         return Err(io::Error::new(io::ErrorKind::Other, "ns-pop: NO SCOPES"));
     }
-    Ok(Expression::make_nil(&mut environment.gc))
+    Ok(Expression::make_nil())
 }
 
 fn builtin_ns_symbols(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)?.get() {
+            let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
                 ExpEnum::Atom(Atom::StringRef(s)) => s,
@@ -224,14 +221,11 @@ fn builtin_ns_symbols(
                 if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::alloc_data(
-                            &mut environment.gc,
-                            ExpEnum::Atom(Atom::Symbol(sym)),
-                        ));
+                        ns_symbols.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(sym))));
                     }
-                    return Ok(Expression::with_list(&mut environment.gc, ns_symbols));
+                    return Ok(Expression::with_list(ns_symbols));
                 }
-                return Ok(Expression::make_nil(&mut environment.gc));
+                return Ok(Expression::make_nil());
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -247,7 +241,6 @@ fn builtin_ns_symbols(
 }
 
 pub fn add_namespace_builtins<S: BuildHasher>(
-    gc: &mut GC,
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
 ) {
@@ -255,7 +248,6 @@ pub fn add_namespace_builtins<S: BuildHasher>(
     data.insert(
         interner.intern("ns-create"),
         Expression::make_function(
-            gc,
             builtin_ns_create,
             "Usage: (ns-create namespace)
 
@@ -274,7 +266,6 @@ Example:
     data.insert(
         interner.intern("ns-enter"),
         Expression::make_function(
-            gc,
             builtin_ns_enter,
             "Usage: (ns-enter namespace)
 
@@ -298,7 +289,6 @@ t
     data.insert(
         interner.intern("ns-exists?"),
         Expression::make_function(
-            gc,
             builtin_ns_exists,
             "Usage: (ns-exists? namespace)
 
@@ -316,7 +306,6 @@ Example:
     data.insert(
         interner.intern("ns-list"),
         Expression::make_function(
-            gc,
             builtin_ns_list,
             "Usage: (ns-list)
 
@@ -335,7 +324,6 @@ t
     data.insert(
         interner.intern("ns-pop"),
         Expression::make_function(
-            gc,
             builtin_ns_pop,
             "Usage: (ns-pop)
 
@@ -353,7 +341,6 @@ Example:
     data.insert(
         interner.intern("ns-symbols"),
         Expression::make_function(
-            gc,
             builtin_ns_symbols,
             "Usage: (ns-symbols namespace)
 

@@ -10,28 +10,28 @@ use crate::types::*;
 
 fn builtin_vec(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut new_args: Vec<Expression> = Vec::new();
     for a in args {
         new_args.push(eval(environment, a)?);
     }
-    Ok(Expression::with_list(&mut environment.gc, new_args))
+    Ok(Expression::with_list(new_args))
 }
 
 fn builtin_make_vec(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let list = if let Some(cap) = args.next() {
         let cap = eval(environment, cap)?;
-        let cap = if let ExpEnum::Atom(Atom::Int(c)) = cap.get() {
+        let cap = if let ExpEnum::Atom(Atom::Int(c)) = cap.get().data {
             c
         } else {
             let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         };
-        let mut list = Vec::with_capacity(*cap as usize);
+        let mut list = Vec::with_capacity(cap as usize);
         if let Some(item) = args.next() {
             if args.next().is_some() {
                 return Err(io::Error::new(
@@ -40,34 +40,26 @@ fn builtin_make_vec(
                 ));
             }
             let item = eval(environment, item)?;
-            for _ in 0..*cap {
+            for _ in 0..cap {
                 // Make a copy of each item instead if using the same item for each.
-                unsafe {
-                    list.push(Expression::alloc(
-                        &mut environment.gc,
-                        item.obj.get_unchecked().clone(),
-                    ));
-                }
+                list.push(item.duplicate());
             }
         }
         list
     } else {
-        return Ok(Expression::alloc_data(
-            &mut environment.gc,
-            ExpEnum::Vector(Vec::new()),
-        ));
+        return Ok(Expression::alloc_data(ExpEnum::Vector(Vec::new())));
     };
-    Ok(Expression::with_list(&mut environment.gc, list))
+    Ok(Expression::with_list(list))
 }
 
 fn builtin_vec_slice(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let (vec, start, end, has_end) = if let Some(vec) = args.next() {
         if let Some(start) = args.next() {
-            let start = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, start)?.get() {
-                *i as usize
+            let start = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, start)?.get().data {
+                i as usize
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -75,8 +67,8 @@ fn builtin_vec_slice(
                 ));
             };
             if let Some(end) = args.next() {
-                let end = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, end)?.get() {
-                    *i as usize
+                let end = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, end)?.get().data {
+                    i as usize
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -99,12 +91,13 @@ fn builtin_vec_slice(
             "vec-slice takes two or three forms",
         ));
     };
-    match vec.get() {
+    let vec_d = vec.get();
+    match &vec_d.data {
         ExpEnum::Vector(list) => {
             if !list.is_empty() {
                 let len = list.len();
                 if start == len {
-                    return Ok(Expression::make_nil(&mut environment.gc));
+                    return Ok(Expression::make_nil());
                 }
                 if start > (len - 1) || end > len {
                     let msg = format!(
@@ -118,9 +111,9 @@ fn builtin_vec_slice(
                 } else {
                     Vec::from_iter(list[start..].iter().cloned())
                 };
-                Ok(Expression::with_list(&mut environment.gc, slice))
+                Ok(Expression::with_list(slice))
             } else {
-                Ok(Expression::make_nil(&mut environment.gc))
+                Ok(Expression::make_nil())
             }
         }
         _ => Err(io::Error::new(
@@ -132,20 +125,20 @@ fn builtin_vec_slice(
 
 fn builtin_vec_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    if let Some(mut idx) = args.next() {
-        if let Some(mut list) = args.next() {
+    if let Some(idx) = args.next() {
+        if let Some(list) = args.next() {
             if args.next().is_none() {
-                if let ExpEnum::Atom(Atom::Int(idx)) = eval(environment, &mut idx)?.get() {
-                    if let ExpEnum::Vector(list) = eval(environment, &mut list)?.get() {
+                if let ExpEnum::Atom(Atom::Int(idx)) = &eval(environment, idx)?.get().data {
+                    if let ExpEnum::Vector(list) = &eval(environment, list)?.get().data {
                         if *idx < 0 || *idx >= list.len() as i64 {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
                                 "vec-nth index out of range",
                             ));
                         }
-                        return Ok(list[*idx as usize].clone());
+                        return Ok(list[*idx as usize]);
                     }
                 }
             }
@@ -160,23 +153,24 @@ fn builtin_vec_nth(
 // Destructive
 fn builtin_vec_setnth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
             if let Some(list) = args.next() {
                 if args.next().is_none() {
-                    let idx = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, idx)?.get() {
-                        *i
-                    } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "vec-setnth! first form must be an int",
-                        ));
-                    };
+                    let idx =
+                        if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, idx)?.get().data {
+                            i
+                        } else {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "vec-setnth! first form must be an int",
+                            ));
+                        };
                     let new_element = eval(environment, new_element)?;
-                    let mut vec = eval(environment, list)?;
-                    return match vec.get_mut() {
+                    let vec = eval(environment, list)?;
+                    return match &mut vec.get_mut().data {
                         ExpEnum::Vector(list) => {
                             if idx < 0 || idx >= list.len() as i64 {
                                 return Err(io::Error::new(
@@ -205,14 +199,14 @@ fn builtin_vec_setnth(
 // Destructive
 fn builtin_vec_push(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if let Some(new_item) = args.next() {
             if args.next().is_none() {
                 let new_item = eval(environment, new_item)?;
-                let mut vec = eval(environment, list)?;
-                return match vec.get_mut() {
+                let vec = eval(environment, list)?;
+                return match &mut vec.get_mut().data {
                     ExpEnum::Vector(list) => {
                         list.push(new_item);
                         Ok(vec)
@@ -234,16 +228,16 @@ fn builtin_vec_push(
 // Destructive
 fn builtin_vec_pop(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
-            return match eval(environment, list)?.get_mut() {
+            return match &mut eval(environment, list)?.get_mut().data {
                 ExpEnum::Vector(list) => {
                     if let Some(item) = list.pop() {
                         Ok(item)
                     } else {
-                        Ok(Expression::make_nil(&mut environment.gc))
+                        Ok(Expression::make_nil())
                     }
                 }
                 _ => Err(io::Error::new(
@@ -261,17 +255,17 @@ fn builtin_vec_pop(
 
 fn builtin_vec_is_empty(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
             let list = eval(environment, list)?;
-            return match list.get() {
+            return match &list.get().data {
                 ExpEnum::Vector(list) => {
                     if list.is_empty() {
-                        Ok(Expression::make_true(&mut environment.gc))
+                        Ok(Expression::make_true())
                     } else {
-                        Ok(Expression::make_nil(&mut environment.gc))
+                        Ok(Expression::make_nil())
                     }
                 }
                 _ => Err(io::Error::new(
@@ -290,15 +284,15 @@ fn builtin_vec_is_empty(
 // Destructive
 fn builtin_vec_vclear(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
-            let mut list = eval(environment, list)?;
-            return match list.get_mut() {
+            let list = eval(environment, list)?;
+            return match &mut list.get_mut().data {
                 ExpEnum::Vector(list) => {
                     list.clear();
-                    Ok(Expression::make_nil(&mut environment.gc))
+                    Ok(Expression::make_nil())
                 }
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -316,22 +310,22 @@ fn builtin_vec_vclear(
 // Destructive
 fn builtin_vec_remove_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(list) = args.next() {
             if args.next().is_none() {
                 let idx = eval(environment, idx)?;
-                let mut list = eval(environment, list)?;
-                let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get() {
-                    *i
+                let list = eval(environment, list)?;
+                let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+                    i
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "vec-remove-nth! first form must be an int",
                     ));
                 };
-                return match list.get_mut() {
+                return match &mut list.get_mut().data {
                     ExpEnum::Vector(inner_list) => {
                         if idx < 0 || idx >= inner_list.len() as i64 {
                             return Err(io::Error::new(
@@ -359,7 +353,7 @@ fn builtin_vec_remove_nth(
 // Destructive
 fn builtin_vec_insert_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
@@ -367,16 +361,16 @@ fn builtin_vec_insert_nth(
                 if args.next().is_none() {
                     let idx = eval(environment, idx)?;
                     let new_element = eval(environment, new_element)?;
-                    let mut list = eval(environment, list)?;
-                    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get() {
-                        *i
+                    let list = eval(environment, list)?;
+                    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+                        i
                     } else {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "vec-insert-nth! first form must be an int",
                         ));
                     };
-                    return match list.get_mut() {
+                    return match &mut list.get_mut().data {
                         ExpEnum::Vector(inner_list) => {
                             if idx < 0 || idx > inner_list.len() as i64 {
                                 return Err(io::Error::new(
@@ -403,7 +397,6 @@ fn builtin_vec_insert_nth(
 }
 
 pub fn add_vec_builtins<S: BuildHasher>(
-    gc: &mut GC,
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
 ) {
@@ -411,7 +404,6 @@ pub fn add_vec_builtins<S: BuildHasher>(
     data.insert(
         interner.intern("vec"),
         Expression::make_function(
-            gc,
             builtin_vec,
             "Usage: (vec item1 item2 .. itemN)
 
@@ -427,7 +419,6 @@ Example:
     data.insert(
         interner.intern("make-vec"),
         Expression::make_function(
-            gc,
             builtin_make_vec,
             "Usage: (make-vec capacity default)
 
@@ -445,7 +436,6 @@ Example:
     data.insert(
         interner.intern("vec-slice"),
         Expression::make_function(
-            gc,
             builtin_vec_slice,
             "Usage: (vec-slice vector start end?)
 
@@ -463,7 +453,6 @@ Example:
     data.insert(
         interner.intern("vec-nth"),
         Expression::make_function(
-            gc,
             builtin_vec_nth,
             "Usage: (vec-nth index vector)
 
@@ -481,7 +470,6 @@ Example:
     data.insert(
         interner.intern("vec-setnth!"),
         Expression::make_function(
-            gc,
             builtin_vec_setnth,
             "Usage: (vec-setnth! index value vector)
 
@@ -499,7 +487,6 @@ Example:
     data.insert(
         interner.intern("vec-push!"),
         Expression::make_function(
-            gc,
             builtin_vec_push,
             "Usage: (vec-push! vector object)
 
@@ -520,7 +507,6 @@ Example:
     data.insert(
         interner.intern("vec-pop!"),
         Expression::make_function(
-            gc,
             builtin_vec_pop,
             "Usage: (vec-pop! vector object)
 
@@ -541,7 +527,6 @@ Example:
     data.insert(
         interner.intern("vec-empty?"),
         Expression::make_function(
-            gc,
             builtin_vec_is_empty,
             "Usage: (vec-empty? vector)
 
@@ -557,7 +542,6 @@ Example:
     data.insert(
         interner.intern("vec-clear!"),
         Expression::make_function(
-            gc,
             builtin_vec_vclear,
             "Usage: (vec-clear! vector)
 
@@ -575,7 +559,6 @@ Example:
     data.insert(
         interner.intern("vec-remove-nth!"),
         Expression::make_function(
-            gc,
             builtin_vec_remove_nth,
             "Usage: (vec-remove-nth! index vector)
 
@@ -597,7 +580,6 @@ Example:
     data.insert(
         interner.intern("vec-insert-nth!"),
         Expression::make_function(
-            gc,
             builtin_vec_insert_nth,
             "Usage: (vec-insert-nth! index new-element vector)
 

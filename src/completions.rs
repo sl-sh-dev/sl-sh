@@ -95,21 +95,18 @@ impl ShellCompleter {
         }
         let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
         if let Some(comp_exp) = comp_exp {
-            let mut exp = match comp_exp.exp.get() {
+            let exp = match &comp_exp.exp.get().data {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     let mut environment = self.environment.borrow_mut();
                     let data = ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern("__completion_hook"),
                     ));
-                    v.push(Expression::alloc_data(&mut environment.gc, data));
+                    v.push(Expression::alloc_data(data));
                     for a in self.args.drain(..) {
-                        v.push(Expression::alloc_data(
-                            &mut environment.gc,
-                            ExpEnum::Atom(Atom::String(a)),
-                        ));
+                        v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(a))));
                     }
-                    Expression::with_list(&mut environment.gc, v)
+                    Expression::with_list(v)
                 }
                 _ => {
                     eprintln!("WARNING: __completion_hook not a function, ignoring.");
@@ -117,9 +114,9 @@ impl ShellCompleter {
                 }
             };
             let envir = &mut self.environment.borrow_mut();
-            match eval(envir, &mut exp) {
-                Ok(mut res) => {
-                    match res.get_mut() {
+            match eval(envir, exp) {
+                Ok(res) => {
+                    match &res.get().data {
                         ExpEnum::Atom(Atom::StringRef(s)) | ExpEnum::Atom(Atom::Symbol(s)) => {
                             match *s {
                                 "path" => HookResult::Path,
@@ -148,7 +145,7 @@ impl ShellCompleter {
                         },
                         ExpEnum::Vector(list) => {
                             let mut v = Vec::with_capacity(list.len());
-                            for l in list.drain(..) {
+                            for l in list {
                                 let s = match l.as_string(envir) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
@@ -411,8 +408,8 @@ fn find_lisp_things(
     symbols: bool,
     need_quote: bool,
 ) {
-    fn save_val(comps: &mut Vec<String>, data: &Expression, val: String, symbols: bool) {
-        match data.get() {
+    fn save_val(comps: &mut Vec<String>, data: Expression, val: String, symbols: bool) {
+        match &data.get().data {
             ExpEnum::Atom(Atom::Lambda(_)) => {
                 if !symbols {
                     comps.push(val);
@@ -450,7 +447,7 @@ fn find_lisp_things(
                             } else {
                                 format!("{}::{}", namespace, key)
                             };
-                            save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                            save_val(comps, data.get(key).unwrap().exp, val, symbols);
                         }
                     }
                 }
@@ -467,7 +464,7 @@ fn find_lisp_things(
                     } else {
                         (*key).to_string()
                     };
-                    save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                    save_val(comps, data.get(key).unwrap().exp, val, symbols);
                 }
             }
             loop_scope = scope.borrow().outer.clone();

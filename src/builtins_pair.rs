@@ -9,17 +9,14 @@ use crate::types::*;
 
 fn builtin_join(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
             if args.next().is_none() {
                 let arg0 = eval(environment, arg0)?;
                 let arg1 = eval(environment, arg1)?;
-                return Ok(Expression::alloc_data(
-                    &mut environment.gc,
-                    ExpEnum::Pair(arg0, arg1),
-                ));
+                return Ok(Expression::alloc_data(ExpEnum::Pair(arg0, arg1)));
             }
         }
     }
@@ -28,41 +25,39 @@ fn builtin_join(
 
 fn builtin_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut head: Option<Expression> = None;
-    let mut last = head.clone();
+    let mut last = head;
     for a in args {
         let a = eval(environment, a)?;
-        if let Some(mut inner_last) = last {
-            if let ExpEnum::Pair(_, e2) = inner_last.get_mut() {
+        if let Some(inner_last) = last {
+            if let ExpEnum::Pair(_, e2) = inner_last.get().data {
                 e2.get_mut()
-                    .replace(ExpEnum::Pair(a, Expression::make_nil(&mut environment.gc)));
-                last = Some(*e2);
+                    .data
+                    .replace(ExpEnum::Pair(a, Expression::make_nil()));
+                last = Some(e2);
             }
         } else {
-            let nil = Expression::make_nil(&mut environment.gc);
-            last = Some(Expression::alloc_data(
-                &mut environment.gc,
-                ExpEnum::Pair(a, nil),
-            ));
+            let nil = Expression::make_nil();
+            last = Some(Expression::alloc_data(ExpEnum::Pair(a, nil)));
         }
         if head.is_none() {
             head = last;
         }
     }
-    Ok(head.unwrap_or_else(|| Expression::make_nil(&mut environment.gc)))
+    Ok(head.unwrap_or_else(Expression::make_nil))
 }
 
 fn builtin_car(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match arg.get() {
-                ExpEnum::Pair(e1, _) => Ok(*e1),
+            return match arg.get().data {
+                ExpEnum::Pair(e1, _) => Ok(e1),
                 ExpEnum::Nil => Ok(arg),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "car requires a pair")),
             };
@@ -76,13 +71,13 @@ fn builtin_car(
 
 fn builtin_cdr(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match arg.get() {
-                ExpEnum::Pair(_, e2) => Ok(*e2),
+            return match arg.get().data {
+                ExpEnum::Pair(_, e2) => Ok(e2),
                 ExpEnum::Nil => Ok(arg),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "cdr requires a pair")),
             };
@@ -97,22 +92,22 @@ fn builtin_cdr(
 // Destructive
 fn builtin_xar(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
-                let mut pair = eval(environment, pair)?;
-                match pair.get_mut() {
-                    ExpEnum::Pair(e1, _) => {
+                let pair = eval(environment, pair)?;
+                let mut pair_d = pair.get_mut();
+                match &pair_d.data {
+                    ExpEnum::Pair(mut e1, _) => {
                         e1.replace(arg);
                     }
                     ExpEnum::Nil => {
-                        pair.get_mut().replace(ExpEnum::Pair(
-                            arg,
-                            Expression::make_nil(&mut environment.gc),
-                        ));
+                        pair_d
+                            .data
+                            .replace(ExpEnum::Pair(arg, Expression::make_nil()));
                     }
                     _ => {
                         return Err(io::Error::new(
@@ -134,22 +129,22 @@ fn builtin_xar(
 // Destructive
 fn builtin_xdr(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &mut Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
                 let arg = eval(environment, arg)?;
-                let mut pair = eval(environment, pair)?;
-                match pair.get_mut() {
-                    ExpEnum::Pair(_, e2) => {
+                let pair = eval(environment, pair)?;
+                let mut pair_d = pair.get_mut();
+                match pair_d.data {
+                    ExpEnum::Pair(_, mut e2) => {
                         e2.replace(arg);
                     }
                     ExpEnum::Nil => {
-                        pair.get_mut().replace(ExpEnum::Pair(
-                            Expression::make_nil(&mut environment.gc),
-                            arg,
-                        ));
+                        pair_d
+                            .data
+                            .replace(ExpEnum::Pair(Expression::make_nil(), arg));
                     }
                     _ => {
                         return Err(io::Error::new(
@@ -169,7 +164,6 @@ fn builtin_xdr(
 }
 
 pub fn add_pair_builtins<S: BuildHasher>(
-    gc: &mut GC,
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
 ) {
@@ -177,7 +171,6 @@ pub fn add_pair_builtins<S: BuildHasher>(
     data.insert(
         interner.intern("join"),
         Expression::make_function(
-            gc,
             builtin_join,
             "Usage: (join car cdr)
  
@@ -195,7 +188,6 @@ Example:
     data.insert(
         interner.intern("list"),
         Expression::make_function(
-            gc,
             builtin_list,
             "Usage: (list item0 item1 .. itemN)
 
@@ -210,7 +202,6 @@ Example:
     data.insert(
         interner.intern("car"),
         Expression::make_function(
-            gc,
             builtin_car,
             "Usage: (car pair)
 
@@ -227,7 +218,7 @@ Example:
     );
     data.insert(
         interner.intern("cdr"),
-        Expression::make_function(gc,builtin_cdr, "Usage: (cdr pair)
+        Expression::make_function(builtin_cdr, "Usage: (cdr pair)
 
 Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
 
@@ -242,7 +233,6 @@ Example:
     data.insert(
         interner.intern("xar!"),
         Expression::make_function(
-            gc,
             builtin_xar,
             "Usage: (xar! pair expression)
 
@@ -267,7 +257,6 @@ Example:
     data.insert(
         interner.intern("xdr!"),
         Expression::make_function(
-            gc,
             builtin_xdr,
             "Usage: (xdr! pair expression)
 
