@@ -142,9 +142,9 @@ impl Iterator for PairIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current {
-            if let ExpEnum::Pair(e1, e2) = current.get().data {
-                self.current = Some(e2);
-                Some(e1)
+            if let ExpEnum::Pair(e1, e2) = &current.get().data {
+                self.current = Some(*e2);
+                Some(*e1)
             } else {
                 None
             }
@@ -372,13 +372,13 @@ impl Expression {
 
     // If the expression is a lazy fn then resolve it to concrete expression.
     pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
-        let mut res = self;
-        while let ExpEnum::LazyFn(lambda, parts) = &self.get().data {
-            let mut lambda = lambda.clone();
+        if let ExpEnum::LazyFn(lambda, parts) = &self.get().data {
             let ib = &mut Box::new(ListIter::new_list(parts));
-            res = call_lambda(environment, &mut lambda, ib, false)?;
+            let res = call_lambda(environment, &lambda, ib, false)?;
+            res.resolve(environment)
+        } else {
+            Ok(self)
         }
-        Ok(res)
     }
 
     pub fn make_function(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
@@ -415,29 +415,18 @@ impl Expression {
         })
     }
 
-    pub fn cons_from_vec(v: &mut Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
+    pub fn cons_from_vec(v: &[Expression], meta: Option<ExpMeta>) -> Expression {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
-            let mut i = v.len() - 1;
-            loop {
-                if i == 0 {
-                    last_pair = ExpEnum::Pair(
-                        v.remove(i),
-                        Expression::alloc(ExpObj {
-                            data: last_pair.clone(),
-                            meta: None,
-                        }),
-                    );
-                    break;
-                } else {
-                    last_pair = ExpEnum::Pair(
-                        v.remove(i),
-                        Expression::alloc(ExpObj {
-                            data: last_pair.clone(),
-                            meta: None,
-                        }),
-                    );
-                }
+            let mut i = v.len();
+            while i > 0 {
+                last_pair = ExpEnum::Pair(
+                    v[i - 1],
+                    Expression::alloc(ExpObj {
+                        data: last_pair.clone(),
+                        meta: None,
+                    }),
+                );
                 i -= 1;
             }
         }

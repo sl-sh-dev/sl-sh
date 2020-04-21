@@ -94,7 +94,7 @@ fn builtin_apply(
             call_list.push(a);
         }
     }
-    let mut args = box_slice_it(&mut call_list[..]);
+    let mut args = box_slice_it(&call_list[..]);
     if let Some(command) = args.next() {
         let command = eval(environment, command)?;
         fn_call(environment, command, &mut args)
@@ -1066,7 +1066,7 @@ fn replace_commas(
     if is_vector {
         Ok(Expression::with_list_meta(output, meta))
     } else {
-        Ok(Expression::cons_from_vec(&mut output, meta))
+        Ok(Expression::cons_from_vec(&output, meta))
     }
 }
 
@@ -1269,9 +1269,9 @@ fn expand_macro_internal(
     arg: Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    let argd = &mut arg.get_mut().data;
-    if let ExpEnum::Vector(list) = argd {
-        let (command, parts) = match list.split_first_mut() {
+    let arg_d = arg.get();
+    if let ExpEnum::Vector(list) = &arg_d.data {
+        let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
                 return Ok(None);
@@ -1295,7 +1295,7 @@ fn expand_macro_internal(
         } else {
             Ok(None)
         }
-    } else if let ExpEnum::Pair(e1, e2) = argd {
+    } else if let ExpEnum::Pair(e1, e2) = &arg_d.data {
         let e2_d = e2.get();
         let mut e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
             Box::new(ListIter::new_list(&list))

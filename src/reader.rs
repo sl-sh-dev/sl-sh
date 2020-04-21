@@ -74,7 +74,7 @@ fn escape_to_char(escape_code: &[char]) -> char {
 
 fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ParseError> {
     match stack.pop() {
-        Some(mut v) => match stack.pop() {
+        Some(v) => match stack.pop() {
             Some(mut v2) => {
                 match v.list_type {
                     ListType::Vector => {
@@ -87,7 +87,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
                                 meta: exp_meta,
                             }));
                         } else {
-                            v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
+                            v2.vec.push(Expression::cons_from_vec(&v.vec, exp_meta));
                         }
                     }
                 }

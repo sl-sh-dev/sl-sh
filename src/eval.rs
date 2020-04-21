@@ -13,7 +13,7 @@ use crate::types::*;
 
 pub fn call_lambda(
     environment: &mut Environment,
-    lambda: &mut Lambda,
+    lambda: &Lambda,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> io::Result<Expression> {
@@ -74,7 +74,7 @@ pub fn call_lambda(
                 lambda = &mut lambda_int;
                 looping = true;
                 environment.current_scope.pop();
-                // scope is popped so can use ? in this if now.
+                // scope is popped so can use ? now.
                 let new_scope = build_new_scope(Some(lambda.capture.clone()));
                 let mut ib = Box::new(ListIter::new_list(&parts));
                 setup_args(
@@ -98,7 +98,7 @@ pub fn call_lambda(
 
 fn exec_macro(
     environment: &mut Environment,
-    sh_macro: &mut Macro,
+    sh_macro: &Macro,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
@@ -153,9 +153,7 @@ pub fn fn_call(
             if let Some(exp) = get_expression(environment, command) {
                 match exp.exp.get().data.clone() {
                     ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
-                    ExpEnum::Atom(Atom::Lambda(mut f)) => {
-                        call_lambda(environment, &mut f, args, true)
-                    }
+                    ExpEnum::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args, true),
                     _ => {
                         let msg = format!(
                             "Symbol {} is not callable (or is macro or special form).",
@@ -172,8 +170,8 @@ pub fn fn_call(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        ExpEnum::Atom(Atom::Lambda(mut l)) => call_lambda(environment, &mut l, args, true),
-        ExpEnum::Atom(Atom::Macro(mut m)) => exec_macro(environment, &mut m, args),
+        ExpEnum::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args, true),
+        ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
         ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
             let msg = format!(
@@ -201,17 +199,16 @@ fn make_lazy(
     }))
 }
 
-pub fn box_slice_it<'a>(v: &'a mut [Expression]) -> Box<dyn Iterator<Item = Expression> + 'a> {
+pub fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = Expression> + 'a> {
     Box::new(ListIter::new_slice(v))
 }
 
 fn fn_eval_lazy(environment: &mut Environment, expression: Expression) -> io::Result<Expression> {
-    // XXX look into all these data clones...
-    let exp_d = &mut expression.get_mut().data;
+    let exp_d = expression.get();
     let e2_d;
-    let (command, mut parts) = match exp_d {
+    let (command, mut parts) = match &exp_d.data {
         ExpEnum::Vector(parts) => {
-            let (command, parts) = match parts.split_first_mut() {
+            let (command, parts) = match parts.split_first() {
                 Some((c, p)) => (c, p),
                 None => {
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
@@ -242,8 +239,8 @@ fn fn_eval_lazy(environment: &mut Environment, expression: Expression) -> io::Re
     } else {
         command
     };
-    let command_d = command.get().data.clone();
-    match command_d {
+    let command_d = command.get();
+    match &command_d.data {
         ExpEnum::Atom(Atom::Symbol(command)) => {
             if command.is_empty() {
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -256,18 +253,16 @@ fn fn_eval_lazy(environment: &mut Environment, expression: Expression) -> io::Re
                 None
             };
             if let Some(exp) = form {
-                match exp.exp.get().data.clone() {
-                    ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-                    ExpEnum::Atom(Atom::Lambda(mut f)) => {
+                match &exp.exp.get().data {
+                    ExpEnum::Function(c) => (c.func)(environment, &mut parts),
+                    ExpEnum::Atom(Atom::Lambda(f)) => {
                         if environment.allow_lazy_fn {
                             make_lazy(environment, &f, &mut parts)
                         } else {
-                            call_lambda(environment, &mut f, &mut parts, true)
+                            call_lambda(environment, &f, &mut parts, true)
                         }
                     }
-                    ExpEnum::Atom(Atom::Macro(mut m)) => {
-                        exec_macro(environment, &mut m, &mut parts)
-                    }
+                    ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
                     _ => {
                         let exp = exp.exp;
                         eval(environment, exp)
@@ -293,44 +288,50 @@ fn fn_eval_lazy(environment: &mut Environment, expression: Expression) -> io::Re
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        ExpEnum::Vector(list) => match eval(environment, command)?.get().data.clone() {
-            ExpEnum::Atom(Atom::Lambda(mut l)) => {
-                if environment.allow_lazy_fn {
-                    make_lazy(environment, &l, &mut parts)
-                } else {
-                    call_lambda(environment, &mut l, &mut parts, true)
+        ExpEnum::Vector(_) => {
+            drop(command_d); // Drop the lock on command.
+            match &eval(environment, command)?.get().data {
+                ExpEnum::Atom(Atom::Lambda(l)) => {
+                    if environment.allow_lazy_fn {
+                        make_lazy(environment, &l, &mut parts)
+                    } else {
+                        call_lambda(environment, &l, &mut parts, true)
+                    }
+                }
+                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
+                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
+                _ => {
+                    let msg = format!("Not a valid command {:?}", command);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
                 }
             }
-            ExpEnum::Atom(Atom::Macro(mut m)) => exec_macro(environment, &mut m, &mut parts),
-            ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-            _ => {
-                let msg = format!("Not a valid command {:?}", list);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        },
-        ExpEnum::Pair(_, _) => match eval(environment, command)?.get().data.clone() {
-            ExpEnum::Atom(Atom::Lambda(mut l)) => {
-                if environment.allow_lazy_fn {
-                    make_lazy(environment, &l, &mut parts)
-                } else {
-                    call_lambda(environment, &mut l, &mut parts, true)
+        }
+        ExpEnum::Pair(_, _) => {
+            drop(command_d); // Drop the lock on command.
+            match &eval(environment, command)?.get().data {
+                ExpEnum::Atom(Atom::Lambda(l)) => {
+                    if environment.allow_lazy_fn {
+                        make_lazy(environment, &l, &mut parts)
+                    } else {
+                        call_lambda(environment, &l, &mut parts, true)
+                    }
+                }
+                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
+                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
+                _ => {
+                    let msg = format!("Not a valid command {:?}", command);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
                 }
             }
-            ExpEnum::Atom(Atom::Macro(mut m)) => exec_macro(environment, &mut m, &mut parts),
-            ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-            _ => {
-                let msg = format!("Not a valid command {:?}", command);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
-            }
-        },
-        ExpEnum::Atom(Atom::Lambda(mut l)) => {
+        }
+        ExpEnum::Atom(Atom::Lambda(l)) => {
             if environment.allow_lazy_fn {
                 make_lazy(environment, &l, &mut parts)
             } else {
-                call_lambda(environment, &mut l, &mut parts, true)
+                call_lambda(environment, &l, &mut parts, true)
             }
         }
-        ExpEnum::Atom(Atom::Macro(mut m)) => exec_macro(environment, &mut m, &mut parts),
+        ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
         ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
             let msg = format!(
@@ -394,8 +395,11 @@ fn str_process(environment: &mut Environment, string: &str) -> Expression {
     }
 }
 
-fn internal_eval(environment: &mut Environment, expression: Expression) -> io::Result<Expression> {
-    let mut expression = expression;
+fn internal_eval(
+    environment: &mut Environment,
+    expression_in: Expression,
+) -> io::Result<Expression> {
+    let mut expression = expression_in;
     if environment.sig_int.load(Ordering::Relaxed) {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -415,9 +419,9 @@ fn internal_eval(environment: &mut Environment, expression: Expression) -> io::R
         ));
     }
     // If we have a macro expand it and replace the expression with the expansion.
-    let mut macro_replace = true;
     if let Some(exp) = expand_macro(environment, expression, false)? {
         let mut nv = Vec::new();
+        let mut macro_replace = true;
         if let ExpEnum::Vector(list) = &exp.get().data {
             for item in list {
                 let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
