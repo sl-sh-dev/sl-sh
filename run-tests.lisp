@@ -81,7 +81,8 @@
 			(str shell::*fg-black* shell::*bg-red*
 			"FAIL:"
 			shell::*fg-default* shell::*bg-default*
-			" " test-name)))))
+			" " test-name)))
+		(nil (err (str "Invalid test result status for test name " test-name)))))
 
 (defn report-test-results (tests test-report) (progn
 	(defq exit-status :passed)
@@ -125,19 +126,113 @@
 
 
 ;; run tests for non-root namespaces
-(for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
-	(printer (str "Tests from " a-ns " namspace"))
+(for a-ns (filter (fn (x) (and
+(not (= x "user"))
+(not (= x "core"))
+							(not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
+	(printer (str "Tests from " a-ns))
 	(defq sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))
 	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
-	(run-tests-for (str a-ns " namespace unit tests") sym-list final-test-report)))
+	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
-
 (progn
-(printer (str "Tests from root namspace"))
+(printer (str "Tests from root"))
 (defq sym-list (ns-symbols 'root))
 (defq sym-list (make-test-list-from-symbols sym-list "root"))
-(run-tests-for (str "root namespace unit tests") sym-list final-test-report))
+(run-tests-for (str "root unit tests") sym-list final-test-report))
+
+;; run tests for root namespace special namespace tests (ns cmd can not be run
+;; inside a fcn
+(progn
+(printer "Tests from root")
+(defq sym-list (ns-symbols 'root))
+(defq sym-list (make-test-list-from-symbols sym-list "root"))
+(run-tests-for (str "root unit tests") sym-list final-test-report))
+
+(defq ns-test-set-item (make-hash))
+(hash-set! ns-test-set-item :name "namespace unit tests")
+(hash-set! ns-test-set-item :total 0)
+(hash-set! ns-test-set-item :failed 0)
+(hash-set! ns-test-set-item :passed 0)
+(hash-set! ns-test-set-item :no-test 0)
+
+
+(printer "Tests from namespace")
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-create)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-create"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-create"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-enter)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-enter"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-enter"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-exists?)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-exists"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-exists"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-list)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-list"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-list"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-pop)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-pop"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-pop"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-symbols)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-symbols"))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-symbols"))))
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'root::*ns*)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "*ns* "))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "*ns* "))))
+
+(append! final-test-report ns-test-set-item)
+
+(println)
+
 
 (defn pprint-final-test-report (report-list) (progn
 	(println (str shell::*fg-black* shell::*bg-white*))
@@ -161,8 +256,8 @@
 		(println (hash-get test :name))
 		(println "total: " total)
 		(println "failed: " failed)
-		(println "no test " passed)
-		(println "passed: " notest)))
+		(println "no test " notest)
+		(println "passed: " passed)))
 
 		(println "-----------------------------")
 		(println "All tests:")
@@ -172,10 +267,6 @@
 		(println "no test " global-notest)
 	(println (str shell::*fg-default* shell::*bg-default*))))
 
-;;TODO gpwclark import ns tests from run-root-test.lisp
-
 (println)
 (printer "Test Summary")
 (pprint-final-test-report final-test-report)
-
-;;TODO gpwclark meta-line-no unit tests.

@@ -38,6 +38,11 @@
           (for v seq (if (= v value) (set 'found t)))
           (if (found) (progn (println (str value " found in " seq))(exit 3)))))
 
+; Make this a macro to it will not create a scope and will work for namespace tests.
+(defmacro run-ns-example (sym)
+	;`(eval (str "(progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) ")")))
+	`(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
+
 (defmacro run-example (sym)
 	`(progn
 		(defq doc-list (str-split "Example:" (doc ,sym)))
