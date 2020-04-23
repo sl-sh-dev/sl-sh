@@ -1,4 +1,4 @@
-#!/bin/sl-sh
+#!/usr/bin/env sl-sh
 
 (core::ns-import 'core)
 (ns-import 'shell)
