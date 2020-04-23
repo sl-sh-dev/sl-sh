@@ -126,10 +126,7 @@
 
 
 ;; run tests for non-root namespaces
-(for a-ns (filter (fn (x) (and
-(not (= x "user"))
-(not (= x "core"))
-							(not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
+(for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
 	(printer (str "Tests from " a-ns))
 	(defq sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))
 	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
@@ -151,7 +148,6 @@
 (hash-set! ns-test-set-item :failed 0)
 (hash-set! ns-test-set-item :passed 0)
 (hash-set! ns-test-set-item :no-test 0)
-
 
 (printer "Tests from namespace")
 (progn
