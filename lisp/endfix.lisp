@@ -15,7 +15,7 @@
 ;; supports the bash equivalent of ; but use @@ instead (conflict with ; b/c it
 ;; in lisp that indicates a comment.
 
-;; TODOS
+;; TODOS gpwclark
 ;; 1. support things like $2la for second to last arg, $3la, etc..
 ;; 2. organize fcns
 ;; 3. use docstrings

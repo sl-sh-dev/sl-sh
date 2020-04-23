@@ -747,7 +747,14 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         .borrow_mut()
         .insert_exp(environment.interner.intern("args"), data);
     if let Err(err) = load(&mut environment, command) {
-        eprintln!("Error running {}: {}", command, err);
+        eprint!("Error running {}: {}", command, err);
+        if let Some(meta) = &environment.error_meta {
+            eprint!(
+                "\n[[[ {}, line: {}, column: {} ]]]",
+                meta.file, meta.line, meta.col
+            )
+        }
+        eprintln!("");
         if environment.exit_code.is_none() {
             return 1;
         }
