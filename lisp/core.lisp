@@ -185,12 +185,7 @@ The result from the previous application of the reducing-fcn will be used as the
 first argument to the reducing-fcn and the second argument will be the next item
 in the collection when the collection is empty reduce will return the
 amalgamated result.
-
-Example:
-```
-(reduce + 0 (list 1 2 3 4 5))
-;; 15
-```"
+"
 	(reducing-fcn init-val coll)
 		(if (not (first coll))
 				init-val
@@ -202,18 +197,36 @@ Example:
 `when` is a convenience function used to check a form, `provided-condition`,
 and run some form, `if-true`, if the provided as the first argument evaluates
 to true.
-
-Example:
-```
-(when #t (println \"that's so true!\")) ;; prints \"that's so true!\"
-
-(when (= 0 1) (println \"pigs can fly\")) ;; prints nothing
-```"
+"
 	(provided-condition if-true)
 	`(if ,provided-condition ,if-true))
 
+(defn filter
+"Usage: (reduce pred coll)
+
+`filter` is used to strip a collection, `coll`, of all values that do not
+pass the condition defined by the function, `pred`. Filter returns a new
+collection.
+
+Example:
+(assert-equals '(2 4) (filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
+"
+	(pred coll)
+		(progn
+			(defq filtering-fcn
+				(fn (pred filtered-coll coll-to-filter)
+					(progn (defq fst (first coll-to-filter))
+					(if (not fst)
+						filtered-coll
+						(recur
+							pred
+							(if (pred fst) (append filtered-coll fst) filtered-coll)
+							(rest coll-to-filter))))))
+			(filtering-fcn pred (list) coll)))
+
+(defmacro func? (to-test) `(progn
+	(or (builtin? ,to-test) (lambda? ,to-test) (macro? ,to-test))))
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq reduce when))
-
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq reduce when filter func?))

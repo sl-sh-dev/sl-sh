@@ -10,10 +10,10 @@
                 nil
                 (recur (rest list1) (rest list2))))))
 
-(defmacro assert-equal (expected-val right-val &rest args)
-      `(if (or (list? ,expected-val)(vec? ,expected-val))
-          (if (lists= ,expected-val ,right-val) t (progn (println (apply str "Expected " ,expected-val " got " ,right-val ,args (meta-file-name)(meta-line-no)(meta-column-no)))(exit 2)))
-          (if (= ,expected-val ,right-val) t (progn (println (apply str "Expected " ,expected-val " got " ,right-val (meta-file-name)(meta-line-no)": "(meta-column-no),args))(exit 1)))))
+(defn assert-equal (expected-val right-val &rest args)
+      (if (or (list? expected-val)(vec? expected-val))
+          (if (lists= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
+          (if (= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))))
 
 (defn assert-not-equal (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
@@ -39,9 +39,16 @@
           (if (found) (progn (println (str value " found in " seq))(exit 3)))))
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
-(defmacro run-example (sym)
+(defmacro run-ns-example (sym)
 	;`(eval (str "(progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) ")")))
 	`(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
+
+(defmacro run-example (sym)
+	`(progn
+		(defq doc-list (str-split "Example:" (doc ,sym)))
+		(if (> (length doc-list) 1)
+			(eval (str "(progn " (str (vec-nth 1 doc-list)) ")"))
+			:no-test)))
 
 (ns-export '(assert-equal assert-true assert-false run-example))
 
