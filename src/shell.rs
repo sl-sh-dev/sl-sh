@@ -93,6 +93,7 @@ t
             eprintln!("WARNING: Failed to load init script slshrc: {}", err);
         }
     }
+    gc_mut().clean();
 }
 
 fn get_prompt(environment: &mut Environment) -> Prompt {
@@ -556,6 +557,19 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         if environment.borrow().exit_code.is_some() {
             break;
         }
+        println!(
+            "PRE  {}/{}/{}",
+            gc().objects(),
+            gc().used_objects(),
+            gc().free_objects()
+        );
+        gc_mut().clean();
+        println!(
+            "POST {}/{}/{}",
+            gc().objects(),
+            gc().used_objects(),
+            gc().free_objects()
+        );
     }
     if environment.borrow().exit_code.is_some() {
         environment.borrow().exit_code.unwrap()

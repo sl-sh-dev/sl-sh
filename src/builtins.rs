@@ -864,29 +864,30 @@ fn builtin_dyn(
         None
     };
     if let Some(exp) = args.next() {
-        environment.dynamic_scope.insert(
-            key,
-            Reference::new_rooted(
-                val,
-                RefMetaData {
-                    namespace: None,
-                    doc_string: None,
-                },
-            ),
-        );
-        let res = eval(environment, exp);
-        if let Some(old_val) = old_val {
-            environment.dynamic_scope.insert(key, old_val);
-        } else {
-            environment.dynamic_scope.remove(key);
+        if args.next().is_none() {
+            environment.dynamic_scope.insert(
+                key,
+                Reference::new_rooted(
+                    val,
+                    RefMetaData {
+                        namespace: None,
+                        doc_string: None,
+                    },
+                ),
+            );
+            let res = eval(environment, exp);
+            if let Some(old_val) = old_val {
+                environment.dynamic_scope.insert(key, old_val);
+            } else {
+                environment.dynamic_scope.remove(key);
+            }
+            return res;
         }
-        res
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "dyn requires three expressions (symbol, value, form to evaluate)",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "dyn requires three expressions (symbol, value, form to evaluate)",
+    ))
 }
 
 fn builtin_to_symbol(
@@ -1019,19 +1020,24 @@ fn replace_commas(
             } else if amp_next {
                 drop(exp_d);
                 let nl = eval(environment, exp)?;
-                if let ExpEnum::Vector(new_list) = &nl.get().data {
-                    for item in new_list.iter() {
-                        output.push(item.clone());
+                match &nl.get().data {
+                    ExpEnum::Vector(new_list) => {
+                        for item in new_list {
+                            output.push(*item);
+                        }
                     }
-                } else if let ExpEnum::Pair(_, _) = &nl.get().data {
-                    for item in nl.iter() {
-                        output.push(item.clone());
+                    ExpEnum::Pair(_, _) => {
+                        for item in nl.iter() {
+                            output.push(item);
+                        }
                     }
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        ",@ must be applied to a list",
-                    ));
+                    ExpEnum::Nil => {}
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            ",@ must be applied to a list",
+                        ));
+                    }
                 }
                 amp_next = false;
             } else {
@@ -1044,19 +1050,24 @@ fn replace_commas(
         } else if amp_next {
             drop(exp_d);
             let nl = eval(environment, exp)?;
-            if let ExpEnum::Vector(new_list) = &nl.get().data {
-                for item in new_list {
-                    output.push(*item);
+            match &nl.get().data {
+                ExpEnum::Vector(new_list) => {
+                    for item in new_list {
+                        output.push(*item);
+                    }
                 }
-            } else if let ExpEnum::Pair(_, _) = &nl.get().data {
-                for item in nl.iter() {
-                    output.push(item.clone());
+                ExpEnum::Pair(_, _) => {
+                    for item in nl.iter() {
+                        output.push(item);
+                    }
                 }
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    ",@ must be applied to a list",
-                ));
+                ExpEnum::Nil => {}
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        ",@ must be applied to a list",
+                    ));
+                }
             }
             amp_next = false;
         } else {
@@ -1335,37 +1346,43 @@ pub fn expand_macro(
 
 fn expand_macro_all(environment: &mut Environment, arg: Expression) -> io::Result<Expression> {
     if let Some(exp_outer) = expand_macro(environment, arg, false)? {
-        let exp_outer2 = exp_outer;
-        let exp = &mut exp_outer.get_mut().data;
-        if let ExpEnum::Vector(list) = exp {
+        let exp_d = exp_outer.get();
+        if let ExpEnum::Vector(list) = &exp_d.data {
             let mut nv = Vec::new();
             for item in list {
                 nv.push(expand_macro_all(environment, *item)?);
             }
-            exp.replace(ExpEnum::Vector(nv));
-        } else if let ExpEnum::Pair(_, _) = exp {
+            drop(exp_d);
+            exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
+        } else if let ExpEnum::Pair(_, _) = &exp_d.data {
             let mut nv = Vec::new();
-            for item in exp_outer2.iter() {
+            drop(exp_d);
+            for item in exp_outer.iter() {
                 nv.push(expand_macro_all(environment, item)?);
             }
-            exp.replace(ExpEnum::cons_from_vec(&mut nv));
+            exp_outer
+                .get_mut()
+                .data
+                .replace(ExpEnum::cons_from_vec(&mut nv));
         }
-        Ok(exp_outer2)
+        Ok(exp_outer)
     } else {
         let arg2 = arg;
-        let argd = &mut arg.get_mut().data;
-        if let ExpEnum::Vector(list) = argd {
+        let arg_d = arg.get();
+        if let ExpEnum::Vector(list) = &arg_d.data {
             let mut nv = Vec::new();
             for item in list {
                 nv.push(expand_macro_all(environment, *item)?);
             }
-            argd.replace(ExpEnum::Vector(nv));
-        } else if let ExpEnum::Pair(_, _) = argd {
+            drop(arg_d);
+            arg.get_mut().data.replace(ExpEnum::Vector(nv));
+        } else if let ExpEnum::Pair(_, _) = &arg_d.data {
             let mut nv = Vec::new();
+            drop(arg_d);
             for item in arg2.iter() {
                 nv.push(expand_macro_all(environment, item)?);
             }
-            argd.replace(ExpEnum::cons_from_vec(&mut nv));
+            arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
         }
         Ok(arg2)
     }
@@ -2268,11 +2285,14 @@ Read and eval a file (from path- a string).
 Example:
 (def 'test-load-one nil)
 (def 'test-load-two nil)
-(write-line (open \"/tmp/slsh-test-load.testing\" :create :truncate) \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(def 'test-load-fn (open \"/tmp/slsh-test-load.testing\" :create :truncate))
+(write-line test-load-fn \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(close test-load-fn)
 (set 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
-", root
+",
+            root,
         ),
     );
     data.insert(
@@ -2335,7 +2355,7 @@ Print the arguments (as strings) to *stdout*.
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (print \"Print test out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (progn (print \"Print test out\") (close *stdout*)))
 (test::assert-equal \"Print test out\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
             root,
@@ -2351,7 +2371,7 @@ Print the arguments (as strings) to *stdout* and then a newline.
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (println \"Println test out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (progn (println \"Println test out\") (close *stdout*)))
 (test::assert-equal \"Println test out\n\" (read-line (open \"/tmp/sl-sh.println.test\" :read)))
 ",
             root,
@@ -2367,7 +2387,7 @@ Print the arguments (as strings) to *stderr*.
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (eprint \"eprint test out\"))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (progn (eprint \"eprint test out\") (close *stderr*)))
 (test::assert-equal \"eprint test out\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
             root,
@@ -2383,7 +2403,7 @@ Print the arguments (as strings) to *stderr* and then a newline.
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (eprintln \"eprintln test out\"))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (progn (eprintln \"eprintln test out\") (close *stderr*)))
 (test::assert-equal \"eprintln test out\n\" (read-line (open \"/tmp/sl-sh.eprintln.test\" :read)))
 ", root
         ),
@@ -2545,7 +2565,7 @@ used indirectly).
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
-(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (progn (test-dyn-fn)))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 ",
             root,

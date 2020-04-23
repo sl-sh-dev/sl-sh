@@ -136,7 +136,7 @@ Example:
 (write-line stdin-test \"Test line\")
 (close stdin-test)
 ; Use a file for stdin for test.
-(dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (test::assert-equal \"Test line\n\" (read-line *stdin*)))
+(dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (progn (test::assert-equal \"Test line\n\" (read-line *stdin*)) (close *stdin*)))
 ".to_string()),
                 },
             ),
@@ -156,7 +156,7 @@ as the default for print and println.
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (write-line *stdout* \"Test out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (progn (write-line *stdout* \"Test out\") (close *stdout*)))
 (test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
 ".to_string()),
                 },
@@ -177,7 +177,7 @@ as the default for eprint and eprintln.
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (write-line *stderr* \"Test Error\"))
+(dyn '*stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (progn (write-line *stderr* \"Test Error\") (close *stderr*)))
 (test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
 ".to_string()),
                 },

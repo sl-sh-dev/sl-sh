@@ -385,7 +385,9 @@ Options are:
     :on-error-nil
 
 Example:
-(write-line (open \"/tmp/slsh-tst-open.txt\" :create :truncate) \"Test Line One\")
+(def 'test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line test-open-f \"Test Line One\")
+(close test-open-f)
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
 ",
             root,

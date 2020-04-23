@@ -336,10 +336,6 @@ impl Expression {
         Expression::alloc(self.get().clone())
     }
 
-    pub fn replace(&mut self, new_data: Expression) {
-        self.obj = new_data.obj;
-    }
-
     pub fn get(&self) -> Obj<'_, ExpObj> {
         gc().get(self.obj).expect("Invalid expression!")
     }

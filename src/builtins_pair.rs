@@ -100,22 +100,17 @@ fn builtin_xar(
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
-                match &pair_d.data {
-                    ExpEnum::Pair(mut e1, _) => {
-                        e1.replace(arg);
-                    }
-                    ExpEnum::Nil => {
-                        pair_d
-                            .data
-                            .replace(ExpEnum::Pair(arg, Expression::make_nil()));
-                    }
+                let new_pair = match &pair_d.data {
+                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg, *e2),
+                    ExpEnum::Nil => ExpEnum::Pair(arg, Expression::make_nil()),
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "xar! requires a pair for it's first form",
                         ));
                     }
-                }
+                };
+                pair_d.data.replace(new_pair);
                 return Ok(pair);
             }
         }
@@ -137,22 +132,17 @@ fn builtin_xdr(
                 let arg = eval(environment, arg)?;
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
-                match pair_d.data {
-                    ExpEnum::Pair(_, mut e2) => {
-                        e2.replace(arg);
-                    }
-                    ExpEnum::Nil => {
-                        pair_d
-                            .data
-                            .replace(ExpEnum::Pair(Expression::make_nil(), arg));
-                    }
+                let new_pair = match &pair_d.data {
+                    ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(*e1, arg),
+                    ExpEnum::Nil => ExpEnum::Pair(Expression::make_nil(), arg),
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "xdr! requires a pair for it's first form",
                         ));
                     }
-                }
+                };
+                pair_d.data.replace(new_pair);
                 return Ok(pair);
             }
         }

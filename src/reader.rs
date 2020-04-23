@@ -610,7 +610,7 @@ fn read2(
     }
     let exp_meta = get_meta(name, 0, 0);
     close_list(&mut stack, exp_meta.clone())?;
-    if stack.len() > 1 {
+    let res = if stack.len() > 1 {
         Err(ParseError {
             reason: "WTF?".to_string(),
         })
@@ -644,7 +644,8 @@ fn read2(
                 reason: "WTF, Empty results".to_string(),
             }),
         }
-    }
+    };
+    res
 }
 
 pub fn read(
