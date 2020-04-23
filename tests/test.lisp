@@ -45,10 +45,16 @@
 
 (defmacro run-example (sym)
 	`(progn
-		(defq doc-list (str-split "Example:" (doc ,sym)))
+       ;;(println "hey! " sym)
+		(defq doc-list (str-split "Example:" (str (doc ,sym))))
+        ;;(println "doc-list len: " (vec-nth 0 doc-list))
 		(if (> (length doc-list) 1)
-			(eval (str "(progn " (str (vec-nth 1 doc-list)) ")"))
-			:no-test)))
+			(progn
+              ;;(println "ok i will run the test")
+             (eval (str "(progn " (println (vec-nth 1 doc-list)) (str (vec-nth 1 doc-list)) ")")))
+			(progn
+              ;;(println "there aint no test")
+             :no-test))))
 
 (ns-export '(assert-equal assert-true assert-false run-example))
 

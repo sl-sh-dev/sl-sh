@@ -88,7 +88,18 @@ otherwise. If a non list or non vector is passed in it returns false."
             (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
             (err "Not a vector or list"))))
 
-(defn in? (to-search item)
+(defn in?
+"
+Takes a seq? and returns true if the second argument is is in list, false otherwise.
+
+;;TODO need a test to check err is returned if not a seq?
+Example:
+;; check list contains in? fcn
+(let ((vowels-list (list 'a 'e 'i 'o 'u)))
+    (assert-true (in? vowels-list 'u))
+    (assert-false (in? vowels-list 'c)))
+"
+  (to-search item)
   (progn
     (defq first-arg (first to-search))
     (if (nil? first-arg)
