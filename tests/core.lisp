@@ -2,9 +2,9 @@
 (ns-import 'test)
 
 ;; check list contains in? fcn
-(let ((vowels-list (list "a" "e" "i" "o" "u")))
-    (assert-true (in? vowels-list "u") (str ". line number: " (meta-line-no)))
-    (assert-false (in? vowels-list "c")) (str ". line number: " (meta-line-no)))
+(let ((vowels-list (list 'a 'e 'i 'o 'u)))
+    (assert-true (in? vowels-list 'u))
+    (assert-false (in? vowels-list 'c)))
 
 ;; check reduce
 (assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))) (str ". line number: " (meta-line-no)))

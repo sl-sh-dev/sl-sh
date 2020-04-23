@@ -92,35 +92,12 @@ otherwise. If a non list or non vector is passed in it returns false."
 "
 Takes a seq? and returns true if the second argument is is in list, false otherwise.
 
+;;TODO need a test to check err is returned if not a seq?
 Example:
-
-(defn lists= (list1 list2)
-    (if (not (= (length list1)(length list2)))
-        nil
-        (if (= (length list1) 0)
-            t
-            (if (not (= (first list1)(first list2)))
-                nil
-                (recur (rest list1) (rest list2))))))
-
-(defn assert-equal (expected-val right-val &rest args)
-      (if (or (list? expected-val)(vec? expected-val))
-          (if (lists= expected-val right-val) t (progn (println (apply str \"Expected \" expected-val \" got \" right-val args))(exit 2)))
-          (if (= expected-val right-val) t (progn (println (apply str \"Expected \" expected-val \" got \" right-val args))(exit 1)))))
-
-(defn assert-not-equal (expected-val right-val &rest args)
-      (if (or (list? expected-val)(vec? expected-val))
-          (if (not (lists= expected-val right-val)) t (progn (println (apply str \"Did not expect \" expected-val \" got \" right-val args))(exit 2)))
-          (if (not (= expected-val right-val)) t (progn (println (apply str \"Did not expect \" expected-val \" got \" right-val args))(exit 1)))))
-
-(defn assert-true (value &rest args)
-      (apply assert-equal t value args))
-
-(defn assert-false (value &rest args)
-      (apply assert-equal nil value args))
-
-(println \"meep\")
-(assert-equal 1 2)
+;; check list contains in? fcn
+(let ((vowels-list (list 'a 'e 'i 'o 'u)))
+    (assert-true (in? vowels-list 'u))
+    (assert-false (in? vowels-list 'c)))
 "
   (to-search item)
   (progn
