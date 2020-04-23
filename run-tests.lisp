@@ -14,10 +14,54 @@
 			(hash-set! err-map :error (first (rest ret))))
 		ret)))
 
+(defn lists= (list1 list2)
+    (if (not (= (length list1)(length list2)))
+        nil
+        (if (= (length list1) 0)
+            t
+            (if (not (= (first list1)(first list2)))
+                nil
+                (recur (rest list1) (rest list2))))))
+
+(defn assert-equal (expected-val right-val &rest args)
+      (if (or (list? expected-val)(vec? expected-val))
+          (if (lists= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
+          (if (= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))))
+
+(defn assert-not-equal (expected-val right-val &rest args)
+      (if (or (list? expected-val)(vec? expected-val))
+          (if (not (lists= expected-val right-val)) t (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 2)))
+          (if (not (= expected-val right-val)) t (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1)))))
+
+(defn assert-true (value &rest args)
+      (apply assert-equal t value args))
+
+(defn assert-false (value &rest args)
+      (apply assert-equal nil value args))
+
+(defn assert-includes (value seq)
+      (progn
+          (def 'found nil)
+          (for v seq (if (= v value) (set 'found t)))
+          (if (not found) (progn (println (str value " not found in " seq))(exit 3)))))
+
+(defn assert-not-includes (value seq)
+      (progn
+          (def 'found nil)
+          (for v seq (if (= v value) (set 'found t)))
+          (if (found) (progn (println (str value " found in " seq))(exit 3)))))
+
 ;;TODO gpwclark remove this error stack on call when "(error-stack-on)" becomes an environment variable
 (error-stack-on)
 
 (defq tests-dir "tests")
+
+(defn has-example (docstring)
+	(str-contains "Example:" docstring))
+
+(defn exec-str (docstring) (progn
+	(defq test (vec-nth 1 (str-split "Example:" docstring)))
+	(fn () (eval (str "(progn " test ")")))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
@@ -33,9 +77,11 @@
 				(= "*ns*" (str sym))))) (progn
 		(defq test-set-item (make-hash))
 		(hash-set! test-set-item :name (str sym))
-		(if (str-contains "Example:" (doc fully-qualified-symbol))
+		(defq docstring (doc fully-qualified-symbol))
+		(if (has-example docstring)
 			(progn
-				(hash-set! test-set-item :load-fcn (fn () `(test::run-example ,fully-qualified-symbol)))
+				(hash-set! test-set-item :load-fcn ;;(fn () (test::run-example fully-qualified-symbol))
+                           (exec-str docstring))
 				(append! test-list test-set-item))
 			(progn
 				(hash-set! test-set-item :load-fcn :no-test)
@@ -82,7 +128,13 @@
 			"FAIL:"
 			shell::*fg-default* shell::*bg-default*
 			" " test-name)))
-		(nil (err (str "Invalid test result status for test name " test-name)))))
+        (:error
+		 (println
+			(str shell::*fg-black* shell::*bg-red*
+			"ERR: "
+			shell::*fg-default* shell::*bg-default*
+			" " test-name)))
+		(nil (err (str "Invalid test result status for test name " test-name "\n Error: " result)))))
 
 (defn report-test-results (tests test-report) (progn
 	(defq exit-status :passed)
@@ -111,19 +163,17 @@
 
 (defq final-test-report '())
 
-(defn run-tests-for (test-name test-list test-report)
-	(progn
-		(defq test-data (make-hash))
-		(hash-set! test-data :name test-name)
-		(hash-set! test-data :total 0)
-		(hash-set! test-data :failed 0)
-		(hash-set! test-data :no-test 0)
-		(report-test-results test-list test-data)
-		(append! test-report test-data)))
+(defn run-tests-for (test-name test-list test-report) (progn
+    (defq test-data (make-hash))
+    (hash-set! test-data :name test-name)
+    (hash-set! test-data :total 0)
+    (hash-set! test-data :failed 0)
+    (hash-set! test-data :no-test 0)
+    (report-test-results test-list test-data)
+    (append! test-report test-data)))
 
 (printer "Tests from test directory")
 (run-tests-for "module tests" file-test-list final-test-report)
-
 
 ;; run tests for non-root namespaces
 (for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
