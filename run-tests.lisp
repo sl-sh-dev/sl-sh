@@ -144,11 +144,6 @@
 
 ;; run tests for root namespace special namespace tests (ns cmd can not be run
 ;; inside a fcn
-(progn
-(printer "Tests from root")
-(defq sym-list (ns-symbols 'root))
-(defq sym-list (make-test-list-from-symbols sym-list "root"))
-(run-tests-for (str "root unit tests") sym-list final-test-report))
 
 (defq ns-test-set-item (make-hash))
 (hash-set! ns-test-set-item :name "namespace unit tests")
