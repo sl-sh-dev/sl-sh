@@ -15,8 +15,10 @@ use nix::{
 
 use ::sl_sh::config::*;
 use ::sl_sh::shell::*;
+use ::sl_sh::types::init_gc;
 
 fn main() -> io::Result<()> {
+    init_gc();
     let config = get_config();
     if let Ok(config) = config {
         if config.command.is_none() && config.script.is_none() {

@@ -350,7 +350,6 @@ impl Environment {
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
-    init_gc();
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
