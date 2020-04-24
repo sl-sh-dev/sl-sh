@@ -216,7 +216,7 @@ Example:
 			(defq filtering-fcn
 				(fn (pred filtered-coll coll-to-filter)
 					(progn (defq fst (first coll-to-filter))
-					(if (not fst)
+					(if (empty-seq? coll-to-filter)
 						filtered-coll
 						(recur
 							pred

@@ -145,7 +145,8 @@ Example:
                             (set 'ret (copy-els ret l))
                             (progn
                                 (def 'tcell (join l nil))
-                                (xdr! tseq tcell)
+                                (if (not (null tseq))
+                                    (xdr! tseq tcell))
                                 (set 'tseq tcell)
                                 (if (null ret) (set 'ret tseq))
                                 ))))
