@@ -671,15 +671,18 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::Once;
 
     use crate::builtins_util::is_proper_list;
 
-    fn to_strs(output: &mut Vec<String>, exp: &Expression) {
+    static INIT: Once = Once::new();
+
+    fn to_strs(output: &mut Vec<String>, exp: Expression) {
         match &exp.get().data {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {
-                    to_strs(output, exp);
+                    to_strs(output, *exp);
                 }
                 output.push(")".to_string());
             }
@@ -692,9 +695,9 @@ mod tests {
                     output.push(")".to_string());
                 } else {
                     output.push("(".to_string());
-                    to_strs(output, &e1);
+                    to_strs(output, *e1);
                     output.push(".".to_string());
-                    to_strs(output, &e2);
+                    to_strs(output, *e2);
                     output.push(")".to_string());
                 }
             }
@@ -713,7 +716,7 @@ mod tests {
         let exp = read(environment, input, name);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
-            to_strs(&mut tokens, &exp);
+            to_strs(&mut tokens, exp);
         } else {
             assert!(false);
         }
@@ -728,15 +731,21 @@ mod tests {
         let exp = read_list_wrap(environment, input, name);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
-            to_strs(&mut tokens, &exp);
+            to_strs(&mut tokens, exp);
         } else {
             assert!(false);
         }
         tokens
     }
 
+pub fn setup() {
+    INIT.call_once(|| {
+        init_gc();
+    });
+}
     #[test]
     fn test_tokenize() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "one two three \"four\" 5 6", None);
         assert!(tokens.len() == 8);
@@ -806,6 +815,7 @@ mod tests {
 
     #[test]
     fn test_quotes() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "'(1 2 3)", None);
         assert!(tokens.len() == 8);
@@ -897,6 +907,7 @@ mod tests {
 
     #[test]
     fn test_types() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(
             &mut environment,
@@ -955,6 +966,7 @@ mod tests {
 
     #[test]
     fn test_wrap() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "(1 2 3)", None);
         assert!(tokens.len() == 5);
@@ -1060,6 +1072,7 @@ mod tests {
 
     #[test]
     fn test_tok_strings() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let input =
             "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
