@@ -215,10 +215,9 @@ Example:
 	`(if ,provided-condition ,if-true))
 
 (defn filter
-"Usage: (reduce pred coll)
-
-`filter` is used to strip a collection, `coll`, of all values that do not
-pass the condition defined by the function, `pred`. Filter returns a new
+"
+filter is used to strip a collection, coll, of all values that do not
+pass the condition defined by the function, pred. Filter returns a new
 collection.
 
 Example:
