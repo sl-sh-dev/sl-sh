@@ -35,27 +35,32 @@
 (defn get-doc-section-if-exists (key idx docstring) (progn
 	(defq full-key (str key ":"))
 	(if (str-contains full-key docstring)
-		(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>")
+		(if (= key "Section")
+			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "")
+			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>"))
 		has-no-doc)))
 
-(defn get-mid-doc-section (key second-key docstring) (progn
+(defn get-mid-doc-section (sym key second-key docstring required) (progn
 	(defq type-doc (get-doc-section-if-exists key 1 docstring))
 	(if (= type-doc has-no-doc)
-		(progn
-			(println "I was on the docstring: " (str-replace docstring "\n" "<br>"))
-			(err ("Every docstring must have: " key)))
+		(if required
+			(err (str ("Every docstring must have: " key ", but " sym " does not.")))
+			:none)
 		(get-doc-section-if-exists second-key 0 type-doc))))
 
 (defn get-example-doc-section (key docstring)
 	(get-doc-section-if-exists key 1 docstring))
 
+;; TODO maybe write a function that verifies order is correct in the docstrings?
+;; to prevent future headaches?
 (defn parse-doc (sym) (progn
 	(defq docstring (doc sym))
 	(defq doc-map (make-hash))
 	(hash-set! doc-map :form (if (= sym '|) (str \ sym) (str sym)))
-	(hash-set! doc-map :type (get-mid-doc-section "Type" "Namespace" docstring))
-	(hash-set! doc-map :namespace (get-mid-doc-section "Namespace" "Usage" docstring))
-	(hash-set! doc-map :usage (get-mid-doc-section "Usage" "Example" docstring))
+	(hash-set! doc-map :type (get-mid-doc-section sym "Type" "Namespace" docstring #t))
+	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" "Usage" docstring #t))
+	(hash-set! doc-map :usage (get-mid-doc-section sym "Usage" "Section" docstring #t))
+	(hash-set! doc-map :section (get-mid-doc-section sym "Section" "Example" docstring nil))
 	(hash-set! doc-map :example (get-example-doc-section "Example" docstring))
 	doc-map))
 
