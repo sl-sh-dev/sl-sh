@@ -2728,7 +2728,8 @@ Example:
         interner.intern("macro"),
         Rc::new(Expression::make_function(
             builtin_macro,
-            "Define a macro. You probably only want to use defmacro.
+            "Usage: (macro (x) (+ x x))
+Define a macro. You probably only want to use defmacro or fn instead.
 
 Section: core
 ",
@@ -2838,7 +2839,9 @@ Example:
     );
     data.insert(
         interner.intern("recur"),
-        Rc::new(Expression::make_function(builtin_recur, "Section: core", root)),
+        Rc::new(Expression::make_function(builtin_recur, "Usage: (recur &rest)
+
+Section: core", root)),
     );
     data.insert(
         interner.intern("gensym"),
