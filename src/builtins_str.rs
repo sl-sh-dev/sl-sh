@@ -968,6 +968,8 @@ pub fn add_str_builtins<S: BuildHasher>(
  
 Trim right and left whitespace from string.
 
+Section: string
+
 Example:
 (test::assert-equal \"some string\" (str-trim \"   some string\"))
 (test::assert-equal \"some string\" (str-trim \"   some string   \"))
@@ -985,6 +987,8 @@ Example:
             "Usage: (str-ltrim string) -> string
  
 Trim left whitspace from string.
+
+Section: string
 
 Example:
 (test::assert-equal \"some string\" (str-ltrim \"   some string\"))
@@ -1004,6 +1008,8 @@ Example:
  
 Trim right whitespace from string.
 
+Section: string
+
 Example:
 (test::assert-equal \"   some string\" (str-rtrim \"   some string\"))
 (test::assert-equal \"   some string\" (str-rtrim \"   some string   \"))
@@ -1022,6 +1028,8 @@ Example:
  
 Replace occurances of second string with third in the first string.
 
+Section: string
+
 Example:
 (test::assert-equal \"some yyy string\" (str-replace \"some xxx string\" \"xxx\" \"yyy\"))
 (test::assert-equal \"some yyy string yyy\" (str-replace \"some xxx string xxx\" \"xxx\" \"yyy\"))
@@ -1036,6 +1044,8 @@ Example:
             "Usage: (str-split split-pattern string) -> vector
  
 Use a pattern to split a string (:whitespace to split on whitespace).
+
+Section: string
 
 Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-split \"xxx\" \"somexxxyyyxxxstring\"))
@@ -1055,6 +1065,8 @@ Example:
  
 Use a pattern to split a string into reverse order.
 
+Section: string
+
 Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsome\"))
 (test::assert-equal '(\"\" \"some\" \"yyy\" \"string\") (str-rsplit \"xxx\" \"stringxxxyyyxxxsomexxx\"))
@@ -1071,6 +1083,8 @@ Example:
             "Usage: (str-splitn n split-pattern string) -> vector
  
 Use a pattern to split a string with at most n items.
+
+Section: string
 
 Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-splitn 3 \"xxx\" \"somexxxyyyxxxstring\"))
@@ -1089,6 +1103,8 @@ Example:
  
 Use a pattern to split a string with at most n items returned in reverse order.
 
+Section: string
+
 Example:
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplitn 3 \"xxx\" \"stringxxxyyyxxxsome\"))
 (test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplitn 4 \"xxx\" \"stringxxxyyyxxxsome\"))
@@ -1106,6 +1122,8 @@ Example:
 
 Build a string by concatting a sequence with a join string.
 
+Section: string
+
 Example:
 (test::assert-equal \"stringxxxyyyxxxsome\" (str-cat-list \"xxx\" '(\"string\" \"yyy\" \"some\")))
 (test::assert-equal \"string yyy some\" (str-cat-list \" \" '(\"string\" \"yyy\" \"some\")))
@@ -1122,6 +1140,8 @@ Example:
 
 Return a substring from a string given start (0 based) and length.
 
+Section: string
+
 Example:
 (test::assert-equal \"string\" (str-sub 0 6 \"stringxxxyyyxxxsome\"))
 (test::assert-equal \"some\" (str-sub 15 4 \"stringxxxyyyxxxsome\"))
@@ -1137,6 +1157,8 @@ Example:
             "Usage: (str-append string string) -> string
 
 Make a new string by appending two strings.
+
+Section: string
 
 Example:
 (test::assert-equal \"stringsome\" (str-append \"string\" \"some\"))
@@ -1157,6 +1179,8 @@ Make a new string with it's arguments.
 Arguments will be turned into strings.  If an argument is a process then the
 output of the process will be captured and put into the string.
 
+Section: string
+
 Example:
 (test::assert-equal \"stringsome\" (str \"string\" \"some\"))
 (test::assert-equal \"string\" (str \"string\" \"\"))
@@ -1173,6 +1197,8 @@ Example:
             "Usage: (str-empty?) -> t/nil
 
 Is a string empty?  Let's find out...
+
+Section: string
 
 Example:
 (test::assert-true (str-empty? \"\"))
@@ -1191,6 +1217,8 @@ Example:
 
 Get the nth char of a string.
 
+Section: string
+
 Example:
 (test::assert-equal #\\a (str-nth 2 \"stau\"))
 (test::assert-equal #\\s (str-nth 0 \"stau\"))
@@ -1206,6 +1234,8 @@ Example:
             "Usage: (str-lower string) -> string
 
 Get all lower case string from a string.
+
+Section: string
 
 Example:
 (test::assert-equal \"stau\" (str-lower \"STAU\"))
@@ -1224,6 +1254,8 @@ Example:
             "Usage: (str-upper string) -> string
 
 Get all upper case string from a string.
+
+Section: string
 
 Example:
 (test::assert-equal \"STAU\" (str-upper \"STAU\"))
@@ -1245,6 +1277,8 @@ Return number of bytes in a string (may be more then length).
 
 Strings are utf8 so it chars and bytes may not be a one to one match.
 
+Section: string
+
 Example:
 (test::assert-equal 4 (str-bytes \"Stau\"))
 (test::assert-equal 0 (str-bytes \"\"))
@@ -1262,6 +1296,8 @@ Example:
 
 True if string start with pattern (both strings).
 
+Section: string
+
 Example:
 (test::assert-true (str-starts-with \"Stau\" \"Stausomething\"))
 (test::assert-false (str-starts-with \"StaU\" \"Stausomething\"))
@@ -1276,6 +1312,8 @@ Example:
             "Usage: (str-contains pattern string) -> t/nil
 
 True if string contains pattern (both strings).
+
+Section: string
 
 Example:
 (test::assert-true (str-contains \"Stau\" \"Stausomething\"))
@@ -1300,6 +1338,8 @@ Make a new string buffer with it's arguments.
 Arguments will be turned into strings.  If an argument is a process then the
 output of the process will be captured and put into the string buffer.
 
+Section: string
+
 Example:
 (test::assert-equal \"stringsome\" (str-buf \"string\" \"some\"))
 (test::assert-equal \"StringBuf\" (type (str-buf \"string\" \"some\")))
@@ -1321,6 +1361,8 @@ Push the args (as strings) onto the string-buffer.  This is a destructive form.
 
 Arguments will be turned into strings.  Returns the string-buffer it was given.
 
+Section: string
+
 Example:
 (test::assert-equal \"stringsome\" (str-buf-push! (str-buf \"string\") \"some\"))
 (def 'test-str-buf-push (str-buf \"def-string\"))
@@ -1340,6 +1382,8 @@ Clears a string-buffer.  This is a destructive form.
 
 Returns the string-buffer it was given.
 
+Section: string
+
 Example:
 (test::assert-equal \"\" (str-buf-clear! (str-buf \"string\")))
 (def 'test-str-buf-clear (str-buf \"def-string\"))
@@ -1356,6 +1400,8 @@ Example:
             "Usage: (str-map lambda string) -> string
 
 Make a new string by applying lambda to each char.
+
+Section: string
 
 Example:
 (test::assert-equal \"XstringXstrX\" (str-map (fn (ch) (if (char= #\\x ch) #\\X ch)) \"xstringxstrx\"))
@@ -1376,6 +1422,8 @@ Example:
 
 Make a new string buffer by applying lambda to each char.
 
+Section: string
+
 Example:
 (def 'test-str-buf-map (str-buf-map (fn (ch) (if (char= #\\x ch) #\\X ch)) \"xstringxstrx\"))
 (test::assert-equal \"XstringXstrX\" test-str-buf-map)
@@ -1394,6 +1442,8 @@ Example:
 
 Like progn but any strings in the form will not be expanded.
 
+Section: string
+
 Example:
 (export 'TST-IGNORE \"TST\")
 (test::assert-equal \"some TST stuff\" \"some $TST-IGNORE stuff\")
@@ -1411,6 +1461,8 @@ Example:
 
 Get ascii lower case character for a character.
 
+Section: char
+
 Example:
 (test::assert-equal #\\a (char-lower #\\A))
 (test::assert-equal #\\a (char-lower #\\a))
@@ -1427,6 +1479,8 @@ Example:
 
 Get ascii upper case character for a character.
 
+Section: char
+
 Example:
 (test::assert-equal #\\A (char-upper #\\A))
 (test::assert-equal #\\A (char-upper #\\a))
@@ -1442,6 +1496,8 @@ Example:
             "Usage: (char-whitespace? char) -> t/nil
 
 Returns true if a character is whitespace, false/nil otherwise.
+
+Section: char
 
 Example:
 (test::assert-true (char-whitespace? #\\ ))
@@ -1462,6 +1518,8 @@ Example:
             "Usage: (char= char0 char1 ... charN) -> t/nil
 
 Test chars for equality.
+
+Section: char
 
 Example:
 (test::assert-true (char= #\\  #\\ ))
@@ -1487,6 +1545,8 @@ Example:
 
 Test chars for in-equality.
 
+Section: char
+
 Example:
 (test::assert-false (char!= #\\  #\\ ))
 (test::assert-false (char!= #\\a #\\a))
@@ -1510,6 +1570,8 @@ Example:
             "Usage: (char> char0 char1 ... charN) -> t/nil
 
 Test chars for greater than.
+
+Section: char
 
 Example:
 (test::assert-false (char> #\\  #\\ ))
@@ -1535,6 +1597,8 @@ Example:
 
 Test chars for less than.
 
+Section: char
+
 Example:
 (test::assert-false (char< #\\  #\\ ))
 (test::assert-false (char< #\\b #\\b))
@@ -1559,6 +1623,8 @@ Example:
 
 Test chars for greater than or equal.
 
+Section: char
+
 Example:
 (test::assert-true (char>= #\\  #\\ ))
 (test::assert-false (char>= #\\a #\\b))
@@ -1582,6 +1648,8 @@ Example:
             "Usage: (char<= char0 char1 ... charN) -> t/nil
 
 Test chars for less than or equal.
+
+Section: char
 
 Example:
 (test::assert-true (char<= #\\  #\\ ))

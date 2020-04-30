@@ -373,6 +373,8 @@ Types are:
     HashMap
     File
 
+Section: type
+
 Example:
 (test::assert-equal \"True\" (type t))
 (test::assert-equal \"Float\" (type 1.1))
@@ -409,6 +411,8 @@ Example:
 
 True if the expression is nil, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (nil? nil))
 (test::assert-false (nil? t))
@@ -423,6 +427,8 @@ Example:
             "Usage: (true? expression)
 
 True if the expression is true (true type NOT non-null), false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (true? t))
@@ -441,6 +447,8 @@ Example:
 
 True if the expression is a float, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (float? 1.5))
 (test::assert-false (float? 1))
@@ -455,6 +463,8 @@ Example:
             "Usage: (int? expression)
 
 True if the expression is an int, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (int? 1))
@@ -471,6 +481,8 @@ Example:
 
 True if the expression is a symbol, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (symbol? 'symbol))
 (test::assert-false (symbol? 1))
@@ -486,6 +498,8 @@ Example:
 
 True if the expression is a string, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (string? \"string\"))
 (test::assert-false (string? 1))
@@ -500,6 +514,8 @@ Example:
             "Usage: (string-buf? expression)
 
 True if the expression is a string buffer, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (string-buf? (str-buf \"string\")))
@@ -517,6 +533,8 @@ Example:
 
 True if the expression is a char, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (char? #\\a))
 (test::assert-false (char? 1))
@@ -532,6 +550,8 @@ Example:
             "Usage: (lambda? expression)
 
 True if the expression is a lambda, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (lambda? (fn () ())))
@@ -550,6 +570,8 @@ Example:
 
 True if the expression is a macro, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (macro? (macro () ())))
 (test::assert-true (macro? defn))
@@ -566,6 +588,8 @@ Example:
             "Usage: (vec? expression)
 
 True if the expression is a vector, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (vec? '#(1 2 3)) \"reader macro\")
@@ -586,6 +610,8 @@ Example:
 
 True if the expression is a pair, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (pair? '(1 . 2)) \"reader macro\")
 (test::assert-true (pair? (join 1 2)) \"join\") 
@@ -605,6 +631,8 @@ Example:
 
 True if the expression is a builtin function or special form, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (builtin? type))
 (test::assert-true (builtin? if))
@@ -623,6 +651,8 @@ Example:
 
 True if the expression is a process, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (process? (true)))
 (test::assert-false (process? (fn () ())))
@@ -639,6 +669,8 @@ Example:
             "Usage: (file? expression)
 
 True if the expression is a file, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (file? (open :stdout)))
@@ -657,6 +689,8 @@ Example:
 
 True if the expression is a hash map, false otherwise.
 
+Section: type
+
 Example:
 (test::assert-true (hash? (make-hash)) \"make-vec\") 
 (test::assert-false (hash? 1))
@@ -674,6 +708,8 @@ Example:
             "Usage: (list? expression)
 
 True if the expression is a list, false otherwise.
+
+Section: type
 
 Example:
 (test::assert-true (list? '(1 2 3)) \"reader macro\")

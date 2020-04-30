@@ -340,6 +340,8 @@ Make a new hash map.
 If associations is provided (makes an empty map if not) then it is a list of
 pairs (key . value) that populate the intial map.
 
+Section: hashmap
+
 Example:
 (def 'tst-hash (make-hash))
 (test::assert-equal 0 (length (hash-keys tst-hash)))
@@ -367,6 +369,8 @@ Example:
             "Usage (hash-set! hashmap key value)
 
 Add or update a hashmap key's value.  This is a destructive form!
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash))
@@ -405,6 +409,8 @@ Example:
 
 Remove a key from a hashmap.  This is a destructive form!
 
+Section: hashmap
+
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
@@ -432,6 +438,8 @@ Example:
 
 Get a value for a key from a hashmap.
 
+Section: hashmap
+
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
@@ -449,6 +457,8 @@ Example:
             "Usage (hash-haskey hashmap key)
 
 Checks if a key is in a hashmap.
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
@@ -475,6 +485,8 @@ Example:
 
 Returns a vector of all the hashmaps keys.  The keys will be unordered.
 
+Section: hashmap
+
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
@@ -494,6 +506,8 @@ Example:
             "Usage (hash-clear! hashmap)
 
 Clears a hashmap.  This is a destructive form!
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))

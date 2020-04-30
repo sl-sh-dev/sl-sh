@@ -408,6 +408,8 @@ pub fn add_vec_builtins<S: BuildHasher>(
 
 Make a new vector with items.
 
+Section: vector
+
 Example:
 (test::assert-false (vec))
 (test::assert-equal '(1 2 3) (vec 1 2 3))
@@ -422,6 +424,8 @@ Example:
             "Usage: (make-vec capacity default)
 
 Make a new vector with capacity and default item(s).
+
+Section: vector
 
 Example:
 (test::assert-false (make-vec))
@@ -440,6 +444,8 @@ Example:
 
 Returns a slice of a vector (0 based indexes, end is exclusive).
 
+Section: vector
+
 Example:
 (test::assert-equal '(5 6) (vec-slice '#(1 2 3 4 5 6) 4 6))
 (test::assert-equal '(1 2 3) (vec-slice '#(1 2 3 4 5 6) 0 3))
@@ -456,6 +462,8 @@ Example:
             "Usage: (vec-nth index vector)
 
 Get the nth element (0 based) of a vector.
+
+Section: vector
 
 Example:
 (test::assert-equal 5 (vec-nth 4 '#(1 2 3 4 5 6)))
@@ -474,6 +482,8 @@ Example:
 
 Set the nth index (0 based) of a vector to value.  This is destructive!
 
+Section: vector
+
 Example:
 (def 'test-setnth-vec (vec 1 2 3))
 (test::assert-equal '(1 5 3) (vec-setnth! 1 5 test-setnth-vec))
@@ -490,6 +500,8 @@ Example:
             "Usage: (vec-push! vector object)
 
 Pushes the provided object onto the end of the vector.  This is destructive!
+
+Section: vector
 
 Example:
 (def 'test-push-vec (vec))
@@ -511,6 +523,8 @@ Example:
 
 Pops the last object off of the end of the vector.  This is destructive!
 
+Section: vector
+
 Example:
 (def 'test-pop-vec (vec 1 2 3))
 (test::assert-equal 3 (vec-pop! test-pop-vec))
@@ -531,6 +545,8 @@ Example:
 
 True if the vector is empty.
 
+Section: vector
+
 Example:
 (test::assert-true (vec-empty? '#()))
 (test::assert-false (vec-empty? '#(1 2 3)))
@@ -545,6 +561,8 @@ Example:
             "Usage: (vec-clear! vector)
 
 Clears a vector.  This is destructive!
+
+Section: vector
 
 Example:
 (def 'test-clear-vec (vec 1 2 3))
@@ -562,6 +580,8 @@ Example:
             "Usage: (vec-remove-nth! index vector)
 
 Remove the element at index from vector.  This is destructive!
+
+Section: vector
 
 Example:
 (def 'test-remove-nth-vec (vec 1 2 3))
@@ -583,6 +603,8 @@ Example:
             "Usage: (vec-insert-nth! index new-element vector)
 
 Inserts new-element at index and moves following elements right in vector.  This is destructive!
+
+Section: vector
 
 Example:
 (def 'test-insert-nth-vec (vec 1 2 3))
