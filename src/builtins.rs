@@ -2564,7 +2564,12 @@ Example:
         interner.intern("fn"),
         Rc::new(Expression::make_special(
             builtin_fn,
-            "Create a function (lambda).",
+            "Usage: (fn (x) (x + 1))
+
+Create a function (lambda).
+
+Section: core
+",
             root,
         )),
     );
@@ -2723,7 +2728,10 @@ Example:
         interner.intern("macro"),
         Rc::new(Expression::make_function(
             builtin_macro,
-            "Define a macro.",
+            "Define a macro. You probably only want to use defmacro.
+
+Section: core
+",
             root,
         )),
     );
@@ -2830,7 +2838,7 @@ Example:
     );
     data.insert(
         interner.intern("recur"),
-        Rc::new(Expression::make_function(builtin_recur, "", root)),
+        Rc::new(Expression::make_function(builtin_recur, "Section: core", root)),
     );
     data.insert(
         interner.intern("gensym"),

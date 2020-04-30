@@ -422,7 +422,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("cd"),
         Rc::new(Expression::make_function(
             builtin_cd,
-            "Change directory.",
+            "Usage: (cd dir-to-change-to)
+
+Change directory.
+
+Section: shell
+",
             root,
         )),
     );
@@ -430,7 +435,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("fs-exists?"),
         Rc::new(Expression::make_function(
             builtin_path_exists,
-            "Does the given path exist?",
+            "Usage: (fs-exists? path-to-test)
+
+Does the given path exist?
+
+Section: shell
+",
             root,
         )),
     );
@@ -438,7 +448,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("fs-file?"),
         Rc::new(Expression::make_function(
             builtin_is_file,
-            "Is the given path a file?",
+            "Usage: (fs-file? path-to-test)
+
+Is the given path a file?
+
+Section: shell
+",
             root,
         )),
     );
@@ -446,7 +461,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("fs-dir?"),
         Rc::new(Expression::make_function(
             builtin_is_dir,
-            "Is the given path a directory?",
+            "Usage: (fs-dir? path-to-test)
+
+Is the given path a directory?
+
+Section: shell
+",
             root,
         )),
     );
@@ -454,7 +474,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("pipe"),
         Rc::new(Expression::make_function(
             builtin_pipe,
-            "Setup a pipe between processes.",
+            "Usage: (pipe (proc-whose-stdout) (is-inpup-here))
+
+Setup a pipe between processes.
+
+Section: shell
+",
             root,
         )),
     );
@@ -462,7 +487,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("wait"),
         Rc::new(Expression::make_function(
             builtin_wait,
-            "Wait for a process to end and return it's exit status.",
+            "Usage: (wait proc-to-wait-for)
+
+Wait for a process to end and return it's exit status.
+
+Section: shell
+",
             root,
         )),
     );
@@ -470,7 +500,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("pid"),
         Rc::new(Expression::make_function(
             builtin_pid,
-            "Return the pid of a process.",
+            "Usage: (pid proc)
+
+Return the pid of a process.
+
+Section: shell
+",
             root,
         )),
     );
@@ -478,7 +513,12 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("glob"),
         Rc::new(Expression::make_function(
             builtin_glob,
-            "Takes a list of globs and return the list of them expanded.",
+            "Usage: (glob /path/with/*)
+
+Takes a list/varargs of globs and return the list of them expanded.
+
+Section: shell
+",
             root,
         )),
     );
