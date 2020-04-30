@@ -176,15 +176,22 @@ Binds an expession to a quoted symbol (ie def 'sym bind)"
 (defn reduce
 "Usage: (reduce reducing-fcn init-val coll)
 
-`reduce` is used to amalgamate a provided collection, `coll`, and an intitial value,
-`init-val`, according to the reducing function, reducing-fcn, provided. The
+reduce is used to amalgamate a provided collection, coll, and an intitial value,
+init-val, according to the reducing function, reducing-fcn, provided. The
 reducing-fcn should be a function of two arguments. In the first iteration of
-reduce, the `init-val` will be used as the first argument to the reducing-fcn and
-`(first coll)` will be used as the second argument. For all subsequent iterations,
+reduce, the init-val will be used as the first argument to the reducing-fcn and
+(first coll) will be used as the second argument. For all subsequent iterations,
 The result from the previous application of the reducing-fcn will be used as the
 first argument to the reducing-fcn and the second argument will be the next item
 in the collection when the collection is empty reduce will return the
 amalgamated result.
+
+Example:
+
+;; check reduce
+(assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))))
+(assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
+(assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
 "
 	(reducing-fcn init-val coll)
 		(if (not (first coll))
@@ -194,9 +201,15 @@ amalgamated result.
 (defmacro when
 "Usage: (when provided-condition if-true)
 
-`when` is a convenience function used to check a form, `provided-condition`,
-and run some form, `if-true`, if the provided as the first argument evaluates
+when is a convenience function used to check a form, provided-condition,
+and run some form, if-true, if the provided as the first argument evaluates
 to true.
+
+Example:
+
+(assert-true (when #t #t))
+(assert-false (when #t nil))
+(assert-false (when nil nil))
 "
 	(provided-condition if-true)
 	`(if ,provided-condition ,if-true))

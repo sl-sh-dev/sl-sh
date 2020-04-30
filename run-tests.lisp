@@ -43,8 +43,7 @@
 		(defq docstring (doc fully-qualified-symbol))
 		(if (has-example docstring)
 			(progn
-				(hash-set! test-set-item :load-fcn
-                           (exec-str docstring))
+				(hash-set! test-set-item :load-fcn (exec-str docstring))
 				(append! test-list test-set-item))
 			(progn
 				(hash-set! test-set-item :load-fcn :no-test)
