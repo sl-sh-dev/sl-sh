@@ -154,15 +154,29 @@
 (def '*bg-cyan* "\x1b[46m")
 (def '*bg-white* "\x1b[47m")
 
-;; given 3 numbers 0-255 representing RGB values,
-;; return corresponding ANSI font color code
-(defn fg-color-rgb (R G B)
-  (get-rgb-seq R G B :font))
+(defn fg-color-rgb
+"
+Usage: (fg-color-rgb red-val green-val blue-val)
 
-;; given 3 numbers 0-255 representing RGB values,
-;; return corresponding ANSI background color code
-(defn bg-color-rgb (R G B)
-  (get-rgb-seq R G B :bkrd))
+Set the foreground color to the desired rgb where each arg is an integer between 0 and
+255 inclusive.
+
+Section: shell
+"
+	(R G B)
+		(get-rgb-seq R G B :font))
+
+(defn bg-color-rgb
+"
+Usage: (bg-color-rgb red-val green-val blue-val)
+
+Set the background color to the desired rgb where each arg is an integer between 0 and
+255 inclusive.
+
+Section: shell
+"
+	(R G B)
+		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
       (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
@@ -334,7 +348,27 @@
 (defmacro syntax-off () '(undef '__line_handler))
 
 (load "endfix.lisp")
-(defmacro endfix-on () '(def '__exec_hook shell::endfix-hook))
+(defmacro endfix-on "
+	Allows use of infix notation for common shell forms. The following is the
+	complete mapping in lisp/endfix.lisp of all supported infix operators and
+	the corresponding sl-sh function they map to:
+		'|| 'or
+		'| '|
+		'@@ 'progn (@@ is used instead of ; because ; is a comment in lisp)
+		'&& 'and
+		'out> 'out>
+		'out>> 'out>>
+		'err> 'err>
+		'err>> 'err>>
+		'out>null 'out>null
+		'out-err> 'out-err>
+		'out-err>> 'out-err>>
+		'out-err>null 'out-err>null
+
+
+	Section: shell
+"
+	() '(def '__exec_hook shell::endfix-hook))
 
 (ns-export '(
 	alias
