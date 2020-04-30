@@ -174,8 +174,7 @@ Binds an expession to a quoted symbol (ie def 'sym bind)"
             (err "Not a list or vector."))))
 
 (defn reduce
-"Usage: (reduce reducing-fcn init-val coll)
-
+"
 reduce is used to amalgamate a provided collection, coll, and an intitial value,
 init-val, according to the reducing function, reducing-fcn, provided. The
 reducing-fcn should be a function of two arguments. In the first iteration of
@@ -188,7 +187,6 @@ amalgamated result.
 
 Example:
 
-;; check reduce
 (assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))))
 (assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
 (assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
