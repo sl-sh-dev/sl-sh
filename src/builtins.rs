@@ -2092,7 +2092,7 @@ If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
 provided expression will be evaluated as part of call).
 
-Section: Core Forms
+Section: core
 
 Example:
 (def 'test-eval-one nil)
@@ -2689,7 +2689,7 @@ Example:
 
 Return true if expression is nil (null).
 
-Section: condition
+Section: conditional
 
 Example:
 (test::assert-true (null nil))
@@ -2728,8 +2728,9 @@ Example:
         interner.intern("macro"),
         Rc::new(Expression::make_function(
             builtin_macro,
-            "Usage: (macro (x) (+ x x))
-Define a macro. You probably only want to use defmacro or fn instead.
+            "Usage: (macro (&rest args) `(apply + ,@args))
+
+Define an anonymous macro.
 
 Section: core
 ",

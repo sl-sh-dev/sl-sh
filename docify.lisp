@@ -2,8 +2,9 @@
 
 (core::ns-import 'core)
 (ns-import 'shell)
+(error-stack-on)
 
-(defn make-md-row (&rest args) (progn
+(defn make-str-md-row (&rest args) (progn
 	(defq row (list " | "))
 	(for a args (progn
 		(append! row (list a " | "))))
@@ -21,10 +22,9 @@
 		(append! table (list row)))
 	table))
 
-(defn gen-md-table (table file-name) (progn
-	(defq file (open file-name :write))
+(defn write-md-table (table file-name) (progn
+	(defq file (open file-name :create))
 	(for row table (progn
-		(println "row: " row)
 		(defq line (apply str row))
 		(write-line file line)))
 	(close file)
@@ -44,7 +44,7 @@
 	(defq type-doc (get-doc-section-if-exists key 1 docstring))
 	(if (= type-doc has-no-doc)
 		(if required
-			(err (str ("Every docstring must have: " key ", but " sym " does not.")))
+			(err (str "Every docstring must have: " key ", but " sym " does not."))
 			:none)
 		(get-doc-section-if-exists second-key 0 type-doc))))
 
@@ -56,7 +56,7 @@
 (defn parse-doc (sym) (progn
 	(defq docstring (doc sym))
 	(defq doc-map (make-hash))
-	(hash-set! doc-map :form (if (= sym '|) (str \ sym) (str sym)))
+	(hash-set! doc-map :form (if (= sym '|) (str '\ sym) (str sym)))
 	(hash-set! doc-map :type (get-mid-doc-section sym "Type" "Namespace" docstring #t))
 	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" "Usage" docstring #t))
 	(hash-set! doc-map :usage (get-mid-doc-section sym "Usage" "Section" docstring #t))
@@ -64,8 +64,7 @@
 	(hash-set! doc-map :example (get-example-doc-section "Example" docstring))
 	doc-map))
 
-(defn doc-str-to-md-row (to-doc) (progn
-	(defq doc-map (parse-doc to-doc))
+(defn doc-str-to-md-row (doc-map) (progn
 	(defq row (list))
 	(append! row (hash-get doc-map :form))
 	(append! row (hash-get doc-map :type))
@@ -76,29 +75,60 @@
 	(append! row (hash-get doc-map :example))
 	row))
 
-(defq file-name "sample-wiki.md")
-(out> file-name "")
+(defn make-doc-map-md-row (doc-str)
+	(make-doc-md-row (doc-str-to-md-row doc-str)))
 
-(defmacro gen-md-table-for (namespace) (progn
-	(println "namespace " namespace)
-	(defq md-row-lists (list))
-	`(for sym (ns-symbols (to-symbol ,namespace))
-		(append! md-row-lists (make-doc-md-row (doc-str-to-md-row sym))))
-	md-row-lists))
+(defn list-of-all-slsh-syms () (progn
+	(defq sym-list (ns-symbols 'root))
+	(for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "user")))) (ns-list)) (progn
+		(append! sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))))
+	(filter (fn (x)
+		(and
+			(not (= x '*ns*))
+			(not (= x 'tok-slsh-form-color))
+			(not (= x 'tok-slsh-fcn-color))
+			(not (= x 'tok-default-color))
+			(not (= x 'tok-sys-command-color))
+			(not (= x 'tok-sys-alias-color))
+			(not (= x 'tok-string-color))
+			(not (= x 'tok-invalid-color))
+			(not (= x 'args))))
+		sym-list)))
 
-#| (gen-md-table
-	(join-md-rows
-		(make-md-row "form" "type" "namespace" "usage" "example")
-		(make-md-row "----" "----" "----" "----" "----")
-		(make-doc-md-row (doc-str-to-md-row (first (ns-symbols 'root)))))
-		;;(gen-md-table-for 'root)
-	file-name) |#
+(defn parse-all-docstrings () (progn
+	(defq docstring-sections (make-hash))
+	(defq section-builder (fn (syms)
+		(when (not (empty-seq? syms))
+			(progn
+				(defq doc-map (parse-doc (first syms)))
+				(defq section-key (hash-get doc-map :section))
+				(if (hash-haskey docstring-sections section-key)
+					(append! (hash-get docstring-sections section-key) doc-map)
+					(hash-set! docstring-sections section-key (list doc-map)))
+				(recur (rest syms))))))
+	(section-builder (list-of-all-slsh-syms))
+	docstring-sections))
 
-(defmacro make-things (things)
-	`(for l (ns-symbols ,things) (join l ,things)))
+(defq docstrings-map (parse-all-docstrings))
+;; TODO why does my docstrings-map have " " as a key?
+;;(println "length of parsing: " (hash-keys docstrings-map))
+;;(println "length of parsing: " (hash-get docstrings-map " "))
 
-(println (str "my row " (length (doc-str-to-md-row 'doc))))
-(println (str "my row " (make-md-row (doc-str-to-md-row 'doc))))
-(println (str "my-macro " (expand-macro-all (make-things "a"))))
+(defn md-file-dir ()
+	(if (fs-dir? "md") "md" (progn (mkdir "md") "md")))
 
-;;(cat file-name)
+(defn get-file (key)
+	(defq file (str (md-file-dir) "/_" key ".md")))
+
+(for key (hash-keys docstrings-map) (progn
+	(defq docstrings (hash-get docstrings-map key))
+	(defq make-tables (list 'write-md-table
+			(reduce
+				(macro (existing new-item) `(append ,existing (list (list 'make-doc-map-md-row ,new-item))))
+				(list 'join-md-rows
+					(list 'make-str-md-row  "form" "type" "namespace" "usage" "example")
+					(list 'make-str-md-row  "----" "----" "----" "----" "----")) 
+					docstrings)
+			(get-file key)))
+	(eval make-tables)))
+
