@@ -22,11 +22,32 @@
 		(append! table (list row)))
 	table))
 
-(defn write-md-table (table file-name) (progn
-	(defq file (open file-name :create))
+(defq human-readable-name (make-hash))
+(hash-set! human-readable-name :none "Uncategorized forms")
+(hash-set! human-readable-name "char" "Char forms")
+(hash-set! human-readable-name "condictional" "Conditional forms")
+(hash-set! human-readable-name "core" "Core forms")
+(hash-set! human-readable-name "file" "File forms")
+(hash-set! human-readable-name "hashmap" "Hashmap forms")
+(hash-set! human-readable-name "math" "Math forms")
+(hash-set! human-readable-name "namespace" "Namespace forms")
+(hash-set! human-readable-name "pair" "Pair forms")
+(hash-set! human-readable-name "shell" "Shell forms")
+(hash-set! human-readable-name "string" "String forms")
+(hash-set! human-readable-name "type" "Type forms")
+(hash-set! human-readable-name "vector" "Vector forms")
+
+(hash-set! human-readable-name " " "Unknown forms")
+(defn write-md-table (key table file-name) (progn
+	(defq file (open file-name :append))
+	(defq name (hash-get human-readable-name key))
+	(write-line file (str "## " (if (not name) "Unknown forms" name)))
+	(write-line file "")
+	(write-line file "")
 	(for row table (progn
 		(defq line (apply str row))
 		(write-line file line)))
+	(write-line file "")
 	(close file)
 	file-name))
 
@@ -78,6 +99,8 @@
 (defn make-doc-map-md-row (doc-str)
 	(make-doc-md-row (doc-str-to-md-row doc-str)))
 
+;; TODO might want user docs under certain circumstances. or only user, might
+;; want to the list of syms md files are generated for very flexible
 (defn list-of-all-slsh-syms () (progn
 	(defq sym-list (ns-symbols 'root))
 	(for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "user")))) (ns-list)) (progn
@@ -115,20 +138,36 @@
 ;;(println "length of parsing: " (hash-get docstrings-map " "))
 
 (defn md-file-dir ()
-	(if (fs-dir? "md") "md" (progn (mkdir "md") "md")))
+	(if (fs-dir? "docs") "docs" (progn (mkdir "docs") "docs")))
+
+(defq header "---
+layout: default
+title: Sl-sh form documentation
+---
+
+# Sl-sh form documentation
+
+")
 
 (defn get-file (key)
-	(defq file (str (md-file-dir) "/_" key ".md")))
+	(progn
+	(defq file (str (md-file-dir) "/" key ".md"))
+	(defq new-file (open file :create))
+	;;(write-string new-file header) TODO bug?
+	(close new-file)
+	file))
+
+(defq index-file (get-file "index"))
 
 (for key (hash-keys docstrings-map) (progn
 	(defq docstrings (hash-get docstrings-map key))
-	(defq make-tables (list 'write-md-table
+	(defq make-tables (list 'write-md-table 'key
 			(reduce
 				(macro (existing new-item) `(append ,existing (list (list 'make-doc-map-md-row ,new-item))))
 				(list 'join-md-rows
 					(list 'make-str-md-row  "form" "type" "namespace" "usage" "example")
 					(list 'make-str-md-row  "----" "----" "----" "----" "----")) 
 					docstrings)
-			(get-file key)))
+			index-file))
 	(eval make-tables)))
 
