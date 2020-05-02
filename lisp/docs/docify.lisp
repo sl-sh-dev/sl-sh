@@ -1,7 +1,13 @@
 #!/bin/sl-sh
 
+;; TODO https://victorafanasev.info/tech/deploy-jekyll-build-to-github-pages-using-git-pre-push-hook
+
 (core::ns-import 'core)
 (ns-import 'shell)
+;;TODO load AND import?
+(load "parse-docstrings.lisp")
+(ns-import 'docparse)
+
 (error-stack-on)
 
 (defn make-str-md-row (&rest args) (progn
@@ -36,8 +42,8 @@
 (hash-set! human-readable-name "string" "String forms")
 (hash-set! human-readable-name "type" "Type forms")
 (hash-set! human-readable-name "vector" "Vector forms")
-
 (hash-set! human-readable-name " " "Unknown forms")
+
 (defn write-md-table (key table file-name) (progn
 	(defq file (open file-name :append))
 	(defq name (hash-get human-readable-name key))
@@ -50,40 +56,6 @@
 	(write-line file "")
 	(close file)
 	file-name))
-
-(defq has-no-doc " ")
-
-(defn get-doc-section-if-exists (key idx docstring) (progn
-	(defq full-key (str key ":"))
-	(if (str-contains full-key docstring)
-		(if (= key "Section")
-			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "")
-			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>"))
-		has-no-doc)))
-
-(defn get-mid-doc-section (sym key second-key docstring required) (progn
-	(defq type-doc (get-doc-section-if-exists key 1 docstring))
-	(if (= type-doc has-no-doc)
-		(if required
-			(err (str "Every docstring must have: " key ", but " sym " does not."))
-			:none)
-		(get-doc-section-if-exists second-key 0 type-doc))))
-
-(defn get-example-doc-section (key docstring)
-	(get-doc-section-if-exists key 1 docstring))
-
-;; TODO maybe write a function that verifies order is correct in the docstrings?
-;; to prevent future headaches?
-(defn parse-doc (sym) (progn
-	(defq docstring (doc sym))
-	(defq doc-map (make-hash))
-	(hash-set! doc-map :form (if (= sym '|) (str '\ sym) (str sym)))
-	(hash-set! doc-map :type (get-mid-doc-section sym "Type" "Namespace" docstring #t))
-	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" "Usage" docstring #t))
-	(hash-set! doc-map :usage (get-mid-doc-section sym "Usage" "Section" docstring #t))
-	(hash-set! doc-map :section (get-mid-doc-section sym "Section" "Example" docstring nil))
-	(hash-set! doc-map :example (get-example-doc-section "Example" docstring))
-	doc-map))
 
 (defn doc-str-to-md-row (doc-map) (progn
 	(defq row (list))
@@ -116,29 +88,12 @@
 			(not (= x 'tok-string-color))
 			(not (= x 'tok-invalid-color))
 			(not (= x 'args))))
-		sym-list)))
+		(qsort sym-list))))
 
-(defn parse-all-docstrings () (progn
-	(defq docstring-sections (make-hash))
-	(defq section-builder (fn (syms)
-		(when (not (empty-seq? syms))
-			(progn
-				(defq doc-map (parse-doc (first syms)))
-				(defq section-key (hash-get doc-map :section))
-				(if (hash-haskey docstring-sections section-key)
-					(append! (hash-get docstring-sections section-key) doc-map)
-					(hash-set! docstring-sections section-key (list doc-map)))
-				(recur (rest syms))))))
-	(section-builder (list-of-all-slsh-syms))
-	docstring-sections))
-
-(defq docstrings-map (parse-all-docstrings))
+(defq docstrings-map (parse-docstrings-for-syms (list-of-all-slsh-syms)))
 ;; TODO why does my docstrings-map have " " as a key?
 ;;(println "length of parsing: " (hash-keys docstrings-map))
 ;;(println "length of parsing: " (hash-get docstrings-map " "))
-
-(defn md-file-dir ()
-	(if (fs-dir? "docs") "docs" (progn (mkdir "docs") "docs")))
 
 (defq header "---
 layout: default
@@ -147,19 +102,20 @@ title: Sl-sh form documentation
 
 # Sl-sh form documentation
 
+;;TODO need anchor links / table of contents to all forms here
 ")
 
 (defn get-file (key)
 	(progn
-	(defq file (str (md-file-dir) "/" key ".md"))
-	(defq new-file (open file :create))
-	;;(write-string new-file header) TODO bug?
+	(defq file (str key ".md"))
+	(defq new-file (open file :create :truncate))
+	(write-string new-file header)
 	(close new-file)
 	file))
 
 (defq index-file (get-file "index"))
 
-(for key (hash-keys docstrings-map) (progn
+(for key (qsort (hash-keys docstrings-map)) (progn
 	(defq docstrings (hash-get docstrings-map key))
 	(defq make-tables (list 'write-md-table 'key
 			(reduce
