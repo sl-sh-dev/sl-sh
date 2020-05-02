@@ -1,10 +1,7 @@
 #!/bin/sl-sh
 
-;; TODO https://victorafanasev.info/tech/deploy-jekyll-build-to-github-pages-using-git-pre-push-hook
-
 (core::ns-import 'core)
 (ns-import 'shell)
-;;TODO load AND import?
 (load "parse-docstrings.lisp")
 (ns-import 'docparse)
 
@@ -63,8 +60,6 @@
 	(append! row (hash-get doc-map :type))
 	(append! row (hash-get doc-map :namespace))
 	(append! row (hash-get doc-map :usage))
-	;; TODO user typed explanation should be in it's own non-usage section
-	;;(append! row (hash-get doc-map :explanation))
 	(append! row (hash-get doc-map :example))
 	row))
 
@@ -91,9 +86,6 @@
 		(qsort sym-list))))
 
 (defq docstrings-map (parse-docstrings-for-syms (list-of-all-slsh-syms)))
-;; TODO why does my docstrings-map have " " as a key?
-;;(println "length of parsing: " (hash-keys docstrings-map))
-;;(println "length of parsing: " (hash-get docstrings-map " "))
 
 (defq header "---
 layout: default
@@ -122,8 +114,15 @@ title: Sl-sh form documentation
 				(macro (existing new-item) `(append ,existing (list (list 'make-doc-map-md-row ,new-item))))
 				(list 'join-md-rows
 					(list 'make-str-md-row  "form" "type" "namespace" "usage" "example")
-					(list 'make-str-md-row  "----" "----" "----" "----" "----")) 
+					(list 'make-str-md-row  "----" "----" "----" "----" "----"))
 					docstrings)
 			index-file))
 	(eval make-tables)))
 
+;;TODO formatting issues
+;; - too many <br>s in certain sections;
+;; - why does my docstrings-map have " " as a key?
+;;		(println "length of parsing: " (hash-keys docstrings-map))
+;;		(println "length of parsing: " (hash-get docstrings-map " "))
+;; - tables have extra columns, miiight go away when we switch from tables?
+;; - make pre push hook: https://victorafanasev.info/tech/deploy-jekyll-build-to-github-pages-using-git-pre-push-hook

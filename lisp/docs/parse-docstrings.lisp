@@ -13,13 +13,13 @@
 			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>"))
 		has-no-doc)))
 
-(defn get-mid-doc-section (sym key second-key docstring required) (progn
-	(defq type-doc (get-doc-section-if-exists key 1 docstring))
+(defn get-mid-doc-section (sym key key-idx second-key second-key-idx docstring required) (progn
+	(defq type-doc (get-doc-section-if-exists key key-idx docstring))
 	(if (= type-doc has-no-doc)
 		(if required
 			(err (str "Every docstring must have: " key ", but " sym " does not."))
 			:none)
-		(get-doc-section-if-exists second-key 0 type-doc))))
+		(get-doc-section-if-exists second-key second-key-idx type-doc))))
 
 (defn get-example-doc-section (key docstring)
 	(get-doc-section-if-exists key 1 docstring))
@@ -30,14 +30,24 @@
 	(defq docstring (doc sym))
 	(defq doc-map (make-hash))
 	(hash-set! doc-map :form (if (= sym '|) (str '\ sym) (str sym)))
-	(hash-set! doc-map :type (get-mid-doc-section sym "Type" "Namespace" docstring #t))
-	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" "Usage" docstring #t))
-	(hash-set! doc-map :usage (get-mid-doc-section sym "Usage" "Section" docstring #t))
-	(hash-set! doc-map :section (get-mid-doc-section sym "Section" "Example" docstring nil))
+	(hash-set! doc-map :type (get-mid-doc-section sym "Type" 1 "Namespace" 0 docstring #t))
+	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" 1 "Usage" 0 docstring #t))
+	(hash-set! doc-map :usage (get-mid-doc-section sym "Namespace" 1 "Section" 0 docstring #t))
+	(hash-set! doc-map :section (get-mid-doc-section sym "Section" 1 "Example" 0 docstring nil))
 	(hash-set! doc-map :example (get-example-doc-section "Example" docstring))
 	doc-map))
 
-(defn parse-docstrings-for-syms (sym-list) (progn
+(defn parse-docstrings-for-syms
+"Takes a list of slsh symbols and returns a hashmap. To build the hashmap this
+function gets the docstring  (calls the root:doc function which return the
+docstring) for each symbol. The value for the \"Section:\" declaration in the
+doc symbol is used as the key in the returned map.  The value for each key in the
+map is a list of hashmaps representing structured data parsed from the
+docstrings. The string following \"Section:\" can be anything but using a
+coherent set of values for the section declaration allows for flexible
+organization of docstrings.
+"
+	(sym-list) (progn
 	(defq docstring-sections (make-hash))
 	(defq section-builder (fn (syms)
 		(when (not (empty-seq? syms))
