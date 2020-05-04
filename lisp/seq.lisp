@@ -90,22 +90,18 @@ otherwise. If a non list or non vector is passed in it returns false."
 
 (defn in?
 "
-Takes a seq? and returns true if the second argument is is in list, false otherwise.
+Takes a [seq?](#core__seq?) that is not an [empty-seq?](#core__empty-seq?) and returns true if the second argument is is in list, false otherwise.
 
-;;TODO need a test to check err is returned if not a seq?
 Example:
-;; check list contains in? fcn
 (let ((vowels-list (list 'a 'e 'i 'o 'u)))
     (assert-true (in? vowels-list 'u))
-    (assert-false (in? vowels-list 'c)))
+    (assert-false (in? vowels-list 'c))
+    (assert-true (in? (list (list)) (list)))
+    (assert-false (in? 8 18)))
 "
-  (to-search item)
-  (progn
-    (defq first-arg (first to-search))
-    (if (nil? first-arg)
-      nil
-      (progn
-        (if (= item first-arg) #t (recur (rest to-search) item))))))
+  (seq-to-search item-to-match)
+    (when (and (seq? seq-to-search ) (not (empty-seq? seq-to-search)))
+        (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
 
 (def 'append nil)
 (def 'append! nil)

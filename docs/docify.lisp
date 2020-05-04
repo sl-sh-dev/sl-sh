@@ -7,6 +7,26 @@
 
 (error-stack-on)
 
+(when (not (= 1 (length args)))
+	(err "Need required argument, a path to write the markdown file."))
+
+(defq header "---
+layout: default
+title: Sl-sh form documentation
+---
+
+# Sl-sh form documentation
+
+;;TODO need anchor links / table of contents to all forms here
+")
+
+(defq user-input (first args))
+(defq index-file (progn
+	(defq new-file (open user-input :create :truncate))
+	(write-string new-file header)
+	(close new-file)
+	user-input))
+
 (defn make-str-md-row (&rest args) (progn
 	(defq row (list " | "))
 	(for a args (progn
@@ -25,25 +45,27 @@
 		(append! table (list row)))
 	table))
 
-(defq human-readable-name (make-hash))
-(hash-set! human-readable-name :none "Uncategorized forms")
-(hash-set! human-readable-name "char" "Char forms")
-(hash-set! human-readable-name "condictional" "Conditional forms")
-(hash-set! human-readable-name "core" "Core forms")
-(hash-set! human-readable-name "file" "File forms")
-(hash-set! human-readable-name "hashmap" "Hashmap forms")
-(hash-set! human-readable-name "math" "Math forms")
-(hash-set! human-readable-name "namespace" "Namespace forms")
-(hash-set! human-readable-name "pair" "Pair forms")
-(hash-set! human-readable-name "shell" "Shell forms")
-(hash-set! human-readable-name "string" "String forms")
-(hash-set! human-readable-name "type" "Type forms")
-(hash-set! human-readable-name "vector" "Vector forms")
-(hash-set! human-readable-name " " "Unknown forms")
+(defn human-readable-name (key)
+	;; TODO why does this need to be stringified?
+	(match (str key)
+		("char" "Char forms")
+		("conditional" "Conditional forms")
+		("core" "Core forms")
+		("file" "File forms")
+		("hashmap" "Hashmap forms")
+		("math" "Math forms")
+		("namespace" "Namespace forms")
+		("pair" "Pair forms")
+		("shell" "Shell forms")
+		("string" "String forms")
+		("type" "Type forms")
+		("vector" "Vector forms")
+		(":uncategorized" "Uncategorized forms")
+		(nil "Unknown forms")))
 
 (defn write-md-table (key table file-name) (progn
 	(defq file (open file-name :append))
-	(defq name (hash-get human-readable-name key))
+	(defq name (human-readable-name key))
 	(write-line file (str "## " (if (not name) "Unknown forms" name)))
 	(write-line file "")
 	(write-line file "")
@@ -54,13 +76,29 @@
 	(close file)
 	file-name))
 
+(defn format-first-line-as-code (text-slice delim) (progn
+	(defq arr (str-split delim text-slice))
+	;; if first char in str is delim, 0th elem is "" when we don't need to
+	;; bracket with backticks
+	(defq trim-arr (if (= "" (first arr)) (rest arr) arr))
+	(str-cat-list delim (append (list (str "``" (first trim-arr) "``")) (rest trim-arr)))))
+
 (defn doc-str-to-md-row (doc-map) (progn
 	(defq row (list))
-	(append! row (hash-get doc-map :form))
-	(append! row (hash-get doc-map :type))
-	(append! row (hash-get doc-map :namespace))
-	(append! row (hash-get doc-map :usage))
-	(append! row (hash-get doc-map :example))
+	(defq doc-namespace (hash-get doc-map :namespace))
+	(defq doc-type (hash-get doc-map :type))
+	(defq doc-usage (hash-get doc-map :usage))
+	(defq doc-example (hash-get doc-map :example))
+	(append! row
+		(progn
+		(defq form (hash-get doc-map :form))
+		(str "<a id=\"" doc-namespace "__" form  "\" class=\"anchor\" aria-hidden=\"true\" href=\"#sl-sh-form-documentation\">`" form "`</a>")))
+	(append! row doc-type)
+	(append! row doc-namespace)
+	(append! row (format-first-line-as-code doc-usage "<br>"))
+	(when (not (= doc-example ""))
+	  (append! row (str "``" doc-example "``")))
+	;;(append! row (hash-get doc-map :example))
 	row))
 
 (defn make-doc-map-md-row (doc-str)
@@ -82,33 +120,29 @@
 			(not (= x 'tok-sys-alias-color))
 			(not (= x 'tok-string-color))
 			(not (= x 'tok-invalid-color))
+			;;TODO should not exclude last-status OR export
+			(not (= x '*last-status*))
+			(not (= x 'export))
 			(not (= x 'args))))
 		(qsort sym-list))))
 
 (defq docstrings-map (parse-docstrings-for-syms (list-of-all-slsh-syms)))
+;;(defq docstrings-map (parse-docstrings-for-syms (append '() (first (list-of-all-slsh-syms)))))
 
-(defq header "---
-layout: default
-title: Sl-sh form documentation
----
-
-# Sl-sh form documentation
-
-;;TODO need anchor links / table of contents to all forms here
-")
-
-(defn get-file (key)
-	(progn
-	(defq file (str key ".md"))
-	(defq new-file (open file :create :truncate))
-	(write-string new-file header)
-	(close new-file)
-	file))
-
-(defq index-file (get-file "index"))
+(defmacro maketables (key docstrings)
+	(eval `(write-md-table ,key
+			(reduce
+				(macro (existing new-item) (append ,existing ((make-doc-map-md-row ,new-item))))
+				(join-md-rows
+					(make-str-md-row  "form" "type" "namespace" "usage" "example")
+					(make-str-md-row  "----" "----" "----" "----" "----"))
+					docstrings)
+			index-file)))
 
 (for key (qsort (hash-keys docstrings-map)) (progn
 	(defq docstrings (hash-get docstrings-map key))
+	;;TODO this should be a macro that evals
+	;; literally all this list and quote stuff is what macros are for...
 	(defq make-tables (list 'write-md-table 'key
 			(reduce
 				(macro (existing new-item) `(append ,existing (list (list 'make-doc-map-md-row ,new-item))))

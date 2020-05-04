@@ -3,23 +3,31 @@
 (core::ns-import 'core)
 (ns-import 'shell)
 
-(defq has-no-doc " ")
-
 (defn get-doc-section-if-exists (key idx docstring) (progn
 	(defq full-key (str key ":"))
 	(if (str-contains full-key docstring)
-		(if (= key "Section")
+		(str-replace
+		  (if (in? '("Type" "Namespace" "Section") key)
 			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "")
 			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>"))
-		has-no-doc)))
+					"|" "\|")
+		"")))
 
-(defn get-mid-doc-section (sym key key-idx second-key second-key-idx docstring required) (progn
+(defn find-doc-section-or-none (second-keys second-key-idx target-str)
+	(if (not (empty-seq? second-keys))
+		(progn
+			(defq text-slice (get-doc-section-if-exists (first second-keys) second-key-idx target-str))
+			(if (not (nil? text-slice))
+				text-slice
+				(recur (rest second-keys) second-key-idx target-str)))
+		""))
+
+(defn get-mid-doc-section (sym key key-idx second-key-idx docstring required &rest second-keys) (progn
 	(defq type-doc (get-doc-section-if-exists key key-idx docstring))
-	(if (= type-doc has-no-doc)
-		(if required
-			(err (str "Every docstring must have: " key ", but " sym " does not."))
-			:none)
-		(get-doc-section-if-exists second-key second-key-idx type-doc))))
+	(if (nil? type-doc)
+		(when required
+			(err (str "Every docstring must have: " key ", but " sym " does not.")))
+		(find-doc-section-or-none second-keys second-key-idx type-doc))))
 
 (defn get-example-doc-section (key docstring)
 	(get-doc-section-if-exists key 1 docstring))
@@ -29,12 +37,22 @@
 (defn parse-doc (sym) (progn
 	(defq docstring (doc sym))
 	(defq doc-map (make-hash))
-	(hash-set! doc-map :form (if (= sym '|) (str '\ sym) (str sym)))
-	(hash-set! doc-map :type (get-mid-doc-section sym "Type" 1 "Namespace" 0 docstring #t))
-	(hash-set! doc-map :namespace (get-mid-doc-section sym "Namespace" 1 "Usage" 0 docstring #t))
-	(hash-set! doc-map :usage (get-mid-doc-section sym "Namespace" 1 "Section" 0 docstring #t))
-	(hash-set! doc-map :section (get-mid-doc-section sym "Section" 1 "Example" 0 docstring nil))
-	(hash-set! doc-map :example (get-example-doc-section "Example" docstring))
+	(hash-set! doc-map :form
+		(if (= sym '|) (str '\ sym) (str sym)))
+	(hash-set! doc-map :type
+		(progn
+		(defq ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))
+		ms))
+	(hash-set! doc-map :namespace
+		(get-mid-doc-section sym "Namespace" 1 0 docstring #t "Usage" "Section" "Example"))
+	(hash-set! doc-map :usage
+		(get-mid-doc-section sym "Usage" 1 0 docstring #t "Section" "Example"))
+	(hash-set! doc-map :section
+		(progn
+		(defq sec (get-mid-doc-section sym "Section" 1 0 docstring nil "Example"))
+		(if (or (nil? sec) (str-empty? (str-trim sec))) :uncategorized sec)))
+	(hash-set! doc-map :example
+		(get-example-doc-section "Example" docstring))
 	doc-map))
 
 (defn parse-docstrings-for-syms
