@@ -5,20 +5,15 @@
 
 (defn get-doc-section-if-exists (key idx docstring) (progn
 	(defq full-key (str key ":"))
-	(if (str-contains full-key docstring)
-		(str-replace
-		  (if (in? '("Type" "Namespace" "Section") key)
-			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "")
-			(str-replace (str-trim (vec-nth idx (str-split full-key docstring))) "\n" "<br>"))
-					"|" "\|")
-		"")))
+	(when (str-contains full-key docstring)
+		(str-trim (vec-nth idx (str-split full-key docstring))))))
 
 (defn find-doc-section-or-none (second-keys second-key-idx target-str)
 	(if (not (empty-seq? second-keys))
 		(progn
 			(defq text-slice (get-doc-section-if-exists (first second-keys) second-key-idx target-str))
 			(if (not (nil? text-slice))
-				text-slice
+					text-slice
 				(recur (rest second-keys) second-key-idx target-str)))
 		""))
 
