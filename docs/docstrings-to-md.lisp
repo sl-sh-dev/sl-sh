@@ -17,23 +17,62 @@ title: Sl-sh form documentation
 ")
 	(close new-file)))
 
-(defn human-readable-name (key)
+(defn section-metadata (key attr) (progn
 	;; TODO why does this need to be stringified?
+	(defq idx (match attr
+			(:name 0)
+			(:description 1)
+			(nil (err "Unkown attribute of table heading."))))
 	(match (str key)
-		("char" "Char forms")
-		("conditional" "Conditional forms")
-		("core" "Core forms")
-		("file" "File forms")
-		("hashmap" "Hashmap forms")
-		("math" "Math forms")
-		("namespace" "Namespace forms")
-		("pair" "Pair forms")
-		("shell" "Shell forms")
-		("string" "String forms")
-		("type" "Type forms")
-		("vector" "Vector forms")
-		(":uncategorized" "Uncategorized forms")
-		(nil "Unknown forms")))
+		("sequence" (vec-nth idx #("Sequence forms"
+"These macros will work on either a vector or a pair made into a proper list
+(cons list).  Use these in preference to the vector/list specific versions when
+possible (ie first vs car).
+NOTE: list on this table can be a vector or a list.")))
+		("char" (vec-nth idx '#("Char forms" nil)))
+		("conditional" (vec-nth idx '#("Conditional forms" nil)))
+		("core" (vec-nth idx '#("Core forms" nil)))
+		("file" (vec-nth idx '#("File forms"
+" Options to open, one or more of these can be added to open after the filename.
+A file can only be opened for reading or writing (read is default).
+
+Option | Description
+-------|-----------
+:read | Open file for reading, this is the default.
+:write | Open file for writing.
+:append | Open file for writing and append new data to end.
+:truncate | Open file for write and delete all existing data.
+:create | Create the file if it does not exist and open for writing.
+:create-new | Create if does not exist, error if it does and open for writing.
+:on-error-nil | If open has an error then return nil instead of producing an error.
+
+Notes on closing.  Files will close when they go out of scope.  Using close will
+cause a reference to a file to be marked close (removes that reference).  If
+there are more then one references to a file it will not actually close until
+all are released.  Close will also flush the file even if it is not the final
+reference.  If a reference to a file is captured in a closure that can also keep
+it open (closures currently capture the entire scope not just used symbols).")))
+		("hashmap" (vec-nth idx '#("Hashmap forms" nil)))
+		("math" (vec-nth idx '#("Math forms" nil)))
+		("namespace" (vec-nth idx '#("Namespace forms" nil)))
+		("pair" (vec-nth idx '#("Pair forms"
+"Operations on the 'Pair' type (aka Cons Cell) that can be used to create
+traditional Lisp list structures. These are the default list structure and
+are produced with bare parentheses in code. These lists can also be created by
+building them up with joins or with the list form.")))
+		("shell" (vec-nth idx '#("Shell forms"
+"Forms to do shell operations like file tests, pipes, redirects, etc.")))
+		("string" (vec-nth idx '#("String forms" nil)))
+		("type" (vec-nth idx '#("Type forms"
+"These forms provide information/tests about an objects underlying type.")))
+		("vector" (vec-nth idx '#("Vector forms"
+"Forms ending in '!' are destructive and change the underlying vector, other forms
+do not make changes to the the provided vector.  They are usable in place of a
+list for purposes of lambda calls, parameters, etc (they work the same as a list
+made from pairs but are vectors not linked lists).  Use #() to declare them in
+code (i.e. '#(1 2 3) or #(+ 1 2)).")))
+		(":uncategorized" (vec-nth idx '#("Uncategorized forms" nil)))
+		(nil (vec-nth idx '#("Unknown forms" nil))))))
 
 (defn create-anchor (id)
 	(str "<a id=\"" id "\" class=\"anchor\" aria-hidden=\"true\" href=\"#sl-sh-form-documentation\"></a>"))
@@ -56,7 +95,7 @@ title: Sl-sh form documentation
 
 (defn table-of-contents (key docstrings file-name) (progn
 	(defq file (open file-name :append))
-	(defq name (human-readable-name key))
+	(defq name (section-metadata key :name))
 	(write-line file (str "### "
 		(create-anchor (str name "-contents" ))
 		(make-md-link-able name (str "#" name "-body"))))
@@ -81,7 +120,7 @@ title: Sl-sh form documentation
 	(write-line file "")
 	(write-line file
 		(str "| <b>form name</b> | <b>type</b> (see: "
-			 (make-md-link-able (human-readable-name "type") (str "#" (human-readable-name "type") "-contents"))
+			 (make-md-link-able (section-metadata "type" :name) (str "#" (section-metadata "type" :name) "-contents"))
 			 ") |"))
 	(write-line file "| <b>namespace</b> (fully qualified names are of format namespace::symbol) | <b>usage</b> |")
 	(write-line file "")
@@ -106,10 +145,15 @@ title: Sl-sh form documentation
 
 (defn write-md-table (key docstrings file-name) (progn
 	(defq file (open file-name :append))
-	(defq name (human-readable-name key))
+	(defq name (section-metadata key :name))
 	(write-line file (str "### "
 				(create-anchor (str name "-body" ))
 				(make-md-link-able name (str "#" name "-contents"))))
+	(write-line file (progn
+		 (defq data (section-metadata key :description))
+		 (if (nil? data)
+			""
+			data)))
 	(for doc-map docstrings (progn
 		(defq doc-form (sanitize-for-md-row (hash-get doc-map :form)))
 		(defq doc-namespace (sanitize-for-md-row (hash-get doc-map :namespace)))
@@ -153,6 +197,6 @@ title: Sl-sh form documentation
 	(write-heading "Documentation" index-file)
 	(for key (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
-		(write-md-table  key docstrings index-file)))))
+		(write-md-table key docstrings index-file)))))
 
 (ns-export '(make-md-file))
