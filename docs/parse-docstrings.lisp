@@ -1,5 +1,4 @@
 (if (ns-exists? 'docparse) (ns-enter 'docparse) (ns-create 'docparse))
-
 (core::ns-import 'core)
 (ns-import 'shell)
 
