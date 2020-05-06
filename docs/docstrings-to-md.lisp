@@ -24,7 +24,7 @@ title: Sl-sh form documentation
 			(:description 1)
 			(nil (err "Unkown attribute of table heading."))))
 	(match (str key)
-		("sequence" (vec-nth idx #("Sequence forms"
+		("sequence" (vec-nth idx '#("Sequence forms"
 "These macros will work on either a vector or a pair made into a proper list
 (cons list).  Use these in preference to the vector/list specific versions when
 possible (ie first vs car).
@@ -181,7 +181,6 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	file-name))
 
 (defn make-md-file
-	"meow meow meow"
 	(index-file sym-list) (progn
 	(defq docstrings-map (parse-docstrings-for-syms sym-list))
 	(create-header index-file)

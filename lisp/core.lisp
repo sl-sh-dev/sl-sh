@@ -155,7 +155,14 @@ Binds an expession to a quoted symbol (ie def 'sym bind)"
 					(err "ERROR: invalid bindings on let"))))
 		`((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 
-(defn copy-seq (seq)
+(defn copy-seq
+"
+Produces a copy of the provided list (copy has same type as the parameter).
+
+Section: sequence
+
+"
+(seq)
     (if (vec? seq)
         (progn
             (def 'tseq (make-vec (length seq)))

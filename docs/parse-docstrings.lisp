@@ -7,21 +7,28 @@
 	(when (str-contains full-key docstring)
 		(str-trim (vec-nth idx (str-split full-key docstring))))))
 
-(defn find-doc-section-or-none (second-keys second-key-idx target-str)
+(defn cut-target-str
+	"Function is used to cut the appropriate piece of the doc string out of the
+	target-str. The docstring api is a text block separated by predefined
+	strings delimiting sections. It is necessary, after identifying the start
+	of the block of text needed (by splitting on an ordered list of predefined
+	strings), to cut the remaining text (target-str) to just above the start
+	of the next prefedined string."
+	(second-keys second-key-idx target-str)
 	(if (not (empty-seq? second-keys))
 		(progn
 			(defq text-slice (get-doc-section-if-exists (first second-keys) second-key-idx target-str))
 			(if (not (nil? text-slice))
 					text-slice
 				(recur (rest second-keys) second-key-idx target-str)))
-		""))
+		target-str))
 
 (defn get-mid-doc-section (sym key key-idx second-key-idx docstring required &rest second-keys) (progn
 	(defq type-doc (get-doc-section-if-exists key key-idx docstring))
 	(if (nil? type-doc)
 		(when required
 			(err (str "Every docstring must have: " key ", but " sym " does not.")))
-		(find-doc-section-or-none second-keys second-key-idx type-doc))))
+		(cut-target-str second-keys second-key-idx type-doc))))
 
 (defn get-example-doc-section (key docstring)
 	(get-doc-section-if-exists key 1 docstring))
