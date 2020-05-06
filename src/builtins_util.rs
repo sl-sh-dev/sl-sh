@@ -6,13 +6,13 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
-pub fn is_proper_list(exp: Expression) -> bool {
+pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
     if let ExpEnum::Pair(_e1, e2) = &exp.get().data {
         if e2.is_nil() {
             true
         } else {
-            is_proper_list(*e2)
+            is_proper_list(&e2)
         }
     } else {
         false
@@ -27,7 +27,7 @@ pub fn list_to_args(
     if do_eval {
         let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
         for a in parts {
-            args.push(eval(environment, *a)?);
+            args.push(eval(environment, a)?);
         }
         Ok(args)
     } else {
@@ -131,7 +131,7 @@ fn set_arg(
     let var = if let ExpEnum::LazyFn(_, _) = &var.get().data {
         var.resolve(environment)?
     } else {
-        var
+        var.clone()
     };
     let v2 = if do_eval {
         let var_d = var.get();
@@ -253,10 +253,11 @@ fn setup_args_final(
 pub fn setup_args(
     environment: &mut Environment,
     mut new_scope: Option<&mut Scope>,
-    params: Expression,
+    params: impl AsRef<Expression>,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> io::Result<()> {
+    let params = params.as_ref();
     let p_d = params.get();
     let p_iter = if let ExpEnum::Vector(list) = &p_d.data {
         Box::new(ListIter::new_list(&list))

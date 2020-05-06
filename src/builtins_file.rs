@@ -66,11 +66,11 @@ fn builtin_cd(
                             environment,
                             Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
                         )?,
-                        _ => eval(environment, arg)?,
+                        _ => eval(environment, &arg)?,
                     },
-                    _ => eval(environment, arg)?,
+                    _ => eval(environment, &arg)?,
                 },
-                _ => eval(environment, arg)?,
+                _ => eval(environment, &arg)?,
             }
             .as_string(environment)?;
             if let Some(h) = expand_tilde(&new_arg) {
@@ -168,7 +168,7 @@ fn builtin_is_dir(
 
 fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
     let mut do_write = false;
-    if let Some(data_in) = environment.data_in {
+    if let Some(data_in) = environment.data_in.clone() {
         match &data_in.get().data {
             ExpEnum::Atom(_) => {
                 do_write = true;
@@ -195,7 +195,7 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io:
         }
     }
     if do_write {
-        let data_in = *environment.data_in.as_ref().unwrap();
+        let data_in = environment.data_in.as_ref().unwrap().clone();
         data_in.writef(environment, writer)?;
     }
     Ok(())
@@ -224,9 +224,9 @@ fn builtin_pipe(
             environment.state.stdout_status = old_out_status.clone();
             environment.in_pipe = false; // End of the pipe and want to wait.
         }
-        environment.data_in = Some(out);
+        environment.data_in = Some(out.clone());
         let res = eval(environment, p);
-        match res {
+        match &res {
             Ok(res) => match &res.get().data {
                 ExpEnum::Process(ProcessState::Running(pid)) => {
                     if environment.state.pipe_pgid.is_none() {
@@ -290,11 +290,15 @@ fn builtin_pipe(
                 _ => {}
             },
             Err(err) => {
-                error = Some(Err(err));
+                error = Some(Err(io::Error::new(err.kind(), err.to_string())));
                 break;
             }
         }
-        out = if let Ok(out) = res { out } else { out };
+        out = if let Ok(out) = res {
+            out.clone()
+        } else {
+            out.clone()
+        };
         i += 1;
         pipe = next_pipe;
     }

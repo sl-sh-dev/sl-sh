@@ -9,7 +9,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
-fn as_string(environment: &mut Environment, exp: Expression) -> io::Result<String> {
+fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<String> {
     exp.as_string(environment)
 }
 
@@ -104,9 +104,9 @@ fn builtin_str_split(
         if let Some(text) = args.next() {
             if args.next().is_none() {
                 let pat = eval(environment, pat)?;
-                let pat = as_string(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
-                let text = as_string(environment, text)?;
+                let text = as_string(environment, &text)?;
                 let mut split_list: Vec<Expression> = Vec::new();
                 if pat == ":whitespace" {
                     for s in text.split_whitespace() {
@@ -139,9 +139,9 @@ fn builtin_str_rsplit(
         if let Some(text) = args.next() {
             if args.next().is_none() {
                 let pat = eval(environment, pat)?;
-                let pat = as_string(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
-                let text = as_string(environment, text)?;
+                let text = as_string(environment, &text)?;
                 let mut split_list: Vec<Expression> = Vec::new();
                 for s in text.rsplit(&pat) {
                     split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -181,9 +181,9 @@ fn builtin_str_splitn(
                         ));
                     };
                     let pat = eval(environment, pat)?;
-                    let pat = as_string(environment, pat)?;
+                    let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
-                    let text = as_string(environment, text)?;
+                    let text = as_string(environment, &text)?;
                     let mut split_list: Vec<Expression> = Vec::new();
                     for s in text.splitn(n as usize, &pat) {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -224,9 +224,9 @@ fn builtin_str_rsplitn(
                         ));
                     };
                     let pat = eval(environment, pat)?;
-                    let pat = as_string(environment, pat)?;
+                    let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
-                    let text = as_string(environment, text)?;
+                    let text = as_string(environment, &text)?;
                     let mut split_list: Vec<Expression> = Vec::new();
                     for s in text.rsplitn(n as usize, &pat) {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -250,7 +250,7 @@ fn builtin_str_cat_list(
 ) -> io::Result<Expression> {
     if let Some(join_str) = args.next() {
         let join_str = eval(environment, join_str)?;
-        let join_str = as_string(environment, join_str)?;
+        let join_str = as_string(environment, &join_str)?;
         if let Some(list) = args.next() {
             if args.next().is_none() {
                 let mut new_str = String::new();
@@ -262,7 +262,7 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, *s)?);
+                            new_str.push_str(&as_string(environment, s)?);
                             first = false;
                         }
                     }
@@ -274,7 +274,7 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, s)?);
+                            new_str.push_str(&as_string(environment, &s)?);
                             first = false;
                         }
                     }
@@ -422,7 +422,7 @@ fn builtin_str(
     environment.state.stderr_status = Some(IOState::Pipe);
 
     // Get out of a pipe for the str call if in one...
-    let data_in = environment.data_in;
+    let data_in = environment.data_in.clone();
     environment.data_in = None;
     let in_pipe = environment.in_pipe;
     environment.in_pipe = false;
@@ -439,7 +439,7 @@ fn builtin_str(
                 return Err(err);
             }
             Ok(a) => {
-                match as_string(environment, a) {
+                match as_string(environment, &a) {
                     Err(err) => {
                         environment.state.stdout_status = old_out;
                         environment.state.stderr_status = old_err;
@@ -644,9 +644,9 @@ fn builtin_str_starts_with(
         if let Some(text) = args.next() {
             if args.next().is_none() {
                 let pat = eval(environment, pat)?;
-                let pat = as_string(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
-                let text = as_string(environment, text)?;
+                let text = as_string(environment, &text)?;
                 return if text.starts_with(&pat) {
                     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
                 } else {
@@ -669,9 +669,9 @@ fn builtin_str_contains(
         if let Some(text) = args.next() {
             if args.next().is_none() {
                 let pat = eval(environment, pat)?;
-                let pat = as_string(environment, pat)?;
+                let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
-                let text = as_string(environment, text)?;
+                let text = as_string(environment, &text)?;
                 return if text.contains(&pat) {
                     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
                 } else {
@@ -696,7 +696,7 @@ fn builtin_str_buf(
     environment.state.stderr_status = Some(IOState::Pipe);
 
     // Get out of a pipe for the str call if in one...
-    let data_in = environment.data_in;
+    let data_in = environment.data_in.clone();
     environment.data_in = None;
     let in_pipe = environment.in_pipe;
     environment.in_pipe = false;
@@ -713,7 +713,7 @@ fn builtin_str_buf(
                 return Err(err);
             }
             Ok(a) => {
-                match as_string(environment, a) {
+                match as_string(environment, &a) {
                     Err(err) => {
                         environment.state.stdout_status = old_out;
                         environment.state.stderr_status = old_err;
@@ -743,7 +743,7 @@ fn builtin_str_buf_push(
             let mut res = res_in.borrow_mut();
             for a in args {
                 let a = eval(environment, a)?;
-                res.push_str(&as_string(environment, a)?);
+                res.push_str(&as_string(environment, &a)?);
             }
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
                 res_in.clone(),
@@ -803,7 +803,7 @@ fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> 
         ))));
         list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch))));
         let a = eval(environment, Expression::with_list(list))?;
-        res.push_str(&as_string(environment, a)?);
+        res.push_str(&as_string(environment, &a)?);
     }
     Ok(res)
 }

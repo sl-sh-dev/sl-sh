@@ -14,10 +14,12 @@ fn build_map(
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             match &key.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), *val),
-                ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), *val),
-                ExpEnum::Atom(Atom::StringRef(s)) => map.insert((*s).to_string(), *val),
-                ExpEnum::Atom(Atom::StringBuf(s)) => map.insert(s.borrow().to_string(), *val),
+                ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
+                ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), val.clone()),
+                ExpEnum::Atom(Atom::StringRef(s)) => map.insert((*s).to_string(), val.clone()),
+                ExpEnum::Atom(Atom::StringBuf(s)) => {
+                    map.insert(s.borrow().to_string(), val.clone())
+                }
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -80,19 +82,19 @@ fn builtin_hash_set(
                         match &key.get().data {
                             ExpEnum::Atom(Atom::Symbol(sym)) => {
                                 map.insert((*sym).to_string(), val);
-                                return Ok(exp_map);
+                                return Ok(exp_map.clone());
                             }
                             ExpEnum::Atom(Atom::String(s)) => {
                                 map.insert(s.to_string(), val);
-                                return Ok(exp_map);
+                                return Ok(exp_map.clone());
                             }
                             ExpEnum::Atom(Atom::StringRef(s)) => {
                                 map.insert((*s).to_string(), val);
-                                return Ok(exp_map);
+                                return Ok(exp_map.clone());
                             }
                             ExpEnum::Atom(Atom::StringBuf(s)) => {
                                 map.insert(s.borrow().to_string(), val);
-                                return Ok(exp_map);
+                                return Ok(exp_map.clone());
                             }
                             _ => {
                                 return Err(io::Error::new(
@@ -168,7 +170,7 @@ fn builtin_hash_get(
     fn do_get(map: &HashMap<String, Expression>, sym: &str) -> io::Result<Expression> {
         let old = map.get(sym);
         if let Some(old) = old {
-            Ok(*old)
+            Ok(old.clone())
         } else {
             Ok(Expression::make_nil())
         }
@@ -296,7 +298,7 @@ fn builtin_hash_clear(
             let mut map_d = map.get_mut();
             if let ExpEnum::HashMap(inner_map) = &mut map_d.data {
                 inner_map.clear();
-                return Ok(map);
+                return Ok(map.clone());
             }
         }
     }

@@ -16,6 +16,7 @@ use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::reader::*;
@@ -41,7 +42,7 @@ fn builtin_eval(
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                _ => eval(environment, arg),
+                _ => eval(environment, &arg),
             };
         }
     }
@@ -110,7 +111,7 @@ fn builtin_unwind_protect(
     if let Some(protected) = args.next() {
         let result = eval(environment, protected);
         for a in args {
-            if let Err(err) = eval(environment, a) {
+            if let Err(err) = eval(environment, &a) {
                 eprintln!(
                     "ERROR in unwind-protect cleanup form {}, {} will continue cleanup",
                     a, err
@@ -227,7 +228,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             match &ast.get().data {
                 ExpEnum::Vector(list) => {
                     for l in list {
-                        res = Some(eval(environment, *l)?);
+                        res = Some(eval(environment, l)?);
                     }
                 }
                 ExpEnum::Pair(_, _) => {
@@ -236,7 +237,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                     }
                 }
                 _ => {
-                    res = Some(eval(environment, ast)?);
+                    res = Some(eval(environment, &ast)?);
                 }
             }
             environment.loose_symbols = old_loose_syms;
@@ -307,17 +308,17 @@ fn builtin_length(
                 )))),
                 ExpEnum::Pair(_, e2) => {
                     let mut len = 0;
-                    let mut e_next = *e2;
+                    let mut e_next = e2.clone();
                     loop {
                         let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
-                            Some(*e2)
+                            Some(e2.clone())
                         } else {
                             None
                         };
                         match e2 {
                             Some(e2) => {
                                 len += 1;
-                                e_next = e2;
+                                e_next = e2.clone();
                             }
                             None => {
                                 len += 1;
@@ -596,7 +597,7 @@ fn val_to_reference(
             let val = eval(environment, val_in)?;
             Ok((
                 Reference::new_rooted(
-                    val,
+                    val.clone_root(),
                     RefMetaData {
                         namespace,
                         doc_string,
@@ -610,7 +611,7 @@ fn val_to_reference(
         let val = eval(environment, val_in)?;
         Ok((
             Reference::new_rooted(
-                val,
+                val.clone_root(),
                 RefMetaData {
                     namespace,
                     doc_string,
@@ -629,7 +630,7 @@ fn builtin_set(
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
         // XXX TODO, eval val here?
         entry.insert(Reference::new_rooted(
-            val,
+            val.clone_root(),
             RefMetaData {
                 namespace: None,
                 doc_string: None,
@@ -1006,7 +1007,7 @@ fn replace_commas(
                 replace_commas(environment, &mut i, is_vector, meta)?
             }
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
-            _ => exp,
+            _ => exp.clone(),
         };
         if let ExpEnum::Atom(Atom::Symbol(symbol)) = &exp_d.data {
             if symbol == &"," {
@@ -1023,7 +1024,7 @@ fn replace_commas(
                 match &nl.get().data {
                     ExpEnum::Vector(new_list) => {
                         for item in new_list {
-                            output.push(*item);
+                            output.push(item.clone());
                         }
                     }
                     ExpEnum::Pair(_, _) => {
@@ -1053,7 +1054,7 @@ fn replace_commas(
             match &nl.get().data {
                 ExpEnum::Vector(new_list) => {
                     for item in new_list {
-                        output.push(*item);
+                        output.push(item.clone());
                     }
                 }
                 ExpEnum::Pair(_, _) => {
@@ -1102,7 +1103,7 @@ fn builtin_bquote(
                 meta,
             ),
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false, meta),
-            _ => Ok(arg),
+            _ => Ok(arg.clone()),
         }
     } else {
         Err(io::Error::new(
@@ -1241,7 +1242,7 @@ fn builtin_macro(
 
 fn do_expansion(
     environment: &mut Environment,
-    command: Expression,
+    command: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Option<Expression>> {
     if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
@@ -1252,11 +1253,11 @@ fn do_expansion(
                     None => build_new_scope(None),
                 };
                 environment.current_scope.push(new_scope);
-                if let Err(err) = setup_args(environment, None, sh_macro.params, parts, false) {
+                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
-                let expansion = eval(environment, sh_macro.body);
+                let expansion = eval(environment, &sh_macro.body);
                 if let Err(err) = expansion {
                     environment.current_scope.pop();
                     return Err(err);
@@ -1277,7 +1278,7 @@ fn do_expansion(
 
 fn expand_macro_internal(
     environment: &mut Environment,
-    arg: Expression,
+    arg: &Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
     let arg_d = arg.get();
@@ -1290,12 +1291,12 @@ fn expand_macro_internal(
         };
         let expansion = do_expansion(
             environment,
-            *command,
+            command,
             &mut Box::new(ListIter::new_slice(parts)),
         )?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1313,10 +1314,10 @@ fn expand_macro_internal(
         } else {
             e2.iter()
         };
-        let expansion = do_expansion(environment, *e1, &mut e2_iter)?;
+        let expansion = do_expansion(environment, e1, &mut e2_iter)?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1334,9 +1335,10 @@ fn expand_macro_internal(
 
 pub fn expand_macro(
     environment: &mut Environment,
-    arg: Expression,
+    arg: impl AsRef<Expression>,
     one: bool,
 ) -> io::Result<Option<Expression>> {
+    let arg = arg.as_ref();
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
     let res = expand_macro_internal(environment, arg, one);
@@ -1344,26 +1346,31 @@ pub fn expand_macro(
     res
 }
 
-fn expand_macro_all(environment: &mut Environment, arg: Expression) -> io::Result<Expression> {
+fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
     if let Some(exp_outer) = expand_macro(environment, arg, false)? {
-        let exp_d = exp_outer.get();
+        let exp_outer_c = exp_outer.clone();
+        let exp_d = exp_outer_c.get();
         if let ExpEnum::Vector(list) = &exp_d.data {
             let mut nv = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, *item)?);
+                nv.push(expand_macro_all(environment, item)?);
             }
             drop(exp_d);
             exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
+            // XXX
+            gc_mut().down_root(&exp_outer);
         } else if let ExpEnum::Pair(_, _) = &exp_d.data {
             let mut nv = Vec::new();
             drop(exp_d);
             for item in exp_outer.iter() {
-                nv.push(expand_macro_all(environment, item)?);
+                nv.push(expand_macro_all(environment, &item)?);
             }
             exp_outer
                 .get_mut()
                 .data
                 .replace(ExpEnum::cons_from_vec(&mut nv));
+            // XXX
+            gc_mut().down_root(&exp_outer);
         }
         Ok(exp_outer)
     } else {
@@ -1372,19 +1379,23 @@ fn expand_macro_all(environment: &mut Environment, arg: Expression) -> io::Resul
         if let ExpEnum::Vector(list) = &arg_d.data {
             let mut nv = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, *item)?);
+                nv.push(expand_macro_all(environment, item)?);
             }
             drop(arg_d);
             arg.get_mut().data.replace(ExpEnum::Vector(nv));
+            // XXX
+            gc_mut().down_root(arg);
         } else if let ExpEnum::Pair(_, _) = &arg_d.data {
             let mut nv = Vec::new();
             drop(arg_d);
             for item in arg2.iter() {
-                nv.push(expand_macro_all(environment, item)?);
+                nv.push(expand_macro_all(environment, &item)?);
             }
             arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
+            // XXX
+            gc_mut().down_root(arg);
         }
-        Ok(arg2)
+        Ok(arg2.clone())
     }
 }
 
@@ -1394,7 +1405,7 @@ fn builtin_expand_macro(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, arg0, false)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, false)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -1413,7 +1424,7 @@ fn builtin_expand_macro1(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, arg0, true)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, true)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -1432,7 +1443,7 @@ fn builtin_expand_macro_all(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return expand_macro_all(environment, arg0);
+            return expand_macro_all(environment, &arg0);
         }
     }
     Err(io::Error::new(
@@ -1758,7 +1769,7 @@ fn builtin_get_error(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-fn add_usage(doc_str: &mut String, sym: &str, exp: Expression) {
+fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     let exp_d = exp.get();
     let f_d;
     let m_d;
@@ -1803,12 +1814,12 @@ fn make_doc(_environment: &mut Environment, exp: &Reference, key: &str) -> io::R
     }
     if let Some(doc_str) = &exp.meta.doc_string {
         if !doc_str.contains("Usage:") {
-            add_usage(&mut new_docs, key, exp.exp);
+            add_usage(&mut new_docs, key, &exp.exp);
         }
         new_docs.push_str("\n\n");
         new_docs.push_str(&doc_str);
     } else {
-        add_usage(&mut new_docs, key, exp.exp);
+        add_usage(&mut new_docs, key, &exp.exp);
     }
     new_docs.push('\n');
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -1944,11 +1955,11 @@ pub fn builtin_block(
                 if let Some(ret_name) = ret_name {
                     if name == ret_name {
                         returned = true;
-                        ret = Some(*exp);
+                        ret = Some(exp.clone());
                     }
                 } else {
                     returned = true;
-                    ret = Some(*exp);
+                    ret = Some(exp.clone());
                 }
             }
             if returned {

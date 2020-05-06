@@ -18,6 +18,7 @@ use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_types::add_type_builtins;
 use crate::builtins_vector::add_vec_builtins;
+use crate::gc::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
@@ -70,7 +71,6 @@ pub struct RefMetaData {
 #[derive(Clone, Debug)]
 pub struct Reference {
     pub exp: Expression,
-    pub rc: Arc<()>, // This is the Rc that keeps expression from being garbage collected.
     pub meta: RefMetaData,
 }
 
@@ -81,19 +81,14 @@ impl Reference {
             meta: None,
         });
         Reference {
-            exp: Expression::new(root.handle()),
-            rc: root.rc(),
+            exp: Expression::new(root),
             meta,
         }
     }
 
     pub fn new_rooted(exp: Expression, meta: RefMetaData) -> Reference {
-        let root = gc_mut().make_rooted(exp);
-        Reference {
-            exp: Expression::new(root.handle()),
-            rc: root.rc(),
-            meta,
-        }
+        let exp = exp.clone_root();
+        Reference { exp, meta }
     }
 }
 

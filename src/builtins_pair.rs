@@ -4,6 +4,7 @@ use std::io;
 
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::*;
 use crate::interner::*;
 use crate::types::*;
 
@@ -28,22 +29,24 @@ fn builtin_list(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut head: Option<Expression> = None;
-    let mut last = head;
+    let mut last = head.clone();
     for a in args {
         let a = eval(environment, a)?;
-        if let Some(inner_last) = last {
-            if let ExpEnum::Pair(_, e2) = inner_last.get().data {
+        if let Some(inner_last) = last.clone() {
+            if let ExpEnum::Pair(_, e2) = &inner_last.get().data {
                 e2.get_mut()
                     .data
                     .replace(ExpEnum::Pair(a, Expression::make_nil()));
-                last = Some(e2);
+                // XXX
+                gc_mut().down_root(&e2);
+                last = Some(e2.clone());
             }
         } else {
             let nil = Expression::make_nil();
-            last = Some(Expression::alloc_data(ExpEnum::Pair(a, nil)));
+            last = Some(Expression::alloc_data(ExpEnum::Pair(a.clone(), nil)));
         }
         if head.is_none() {
-            head = last;
+            head = last.clone();
         }
     }
     Ok(head.unwrap_or_else(Expression::make_nil))
@@ -56,9 +59,9 @@ fn builtin_car(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match arg.get().data {
-                ExpEnum::Pair(e1, _) => Ok(e1),
-                ExpEnum::Nil => Ok(arg),
+            return match &arg.get().data {
+                ExpEnum::Pair(e1, _) => Ok(e1.clone()),
+                ExpEnum::Nil => Ok(arg.clone()),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "car requires a pair")),
             };
         }
@@ -76,9 +79,9 @@ fn builtin_cdr(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match arg.get().data {
-                ExpEnum::Pair(_, e2) => Ok(e2),
-                ExpEnum::Nil => Ok(arg),
+            return match &arg.get().data {
+                ExpEnum::Pair(_, e2) => Ok(e2.clone()),
+                ExpEnum::Nil => Ok(arg.clone()),
                 _ => Err(io::Error::new(io::ErrorKind::Other, "cdr requires a pair")),
             };
         }
@@ -101,7 +104,7 @@ fn builtin_xar(
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
                 let new_pair = match &pair_d.data {
-                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg, *e2),
+                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg, e2.clone()),
                     ExpEnum::Nil => ExpEnum::Pair(arg, Expression::make_nil()),
                     _ => {
                         return Err(io::Error::new(
@@ -111,7 +114,9 @@ fn builtin_xar(
                     }
                 };
                 pair_d.data.replace(new_pair);
-                return Ok(pair);
+                // XXX
+                gc_mut().down_root(&pair);
+                return Ok(pair.clone());
             }
         }
     }
@@ -133,7 +138,7 @@ fn builtin_xdr(
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
                 let new_pair = match &pair_d.data {
-                    ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(*e1, arg),
+                    ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(e1.clone(), arg.clone()),
                     ExpEnum::Nil => ExpEnum::Pair(Expression::make_nil(), arg),
                     _ => {
                         return Err(io::Error::new(
@@ -143,7 +148,9 @@ fn builtin_xdr(
                     }
                 };
                 pair_d.data.replace(new_pair);
-                return Ok(pair);
+                // XXX
+                gc_mut().down_root(&pair);
+                return Ok(pair.clone());
             }
         }
     }

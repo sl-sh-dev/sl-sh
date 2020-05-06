@@ -21,6 +21,7 @@ use crate::builtins::load;
 use crate::completions::*;
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::*;
 use crate::reader::*;
 use crate::types::*;
 
@@ -67,7 +68,7 @@ t
     );
     if let Err(err) = load(environment, "slsh-std.lisp") {
         eprintln!(
-            "WARNING: Failed to load standard macros script slsh-std.lisp: {}",
+            "WARNING: Failed to load standard lib script slsh-std.lisp: {}",
             err
         );
     }
@@ -106,7 +107,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
                 ))));
                 Expression::with_list(v)
             }
-            _ => exp.exp,
+            _ => exp.exp.clone(),
         };
         environment.save_exit_status = false; // Do not overwrite last exit status with prompt commands.
         let res = eval(environment, exp);
@@ -226,7 +227,7 @@ fn handle_result(
             }
             if !environment.stack_on_error {
                 if let Some(exp) = &environment.error_expression {
-                    let exp = *exp;
+                    let exp = exp.clone();
                     eprintln!("Error evaluting:");
                     let stderr = io::stderr();
                     let mut handle = stderr.lock();
@@ -249,7 +250,7 @@ fn handle_result(
     }
 }
 
-fn load_repl_settings(repl_settings: Expression) -> ReplSettings {
+fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings {
         key_bindings: Keys::Emacs,
         max_history: 1000,
@@ -355,12 +356,12 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
                 return read(environment, input, None);
             }
         };
-        match eval(environment, exp) {
+        match eval(environment, &exp) {
             Ok(res) => match &res.get().data {
                 ExpEnum::Atom(Atom::String(s)) => read(environment, &s, None),
                 ExpEnum::Atom(Atom::StringRef(s)) => read(environment, s, None),
                 ExpEnum::Atom(Atom::StringBuf(s)) => read(environment, &s.borrow(), None),
-                _ => Ok(res),
+                _ => Ok(res.clone()),
             },
             Err(err) => {
                 eprintln!("ERROR calling __exec_hook: {}", err);
@@ -478,7 +479,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let interned_sym2 = env.interner.intern("");
     let data = Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(interned_sym2)));
     env.insert_into_root_scope(interned_sym, data);
-    let mut current_repl_settings = load_repl_settings(repl_settings.exp);
+    let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
     apply_repl_settings(&mut con, &current_repl_settings);
     let mut new_repl_settings;
     if let Err(err) = con
@@ -490,7 +491,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     drop(env);
     con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
-        new_repl_settings = load_repl_settings(repl_settings.exp);
+        new_repl_settings = load_repl_settings(&repl_settings.exp);
         if current_repl_settings != new_repl_settings {
             apply_repl_settings(&mut con, &new_repl_settings);
         };
@@ -534,6 +535,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                         environment.loose_symbols = true;
                         environment.error_expression = None;
                         environment.error_meta = None;
+                        //let _thold = ast.hold();
                         let res = eval(&mut environment, ast);
                         handle_result(&mut environment, res, &mut con, &input, false);
                         environment.loose_symbols = false;
@@ -557,19 +559,23 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         if environment.borrow().exit_code.is_some() {
             break;
         }
+        let gc = gc();
         println!(
-            "PRE  {}/{}/{}",
-            gc().objects(),
-            gc().used_objects(),
-            gc().free_objects()
+            "PRE  {}/{}/{}: {}",
+            gc.objects(),
+            gc.used_objects(),
+            gc.free_objects(),
+            gc.nursery_objects(),
         );
         gc_mut().clean();
         println!(
-            "POST {}/{}/{}",
-            gc().objects(),
-            gc().used_objects(),
-            gc().free_objects()
+            "POST {}/{}/{}: {}",
+            gc.objects(),
+            gc.used_objects(),
+            gc.free_objects(),
+            gc.nursery_objects(),
         );
+        gc.print_stats();
     }
     if environment.borrow().exit_code.is_some() {
         environment.borrow().exit_code.unwrap()

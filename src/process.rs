@@ -381,7 +381,7 @@ pub fn do_command(
     let mut data = None;
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
-    if let Some(data_in) = environment.data_in {
+    if let Some(data_in) = environment.data_in.clone() {
         if let ExpEnum::LazyFn(_, _) = &data_in.get().data {
             environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
         }
@@ -476,7 +476,7 @@ pub fn do_command(
     environment.loose_symbols = true;
     let mut args = Vec::new();
     for a_exp in parts {
-        let a_exp2 = a_exp;
+        let a_exp2 = a_exp.clone();
         let a_exp_a = a_exp.get();
         if let ExpEnum::Atom(Atom::String(_)) = a_exp_a.data {
             let new_a = eval(environment, a_exp2)?;

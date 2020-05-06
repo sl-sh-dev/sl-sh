@@ -83,7 +83,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
                     ListType::List => {
                         if v.vec.len() == 3 && v.vec[1].to_string() == "." {
                             v2.vec.push(Expression::alloc(ExpObj {
-                                data: ExpEnum::Pair(v.vec[0], v.vec[2]),
+                                data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                 meta: exp_meta,
                             }));
                         } else {
@@ -628,11 +628,11 @@ fn read2(
                     let exp = v.vec.pop().unwrap();
                     let exp_d = &exp.get().data;
                     match exp_d {
-                        ExpEnum::Vector(_) => Ok(exp),
-                        ExpEnum::Pair(_, _) => Ok(exp),
-                        ExpEnum::Nil => Ok(exp),
+                        ExpEnum::Vector(_) => Ok(exp.clone()),
+                        ExpEnum::Pair(_, _) => Ok(exp.clone()),
+                        ExpEnum::Nil => Ok(exp.clone()),
                         _ => {
-                            v.vec.push(exp);
+                            v.vec.push(exp.clone());
                             Ok(Expression::with_list_meta(v.vec, exp_meta))
                         }
                     }
@@ -738,11 +738,11 @@ mod tests {
         tokens
     }
 
-pub fn setup() {
-    INIT.call_once(|| {
-        init_gc();
-    });
-}
+    pub fn setup() {
+        INIT.call_once(|| {
+            init_gc();
+        });
+    }
     #[test]
     fn test_tokenize() {
         setup();

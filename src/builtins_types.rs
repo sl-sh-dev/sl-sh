@@ -326,7 +326,7 @@ fn builtin_is_list(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if arg.is_nil() || is_proper_list(arg) {
+            return if arg.is_nil() || is_proper_list(&arg) {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())

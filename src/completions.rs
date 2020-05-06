@@ -408,7 +408,7 @@ fn find_lisp_things(
     symbols: bool,
     need_quote: bool,
 ) {
-    fn save_val(comps: &mut Vec<String>, data: Expression, val: String, symbols: bool) {
+    fn save_val(comps: &mut Vec<String>, data: &Expression, val: String, symbols: bool) {
         match &data.get().data {
             ExpEnum::Atom(Atom::Lambda(_)) => {
                 if !symbols {
@@ -447,7 +447,7 @@ fn find_lisp_things(
                             } else {
                                 format!("{}::{}", namespace, key)
                             };
-                            save_val(comps, data.get(key).unwrap().exp, val, symbols);
+                            save_val(comps, &data.get(key).unwrap().exp, val, symbols);
                         }
                     }
                 }
@@ -464,7 +464,7 @@ fn find_lisp_things(
                     } else {
                         (*key).to_string()
                     };
-                    save_val(comps, data.get(key).unwrap().exp, val, symbols);
+                    save_val(comps, &data.get(key).unwrap().exp, val, symbols);
                 }
             }
             loop_scope = scope.borrow().outer.clone();

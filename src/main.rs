@@ -14,8 +14,8 @@ use nix::{
 };
 
 use ::sl_sh::config::*;
+use ::sl_sh::gc::init_gc;
 use ::sl_sh::shell::*;
-use ::sl_sh::types::init_gc;
 
 fn main() -> io::Result<()> {
     init_gc();

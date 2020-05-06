@@ -138,7 +138,7 @@ fn builtin_vec_nth(
                                 "vec-nth index out of range",
                             ));
                         }
-                        return Ok(list[*idx as usize]);
+                        return Ok(list[*idx as usize].clone());
                     }
                 }
             }
@@ -179,7 +179,7 @@ fn builtin_vec_setnth(
                                 ));
                             }
                             list[idx as usize] = new_element;
-                            Ok(vec)
+                            Ok(vec.clone())
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -209,7 +209,7 @@ fn builtin_vec_push(
                 return match &mut vec.get_mut().data {
                     ExpEnum::Vector(list) => {
                         list.push(new_item);
-                        Ok(vec)
+                        Ok(vec.clone())
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -334,7 +334,7 @@ fn builtin_vec_remove_nth(
                             ));
                         }
                         inner_list.remove(idx as usize);
-                        Ok(list)
+                        Ok(list.clone())
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -379,7 +379,7 @@ fn builtin_vec_insert_nth(
                                 ));
                             }
                             inner_list.insert(idx as usize, new_element);
-                            Ok(list)
+                            Ok(list.clone())
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,

@@ -62,3 +62,9 @@ pub use crate::process::*;
 
 pub mod interner;
 pub use crate::interner::*;
+
+pub mod trace;
+pub use crate::trace::*;
+
+pub mod gc;
+pub use crate::gc::*;
