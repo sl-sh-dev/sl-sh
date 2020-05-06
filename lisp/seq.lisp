@@ -5,6 +5,8 @@
 
 True if expression is a sequence, nil otherwise.
 
+Section: sequence
+
 Example:
 (test::assert-true (seq? '(1 2 3)))
 (test::assert-true (seq? '#(1 2 3)))
@@ -20,7 +22,10 @@ Example:
 "Usage: (empty-seq? obj)
 
 `empty-seq?` returns true if a list or vector is empty and false
-otherwise. If a non list or non vector is passed in it returns false."
+otherwise. If a non list or non vector is passed in it returns false.
+
+Section: sequence
+"
 	(obj)
 	(if (vec? obj)
 		(vec-empty? obj)
@@ -32,7 +37,10 @@ otherwise. If a non list or non vector is passed in it returns false."
 "Usage: (non-empty-seq? obj)
 
 `non-empty-seq?` returns true if a list or vector is non-empty and false
-otherwise. If a non list or non vector is passed in it returns false."
+otherwise. If a non list or non vector is passed in it returns false.
+
+Section: sequence
+"
 	(obj)
 	(if (vec? obj)
 		(not (vec-empty? obj))
@@ -126,7 +134,7 @@ Section: sequence
 
 (defn in?
 "
-Takes a [seq?](#seq?-core-body) that is not an [empty-seq?](#empty-seq?-core-body) and returns true if the second argument is is in list, false otherwise.
+Takes a [seq?](#core::seq?) that is not an [empty-seq?](#core::empty-seq?) and returns true if the second argument is is in list, false otherwise.
 
 Section: sequence
 
@@ -173,7 +181,14 @@ nil)
                 (recur (cdr obj)))
             (err "Not a list")))
 
-    (setfn append (l1 &rest others) (progn
+    (setfn append
+"
+Returns new list whose contents are a combined list (concatenated) of l1 and
+every item in others.
+
+Section: sequence
+"
+        (l1 &rest others) (progn
         (def 'ret nil)
         (if (vec? l1)
             (progn
@@ -335,6 +350,8 @@ The comp-lambda argument is optional, if provided it should be a lambda or
 builtin that takes two arguments and return t or nil (it is the compare
 function for the sort).  Defaults to < if not provided.
 
+Section: sequence
+
 Example:
 (test::assert-equal '(1 2 3) (qsort '(2 3 1)))
 (test::assert-equal '(1 2 3) (qsort '#(2 3 1)))
@@ -389,5 +406,54 @@ Example:
     (quick-inner comp-fn sorted to-sort)
     sorted))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort))
+(defn filter
+"
+filter is used to strip a collection, coll, of all values that do not
+pass the condition defined by the function, pred. Filter returns a new
+collection.
+
+Section: sequence
+
+Example:
+(assert-equal '(2 4) (filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
+"
+	(pred coll)
+		(progn
+			(defq filtering-fcn
+				(fn (pred filtered-coll coll-to-filter)
+					(progn (defq fst (first coll-to-filter))
+					(if (not fst)
+						filtered-coll
+						(recur
+							pred
+							(if (pred fst) (append filtered-coll fst) filtered-coll)
+							(rest coll-to-filter))))))
+			(filtering-fcn pred (list) coll)))
+
+(defn reduce
+"
+reduce is used to amalgamate a provided collection, coll, and an intitial value,
+init-val, according to the reducing function, reducing-fcn, provided. The
+reducing-fcn should be a function of two arguments. In the first iteration of
+reduce, the init-val will be used as the first argument to the reducing-fcn and
+(first coll) will be used as the second argument. For all subsequent iterations,
+The result from the previous application of the reducing-fcn will be used as the
+first argument to the reducing-fcn and the second argument will be the next item
+in the collection when the collection is empty reduce will return the
+amalgamated result.
+
+Section: sequence
+
+Example:
+
+(assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))))
+(assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
+(assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
+"
+	(reducing-fcn init-val coll)
+		(if (not (first coll))
+				init-val
+				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
+
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce))
 

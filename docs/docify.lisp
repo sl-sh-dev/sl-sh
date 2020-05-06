@@ -54,8 +54,6 @@
 		(append! sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))))
 	(filter-undocable-forms (qsort sym-list))))
 
-;;TODO :single last reveals a form \| that seems mysterious and has different
-;; values for :form in two different places.
 (defq docstrings-list nil)
 (match target-doc-forms
 	(:single (setq docstrings-list (append '() (last (list-of-all-slsh-syms)))))
@@ -64,4 +62,6 @@
 
 (docmd::make-md-file index-file docstrings-list)
 
-;;TODO make pre push hook: https://victorafanasev.info/tech/deploy-jekyll-build-to-github-pages-using-git-pre-push-hook
+;; TODO deployment polish
+;;	-	deploying a dir to gh-pages https://gist.github.com/cobyism/4730490
+;;	-	make pre push hook: https://victorafanasev.info/tech/deploy-jekyll-build-to-github-pages-using-git-pre-push-hook, should check return code and fail if there are uncategorized forms!

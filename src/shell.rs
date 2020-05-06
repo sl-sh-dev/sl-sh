@@ -56,6 +56,8 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
 
 Set the a list of paths to search for loading scripts with the load form.
 
+Section: scripting
+
 Example:
 ;(set '*load-path '(\"/path\"))
 ;(load \"script-in-path\")

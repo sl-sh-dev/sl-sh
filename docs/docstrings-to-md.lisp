@@ -89,25 +89,29 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	file-name))
 
 (defn get-anchor-link-id (doc-map) (progn
-	(defq doc-form (hash-get doc-map :form))
+	(defq doc-form (progn
+		(defq form (hash-get doc-map :form))
+		(if (= "\|" form) "pipe-shorthand" form)))
 	(defq doc-namespace (hash-get doc-map :namespace))
-	(str doc-form "-" doc-namespace)))
+	(str doc-namespace "::" doc-form)))
 
 (defn table-of-contents (key docstrings file-name) (progn
 	(defq file (open file-name :append))
 	(defq name (section-metadata key :name))
 	(write-line file (str "### "
 		(create-anchor (str name "-contents" ))
-		(make-md-link-able name (str "#" name "-body"))))
+		(make-md-link-able name (str "#" name))))
 	(write-line file "")
 	(write-line file "")
 	(for doc-map docstrings (progn
-		(defq form (hash-get doc-map :form))
+		(defq doc-form (progn
+			(defq form (hash-get doc-map :form))
+			(if (= "\|" form) "|" form)))
 		(defq doc-namespace (hash-get doc-map :namespace))
 		(write-string file
 			(str
 				(create-anchor (str (get-anchor-link-id doc-map) "-contents"))
-				(make-md-link-able (str "``" form "``") (str "#" (get-anchor-link-id doc-map) "-body"))
+				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-map)))
 				", "
 				))))
 	(write-line file "")
@@ -130,6 +134,9 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(close file)
 	file-name))
 
+(defn check-if-pipe-shorthand (item)
+	(if (= item "(\| &rest body)") "(| &rest body)" item))
+
 (defn format-first-line-as-code (text-slice delim)
 	(if (or (nil? text-slice) (str-empty? (str-trim text-slice)))
 	text-slice
@@ -138,7 +145,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	;; if first char in str is delim, 0th elem is "" when we don't need to
 	;; bracket with backticks
 	(defq trim-arr (if (= "" (first arr)) (rest arr) arr))
-	(str-cat-list delim (append (list (str "``" (first trim-arr) "``")) (rest trim-arr))))))
+	(str-cat-list delim (append (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``")) (rest trim-arr))))))
 
 (defn sanitize-for-md-row (to-santiize)
 		(str-replace to-santiize "|" "\|"))
@@ -147,7 +154,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(defq file (open file-name :append))
 	(defq name (section-metadata key :name))
 	(write-line file (str "### "
-				(create-anchor (str name "-body" ))
+				(create-anchor (str name "-body"))
 				(make-md-link-able name (str "#" name "-contents"))))
 	(write-line file (progn
 		 (defq data (section-metadata key :description))
@@ -155,7 +162,9 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 			""
 			data)))
 	(for doc-map docstrings (progn
-		(defq doc-form (sanitize-for-md-row (hash-get doc-map :form)))
+		(defq doc-form (progn
+			(defq form (hash-get doc-map :form))
+			(if (= "\|" form) "|" (sanitize-for-md-row form))))
 		(defq doc-namespace (sanitize-for-md-row (hash-get doc-map :namespace)))
 		(defq doc-type (sanitize-for-md-row (hash-get doc-map :type)))
 		(defq doc-usage (str-replace (sanitize-for-md-row (hash-get doc-map :usage)) "\n" "<br>"))
@@ -164,7 +173,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		(write-line file "")
 		(write-line file
 			(str "| "
-					(create-anchor (str (get-anchor-link-id doc-map) "-body"))
+					(create-anchor (str (get-anchor-link-id doc-map)))
 					(make-md-link-able (str "``" doc-form "``")
 					(str "#" (get-anchor-link-id doc-map) "-contents"))
 				" | " doc-type " |"))
@@ -196,6 +205,13 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(write-heading "Documentation" index-file)
 	(for key (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
-		(write-md-table key docstrings index-file)))))
+		(write-md-table key docstrings index-file)))
+	(progn
+		(defq uncat-syms (hash-get docstrings-map :uncategorized))
+		(when (not (empty-seq? uncat-syms)) (progn
+			(println "Found :uncategorized symbols: ")
+			(for sym uncat-syms (println "symbol: " sym))
+			(exit 1)))
+		exit 0)))
 
 (ns-export '(make-md-file))

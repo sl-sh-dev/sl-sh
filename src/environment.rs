@@ -107,6 +107,8 @@ File that connects to standard in by default.
 
 Can be used in place of a read file object in any form that takes one.
 
+Section: shell
+
 Example:
 (def 'stdin-test (open \"/tmp/sl-sh.stdin.test\" :create :truncate))
 (write-line stdin-test \"Test line\")
@@ -130,6 +132,8 @@ File that connects to standard out by default.
 Can be used in place of a write file object in any form that takes one.  Used
 as the default for print and println.
 
+Section: shell
+
 Example:
 ; Use a file for stdout for test.
 (dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (write-line *stdout* \"Test out\"))
@@ -150,6 +154,8 @@ File that connects to standard error by default.
 
 Can be used in place of a write file object in any form that takes one.  Used
 as the default for eprint and eprintln.
+
+Section: shell
 
 Example:
 ; Use a file for stderr for test.
