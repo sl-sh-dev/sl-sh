@@ -53,6 +53,7 @@ all are released.  Close will also flush the file even if it is not the final
 reference.  If a reference to a file is captured in a closure that can also keep
 it open (closures currently capture the entire scope not just used symbols).")))
 		("hashmap" (vec-nth idx '#("Hashmap forms" nil)))
+		("scripting" (vec-nth idx '#("Scripting forms" nil)))
 		("math" (vec-nth idx '#("Math forms" nil)))
 		("namespace" (vec-nth idx '#("Namespace forms" nil)))
 		("pair" (vec-nth idx '#("Pair forms"

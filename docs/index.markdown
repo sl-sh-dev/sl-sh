@@ -51,7 +51,7 @@ example code if exists
 
 
 <a id="root::car-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#root::car), <a id="root::cdr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#root::cdr), <a id="root::join-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#root::join), <a id="root::list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#root::list), <a id="root::xar!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#root::xar!), <a id="root::xdr!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#root::xdr!), 
-### <a id="Unknown forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Unknown forms](#Unknown forms-body)
+### <a id="Scripting forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Scripting forms](#Scripting forms-body)
 
 
 <a id="root::*load-path*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#root::*load-path*), 
@@ -472,7 +472,7 @@ example code if exists
 
 
 | <a id="core::defmacro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#core::defmacro-contents) | Macro |
-| core::defmacro | ``(defmacro name doc_string? argument_list body)``<br><br>Create a macro and bind it to a symbol in the current scope, |
+| core::defmacro | ``(defmacro name doc_string? argument_list body)``<br><br>Create a macro and bind it to a symbol in the current scope. |
 
 
 
@@ -727,7 +727,7 @@ t
 
 
 | <a id="core::let" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#core::let-contents) | Macro |
-| core::let | ``(let vals &rest let_body)``<br><br><br>Takes list, vals, of form ((binding sexp) ...) and evaluates let_body with all<br>values of binding bound to the result of the evaluation of sexp. |
+| core::let | ``(let vals &rest let_body)``<br><br><br>Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates<br>let_body with all values of binding bound to the result of the evaluation of<br>sexp. |
 
 
 
@@ -1425,7 +1425,7 @@ building them up with joins or with the list form.
 (test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
 (test::assert-equal '(nil . v) tst-pairs-six)
 ```
-### <a id="Unknown forms-body" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Unknown forms](#Unknown forms-contents)
+### <a id="Scripting forms-body" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Scripting forms](#Scripting forms-contents)
 
 
 
@@ -1684,7 +1684,7 @@ t
 
 
 | <a id="core::dotimesi" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimesi``](#core::dotimesi-contents) | Macro |
-| core::dotimesi | ``(dotimesi idx-bind times body)``<br><br><br>Evaluate body a number of times equal to times' numnrical value. Includes an <br>incrementing reference binding, idx-bind, accesible in body. |
+| core::dotimesi | ``(dotimesi idx-bind times body)``<br><br><br>Evaluate body a number of times equal to times' numnrical value. Includes an<br>incrementing reference binding, idx-bind, accesible in body. |
 
 
 
@@ -1738,7 +1738,7 @@ t
 
 
 | <a id="core::fori" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fori``](#core::fori-contents) | Macro |
-| core::fori | ``(fori idx_bind bind in_list body)``<br><br><br>idx-bind is an incrementing reference bound to current elemtn in in_list.<br>accesible in body and a binding to the current element of in_list. bind is<br>bound to the current element of in_list as is also accesible in body.  body is<br>evaluated a number of times equal to the the number of items in in_list. |
+| core::fori | ``(fori idx_bind bind in_list body)``<br><br><br>idx-bind is an incrementing reference bound to current elemt in in_list and is<br>accesible in body. bind is bound to the current element of in_list as is also<br>accesible in body.  body is evaluated a number of times equal to the the number<br>of items in in_list. |
 
 
 
@@ -1849,7 +1849,7 @@ t
 
 
 | <a id="shell::register-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#shell::register-alias-contents) | Lambda |
-| shell::register-alias | ``(register-alias name)``<br><br><br>		Registers an alias to the current scope. Useful if unregistering or<br>		ability to know whether an alias has been registered an alias is<br>		desirable. |
+| shell::register-alias | ``(register-alias name)``<br><br><br>		Registers an alias to the current scope. Useful if unregistering or<br>		ability to know whether an alias has been registered is desirable. |
 
 
 
