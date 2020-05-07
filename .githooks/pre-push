@@ -1,0 +1,35 @@
+#!/bin/bash
+
+echo "> Docs Hook started"
+
+pushd docs
+
+../target/debug/sl-sh docify.lisp index.markdown :lang
+
+if [[ $? != "0" ]]; then
+	echo "Uncategorized forms found, not pushing. Please edit appropriate"
+	echo "docstrings printed as hashmap literals above. Run"
+	echo "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
+	exit 1;
+fi
+
+REMOTE=$(git config --get remote.origin.url)
+
+if [ ! -d ".git" ]; then
+   git init
+fi
+
+if [[ ! $(git remote) ]]; then
+	git remote add origin ${REMOTE}
+	git add --all && git commit -m "Build $(date)" && git push -u -f origin master
+else
+	git add . && git commit -m "Build" && git push -f origin master
+fi
+
+rm -rf .git
+
+popd docs
+
+echo "< Docs Hook finished"
+
+exit 1
