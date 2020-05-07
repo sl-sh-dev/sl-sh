@@ -100,7 +100,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(defq name (section-metadata key :name))
 	(write-line file (str "### "
 		(create-anchor (str name "-contents" ))
-		(make-md-link-able name (str "#" name))))
+		(make-md-link-able name (str "#" name "-body"))))
 	(write-line file "")
 	(write-line file "")
 	(for doc-map docstrings (progn

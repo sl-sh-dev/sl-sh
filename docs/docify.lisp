@@ -4,7 +4,6 @@
 (core::ns-import 'core)
 (ns-import 'shell)
 
-
 (error-stack-on)
 
 (when (not (= 2 (length args)))
