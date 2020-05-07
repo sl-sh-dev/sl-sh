@@ -55,8 +55,6 @@
 	(hash-set! doc-map :example
 		(get-example-doc-section "Example" docstring))
 	doc-map))
-;;TODO chnage idx of form in body to namespace::symbol OR add additional one?
-;; need better way to reference docs within docs.
 
 (defn parse-docstrings-for-syms
 "Takes a list of slsh symbols and returns a hashmap. To build the hashmap this
