@@ -1,9 +1,17 @@
 #!/bin/bash
 
-echo "> Docs Hook started"
+function log() {
+	echo -e "\033[33;7m$1\033[0m $2"
+}
+
+log "> Docs Hook started"
+
+log "Verify we have an up to date release build to generate the docs with"
+cargo build --release
 
 pushd docs
 
+log "Build docs"
 ../target/release/sl-sh docify.lisp index.markdown :lang
 
 if [[ $? != "0" ]]; then
@@ -13,21 +21,24 @@ if [[ $? != "0" ]]; then
 	exit 1;
 fi
 
+log "Push docs"
+
 REMOTE=$(git config --get remote.origin.url)
+
+rm -rf .git
 
 if [ ! -d ".git" ]; then
    git init
 fi
 
-if [[ ! $(git remote) ]]; then
-	git remote add origin ${REMOTE}
-	git add --all && git commit -m "Build $(date)" && git push -u -f origin master
-else
-	git add . && git commit -m "Build" && git push -f origin master
-fi
+git checkout -b gh-pages
+
+git remote add origin ${REMOTE}
+git add --all && git commit -m "Build $(date)"
+git push -u -f origin gh-pages
 
 rm -rf .git
 
 popd doc
 
-echo "< Docs Hook finished"
+log "< Docs Hook finished"

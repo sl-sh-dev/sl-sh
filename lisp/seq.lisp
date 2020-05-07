@@ -164,7 +164,7 @@ Section: sequence
 "
 nil)
 (def 'fn-append! nil)
-(def 'map 'nil)
+(def 'map nil)
 (let ((tseq))
     (defn copy-els (to l) (progn
         (def 'tcell nil)
