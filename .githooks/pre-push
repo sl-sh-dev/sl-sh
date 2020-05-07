@@ -4,7 +4,7 @@ echo "> Docs Hook started"
 
 pushd docs
 
-../target/debug/sl-sh docify.lisp index.markdown :lang
+../target/release/sl-sh docify.lisp index.markdown :lang
 
 if [[ $? != "0" ]]; then
 	echo "Uncategorized forms found, not pushing. Please edit appropriate"
@@ -28,8 +28,6 @@ fi
 
 rm -rf .git
 
-popd docs
+popd doc
 
 echo "< Docs Hook finished"
-
-exit 1
