@@ -316,8 +316,7 @@ Section: shell
 	(setfn register-alias
 		"
 		Registers an alias to the current scope. Useful if unregistering or
-		ability to know whether an alias has been registered an alias is
-		desirable.
+		ability to know whether an alias has been registered is desirable.
 
 		Section: shell
 		"

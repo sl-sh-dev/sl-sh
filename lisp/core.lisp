@@ -5,7 +5,7 @@
 (def 'defmacro
 "Usage: (defmacro name doc_string? argument_list body)
 
-Create a macro and bind it to a symbol in the current scope,
+Create a macro and bind it to a symbol in the current scope.
 
 Section: core
 "
@@ -153,7 +153,7 @@ Section: shell
 
 (defmacro dotimesi
 "
-Evaluate body a number of times equal to times' numnrical value. Includes an 
+Evaluate body a number of times equal to times' numnrical value. Includes an
 incrementing reference binding, idx-bind, accesible in body.
 
 Section: shell
@@ -184,11 +184,10 @@ Section: shell
 
 (defmacro fori
 "
-idx-bind is an incrementing reference bound to current elemtn in in_list.
-accesible in body and a binding to the current element of in_list. bind is
-bound to the current element of in_list as is also accesible in body.  body is
-evaluated a number of times equal to the the number of items in in_list.
-
+idx-bind is an incrementing reference bound to current elemt in in_list and is
+accesible in body. bind is bound to the current element of in_list as is also
+accesible in body.  body is evaluated a number of times equal to the the number
+of items in in_list.
 
 Section: shell
 "
@@ -220,8 +219,9 @@ Section: core
 
 (defmacro let
 "
-Takes list, vals, of form ((binding sexp) ...) and evaluates let_body with all
-values of binding bound to the result of the evaluation of sexp.
+Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let_body with all values of binding bound to the result of the evaluation of
+sexp.
 
 Section: core
 "

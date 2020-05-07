@@ -22,7 +22,7 @@ title: sl-sh
 description: >- # this means to ignore newlines until "baseurl:"
   Documentation for sl-sh shell script.
 baseurl: "/slsh" # the subpath of your site, e.g. /blog
-url: "https://gpwclark.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+url: "https://sstanfield.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 
 # Build settings
 theme: minima
