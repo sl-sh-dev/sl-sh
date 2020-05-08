@@ -81,3 +81,5 @@ organization of docstrings.
 	docstring-sections))
 
 (ns-export '(parse-docstrings-for-syms))
+
+(ns-pop)
