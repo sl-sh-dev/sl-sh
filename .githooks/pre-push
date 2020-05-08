@@ -10,6 +10,10 @@ log "Verify we have an up to date release build to generate the docs with"
 cargo build --release
 
 pushd docs
+if [[ $? != "0" ]]; then
+	echo "docs dir not found, where are the docs? Aborting!"
+	exit 1
+fi
 
 log "Build docs"
 ../target/release/sl-sh docify.lisp index.markdown :lang
