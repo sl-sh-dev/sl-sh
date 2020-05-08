@@ -114,6 +114,7 @@ fn builtin_xar(
                     }
                 };
                 pair_d.data.replace(new_pair);
+                drop(pair_d);
                 // XXX
                 gc_mut().down_root(&pair);
                 return Ok(pair.clone());
@@ -148,6 +149,7 @@ fn builtin_xdr(
                     }
                 };
                 pair_d.data.replace(new_pair);
+                drop(pair_d);
                 // XXX
                 gc_mut().down_root(&pair);
                 return Ok(pair.clone());

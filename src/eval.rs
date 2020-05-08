@@ -64,7 +64,12 @@ pub fn call_lambda(
                 gc().free_objects(),
                 gc().nursery_objects(),
             );*/
-            gc_mut().prune_nursery();
+            if gc().nursery_objects() >= 1023 {
+                let _corpses = gc_mut().prune_nursery();
+                if gc().nursery_objects() >= 1023 {
+                    gc_mut().clean();
+                }
+            }
             //gc_mut().clean();
             /*println!(
                 "POST {} prune {}/{}/{}: {}",
@@ -244,6 +249,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
                 Box::new(ListIter::new_list(&list))
             } else {
+                drop(e2_d);
                 e2.iter()
             };
             (e1.clone(), e2_iter)
@@ -468,14 +474,16 @@ fn internal_eval(
             macro_replace = false;
         }
         if macro_replace {
-            let exp_mut = &mut expression.get_mut().data;
-            match exp_mut {
+            let mut exp_mut = expression.get_mut();//.data;
+            match exp_mut.data {
                 ExpEnum::Vector(_) => {
-                    exp_mut.replace(ExpEnum::Vector(nv));
+                    exp_mut.data.replace(ExpEnum::Vector(nv));
+                    drop(exp_mut);
                     gc_mut().down_root(&expression);
                 }
                 ExpEnum::Pair(_, _) => {
-                    exp_mut.replace(ExpEnum::cons_from_vec(&mut nv));
+                    exp_mut.data.replace(ExpEnum::cons_from_vec(&mut nv));
+                    drop(exp_mut);
                     gc_mut().down_root(&expression);
                 }
                 _ => {}
@@ -486,13 +494,13 @@ fn internal_eval(
     let exp_d = &exp_a.data;
     match exp_d {
         ExpEnum::Vector(_) => {
-            environment.last_meta = expression.meta();
             drop(exp_a);
+            environment.last_meta = expression.meta();
             fn_eval_lazy(environment, &expression)
         }
         ExpEnum::Pair(_, _) => {
-            environment.last_meta = expression.meta();
             drop(exp_a);
+            environment.last_meta = expression.meta();
             fn_eval_lazy(environment, &expression)
         }
         ExpEnum::Nil => Ok(expression.clone()),

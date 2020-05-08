@@ -348,13 +348,14 @@ impl Expression {
         Expression::alloc(self.get().clone())
     }
 
-    pub fn get(&self) -> GcRef<'_> {
+    //pub fn get(&self) -> GcRef<'_> {
+    pub fn get(&self) -> GcRef {
         self.obj.get().expect("Invalid expression!")
         //gc().get(&self.obj).expect("Invalid expression!")
     }
 
-    pub fn get_mut(&self) -> GcRefMut<'_> {
-        self.obj.get_mut().expect("Invalid expression!")
+    pub fn get_mut(&self) -> GcRefMut {
+        self.obj.get_mut().expect("Invalid mut expression!")
         //gc().get_mut(&self.obj).expect("Invalid expression!")
     }
 
@@ -949,13 +950,11 @@ mod tests {
         init_gc();
         let s1 = Expression::alloc_data(ExpEnum::Atom(Atom::String("sls".to_string())));
         let n1 = Expression::make_nil();
-        let p1 = Expression::alloc_data(ExpEnum::Pair(s1, n1));
-        let p1root = gc_mut().make_rooted(p1);
+        let p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone(), n1.clone()));
         let l1 = Expression::with_list(vec![Expression::make_nil(), Expression::make_nil()]);
-        let l1root = gc_mut().make_rooted(l1);
         gc_mut().clean();
         println!("XXX {}, {}, {}", p1, s1, n1);
         println!("XXX {}", l1);
-        assert!(1 == 2);
+        //assert!(1 == 2);
     }
 }

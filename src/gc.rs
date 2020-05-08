@@ -1,59 +1,60 @@
-//! # Broom
-//!
-//! An ergonomic tracing garbage collector that supports mark 'n sweep garbage collection.
-//!
-//! ## Example
-//!
-//! ```
-//! use broom::prelude::*;
-//!
-//! // The type you want the heap to contain
-//! pub enum GcRefect {
-//!     Num(f64),
-//!     List(Vec<Handle<Self>>),
-//! }
-//!
-//! // Tell the garbage collector how to explore a graph of this object
-//! impl Trace<Self> for GcRefect {
-//!     fn trace(&self, tracer: &mut Tracer<Self>) {
-//!         match self {
-//!             GcRefect::Num(_) => {},
-//!             GcRefect::List(objects) => objects.trace(tracer),
-//!         }
-//!     }
-//! }
-//!
-//! // Create a new heap
-//! //let mut heap = Heap::default();
-//! let gc = create_gc::<GcRefect>();
-//! let mut heap = gc.get_mut();
-//!
-//! // Temporary objects are cheaper than rooted objects, but don't survive heap cleans
-//! let a = heap.insert_temp(GcRefect::Num(42.0));
-//! let b = heap.insert_temp(GcRefect::Num(1337.0));
-//!
-//! // Turn the numbers into a rooted list
-//! let c = heap.insert(GcRefect::List(vec![a.clone(), b.clone()]));
-//!
-//! // Change one of the numbers - this is safe, even if the object is self-referential!
-//! *heap.get_mut(&a).unwrap() = GcRefect::Num(256.0);
-//!
-//! // Create another number object
-//! let d = heap.insert_temp(GcRefect::Num(0.0));
-//!
-//! // Clean up unused heap objects
-//! heap.clean();
-//!
-//! // a, b and c are all kept alive because c is rooted and a and b are its children
-//! assert!(heap.contains(a));
-//! assert!(heap.contains(b));
-//! assert!(heap.contains(c));
-//!
-//! // Because `d` was temporary and unused, it did not survive the heap clean
-//! assert!(!heap.contains(d));
-//!
-//! ```
-
+/// # Broom
+///
+/// An ergonomic tracing garbage collector that supports mark 'n sweep garbage collection.
+///
+/// ## Example
+///
+/// ```
+/// //use broom::prelude::*;
+/// use sl_sh::gc::*;
+/// use sl_sh::trace::*;
+///
+/// // The type you want the heap to contain
+/// pub enum GcRefect {
+///     Num(f64),
+///     List(Vec<Handle<Self>>),
+/// }
+///
+/// // Tell the garbage collector how to explore a graph of this object
+/// impl Trace<Self> for GcRefect {
+///     fn trace(&self, tracer: &mut Tracer<Self>) {
+///         match self {
+///             GcRefect::Num(_) => {},
+///             GcRefect::List(objects) => objects.trace(tracer),
+///         }
+///     }
+/// }
+///
+/// // Create a new heap
+/// //let mut heap = Heap::default();
+/// let gc = create_gc::<GcRefect>();
+/// let mut heap = gc.get_mut();
+///
+/// // Temporary objects are cheaper than rooted objects, but don't survive heap cleans
+/// let a = heap.insert_temp(GcRefect::Num(42.0));
+/// let b = heap.insert_temp(GcRefect::Num(1337.0));
+///
+/// // Turn the numbers into a rooted list
+/// let c = heap.insert(GcRefect::List(vec![a.clone(), b.clone()]));
+///
+/// // Change one of the numbers - this is safe, even if the object is self-referential!
+/// *heap.get_mut(&a).unwrap() = GcRefect::Num(256.0);
+///
+/// // Create another number object
+/// let d = heap.insert_temp(GcRefect::Num(0.0));
+///
+/// // Clean up unused heap objects
+/// heap.clean();
+///
+/// // a, b and c are all kept alive because c is rooted and a and b are its children
+/// assert!(heap.contains(a));
+/// assert!(heap.contains(b));
+/// assert!(heap.contains(c));
+///
+/// // Because `d` was temporary and unused, it did not survive the heap clean
+/// assert!(!heap.contains(d));
+///
+/// ```
 use crate::trace::*;
 use crate::types::*;
 
@@ -61,7 +62,7 @@ use crate::types::*;
 use std::collections::HashMap;
 use std::{
     //cell::{Ref, RefCell, RefMut},
-    cell::{Ref, RefMut},
+    cell::{Ref, RefCell, RefMut},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
     //rc::Rc,
@@ -82,44 +83,147 @@ pub(crate) type HandleIdx = u32;
 pub(crate) type HandleIdxAtomic = AtomicU32;
 
 static mut STATIC_GC: Option<RwLock<Heap>> = None;
+static mut NURSERY_ROOTS: Option<RwLock<HashMap<HandleIdx, HandleIdxAtomic>>> = None;
+static mut ROOTS: Option<RwLock<HashMap<HandleIdx, HandleIdxAtomic>>> = None;
+
+pub struct GcWrapRef<'a> {
+    read: RwLockReadGuard<'a, Heap>,
+}
+
+impl<'a> Deref for GcWrapRef<'a> {
+    type Target = Heap;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.read
+    }
+}
+
+pub struct GcWrapRefMut<'a> {
+    write: RwLockWriteGuard<'a, Heap>,
+}
+
+impl<'a> Deref for GcWrapRefMut<'a> {
+    type Target = Heap;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.write
+    }
+}
+
+impl<'a> DerefMut for GcWrapRefMut<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.write
+    }
+}
+
+struct RootsRef<'a> {
+    read: RwLockReadGuard<'a, HashMap<HandleIdx, HandleIdxAtomic>>,
+}
+
+impl<'a> Deref for RootsRef<'a> {
+    type Target = HashMap<HandleIdx, HandleIdxAtomic>;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.read
+    }
+}
+
+struct RootsRefMut<'a> {
+    write: RwLockWriteGuard<'a, HashMap<HandleIdx, HandleIdxAtomic>>,
+}
+
+impl<'a> Deref for RootsRefMut<'a> {
+    type Target = HashMap<HandleIdx, HandleIdxAtomic>;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.write
+    }
+}
+
+impl<'a> DerefMut for RootsRefMut<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.write
+    }
+}
 
 pub fn init_gc() {
     unsafe {
         if STATIC_GC.is_none() {
             STATIC_GC = Some(RwLock::new(Heap::new()));
         }
+        if NURSERY_ROOTS.is_none() {
+            NURSERY_ROOTS = Some(RwLock::new(HashMap::default()));
+        }
+        if ROOTS.is_none() {
+            ROOTS = Some(RwLock::new(HashMap::default()));
+        }
     }
 }
 
-pub fn gc<'a>() -> &'a Heap {
-    unsafe { &*(&*STATIC_GC.as_ref().unwrap().read().unwrap() as *const Heap) }
+//pub fn gc<'a>() -> &'a Heap {
+pub fn gc<'a>() -> GcWrapRef<'a> {
+    //unsafe { &*(&*STATIC_GC.as_ref().unwrap().read().unwrap() as *const Heap) }
+    GcWrapRef {
+        read: unsafe { STATIC_GC.as_ref().unwrap().read().unwrap() },
+    }
 }
 
-pub fn gc_mut<'a>() -> &'a mut Heap {
-    unsafe { &mut *(&mut *STATIC_GC.as_ref().unwrap().write().unwrap() as *mut Heap) }
+//pub fn gc_mut<'a>() -> &'a mut Heap {
+pub fn gc_mut<'a>() -> GcWrapRefMut<'a> {
+    //unsafe { &mut *(&mut *STATIC_GC.as_ref().unwrap().write().unwrap() as *mut Heap) }
+    GcWrapRefMut {
+        write: unsafe { STATIC_GC.as_ref().unwrap().write().unwrap() },
+    }
+}
+
+fn nursery_roots<'a>() -> RootsRef<'a> {
+    RootsRef {
+        read: unsafe { NURSERY_ROOTS.as_ref().unwrap().read().unwrap() },
+    }
+}
+
+fn nursery_roots_mut<'a>() -> RootsRefMut<'a> {
+    RootsRefMut {
+        write: unsafe { NURSERY_ROOTS.as_ref().unwrap().write().unwrap() },
+    }
+}
+
+fn roots<'a>() -> RootsRef<'a> {
+    RootsRef {
+        read: unsafe { ROOTS.as_ref().unwrap().read().unwrap() },
+    }
+}
+
+fn roots_mut<'a>() -> RootsRefMut<'a> {
+    RootsRefMut {
+        write: unsafe { ROOTS.as_ref().unwrap().write().unwrap() },
+    }
 }
 
 struct Nursery {
-    objects: Vec<Option<Arc<RwLock<ExpObj>>>>,
+    objects: RwLock<Vec<Option<ExpObj>>>,
     objects_handle: Vec<HandleIdx>,
-    roots: HashMap<HandleIdx, HandleIdxAtomic>,
+    //roots: RwLock<HashMap<HandleIdx, HandleIdxAtomic>>,
     excludes: Vec<Handle>,
 }
 
 impl Nursery {
     fn new() -> Nursery {
         Nursery {
-            objects: Vec::new(),
+            objects: RwLock::new(Vec::with_capacity(1024)),
             objects_handle: Vec::new(),
-            roots: HashMap::default(),
+            //roots: RwLock::new(HashMap::default()),
             excludes: Vec::new(),
         }
     }
 
     fn clear(&mut self) {
-        self.objects.clear();
+        if let Ok(mut objects) = self.objects.write() {
+            objects.clear();
+        }
         self.objects_handle.clear();
-        self.roots.clear();
+        nursery_roots_mut().clear();
+        //self.roots.write().unwrap().clear();
         self.excludes.clear();
     }
 }
@@ -134,11 +238,11 @@ impl Nursery {
 pub struct Heap {
     last_sweep: usize,
     object_sweeps: HashMap<usize, usize>,
-    objects: Vec<Option<Arc<RwLock<ExpObj>>>>,
+    objects: RwLock<Vec<Option<ExpObj>>>,
     objects_handle: Vec<HandleIdx>,
     freed: Vec<usize>,
     //rooted: HashMap<Handle, AtomicU32>,
-    roots: HashMap<HandleIdx, HandleIdxAtomic>,
+    //roots: RwLock<HashMap<HandleIdx, HandleIdxAtomic>>,
     refs: HashMap<HandleIdx, HandleRef>,
     next_handle: HandleIdxAtomic,
 
@@ -151,10 +255,10 @@ impl Heap {
         Self {
             last_sweep: 0,
             object_sweeps: HashMap::default(),
-            objects: Vec::default(),
+            objects: RwLock::new(Vec::default()),
             objects_handle: Vec::default(),
             freed: Vec::default(),
-            roots: HashMap::default(),
+            //roots: RwLock::new(HashMap::default()),
             refs: HashMap::default(),
             next_handle: HandleIdxAtomic::new(0),
             nursery: Nursery::new(),
@@ -163,10 +267,10 @@ impl Heap {
 
     pub fn print_stats(&self) {
         println!("last_sweep: {}, obj sweeps: {}, objects: {}, object handles: {}, freed len: {}, rooted: {}, refs: {}, next handle: {}",
-                 self.last_sweep, self.object_sweeps.len(), self.objects.len(), self.objects_handle.len(), self.freed.len(), self.roots.len(), self.refs.len(), self.next_handle.load(Ordering::Relaxed));
+                 self.last_sweep, self.object_sweeps.len(), self.objects.read().unwrap().len(), self.objects_handle.len(), self.freed.len(), roots().len(), self.refs.len(), self.next_handle.load(Ordering::Relaxed));
     }
     pub fn objects(&self) -> usize {
-        self.objects.len()
+        self.objects.read().unwrap().len()
     }
     pub fn free_objects(&self) -> usize {
         self.freed.len()
@@ -175,61 +279,54 @@ impl Heap {
         self.objects() - self.free_objects()
     }
     pub fn nursery_objects(&self) -> usize {
-        self.nursery.objects.len()
+        self.nursery.objects.read().unwrap().len()
     }
 
-    fn update_handle(&mut self, handle: impl AsRef<Handle>, object: Arc<RwLock<ExpObj>>) -> Handle {
+    fn update_handle(&mut self, handle: impl AsRef<Handle>, object: ExpObj) -> Handle {
         let handle = handle.as_ref();
         let idx = handle.idx;
-        //let refs = if let Some(rc) = self.roots.remove(&idx) {
-        if let Some(rc) = self.roots.remove(&idx) {
-            self.nursery.roots.insert(idx, rc);
-            /*  self.nursery
-                    .roots
-                    .entry(idx)
-                    .or_insert_with(|| HandleIdxAtomic::new(0))
-            } else {
-                self.nursery
-                    .roots
-                    .entry(idx)
-                    .or_insert_with(|| HandleIdxAtomic::new(0))*/
+        if let Some(rc) = roots_mut().remove(&idx) {
+            nursery_roots_mut().insert(idx, rc);
         }
-        //refs.fetch_add(1, Ordering::Relaxed);
-        //let handle = Handle { root: true, idx };
         let handle = Handle { root: false, idx };
-        self.nursery.objects.push(Some(object));
+        self.nursery.objects.write().unwrap().push(Some(object));
         self.nursery.objects_handle.push(handle.idx);
         let href = HandleRef {
             gen: RefGen::Nursery,
-            handle: handle.clone(),
-            idx: self.nursery.objects.len() - 1,
+            handle: handle.clone_no_root(),
+            idx: self.nursery.objects.read().unwrap().len() - 1,
         };
         self.refs.insert(handle.idx, href);
         handle
     }
 
-    fn insert_int(&mut self, object: Arc<RwLock<ExpObj>>) -> Handle {
+    fn insert_int(&mut self, object: ExpObj) -> Handle {
         let idx = self.next_handle.fetch_add(1, Ordering::Relaxed);
-        let refs = self
-            .nursery
-            .roots
-            .entry(idx)
-            .or_insert_with(|| HandleIdxAtomic::new(0));
-        refs.fetch_add(1, Ordering::Relaxed);
+        {
+            let mut roots = nursery_roots_mut();
+            let refs = roots.entry(idx).or_insert_with(|| HandleIdxAtomic::new(0));
+            refs.fetch_add(1, Ordering::Relaxed);
+        }
         let handle = Handle { root: true, idx };
-        self.nursery.objects.push(Some(object));
-        self.nursery.objects_handle.push(handle.idx);
+        let idx;
+        if let Ok(mut objects) = self.nursery.objects.write() {
+            objects.push(Some(object));
+            self.nursery.objects_handle.push(handle.idx);
+            idx = objects.len() - 1;
+        } else {
+            panic!("Failed to get write lock on nursery objects.");
+        }
         let href = HandleRef {
             gen: RefGen::Nursery,
-            handle: handle.clone(),
-            idx: self.nursery.objects.len() - 1,
+            handle: handle.clone_no_root(),
+            idx,
         };
         self.refs.insert(handle.idx, href);
         handle
     }
 
     pub fn insert(&mut self, object: ExpObj) -> Handle {
-        self.insert_int(Arc::new(RwLock::new(object)))
+        self.insert_int(object)
     }
 
     pub fn down_root(&mut self, handle: impl AsRef<Handle>) {
@@ -238,42 +335,55 @@ impl Heap {
         let mut object = None;
         if let Some(href) = self.refs.get(&handle.idx) {
             if let RefGen::GenX = href.gen {
-                let obj = self.objects.get_mut(href.idx);
-                if let Some(obj) = obj {
-                    if let Some(obj) = obj {
-                        object = Some(obj.clone());
-                    }
-                    if obj.is_some() {
-                        self.freed.push(href.idx);
-                        *obj = None;
+                if let Ok(mut objects) = self.objects.write() {
+                    objects.push(None);
+                    let obj = objects.swap_remove(href.idx);
+                    self.objects_handle.push(0);
+                    self.objects_handle.swap_remove(href.idx);
+                    self.freed.push(href.idx);
+                    object = obj;
+                    if object.is_none() {
+                        panic!("down_root: Not a valid expression (does something have a mutable copy?)!");
                     }
                 }
             }
         }
         if let Some(obj) = object {
-            let handle = self.update_handle(handle, obj.clone());
+            let handle = self.update_handle(handle, obj);
             self.nursery.excludes.push(handle);
         }
     }
 
     /// Count the number of heap-allocated objects in this heap
-    pub fn len(&self) -> usize {
+    /*pub fn len(&self) -> usize {
         self.objects.len()
     }
 
     pub fn is_empty(&self) -> bool {
         self.objects.is_empty()
-    }
+    }*/
 
     /// Return true if the heap contains the specified handle
     pub fn contains(&self, handle: impl AsRef<Handle>) -> bool {
         let handle = handle.as_ref();
         if let Some(href) = self.refs.get(&handle.idx) {
-            let objects = match href.gen {
-                RefGen::Nursery => &self.nursery.objects,
-                RefGen::GenX => &self.objects,
-            };
-            objects.get(href.idx).expect("Invalid handle!").is_some()
+            match href.gen {
+                RefGen::Nursery => self
+                    .nursery
+                    .objects
+                    .read()
+                    .unwrap()
+                    .get(href.idx)
+                    .expect("Invalid handle!")
+                    .is_some(),
+                RefGen::GenX => self
+                    .objects
+                    .read()
+                    .unwrap()
+                    .get(href.idx)
+                    .expect("Invalid handle!")
+                    .is_some(),
+            }
         } else {
             false
         }
@@ -287,13 +397,13 @@ impl Heap {
                 RefGen::Nursery => &self.nursery.objects,
                 RefGen::GenX => &self.objects,
             };
-            if let Some(obj) = objects.get(href.idx) {
-                if let Some(obj) = obj {
-                    return Some(GcRef::new_arc(
-                        self,
-                        handle.clone_root(),
-                        obj.read().unwrap(),
-                    ));
+            if let Ok(objects) = objects.read() {
+                //objects.push(None);
+                //let data = objects.swap_remove(href.idx);
+                if let Some(data) = objects.get(href.idx) {
+                    if let Some(data) = data {
+                        return Some(GcRef::new(handle.clone_root(), data.clone()));
+                    }
                 }
             }
         }
@@ -308,20 +418,23 @@ impl Heap {
                 RefGen::Nursery => &self.nursery.objects,
                 RefGen::GenX => &self.objects,
             };
-            if let Some(obj) = objects.get(href.idx) {
-                if let Some(obj) = obj {
-                    return Some(GcRefMut::new_arc(
-                        self,
-                        handle.clone_root(),
-                        obj.write().unwrap(),
-                    ));
+            if let Ok(mut objects) = objects.write() {
+                objects.push(None);
+                let data = objects.swap_remove(href.idx);
+                if let Some(data) = data {
+                    return Some(GcRefMut::new(handle.clone_root(), data));
                 }
+                /*if let Some(data) = objects.get(href.idx) {
+                    if let Some(data) = data {
+                        return Some(GcRefMut::new(handle.clone_root(), data.clone()));
+                    }
+                }*/
             }
         }
         None
     }
 
-    pub fn prune_nursery(&mut self) {
+    pub fn prune_nursery(&mut self) -> Vec<Option<ExpObj>> {
         let mut new_nursery = Nursery::new();
         let new_sweep = 1;
         let mut object_sweeps: HashMap<usize, usize> = HashMap::default();
@@ -329,13 +442,13 @@ impl Heap {
             let mut tracer = Tracer {
                 new_sweep,
                 object_sweeps: &mut object_sweeps,
-                objects: &self.nursery.objects,
+                objects: &self.nursery.objects.read().unwrap(),
                 refs: &self.refs,
                 ref_gen: RefGen::Nursery,
             };
 
             // Mark
-            self.nursery.roots.retain(|handle_idx, rc| {
+            nursery_roots_mut().retain(|handle_idx, rc| {
                 if rc.load(Ordering::Relaxed) > 0 {
                     tracer.mark_handle(*handle_idx);
                     true
@@ -349,30 +462,37 @@ impl Heap {
             // drop the tracer now to avoid deadlock
         }
 
-        for (i, obj) in self.nursery.objects.drain(..).enumerate() {
+        let mut corpses = Vec::new();
+        for (i, obj) in self.nursery.objects.write().unwrap().drain(..).enumerate() {
             if object_sweeps
                 .get(&i)
                 .map(|sweep| *sweep == new_sweep)
                 .unwrap_or(false)
             {
                 let handle_idx = self.nursery.objects_handle[i];
-                new_nursery.objects.push(obj);
-                new_nursery.objects_handle.push(handle_idx);
-                let href = HandleRef {
-                    gen: RefGen::Nursery,
-                    handle: Handle::new(handle_idx),
-                    idx: new_nursery.objects.len() - 1,
-                };
-                self.refs.insert(handle_idx, href);
+                if let Ok(mut objects) = new_nursery.objects.write() {
+                    objects.push(obj);
+                    new_nursery.objects_handle.push(handle_idx);
+                    let href = HandleRef {
+                        gen: RefGen::Nursery,
+                        handle: Handle::new(handle_idx),
+                        idx: objects.len() - 1,
+                    };
+                    self.refs.insert(handle_idx, href);
+                } else {
+                    panic!("Invalid new nursery.");
+                }
             } else {
                 let handle_idx = self.nursery.objects_handle[i];
                 self.refs.remove(&handle_idx);
+                corpses.push(obj);
             }
         }
-        for (idx, rc) in self.nursery.roots.drain() {
-            new_nursery.roots.insert(idx, rc);
-        }
+        //for (idx, rc) in nursery_roots_mut().drain() {
+        //    new_nursery.roots.write().unwrap().insert(idx, rc);
+        //}
         self.nursery = new_nursery;
+        corpses
     }
 
     fn promote_nursery(&mut self) {
@@ -382,13 +502,13 @@ impl Heap {
             let mut tracer = Tracer {
                 new_sweep,
                 object_sweeps: &mut object_sweeps,
-                objects: &self.nursery.objects,
+                objects: &self.nursery.objects.read().unwrap(),
                 refs: &self.refs,
                 ref_gen: RefGen::Nursery,
             };
 
             // Mark
-            self.nursery.roots.retain(|idx, rc| {
+            nursery_roots_mut().retain(|idx, rc| {
                 if rc.load(Ordering::Relaxed) > 0 {
                     tracer.mark_handle(*idx);
                     true
@@ -403,7 +523,7 @@ impl Heap {
         }
 
         // Promote referenced objects to the heap.
-        for (i, obj) in self.nursery.objects.iter().enumerate() {
+        for (i, obj) in self.nursery.objects.write().unwrap().drain(..).enumerate() {
             if object_sweeps
                 .get(&i)
                 .map(|sweep| *sweep == new_sweep)
@@ -412,31 +532,35 @@ impl Heap {
                 if let Some(obj) = obj {
                     let handle_idx = self.nursery.objects_handle[i];
 
-                    let idx = if let Some(idx) = self.freed.pop() {
-                        self.objects.push(Some(obj.clone()));
-                        self.objects.swap_remove(idx);
-                        self.objects_handle.push(handle_idx);
-                        self.objects_handle.swap_remove(idx);
-                        idx
+                    if let Ok(mut objects) = self.objects.write() {
+                        let idx = if let Some(idx) = self.freed.pop() {
+                            objects.push(Some(obj));
+                            objects.swap_remove(idx);
+                            self.objects_handle.push(handle_idx);
+                            self.objects_handle.swap_remove(idx);
+                            idx
+                        } else {
+                            objects.push(Some(obj));
+                            self.objects_handle.push(handle_idx);
+                            objects.len() - 1
+                        };
+                        let href = HandleRef {
+                            gen: RefGen::GenX,
+                            handle: Handle::new(handle_idx),
+                            idx,
+                        };
+                        self.refs.insert(handle_idx, href);
                     } else {
-                        self.objects.push(Some(obj.clone()));
-                        self.objects_handle.push(handle_idx);
-                        self.objects.len() - 1
-                    };
-                    let href = HandleRef {
-                        gen: RefGen::GenX,
-                        handle: Handle::new(handle_idx),
-                        idx,
-                    };
-                    self.refs.insert(handle_idx, href);
+                        panic!("Failed to get write lock on objects!");
+                    }
                 }
             } else {
                 let handle_idx = self.nursery.objects_handle[i];
                 self.refs.remove(&handle_idx);
             }
         }
-        for (idx, rc) in self.nursery.roots.drain() {
-            self.roots.insert(idx, rc);
+        for (idx, rc) in nursery_roots_mut().drain() {
+            roots_mut().insert(idx, rc);
         }
         self.nursery.clear();
     }
@@ -449,13 +573,13 @@ impl Heap {
             let mut tracer = Tracer {
                 new_sweep,
                 object_sweeps: &mut self.object_sweeps,
-                objects: &self.objects,
+                objects: &self.objects.read().unwrap(),
                 refs: &self.refs,
                 ref_gen: RefGen::GenX,
             };
 
             // Mark
-            self.roots.retain(|handle_idx, rc| {
+            roots_mut().retain(|handle_idx, rc| {
                 if rc.load(Ordering::Relaxed) > 0 {
                     tracer.mark_handle(*handle_idx);
                     true
@@ -467,7 +591,7 @@ impl Heap {
         }
 
         // Sweep
-        for (i, obj) in self.objects.iter_mut().enumerate() {
+        for (i, obj) in self.objects.write().unwrap().iter_mut().enumerate() {
             if !self
                 .object_sweeps
                 .get(&i)
@@ -521,7 +645,7 @@ impl Clone for HandleRef {
     fn clone(&self) -> HandleRef {
         HandleRef {
             gen: self.gen,
-            handle: self.handle.clone(),
+            handle: self.handle.clone_no_root(),
             idx: self.idx,
         }
     }
@@ -544,19 +668,15 @@ impl Handle {
     }
 
     fn new_root(idx: HandleIdx) -> Handle {
-        let refs = if gc().roots.contains_key(&idx) {
-            gc_mut()
-                .roots
-                .entry(idx)
-                .or_insert_with(|| HandleIdxAtomic::new(0))
+        if roots().contains_key(&idx) {
+            let mut roots = roots_mut();
+            let refs = roots.entry(idx).or_insert_with(|| HandleIdxAtomic::new(0));
+            refs.fetch_add(1, Ordering::Relaxed);
         } else {
-            gc_mut()
-                .nursery
-                .roots
-                .entry(idx)
-                .or_insert_with(|| HandleIdxAtomic::new(0))
+            let mut roots = nursery_roots_mut();
+            let refs = roots.entry(idx).or_insert_with(|| HandleIdxAtomic::new(0));
+            refs.fetch_add(1, Ordering::Relaxed);
         };
-        refs.fetch_add(1, Ordering::Relaxed);
         Handle { root: true, idx }
     }
 
@@ -622,196 +742,116 @@ impl AsRef<Handle> for Handle {
 impl Drop for Handle {
     fn drop(&mut self) {
         if self.root {
-            let refs = if gc().roots.contains_key(&self.idx) {
-                gc_mut()
-                    .roots
+            if roots().contains_key(&self.idx) {
+                let mut roots = roots_mut();
+                let refs = roots
                     .entry(self.idx)
-                    .or_insert_with(|| panic!("Dropped invalid Handle!"))
+                    .or_insert_with(|| panic!("Dropped invalid Handle!"));
+                refs.fetch_sub(1, Ordering::Relaxed);
             } else {
-                gc_mut()
-                    .nursery
-                    .roots
+                let mut roots = nursery_roots_mut();
+                let refs = roots
                     .entry(self.idx)
-                    .or_insert_with(|| panic!("Dropped invalid Handle!"))
+                    .or_insert_with(|| panic!("Dropped invalid Handle!"));
                 //.or_insert_with(|| HandleIdxAtomic::new(1))//panic!("Dropped invalid Handle!"))
+                refs.fetch_sub(1, Ordering::Relaxed);
             };
-            refs.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }
 
-pub enum GcRef<'a> {
-    Arc {
-        //obj: Arc<RwLock>,
-        handle: Handle,
-        heap: &'a Heap,
-        read: RwLockReadGuard<'a, ExpObj>,
-    },
-    Rc {
-        read: Ref<'a, ExpObj>,
-    },
+pub struct GcRef {
+    handle: Handle,
+    data: ExpObj,
 }
 
-impl<'a> GcRef<'a> {
-    /*fn new_lifetime_arc(obj: &Arc<RwLock>) -> &'a Arc<RwLock> {
-        unsafe { &*(obj as *const Arc<RwLock>) }
-    }*/
-
-    /*fn new_lifetime_rc(obj: &Rc<RefCell>) -> &'a Rc<RefCell> {
-        unsafe { &*(obj as *const Rc<RefCell>) }
-    }*/
-
-    fn new_arc(
-        heap: &'a Heap,
-        handle: Handle,
-        read: RwLockReadGuard<'a, ExpObj>, /*obj: Arc<RwLock>*/
-    ) -> GcRef<'a> {
-        //let read = GcRef::new_lifetime_arc(&obj)
-        //    .read()
-        //    .expect("Heap has poisoned data, done!");
-        //GcRef::Arc { obj, read }
-        GcRef::Arc { heap, handle, read }
-    }
-
-    /*fn new_rc(obj: Rc<RefCell>) -> GcRef<'a> {
-        let read = GcRef::new_lifetime_rc(&obj).borrow();
-        GcRef::Rc { _obj: obj, read }
-    }*/
-
-    pub fn data<'b>(&'b self) -> &'b ExpObj
-    where
-        'a: 'b,
-    {
-        match self {
-            //Self::Arc { obj: _, read } => &*read,
-            Self::Arc {
-                heap: _,
-                handle: _,
-                read,
-            } => &*read,
-            Self::Rc { read } => &*read,
-        }
+impl GcRef {
+    fn new(handle: Handle, data: ExpObj) -> GcRef {
+        GcRef { handle, data }
     }
 }
 
-impl<'a> Deref for GcRef<'a> {
+impl Deref for GcRef {
     type Target = ExpObj;
 
     fn deref(&self) -> &Self::Target {
-        self.data()
+        &self.data
     }
 }
-
-/*impl<'a> Drop for GcRef<'a> {
+/*
+impl Drop for GcRef {
     fn drop(&mut self) {
-        match self {
-            Self::Arc { heap, handle, read } => {
-                drop(read)
-            }
-            Self::Rc { read } => drop(read),
-        }
-    }
-}*/
-
-pub enum GcRefMut<'a> {
-    Arc {
-        handle: Handle,
-        heap: &'a Heap,
-        write: RwLockWriteGuard<'a, ExpObj>,
-    },
-    Rc {
-        //_obj: Rc<RefCell>,
-        write: RefMut<'a, ExpObj>,
-    },
-}
-
-impl<'a> GcRefMut<'a> {
-    /*fn new_lifetime_arc(obj: &Arc<RwLock>) -> &'a Arc<RwLock> {
-        unsafe { &*(obj as *const Arc<RwLock>) }
-    }*/
-
-    /*fn new_lifetime_rc(obj: &Rc<RefCell>) -> &'a Rc<RefCell> {
-        unsafe { &*(obj as *const Rc<RefCell>) }
-    }*/
-
-    fn new_arc(
-        heap: &'a Heap,
-        handle: Handle,
-        write: RwLockWriteGuard<'a, ExpObj>, /*obj: Arc<RwLock>*/
-    ) -> GcRefMut<'a> {
-        //let write = GcRefMut::new_lifetime_arc(&obj)
-        //    .try_write()
-        //    .expect("Heap has poisoned data, done!");
-        //GcRefMut::Arc { _obj: obj, write }
-        GcRefMut::Arc {
-            heap,
-            handle,
-            write,
-        }
-    }
-
-    /*fn new_rc(obj: Rc<RefCell>) -> GcRefMut<'a> {
-        let write = GcRefMut::new_lifetime_rc(&obj).borrow_mut();
-        GcRefMut::Rc { _obj: obj, write }
-    }*/
-
-    pub fn data<'b>(&'b self) -> &'b ExpObj
-    where
-        'a: 'b,
-    {
-        match self {
-            Self::Arc {
-                heap: _,
-                handle: _,
-                write,
-            } => &*write,
-            Self::Rc { write } => &*write,
-        }
-    }
-
-    pub fn data_mut<'b>(&'b mut self) -> &'b mut ExpObj
-    where
-        'a: 'b,
-    {
-        match self {
-            Self::Arc {
-                heap: _,
-                handle: _,
-                write,
-            } => &mut *write,
-            Self::Rc { write } => &mut *write,
+        let gc = gc();
+        if let Some(href) = gc.refs.get(&self.handle.idx) {
+            match href.gen {
+                RefGen::Nursery => {
+                    let mut objects = gc.nursery.objects.write().unwrap();
+                    objects.push(Some(self.data.clone()));
+                    objects.swap_remove(href.idx);
+                }
+                RefGen::GenX => {
+                    let mut objects = gc.objects.write().unwrap();
+                    objects.push(Some(self.data.clone()));
+                    objects.swap_remove(href.idx);
+                }
+            };
         }
     }
 }
+*/
+pub struct GcRefMut {
+    handle: Handle,
+    data: ExpObj,
+}
 
-impl<'a> Deref for GcRefMut<'a> {
+impl GcRefMut {
+    fn new(handle: Handle, data: ExpObj) -> GcRefMut {
+        //GcRefMut { handle, data: Some(data) }
+        GcRefMut { handle, data }
+    }
+}
+
+impl Deref for GcRefMut {
     type Target = ExpObj;
 
     fn deref(&self) -> &Self::Target {
-        self.data()
+        &self.data
     }
 }
 
-impl<'a> DerefMut for GcRefMut<'a> {
+impl DerefMut for GcRefMut {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data_mut()
+        &mut self.data
     }
 }
 
-/*impl<'a> Drop for GcRefMut<'a> {
+impl Drop for GcRefMut {
     fn drop(&mut self) {
-        match self {
-            Self::Arc {
-                heap,
-                handle,
-                write,
-            } => {
-                drop(write)
-            }
-            Self::Rc { write } => drop(write),
+        let gc = gc();
+        if let Some(href) = gc.refs.get(&self.handle.idx) {
+            let mut data = ExpObj {
+                data: ExpEnum::Nil,
+                meta: None,
+            };
+            std::mem::swap(&mut self.data, &mut data);
+            match href.gen {
+                RefGen::Nursery => {
+                    let mut objects = gc.nursery.objects.write().unwrap();
+                    objects.push(Some(data));
+                    objects.swap_remove(href.idx);
+                }
+                RefGen::GenX => {
+                    let mut objects = gc.objects.write().unwrap();
+                    objects.push(Some(data));
+                    objects.swap_remove(href.idx);
+                }
+            };
+        } else {
+            panic!("Dropping an invalid GcRefMut!");
         }
     }
-}*/
+}
+
 /*
 #[cfg(test)]
 mod tests {

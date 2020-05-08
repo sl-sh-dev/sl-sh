@@ -1312,6 +1312,7 @@ fn expand_macro_internal(
         let mut e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
             Box::new(ListIter::new_list(&list))
         } else {
+            drop(e2_d);
             e2.iter()
         };
         let expansion = do_expansion(environment, e1, &mut e2_iter)?;

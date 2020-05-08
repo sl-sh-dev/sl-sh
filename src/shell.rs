@@ -559,7 +559,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         if environment.borrow().exit_code.is_some() {
             break;
         }
-        let gc = gc();
+        let mut gc = gc_mut();
         println!(
             "PRE  {}/{}/{}: {}",
             gc.objects(),
@@ -567,7 +567,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             gc.free_objects(),
             gc.nursery_objects(),
         );
-        gc_mut().clean();
+        gc.clean();
         println!(
             "POST {}/{}/{}: {}",
             gc.objects(),

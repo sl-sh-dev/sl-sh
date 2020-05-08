@@ -674,30 +674,31 @@ mod tests {
     use std::sync::Once;
 
     use crate::builtins_util::is_proper_list;
+    use crate::gc::init_gc;
 
     static INIT: Once = Once::new();
 
-    fn to_strs(output: &mut Vec<String>, exp: Expression) {
+    fn to_strs(output: &mut Vec<String>, exp: &Expression) {
         match &exp.get().data {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {
-                    to_strs(output, *exp);
+                    to_strs(output, exp);
                 }
                 output.push(")".to_string());
             }
             ExpEnum::Pair(e1, e2) => {
-                if is_proper_list(exp) {
+                if is_proper_list(&exp) {
                     output.push("(".to_string());
                     for p in exp.iter() {
-                        to_strs(output, p);
+                        to_strs(output, &p);
                     }
                     output.push(")".to_string());
                 } else {
                     output.push("(".to_string());
-                    to_strs(output, *e1);
+                    to_strs(output, e1);
                     output.push(".".to_string());
-                    to_strs(output, *e2);
+                    to_strs(output, e2);
                     output.push(")".to_string());
                 }
             }
@@ -716,7 +717,7 @@ mod tests {
         let exp = read(environment, input, name);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
-            to_strs(&mut tokens, exp);
+            to_strs(&mut tokens, &exp);
         } else {
             assert!(false);
         }
@@ -731,7 +732,7 @@ mod tests {
         let exp = read_list_wrap(environment, input, name);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
-            to_strs(&mut tokens, exp);
+            to_strs(&mut tokens, &exp);
         } else {
             assert!(false);
         }

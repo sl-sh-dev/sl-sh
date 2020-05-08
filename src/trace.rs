@@ -13,7 +13,9 @@ use crate::types::*;
 ///
 /// # Example
 /// ```
-/// use broom::prelude::*;
+/// //use broom::prelude::*;
+/// use sl_sh::gc::*;
+/// use sl_sh::trace::*;
 ///
 /// pub enum Object {
 ///     Num(f64),
@@ -47,7 +49,7 @@ pub trait Trace {
 pub struct Tracer<'a> {
     pub(crate) new_sweep: usize,
     pub(crate) object_sweeps: &'a mut HashMap<usize, usize>,
-    pub(crate) objects: &'a Vec<Option<Arc<RwLock<ExpObj>>>>,
+    pub(crate) objects: &'a Vec<Option<ExpObj>>,
     pub(crate) refs: &'a HashMap<HandleIdx, HandleRef>,
     pub(crate) ref_gen: RefGen,
 }
@@ -63,7 +65,7 @@ impl<'a> Tracer<'a> {
                 *sweep = self.new_sweep;
                 if let Some(obj) = &self.objects[href.index()] {
                     //XXX FIX ME
-                    obj.read().unwrap().trace(self);
+                    obj.trace(self);
                 }
             }
         }
