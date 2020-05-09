@@ -1886,7 +1886,7 @@ pub fn builtin_block(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "block: Name must be a symbol (not evaluted).",
+                "block: Name must be a symbol (not evaluated).",
             ));
         };
         for arg in args {
@@ -1936,7 +1936,7 @@ pub fn builtin_return_from(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "return-from: Name should be a symbol or nil (not evaluted).",
+                "return-from: Name should be a symbol or nil (not evaluated).",
             ));
         };
         if let Some(exp) = args.next() {
@@ -2086,7 +2086,7 @@ pub fn add_builtins<S: BuildHasher>(
             builtin_eval,
             "Usage: (eval expression)
 
-Evalute the provided expression.
+Evaluate the provided expression.
 
 If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
@@ -2110,7 +2110,7 @@ Example:
             builtin_fncall,
             "Usage: (fncall function arg0 ... argN)
 
-Call the provided function with the suplied arguments.
+Call the provided function with the supplied arguments.
 
 Section: core
 
@@ -2364,7 +2364,7 @@ Example:
             builtin_progn,
             "Usage: (progn exp0 ... expN) -> expN
 
-Evalutate each form and return the last.
+Evaluatate each form and return the last.
 
 Section: core
 
@@ -2500,9 +2500,9 @@ Example:
 
 Creates a dynamic binding for key, assigns value to it and evals expression under it.
 
-The binding is gone once the dyn form ends.  The binding will take precedent over
-any other binding in any scope with that name for any form that evalute as a 
-result of the dynamic binging (for instance creating a dynamic binding for
+The binding is gone once the dyn form ends. The binding will take precedence over
+any other binding in any scope with that name for any form that evaluates as a
+result of the dynamic binding (for instance creating a dynamic binding for
 *stdout* will cause all output to stdout to use the new binding in any print's
 used indirectly).
 
@@ -2627,7 +2627,7 @@ Example:
 
 Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
 
-The and form will stop evaluting when the first expression produces nil.
+The and form will stop evaluating when the first expression produces nil.
 
 Section: conditional
 
@@ -2647,7 +2647,7 @@ Example:
 
 Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
 
-The or form will stop evaluting when the first expression produces non-nil.
+The or form will stop evaluating when the first expression produces non-nil.
 
 Section: conditional
 
@@ -3121,7 +3121,7 @@ t
             builtin_block,
             "Usage: (block name form*)
 
-Create a block with name (name is not evaluted), if no return-from encountered then
+Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like progn).
 
 Section: core
@@ -3142,7 +3142,7 @@ Example:
             builtin_return_from,
             "Usage: (return-from name expression?)
 
-Causes enclosing block with name (name is not evaluted) to evaluate to expression.
+Causes enclosing block with name (name is not evaluated) to evaluate to expression.
 
 Section: core
 

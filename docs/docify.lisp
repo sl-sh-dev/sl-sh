@@ -11,7 +11,7 @@
 		of :lang, :user, or :single. :lang to indicate doc generation with sl-sh
 		forms (all forms not in user namespace), :user to indicate doc
 		generation of user forms, or :single to generate a page for a random
-		function for debugging pruposes. Future work will beed to be done to
+		function for debugging purposes. Future work will need to be done to
 		disambiguate sl-sh forms and user created forms when users themselves
 		start making many different namespaces."))
 

@@ -22,12 +22,12 @@ title: Sl-sh form documentation
 	(defq idx (match attr
 			(:name 0)
 			(:description 1)
-			(nil (err "Unkown attribute of table heading."))))
+			(nil (err "Unknown attribute of table heading."))))
 	(match (str key)
 		("sequence" (vec-nth idx '#("Sequence forms"
 "These macros will work on either a vector or a pair made into a proper list
 (cons list).  Use these in preference to the vector/list specific versions when
-possible (ie first vs car).
+possible (i.e. first vs car).
 NOTE: list on this table can be a vector or a list.")))
 		("char" (vec-nth idx '#("Char forms" nil)))
 		("conditional" (vec-nth idx '#("Conditional forms" nil)))
@@ -148,8 +148,8 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(defq trim-arr (if (= "" (first arr)) (rest arr) arr))
 	(str-cat-list delim (append (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``")) (rest trim-arr))))))
 
-(defn sanitize-for-md-row (to-santiize)
-		(str-replace to-santiize "|" "\|"))
+(defn sanitize-for-md-row (to-sanitize)
+		(str-replace to-sanitize "|" "\|"))
 
 (defn write-md-table (key docstrings file-name) (progn
 	(defq file (open file-name :append))

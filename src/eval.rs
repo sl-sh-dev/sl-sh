@@ -542,7 +542,7 @@ pub fn eval_nr<'a>(
             environment.error_expression = Some(expression.clone());
         }
         if environment.stack_on_error {
-            eprintln!("{}: Error evaluting:", environment.state.eval_level);
+            eprintln!("{}: Error evaluating:", environment.state.eval_level);
             let stderr = io::stderr();
             let mut handle = stderr.lock();
             if let Err(err) = expression.pretty_printf(environment, &mut handle) {

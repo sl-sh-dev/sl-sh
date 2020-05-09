@@ -13,7 +13,7 @@
 	strings delimiting sections. It is necessary, after identifying the start
 	of the block of text needed (by splitting on an ordered list of predefined
 	strings), to cut the remaining text (target-str) to just above the start
-	of the next prefedined string."
+	of the next predefined string."
 	(second-keys second-key-idx target-str)
 	(if (not (empty-seq? second-keys))
 		(progn

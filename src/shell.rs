@@ -233,7 +233,7 @@ fn handle_result(
             if !environment.stack_on_error {
                 if let Some(exp) = &environment.error_expression {
                     let exp = exp.clone();
-                    eprintln!("Error evaluting:");
+                    eprintln!("Error evaluating:");
                     let stderr = io::stderr();
                     let mut handle = stderr.lock();
                     if let Err(err) = exp.pretty_printf(environment, &mut handle) {
