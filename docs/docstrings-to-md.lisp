@@ -181,8 +181,8 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 					(str "#" (get-anchor-link-id doc-map) "-contents"))
 				" | " doc-type " |"))
 		(write-line file 
-			(str "| " doc-namespace "::" doc-form
-				 " | " (format-first-line-as-code doc-usage "<br>") " |"))
+			(str "| ``" doc-namespace "::" doc-form
+				 "`` | " (format-first-line-as-code doc-usage "<br>") " |"))
 		(write-line file "")
 		(when (not (nil? doc-example))
 		  (progn
