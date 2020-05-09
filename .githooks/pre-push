@@ -4,25 +4,40 @@ function log() {
 	echo -e "\033[33;7m$1\033[0m $2"
 }
 
+function elog() {
+	echo -e "\033[31;7m$1\033[0m $2"
+}
+
 log "> Docs Hook started"
+
+## TODO find git commands to list filenames of files that appear under
+# git diff OR git dc...
+# need to make sure nothing has been touched in the docs/ directory
+#before a push?
+pushd docs
+if [[ $? != "0" ]]; then
+	elog "docs dir not found, where are the docs? Aborting!"
+	exit 1
+fi
+
+if [[ ! -z $(git diff --dirstat .) ]]; then
+	elog "\`docs\` directory's working tree has been modified, please resolve "
+	elog "said modifications and try again.";
+fi
+
+exit 1;
 
 log "Verify we have an up to date release build to generate the docs with"
 cargo build --release
-
-pushd docs
-if [[ $? != "0" ]]; then
-	echo "docs dir not found, where are the docs? Aborting!"
-	exit 1
-fi
 
 log "Build docs"
 ../target/release/sl-sh docify.lisp index.markdown :lang
 
 if [[ $? != "0" ]]; then
-	echo "Uncategorized forms found, not pushing. Please edit appropriate"
-	echo "docstrings printed as hashmap literals above. Run"
-	echo "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
-	exit 1;
+	elog "Uncategorized forms found, not pushing. Please edit appropriate"
+	elog "docstrings printed as hashmap literals above. Run"
+	elog "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
+	elog 1;
 fi
 
 log "Push docs"
