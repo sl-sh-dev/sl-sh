@@ -1,4 +1,4 @@
-#!/bin/sl-sh
+#!/usr/bin/env sl-sh
 
 (load "docstrings-to-md.lisp")
 (core::ns-import 'core)
