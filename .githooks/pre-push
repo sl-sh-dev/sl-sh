@@ -21,11 +21,9 @@ if [[ $? != "0" ]]; then
 fi
 
 if [[ ! -z $(git diff --dirstat .) ]]; then
-	elog "\`docs\` directory's working tree has been modified, please resolve "
-	elog "said modifications and try again.";
+	elog "docs directory's working tree has been modified, please resolve"
+	elog "said modifications and try again."
 fi
-
-exit 1;
 
 log "Verify we have an up to date release build to generate the docs with"
 cargo build --release
