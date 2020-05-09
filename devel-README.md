@@ -1,3 +1,6 @@
-## On building documentation
+## on git convention
+- main trunk is the `master` branch
+- sstanfield repository remote is named `origin`
 
-Run `git config core.hooksPath .githooks` so your githooks are set properly.
+## On building documentation
+- Run `git config core.hooksPath .githooks` so your githooks are set properly.

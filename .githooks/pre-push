@@ -10,6 +10,13 @@ function elog() {
 
 log "> Docs Hook started"
 
+BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
+
+if [[ ${BRANCH_NAME} != "master" && ${BRANCH_NAME} != "remotes/origin/master" ]]; then
+	log "Not pushing master branch, not building docs."
+	exit 0
+fi
+
 ## TODO find git commands to list filenames of files that appear under
 # git diff OR git dc...
 # need to make sure nothing has been touched in the docs/ directory
@@ -23,6 +30,7 @@ fi
 if [[ ! -z $(git diff --dirstat .) ]]; then
 	elog "docs directory's working tree has been modified, please resolve"
 	elog "said modifications and try again."
+	exit 1
 fi
 
 log "Verify we have an up to date release build to generate the docs with"
@@ -30,13 +38,13 @@ cargo build --release
 
 log "Build docs"
 ../target/release/sl-sh docify.lisp index.markdown :lang
-
 if [[ $? != "0" ]]; then
-	elog "Uncategorized forms found, not pushing. Please edit appropriate"
-	elog "docstrings printed as hashmap literals above. Run"
-	elog "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
-	elog 1;
+    elog "Uncategorized forms found, not pushing. Please edit appropriate"
+    elog "docstrings printed as hashmap literals above. Run"
+    elog "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
+    exit 1;
 fi
+
 
 log "Push docs"
 
