@@ -215,7 +215,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 			(println "Found :uncategorized symbols: ")
 			(for sym uncat-syms (println "symbol: " sym))
 			(exit 1)))
-		exit 0)))
+		(exit 0))))
 
 (ns-export '(make-md-file))
 (ns-pop)
