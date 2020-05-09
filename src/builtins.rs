@@ -2200,7 +2200,7 @@ Example:
 
 Read and eval a file (from path- a string).
 
-Section: core
+Section: scripting
 
 Example:
 (def 'test-load-one nil)
