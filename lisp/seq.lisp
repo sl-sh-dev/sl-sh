@@ -149,13 +149,7 @@ Example:
     (when (and (seq? seq-to-search ) (not (empty-seq? seq-to-search)))
         (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
 
-(def 'append
-"
-Produces a new list (type will be same as first parameter) by appending the other lists onto the first.
-
-Section: sequence
-"
-    nil)
+(def 'append nil)
 (def 'append!
 "
 Modifies the first list by appending the other lists onto it.
@@ -183,8 +177,7 @@ nil)
 
     (setfn append
 "
-Returns new list whose contents are a combined list (concatenated) of l1 and
-every item in others.
+Produces a new list (type will be same as first parameter) by appending the other lists onto the first.
 
 Section: sequence
 "
