@@ -35,11 +35,11 @@
 
 ;; TODO maybe write a function that verifies order is correct in the docstrings?
 ;; to prevent future headaches?
-(defn parse-doc (sym) (progn
-	(defq docstring (doc sym))
+(defn parse-doc (docstring) (progn
+	(defq sym (vec-nth 0 (str-split "\n" docstring)))
 	(defq doc-map (make-hash))
 	(hash-set! doc-map :form
-		(if (= sym '|) (str '\ sym) (str sym)))
+		(if (= sym "|") (str '\ sym) sym))
 	(hash-set! doc-map :type
 		(progn
 		(defq ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))

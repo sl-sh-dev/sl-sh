@@ -73,7 +73,7 @@ list for purposes of lambda calls, parameters, etc (they work the same as a list
 made from pairs but are vectors not linked lists).  Use #() to declare them in
 code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		(":uncategorized" (vec-nth idx '#("Uncategorized forms" nil)))
-		(nil (vec-nth idx '#("Unknown forms" nil))))))
+		(nil (if (= idx 0) (str key " forms") "")))))
 
 (defn create-anchor (id)
 	(str "<a id=\"" id "\" class=\"anchor\" aria-hidden=\"true\" href=\"#sl-sh-form-documentation\"></a>"))
@@ -193,6 +193,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	file-name))
 
 (defn make-md-file
+	  ;; TODO should be using get-error instead of progn
 	(index-file sym-list) (progn
 	(defq docstrings-map (parse-docstrings-for-syms sym-list))
 	(create-header index-file)
@@ -214,8 +215,8 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		(when (not (empty-seq? uncat-syms)) (progn
 			(println "Found :uncategorized symbols: ")
 			(for sym uncat-syms (println "symbol: " sym))
-			(exit 1)))
-		(exit 0))))
+			nil))
+		 #t)))
 
 (ns-export '(make-md-file))
 (ns-pop)

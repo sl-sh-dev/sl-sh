@@ -3,21 +3,21 @@
 (ns-import 'shell)
 
 ;; gpwclark TODOs
-;; - remind slsh bdfl to make error-stack-on an envronment variable so error-stack-on can be automatic for scripts
-;; finish writing script that runs tests.
+;; getopts!
+;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
+;; - get slsh in AUR
 ;; USE empty-seq? instead of (when not nil) for looping over list
 ;; - range? fcn
 ;; - make cond macro?
 ;; - need clojure's threading macro support but you know, we'll call it
-;; "weaving" (which is sometimes used in AOP but not nearly as overlaoded as
-;; the word "thread" in programming.)
+;;		"weaving" (which is sometimes used in AOP but not nearly as overlaoded as
+;;		the word "thread" in programming.)
 ;; - bash completion not working with git checkout and filepaths?
 ;; - rewrite bash so we don't have gpl in here?
 ;; - CI on github? possible?
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - address exec-hook.lisp stuff
-;; - write some "tests" at bottom of each 'critical' file to make sure it's in
-;; working order, e.g. bash-completions & exec-hook
+
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
@@ -25,9 +25,130 @@
 ;; overrides exec hook to use endfix notation
 (endfix-on)
 
-;; helpers {{{
-	(defn all-items-by-whitespace (producer)
-		(str-trim (str (| (producer) (tr "\n" " ") (tr -s "[:blank:]")))))
+;; shell helpers {{{
+	(defn dush
+		"With no arguments: alias for du ./* -sh
+		With any args: provides size of each provided argument
+		Section: shortcut"
+		(&rest paths)
+		(if (= 0 (length paths))
+			(du ./* -sh)
+			(for path paths (du path -sh))))
+
+	(defn pgz
+		"Parallelized gzip.
+		cores:
+			use lscpu to determine # of cores on box
+		compression-ratio:
+			- 1 fastest speed, worst compression
+			- 9 slowest speed, most compression
+			- default is 6
+
+		Section: shortcut"
+		(target-name cores compression-ratio &rest dirs)
+			(out>
+				target-name
+				(|
+					(eval (str "tar cf - " (str-cat-list " " dirs)))
+					(eval (str "pigz  -p " cores  " -" compression-ratio)))))
+	(defn dpgz
+	"Parallelized un gzip.
+	cores:
+		use lscpu to determine # of cores on box
+	Section: shortcut"
+			(target-name cores)
+				(pigz --keep --decompress --processes cores target-name))
+
+	(defn fullfp
+	"Give me a relative filepath and I'll give you an absolute filepath!
+	Section: shortcut"
+		(filepath)
+		(find $PWD -name filepath))
+
+	(defn most-recent-ls-thing ()
+		(str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))
+
+	(defn lftail
+		"Provide string to filter results of ls. Newest file that contains
+		that string is then \"tail -f\"'d
+
+		Section: shortcut"
+		(str-to-tail-f) (progn
+		(defq matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (most-recent-ls-thing)))
+		(println "list match: " matching-list)
+		(defq tail-target (first matching-list))
+		(println "tail -f " tail-target)
+		(tail -f tail-target)))
+
+	(defn cdt
+	"cd into the directory with the most recent timestamp
+	Section: shortcut
+	"
+		()
+		(progn
+			(defq most-recent-dir
+				(first (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (most-recent-ls-thing))))
+			(eval `(cd ,most-recent-dir))))
+
+	;; stdin to clipboard
+	(alias sc (str-trim (xclip -selection c)))
+
+	;;put my pwd in my clipboard
+	(alias this (| (pwd) (sc)))
+
+	;; access zsh history search
+	(defn zh ()
+		(progn
+			(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+			(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
+
+	(defn stripcolor (&rest args)
+		(if (< (length args) 2)
+			(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
+			(err "Only accepts 0 or 1 arguments")))
+
+	;; all find . -iname &rest
+	(defn ifind (&rest args)
+	(if (< (length args) 2)
+		(| (find . -iname (str (nth 0 args))))
+		(err "Only accepts 0 or 1 arguments")))
+
+
+	;;results feed into vim
+	(defn vimifind (&rest args)
+		(if (< (length args) 2)
+			(let
+				((vimargs (str-split
+					" "
+					(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
+				(progn
+					(eval `(vim ,@vimargs))))
+			(err "Only accepts 0 or 1 arguments")))
+
+;; }}}
+
+;; java helpers {{{
+;;gradle build
+(defn g (&rest args)
+(let ((log-out-file "last_build.log"))
+(progn
+	(|
+		(defq gradle-proc (eval (append '(./gradlew) args)))
+		(tee log-out-file)
+	)
+	(defq gradle-ret-code (wait gradle-proc))
+	(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+	(defq proj-name (str (basename $PWD)))
+	(if (= 0 gradle-ret-code)
+		(nss-pass (str "PASS! - " proj-name) log-out-txt)
+		(nss-fail (str "FAIL! - " proj-name) log-out-txt))
+	(= 0 gradle-ret-code))))
+
+(defmacro javad
+	"Start the jvm in debug mode, will hang until a debugger connects to jvm
+	on port 5005"
+	(&rest args)
+		`(java "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005" ,@args))
 ;; }}}
 
 
@@ -71,63 +192,6 @@
 		nil))
 	;; Abuse register-alias to have better syntax highlighting for cd.
 	(register-alias 'cd)
-
-	;; cd into the directory with the most recent timestamp
-	(defn cdt ()
-		(progn
-			(defq most-recent-dir (first (filter fs-dir? (str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))))
-			(eval `(cd ,most-recent-dir))))
-
-	;; stdin to clipboard
-	(alias sc (str-trim (xclip -selection c)))
-
-	;;put my pwd in my clipboard
-	(alias this (| (pwd) (sc)))
-
-	;;gradle build
-	(defn g (&rest args)
-		(let ((log-out-file "last_build.log"))
-		(progn
-			(|
-				(defq gradle-proc (eval (append '(./gradlew) args)))
-				(tee log-out-file)
-			)
-			(defq gradle-ret-code (wait gradle-proc))
-			(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
-			(defq proj-name (str (basename $PWD)))
-			(if (= 0 gradle-ret-code)
-				(nss-pass (str "PASS! - " proj-name) log-out-txt)
-				(nss-fail (str "FAIL! - " proj-name) log-out-txt))
-			(= 0 gradle-ret-code))))
-
-	;; access zsh history search
-	(defn zh ()
-		(progn
-			(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
-			(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
-
-	(defn stripcolor (&rest args)
-		(if (< (length args) 2)
-			(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
-			(err "Only accepts 0 or 1 arguments")))
-
-	;; all find . -iname &rest
-	(defn ifind (&rest args)
-	(if (< (length args) 2)
-		(| (find . -iname (str (nth 0 args))))
-		(err "Only accepts 0 or 1 arguments")))
-
-
-	;;results feed into vim
-	(defn vimifind (&rest args)
-		(if (< (length args) 2)
-			(let
-				((vimargs (str-split
-					" "
-					(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
-				(progn
-					(eval `(vim ,@vimargs))))
-			(err "Only accepts 0 or 1 arguments")))
 ;; }}}
 
 ;; quality of life {{{
@@ -256,9 +320,64 @@
 
 ;; machine specific {{{
 
-(defq custom-lisp-config (str "~/.config/sl-sh/" (cat /etc/hostname) ".lisp"))
+(defq custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
 (if (fs-exists? custom-lisp-config)
 	(load custom-lisp-config)
-	(println (str shell::*fg-red* "Failed to load custom sl-sh config at " custom-lisp-config shell::*fg-default*)))
+	(println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 
 ;;}}}
+
+;; user ns docs {{{
+
+	(pushd "/home/price/development/slsh/docs/")
+	(load "/home/price/development/slsh/docs/mk-docs.lisp")
+
+	(defn filter-non-user-forms (sym-list) (progn
+		(loop (sym-list namespaces) (sym-list '("root" "core" "shell"))
+		;;(loop (sym-list namespaces) (sym-list (append! (ns-symbols 'shell) (ns-symbols 'core) (ns-symbols 'root)))
+			(if (empty-seq? namespaces)
+				sym-list
+				(progn
+					(setq sym-list (filter
+						(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
+						sym-list))
+					(recur sym-list (rest namespaces)))))))
+
+	(defn filter-undocable-forms (sym-list)
+		(filter (fn (x)
+			(and
+				(not (= x '*ns*))
+				(not (= x 'tok-slsh-form-color))
+				(not (= x 'tok-slsh-fcn-color))
+				(not (= x 'tok-default-color))
+				(not (= x 'tok-sys-command-color))
+				(not (= x 'tok-sys-alias-color))
+				(not (= x 'tok-string-color))
+				(not (= x 'tok-invalid-color))
+				(not (= x 'custom-lisp-config))
+				;;TODO should not exclude last-status OR export
+				(not (= x '*last-status*))
+				(not (= x '*repl-settings*))
+				(not (= x '__completion_hook))
+				(not (= x '__line_handler))
+				(not (= x '__exec_hook))
+				(not (= x '__prompt))
+				(not (= x 'export))
+				(not (= x 'args))))
+			sym-list))
+
+	;;TODO ideally this would live in mk-docs.lisp
+	;; and :user would be an option as param fo mkdocs::get-doc-list-for
+	(defn list-of-user-slsh-syms () (progn
+		(defq user-syms (list))
+		(for a-ns (filter
+					(fn (x) (not (in? '("root" "shell" "core" "mkdocs" "docparse" "docmd") x)))
+					(ns-list))
+			(append! user-syms (ns-symbols (to-symbol a-ns))))
+		(filter-undocable-forms (filter-non-user-forms user-syms))))
+
+	(defq all-docstrings (map! (fn (x) (doc (to-symbol x))) (list-of-user-slsh-syms)))
+	(println (mkdocs::make-md-file-with-docstrings "/home/price/development/slsh/docs/index.markdown" all-docstrings))
+	(popd)
+
+;; }}}
