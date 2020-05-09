@@ -66,18 +66,18 @@ docstrings. The string following \"Section:\" can be anything but using a
 coherent set of values for the section declaration allows for flexible
 organization of docstrings.
 "
-	(sym-list) (progn
+	(docstring-list) (progn
 	(defq docstring-sections (make-hash))
-	(defq section-builder (fn (syms)
-		(when (not (empty-seq? syms))
+	(defq section-builder (fn (docs)
+		(when (not (empty-seq? docs))
 			(progn
-				(defq doc-map (parse-doc (first syms)))
+				(defq doc-map (parse-doc (first docs)))
 				(defq section-key (hash-get doc-map :section))
 				(if (hash-haskey docstring-sections section-key)
 					(append! (hash-get docstring-sections section-key) doc-map)
 					(hash-set! docstring-sections section-key (list doc-map)))
-				(recur (rest syms))))))
-	(section-builder sym-list)
+				(recur (rest docs))))))
+	(section-builder docstring-list)
 	docstring-sections))
 
 (ns-export '(parse-docstrings-for-syms))
