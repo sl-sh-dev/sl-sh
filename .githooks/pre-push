@@ -64,6 +64,6 @@ git push -u -f origin gh-pages
 
 rm -rf .git
 
-popd doc
+popd docs
 
 log "< Docs Hook finished"
