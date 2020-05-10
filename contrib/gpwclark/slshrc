@@ -449,6 +449,7 @@
 ;; user ns docs {{{
 
 (pushd "~/development/slsh/docs/")
+
 (if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
 	(load "mk-docs.lisp")
 	(defn filter-non-user-forms (sym-list) (progn
