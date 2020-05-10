@@ -498,7 +498,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)));
     env.insert_into_root_scope(interned_sym, data);
     load_user_env(&mut env, &home, true);
-    let repl_settings = get_expression(&env, "*repl-settings*").unwrap();
+    let repl_settings = get_expression(&env, "user::*repl-settings*").unwrap();
     interned_sym = env.interner.intern("*last-status*");
     let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(0)));
     env.insert_into_root_scope(interned_sym, data);
