@@ -217,9 +217,6 @@
 	Section: user-shell"
 	(lsd))
 
-(alias lat
-	(lsd -lat))
-
 ;; betterer ls
 (alias ll
 	"ls -haltr shorcut
@@ -452,56 +449,53 @@
 ;; user ns docs {{{
 
 (pushd "~/development/slsh/docs/")
-(load "mk-docs.lisp")
+(if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
+	(load "mk-docs.lisp")
+	(defn filter-non-user-forms (sym-list) (progn
+		(loop (sym-list namespaces) (sym-list '("root" "core" "shell"))
+			(if (empty-seq? namespaces)
+				sym-list
+				(progn
+					(setq sym-list (filter
+						(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
+						sym-list))
+					(recur sym-list (rest namespaces)))))))
+	(defn filter-undocable-forms (sym-list)
+		(filter (fn (x)
+			(and (not (= x 'custom-lisp-config))
+				(not (= x 'filter-non-user-forms))
+				(not (= x 'filter-undocable-forms))
+				(not (= x 'list-of-user-slsh-syms))
+				(not (= x '*repl-settings*))
+				(not (= x '__completion_hook))
+				(not (= x '__line_handler))
+				(not (= x '__exec_hook))
+				(not (= x '__prompt))))
+			sym-list))
 
-(defn filter-non-user-forms (sym-list) (progn
-	(loop (sym-list namespaces) (sym-list '("root" "core" "shell"))
-		(if (empty-seq? namespaces)
-			sym-list
+	;;TODO ideally this would live in mk-docs.lisp
+	;; and :user would be an option as param fo mkdocs::get-doc-list-for
+	(defn list-of-user-slsh-syms () (progn
+		(defq user-syms (list))
+		(for a-ns (filter
+					(fn (x) (not (in? '("root" "shell" "core" "mkdocs" "docparse" "docmd") x)))
+					(ns-list))
+			(append! user-syms (ns-symbols (to-symbol a-ns))))
+		(filter-undocable-forms (filter-non-user-forms user-syms))))
+
+	(defq all-docstrings
+		(map! (fn (x)
 			(progn
-				(setq sym-list (filter
-					(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
-					sym-list))
-				(recur sym-list (rest namespaces)))))))
+				(doc (to-symbol x))))
+				(list-of-user-slsh-syms)))
 
-(defn filter-undocable-forms (sym-list)
-	(filter (fn (x)
-		(and (not (= x 'custom-lisp-config))
-			(not (= x 'filter-non-user-forms))
-			(not (= x 'filter-undocable-forms))
-			(not (= x 'list-of-user-slsh-syms))
-			(not (= x '*repl-settings*))
-			(not (= x '__completion_hook))
-			(not (= x '__line_handler))
-			(not (= x '__exec_hook))
-			(not (= x '__prompt))))
-		sym-list))
-
-;;TODO ideally this would live in mk-docs.lisp
-;; and :user would be an option as param fo mkdocs::get-doc-list-for
-(defn list-of-user-slsh-syms () (progn
-	(defq user-syms (list))
-	(for a-ns (filter
-				(fn (x) (not (in? '("root" "shell" "core" "mkdocs" "docparse" "docmd") x)))
-				(ns-list))
-		(append! user-syms (ns-symbols (to-symbol a-ns))))
-	(filter-undocable-forms (filter-non-user-forms user-syms))))
-
-(defq all-docstrings
-	(map! (fn (x)
-		(progn
-			(doc (to-symbol x))
-			)) (list-of-user-slsh-syms)))
-
-;; check the last modified time of index.markdown and only do this if
-; has not been done in some amount of time.
-#|
-(out-err>null
+	;; check the last modified time of index.markdown and only do this if
+	; has not been done in some amount of time.
 	(mkdocs::make-md-file-with-docstrings
-		"/home/price/development/slsh/docs/index.markdown"
+		"index.markdown"
 		all-docstrings)
-)
-|#
+		(println "Built docs!"))
+		nil) ;; (println "not building docs")
 
 (popd)
 
