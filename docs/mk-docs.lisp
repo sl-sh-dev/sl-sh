@@ -19,7 +19,6 @@
 			(not (= x 'tok-sys-alias-color))
 			(not (= x 'tok-string-color))
 			(not (= x 'tok-invalid-color))
-			;;TODO should not exclude last-status OR export
 			(not (= x '*last-status*))
 			(not (= x '*repl-settings*))
 			(not (= x 'get-doc-list-for))
@@ -29,8 +28,6 @@
 			(not (= x '__line_handler))
 			(not (= x '__exec_hook))
 			(not (= x '__prompt))
-
-			(not (= x 'export))
 			(not (= x 'args))))
 		sym-list))
 
