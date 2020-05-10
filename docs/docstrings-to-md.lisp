@@ -184,11 +184,12 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 			(str "| ``" doc-namespace "::" doc-form
 				 "`` | " (format-first-line-as-code doc-usage "<br>") " |"))
 		(write-line file "")
-		(when (not (nil? doc-example))
-		  (progn
-			(write-line file "```")
-				(for line (str-split "\n" doc-example) (write-line file line))
-			(write-line file "```")))))
+		(if (not (nil? doc-example))
+			(progn
+				(write-line file "```")
+					(for line (str-split "\n" doc-example) (write-line file line))
+				(write-line file "```"))
+			(write-line file "<br>"))))
 	(close file)
 	file-name))
 

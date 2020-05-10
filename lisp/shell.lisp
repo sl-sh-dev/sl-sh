@@ -5,15 +5,28 @@
 
 (defmacro alias
 "
+Usage: (alias name body) or (alias name docstring body).
+
 Create an alias, intended to be used with executables not lisp code (use defn
 for that).
 
 Section: shell
 "
-	(name body) (progn
+	(name &rest args) (progn
+	(defq usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
-	`(defmacro ,name (&rest args)
-		(append (quote ,body) args))))
+	(match (length args)
+		(2 (progn
+			(defq docstring (vec-nth 0 args))
+			(defq body (vec-nth 1 args))
+			`(defmacro ,name ,docstring (&rest ars)
+				(append (quote ,body) ars))))
+		(1 (progn
+			(defq body (vec-nth 0 args))
+			`(defmacro ,name (&rest ars)
+				(append (quote ,body) ars))))
+		(0 (err usage))
+		(nil (err usage)))))
 
 ;; Remove an alias, this should be used instead of a raw undef for aliases.
 (defn unalias (name) (progn
