@@ -297,7 +297,8 @@ pub fn add_hash_builtins<S: BuildHasher>(
 Make a new hash map.
 
 If associations is provided (makes an empty map if not) then it is a list of
-pairs (key . value) that populate the intial map.
+pairs (key . value) that populate the intial map, e.g.
+	\"(make-hash '((:x . \"rlr\")(:y . \"sls\")))')\"
 
 Section: hashmap
 
