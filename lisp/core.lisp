@@ -56,6 +56,29 @@ Section: namespace"
 			(core::for sym ,symbol_or_sequence (vec-push! *ns-exports* sym))
 			(err "ns-export takes a symbol or sequence.")))))
 
+(defmacro ns-auto-export
+"Exports all symbols defined in provided curr-ns. By default symbols prefixed
+with a dash symbol, \"-\", will not be exported. Modifiers are functions that
+are applied as the predicate to a filter. The filters are applied in the order
+they are passed in.
+
+Section: namespace
+"
+	(curr-ns &rest modifiers) `(progn
+	(defq curr-ns-syms (ns-symbols-only ,curr-ns))
+	(defq mod-len (length ,modifiers))
+	(defq exportable-syms (filter
+						(fn (x) (progn
+						(defq ns-str (str x))
+						(not (str-starts-with "-" ns-str)))) curr-ns-syms))
+	(if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
+	(if (= 0 mod-len)
+		(core::for sym exportable-syms (vec-push! *ns-exports* sym)) ;;return all symbols
+		(loop (mod syms) (modifiers exportable-syms)
+			(if (empty-seq? mod)
+				syms
+				(recur (rest mod) (filter (first mod) syms)))))))
+
 (defmacro ns-import
 "Import any symbols exported from namespace into the current namespace.
 
@@ -70,9 +93,9 @@ Section: namespace"
 			(apply def import)))))))
 
 (defmacro ns-symbols-only
-	"Get list of symbols created in current namespace exluding all imported
+	"Get list of symbols created in provided namespace, sym, exluding all imported
 	symbols. All imported symbols defaults to all of the symbols from all of the
-	namespaces (ns-list). Optionally, pass in a list of symbols representing
+	namespaces (ns-list). Optionally, pass in a N symbols representing
 	namespaces whose imported symbols should be excluded. This function
 	intentionally defines nothing so as to avoid polluting the calling
 	namespace.
@@ -366,4 +389,4 @@ Example:
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import ns-symbols-only setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? ->> ->))
+(ns-export '(defmacro setmacro ns-export ns-auto-export ns-import ns-symbols-only setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? ->> ->))
