@@ -6,6 +6,16 @@
 (core::ns-import 'core)
 (ns-import 'shell)
 
+(defn filter-user-undocable-forms (sym-list)
+	(filter (fn (x)
+		(and (not (= x 'custom-lisp-config))
+			(not (= x '*repl-settings*))
+			(not (= x '__completion_hook))
+			(not (= x '__line_handler))
+			(not (= x '__exec_hook))
+				(not (= x '__prompt))))
+			sym-list))
+
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and
