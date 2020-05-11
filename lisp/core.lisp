@@ -69,6 +69,19 @@ Section: namespace"
 			(vec-setnth! 1 (to-symbol (str ,namespace "::" sym)) import)
 			(apply def import)))))))
 
+(defmacro ns-symbols-only
+	"Get list of symbols created in current namespace exluding all imported
+	symbols. This function intentionally defines nothing so as to avoid
+	polluting the calling namespace.
+	Section: namespace"
+	(sym)
+	`(loop (symbols namespaces) ((ns-symbols ,sym) (filter (fn (x) (not (= x (str ,sym)))) (ns-list)))
+		(if (empty-seq? namespaces)
+			symbols
+			(recur
+				(filter (fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x))) symbols)
+				(rest namespaces)))))
+
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression
 
@@ -346,4 +359,4 @@ Example:
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? ->> ->))
+(ns-export '(defmacro setmacro ns-export ns-import ns-symbols-only setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? ->> ->))
