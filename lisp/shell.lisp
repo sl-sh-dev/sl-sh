@@ -3,67 +3,136 @@
 
 ;;; Macros to make working with the shell easier.
 
-;; Create an alias, intended to be used with executables not lisp code (use defn for that).
-(defmacro alias (name body) (progn
+(defmacro alias
+"
+Usage: (alias name body) or (alias name docstring body).
+
+Create an alias, intended to be used with executables not lisp code (use defn
+for that).
+
+Section: shell
+"
+	(name &rest args) (progn
+	(defq usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
-	`(defmacro ,name (&rest args)
-		(append (quote ,body) args))))
+	(match (length args)
+		(2 (progn
+			(defq docstring (vec-nth 0 args))
+			(defq body (vec-nth 1 args))
+			`(defmacro ,name ,docstring (&rest ars)
+				(append (quote ,body) ars))))
+		(1 (progn
+			(defq body (vec-nth 0 args))
+			`(defmacro ,name (&rest ars)
+				(append (quote ,body) ars))))
+		(0 (err usage))
+		(nil (err usage)))))
 
 ;; Remove an alias, this should be used instead of a raw undef for aliases.
 (defn unalias (name) (progn
 	(shell::unregister-alias name)
 	(undef name)))
 
-;; Redirect stdout to file, append the output.
-(defmacro out>> (file body)
+(defmacro out>>
+"
+Redirect stdout to file, append the output.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stdout* ,file ,body)
 		(dyn '*stdout* (open ,file :create :append) ,body)))
 
-;; Redirect stdout to file, truncate the file first.
-(defmacro out> (file body)
+(defmacro out>
+"
+Redirect stdout to file, truncate the file first.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stdout* ,file ,body)
 		(dyn '*stdout* (open ,file :create :truncate) ,body)))
 
-;; Redirect stderr to file, append the output.
-(defmacro err>> (file body)
+(defmacro err>>
+"
+Redirect stderr to file, append the output.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stderr* ,file ,body)
 		(dyn '*stderr* (open ,file :create :append) ,body)))
 
-;; Redirect stderr to file, truncate the file first.
-(defmacro err> (file body)
+(defmacro err>
+"
+Redirect stderr to file, truncate the file first.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stderr* ,file ,body)
 		(dyn '*stderr* (open ,file :create :truncate) ,body)))
 
-;; Redirect both stdout and stderr to the same file, append the output.
-(defmacro out-err>> (file body)
+(defmacro out-err>>
+"
+Redirect both stdout and stderr to the same file, append the output.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
 		(dyn '*stdout* (open ,file :create :append) (dyn '*stderr* *stdout* ,body))))
 
-;; Redirect both stdout and stderr to the same file, truncate the file first.
-(defmacro out-err> (file body)
+(defmacro out-err>
+"
+Redirect both stdout and stderr to the same file, truncate the file first.
+
+Section: shell
+"
+	(file body)
 	`(if (file? ,file)
 		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
 		(dyn '*stdout* (open ,file :create :truncate) (dyn '*stderr* *stdout* ,body))))
 
-;; Redirect stdout to null (/dev/null equivelent).
-(defmacro out>null (body)
+(defmacro out>null
+"
+Redirect stdout to null (/dev/null equivelent).
+
+Section: shell
+"
+	(body)
 	`(dyn '*stdout* (open "/dev/null" :write) ,body))
 
-;; Redirect stderr to null (/dev/null equivelent).
-(defmacro err>null (body)
+(defmacro err>null
+"
+Redirect stderr to null (/dev/null equivelent).
+
+Section: shell
+"
+(body)
 	`(dyn '*stderr* (open "/dev/null" :write) ,body))
 
-;; Redirect both stdout and stderr to null (/dev/null equivelent).
-(defmacro out-err>null (body)
+(defmacro out-err>null
+"
+Redirect both stdout and stderr to null (/dev/null equivelent).
+
+Section: shell
+"
+	(body)
 	`(dyn '*stdout* (open "/dev/null" :write) (dyn '*stderr* *stdout* ,body)))
 
-;; Shorthand for pipe builtin.
-(defmacro | (&rest body)
+(defmacro |
+"
+Shorthand for pipe builtin.
+
+Section: shell
+"
+	(&rest body)
 	`(pipe ,@body))
 
 (defq pushd nil)
@@ -74,34 +143,69 @@
 (defq set-dirs-max nil)
 ;; Scope to contain then pushd/popd/dirs functions.
 (let ((dir_stack (make-vec 20)) (dir_stack_max 20))
-	;; Push current directory on the directory stack and change to new directory.
-	(setfn pushd (dir) (if (form (cd dir))
+	(setfn pushd
+		"
+		Push current directory on the directory stack and change to new directory.
+
+		Section: shell
+		"
+		(dir) (if (form (cd dir))
 		(progn
 			(vec-push! dir_stack $OLDPWD)
 			(if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
 			t)
 		nil))
-	;; Pop first directory from directory stack and change to it.
-	(setfn popd () (if (> (length dir_stack) 0)
+	(setfn popd
+		"
+		Pop first directory from directory stack and change to it.
+
+		Section: shell
+		"
+		() (if (> (length dir_stack) 0)
 		(cd (vec-pop! dir_stack))
 		(println "Dir stack is empty")))
-	;; List the directory stack.
-	(setfn dirs ()
+	(setfn dirs
+		"
+		List the directory stack.
+
+		Section: shell
+		"
+		()
 		(for d dir_stack (println d)))
-	;; Return the vector of directories.
-	(setfn get-dirs () dir_stack)
-	;; Clears the directory stack.
-	(setfn clear-dirs ()
+	(setfn get-dirs
+		"
+		Return the vector of directories.
+
+		Section: shell
+		"
+		() dir_stack)
+	(setfn clear-dirs
+		"
+		Clears the directory stack.
+
+		Section: shell
+		"
+		()
 		(vec-clear! dir_stack))
-	;; Sets the max number of directories to save in the stack.
-	(setfn set-dirs-max (max)
+	(setfn set-dirs-max
+		"
+		Sets the max number of directories to save in the stack.
+
+		Section: shell
+		"
+		(max)
 		(if (and (= (type max) "Int")(> max 1))
 			(setq dir_stack_max max)
 			(err "Error, max must be a positive Int greater then one"))))
 
 
-;; Like let but sets environment variables that are reset after the macro finishes.
-(defmacro let-env (vals &rest let_body)
+(defmacro let-env
+"
+Like let but sets environment variables that are reset after the macro finishes.
+
+Section: shell
+"
+	(vals &rest let_body)
 	((fn (params bindings olds) (progn
 		(fori idx el vals
 			(if (= 1 (length el))
@@ -154,15 +258,27 @@
 (def '*bg-cyan* "\x1b[46m")
 (def '*bg-white* "\x1b[47m")
 
-;; given 3 numbers 0-255 representing RGB values,
-;; return corresponding ANSI font color code
-(defn fg-color-rgb (R G B)
-  (get-rgb-seq R G B :font))
+(defn fg-color-rgb
+"
+Usage: (fg-color-rgb red-val green-val blue-val)
 
-;; given 3 numbers 0-255 representing RGB values,
-;; return corresponding ANSI background color code
-(defn bg-color-rgb (R G B)
-  (get-rgb-seq R G B :bkrd))
+Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+
+Section: shell
+"
+	(R G B)
+		(get-rgb-seq R G B :font))
+
+(defn bg-color-rgb
+"
+Usage: (bg-color-rgb red-val green-val blue-val)
+
+Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+
+Section: shell
+"
+	(R G B)
+		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
       (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
@@ -171,8 +287,13 @@
              (:bkrd (make-color 48))
              (nil (make-color 38)))))
 
-;; True if the supplied command is an alias for a system command.
-(defmacro sys-alias? (com) `(progn
+(defmacro sys-alias?
+"
+True if the supplied command is an alias for a system command.
+
+Section: shell
+"
+	(com) `(progn
 	(def 'ret nil)
 	(def 'val (to-symbol ,com))
 	(if (def? val)
@@ -182,8 +303,13 @@
 		(set 'ret (sys-command? (symbol-name (first expansion))))))
 	ret))
 
-;; True if the supplied command is a system command.
-(defn sys-command? (com) (progn
+(defn sys-command?
+"
+True if the supplied command is a system command.
+
+Section: shell
+"
+	(com) (progn
 	(def 'ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
 		(if (fs-exists? com) (set 'ret t))
@@ -200,9 +326,29 @@
 (defq unregister-alias nil)
 (defq alias? nil)
 (let ((alias (make-hash)))
-	(setfn register-alias (name) (hash-set! alias name t))
-	(setfn unregister-alias (name) (hash-remove! alias name))
-	(setfn alias? (name) (hash-haskey alias name)))
+	(setfn register-alias
+		"
+		Registers an alias to the current scope. Useful if unregistering or
+		ability to know whether an alias has been registered is desirable.
+
+		Section: shell
+		"
+		(name) (hash-set! alias name t))
+	(setfn unregister-alias
+		"
+		Unregisters an alias, removing it from scope.
+
+		Section: shell
+		"
+		(name) (hash-remove! alias name))
+	(setfn alias?
+		"
+		Provides boolean value confirming or denying given alias' presence
+		in set of registered aliases.
+
+		Section: shell
+		"
+		(name) (hash-haskey alias name)))
 
 ; These will be imported with syntax-on (ie copied into another namespace).
 ; Since syntax-on is a macro these copies are what will be read/used in that
@@ -215,8 +361,13 @@
 (defq tok-string-color shell::*fg-magenta*)
 (defq tok-invalid-color shell::*fg-red*)
 
-;; Turn on syntax highlighting at the repl.
-(defmacro syntax-on  () '(progn
+(defmacro syntax-on
+"
+Turn on syntax highlighting at the repl.
+
+Section: shell
+"
+() '(progn
 ; Syntax highlight the supplied line.
 (def '__line_handler nil)
 (let ((plev 0)
@@ -330,11 +481,36 @@
 		(str out)))
 		nil)))
 
-;; Turn off syntax highlighting at the repl.
-(defmacro syntax-off () '(undef '__line_handler))
+(defmacro syntax-off
+"
+Turn off syntax highlighting at the repl.
+
+Section: shell
+"
+	() '(undef '__line_handler))
 
 (load "endfix.lisp")
-(defmacro endfix-on () '(def '__exec_hook shell::endfix-hook))
+(defmacro endfix-on "
+	Allows use of infix notation for common shell forms. The following is the
+	complete mapping in lisp/endfix.lisp of all supported infix operators and
+	the corresponding sl-sh function they map to:
+		'|| 'or
+		'| '|
+		'@@ 'progn (@@ is used instead of ; because ; is a comment in lisp)
+		'&& 'and
+		'out> 'out>
+		'out>> 'out>>
+		'err> 'err>
+		'err>> 'err>>
+		'out>null 'out>null
+		'out-err> 'out-err>
+		'out-err>> 'out-err>>
+		'out-err>null 'out-err>null
+
+
+	Section: shell
+"
+	() '(def '__exec_hook shell::endfix-hook))
 
 (ns-export '(
 	alias

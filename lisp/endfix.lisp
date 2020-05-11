@@ -1,5 +1,6 @@
 ;; exec hook fcn {{{
 
+;; TODO move this functionality explanation to a docstring?
 ;; fcnality
 ;; 1. entering 1 arg on the CLI that is a valid directory results in changing
 ;;	to that directory.
@@ -16,6 +17,7 @@
 ;; in lisp that indicates a comment.
 
 ;; TODOS gpwclark
+;; 0. handle-process failing in evaluation?
 ;; 1. support things like $2la for second to last arg, $3la, etc..
 ;; 2. organize fcns
 ;; 3. use docstrings

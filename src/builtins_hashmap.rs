@@ -333,12 +333,14 @@ pub fn add_hash_builtins<S: BuildHasher>(
         interner.intern("make-hash"),
         Rc::new(Expression::make_function(
             builtin_make_hash,
-            "Usage (make-hash associations?)
+            "Usage: (make-hash associations?)
 
 Make a new hash map.
 
 If associations is provided (makes an empty map if not) then it is a list of
 pairs (key . value) that populate the intial map.
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash))
@@ -364,9 +366,11 @@ Example:
         interner.intern("hash-set!"),
         Rc::new(Expression::make_function(
             builtin_hash_set,
-            "Usage (hash-set! hashmap key value)
+            "Usage: (hash-set! hashmap key value)
 
 Add or update a hashmap key's value.  This is a destructive form!
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash))
@@ -401,9 +405,11 @@ Example:
         interner.intern("hash-remove!"),
         Rc::new(Expression::make_function(
             builtin_hash_remove,
-            "Usage (hash-remove! hashmap key)
+            "Usage: (hash-remove! hashmap key)
 
 Remove a key from a hashmap.  This is a destructive form!
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
@@ -428,9 +434,11 @@ Example:
         interner.intern("hash-get"),
         Rc::new(Expression::make_function(
             builtin_hash_get,
-            "Usage (hash-get hashmap key)
+            "Usage: (hash-get hashmap key)
 
 Get a value for a key from a hashmap.
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
@@ -446,9 +454,11 @@ Example:
         interner.intern("hash-haskey"),
         Rc::new(Expression::make_function(
             builtin_hash_haskey,
-            "Usage (hash-haskey hashmap key)
+            "Usage: (hash-haskey hashmap key)
 
 Checks if a key is in a hashmap.
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
@@ -471,9 +481,11 @@ Example:
         interner.intern("hash-keys"),
         Rc::new(Expression::make_function(
             builtin_hash_keys,
-            "Usage (hash-keys hashmap)
+            "Usage: (hash-keys hashmap)
 
 Returns a vector of all the hashmaps keys.  The keys will be unordered.
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
@@ -491,9 +503,11 @@ Example:
         interner.intern("hash-clear!"),
         Rc::new(Expression::make_function(
             builtin_hash_clear,
-            "Usage (hash-clear! hashmap)
+            "Usage: (hash-clear! hashmap)
 
 Clears a hashmap.  This is a destructive form!
+
+Section: hashmap
 
 Example:
 (def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))

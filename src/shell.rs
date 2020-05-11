@@ -56,6 +56,8 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
 
 Set the a list of paths to search for loading scripts with the load form.
 
+Section: scripting
+
 Example:
 ;(set '*load-path '(\"/path\"))
 ;(load \"script-in-path\")
@@ -231,7 +233,7 @@ fn handle_result(
             if !environment.stack_on_error {
                 if let Some(exp) = &environment.error_expression {
                     let exp = exp.clone();
-                    eprintln!("Error evaluting:");
+                    eprintln!("Error evaluating:");
                     let stderr = io::stderr();
                     let mut handle = stderr.lock();
                     if let Err(err) = exp.pretty_printf(environment, &mut handle) {

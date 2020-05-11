@@ -3,7 +3,11 @@
 (ns-import 'shell)
 
 ;; completions {{{
-(defn get-completions-src ()
+
+(defn get-completions-src
+	"Script used to get bash completions.
+	Section: bash-completions"
+	()
 	(str "
 		#
 		# Author: Brian Beffa <brbsix@gmail.com>
@@ -60,31 +64,39 @@
 		}
 	"))
 
-	(defn get-bash-completion (to-complete)
-		(str-split
-			"\n"
-			(str-trim
-				(str
-					(bash -c (str (get-completions-src) "
+(defn get-bash-completion
+	"given a string, (theoretically one taken from the repl) list possible completions
+	Section: bash-completions"
+	(to-complete)
+	(str-split
+		"\n"
+		(str-trim
+			(str
+				(bash -c (str (get-completions-src) "
 					load_extra_completions_only \"" to-complete "\""))))))
 
-	(defn check-bash-completion (args)
-		(let ((arg-str (str-cat-list " " args)))
-			(progn
-				(defq raw-list-of-completions (get-bash-completion arg-str))
-				(if (and
-						(= 1 (length raw-list-of-completions))
-						(str-empty? (first raw-list-of-completions)))
-					nil
-					raw-list-of-completions))))
+(defn check-bash-completion
+	"
+	Take args vec from repl and get list of completions that match.
+	Section: bash-completions"
+	(args)
+	(let ((arg-str (str-cat-list " " args)))
+		(progn
+			(defq raw-list-of-completions (get-bash-completion arg-str))
+			(if (and
+					(= 1 (length raw-list-of-completions))
+					(str-empty? (first raw-list-of-completions)))
+				nil
+				raw-list-of-completions))))
 
-	;; Completion hooks, the match is for the command and then custom completions can be returned.
-	(defn __completion_hook (&rest args)
-		(match (first args)
-			("cd" 'default)
-			("ls" 'default)
-			(nil
-				(progn
-					(defq possible-completions (check-bash-completion args))
-					(if (= nil possible-completions) 'default possible-completions)))))
+;; Completion hooks, the match is for the command and then custom completions can be returned.
+(defn __completion_hook (&rest args)
+	(match (first args)
+		("cd" 'default)
+		("ls" 'default)
+		(nil
+			(progn
+				(defq possible-completions (check-bash-completion args))
+				(if (= nil possible-completions) 'default possible-completions)))))
+
 ;; }}}

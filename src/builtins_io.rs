@@ -379,6 +379,8 @@ Options are:
     :create-new
     :on-error-nil
 
+Section: file
+
 Example:
 (write-line (open \"/tmp/slsh-tst-open.txt\" :create :truncate) \"Test Line One\")
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
@@ -393,6 +395,8 @@ Example:
             "Usage: (close file)
 
 Close a file.
+
+Section: file
 
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
@@ -413,6 +417,8 @@ Example:
 
 Flush a file.
 
+Section: file
+
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Three\")
@@ -431,6 +437,8 @@ Example:
             "Usage: (read-line file) -> string
 
 Read a line from a file.
+
+Section: file
 
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
@@ -456,6 +464,8 @@ Read a file or string and return the list representation.
 Unlike most lisp readers this one will put loose symbols in a list (i.e. you
 enter things at the repl without the enclosing parens).
 
+Section: file
+
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"(1 2 3)\")
@@ -479,6 +489,8 @@ Example:
 
 Write a line to a file.
 
+Section: file
+
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Write Line\")
@@ -497,6 +509,8 @@ Example:
             "Usage: (write-string file string)
 
 Write a string to a file.
+
+Section: file
 
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))

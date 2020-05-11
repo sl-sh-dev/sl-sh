@@ -3,21 +3,21 @@
 (ns-import 'shell)
 
 ;; gpwclark TODOs
-;; - remind slsh bdfl to make error-stack-on an envronment variable so error-stack-on can be automatic for scripts
-;; finish writing script that runs tests.
+;; getopts!
+;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
+;; - get slsh in AUR
 ;; USE empty-seq? instead of (when not nil) for looping over list
 ;; - range? fcn
 ;; - make cond macro?
 ;; - need clojure's threading macro support but you know, we'll call it
-;; "weaving" (which is sometimes used in AOP but not nearly as overlaoded as
-;; the word "thread" in programming.)
+;;	"weaving" (which is sometimes used in AOP but not nearly as overlaoded as
+;;	the word "thread" in programming.)
 ;; - bash completion not working with git checkout and filepaths?
 ;; - rewrite bash so we don't have gpl in here?
 ;; - CI on github? possible?
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - address exec-hook.lisp stuff
-;; - write some "tests" at bottom of each 'critical' file to make sure it's in
-;; working order, e.g. bash-completions & exec-hook
+
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
@@ -25,158 +25,305 @@
 ;; overrides exec hook to use endfix notation
 (endfix-on)
 
-;; helpers {{{
-	(defn all-items-by-whitespace (producer)
-		(str-trim (str (| (producer) (tr "\n" " ") (tr -s "[:blank:]")))))
+;; shell helpers {{{
+	(defn dush
+		"With no arguments: alias for du ./* -sh
+		With any args: provides size of each provided argument
+		Section: user-shell"
+		(&rest paths)
+		(if (= 0 (length paths))
+			(du ./* -sh)
+			(for path paths (du path -sh))))
+
+	(defn pgz
+		"Parallelized gzip.
+		cores:
+			use lscpu to determine # of cores on box
+		compression-ratio:
+			- 1 fastest speed, worst compression
+			- 9 slowest speed, most compression
+			- default is 6
+
+		Section: user-shell"
+		(target-name cores compression-ratio &rest dirs)
+			(out>
+				target-name
+				(|
+					(eval (str "tar cf - " (str-cat-list " " dirs)))
+					(eval (str "pigz  -p " cores  " -" compression-ratio)))))
+	(defn dpgz
+	"Parallelized un gzip.
+	cores:
+		use lscpu to determine # of cores on box
+	Section: user-shell"
+			(target-name cores)
+				(pigz --keep --decompress --processes cores target-name))
+
+	(defn fullfp
+	"Give me a relative filepath and I'll give you an absolute filepath!
+	Section: user-shell"
+		(filepath)
+		(find $PWD -name filepath))
+
+	(defn mrf
+		"most recent files. return ordered list (oldest -> newest) of files in current working dir
+		Section: user-shell"
+		()
+		(str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))
+
+	(defn lftail
+		"Provide string to filter results of ls. Newest file that contains
+		that string is then \"tail -f\"'d
+
+		Section: user-shell"
+		(str-to-tail-f) (progn
+		(defq matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
+		(println "list match: " matching-list)
+		(defq tail-target (first matching-list))
+		(println "tail -f " tail-target)
+		(tail -f tail-target)))
+
+	(defn cdt
+	"cd into the directory with the most recent timestamp
+	Section: user-shell
+	"
+		()
+		(progn
+			(defq most-recent-dir
+				(first (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf))))
+			(eval `(cd ,most-recent-dir))))
+
+;; stdin to clipboard
+(defmacro sc
+	"pipe things into this and they'll be in your clipboard.
+	Section: user-shell
+	"
+	()
+	(str-trim (xclip -selection c)))
+
+(defmacro this
+	"
+	put my pwd in my clipboard
+	Section: user-shell
+	"
+	()
+	`(| (pwd) (sc)))
+
+(defn zh
+	"
+	fuzzy zsh history search
+	Section: user-shell
+	"
+	()
+	(progn
+		(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
+
+(defn stripcolor
+	"remove all color codes from any strings
+	Section: user-shell"
+	(&rest args)
+	(if (< (length args) 2)
+		(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
+		(err "Only accepts 0 or 1 arguments")))
+
+;; all find . -iname &rest
+(defn ifind
+	"pass in a string. list all files in vim whose filenames contain that string.
+	Section: user-shell"
+	(&rest args)
+	(if (< (length args) 2)
+		(| (find . -iname (str (nth 0 args))))
+		(err "Only accepts 0 or 1 arguments")))
+
+
+;;results feed into vim
+(defn vimifind
+	"pass a string. open all files in vim whose filenames contain that string.
+	Section: user-shell"
+	(&rest args)
+	(if (< (length args) 2)
+		(let
+			((vimargs (str-split
+				" "
+				(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
+			(progn
+				(eval `(vim ,@vimargs))))
+		(err "Only accepts 0 or 1 arguments")))
+
+;; }}}
+
+;; java helpers {{{
+
+;;gradle build
+(defn g
+	"gradle alias that writes all output to \"last_build.log\" and triggers a
+	notification letting you know if the command succeeded or failed.
+
+	Section: java"
+	(&rest args)
+	(let ((log-out-file "last_build.log"))
+	(progn
+		(|
+			(defq gradle-proc (eval (append '(./gradlew) args)))
+			(tee log-out-file)
+		)
+		(defq gradle-ret-code (wait gradle-proc))
+		(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+		(defq proj-name (str (basename $PWD)))
+		(if (= 0 gradle-ret-code)
+			(nss-pass (str "PASS! - " proj-name) log-out-txt)
+			(nss-fail (str "FAIL! - " proj-name) log-out-txt))
+		(= 0 gradle-ret-code))))
+
+(defmacro javad
+	"Start the jvm in debug mode, will hang until a debugger connects to jvm on port 5005
+	Section: java"
+	(&rest args)
+		`(java "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005" ,@args))
 ;; }}}
 
 
 ;; custom env settings {{{
+
+;; obviously...
 	(export 'EDITOR "vim")
-	;; use vi keybindings on cli
+
+;; use vi keybindings on cli
 	(hash-set! *repl-settings* :keybindings :vi)
 	(hash-set! *repl-settings* :vi_esc_sequence '("jk" 200))
 	(hash-set! *repl-settings* :vi-normal-prompt-prefix (str (bg-color-rgb 255 140 0)))
 	(hash-set! *repl-settings* :vi-normal-prompt-suffix (str shell::*bg-default*))
 
-	;; syntax highlighting
+;; syntax highlighting
 	(syntax-on)
 
-	;; tweak token colors
+;; tweak token colors
 	(setq tok-default-color shell::*fg-magenta*)
 	(setq tok-sys-command-color shell::*fg-green*)
 	(setq tok-string-color (fg-color-rgb 255 128 0))
 
+;; you deserve all the information
 	(error-stack-on)
 
+;; you never know
 	(hash-set! *repl-settings* :max-history 10000)
+
 ;; }}}
 
 ;; quality of shell life {{{
-	(alias :q (exit))
+(alias ls
+	"alias ls to a colorified version.
+	Section: user-shell"
+	(lsd))
 
-	(alias ls (lsd))
+;; betterer ls
+(alias ll
+	"ls -haltr shorcut
+	Section: user-shell"
+	(lsd -haltr))
 
-	;; betterer ls
-	(alias ll (lsd -haltr))
-
-	;; Replace cd with a version that also runs ls after.
-	;; Macro to let un-expanded args go to root::cd.
-	(defmacro cd (&rest args) (progn
+;; Replace cd with a version that also runs ls after.
+;; Macro to let un-expanded args go to root::cd.
+(defmacro cd
+	"(= 'cd (progn (cd) (ls))) ;; life changing
+	Section: user-shell"
+	(&rest args) (progn
 		(if (= (length args) 0)
 			(and (root::cd) (ls .))
 			(if (= (length args) 1)
 				(and (root::cd (first args)) (ls .))
 				(err "I take zero or one argument.")))
 		nil))
-	;; Abuse register-alias to have better syntax highlighting for cd.
+	;; use register-alias to have better syntax highlighting for cd.
 	(register-alias 'cd)
-
-	;; cd into the directory with the most recent timestamp
-	(defn cdt ()
-		(progn
-			(defq most-recent-dir (first (filter fs-dir? (str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))))
-			(eval `(cd ,most-recent-dir))))
-
-	;; stdin to clipboard
-	(alias sc (str-trim (xclip -selection c)))
-
-	;;put my pwd in my clipboard
-	(alias this (| (pwd) (sc)))
-
-	;;gradle build
-	(defn g (&rest args)
-		(let ((log-out-file "last_build.log"))
-		(progn
-			(|
-				(defq gradle-proc (eval (append '(./gradlew) args)))
-				(tee log-out-file)
-			)
-			(defq gradle-ret-code (wait gradle-proc))
-			(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
-			(defq proj-name (str (basename $PWD)))
-			(if (= 0 gradle-ret-code)
-				(nss-pass (str "PASS! - " proj-name) log-out-txt)
-				(nss-fail (str "FAIL! - " proj-name) log-out-txt))
-			(= 0 gradle-ret-code))))
-
-	;; access zsh history search
-	(defn zh ()
-		(progn
-			(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
-			(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
-
-	(defn stripcolor (&rest args)
-		(if (< (length args) 2)
-			(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
-			(err "Only accepts 0 or 1 arguments")))
-
-	;; all find . -iname &rest
-	(defn ifind (&rest args)
-	(if (< (length args) 2)
-		(| (find . -iname (str (nth 0 args))))
-		(err "Only accepts 0 or 1 arguments")))
-
-
-	;;results feed into vim
-	(defn vimifind (&rest args)
-		(if (< (length args) 2)
-			(let
-				((vimargs (str-split
-					" "
-					(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
-				(progn
-					(eval `(vim ,@vimargs))))
-			(err "Only accepts 0 or 1 arguments")))
 ;; }}}
 
 ;; quality of life {{{
-	;; check spelling
-	(defn spl (word)
+	(defn spl
+	"Give it a spelling of a word, it will tell you what words are spelled like it.
+	Section: user-shell
+	"
+	(word)
 		(println (str (| (echo (str word)) (aspell -a)))))
 
-	(defn weather()
+(defn weather
+	"print weather in terminal
+	Section: user-shell"
+		()
 		(curl wttr.in))
 ;; }}}
 
 ;; notification helpers {{{
-	(defn persist-nss (&rest args)
+
+(defn persist-nss
+	"provide persistent notification via notify-send and libnotify
+	Section: notify"
+	(&rest args)
 		(if (= (length args) 2)
 			(eval `(notify-send -t 0 ,@args --icon=system-software-update))
 			(err "takes 2 arguments")))
 
-	(defn nss-pass (&rest args)
-		(if (= (length args) 2)
-			(eval `(notify-send -t 0 ,@args --icon=face-wink))
-			(err "takes 2 arguments")))
+(defn nss-pass
+	"provide persistent success notification via notify-send and libnotify
+	Section: notify"
+	(&rest args)
+	(if (= (length args) 2)
+		(eval `(notify-send -t 0 ,@args --icon=face-wink))
+		(err "takes 2 arguments")))
 
-	(defn nss-fail (&rest args)
+(defn nss-fail
+	"provide persistent failure notification via notify-send and libnotify
+	Section: notify"
+	(&rest args)
 		(if (= (length args) 2)
 			(eval `(notify-send -t 0 ,@args --icon=process-stop))
 			(err "takes 2 arguments")))
 
-	;; fun, persistent notify send!
-	(defn pnss (&rest args)
-		(if (> (length args) 1)
-			(err "I take one fucking argument dude.")
-			(persist-nss (nth 0 args) (str (fortune)))))
+(defn pnss
+	"provide fun persistent notification via notify-send and libnotify
+	Section: notify"
+	(&rest args)
+	(if (> (length args) 1)
+		(err "I take one argument dude.")
+		(persist-nss (nth 0 args) (str (fortune)))))
 
-	;;tell me about it!
-	(defn tmai ()
-		(progn
-			(defq last-ret-val *last-status*)
-			(pnss (str "Last program exit status: " last-ret-val  "."))
-			last-ret-val))
+;;tell me about it!
+(defn tmai
+	"provide persistent notification of previous commands return code via notify-send and libnotify
+	Section: notify"
+	()
+	(progn
+		(defq last-ret-val *last-status*)
+		(pnss (str "Last program exit status: " last-ret-val  "."))
+		last-ret-val))
+
 ;; }}}
 
 ;; tmux aliases {{{
-	(alias tmuxls (tmux list-sessions))
 
-	(alias tmuxnew (tmux new -s))
+(defn tmuxls
+	"list tmux sessions
+	Section: tmux "
+	()
+	(tmux list-sessions))
 
-	(alias tmuxkill (tmux kill-session -t))
+(defn tmuxnew
+	"new named tmux session
+	Section: tmux"
+	()
+	(tmux new -s))
 
-	(defn tmuxopen (&rest args)
+(defn tmuxkill
+	"kill all tmux sessions
+	Section: tmux"
+	()
+	(tmux kill-session -t))
+
+(defn tmuxopen
+	"open existing named tmux session or create named session if it does not exist
+	Section: tmux"
+	(&rest args)
 		(if (= (length args) 1)
 			(progn
 				(defq tmux-ret-code (tmux a -t (first args)))
@@ -184,81 +331,172 @@
 					0
 					(tmuxnew (first args))))
 			(err "Takes one argument, name of tmux session to create.")))
+
 ;; }}}
 
 ;; time helpers {{{
-	;; epoch in milliseconds
-	(alias epochms (str-trim (| (date +%s%N) (cut -b1-13))))
 
-	(defn datest ()
-		(let-env ((TZ ":America/New_York"))
-		 (date)))
+;; epoch in milliseconds
+(defn epochms
+	"epoch in milliseconds
+	Section: time"
+	()
+	(str-trim (| (date +%s%N) (cut -b1-13))))
 
-	;; takes epock IN SECONDS and converts to nice date time
-	(defn fromepoch (time)
-		(date -d (str "@" time)))
+(defn datest
+	"human readable eastern time zone
+	Section: time"
+	()
+	(let-env ((TZ ":America/New_York"))
+	 (date)))
 
-	(defn timestamp ()
+(defn fromepoch
+	"
+	takes epock IN SECONDS and converts to nice date time
+	Section: time"
+	(time)
+	(date -d (str "@" time)))
+
+(defn timestamp
+	"simple timestamp for use with naming
+	Section: time"
+	()
 	(date +%Y%m%d_%H%M%S))
+
 ;; }}}
 
 ;; prompt {{{
-	(defn get_pwd ()
-		(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
 
-	;;TODO maybe a version of this that strips out all non first/last char consononants
-	(defn path_list_trunc (plist)
+(defn get_pwd
+	"pwd but replaces home with ~
+	Section: prompt"
+	()
+	(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
+
+;;TODO maybe a version of this that strips out all non first/last char consononants
+(defn path_list_trunc
+	"take a path string abbreviates it
+	Section: prompt"
+	(plist)
 		(if (> (length plist) 1)
 			(if (> (length (first plist)) 0)
 				(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
 				(path_list_trunc (rest plist)))
 			plist))
 
-	(defn smaller_path (dir)
-		(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
+(defn smaller_path
+	"take a path string abbreviates it
+	Section: prompt"
+	(dir)
+	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
 
-	(defn set_prompt_tail ()
-		(if (= *last-status* 0) "\x1b[39m❄ >\x1b[39m " (str "\x1b[31m(" *last-status* ")❄ >\x1b[39m ")))
+(defn set_prompt_tail
+	"used to grab return value of last command and put a non 0 error code in
+	the prompt for greater visibility.
+	Section: prompt"
+	()
+	(if (= *last-status* 0) "\x1b[39m❄ >\x1b[39m " (str "\x1b[31m(" *last-status* ")❄ >\x1b[39m ")))
 
-	(defn parse_git_branch () (let ((branch))
-		(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
-		(if (= branch "")
-			(str "")
-			(str "(" (str-trim branch) ")"))))
+(defn parse_git_branch
+	"if in git repo, get the name of the branch
+	Section: git"
+	() (let ((branch))
+	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
+	(if (= branch "")
+		(str "")
+		(str "(" (str-trim branch) ")"))))
 
-	;; prompt ensures
-	;;	1. always a new line above prompt
-	;;	2. if pushd has been used displays in reverse order dirs to popd
-	;;	3. current path
-	;;	4. if in git dir display current branch
-	;;	5. cursor on near empty line
-	(defn __prompt ()
-		(progn
-			;; set $la to be the last argument of the last command.
-			(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
-			(str
-				"\n"
-				(if (> (length (get-dirs)) 0)
-					(str (map! smaller_path (reverse (get-dirs))))
-					"")
-				"\n\r" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
-				(set_prompt_tail))))
+;; prompt ensures
+;;	1. always a new line above prompt
+;;	2. if pushd has been used displays in reverse order dirs to popd
+;;	3. current path
+;;	4. if in git dir display current branch
+;;	5. cursor on near empty line
+(defn __prompt ()
+	(progn
+		;; set $la to be the last argument of the last command.
+		(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
+		(str
+			"\n"
+			(if (> (length (get-dirs)) 0)
+				(str (map! smaller_path (reverse (get-dirs))))
+				"")
+			"\n\r" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+			(set_prompt_tail))))
+
 ;; }}}
 
 ;; i'm fun {{{
-	(println "		Hey, hey, hey. Don't be mean.")
-	(println "		We don't have to be mean because,")
-	(println "		remember, no matter where you go,")
-	(println "		there you are.")
-	(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
-	(intern-stats)
+
+(println "		Hey, hey, hey. Don't be mean.")
+(println "		We don't have to be mean because,")
+(println "		remember, no matter where you go,")
+(println "		there you are.")
+(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
+(intern-stats)
+
 ;; }}}
 
 ;; machine specific {{{
 
-(defq custom-lisp-config (str "~/.config/sl-sh/" (cat /etc/hostname) ".lisp"))
+(defq custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
 (if (fs-exists? custom-lisp-config)
 	(load custom-lisp-config)
-	(println (str shell::*fg-red* "Failed to load custom sl-sh config at " custom-lisp-config shell::*fg-default*)))
+	(println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 
-;;}}}
+;; }}}
+
+;; user ns docs {{{
+
+(pushd "~/development/slsh/docs/")
+(if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
+	(load "mk-docs.lisp")
+	(defn filter-non-user-forms (sym-list) (progn
+		(loop (sym-list namespaces) (sym-list '("root" "core" "shell"))
+			(if (empty-seq? namespaces)
+				sym-list
+				(progn
+					(setq sym-list (filter
+						(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
+						sym-list))
+					(recur sym-list (rest namespaces)))))))
+	(defn filter-undocable-forms (sym-list)
+		(filter (fn (x)
+			(and (not (= x 'custom-lisp-config))
+				(not (= x 'filter-non-user-forms))
+				(not (= x 'filter-undocable-forms))
+				(not (= x 'list-of-user-slsh-syms))
+				(not (= x '*repl-settings*))
+				(not (= x '__completion_hook))
+				(not (= x '__line_handler))
+				(not (= x '__exec_hook))
+				(not (= x '__prompt))))
+			sym-list))
+
+	;;TODO ideally this would live in mk-docs.lisp
+	;; and :user would be an option as param fo mkdocs::get-doc-list-for
+	(defn list-of-user-slsh-syms () (progn
+		(defq user-syms (list))
+		(for a-ns (filter
+					(fn (x) (not (in? '("root" "shell" "core" "mkdocs" "docparse" "docmd") x)))
+					(ns-list))
+			(append! user-syms (ns-symbols (to-symbol a-ns))))
+		(filter-undocable-forms (filter-non-user-forms user-syms))))
+
+	(defq all-docstrings
+		(map! (fn (x)
+			(progn
+				(doc (to-symbol x))))
+				(list-of-user-slsh-syms)))
+
+	;; check the last modified time of index.markdown and only do this if
+	; has not been done in some amount of time.
+	(mkdocs::make-md-file-with-docstrings
+		"index.markdown"
+		all-docstrings)
+		(println "Built docs!"))
+		nil) ;; (println "not building docs")
+
+(popd)
+
+;; }}}

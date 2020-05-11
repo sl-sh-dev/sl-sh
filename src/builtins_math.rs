@@ -44,6 +44,8 @@ pub fn add_math_builtins<S: BuildHasher>(
 
 Add a sequence of numbers.
 
+Section: math
+
 Example:
 (test::assert-equal 5 (+ 5))
 (test::assert-equal 5 (+ 5.0))
@@ -75,6 +77,8 @@ Example:
             "Usage: (* number+)
 
 Multiply a sequence of numbers.
+
+Section: math
 
 Example:
 (test::assert-equal 5 (* 5))
@@ -125,6 +129,8 @@ Example:
             "Usage: (- number+)
 
 Subtract a sequence of numbers.
+
+Section: math
 
 Example:
 (test::assert-equal 5 (- 5))
@@ -180,6 +186,8 @@ Example:
 
 Divide a sequence of numbers.  Requires at least two numbers.
 
+Section: math
+
 Example:
 (test::assert-equal 5 (/ 50 10))
 (test::assert-equal 5 (/ 50.0 10.0))
@@ -220,6 +228,8 @@ Example:
             "Usage: (% int int)
 
 Remainder from dividing first int by the second.
+
+Section: math
 
 Example:
 (test::assert-equal 0 (% 50 10))

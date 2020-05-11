@@ -199,6 +199,8 @@ pub fn add_pair_builtins<S: BuildHasher>(
  
 Create a pair with the provided car and cdr.
 
+Section: pair
+
 Example:
 (def 'tst-pair-one (join 1 2))
 (test::assert-equal 1 (car tst-pair-one))
@@ -216,6 +218,8 @@ Example:
 
 Create a proper list from pairs with items 0 - N.
 
+Section: pair
+
 Example:
 (test::assert-equal '(1 2 3) (list 1 2 3))
 ",
@@ -229,6 +233,8 @@ Example:
             "Usage: (car pair)
 
 Return the car (first item) from a pair.  If used on a proper list this will be the first element.
+
+Section: pair
 
 Example:
 (def 'tst-pairs-two (list 'x 'y 'z))
@@ -244,6 +250,8 @@ Example:
         Rc::new(Expression::make_function(builtin_cdr, "Usage: (cdr pair)
 
 Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
+
+Section: pair
 
 Example:
 (def 'tst-pairs-three (list 'x 'y 'z))
@@ -263,6 +271,8 @@ Destructive form thst replaces the car (first item) in a pair with a new express
 
 If used on a proper list will replace the first item.  Can be used on nil to
 create a pair (expression . nil).
+
+Section: pair
 
 Example:
 (def 'tst-pairs-three (list 'x 'y 'z))
@@ -287,6 +297,8 @@ Destructive form that replaces the cdr (second item) in a pair with a new expres
 
 If used on a proper list will replace everthing after the first item.
 Can be used on nil to create a pair (nil . expression).
+
+Section: pair
 
 Example:
 (def 'tst-pairs-five (list 'a 'b 'c))

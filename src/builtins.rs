@@ -1886,7 +1886,7 @@ pub fn builtin_block(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "block: Name must be a symbol (not evaluted).",
+                "block: Name must be a symbol (not evaluated).",
             ));
         };
         for arg in args {
@@ -1936,7 +1936,7 @@ pub fn builtin_return_from(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "return-from: Name should be a symbol or nil (not evaluted).",
+                "return-from: Name should be a symbol or nil (not evaluated).",
             ));
         };
         if let Some(exp) = args.next() {
@@ -2086,11 +2086,13 @@ pub fn add_builtins<S: BuildHasher>(
             builtin_eval,
             "Usage: (eval expression)
 
-Evalute the provided expression.
+Evaluate the provided expression.
 
 If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
 provided expression will be evaluated as part of call).
+
+Section: core
 
 Example:
 (def 'test-eval-one nil)
@@ -2108,7 +2110,9 @@ Example:
             builtin_fncall,
             "Usage: (fncall function arg0 ... argN)
 
-Call the provided function with the suplied arguments.
+Call the provided function with the supplied arguments.
+
+Section: core
 
 Example:
 (def 'test-fncall-one nil)
@@ -2127,6 +2131,8 @@ Example:
 
 Call the provided function with the suplied arguments, last is a list that will be expanded.
 
+Section: core
+
 Example:
 (def 'test-apply-one nil)
 (apply set '('test-apply-one \"ONE\"))
@@ -2143,6 +2149,8 @@ Example:
             "Usage: (unwind-protect protected cleanup*) -> [protected result]
 
 After evaluation first form, make sure the following cleanup forms run (returns first form's result).
+
+Section: core
 
 Example:
 (def 'test-unwind-one nil)
@@ -2175,6 +2183,8 @@ Example:
 
 Raise an error with the supplied string.
 
+Section: core
+
 Example:
 (def 'test-err-err (get-error (err \"Test Error\")))
 (test::assert-equal '#(:error \"Test Error\") test-err-err)
@@ -2189,6 +2199,8 @@ Example:
             "Usage: (load path) -> [last form value]
 
 Read and eval a file (from path- a string).
+
+Section: scripting
 
 Example:
 (def 'test-load-one nil)
@@ -2207,6 +2219,8 @@ Example:
             "Usage: (length expression) -> int
 
 Return length of suplied expression.
+
+Section: core
 
 Example:
 (test::assert-equal 0 (length nil))
@@ -2231,6 +2245,8 @@ Example:
             "Usage: (if condition then-form else-form?) -> [evaled form result]
 
 If then else conditional.
+
+Section: conditional
 
 Example:
 (def 'test-if-one
@@ -2258,6 +2274,8 @@ Example:
 
 Print the arguments (as strings) to *stdout*.
 
+Section: core
+
 Example:
 ; Use a file for stdout for test.
 (dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (print \"Print test out\"))
@@ -2273,6 +2291,8 @@ Example:
             "Usage: (println arg0 ... argN) -> nil
 
 Print the arguments (as strings) to *stdout* and then a newline.
+
+Section: core
 
 Example:
 ; Use a file for stdout for test.
@@ -2290,6 +2310,8 @@ Example:
 
 Print the arguments (as strings) to *stderr*.
 
+Section: core
+
 Example:
 ; Use a file for stderr for test.
 (dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (eprint \"eprint test out\"))
@@ -2305,6 +2327,8 @@ Example:
             "Usage: (eprintln arg0 ... argN) -> nil
 
 Print the arguments (as strings) to *stderr* and then a newline.
+
+Section: core
 
 Example:
 ; Use a file for stderr for test.
@@ -2323,6 +2347,8 @@ Build a formatted string from arguments.
 
 Arguments will be turned into strings.
 
+Section: core
+
 Example:
 (test::assert-equal \"stringsome\" (format \"string\" \"some\"))
 (test::assert-equal \"string\" (format \"string\" \"\"))
@@ -2338,7 +2364,9 @@ Example:
             builtin_progn,
             "Usage: (progn exp0 ... expN) -> expN
 
-Evalutate each form and return the last.
+Evaluatate each form and return the last.
+
+Section: core
 
 Example:
 (def 'test-progn-one nil)
@@ -2358,6 +2386,8 @@ Example:
             "Usage: (set symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
+
+Section: core
 
 Example:
 (def 'test-progn-one nil)
@@ -2384,6 +2414,8 @@ Example:
 
 Export a key and value to the shell environment.  Second arg will be made a string and returned.
 
+Section: shell
+
 Example:
 (test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
 (test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
@@ -2398,6 +2430,8 @@ Example:
             "Usage: (unexport symbol)
 
 Remove a var from the current shell environment.
+
+Section: shell
 
 Example:
 (test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
@@ -2415,6 +2449,8 @@ Example:
             "Usage: (def symbol expression) -> expression
 
 Adds an expression to the current scope.  Return the expression that was defined.
+
+Section: core
 
 Example:
 (def 'test-progn-one nil)
@@ -2445,6 +2481,8 @@ Example:
 
 Remove a symbol from the current scope (if it exists).
 
+Section: core
+
 Example:
 (def 'test-undef nil)
 (test::assert-true (def? 'test-undef))
@@ -2462,11 +2500,13 @@ Example:
 
 Creates a dynamic binding for key, assigns value to it and evals expression under it.
 
-The binding is gone once the dyn form ends.  The binding will take precedent over
-any other binding in any scope with that name for any form that evalute as a 
-result of the dynamic binging (for instance creating a dynamic binding for
+The binding is gone once the dyn form ends. The binding will take precedence over
+any other binding in any scope with that name for any form that evaluates as a
+result of the dynamic binding (for instance creating a dynamic binding for
 *stdout* will cause all output to stdout to use the new binding in any print's
 used indirectly).
+
+Section: core
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
@@ -2485,6 +2525,8 @@ Example:
 Convert a string, symbol, int or float to a symbol.
 
 If the symbol is new it will be interned.
+
+Section: core
 
 Example:
 (def 'test-to-symbol-sym nil)
@@ -2508,6 +2550,8 @@ Convert a symbol to its string representation.
 
 The string will be the symbol name as a string.
 
+Section: core
+
 Example:
 (def 'test-symbol-name-sym nil)
 (test::assert-true (string? (symbol-name 'test-symbol-name-sym)))
@@ -2520,7 +2564,12 @@ Example:
         interner.intern("fn"),
         Rc::new(Expression::make_special(
             builtin_fn,
-            "Create a function (lambda).",
+            "Usage: (fn (x) (x + 1))
+
+Create a function (lambda).
+
+Section: core
+",
             root,
         )),
     );
@@ -2531,6 +2580,8 @@ Example:
             "Usage: (quote expression) -> expression
 
 Return expression without evaluation.  The reader macro ' will expand to a quote form.
+
+Section: core
 
 Example:
 (test::assert-equal (list 1 2 3) (quote (1 2 3)))
@@ -2549,6 +2600,8 @@ Example:
 Return expression without evaluation.  The reader macro ` will expand to a bquote form.
 
 The bquote form (unlike quote) allows for symbol/form evaluation using , or ,@.
+
+Section: core
 
 Example:
 (test::assert-equal (list 1 2 3) (bquote (1 2 3)))
@@ -2574,7 +2627,9 @@ Example:
 
 Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
 
-The and form will stop evaluting when the first expression produces nil.
+The and form will stop evaluating when the first expression produces nil.
+
+Section: conditional
 
 Example:
 (test::assert-false (and nil (err \"and- can not happen\")))
@@ -2592,7 +2647,9 @@ Example:
 
 Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
 
-The or form will stop evaluting when the first expression produces non-nil.
+The or form will stop evaluating when the first expression produces non-nil.
+
+Section: conditional
 
 Example:
 (test::assert-true (or nil nil t (err \"and- can not happen\")))
@@ -2613,6 +2670,8 @@ Example:
 
 Return true if expression is nil.
 
+Section: conditional
+
 Example:
 (test::assert-true (not nil))
 (test::assert-false (not 10))
@@ -2629,6 +2688,8 @@ Example:
             "Usage: (null expression)
 
 Return true if expression is nil (null).
+
+Section: conditional
 
 Example:
 (test::assert-true (null nil))
@@ -2650,6 +2711,8 @@ Return true if symbol is defined.
 Expression will be evaluated and if a symbol or string it will look up that
 name in the symbol table and return true if it exists.
 
+Section: core
+
 Example:
 (def 'test-is-def t)
 (test::assert-true (def? 'test-is-def))
@@ -2665,7 +2728,12 @@ Example:
         interner.intern("macro"),
         Rc::new(Expression::make_function(
             builtin_macro,
-            "Define a macro.",
+            "Usage: (macro (&rest args) `(apply + ,@args))
+
+Define an anonymous macro.
+
+Section: core
+",
             root,
         )),
     );
@@ -2678,6 +2746,8 @@ Example:
 Expands a macro expression.  If that expansion is also a macro then expand it recursively.
 
 Just returns the expression if not a macro.
+
+Section: core
 
 Example:
 (test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro (defq xx \"value\")))
@@ -2711,6 +2781,8 @@ Expands a macro expression.  Only expand the first macro.
 
 Just returns the expression if not a macro.
 
+Section: core
+
 Example:
 (test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro1 (defq xx \"value\")))
 (test::assert-equal '(core::let
@@ -2741,6 +2813,8 @@ Expands a macro expression like expand-macro but also expand any embedded macros
 
 Just returns the expression if not a macro.
 
+Section: core
+
 Example:
 (test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro-all (defq xx \"value\")))
 (test::assert-equal '(
@@ -2766,7 +2840,9 @@ Example:
     );
     data.insert(
         interner.intern("recur"),
-        Rc::new(Expression::make_function(builtin_recur, "", root)),
+        Rc::new(Expression::make_function(builtin_recur, "Usage: (recur &rest)
+
+Section: core", root)),
     );
     data.insert(
         interner.intern("gensym"),
@@ -2778,6 +2854,8 @@ Generate a unique symbol.
 
 Gensym uses a prefix of gs@@ followed by an incrementing counter.
 It is useful to generate unique symbol names when writing macros (for instance).
+
+Section: core
 
 Example:
 (def 'test-gensym-one (gensym))
@@ -2802,6 +2880,8 @@ Example:
 
 Print list of jobs with ids.
 
+Section: shell
+
 Example:
 ;(jobs)
 t
@@ -2818,6 +2898,8 @@ t
 Put a job in the background.
 
 If no job id is specified use the last job.
+
+Section: shell
 
 Example:
 ;(bg)
@@ -2836,6 +2918,8 @@ Put a job in the foreground.
 
 If no job id is specified use the last job.
 
+Section: shell
+
 Example:
 ;(fg)
 t
@@ -2851,6 +2935,8 @@ t
 
 Produce executable version as string.
 
+Section: shell
+
 Example:
 (test::assert-true (string? (version)))
 ",
@@ -2865,6 +2951,8 @@ Example:
 
 Only execute system commands not forms within this form.
 
+Section: shell
+
 Example:
 (test::assert-equal '#(:error \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
@@ -2878,6 +2966,8 @@ Example:
             "Usage: (run-bg exp0 ... expN)
 
 Like progn except any system commands started within form will be in the background.
+
+Section: shell
 
 Example:
 ;(run-bg gitk)
@@ -2894,6 +2984,8 @@ t
 
 Like progn but do not execute system commands within this form.
 
+Section: shell
+
 Example:
 (test::assert-equal '#(:error \"Not a valid form true, not found.\") (get-error (form (true))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
@@ -2909,6 +3001,8 @@ Example:
 
 Within this form any undefined symbols become strings.
 
+Section: shell
+
 Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 ",
@@ -2922,6 +3016,8 @@ Example:
             "Usage: (exit code?)
 
 Exit shell with optional status code.
+
+Section: shell
 
 Example:
 ;(exit)
@@ -2939,6 +3035,8 @@ t
 
 Print the eval stack on error.
 
+Section: core
+
 Example:
 ;(error-stack-on)
 t
@@ -2953,6 +3051,8 @@ t
             "Usage: (error-stack-off)
 
 Do not print the eval stack on error.
+
+Section: core
 
 Example:
 ;(error-stack-off)
@@ -2971,6 +3071,8 @@ Evaluate each form (like progn) but on error return #(:error msg) instead of abo
 
 If there is no error will return the value of the last expression.
 
+Section: core
+
 Example:
 (test::assert-equal '#(:error \"Some Error\") (get-error (err \"Some Error\")))
 (test::assert-equal \"Some String\" (get-error \"Some String\"))
@@ -2985,6 +3087,8 @@ Example:
             "Usage: (doc symbol)
 
 Return the doc string for a symbol or nil if no string.
+
+Section: core
 
 Example:
 ;(doc 'car)
@@ -3001,6 +3105,8 @@ t
 
 Return the raw (unexpanded) doc string for a symbol or nil if no string.
 
+Section: core
+
 Example:
 ;(doc-raw 'car)
 t
@@ -3015,8 +3121,10 @@ t
             builtin_block,
             "Usage: (block name form*)
 
-Create a block with name (name is not evaluted), if no return-from encountered then
+Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like progn).
+
+Section: core
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3034,7 +3142,9 @@ Example:
             builtin_return_from,
             "Usage: (return-from name expression?)
 
-Causes enclosing block with name (name is not evaluted) to evaluate to expression.
+Causes enclosing block with name (name is not evaluated) to evaluate to expression.
+
+Section: core
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3054,6 +3164,8 @@ Example:
 
 Prints the stats for interned symbols.
 
+Section: core
+
 Example:
 ;(intern-stats)
 t
@@ -3069,6 +3181,8 @@ t
             "Usage: (meta-line-no)
 
 Line number from the file this came from.
+
+Section: core
 
 Example:
 ;(meta-line-no)
@@ -3086,6 +3200,8 @@ t
 
 Column number from the file this came from.
 
+Section: core
+
 Example:
 ;(meta-column-no)
 t
@@ -3101,6 +3217,8 @@ t
             "Usage: (meta-file-name)
 
 File name of the file this came from.
+
+Section: core
 
 Example:
 ;(meta-file-name)
@@ -3132,6 +3250,8 @@ t
             "Usage: (= val0 ... valN)
 
 Equals.  Works for int, float or string.
+
+Section: conditional
 
 Example:
 (test::assert-false (= 1 2))
@@ -3166,6 +3286,8 @@ Example:
 
 Greater than.  Works for int, float or string.
 
+Section: conditional
+
 Example:
 (test::assert-false (> 1 2))
 (test::assert-false (> 2 2))
@@ -3196,6 +3318,8 @@ Example:
 
 Greater than or equal.  Works for int, float or string.
 
+Section: conditional
+
 Example:
 (test::assert-false (>= 1 2))
 (test::assert-true (>= 2 2))
@@ -3225,6 +3349,8 @@ Example:
 
 Less than.  Works for int, float or string.
 
+Section: conditional
+
 Example:
 (test::assert-true (< 1 2))
 (test::assert-true (< 1 2 3 4))
@@ -3253,6 +3379,8 @@ Example:
             "Usage: (<= val0 ... valN)
 
 Less than or equal.  Works for int, float or string.
+
+Section: conditional
 
 Example:
 (test::assert-true (<= 1 2))

@@ -254,6 +254,8 @@ pub fn add_namespace_builtins<S: BuildHasher>(
 
 Creates and enters a new a namespace (must evaluate to a string or symbol).
 
+Section: namespace
+
 Example:
 (ns-create 'ns-create-test-namespace)
 (def 'test-symbol \"testing\")
@@ -271,6 +273,8 @@ Example:
             "Usage: (ns-enter namespace)
 
 Enters an existing namespace (must evaluate to a string or symbol).
+
+Section: namespace
 
 Example:
 (ns-create 'ns-enter-test-namespace)
@@ -295,6 +299,8 @@ t
 
 True if the supplied namespace exists (must evaluate to a string or symbol).
 
+Section: namespace
+
 Example:
 (test::assert-false (ns-exists? 'ns-exists-test-namespace))
 (ns-create 'ns-exists-test-namespace)
@@ -311,6 +317,8 @@ Example:
             "Usage: (ns-list)
 
 Returns a vector of all namespaces.
+
+Section: namespace
 
 Example:
 (test::assert-not-includes \"ns-list-test-namespace\" (ns-list))
@@ -330,6 +338,8 @@ t
 
 Returns to the previous namespace.
 
+Section: namespace
+
 Example:
 (ns-create 'ns-pop-test-namespace)
 (test::assert-equal \"ns-pop-test-namespace\" *ns*)
@@ -346,6 +356,8 @@ Example:
             "Usage: (ns-symbols namespace)
 
 Returns the list of all symbols in namespace (must evaluate to a string or symbol).
+
+Section: namespace
 
 Example:
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'core))
