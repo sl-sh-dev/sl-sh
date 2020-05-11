@@ -8,6 +8,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::gc::Handle;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<String> {
     exp.as_string(environment)
@@ -107,18 +108,18 @@ fn builtin_str_split(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
+                let mut split_list: Vec<Handle> = Vec::new();
                 if pat == ":whitespace" {
                     for s in text.split_whitespace() {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             s.to_string(),
-                        ))));
+                        ))).handle_no_root());
                     }
                 } else {
                     for s in text.split(&pat) {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             s.to_string(),
-                        ))));
+                        ))).handle_no_root());
                     }
                 }
                 return Ok(Expression::with_list(split_list));
@@ -142,11 +143,11 @@ fn builtin_str_rsplit(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
+                let mut split_list: Vec<Handle> = Vec::new();
                 for s in text.rsplit(&pat) {
                     split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                         s.to_string(),
-                    ))));
+                    ))).handle_no_root());
                 }
                 return Ok(Expression::with_list(split_list));
             }
@@ -184,11 +185,11 @@ fn builtin_str_splitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
+                    let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.splitn(n as usize, &pat) {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             s.to_string(),
-                        ))));
+                        ))).handle_no_root());
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -227,11 +228,11 @@ fn builtin_str_rsplitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
+                    let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.rsplitn(n as usize, &pat) {
                         split_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             s.to_string(),
-                        ))));
+                        ))).handle_no_root());
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -262,7 +263,8 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, s)?);
+                            let s: Expression = s.into();
+                            new_str.push_str(&as_string(environment, &s)?);
                             first = false;
                         }
                     }
@@ -800,8 +802,8 @@ fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> 
         let mut list = Vec::with_capacity(2);
         list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
             func.clone(),
-        ))));
-        list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch))));
+        ))).handle_no_root());
+        list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch))).handle_no_root());
         let a = eval(environment, Expression::with_list(list))?;
         res.push_str(&as_string(environment, &a)?);
     }

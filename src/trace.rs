@@ -93,7 +93,7 @@ impl<O: Trace<O>> Trace<O> for Rooted<O> {
     }
 }
 */
-
+/*
 impl Trace for [ExpObj] {
     fn trace(&self, tracer: &mut Tracer) {
         self.iter().for_each(|object| object.trace(tracer));
@@ -111,3 +111,16 @@ impl<S: ::std::hash::BuildHasher> Trace for HashSet<ExpObj, S> {
         self.iter().for_each(|object| object.trace(tracer));
     }
 }
+
+impl<K> Trace for HashMap<K, Handle> {
+    fn trace(&self, tracer: &mut Tracer) {
+        self.values().for_each(|object| object.trace(tracer));
+    }
+}
+
+impl<S: ::std::hash::BuildHasher> Trace for HashSet<Handle, S> {
+    fn trace(&self, tracer: &mut Tracer) {
+        self.iter().for_each(|object| object.trace(tracer));
+    }
+}
+*/

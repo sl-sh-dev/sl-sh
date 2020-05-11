@@ -6,13 +6,15 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::gc::Handle;
 
 fn build_map(
-    mut map: HashMap<String, Expression>,
+    mut map: HashMap<String, Handle>,
     assocs: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
+            let key: Expression = key.into();
             match &key.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
                 ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), val.clone()),
@@ -41,7 +43,7 @@ fn builtin_make_hash(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let map: HashMap<String, Expression> = HashMap::new();
+    let map: HashMap<String, Handle> = HashMap::new();
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
             let assocs = eval(environment, assocs)?;
@@ -79,6 +81,7 @@ fn builtin_hash_set(
                     let val = eval(environment, val)?;
                     let mut exp_map_d = exp_map.get_mut();
                     if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
+                        let val: Handle = val.into();
                         match &key.get().data {
                             ExpEnum::Atom(Atom::Symbol(sym)) => {
                                 map.insert((*sym).to_string(), val);
@@ -118,9 +121,10 @@ fn builtin_hash_remove(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_rem(map: &mut HashMap<String, Expression>, sym: &str) -> io::Result<Expression> {
+    fn do_rem(map: &mut HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         let old = map.remove(sym);
         if let Some(old) = old {
+            let old: Expression = old.into();
             Ok(old)
         } else {
             Ok(Expression::make_nil())
@@ -167,10 +171,11 @@ fn builtin_hash_get(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_get(map: &HashMap<String, Expression>, sym: &str) -> io::Result<Expression> {
+    fn do_get(map: &HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         let old = map.get(sym);
         if let Some(old) = old {
-            Ok(old.clone())
+            let old: Expression = old.into();
+            Ok(old)
         } else {
             Ok(Expression::make_nil())
         }
@@ -216,7 +221,7 @@ fn builtin_hash_haskey(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_has(map: &HashMap<String, Expression>, sym: &str) -> io::Result<Expression> {
+    fn do_has(map: &HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         if map.contains_key(sym) {
             Ok(Expression::make_true())
         } else {
@@ -274,7 +279,7 @@ fn builtin_hash_keys(
             if let ExpEnum::HashMap(map) = &map_d.data {
                 let mut key_list = Vec::with_capacity(map.len());
                 for key in map.keys() {
-                    key_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                    key_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern(key),
                     ))));
                 }

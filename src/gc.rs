@@ -65,7 +65,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
-    //rc::Rc,
+    rc::Rc,
     sync::atomic::{AtomicU32, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
@@ -266,6 +266,25 @@ impl Heap {
     }
 
     pub fn print_stats(&self) {
+        println!(
+            "sizeof ExpObj: {}, ExpEnum: {}, ExpMeta: {}, Atom: {}, Expression: {}, str ref: {}",
+            std::mem::size_of::<ExpObj>(),
+            std::mem::size_of::<ExpEnum>(),
+            std::mem::size_of::<ExpMeta>(),
+            std::mem::size_of::<Atom>(),
+            std::mem::size_of::<Expression>(),
+            std::mem::size_of::<&'static str>()
+        );
+        println!(
+            "String: {}, Rc<RefCell<String>>: {}, Arc<RwLock<String>>: {} {} {} {} {}",
+            std::mem::size_of::<String>(),
+            std::mem::size_of::<Rc<RefCell<String>>>(),
+            std::mem::size_of::<Arc<RwLock<String>>>(),
+            std::mem::size_of::<Arc<String>>(),
+            std::mem::size_of::<RwLock<String>>(),
+            std::mem::size_of::<RefCell<String>>(),
+            std::mem::size_of::<RefCell<u64>>()
+        );
         println!("last_sweep: {}, obj sweeps: {}, objects: {}, object handles: {}, freed len: {}, rooted: {}, refs: {}, next handle: {}",
                  self.last_sweep, self.object_sweeps.len(), self.objects.read().unwrap().len(), self.objects_handle.len(), self.freed.len(), roots().len(), self.refs.len(), self.next_handle.load(Ordering::Relaxed));
     }
@@ -389,6 +408,28 @@ impl Heap {
         }
     }
 
+    pub fn with<F, R>(&self, handle: impl AsRef<Handle>, callback: F) -> Option<R>
+    where
+        F: FnOnce(&ExpObj) -> R,
+    {
+        let handle = handle.as_ref();
+        if let Some(href) = self.refs.get(&handle.idx) {
+            let objects = match href.gen {
+                RefGen::Nursery => &self.nursery.objects,
+                RefGen::GenX => &self.objects,
+            };
+            if let Ok(objects) = objects.read() {
+                if let Some(data) = objects.get(href.idx) {
+                    if let Some(data) = data {
+                        let r = callback(data);
+                        return Some(r);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Get a reference to a heap object if it exists on this heap.
     pub fn get(&self, handle: impl AsRef<Handle>) -> Option<GcRef> {
         let handle = handle.as_ref();
@@ -402,7 +443,8 @@ impl Heap {
                 //let data = objects.swap_remove(href.idx);
                 if let Some(data) = objects.get(href.idx) {
                     if let Some(data) = data {
-                        return Some(GcRef::new(handle.clone_root(), data.clone()));
+                        //return Some(GcRef::new(handle.clone_root(), data.clone()));
+                        return Some(GcRef::new(handle.clone_no_root(), data.clone()));
                     }
                 }
             }
@@ -680,6 +722,13 @@ impl Handle {
         Handle { root: true, idx }
     }
 
+    pub fn with<F, R>(&self, callback: F) -> Option<R>
+    where
+        F: FnOnce(&ExpObj) -> R,
+    {
+        gc().with(self, callback)
+    }
+
     /// Get a reference to a heap object if it exists on this heap.
     pub fn get(&self) -> Option<GcRef> {
         gc().get(self)
@@ -762,12 +811,16 @@ impl Drop for Handle {
 
 pub struct GcRef {
     handle: Handle,
-    data: ExpObj,
+    data: Rc<ExpObj>,
 }
 
 impl GcRef {
     fn new(handle: Handle, data: ExpObj) -> GcRef {
-        GcRef { handle, data }
+        GcRef { handle, data: Rc::new(data) }
+    }
+
+    pub fn clone(other: &GcRef) -> GcRef {
+        GcRef { handle: other.handle.clone_no_root(), data: other.data.clone() }
     }
 }
 

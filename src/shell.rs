@@ -48,7 +48,7 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
         environment
             .interner
             .intern(&format!("{}/.config/sl-sh", home)),
-    ))));
+    ))).handle_no_root());
     let data = Expression::with_list(load_path);
     environment.root_scope.borrow_mut().insert_exp_with_doc(
         environment.interner.intern("*load-path*"),
@@ -77,7 +77,7 @@ t
         Ok(scope) => {
             let mut settings = HashMap::new();
             let data = ExpEnum::Atom(Atom::Symbol(environment.interner.intern("emacs")));
-            settings.insert("keybindings".to_string(), Expression::alloc_data(data));
+            settings.insert("keybindings".to_string(), Expression::alloc_data(data).handle_no_root());
             let data = Expression::alloc_data(ExpEnum::HashMap(settings));
             scope
                 .borrow_mut()
@@ -104,7 +104,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
                 let mut v = Vec::with_capacity(1);
                 v.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern("__prompt"),
-                ))));
+                ))).handle_no_root());
                 Expression::with_list(v)
             }
             _ => exp.exp.clone(),
@@ -160,10 +160,10 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1);
                     let sym = environment.borrow_mut().interner.intern("__line_handler");
-                    v.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(sym))));
+                    v.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(sym))).handle_no_root());
                     v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                         input.to_string(),
-                    ))));
+                    ))).handle_no_root());
                     Expression::with_list(v)
                 }
                 _ => return input.to_string(),
@@ -262,6 +262,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     };
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
+            let keybindings: Expression = keybindings.into();
             if let ExpEnum::Atom(Atom::Symbol(keybindings)) = &keybindings.get().data {
                 match &keybindings[..] {
                     ":vi" => ret.key_bindings = Keys::Vi,
@@ -271,6 +272,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             }
         }
         if let Some(max) = repl_settings.get(":max-history") {
+            let max: Expression = max.into();
             if let ExpEnum::Atom(Atom::Int(max)) = &max.get().data {
                 if *max >= 0 {
                     ret.max_history = *max as usize;
@@ -282,6 +284,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             }
         }
         if let Some(vi_esc) = repl_settings.get(":vi_esc_sequence") {
+            let vi_esc: Expression = vi_esc.into();
             let mut i = vi_esc.iter();
             if let Some(arg0) = i.next() {
                 if let ExpEnum::Atom(Atom::String(keys)) = &arg0.get().data {
@@ -315,21 +318,25 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             }
         }
         if let Some(prefix) = repl_settings.get(":vi-normal-prompt-prefix") {
+            let prefix: Expression = prefix.into();
             if let ExpEnum::Atom(Atom::String(prefix)) = &prefix.get().data {
                 ret.vi_normal_prompt_prefix = Some(prefix.to_string());
             }
         }
         if let Some(suffix) = repl_settings.get(":vi-normal-prompt-suffix") {
+            let suffix: Expression = suffix.into();
             if let ExpEnum::Atom(Atom::String(suffix)) = &suffix.get().data {
                 ret.vi_normal_prompt_suffix = Some(suffix.to_string());
             }
         }
         if let Some(prefix) = repl_settings.get(":vi-insert-prompt-prefix") {
+            let prefix: Expression = prefix.into();
             if let ExpEnum::Atom(Atom::String(prefix)) = &prefix.get().data {
                 ret.vi_insert_prompt_prefix = Some(prefix.to_string());
             }
         }
         if let Some(suffix) = repl_settings.get(":vi-insert-prompt-suffix") {
+            let suffix: Expression = suffix.into();
             if let ExpEnum::Atom(Atom::String(suffix)) = &suffix.get().data {
                 ret.vi_insert_prompt_suffix = Some(suffix.to_string());
             }
@@ -345,10 +352,10 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
                 let mut v = Vec::with_capacity(2);
                 v.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern("__exec_hook"),
-                ))));
+                ))).handle_no_root());
                 v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                     input.to_string(),
-                ))));
+                ))).handle_no_root());
                 Expression::with_list(v)
             }
             _ => {
@@ -741,11 +748,11 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     }
     load_user_env(&mut environment, &home, false);
 
-    let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
+    let mut exp_args: Vec<Handle> = Vec::with_capacity(args.len());
     for a in args {
         exp_args.push(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
             environment.interner.intern(a),
-        ))));
+        ))).handle_no_root());
     }
     let data = Expression::with_list(exp_args);
     environment

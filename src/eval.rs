@@ -20,12 +20,14 @@ pub fn call_lambda(
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
+    let mut body: Expression = lambda.body.clone().into();
+    let mut params: Expression = lambda.params.clone().into();
     let mut looping = true;
     let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
         environment,
         Some(&mut new_scope.borrow_mut()),
-        &lambda.params,
+        &params,
         args,
         eval_args,
     ) {
@@ -34,7 +36,7 @@ pub fn call_lambda(
     environment.current_scope.push(new_scope);
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
-    let mut lambda = lambda;
+    let mut lambda;// = lambda;
     let mut lambda_int;
     let mut llast_eval: Option<Expression> = None;
     //let mut iii = 0;
@@ -46,7 +48,7 @@ pub fn call_lambda(
                 "Lambda interupted by SIGINT.",
             ));
         }
-        let last_eval = match eval_nr(environment, &lambda.body) {
+        let last_eval = match eval_nr(environment, &body) {
             Ok(e) => e,
             Err(err) => {
                 environment.current_scope.pop();
@@ -90,7 +92,7 @@ pub fn call_lambda(
                     ));
                 }
                 let mut ib = Box::new(ListIter::new_list(&new_args));
-                if let Err(err) = setup_args(environment, None, &lambda.params, &mut ib, false) {
+                if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
@@ -99,6 +101,8 @@ pub fn call_lambda(
             if let ExpEnum::LazyFn(lam, parts) = &last_eval.get().data {
                 lambda_int = lam.clone();
                 lambda = &mut lambda_int;
+    body = lambda.body.clone().into();
+    params = lambda.params.clone().into();
                 looping = true;
                 environment.current_scope.pop();
                 // scope is popped so can use ? now.
@@ -107,7 +111,7 @@ pub fn call_lambda(
                 setup_args(
                     environment,
                     Some(&mut new_scope.borrow_mut()),
-                    &lambda.params,
+                    &params,
                     &mut ib,
                     false,
                 )?;
@@ -130,6 +134,8 @@ fn exec_macro(
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
+    let body: Expression = sh_macro.body.clone().into();
+    let params: Expression = sh_macro.params.clone().into();
     let mut new_scope = Scope {
         data: HashMap::new(),
         outer: None,
@@ -138,7 +144,7 @@ fn exec_macro(
     match setup_args(
         environment,
         Some(&mut new_scope),
-        &sh_macro.params,
+        &params,
         args,
         false,
     ) {
@@ -154,7 +160,7 @@ fn exec_macro(
         .push(Rc::new(RefCell::new(new_scope)));
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
-    match eval(environment, &sh_macro.body) {
+    match eval(environment, &body) {
         Ok(expansion) => {
             let expansion = expansion.resolve(environment)?;
             environment.current_scope.pop();
@@ -218,7 +224,7 @@ fn make_lazy(
 ) -> io::Result<Expression> {
     let mut parms = Vec::new();
     for p in args {
-        parms.push(eval(environment, p)?);
+        parms.push(eval(environment, p)?.handle_no_root());
     }
     Ok(Expression::alloc(ExpObj {
         data: ExpEnum::LazyFn(lambda.clone(), parms),
@@ -226,13 +232,14 @@ fn make_lazy(
     }))
 }
 
-pub fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = Expression> + 'a> {
+pub fn box_slice_it<'a>(v: &'a [Handle]) -> Box<dyn Iterator<Item = Expression> + 'a> {
     Box::new(ListIter::new_slice(v))
 }
 
 fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
     let exp_d = expression.get();
     let e2_d;
+    let e2: Expression;
     let (command, mut parts) = match &exp_d.data {
         ExpEnum::Vector(parts) => {
             let (command, parts) = match parts.split_first() {
@@ -244,7 +251,8 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let ib = box_slice_it(parts);
             (command.clone(), ib)
         }
-        ExpEnum::Pair(e1, e2) => {
+        ExpEnum::Pair(e1, ie2) => {
+            e2 = ie2.into();
             e2_d = e2.get();
             let e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
                 Box::new(ListIter::new_list(&list))
@@ -262,6 +270,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             ))
         }
     };
+    let command: Expression = command.into();
     let command = if let ExpEnum::LazyFn(_, _) = &command.get().data {
         command.resolve(environment)?
     } else {
@@ -449,16 +458,17 @@ fn internal_eval(
     // If we have a macro expand it and replace the expression with the expansion.
     //println!("XXXXXX expand: {}", expression);
     if let Some(exp) = expand_macro(environment, &expression, false)? {
-        let mut nv = Vec::new();
+        let mut nv: Vec<Handle> = Vec::new();
         let mut macro_replace = true;
         if let ExpEnum::Vector(list) = &exp.get().data {
             for item in list {
+                let item: Expression = item.into();
                 let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
                     item.resolve(environment)?
                 } else {
                     item.clone()
                 };
-                nv.push(item);
+                nv.push(item.handle_no_root());
             }
         } else if let ExpEnum::Pair(_, _) = &exp.get().data {
             for item in exp.iter() {
@@ -467,14 +477,14 @@ fn internal_eval(
                 } else {
                     item.clone()
                 };
-                nv.push(item);
+                nv.push(item.handle_no_root());
             }
         } else {
             expression = exp.clone();
             macro_replace = false;
         }
         if macro_replace {
-            let mut exp_mut = expression.get_mut();//.data;
+            let mut exp_mut = expression.get_mut(); //.data;
             match exp_mut.data {
                 ExpEnum::Vector(_) => {
                     exp_mut.data.replace(ExpEnum::Vector(nv));

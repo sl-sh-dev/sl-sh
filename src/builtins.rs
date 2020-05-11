@@ -72,7 +72,7 @@ fn builtin_apply(
     let mut last_arg: Option<Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(a);
+            call_list.push(a.handle_no_root());
         }
         last_arg = Some(arg);
     }
@@ -92,7 +92,7 @@ fn builtin_apply(
             }
         };
         for a in itr {
-            call_list.push(a);
+            call_list.push(a.handle_no_root());
         }
     }
     let mut args = box_slice_it(&call_list[..]);
@@ -228,7 +228,8 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             match &ast.get().data {
                 ExpEnum::Vector(list) => {
                     for l in list {
-                        res = Some(eval(environment, l)?);
+                        let l: Expression = l.into();
+                        res = Some(eval(environment, &l)?);
                     }
                 }
                 ExpEnum::Pair(_, _) => {
@@ -307,10 +308,12 @@ fn builtin_length(
                     list.len() as i64,
                 )))),
                 ExpEnum::Pair(_, e2) => {
+                    let e2: Expression = e2.into();
                     let mut len = 0;
                     let mut e_next = e2.clone();
                     loop {
                         let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
+                            let e2: Expression = e2.into();
                             Some(e2.clone())
                         } else {
                             None
@@ -961,6 +964,8 @@ fn builtin_fn(
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
+                let params = params.handle_no_root();
+                let body = body.handle_no_root();
                 return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
                     Lambda {
                         params,
@@ -995,7 +1000,7 @@ fn replace_commas(
     is_vector: bool,
     meta: Option<ExpMeta>,
 ) -> io::Result<Expression> {
-    let mut output: Vec<Expression> = Vec::new();
+    let mut output: Vec<Handle> = Vec::new();
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
@@ -1016,7 +1021,7 @@ fn replace_commas(
                 amp_next = true;
             } else if comma_next {
                 drop(exp_d);
-                output.push(eval(environment, exp)?);
+                output.push(eval(environment, exp)?.into());
                 comma_next = false;
             } else if amp_next {
                 drop(exp_d);
@@ -1029,7 +1034,7 @@ fn replace_commas(
                     }
                     ExpEnum::Pair(_, _) => {
                         for item in nl.iter() {
-                            output.push(item);
+                            output.push(item.handle_no_root());
                         }
                     }
                     ExpEnum::Nil => {}
@@ -1042,11 +1047,11 @@ fn replace_commas(
                 }
                 amp_next = false;
             } else {
-                output.push(exp);
+                output.push(exp.into());
             }
         } else if comma_next {
             drop(exp_d);
-            output.push(eval(environment, exp)?);
+            output.push(eval(environment, exp)?.into());
             comma_next = false;
         } else if amp_next {
             drop(exp_d);
@@ -1054,12 +1059,12 @@ fn replace_commas(
             match &nl.get().data {
                 ExpEnum::Vector(new_list) => {
                     for item in new_list {
-                        output.push(item.clone());
+                        output.push(item.clone_no_root());
                     }
                 }
                 ExpEnum::Pair(_, _) => {
                     for item in nl.iter() {
-                        output.push(item);
+                        output.push(item.handle_no_root());
                     }
                 }
                 ExpEnum::Nil => {}
@@ -1072,7 +1077,7 @@ fn replace_commas(
             }
             amp_next = false;
         } else {
-            output.push(exp);
+            output.push(exp.handle_no_root());
         }
     }
     if is_vector {
@@ -1227,6 +1232,8 @@ fn builtin_macro(
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
+                let params = params.handle_no_root();
+                let body = body.handle_no_root();
                 return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Macro {
                     params,
                     body,
@@ -1248,16 +1255,18 @@ fn do_expansion(
     if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
         if let Some(exp) = get_expression(environment, &command) {
             if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
+                let params: Expression = sh_macro.params.clone().into();
+                let body: Expression = sh_macro.body.clone().into();
                 let new_scope = match environment.current_scope.last() {
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
                 };
                 environment.current_scope.push(new_scope);
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
+                if let Err(err) = setup_args(environment, None, &params, parts, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
-                let expansion = eval(environment, &sh_macro.body);
+                let expansion = eval(environment, &body);
                 if let Err(err) = expansion {
                     environment.current_scope.pop();
                     return Err(err);
@@ -1291,7 +1300,7 @@ fn expand_macro_internal(
         };
         let expansion = do_expansion(
             environment,
-            command,
+            &command.clone_no_root().into(),
             &mut Box::new(ListIter::new_slice(parts)),
         )?;
         if let Some(expansion) = expansion {
@@ -1308,6 +1317,8 @@ fn expand_macro_internal(
             Ok(None)
         }
     } else if let ExpEnum::Pair(e1, e2) = &arg_d.data {
+        let e1: Expression = e1.into();
+        let e2: Expression = e2.into();
         let e2_d = e2.get();
         let mut e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
             Box::new(ListIter::new_list(&list))
@@ -1315,7 +1326,7 @@ fn expand_macro_internal(
             drop(e2_d);
             e2.iter()
         };
-        let expansion = do_expansion(environment, e1, &mut e2_iter)?;
+        let expansion = do_expansion(environment, &e1, &mut e2_iter)?;
         if let Some(expansion) = expansion {
             if !one {
                 if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
@@ -1352,19 +1363,19 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
         let exp_outer_c = exp_outer.clone();
         let exp_d = exp_outer_c.get();
         if let ExpEnum::Vector(list) = &exp_d.data {
-            let mut nv = Vec::new();
+            let mut nv: Vec<Handle> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, item)?);
+                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
             }
             drop(exp_d);
             exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
             // XXX
             gc_mut().down_root(&exp_outer);
         } else if let ExpEnum::Pair(_, _) = &exp_d.data {
-            let mut nv = Vec::new();
+            let mut nv: Vec<Handle> = Vec::new();
             drop(exp_d);
             for item in exp_outer.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
+                nv.push(expand_macro_all(environment, &item)?.into());
             }
             exp_outer
                 .get_mut()
@@ -1378,9 +1389,9 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
         let arg2 = arg;
         let arg_d = arg.get();
         if let ExpEnum::Vector(list) = &arg_d.data {
-            let mut nv = Vec::new();
+            let mut nv: Vec<Handle> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, item)?);
+                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
             }
             drop(arg_d);
             arg.get_mut().data.replace(ExpEnum::Vector(nv));
@@ -1390,7 +1401,7 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
             let mut nv = Vec::new();
             drop(arg_d);
             for item in arg2.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
+                nv.push(expand_macro_all(environment, &item)?.into());
             }
             arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
             // XXX
@@ -1457,11 +1468,11 @@ fn builtin_recur(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut arg_list: Vec<Expression> = Vec::new();
+    let mut arg_list: Vec<Handle> = Vec::new();
     let mut arg_num = 0;
     for a in args {
         let a = eval(environment, a)?;
-        arg_list.push(a);
+        arg_list.push(a.into());
         arg_num += 1;
     }
     environment.state.recur_num_args = Some(arg_num);
@@ -1756,11 +1767,11 @@ fn builtin_get_error(
             Ok(exp) => ret = Some(exp),
             Err(err) => {
                 let mut v = Vec::new();
-                v.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(":error"),
                 ))));
                 let msg = format!("{}", err);
-                v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(msg))));
+                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg))));
                 environment.stack_on_error = old_err;
                 return Ok(Expression::with_list(v));
             }
@@ -1774,21 +1785,24 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     let exp_d = exp.get();
     let f_d;
     let m_d;
+let params: Expression;
     let p_iter = match &exp_d.data {
         ExpEnum::Atom(Atom::Lambda(f)) => {
-            f_d = f.params.get();
+            params = f.params.clone_no_root().into();
+            f_d = params.get();
             if let ExpEnum::Vector(list) = &f_d.data {
                 Box::new(ListIter::new_list(&list))
             } else {
-                f.params.iter()
+                params.iter()
             }
         }
         ExpEnum::Atom(Atom::Macro(m)) => {
-            m_d = m.params.get();
+            params = m.params.clone_no_root().into();
+            m_d = params.get();
             if let ExpEnum::Vector(list) = &m_d.data {
                 Box::new(ListIter::new_list(&list))
             } else {
-                m.params.iter()
+                params.iter()
             }
         }
         _ => return,

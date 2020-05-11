@@ -5,10 +5,12 @@ use std::iter::FromIterator;
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
+use crate::gc::Handle;
 
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
     if let ExpEnum::Pair(_e1, e2) = &exp.get().data {
+        let e2: Expression = e2.into();
         if e2.is_nil() {
             true
         } else {
@@ -206,9 +208,10 @@ fn setup_args_final(
             set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
         }
-        let mut rest_data: Vec<Expression> = Vec::new();
+        let mut rest_data: Vec<Handle> = Vec::new();
         for v in vars {
             let v2 = if do_eval { eval(environment, v)? } else { v };
+            let v2: Handle = v2.into();
             rest_data.push(v2);
         }
         if rest_data.is_empty() {

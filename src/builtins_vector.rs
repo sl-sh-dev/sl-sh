@@ -7,14 +7,15 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::gc::Handle;
 
 fn builtin_vec(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut new_args: Vec<Expression> = Vec::new();
+    let mut new_args: Vec<Handle> = Vec::new();
     for a in args {
-        new_args.push(eval(environment, a)?);
+        new_args.push(eval(environment, a)?.handle_no_root());
     }
     Ok(Expression::with_list(new_args))
 }
@@ -31,7 +32,7 @@ fn builtin_make_vec(
             let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         };
-        let mut list = Vec::with_capacity(cap as usize);
+        let mut list: Vec<Handle> = Vec::with_capacity(cap as usize);
         if let Some(item) = args.next() {
             if args.next().is_some() {
                 return Err(io::Error::new(
@@ -42,7 +43,7 @@ fn builtin_make_vec(
             let item = eval(environment, item)?;
             for _ in 0..cap {
                 // Make a copy of each item instead if using the same item for each.
-                list.push(item.duplicate());
+                list.push(item.duplicate().handle_no_root());
             }
         }
         list
@@ -138,7 +139,7 @@ fn builtin_vec_nth(
                                 "vec-nth index out of range",
                             ));
                         }
-                        return Ok(list[*idx as usize].clone());
+                        return Ok(list[*idx as usize].clone().into());
                     }
                 }
             }
@@ -178,7 +179,7 @@ fn builtin_vec_setnth(
                                     "vec-setnth! index out of range",
                                 ));
                             }
-                            list[idx as usize] = new_element;
+                            list[idx as usize] = new_element.handle_no_root();
                             Ok(vec.clone())
                         }
                         _ => Err(io::Error::new(
@@ -208,7 +209,7 @@ fn builtin_vec_push(
                 let vec = eval(environment, list)?;
                 return match &mut vec.get_mut().data {
                     ExpEnum::Vector(list) => {
-                        list.push(new_item);
+                        list.push(new_item.handle_no_root());
                         Ok(vec.clone())
                     }
                     _ => Err(io::Error::new(
@@ -235,7 +236,7 @@ fn builtin_vec_pop(
             return match &mut eval(environment, list)?.get_mut().data {
                 ExpEnum::Vector(list) => {
                     if let Some(item) = list.pop() {
-                        Ok(item)
+                        Ok(item.into())
                     } else {
                         Ok(Expression::make_nil())
                     }
@@ -378,7 +379,7 @@ fn builtin_vec_insert_nth(
                                     "vec-insert-nth! index out of range",
                                 ));
                             }
-                            inner_list.insert(idx as usize, new_element);
+                            inner_list.insert(idx as usize, new_element.handle_no_root());
                             Ok(list.clone())
                         }
                         _ => Err(io::Error::new(

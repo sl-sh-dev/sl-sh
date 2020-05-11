@@ -102,9 +102,9 @@ impl ShellCompleter {
                     let data = ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern("__completion_hook"),
                     ));
-                    v.push(Expression::alloc_data(data));
+                    v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
-                        v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(a))));
+                        v.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(a))).handle_no_root());
                     }
                     Expression::with_list(v)
                 }
@@ -146,6 +146,7 @@ impl ShellCompleter {
                         ExpEnum::Vector(list) => {
                             let mut v = Vec::with_capacity(list.len());
                             for l in list {
+                                let l: Expression = l.into();
                                 let s = match l.as_string(envir) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),

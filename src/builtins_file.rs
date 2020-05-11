@@ -405,7 +405,7 @@ fn builtin_glob(
                     match p {
                         Ok(p) => {
                             if let Some(p) = p.to_str() {
-                                files.push(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                files.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
                                     p.to_string(),
                                 ))));
                             }

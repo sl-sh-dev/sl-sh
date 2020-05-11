@@ -3,6 +3,7 @@ use std::num::{ParseFloatError, ParseIntError};
 
 use crate::environment::*;
 use crate::types::*;
+use crate::gc::Handle;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -26,7 +27,7 @@ enum ListType {
 
 struct List {
     list_type: ListType,
-    vec: Vec<Expression>,
+    vec: Vec<Handle>,
 }
 
 fn is_whitespace(ch: char) -> bool {
@@ -78,16 +79,16 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
             Some(mut v2) => {
                 match v.list_type {
                     ListType::Vector => {
-                        v2.vec.push(Expression::with_list(v.vec));
+                        v2.vec.push(Expression::with_list(v.vec).handle_no_root());
                     }
                     ListType::List => {
-                        if v.vec.len() == 3 && v.vec[1].to_string() == "." {
+                        if v.vec.len() == 3 && Expression::new(v.vec[1].clone()).to_string() == "." {
                             v2.vec.push(Expression::alloc(ExpObj {
                                 data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                 meta: exp_meta,
-                            }));
+                            }).handle_no_root());
                         } else {
-                            v2.vec.push(Expression::cons_from_vec(&v.vec, exp_meta));
+                            v2.vec.push(Expression::cons_from_vec(&v.vec, exp_meta).handle_no_root());
                         }
                     }
                 }
@@ -298,7 +299,7 @@ fn push_stack(
 ) -> Result<(), ParseError> {
     match stack.pop() {
         Some(mut v) => {
-            v.vec.push(expression);
+            v.vec.push(expression.handle_no_root());
             stack.push(v);
             Ok(())
         }
@@ -427,10 +428,10 @@ where
                 )?;
             }
             '\'' => {
-                let mut quoted = Vec::<Expression>::new();
+                let mut quoted = Vec::<Handle>::new();
                 quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern("quote"),
-                ))));
+                ))).handle_no_root());
                 stack.push(List {
                     list_type: ListType::List,
                     vec: quoted,
@@ -447,15 +448,15 @@ where
                 close_list(stack, get_meta(name, *line, *column))?;
             }
             '`' => {
-                let mut quoted = Vec::<Expression>::new();
+                let mut quoted = Vec::<Handle>::new();
                 if in_bquote {
                     quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern("quote"),
-                    ))));
+                    ))).handle_no_root());
                 } else {
                     quoted.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern("bquote"),
-                    ))));
+                    ))).handle_no_root());
                 }
                 stack.push(List {
                     list_type: ListType::List,
@@ -513,7 +514,7 @@ where
                         level += 1;
                         stack.push(List {
                             list_type: ListType::Vector,
-                            vec: Vec::<Expression>::new(),
+                            vec: Vec::<Handle>::new(),
                         });
                     }
                     't' => push_stack(
@@ -535,7 +536,7 @@ where
                 level += 1;
                 stack.push(List {
                     list_type: ListType::List,
-                    vec: Vec::<Expression>::new(),
+                    vec: Vec::<Handle>::new(),
                 });
             }
             ')' => {
@@ -585,7 +586,7 @@ fn read2(
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
-        vec: Vec::<Expression>::new(),
+        vec: Vec::<Handle>::new(),
     });
     let mut chars = text.chars().peekable();
     if text.starts_with("#!") {
@@ -625,14 +626,14 @@ fn read2(
                     // If we only have one thing and it is a vector or list then
                     // remove the outer list that was added (unless always_wrap
                     // is set).
-                    let exp = v.vec.pop().unwrap();
+                    let exp: Expression = v.vec.pop().unwrap().into();
                     let exp_d = &exp.get().data;
                     match exp_d {
                         ExpEnum::Vector(_) => Ok(exp.clone()),
                         ExpEnum::Pair(_, _) => Ok(exp.clone()),
                         ExpEnum::Nil => Ok(exp.clone()),
                         _ => {
-                            v.vec.push(exp.clone());
+                            v.vec.push(exp.handle_no_root());
                             Ok(Expression::with_list_meta(v.vec, exp_meta))
                         }
                     }

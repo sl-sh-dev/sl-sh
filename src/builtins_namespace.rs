@@ -138,7 +138,7 @@ fn builtin_ns_list(
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
-            ns_list.push(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(ns))));
+            ns_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::StringRef(ns))));
         }
         return Ok(Expression::with_list(ns_list));
     }
@@ -221,7 +221,7 @@ fn builtin_ns_symbols(
                 if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(sym))));
+                        ns_symbols.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(sym))));
                     }
                     return Ok(Expression::with_list(ns_symbols));
                 }

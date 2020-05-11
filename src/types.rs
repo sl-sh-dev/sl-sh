@@ -7,7 +7,7 @@ use std::iter;
 use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
-use std::sync::RwLock;
+//use std::sync::RwLock;
 
 use crate::builtins_util::is_proper_list;
 use crate::environment::*;
@@ -50,15 +50,15 @@ pub fn init_gc() {
 */
 #[derive(Clone, Debug)]
 pub struct Lambda {
-    pub params: Expression,
-    pub body: Expression,
+    pub params: Handle,
+    pub body: Handle,
     pub capture: Rc<RefCell<Scope>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Macro {
-    pub params: Expression,
-    pub body: Expression,
+    pub params: Handle,
+    pub body: Handle,
 }
 
 #[derive(Clone, Debug)]
@@ -86,8 +86,16 @@ impl fmt::Display for Atom {
             Atom::String(s) => write!(f, "\"{}\"", s),
             Atom::StringBuf(s) => write!(f, "\"{}\"", s.borrow()),
             Atom::Char(c) => write!(f, "#\\{}", c),
-            Atom::Lambda(l) => write!(f, "(fn {} {})", l.params.to_string(), l.body.to_string()),
-            Atom::Macro(m) => write!(f, "(macro {} {})", m.params.to_string(), m.body.to_string()),
+            Atom::Lambda(l) => {
+                let params: Expression = l.params.clone().into();
+                let body: Expression = l.body.clone().into();
+                write!(f, "(fn {} {})", params.to_string(), body.to_string())
+            }
+            Atom::Macro(m) => {
+                let params: Expression = m.params.clone().into();
+                let body: Expression = m.body.clone().into();
+                write!(f, "(macro {} {})", params.to_string(), body.to_string())
+            }
         }
     }
 }
@@ -155,6 +163,8 @@ impl Iterator for PairIter {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.clone() {
             if let ExpEnum::Pair(e1, e2) = &current.get().data {
+                let e1: Expression = e1.into();
+                let e2: Expression = e2.into();
                 self.current = Some(e2.clone());
                 Some(e1.clone())
             } else {
@@ -167,17 +177,17 @@ impl Iterator for PairIter {
 }
 
 pub struct ListIter<'a> {
-    inner_iter: std::slice::Iter<'a, Expression>,
+    inner_iter: std::slice::Iter<'a, Handle>,
 }
 
 impl<'a> ListIter<'a> {
-    pub fn new_list(list: &[Expression]) -> ListIter<'_> {
+    pub fn new_list(list: &[Handle]) -> ListIter<'_> {
         ListIter {
             inner_iter: list.iter(),
         }
     }
 
-    pub fn new_slice(list: &'a [Expression]) -> ListIter<'a> {
+    pub fn new_slice(list: &'a [Handle]) -> ListIter<'a> {
         ListIter {
             inner_iter: list.iter(),
         }
@@ -189,6 +199,7 @@ impl<'a> Iterator for ListIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(exp) = self.inner_iter.next() {
+            let exp: Expression = exp.into();
             Some(exp.clone())
         } else {
             None
@@ -214,7 +225,7 @@ impl Callable {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExpMeta {
     pub file: &'static str,
     pub line: usize,
@@ -224,13 +235,13 @@ pub struct ExpMeta {
 #[derive(Clone)]
 pub enum ExpEnum {
     Atom(Atom),
-    Vector(Vec<Expression>),
-    Pair(Expression, Expression),
-    HashMap(HashMap<String, Expression>),
+    Vector(Vec<Handle>),
+    Pair(Handle, Handle),
+    HashMap(HashMap<String, Handle>),
     Function(Callable),
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),
-    LazyFn(Lambda, Vec<Expression>),
+    LazyFn(Lambda, Vec<Handle>),
     Nil,
 }
 
@@ -239,7 +250,7 @@ impl ExpEnum {
         *self = new_data;
     }
 
-    pub fn cons_from_vec(v: &mut Vec<Expression>) -> ExpEnum {
+    pub fn cons_from_vec(v: &mut Vec<Handle>) -> ExpEnum {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len() - 1;
@@ -250,7 +261,8 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
-                        }),
+                        })
+                        .into(),
                     );
                     break;
                 } else {
@@ -259,7 +271,8 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
-                        }),
+                        })
+                        .into(),
                     );
                 }
                 i -= 1;
@@ -311,50 +324,93 @@ impl Trace for ExpObj {
 #[derive(Clone)]
 pub struct Expression {
     obj: Handle,
+
+    cache: Rc<RefCell<Option<GcRef>>>,
 }
 
 impl Expression {
     pub fn new(obj: Handle) -> Expression {
-        Expression { obj }
+        Expression {
+            obj,
+            cache: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    pub fn alloc_h(obj: ExpObj) -> Handle {
+        gc_mut().insert(obj)
+    }
+
+    pub fn alloc_data_h(data: ExpEnum) -> Handle {
+        gc_mut().insert(ExpObj { data, meta: None })
     }
 
     pub fn alloc(obj: ExpObj) -> Expression {
-        let obj = gc_mut().insert(obj);
-        Expression { obj }
+        Expression::alloc_h(obj).into()
     }
 
     pub fn alloc_data(data: ExpEnum) -> Expression {
-        let obj = gc_mut().insert(ExpObj { data, meta: None });
-        Expression { obj }
+        Expression::alloc_data_h(data).into()
+    }
+
+    pub fn make_nil_h() -> Handle {
+        gc_mut().insert(ExpObj {
+            data: ExpEnum::Nil,
+            meta: None,
+        })
+    }
+
+    pub fn make_true_h() -> Handle {
+        gc_mut().insert(ExpObj {
+            data: ExpEnum::Atom(Atom::True),
+            meta: None,
+        })
     }
 
     pub fn make_nil() -> Expression {
-        let obj = gc_mut().insert(ExpObj {
-            data: ExpEnum::Nil,
-            meta: None,
-        });
-        Expression { obj }
+        Expression::make_nil_h().into()
     }
 
     pub fn make_true() -> Expression {
-        let obj = gc_mut().insert(ExpObj {
-            data: ExpEnum::Atom(Atom::True),
-            meta: None,
-        });
-        Expression { obj }
+        Expression::make_true_h().into()
+    }
+
+    pub fn handle_no_root(&self) -> Handle {
+        self.obj.clone_no_root()
     }
 
     pub fn duplicate(&self) -> Expression {
         Expression::alloc(self.get().clone())
     }
 
+    pub fn with<F, R>(&self, callback: F) -> Option<R>
+    where
+        F: FnOnce(&ExpObj) -> R,
+    {
+        self.obj.with(callback)
+    }
+
+    pub fn invalidate(&self) {
+        self.cache.replace(None);
+    }
+
     //pub fn get(&self) -> GcRef<'_> {
     pub fn get(&self) -> GcRef {
-        self.obj.get().expect("Invalid expression!")
-        //gc().get(&self.obj).expect("Invalid expression!")
+        //self.obj.get().expect("Invalid expression!")
+        //let cache = self.cache.borrow();
+        if self.cache.borrow().is_none() {
+            let val = self.obj.get().expect("Invalid expression!");
+            self.cache.replace(Some(val));
+        }
+        GcRef::clone(self.cache.borrow().as_ref().expect("Invalid expression, missing cache!"))
+        /*if let Some(r) = cache.as_ref() {
+            r
+        } else {
+            panic!("Invalid expression, missing cache!");
+        }*/
     }
 
     pub fn get_mut(&self) -> GcRefMut {
+        self.invalidate();
         self.obj.get_mut().expect("Invalid mut expression!")
         //gc().get_mut(&self.obj).expect("Invalid expression!")
     }
@@ -362,6 +418,7 @@ impl Expression {
     pub fn clone_root(&self) -> Expression {
         Expression {
             obj: self.obj.clone_root(),
+            cache: self.cache.clone(),
         }
     }
 
@@ -419,21 +476,21 @@ impl Expression {
         )
     }
 
-    pub fn with_list(list: Vec<Expression>) -> Expression {
+    pub fn with_list(list: Vec<Handle>) -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta: None,
         })
     }
 
-    pub fn with_list_meta(list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
+    pub fn with_list_meta(list: Vec<Handle>, meta: Option<ExpMeta>) -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta,
         })
     }
 
-    pub fn cons_from_vec(v: &[Expression], meta: Option<ExpMeta>) -> Expression {
+    pub fn cons_from_vec(v: &[Handle], meta: Option<ExpMeta>) -> Expression {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len();
@@ -443,7 +500,8 @@ impl Expression {
                     Expression::alloc(ExpObj {
                         data: last_pair.clone(),
                         meta: None,
-                    }),
+                    })
+                    .into(),
                 );
                 i -= 1;
             }
@@ -520,6 +578,7 @@ impl Expression {
                     writer.write_all(b"#(")?;
                     let mut first = true;
                     for exp in list.iter() {
+                        let exp: Expression = exp.into();
                         if !first {
                             writer.write_all(b" ")?;
                         } else {
@@ -538,7 +597,7 @@ impl Expression {
                 } else if is_proper_list(&self) {
                     writer.write_all(b"(")?;
                     let mut first = true;
-                    let mut last_p = Expression::make_nil();
+                    let mut last_p: Expression = Expression::make_nil().into();
                     for p in self.iter() {
                         if !first {
                             if let ExpEnum::Atom(Atom::Symbol(sym)) = &last_p.get().data {
@@ -556,6 +615,8 @@ impl Expression {
                     }
                     writer.write_all(b")")?;
                 } else {
+                    let e1: Expression = e1.into();
+                    let e2: Expression = e2.into();
                     write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
                 }
             }
@@ -568,6 +629,7 @@ impl Expression {
                 } else {
                     writer.write_all(b"(make-hash (")?;
                     for (key, val) in map.iter() {
+                        let val: Expression = val.into();
                         init_space(indent + 1, writer)?;
                         write!(writer, "({} . {})", key, val)?;
                     }
@@ -584,13 +646,17 @@ impl Expression {
                 write!(writer, "{}", self.to_string())?;
             }
             ExpEnum::Atom(Atom::Lambda(l)) => {
-                write!(writer, "(fn {}", l.params.to_string())?;
-                l.body.pretty_print_int(environment, indent + 1, writer)?;
+                let body: Expression = l.body.clone().into();
+                let params: Expression = l.params.clone().into();
+                write!(writer, "(fn {}", params.to_string())?;
+                body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
             ExpEnum::Atom(Atom::Macro(m)) => {
-                write!(writer, "(macro {}", m.params.to_string())?;
-                m.body.pretty_print_int(environment, indent + 1, writer)?;
+                let body: Expression = m.body.clone().into();
+                let params: Expression = m.params.clone().into();
+                write!(writer, "(macro {}", params.to_string())?;
+                body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
             _ => self.writef(environment, writer)?,
@@ -805,6 +871,18 @@ impl<K> Trace for HashMap<K, Expression> {
     }
 }
 
+impl Trace for [Handle] {
+    fn trace(&self, tracer: &mut Tracer) {
+        self.iter().for_each(|object| object.trace(tracer));
+    }
+}
+
+impl<K> Trace for HashMap<K, Handle> {
+    fn trace(&self, tracer: &mut Tracer) {
+        self.values().for_each(|object| object.trace(tracer));
+    }
+}
+
 impl AsRef<Handle> for Expression {
     fn as_ref(&self) -> &Handle {
         &self.obj
@@ -817,11 +895,29 @@ impl AsRef<Expression> for Expression {
     }
 }
 
+impl From<Expression> for Handle {
+    fn from(item: Expression) -> Self {
+        item.obj
+    }
+}
+
+impl From<Handle> for Expression {
+    fn from(item: Handle) -> Self {
+        Expression::new(item)
+    }
+}
+
+impl From<&Handle> for Expression {
+    fn from(item: &Handle) -> Self {
+        Expression::new(item.clone())
+    }
+}
+
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = Expression>) {
             let mut first = true;
-            let mut last_exp = Expression::make_nil();
+            let mut last_exp: Expression = Expression::make_nil().into();
             for p in itr {
                 if !first {
                     if let ExpEnum::Atom(Atom::Symbol(sym)) = &last_exp.get().data {
@@ -857,12 +953,15 @@ impl fmt::Display for Expression {
                 write!(f, "{}", res)
             }
             ExpEnum::Pair(e1, e2) => {
+                let e1: Expression = e1.into();
+                let e2: Expression = e2.into();
                 if is_proper_list(&self) {
                     match &e1.get().data {
                         ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
+                                let a2: Expression = a2.into();
                                 f.write_str(&a2.to_string())
                             } else {
                                 f.write_str(&e2.to_string())
@@ -872,6 +971,7 @@ impl fmt::Display for Expression {
                             f.write_str("`")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
+                                let a2: Expression = a2.into();
                                 f.write_str(&a2.to_string())
                             } else {
                                 f.write_str(&e2.to_string())
@@ -886,6 +986,8 @@ impl fmt::Display for Expression {
                         }
                     }
                 } else {
+                    let e1: Expression = e1.into();
+                    let e2: Expression = e2.into();
                     write!(f, "({} . {})", e1.to_string(), e2.to_string())
                 }
             }
@@ -894,6 +996,7 @@ impl fmt::Display for Expression {
                 let mut res = String::new();
                 res.push_str("(make-hash (");
                 for (key, val) in map.iter() {
+                    let val: Expression = val.into();
                     res.push_str(&format!("({} . {})", key, val));
                 }
                 res.push_str("))");
@@ -948,13 +1051,16 @@ mod tests {
     #[test]
     fn test_one() {
         init_gc();
-        let s1 = Expression::alloc_data(ExpEnum::Atom(Atom::String("sls".to_string())));
-        let n1 = Expression::make_nil();
-        let p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone(), n1.clone()));
-        let l1 = Expression::with_list(vec![Expression::make_nil(), Expression::make_nil()]);
+        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".to_string())));
+        let n1 = Expression::make_nil_h();
+        let p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
+        let l1 = Expression::with_list(vec![
+            Expression::make_nil_h().clone_no_root(),
+            Expression::make_nil_h().clone_no_root(),
+        ]);
         gc_mut().clean();
-        println!("XXX {}, {}, {}", p1, s1, n1);
-        println!("XXX {}", l1);
+        //println!("XXX {}, {}, {}", p1, s1, n1);
+        //println!("XXX {}", l1);
         //assert!(1 == 2);
     }
 }
