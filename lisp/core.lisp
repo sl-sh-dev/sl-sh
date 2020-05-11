@@ -71,11 +71,18 @@ Section: namespace"
 
 (defmacro ns-symbols-only
 	"Get list of symbols created in current namespace exluding all imported
-	symbols. This function intentionally defines nothing so as to avoid
-	polluting the calling namespace.
+	symbols. All imported symbols defaults to all of the symbols from all of the
+	namespaces (ns-list). Optionally, pass in a list of symbols representing
+	namespaces whose imported symbols should be excluded. This function
+	intentionally defines nothing so as to avoid polluting the calling
+	namespace.
+
 	Section: namespace"
-	(sym)
-	`(loop (symbols namespaces) ((ns-symbols ,sym) (filter (fn (x) (not (= x (str ,sym)))) (ns-list)))
+	(sym &rest exclusions)
+	`(loop (symbols namespaces)
+			((ns-symbols ,sym) (filter
+				(fn (x) (not (= x ,sym)))
+				(if (= 0 (length (list ,@exclusions))) (map! (fn (x) (to-symbol x)) (ns-list)) (list ,@exclusions))))
 		(if (empty-seq? namespaces)
 			symbols
 			(recur
