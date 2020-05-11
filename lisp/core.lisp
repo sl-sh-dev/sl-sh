@@ -57,27 +57,34 @@ Section: namespace"
 			(err "ns-export takes a symbol or sequence.")))))
 
 (defmacro ns-auto-export
-"Exports all symbols defined in provided curr-ns. By default symbols prefixed
-with a dash symbol, \"-\", will not be exported. Modifiers are functions that
-are applied as the predicate to a filter. The filters are applied in the order
-they are passed in.
+"Exports all symbols defined in provided curr-ns. Symbols prefixed with a dash
+symbol, \"-\", will not be exported. Modifiers are functions that are applied
+as the predicate to a filter. The filters are applied in the order they are
+passed in, e.g.
+
+(ns-auto-export 'my-ns)
+(ns-auto-export 'my-ns func?)
+(ns-auto-export 'my-ns (fn (x) (not (func? x))))
+(ns-auto-export 'my-ns func? (fn (x) (str-contains \"42\" (str x))))
 
 Section: namespace
 "
 	(curr-ns &rest modifiers) `(progn
 	(defq curr-ns-syms (ns-symbols-only ,curr-ns))
-	(defq mod-len (length ,modifiers))
-	(defq exportable-syms (filter
-						(fn (x) (progn
-						(defq ns-str (str x))
-						(not (str-starts-with "-" ns-str)))) curr-ns-syms))
+	(defq mod-len (length (list ,@modifiers)))
+	(defq exportable-syms
+		(filter
+			(fn (x) (not (str-starts-with "-" (str x))))
+			curr-ns-syms))
 	(if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
-	(if (= 0 mod-len)
-		(core::for sym exportable-syms (vec-push! *ns-exports* sym)) ;;return all symbols
-		(loop (mod syms) (modifiers exportable-syms)
-			(if (empty-seq? mod)
-				syms
-				(recur (rest mod) (filter (first mod) syms)))))))
+	(when (not (= 0 mod-len))
+		(setq exportable-syms
+			(loop (mods syms) ((list ,@modifiers) exportable-syms)
+				(progn
+				 (if (empty-seq? mods)
+					syms
+					(recur (rest mods) (filter (fn (x) ((first mods) (eval x))) syms)))))))
+	(core::for sym exportable-syms (vec-push! *ns-exports* sym))))
 
 (defmacro ns-import
 "Import any symbols exported from namespace into the current namespace.
