@@ -451,7 +451,7 @@
 (pushd "~/development/slsh/docs/")
 
 ;; only build docs every 24 hours.
-(if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1"))))
+(if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440"))))
 (progn
 	(load "mk-docs.lisp")
 
