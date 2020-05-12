@@ -118,8 +118,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 				(create-anchor (str (get-anchor-link-id doc-map) "-contents"))
 				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-map)))))))
 	(write-line file "")
-	(close file)
-	file-name))
+	(close file)))
 
 (defn doc-structure (file-name) (progn
 	(defq file (open file-name :append))
