@@ -3267,7 +3267,7 @@ t
             builtin_block,
             "Usage: (block name form*)
 
-Create a block with name (name is not evaluated), if no return-from encountered then
+Create a block with name (name is not evaluated), if no [return-from](#root::return-from) encountered then
 return last expression (like progn).
 
 Section: core
@@ -3288,7 +3288,7 @@ Example:
             builtin_return_from,
             "Usage: (return-from name expression?)
 
-Causes enclosing block with name (name is not evaluated) to evaluate to expression.
+Causes enclosing [block](#root::block) with name (name is not evaluated) to evaluate to expression.
 
 Section: core
 
