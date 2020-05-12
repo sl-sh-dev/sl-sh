@@ -298,7 +298,7 @@ Make a new hash map.
 
 If associations is provided (makes an empty map if not) then it is a list of
 pairs (key . value) that populate the intial map, e.g.
-	\"(make-hash '((:x . \"rlr\")(:y . \"sls\")))')\"
+	\"(make-hash '((join :x \"rlr\")(join :y  \"sls\")))\"
 
 Section: hashmap
 
