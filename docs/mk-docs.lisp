@@ -124,11 +124,31 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(hash-set! code-snippets (hash-get directive-map :name) directive-map)
 	directive-map))
 
-(defn -eval-file (file-name trigger-line code-snippets)
-	nil)
+(defn -eval-file (md-file-name directive-map code-snippets) (progn
+	(defq temp-dir (str-replace (str (mktemp -d)) "\n" ""))
+	(defq entrypoint nil)
+	(for file-name (hash-get directive-map :files) (progn
+		(defq snippet (hash-get code-snippets file-name))
+		(defq target-file-name (str temp-dir "/" file-name))
+		(println "target-file-name: " target-file-name)
+		(defq target-file (open target-file-name :create :truncate))
+		(for line (hash-get snippet :contents) (progn
+			(write-line target-file line)))
+		(when (= :entrypoint (hash-get snippet :type)) (progn
+			(setq entrypoint target-file-name)
+			(chmod +x target-file-name)))
+		(close target-file)))
+	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
+	(defq temp-out (str temp-dir "/output" ))
+	(pushd temp-dir)
+	;;TOD) is the eval needed
+	(out-err> temp-out (eval (entrypoint)))
+	(popd)
+	(println "output located: " temp-out)))
 
 (defn eval-post
-	"Section: scripting"
+	"enumerate different directive and expectations
+	Section: scripting"
 	(file-name) (progn
 		(defq code-snippets (make-hash))
 		(defq file (open file-name :read))
@@ -138,7 +158,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 				(match (hash-get directive-map :type)
 					(:entrypoint (-read-in-code-block file directive-map code-snippets))
 					(:lib (-read-in-code-block file directive-map code-snippets))
-					(:eval (-eval-file file-name (hash-get directive-map :trigger-line) code-snippets))
+					(:eval (-eval-file file-name directive-map code-snippets))
 					(nil (err "Unknown hash map found")))
 				(recur file)))))))
 

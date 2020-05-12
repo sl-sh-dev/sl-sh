@@ -20,20 +20,20 @@ ns-test.lisp
 ```
 #!/bin/sl-sh
 
-(load "add2.lisp")
+(load "./add2.lisp")
 (if (ns-exists? 'ns-test) (ns-enter 'ns-test) (ns-create 'ns-test))
 (core::ns-import 'core)
 (ns-import 'shell)
 (ns-import 'add2)
 
-(println "add2: " (add2 input))
+(println (add2 8))
 
 (ns-pop)
 ```
 add2.lisp
 {% comment %} (defq do (make-hash (list (join :type :lib) (join :name "add2.lisp")))) {% endcomment %}
 ```
-(load "add1.lisp")
+(load "./add1.lisp")
 (if (ns-exists? 'add2) (ns-enter 'add2) (ns-create 'add2))
 (core::ns-import 'core)
 (ns-import 'shell)
