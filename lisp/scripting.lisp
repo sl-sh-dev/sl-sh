@@ -1,5 +1,17 @@
 ;;; to make scripting easier
 
+;;TODO sstanfield replace get-error with code like this
+(defmacro error-or-ok
+	"like progn but always returns a hashmap. hashmap will either one key value
+	pair: :ok or :error.  If the key is :ok the value is the result of the last
+	form in error-or-ok and if the key is :error the value is the error string.
+	Section: scripting"
+	(&rest args) `(progn
+	(defq ret (get-error ,@args))
+	(defq ret-map (make-hash))
+	(if (and (vec? ret) (= :error (first ret)))
+		(hash-set! ret-map :error (first (rest ret)))
+		(hash-set! ret-map :ok ret))))
 
 ;;TODO implement getopts
 
