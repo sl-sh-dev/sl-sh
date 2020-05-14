@@ -4,7 +4,8 @@
 ;;TODO implement getopts
 
 (defn mkli
-	"\"make lisp\".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
+	"Usage: (mkli filepath [namespace] [body])
+	\"make lisp\".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
 	to populate as the body (optional 3rd arg), make a canonincal blank sl-sh script
 	complete with all the relevant imports, and boilerplate namespace code taken
 	care of to speed up development.
