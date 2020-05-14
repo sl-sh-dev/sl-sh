@@ -62,3 +62,6 @@
 		("ls" 'default)
 		("git" 'default)
 		(nil 'default)))
+
+; Turn on endfix processing (i.e. "normal" style pipes, etc).
+(endfix-on)
