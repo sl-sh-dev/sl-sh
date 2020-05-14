@@ -40,7 +40,7 @@
 	(defq namespace nil)
 	(defq script-body nil)
 	(when (= 0 (length args)) (err "Must have at least 1 argument, the path to the script to be created."))
-	(when (< 3 (length args)) (err (str "Too many arguments, see doc " #| (doc 'mk-sh) |# )))
+	(when (< 3 (length args)) (err (str "Too many arguments, see doc ")))
 	(when (< 2 (length args)) (setq script-body (vec-nth 2 args)))
 	(when (< 1 (length args)) (setq namespace (vec-nth 1 args)))
 	(when (< 0 (length args)) (setq filepath (vec-nth 0 args)))
@@ -65,5 +65,5 @@
 		(write-line new-file "(ns-pop) ;; must be after body")))
 	(close new-file)))
 
-(ns-export '(mkli))
+(ns-export '(mkli error-or-ok))
 

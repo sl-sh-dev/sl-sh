@@ -55,7 +55,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(when (nil? line)
 		(return-from file-read nil))
 	(progn
-		(write-line dest-file line)
+		(write-string dest-file line)
 		(if (and
 			(str-contains begin-comment (line))
 			(str-contains end-comment (line)))
@@ -68,14 +68,14 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 			(recur src-file dest-file))))))
 
 (defn -read-in-code-block
-	"read in code block from src-file into the code-snippets map.  also,
-	continue to write the lines in the evalable md file into the evaled
-	md file..
-	Section: post"
+"read in code block from src-file into the code-snippets map.  also,
+continue to write the lines in the evalable md file into the evaled
+md file.
+Section: post"
 	(src-file dest-file directive-map code-snippets) (progn
 	(defq line (str-trim (read-line src-file)))
 	(write-line dest-file line)
-	(println "line is::: " line)
+	(println "codeblockstart::: " line)
 	(defq contents (list))
 	(when (not (= line code-block-delim))
 		(err "First line after :entrypoint or :lib directive must be ```"))
@@ -83,9 +83,9 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	;; contents and return.
 	(loop (src-file contents) (src-file contents) (progn
 		(setq line (read-line src-file))
-		(write-line dest-file line)
+		(write-string dest-file line)
 		(setq line (str-trim line))
-		(println "line: " line)
+		(println "code: " line)
 		(if (= line code-block-delim)
 			contents
 			(recur src-file (append! contents line)))))
@@ -115,14 +115,15 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(out-err> temp-out (eval (entrypoint)))
+	(defq return-value (error-or-ok (out-err> temp-out (eval (entrypoint)))))
 	;; write output in temp-out to the dest-file
 	(popd)
 	(loop (input-file) ((open temp-out :read)) (progn
 			(defq line (read-line input-file))
 			(when (not (nil? line)) (progn
-				(write-line dest-file line)
+				(write-string dest-file (str ";; " line))
 				(recur input-file)))))
+	(write-line dest-file (str "==> " return-value))
 	(println "output located: " temp-out)))
 
 (defn -eval-post
@@ -150,8 +151,9 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 		(defq code-snippets (make-hash))
 		(defq src-file (open evalable-post-file-name :read))
 		(defq dest-file (open evaled-post-file-name :create :truncate))
-		(write-line dest-file "ok")
-		(-eval-post src-file dest-file code-snippets)))
+		(-eval-post src-file dest-file code-snippets)
+		(close src-file)
+		(close dest-file)))
 
 (ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
 (ns-pop) ;; must be after body
