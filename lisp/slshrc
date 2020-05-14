@@ -27,3 +27,5 @@
 	(match (first args)
 		("cd" 'path)
 		(nil 'default)))
+
+(endfix-on)
