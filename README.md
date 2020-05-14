@@ -21,8 +21,10 @@ These files contain the lisp code for the shell (anything from the tables below 
 * `cargo build --release`
 
 ## Tasks
-- [ ] Test scripts to exercise everything.
-- [ ] Better Docs.
+- [ ] file-io and idiomatic file iteratoin in sl-sh
+- [ ] better error-reporting and debugging.
+- [ ] benchmarks.
+- [ ] better maths.
 
 ## Examples
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
