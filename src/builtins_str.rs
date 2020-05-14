@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
@@ -15,13 +16,15 @@ fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<Stri
 
 fn builtin_str_trim(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::Atom(Atom::String(arg.trim().to_string())));
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                arg.trim().to_string(),
+            ))));
         }
     }
     Err(io::Error::new(
@@ -32,13 +35,15 @@ fn builtin_str_trim(
 
 fn builtin_str_ltrim(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::Atom(Atom::String(arg.trim_start().to_string())));
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                arg.trim_start().to_string(),
+            ))));
         }
     }
     Err(io::Error::new(
@@ -49,13 +54,15 @@ fn builtin_str_ltrim(
 
 fn builtin_str_rtrim(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::Atom(Atom::String(arg.trim_end().to_string())));
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                arg.trim_end().to_string(),
+            ))));
         }
     }
     Err(io::Error::new(
@@ -66,7 +73,7 @@ fn builtin_str_rtrim(
 
 fn builtin_str_replace(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
@@ -79,7 +86,7 @@ fn builtin_str_replace(
                     let arg2 = &eval(environment, arg2)?;
                     let arg2 = arg2.as_string(environment)?;
                     let new_str = arg0.replace(&arg1, &arg2);
-                    return Ok(Expression::Atom(Atom::String(new_str)));
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(new_str))));
                 }
             }
         }
@@ -92,7 +99,7 @@ fn builtin_str_replace(
 
 fn builtin_str_split(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
@@ -101,14 +108,20 @@ fn builtin_str_split(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
+                let mut split_list: Vec<Handle> = Vec::new();
                 if pat == ":whitespace" {
                     for s in text.split_whitespace() {
-                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                        split_list.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(s.to_string())))
+                                .handle_no_root(),
+                        );
                     }
                 } else {
                     for s in text.split(&pat) {
-                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                        split_list.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(s.to_string())))
+                                .handle_no_root(),
+                        );
                     }
                 }
                 return Ok(Expression::with_list(split_list));
@@ -123,7 +136,7 @@ fn builtin_str_split(
 
 fn builtin_str_rsplit(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
@@ -132,9 +145,12 @@ fn builtin_str_rsplit(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Expression> = Vec::new();
+                let mut split_list: Vec<Handle> = Vec::new();
                 for s in text.rsplit(&pat) {
-                    split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                    split_list.push(
+                        Expression::alloc_data(ExpEnum::Atom(Atom::String(s.to_string())))
+                            .handle_no_root(),
+                    );
                 }
                 return Ok(Expression::with_list(split_list));
             }
@@ -148,13 +164,13 @@ fn builtin_str_rsplit(
 
 fn builtin_str_splitn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(n) = args.next() {
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
-                    let n = if let Expression::Atom(Atom::Int(n)) = eval(environment, n)? {
+                    let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
                         if n < 0 {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -172,9 +188,12 @@ fn builtin_str_splitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
+                    let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.splitn(n as usize, &pat) {
-                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                        split_list.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(s.to_string())))
+                                .handle_no_root(),
+                        );
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -189,13 +208,13 @@ fn builtin_str_splitn(
 
 fn builtin_str_rsplitn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(n) = args.next() {
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
-                    let n = if let Expression::Atom(Atom::Int(n)) = eval(environment, n)? {
+                    let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
                         if n < 0 {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -213,9 +232,12 @@ fn builtin_str_rsplitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Expression> = Vec::new();
+                    let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.rsplitn(n as usize, &pat) {
-                        split_list.push(Expression::Atom(Atom::String(s.to_string())));
+                        split_list.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(s.to_string())))
+                                .handle_no_root(),
+                        );
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -230,7 +252,7 @@ fn builtin_str_rsplitn(
 
 fn builtin_str_cat_list(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(join_str) = args.next() {
         let join_str = eval(environment, join_str)?;
@@ -239,18 +261,19 @@ fn builtin_str_cat_list(
             if args.next().is_none() {
                 let mut new_str = String::new();
                 let list = eval(environment, list)?;
-                match list {
-                    Expression::Vector(list, _) => {
+                match &list.get().data {
+                    ExpEnum::Vector(list) => {
                         let mut first = true;
-                        for s in list.borrow().iter() {
+                        for s in list {
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, s)?);
+                            let s: Expression = s.into();
+                            new_str.push_str(&as_string(environment, &s)?);
                             first = false;
                         }
                     }
-                    Expression::Pair(_, _) => {
+                    ExpEnum::Pair(_, _) => {
                         // Includes nil
                         let list = list.iter();
                         let mut first = true;
@@ -258,7 +281,7 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, s)?);
+                            new_str.push_str(&as_string(environment, &s)?);
                             first = false;
                         }
                     }
@@ -269,7 +292,7 @@ fn builtin_str_cat_list(
                         ));
                     }
                 }
-                return Ok(Expression::Atom(Atom::String(new_str)));
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(new_str))));
             }
         }
     }
@@ -281,7 +304,7 @@ fn builtin_str_cat_list(
 
 fn builtin_str_sub(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
@@ -290,7 +313,7 @@ fn builtin_str_sub(
                     let arg0 = eval(environment, arg0)?;
                     let arg1 = eval(environment, arg1)?;
                     let arg2 = eval(environment, arg2)?;
-                    let start = if let Expression::Atom(Atom::Int(i)) = arg0 {
+                    let start = if let ExpEnum::Atom(Atom::Int(i)) = arg0.get().data {
                         i as usize
                     } else {
                         return Err(io::Error::new(
@@ -298,7 +321,7 @@ fn builtin_str_sub(
                             "str-sub first form must be an int",
                         ));
                     };
-                    let len = if let Expression::Atom(Atom::Int(i)) = arg1 {
+                    let len = if let ExpEnum::Atom(Atom::Int(i)) = arg1.get().data {
                         i as usize
                     } else {
                         return Err(io::Error::new(
@@ -306,34 +329,35 @@ fn builtin_str_sub(
                             "str-sub second form must be an int",
                         ));
                     };
-                    if let Expression::Atom(Atom::String(s)) = &arg2 {
+                    let arg2_d = arg2.get();
+                    if let ExpEnum::Atom(Atom::String(s)) = &arg2_d.data {
                         if (start + len) <= s.len() {
-                            return Ok(Expression::Atom(Atom::String(
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 s.as_str()[start..(start + len)].to_string(),
-                            )));
+                            ))));
                         } else {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
                                 "str-sub index out of range",
                             ));
                         }
-                    } else if let Expression::Atom(Atom::StringRef(s)) = &arg2 {
+                    } else if let ExpEnum::Atom(Atom::StringRef(s)) = &arg2.get().data {
                         if (start + len) <= s.len() {
-                            return Ok(Expression::Atom(Atom::String(
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 s[start..(start + len)].to_string(),
-                            )));
+                            ))));
                         } else {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
                                 "str-sub index out of range",
                             ));
                         }
-                    } else if let Expression::Atom(Atom::StringBuf(s)) = &arg2 {
+                    } else if let ExpEnum::Atom(Atom::StringBuf(s)) = &arg2.get().data {
                         let s = s.borrow();
                         if (start + len) <= s.len() {
-                            return Ok(Expression::Atom(Atom::String(
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 s.as_str()[start..(start + len)].to_string(),
-                            )));
+                            ))));
                         } else {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -358,19 +382,22 @@ fn builtin_str_sub(
 
 fn builtin_str_append(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(start) = args.next() {
         if let Some(end) = args.next() {
             if args.next().is_none() {
                 let start = eval(environment, start)?;
                 let end = eval(environment, end)?;
-                if let Expression::Atom(Atom::String(end)) = end {
-                    if let Expression::Atom(Atom::String(start)) = start {
+                let end_d = end.get();
+                if let ExpEnum::Atom(Atom::String(end)) = &end_d.data {
+                    if let ExpEnum::Atom(Atom::String(start)) = &start.get().data {
                         let mut new_string = String::with_capacity(start.len() + end.len());
                         new_string.push_str(&start);
                         new_string.push_str(&end);
-                        return Ok(Expression::Atom(Atom::String(new_string)));
+                        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                            new_string,
+                        ))));
                     } else {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -394,7 +421,7 @@ fn builtin_str_append(
 
 fn builtin_str(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let old_out = environment.state.stdout_status.clone();
     let old_err = environment.state.stderr_status.clone();
@@ -412,7 +439,7 @@ fn builtin_str(
     // Do not use ?, make sure to reset environment state even on error.
     let mut res = String::new();
     for a in args {
-        match eval(environment, &a) {
+        match eval(environment, a) {
             Err(err) => {
                 environment.state.stdout_status = old_out;
                 environment.state.stderr_status = old_err;
@@ -435,25 +462,25 @@ fn builtin_str(
     environment.data_in = data_in;
     environment.in_pipe = in_pipe;
     environment.state.pipe_pgid = pipe_pgid;
-    Ok(Expression::Atom(Atom::String(res)))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(res))))
 }
 
 fn builtin_str_empty(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            let empty = match eval(environment, &string)? {
-                Expression::Atom(Atom::String(string)) => string.is_empty(),
-                Expression::Atom(Atom::StringRef(string)) => string.is_empty(),
-                Expression::Atom(Atom::StringBuf(string)) => string.borrow().is_empty(),
+            let empty = match &eval(environment, string)?.get().data {
+                ExpEnum::Atom(Atom::String(string)) => string.is_empty(),
+                ExpEnum::Atom(Atom::StringRef(string)) => string.is_empty(),
+                ExpEnum::Atom(Atom::StringBuf(string)) => string.borrow().is_empty(),
                 _ => true,
             };
             return if empty {
-                Ok(Expression::Atom(Atom::True))
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::make_nil())
             };
         }
     }
@@ -465,31 +492,37 @@ fn builtin_str_empty(
 
 fn builtin_str_nth(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(idx) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
-                if let Expression::Atom(Atom::Int(idx)) = eval(environment, &idx)? {
-                    match eval(environment, &string)? {
-                        Expression::Atom(Atom::String(string)) => {
+                if let ExpEnum::Atom(Atom::Int(idx)) = eval(environment, idx)?.get().data {
+                    match &eval(environment, string)?.get().data {
+                        ExpEnum::Atom(Atom::String(string)) => {
                             for (i, ch) in string.chars().enumerate() {
                                 if i as i64 == idx {
-                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                                        ch,
+                                    ))));
                                 }
                             }
                         }
-                        Expression::Atom(Atom::StringRef(string)) => {
+                        ExpEnum::Atom(Atom::StringRef(string)) => {
                             for (i, ch) in string.chars().enumerate() {
                                 if i as i64 == idx {
-                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                                        ch,
+                                    ))));
                                 }
                             }
                         }
-                        Expression::Atom(Atom::StringBuf(string)) => {
+                        ExpEnum::Atom(Atom::StringBuf(string)) => {
                             for (i, ch) in string.borrow().chars().enumerate() {
                                 if i as i64 == idx {
-                                    return Ok(Expression::Atom(Atom::Char(ch)));
+                                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                                        ch,
+                                    ))));
                                 }
                             }
                         }
@@ -516,21 +549,25 @@ fn builtin_str_nth(
 
 fn builtin_str_lower(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            match eval(environment, &string)? {
-                Expression::Atom(Atom::String(string)) => {
-                    return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())))
+            match &eval(environment, string)?.get().data {
+                ExpEnum::Atom(Atom::String(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        string.to_ascii_lowercase(),
+                    ))))
                 }
-                Expression::Atom(Atom::StringRef(string)) => {
-                    return Ok(Expression::Atom(Atom::String(string.to_ascii_lowercase())))
+                ExpEnum::Atom(Atom::StringRef(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        string.to_ascii_lowercase(),
+                    ))))
                 }
-                Expression::Atom(Atom::StringBuf(string)) => {
-                    return Ok(Expression::Atom(Atom::String(
+                ExpEnum::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                         string.borrow().to_ascii_lowercase(),
-                    )))
+                    ))))
                 }
                 _ => {}
             };
@@ -544,21 +581,25 @@ fn builtin_str_lower(
 
 fn builtin_str_upper(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            match eval(environment, &string)? {
-                Expression::Atom(Atom::String(string)) => {
-                    return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())))
+            match &eval(environment, string)?.get().data {
+                ExpEnum::Atom(Atom::String(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        string.to_ascii_uppercase(),
+                    ))))
                 }
-                Expression::Atom(Atom::StringRef(string)) => {
-                    return Ok(Expression::Atom(Atom::String(string.to_ascii_uppercase())))
+                ExpEnum::Atom(Atom::StringRef(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        string.to_ascii_uppercase(),
+                    ))))
                 }
-                Expression::Atom(Atom::StringBuf(string)) => {
-                    return Ok(Expression::Atom(Atom::String(
+                ExpEnum::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                         string.borrow().to_ascii_uppercase(),
-                    )))
+                    ))))
                 }
                 _ => {}
             };
@@ -572,19 +613,25 @@ fn builtin_str_upper(
 
 fn builtin_str_bytes(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            match eval(environment, &arg)? {
-                Expression::Atom(Atom::String(string)) => {
-                    return Ok(Expression::Atom(Atom::Int(string.len() as i64)))
+            match &eval(environment, arg)?.get().data {
+                ExpEnum::Atom(Atom::String(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                        string.len() as i64,
+                    ))))
                 }
-                Expression::Atom(Atom::StringRef(string)) => {
-                    return Ok(Expression::Atom(Atom::Int(string.len() as i64)))
+                ExpEnum::Atom(Atom::StringRef(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                        string.len() as i64,
+                    ))))
                 }
-                Expression::Atom(Atom::StringBuf(string)) => {
-                    return Ok(Expression::Atom(Atom::Int(string.borrow().len() as i64)))
+                ExpEnum::Atom(Atom::StringBuf(string)) => {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                        string.borrow().len() as i64,
+                    ))))
                 }
                 _ => {}
             };
@@ -598,7 +645,7 @@ fn builtin_str_bytes(
 
 fn builtin_str_starts_with(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
@@ -608,9 +655,9 @@ fn builtin_str_starts_with(
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
                 return if text.starts_with(&pat) {
-                    Ok(Expression::Atom(Atom::True))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
                 } else {
-                    Ok(Expression::nil())
+                    Ok(Expression::make_nil())
                 };
             }
         }
@@ -623,7 +670,7 @@ fn builtin_str_starts_with(
 
 fn builtin_str_contains(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
@@ -633,9 +680,9 @@ fn builtin_str_contains(
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
                 return if text.contains(&pat) {
-                    Ok(Expression::Atom(Atom::True))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
                 } else {
-                    Ok(Expression::nil())
+                    Ok(Expression::make_nil())
                 };
             }
         }
@@ -648,7 +695,7 @@ fn builtin_str_contains(
 
 fn builtin_str_buf(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let old_out = environment.state.stdout_status.clone();
     let old_err = environment.state.stderr_status.clone();
@@ -666,7 +713,7 @@ fn builtin_str_buf(
     // Do not use ?, make sure to reset environment state even on error.
     let mut res = String::new();
     for a in args {
-        match eval(environment, &a) {
+        match eval(environment, a) {
             Err(err) => {
                 environment.state.stdout_status = old_out;
                 environment.state.stderr_status = old_err;
@@ -689,23 +736,25 @@ fn builtin_str_buf(
     environment.data_in = data_in;
     environment.in_pipe = in_pipe;
     environment.state.pipe_pgid = pipe_pgid;
-    Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
-        res,
-    )))))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+        Rc::new(RefCell::new(res)),
+    ))))
 }
 
 fn builtin_str_buf_push(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
-        if let Expression::Atom(Atom::StringBuf(res_in)) = eval(environment, arg0)? {
+        if let ExpEnum::Atom(Atom::StringBuf(res_in)) = &eval(environment, arg0)?.get().data {
             let mut res = res_in.borrow_mut();
             for a in args {
-                let a = eval(environment, &a)?;
+                let a = eval(environment, a)?;
                 res.push_str(&as_string(environment, &a)?);
             }
-            Ok(Expression::Atom(Atom::StringBuf(res_in.clone())))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+                res_in.clone(),
+            ))))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -722,14 +771,16 @@ fn builtin_str_buf_push(
 
 fn builtin_str_buf_clear(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::StringBuf(res_in)) = eval(environment, arg0)? {
+            if let ExpEnum::Atom(Atom::StringBuf(res_in)) = &eval(environment, arg0)?.get().data {
                 let mut res = res_in.borrow_mut();
                 res.clear();
-                Ok(Expression::Atom(Atom::StringBuf(res_in.clone())))
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+                    res_in.clone(),
+                ))))
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -750,13 +801,15 @@ fn builtin_str_buf_clear(
     }
 }
 
-fn str_map_inner(environment: &mut Environment, func: Lambda, string: &str) -> io::Result<String> {
+fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> io::Result<String> {
     let mut res = String::new();
     for ch in string.chars() {
         let mut list = Vec::with_capacity(2);
-        list.push(Expression::Atom(Atom::Lambda(func.clone())));
-        list.push(Expression::Atom(Atom::Char(ch)));
-        let a = eval(environment, &Expression::with_list(list))?;
+        list.push(
+            Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(func.clone()))).handle_no_root(),
+        );
+        list.push(Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch))).handle_no_root());
+        let a = eval(environment, Expression::with_list(list))?;
         res.push_str(&as_string(environment, &a)?);
     }
     Ok(res)
@@ -764,35 +817,30 @@ fn str_map_inner(environment: &mut Environment, func: Lambda, string: &str) -> i
 
 fn builtin_str_map(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(func) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
                 let func = eval(environment, func)?;
                 let string = eval(environment, string)?;
-                if let Expression::Atom(Atom::Lambda(func)) = func {
-                    match string {
-                        Expression::Atom(Atom::String(string)) => {
-                            return Ok(Expression::Atom(Atom::String(str_map_inner(
-                                environment,
-                                func,
-                                &string,
-                            )?)));
+                let func_d = func.get();
+                if let ExpEnum::Atom(Atom::Lambda(func)) = &func_d.data {
+                    match &string.get().data {
+                        ExpEnum::Atom(Atom::String(string)) => {
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                str_map_inner(environment, func, &string)?,
+                            ))));
                         }
-                        Expression::Atom(Atom::StringRef(string)) => {
-                            return Ok(Expression::Atom(Atom::String(str_map_inner(
-                                environment,
-                                func,
-                                string,
-                            )?)));
+                        ExpEnum::Atom(Atom::StringRef(string)) => {
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                str_map_inner(environment, func, string)?,
+                            ))));
                         }
-                        Expression::Atom(Atom::StringBuf(string)) => {
-                            return Ok(Expression::Atom(Atom::String(str_map_inner(
-                                environment,
-                                func,
-                                &string.borrow(),
-                            )?)));
+                        ExpEnum::Atom(Atom::StringBuf(string)) => {
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                str_map_inner(environment, func, &string.borrow())?,
+                            ))));
                         }
                         _ => {}
                     }
@@ -808,32 +856,33 @@ fn builtin_str_map(
 
 fn builtin_str_buf_map(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(func) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
                 let func = eval(environment, func)?;
                 let string = eval(environment, string)?;
-                if let Expression::Atom(Atom::Lambda(func)) = func {
-                    match string {
-                        Expression::Atom(Atom::String(string)) => {
+                let func_d = func.get();
+                if let ExpEnum::Atom(Atom::Lambda(func)) = &func_d.data {
+                    match &string.get().data {
+                        ExpEnum::Atom(Atom::String(string)) => {
                             let res = str_map_inner(environment, func, &string)?;
-                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
-                                res,
-                            )))));
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+                                Rc::new(RefCell::new(res)),
+                            ))));
                         }
-                        Expression::Atom(Atom::StringRef(string)) => {
+                        ExpEnum::Atom(Atom::StringRef(string)) => {
                             let res = str_map_inner(environment, func, string)?;
-                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
-                                res,
-                            )))));
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+                                Rc::new(RefCell::new(res)),
+                            ))));
                         }
-                        Expression::Atom(Atom::StringBuf(string)) => {
+                        ExpEnum::Atom(Atom::StringBuf(string)) => {
                             let res = str_map_inner(environment, func, &string.borrow())?;
-                            return Ok(Expression::Atom(Atom::StringBuf(Rc::new(RefCell::new(
-                                res,
-                            )))));
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringBuf(
+                                Rc::new(RefCell::new(res)),
+                            ))));
                         }
                         _ => {}
                     }
@@ -849,13 +898,13 @@ fn builtin_str_buf_map(
 
 pub fn builtin_str_ignore_expand(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let save_ignore = environment.str_ignore_expand;
     environment.str_ignore_expand = true;
-    let mut ret = Ok(Expression::nil());
+    let mut ret = Ok(Expression::make_nil());
     for arg in args {
-        ret = eval(environment, &arg);
+        ret = eval(environment, arg);
         if ret.is_err() {
             break;
         }
@@ -866,12 +915,14 @@ pub fn builtin_str_ignore_expand(
 
 fn builtin_char_lower(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::Char(ch)) = eval(environment, ch)? {
-                return Ok(Expression::Atom(Atom::Char(ch.to_ascii_lowercase())));
+            if let ExpEnum::Atom(Atom::Char(ch)) = eval(environment, ch)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                    ch.to_ascii_lowercase(),
+                ))));
             }
         }
     }
@@ -883,12 +934,14 @@ fn builtin_char_lower(
 
 fn builtin_char_upper(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::Char(ch)) = eval(environment, ch)? {
-                return Ok(Expression::Atom(Atom::Char(ch.to_ascii_uppercase())));
+            if let ExpEnum::Atom(Atom::Char(ch)) = eval(environment, ch)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                    ch.to_ascii_uppercase(),
+                ))));
             }
         }
     }
@@ -900,15 +953,15 @@ fn builtin_char_upper(
 
 fn builtin_char_is_whitespace(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let Expression::Atom(Atom::Char(ch)) = eval(environment, ch)? {
+            if let ExpEnum::Atom(Atom::Char(ch)) = eval(environment, ch)?.get().data {
                 return if ch.is_whitespace() {
-                    Ok(Expression::Atom(Atom::True))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
                 } else {
-                    Ok(Expression::nil())
+                    Ok(Expression::make_nil())
                 };
             }
         }
@@ -923,20 +976,20 @@ type CharTestFunc = fn(char, char) -> bool;
 
 fn char_test_short(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     ch_test: CharTestFunc,
     short: bool,
 ) -> io::Result<Expression> {
     let mut last_ch = None;
     for arg in args {
-        if let Expression::Atom(Atom::Char(ch)) = eval(environment, &arg)? {
+        if let ExpEnum::Atom(Atom::Char(ch)) = eval(environment, arg)?.get().data {
             if let Some(last_ch) = last_ch {
                 let test_res = ch_test(last_ch, ch);
                 if short && test_res {
-                    return Ok(Expression::Atom(Atom::True));
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)));
                 }
                 if !test_res {
-                    return Ok(Expression::nil());
+                    return Ok(Expression::make_nil());
                 }
             }
             last_ch = Some(ch);
@@ -944,12 +997,12 @@ fn char_test_short(
             return Err(io::Error::new(io::ErrorKind::Other, "only works on chars"));
         }
     }
-    Ok(Expression::Atom(Atom::True))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
 }
 
 fn char_test(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     ch_test: CharTestFunc,
 ) -> io::Result<Expression> {
     char_test_short(environment, args, ch_test, false)
@@ -957,12 +1010,12 @@ fn char_test(
 
 pub fn add_str_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("str-trim"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_trim,
             "Usage: (str-trim string) -> string
  
@@ -978,11 +1031,11 @@ Example:
 (test::assert-equal \"some string\" (str-trim \"some string\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-ltrim"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_ltrim,
             "Usage: (str-ltrim string) -> string
  
@@ -998,11 +1051,11 @@ Example:
 (test::assert-equal \"some string\" (str-ltrim \"some string\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-rtrim"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_rtrim,
             "Usage: (str-rtrim string) -> string
  
@@ -1018,11 +1071,11 @@ Example:
 (test::assert-equal \"some string\" (str-rtrim \"some string\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-replace"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_replace,
             "Usage: (str-replace string old-pattern new-pattern) -> string
  
@@ -1035,11 +1088,11 @@ Example:
 (test::assert-equal \"some yyy string yyy\" (str-replace \"some xxx string xxx\" \"xxx\" \"yyy\"))
 (test::assert-equal \"yyy some yyy string yyy\" (str-replace \"xxx some xxx string xxx\" \"xxx\" \"yyy\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-split"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_split,
             "Usage: (str-split split-pattern string) -> vector
  
@@ -1055,11 +1108,11 @@ Example:
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-split :whitespace \"somexxxyyyxxxstring\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-split \"zzz\" \"somexxxyyyxxxstring\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-rsplit"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_rsplit,
             "Usage: (str-rsplit split-pattern string) -> vector
  
@@ -1074,11 +1127,11 @@ Example:
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit :whitespace \"somexxxyyyxxxstring\"))
 (test::assert-equal '(\"somexxxyyyxxxstring\") (str-rsplit \"zzz\" \"somexxxyyyxxxstring\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-splitn"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_splitn,
             "Usage: (str-splitn n split-pattern string) -> vector
  
@@ -1093,11 +1146,11 @@ Example:
 (test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-splitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '() (str-splitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-rsplitn"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_rsplitn,
             "Usage: (str-rsplitn n split-pattern string) -> vector
  
@@ -1112,11 +1165,11 @@ Example:
 (test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-rsplitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
 (test::assert-equal '() (str-rsplitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-cat-list"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_cat_list,
             "Usage: (str-cat-list join-pattern sequence) -> string
 
@@ -1130,11 +1183,11 @@ Example:
 (test::assert-equal \"stringyyysome\" (str-cat-list \"\" '(\"string\" \"yyy\" \"some\")))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-sub"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_sub,
             "Usage: (str-sub start length string) -> string
 
@@ -1148,11 +1201,11 @@ Example:
 (test::assert-equal \"yyy\" (str-sub 9 3 \"stringxxxyyyxxxsome\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-append"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_append,
             "Usage: (str-append string string) -> string
 
@@ -1166,11 +1219,11 @@ Example:
 (test::assert-equal \"string \" (str-append \"string\" \" \"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str,
             "Usage: (str arg0 ... argN) -> string
 
@@ -1188,11 +1241,11 @@ Example:
 (test::assert-equal \"string 50 test\n\" (str \"string\" \" \" 50 \" \" (echo \"test\")))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-empty?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_empty,
             "Usage: (str-empty?) -> t/nil
 
@@ -1207,11 +1260,11 @@ Example:
 (test::assert-false (str-empty? \"string\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-nth"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_nth,
             "Usage: (str-nth n string) -> char
 
@@ -1225,11 +1278,11 @@ Example:
 (test::assert-equal #\\u (str-nth 3 \"stau\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-lower"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_lower,
             "Usage: (str-lower string) -> string
 
@@ -1245,11 +1298,11 @@ Example:
 (test::assert-equal \"stau\" (str-lower \"sTaU\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-upper"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_upper,
             "Usage: (str-upper string) -> string
 
@@ -1265,11 +1318,11 @@ Example:
 (test::assert-equal \"STAU\" (str-upper \"sTaU\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-bytes"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_bytes,
             "Usage: (str-bytes string) -> int
 
@@ -1286,11 +1339,11 @@ Example:
 (test::assert-equal 6 (str-bytes \"StauΣ\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-starts-with"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_starts_with,
             "Usage: (str-starts-with pattern string) -> t/nil
 
@@ -1303,11 +1356,11 @@ Example:
 (test::assert-false (str-starts-with \"StaU\" \"Stausomething\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-contains"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_contains,
             "Usage: (str-contains pattern string) -> t/nil
 
@@ -1325,11 +1378,11 @@ Example:
 (test::assert-true (str-contains \"someΣ\" \"StausomeΣthing\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-buf"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_buf,
             "Usage: (str-buf arg0 ... argN) -> string-buffer
 
@@ -1349,11 +1402,11 @@ Example:
 (test::assert-equal \"string 50 test\n\" (str-buf \"string\" \" \" 50 \" \" (echo \"test\")))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-buf-push!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_buf_push,
             "Usage: (str-buf-push! string-buffer arg0 ... argN) -> string-buffer
 
@@ -1370,11 +1423,11 @@ Example:
 (test::assert-equal \"def-stringsome\" test-str-buf-push)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-buf-clear!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_buf_clear,
             "Usage: (str-buf-clear! string-buffer) -> string-buffer
 
@@ -1391,11 +1444,11 @@ Example:
 (test::assert-equal \"\" test-str-buf-clear)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-map"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_map,
             "Usage: (str-map lambda string) -> string
 
@@ -1412,11 +1465,11 @@ Example:
 (test::assert-equal \"XstringXstrX\" test-str-map)
 (test::assert-true (string? test-str-map))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-buf-map"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_buf_map,
             "Usage: (str-buf-map lambda string) -> string-buffer
 
@@ -1432,11 +1485,11 @@ Example:
 (test::assert-equal \"XstringXstrX\" test-str-buf-map)
 (test::assert-true (string-buf? test-str-buf-map))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("str-ignore-expand"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_str_ignore_expand,
             "Usage: (str-ignore-expand exp0 ... expN) -> [final expression]
 
@@ -1450,12 +1503,12 @@ Example:
 (test::assert-equal \"some \\$TST-IGNORE stuff\" (str-ignore-expand \"some $TST-IGNORE stuff\"))
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("char-lower"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_char_lower,
             "Usage: (char-lower char) -> char
 
@@ -1469,11 +1522,11 @@ Example:
 (test::assert-not-equal #\\a (char-lower #\\Z))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char-upper"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_char_upper,
             "Usage: (char-upper char) -> char
 
@@ -1487,11 +1540,11 @@ Example:
 (test::assert-not-equal #\\A (char-upper #\\Z))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char-whitespace?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_char_is_whitespace,
             "Usage: (char-whitespace? char) -> t/nil
 
@@ -1505,13 +1558,13 @@ Example:
 (test::assert-false (char-whitespace? #\\s))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char="),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test(environment, args, |ch1, ch2| ch1 == ch2)
             },
@@ -1531,13 +1584,13 @@ Example:
 (test::assert-true (char= #\\a (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char!="),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test_short(environment, args, |ch1, ch2| ch1 != ch2, true)
             },
@@ -1557,13 +1610,13 @@ Example:
 (test::assert-false (char!= #\\a (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char>"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test(environment, args, |ch1, ch2| ch1 > ch2)
             },
@@ -1583,13 +1636,13 @@ Example:
 (test::assert-false (char> #\\a (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char<"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test(environment, args, |ch1, ch2| ch1 < ch2)
             },
@@ -1609,13 +1662,13 @@ Example:
 (test::assert-true (char< #\\A (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char>="),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test(environment, args, |ch1, ch2| ch1 >= ch2)
             },
@@ -1635,13 +1688,13 @@ Example:
 (test::assert-true (char>= #\\a (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("char<="),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 char_test(environment, args, |ch1, ch2| ch1 <= ch2)
             },
@@ -1662,6 +1715,6 @@ Example:
 (test::assert-true (char<= #\\A (char-lower #\\A)))
 ",
             root,
-        )),
+        ),
     );
 }

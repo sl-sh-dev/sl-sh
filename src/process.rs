@@ -81,9 +81,9 @@ pub fn wait_pid(
             if let Some(status) = status {
                 if environment.save_exit_status {
                     env::set_var("LAST_STATUS".to_string(), format!("{}", status));
-                    environment.root_scope.borrow_mut().insert_exp(
+                    environment.root_scope.borrow_mut().insert_exp_data(
                         environment.interner.intern("*last-status*"),
-                        Expression::Atom(Atom::Int(i64::from(status))),
+                        ExpEnum::Atom(Atom::Int(i64::from(status))),
                     );
                 }
             }
@@ -232,11 +232,14 @@ fn run_command(
                     wait_pid(environment, proc.id(), None)
                 };
                 match status {
-                    Some(code) => Expression::Process(ProcessState::Over(pid, code as i32)),
-                    None => Expression::nil(),
+                    Some(code) => Expression::alloc_data(ExpEnum::Process(ProcessState::Over(
+                        pid,
+                        code as i32,
+                    ))),
+                    None => Expression::alloc_data(ExpEnum::Nil),
                 }
             } else {
-                Expression::Process(ProcessState::Running(pid))
+                Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)))
             };
             add_process(environment, proc);
             Ok(result)
@@ -274,7 +277,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let Expression::File(f) = &out.exp {
+            if let ExpEnum::File(f) = &out.exp.get().data {
                 match &*f.borrow() {
                     FileState::Stdout => {
                         if is_out {
@@ -370,102 +373,99 @@ fn prep_string_arg(
     Ok(())
 }
 
-pub fn do_command<'a>(
+pub fn do_command(
     environment: &mut Environment,
     command: &str,
-    parts: Box<dyn Iterator<Item = &Expression> + 'a>,
+    parts: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut data = None;
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
-    if let Some(Expression::LazyFn(_, _)) = &environment.data_in {
-        environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
-    }
-    let stdin = match &environment.data_in {
-        Some(Expression::Atom(atom)) => {
-            data = Some(atom.clone());
-            Stdio::piped()
+    if let Some(data_in) = environment.data_in.clone() {
+        if let ExpEnum::LazyFn(_, _) = &data_in.get().data {
+            environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
         }
-        Some(Expression::Process(ProcessState::Running(pid))) => {
-            let procs = environment.procs.clone();
-            let mut procs = procs.borrow_mut();
-            if let Some(proc) = procs.get_mut(&pid) {
-                if proc.stdout.is_some() {
-                    let mut out: Option<ChildStdout> = None;
-                    std::mem::swap(&mut proc.stdout, &mut out);
-                    Stdio::from(out.unwrap())
+    }
+    let stdin = if let Some(data_in) = &environment.data_in {
+        match &data_in.get().data {
+            ExpEnum::Atom(atom) => {
+                data = Some(atom.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Process(ProcessState::Running(pid)) => {
+                let procs = environment.procs.clone();
+                let mut procs = procs.borrow_mut();
+                if let Some(proc) = procs.get_mut(&pid) {
+                    if proc.stdout.is_some() {
+                        let mut out: Option<ChildStdout> = None;
+                        std::mem::swap(&mut proc.stdout, &mut out);
+                        Stdio::from(out.unwrap())
+                    } else if foreground {
+                        Stdio::inherit()
+                    } else {
+                        Stdio::null()
+                    }
                 } else if foreground {
                     Stdio::inherit()
                 } else {
                     Stdio::null()
                 }
-            } else if foreground {
-                Stdio::inherit()
-            } else {
-                Stdio::null()
             }
-        }
-        Some(Expression::Process(ProcessState::Over(_pid, _exit_status))) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (process is already done).",
-            ))
-        }
-        Some(Expression::Function(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (function).",
-            ))
-        }
-        Some(Expression::Vector(_, _)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (list).",
-            ))
-        }
-        Some(Expression::Pair(p, _)) => {
-            if let Some((_, _)) = &*p.borrow() {
+            ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (process is already done).",
+                ))
+            }
+            ExpEnum::Function(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (function).",
+                ))
+            }
+            ExpEnum::Vector(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (list).",
+                ))
+            }
+            ExpEnum::Pair(_, _) => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "Invalid expression state before command (pair).",
                 ));
-            } else {
-                // Nil
-                Stdio::inherit()
             }
-        }
-        Some(Expression::HashMap(_)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Invalid expression state before command (hashmap).",
-            ))
-        }
-        Some(Expression::File(file)) => match &*file.borrow() {
-            FileState::Stdin => Stdio::inherit(),
-            FileState::Read(file) => {
-                // If there is ever a Windows version then use raw_handle instead of raw_fd.
-                unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
-            }
-            _ => {
+            ExpEnum::Nil => Stdio::inherit(),
+            ExpEnum::HashMap(_) => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "Invalid expression state before command (not a readable file).",
+                    "Invalid expression state before command (hashmap).",
                 ))
             }
-        },
-        Some(Expression::LazyFn(_, _)) => {
-            return Err(io::Error::new(
+            ExpEnum::File(file) => match &*file.borrow() {
+                FileState::Stdin => Stdio::inherit(),
+                FileState::Read(file) => {
+                    // If there is ever a Windows version then use raw_handle instead of raw_fd.
+                    unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Invalid expression state before command (not a readable file).",
+                    ))
+                }
+            },
+            ExpEnum::LazyFn(_, _) => {
+                return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Invalid expression state before command (lazyfn- this should be impossible...).",
             ));
-        }
-        None => {
-            if foreground {
-                Stdio::inherit()
-            } else {
-                Stdio::null()
             }
         }
+    } else if foreground {
+        Stdio::inherit()
+    } else {
+        Stdio::null()
     };
     let (stdout, stderr) = get_output(
         environment,
@@ -475,42 +475,57 @@ pub fn do_command<'a>(
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
     let mut args = Vec::new();
-    for a in parts {
-        if let Expression::Atom(Atom::String(_)) = a {
-            let new_a = eval(environment, &a)?;
+    for a_exp in parts {
+        let a_exp2 = a_exp.clone();
+        let a_exp_a = a_exp.get();
+        if let ExpEnum::Atom(Atom::String(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
-        } else if let Expression::Atom(Atom::StringRef(_)) = a {
-            let new_a = eval(environment, &a)?;
+        } else if let ExpEnum::Atom(Atom::StringRef(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
-        } else if let Expression::Atom(Atom::StringBuf(_)) = a {
-            let new_a = eval(environment, &a)?;
+        } else if let ExpEnum::Atom(Atom::StringBuf(_)) = a_exp_a.data {
+            let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
         } else {
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
-            let new_a = match a {
-                Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
-                    Some(exp) => match &exp.exp {
-                        Expression::Function(_) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
+            let new_a = match a_exp_a.data {
+                ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                    Some(exp) => match &exp.exp.get().data {
+                        ExpEnum::Function(_) => {
+                            drop(a_exp_a);
+                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
-                        Expression::Atom(Atom::Lambda(_)) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
+                        ExpEnum::Atom(Atom::Lambda(_)) => {
+                            drop(a_exp_a);
+                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
-                        Expression::Atom(Atom::Macro(_)) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
+                        ExpEnum::Atom(Atom::Macro(_)) => {
+                            drop(a_exp_a);
+                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
                         }
-                        _ => eval(environment, &a)?,
+                        _ => {
+                            drop(a_exp_a);
+                            eval(environment, a_exp2)?
+                        }
                     },
-                    _ => eval(environment, &a)?,
+                    _ => {
+                        drop(a_exp_a);
+                        eval(environment, a_exp2)?
+                    }
                 },
-                _ => eval(environment, &a)?,
+                _ => {
+                    drop(a_exp_a);
+                    eval(environment, a_exp2)?
+                }
             };
-            if let Expression::Atom(Atom::String(s)) = &new_a {
+            let new_a_a = new_a.get();
+            if let ExpEnum::Atom(Atom::String(s)) = &new_a_a.data {
                 prep_string_arg(environment, &s, &mut args)?;
-            } else if let Expression::Atom(Atom::StringRef(s)) = &new_a {
+            } else if let ExpEnum::Atom(Atom::StringRef(s)) = &new_a_a.data {
                 prep_string_arg(environment, s, &mut args)?;
-            } else if let Expression::Atom(Atom::StringBuf(s)) = &new_a {
+            } else if let ExpEnum::Atom(Atom::StringBuf(s)) = &new_a_a.data {
                 prep_string_arg(environment, &s.borrow(), &mut args)?;
             } else {
                 args.push(new_a.as_string(environment)?);

@@ -13,15 +13,15 @@ use crate::types::*;
 
 fn builtin_open(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(a) = args.next() {
         let a = eval(environment, a)?;
-        if let Expression::Atom(Atom::Symbol(sym)) = &a {
+        if let ExpEnum::Atom(Atom::Symbol(sym)) = &a.get().data {
             let ret = match &sym[..] {
-                ":stdin" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stdin)))),
-                ":stdout" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stdout)))),
-                ":stderr" => Some(Expression::File(Rc::new(RefCell::new(FileState::Stderr)))),
+                ":stdin" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin)))),
+                ":stdout" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout)))),
+                ":stderr" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr)))),
                 _ => None,
             };
             if let Some(ret) = ret {
@@ -31,13 +31,13 @@ fn builtin_open(
                         "open: if first form is a symbol then other forms not valid",
                     ));
                 }
-                return Ok(ret);
+                return Ok(Expression::alloc_data(ret));
             }
         }
-        let file_name = match &a {
-            Expression::Atom(Atom::String(name)) => name.to_string(),
-            Expression::Atom(Atom::StringRef(name)) => (*name).to_string(),
-            Expression::Atom(Atom::StringBuf(name)) => name.borrow().to_string(),
+        let file_name = match &a.get().data {
+            ExpEnum::Atom(Atom::String(name)) => name.to_string(),
+            ExpEnum::Atom(Atom::StringRef(name)) => (*name).to_string(),
+            ExpEnum::Atom(Atom::StringBuf(name)) => name.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -51,7 +51,8 @@ fn builtin_open(
         let mut error_nil = false;
         for a in args {
             let a = eval(environment, a)?;
-            if let Expression::Atom(Atom::Symbol(sym)) = a {
+            let a_d = a.get();
+            if let ExpEnum::Atom(Atom::Symbol(sym)) = &a_d.data {
                 match &sym[..] {
                     ":read" => {
                         is_read = true;
@@ -106,20 +107,20 @@ fn builtin_open(
             Ok(file) => file,
             Err(err) => {
                 if error_nil {
-                    return Ok(Expression::nil());
+                    return Ok(Expression::make_nil());
                 } else {
                     return Err(err);
                 }
             }
         };
         return if !is_write {
-            Ok(Expression::File(Rc::new(RefCell::new(FileState::Read(
-                RefCell::new(BufReader::new(file)),
-            )))))
+            Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
+                RefCell::new(FileState::Read(RefCell::new(BufReader::new(file)))),
+            ))))
         } else {
-            Ok(Expression::File(Rc::new(RefCell::new(FileState::Write(
-                RefCell::new(BufWriter::new(file)),
-            )))))
+            Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
+                RefCell::new(FileState::Write(RefCell::new(BufWriter::new(file)))),
+            ))))
         };
     }
     Err(io::Error::new(
@@ -130,15 +131,15 @@ fn builtin_open(
 
 fn builtin_close(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return if let Expression::File(file) = exp {
+            return if let ExpEnum::File(file) = &exp.get().data {
                 let closed = FileState::Closed;
                 file.replace(closed);
-                Ok(Expression::Atom(Atom::True))
+                Ok(Expression::make_true())
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -155,20 +156,20 @@ fn builtin_close(
 
 fn builtin_flush(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return if let Expression::File(file) = &exp {
+            return if let ExpEnum::File(file) = &exp.get().data {
                 match &mut *file.borrow_mut() {
                     FileState::Write(f) => {
                         f.borrow_mut().flush()?;
-                        Ok(Expression::Atom(Atom::True))
+                        Ok(Expression::make_true())
                     }
                     FileState::Stdout => {
                         io::stdout().flush()?;
-                        Ok(Expression::Atom(Atom::True))
+                        Ok(Expression::make_true())
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -191,27 +192,27 @@ fn builtin_flush(
 
 fn builtin_read_line(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return if let Expression::File(file) = &exp {
+            return if let ExpEnum::File(file) = &exp.get().data {
                 match &*file.borrow() {
                     FileState::Read(f) => {
                         let mut line = String::new();
                         if 0 == f.borrow_mut().read_line(&mut line)? {
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
                         } else {
-                            Ok(Expression::Atom(Atom::String(line)))
+                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(line))))
                         }
                     }
                     FileState::Stdin => {
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
                         } else {
-                            Ok(Expression::Atom(Atom::String(line)))
+                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(line))))
                         }
                     }
                     _ => Err(io::Error::new(
@@ -235,7 +236,7 @@ fn builtin_read_line(
 
 fn builtin_read(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn do_read(environment: &mut Environment, input: &str) -> io::Result<Expression> {
         match read(environment, &input, None) {
@@ -246,8 +247,8 @@ fn builtin_read(
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return match &exp {
-                Expression::File(file) => match &*file.borrow() {
+            return match &exp.get().data {
+                ExpEnum::File(file) => match &*file.borrow() {
                     FileState::Read(file) => {
                         let mut input = String::new();
                         file.borrow_mut().read_to_string(&mut input)?;
@@ -263,9 +264,9 @@ fn builtin_read(
                         "read: requires a file opened for reading or string",
                     )),
                 },
-                Expression::Atom(Atom::String(input)) => do_read(environment, input),
-                Expression::Atom(Atom::StringRef(input)) => do_read(environment, input),
-                Expression::Atom(Atom::StringBuf(input)) => do_read(environment, &input.borrow()),
+                ExpEnum::Atom(Atom::String(input)) => do_read(environment, input),
+                ExpEnum::Atom(Atom::StringRef(input)) => do_read(environment, input),
+                ExpEnum::Atom(Atom::StringBuf(input)) => do_read(environment, &input.borrow()),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",
@@ -281,22 +282,26 @@ fn builtin_read(
 
 fn builtin_write_line(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(file) = args.next() {
         if let Some(line) = args.next() {
             if args.next().is_none() {
                 let file = eval(environment, file)?;
                 let line = eval(environment, line)?;
-                return if let Expression::File(file) = &file {
+                return if let ExpEnum::File(file) = &file.get().data {
                     match &*file.borrow() {
                         FileState::Write(file) => {
                             writeln!(file.borrow_mut(), "{}", line.as_string(environment)?)?;
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
                         }
                         FileState::Stdout => {
                             println!("{}", line.as_string(environment)?);
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
+                        }
+                        FileState::Stderr => {
+                            eprintln!("{}", line.as_string(environment)?);
+                            Ok(Expression::make_nil())
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -320,22 +325,22 @@ fn builtin_write_line(
 
 fn builtin_write_string(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(file) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
                 let file = eval(environment, file)?;
                 let string = eval(environment, string)?;
-                return if let Expression::File(file) = file {
+                return if let ExpEnum::File(file) = &file.get().data {
                     match &*file.borrow() {
                         FileState::Write(file) => {
                             write!(file.borrow_mut(), "{}", string.as_string(environment)?)?;
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
                         }
                         FileState::Stdout => {
                             print!("{}", string.as_string(environment)?);
-                            Ok(Expression::nil())
+                            Ok(Expression::make_nil())
                         }
                         _ => Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -359,12 +364,12 @@ fn builtin_write_string(
 
 pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("open"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_open,
             "Usage: (open filename option*)
 
@@ -382,15 +387,17 @@ Options are:
 Section: file
 
 Example:
-(write-line (open \"/tmp/slsh-tst-open.txt\" :create :truncate) \"Test Line One\")
+(def 'test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line test-open-f \"Test Line One\")
+(close test-open-f)
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("close"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_close,
             "Usage: (close file)
 
@@ -407,11 +414,11 @@ Example:
 (close tst-file)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("flush"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_flush,
             "Usage: (flush file)
 
@@ -428,11 +435,11 @@ Example:
 (close tst-file)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("read-line"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_read_line,
             "Usage: (read-line file) -> string
 
@@ -451,11 +458,11 @@ Example:
 (close tst-file)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("read"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_read,
             "Usage: (read file|string) -> list
 
@@ -479,11 +486,11 @@ Example:
 (test::assert-equal '(x y z) (read \"(x y z)\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("write-line"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_write_line,
             "Usage: (write-line file string)
 
@@ -500,11 +507,11 @@ Example:
 (close tst-file)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("write-string"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_write_string,
             "Usage: (write-string file string)
 
@@ -521,6 +528,6 @@ Example:
 (close tst-file)
 ",
             root,
-        )),
+        ),
     );
 }

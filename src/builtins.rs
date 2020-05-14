@@ -11,12 +11,12 @@ use std::fs;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
-use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::reader::*;
@@ -24,26 +24,24 @@ use crate::types::*;
 
 fn builtin_eval(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, &arg)?;
-            return match arg {
-                Expression::Atom(Atom::String(s)) => match read(environment, &s, None) {
-                    Ok(ast) => eval(environment, &ast),
+            let arg = eval(environment, arg)?;
+            return match &arg.get().data {
+                ExpEnum::Atom(Atom::String(s)) => match read(environment, &s, None) {
+                    Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                Expression::Atom(Atom::StringRef(s)) => match read(environment, s, None) {
-                    Ok(ast) => eval(environment, &ast),
+                ExpEnum::Atom(Atom::StringRef(s)) => match read(environment, s, None) {
+                    Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                Expression::Atom(Atom::StringBuf(s)) => {
-                    match read(environment, &s.borrow(), None) {
-                        Ok(ast) => eval(environment, &ast),
-                        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-                    }
-                }
+                ExpEnum::Atom(Atom::StringBuf(s)) => match read(environment, &s.borrow(), None) {
+                    Ok(ast) => eval(environment, ast),
+                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                },
                 _ => eval(environment, &arg),
             };
         }
@@ -56,43 +54,36 @@ fn builtin_eval(
 
 fn builtin_fncall(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut call_list = Vec::new();
-    for arg in args {
-        call_list.push(arg.clone());
+    if let Some(command) = args.next() {
+        let command = eval(environment, command)?;
+        fn_call(environment, command, args)
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"))
     }
-    if call_list.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"));
-    }
-    let command = eval(environment, &call_list[0])?;
-    fn_call(environment, &command, Box::new(call_list[1..].iter()))
 }
 
 fn builtin_apply(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut call_list = Vec::new();
-    let mut last_arg: Option<&Expression> = None;
+    let mut call_list: Vec<Handle> = Vec::new();
+    let mut last_arg: Option<Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(a);
+            call_list.push(a.into());
         }
         last_arg = Some(arg);
     }
-    let tlist;
-    let list_borrow;
     let last_evaled;
     if let Some(alist) = last_arg {
         last_evaled = eval(environment, alist)?;
-        let itr = match last_evaled {
-            Expression::Vector(list, _) => {
-                tlist = list;
-                list_borrow = tlist.borrow();
-                Box::new(list_borrow.iter())
-            }
-            Expression::Pair(_, _) => last_evaled.iter(), // Includes Nil.
+        let last_d = last_evaled.get();
+        let itr = match &last_d.data {
+            ExpEnum::Vector(list) => Box::new(ListIter::new_list(&list)),
+            ExpEnum::Pair(_, _) => last_evaled.iter(),
+            ExpEnum::Nil => last_evaled.iter(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -101,28 +92,26 @@ fn builtin_apply(
             }
         };
         for a in itr {
-            call_list.push(a);
+            call_list.push(a.into());
         }
     }
-    if call_list.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"));
+    let mut args = box_slice_it(&call_list[..]);
+    if let Some(command) = args.next() {
+        let command = eval(environment, command)?;
+        fn_call(environment, command, &mut args)
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"))
     }
-    let command = eval(environment, &call_list[0])?;
-    fn_call(
-        environment,
-        &command,
-        Box::new(call_list[1..].iter().copied()),
-    )
 }
 
 fn builtin_unwind_protect(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(protected) = args.next() {
         let result = eval(environment, protected);
         for a in args {
-            if let Err(err) = eval(environment, a) {
+            if let Err(err) = eval(environment, &a) {
                 eprintln!(
                     "ERROR in unwind-protect cleanup form {}, {} will continue cleanup",
                     a, err
@@ -131,13 +120,13 @@ fn builtin_unwind_protect(
         }
         result
     } else {
-        Ok(Expression::nil())
+        Ok(Expression::alloc_data(ExpEnum::Nil))
     }
 }
 
 fn builtin_err(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -166,21 +155,18 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         None => file_name.to_string(),
     };
     let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
-        let vec_borrow;
-        let p_itr = match &lp.exp {
-            Expression::Vector(vec, _) => {
-                vec_borrow = vec.borrow();
-                Box::new(vec_borrow.iter())
-            }
+        let lp_d = lp.exp.get();
+        let p_itr = match &lp_d.data {
+            ExpEnum::Vector(vec) => Box::new(ListIter::new_list(&vec)),
             _ => lp.exp.iter(),
         };
         let mut path_out = file_name.clone();
         for l in p_itr {
-            let path_name = match l {
-                Expression::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
-                Expression::Atom(Atom::String(s)) => Some(s.to_string()),
-                Expression::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
-                Expression::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
+            let path_name = match &l.get().data {
+                ExpEnum::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
+                ExpEnum::Atom(Atom::String(s)) => Some(s.to_string()),
+                ExpEnum::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
+                ExpEnum::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
                 _ => None,
             };
             if let Some(path_name) = path_name {
@@ -238,24 +224,25 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             let old_loose_syms = environment.loose_symbols;
             // Do not use loose symbols in scripts even if loading from the repl.
             environment.loose_symbols = false;
-            let mut res = Expression::nil();
-            match ast {
-                Expression::Vector(list, _) => {
-                    for l in list.borrow_mut().drain(..) {
-                        res = eval(environment, &l)?;
+            let mut res: Option<Expression> = None;
+            match &ast.get().data {
+                ExpEnum::Vector(list) => {
+                    for l in list {
+                        let l: Expression = l.into();
+                        res = Some(eval(environment, &l)?);
                     }
                 }
-                Expression::Pair(_, _) => {
+                ExpEnum::Pair(_, _) => {
                     for l in ast.iter() {
-                        res = eval(environment, &l)?;
+                        res = Some(eval(environment, l)?);
                     }
                 }
                 _ => {
-                    res = eval(environment, &ast)?;
+                    res = Some(eval(environment, &ast)?);
                 }
             }
             environment.loose_symbols = old_loose_syms;
-            Ok(res)
+            Ok(res.unwrap_or_else(Expression::make_nil))
         }
         Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
     }
@@ -263,7 +250,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
 
 fn builtin_load(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -280,71 +267,75 @@ fn builtin_load(
 
 fn builtin_length(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match &arg {
-                Expression::Atom(Atom::String(s)) => {
+            return match &arg.get().data {
+                ExpEnum::Atom(Atom::String(s)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in s.chars() {
                         i += 1;
                     }
-                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
+                        i,
+                    )))))
                 }
-                Expression::Atom(Atom::StringRef(s)) => {
+                ExpEnum::Atom(Atom::StringRef(s)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in s.chars() {
                         i += 1;
                     }
-                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
+                        i,
+                    )))))
                 }
-                Expression::Atom(Atom::StringBuf(s)) => {
+                ExpEnum::Atom(Atom::StringBuf(s)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in s.borrow().chars() {
                         i += 1;
                     }
-                    Ok(Expression::Atom(Atom::Int(i64::from(i))))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
+                        i,
+                    )))))
                 }
-                Expression::Atom(_) => Ok(Expression::Atom(Atom::Int(1))),
-                Expression::Vector(list, _) => {
-                    Ok(Expression::Atom(Atom::Int(list.borrow().len() as i64)))
-                }
-                Expression::Pair(p, _) => {
-                    if let Some((_e1, e2)) = &*p.borrow() {
-                        let mut len = 0;
-                        let mut e_next = e2.clone();
-                        loop {
-                            match e_next {
-                                Expression::Pair(p, _) => {
-                                    len += 1;
-                                    if let Some((_e1, e2)) = &*p.borrow() {
-                                        e_next = e2.clone();
-                                    } else {
-                                        // Nil
-                                        break;
-                                    }
-                                }
-                                _ => {
-                                    len += 1;
-                                    break;
-                                }
+                ExpEnum::Atom(_) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(1)))),
+                ExpEnum::Vector(list) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    list.len() as i64,
+                )))),
+                ExpEnum::Pair(_, e2) => {
+                    let e2: Expression = e2.into();
+                    let mut len = 0;
+                    let mut e_next = e2;
+                    loop {
+                        let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
+                            let e2: Expression = e2.into();
+                            Some(e2.clone())
+                        } else {
+                            None
+                        };
+                        match e2 {
+                            Some(e2) => {
+                                len += 1;
+                                e_next = e2.clone();
+                            }
+                            None => {
+                                len += 1;
+                                break;
                             }
                         }
-                        Ok(Expression::Atom(Atom::Int(len)))
-                    } else {
-                        // Nil
-                        Ok(Expression::Atom(Atom::Int(0)))
                     }
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(len))))
                 }
-                Expression::HashMap(map) => {
-                    Ok(Expression::Atom(Atom::Int(map.borrow().len() as i64)))
-                }
-                _ => Ok(Expression::Atom(Atom::Int(0))),
+                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(0)))),
+                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    map.len() as i64,
+                )))),
+                _ => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(0)))),
             };
         }
     }
@@ -356,7 +347,7 @@ fn builtin_length(
 
 fn builtin_if(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(if_form) = args.next() {
         if let Some(then_form) = args.next() {
@@ -364,7 +355,7 @@ fn builtin_if(
                 if let Some(else_form) = args.next() {
                     eval_nr(environment, else_form)
                 } else {
-                    Ok(Expression::nil())
+                    Ok(Expression::alloc_data(ExpEnum::Nil))
                 }
             } else {
                 eval_nr(environment, then_form)
@@ -379,7 +370,7 @@ fn builtin_if(
 
 fn args_out(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
     pretty: bool,
     writer: &mut dyn Write,
@@ -387,10 +378,10 @@ fn args_out(
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
-        let pretty = match aa {
-            Expression::Atom(Atom::String(_)) => false,
-            Expression::Atom(Atom::StringRef(_)) => false,
-            Expression::Atom(Atom::StringBuf(_)) => false,
+        let pretty = match &aa.get().data {
+            ExpEnum::Atom(Atom::String(_)) => false,
+            ExpEnum::Atom(Atom::StringRef(_)) => false,
+            ExpEnum::Atom(Atom::StringBuf(_)) => false,
             _ => pretty,
         };
         if pretty {
@@ -407,7 +398,7 @@ fn args_out(
 
 fn print_to_oe(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
     pretty: bool,
     default_error: bool,
@@ -416,7 +407,7 @@ fn print_to_oe(
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
-            if let Expression::File(f) = &out.exp {
+            if let ExpEnum::File(f) = &out.exp.get().data {
                 match &*f.borrow() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
@@ -433,10 +424,10 @@ fn print_to_oe(
                         for a in args {
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
-                            let pretty = match aa {
-                                Expression::Atom(Atom::String(_)) => false,
-                                Expression::Atom(Atom::StringRef(_)) => false,
-                                Expression::Atom(Atom::StringBuf(_)) => false,
+                            let pretty = match &aa.get().data {
+                                ExpEnum::Atom(Atom::String(_)) => false,
+                                ExpEnum::Atom(Atom::StringRef(_)) => false,
+                                ExpEnum::Atom(Atom::StringBuf(_)) => false,
                                 _ => pretty,
                             };
                             if pretty {
@@ -478,7 +469,7 @@ fn print_to_oe(
 
 fn print(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stdout_status {
@@ -487,12 +478,12 @@ fn print(
             print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
         }
     };
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
 pub fn eprint(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> io::Result<Expression> {
     match &environment.state.stderr_status {
@@ -501,68 +492,70 @@ pub fn eprint(
             print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
         }
     };
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
 fn builtin_print(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     print(environment, args, false)
 }
 
 fn builtin_println(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     print(environment, args, true)
 }
 
 fn builtin_eprint(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     eprint(environment, args, false)
 }
 
 fn builtin_eprintln(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     eprint(environment, args, true)
 }
 
 fn builtin_format(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut res = String::new();
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
-    Ok(Expression::Atom(Atom::String(res)))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(res))))
 }
 
 pub fn builtin_progn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::nil();
+    let mut ret: Option<Expression> = None;
     for arg in args {
-        ret.resolve(environment)?;
-        ret = eval_nr(environment, &arg)?;
+        if let Some(ret) = ret {
+            ret.resolve(environment)?;
+        }
+        ret = Some(eval_nr(environment, arg.clone_root())?);
     }
-    Ok(ret)
+    Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
 fn proc_set_vars<'a>(
     environment: &mut Environment,
-    args: &'a mut dyn Iterator<Item = &Expression>,
-) -> io::Result<(&'static str, Option<String>, &'a Expression)> {
+    args: &'a mut dyn Iterator<Item = Expression>,
+) -> io::Result<(&'static str, Option<String>, Expression)> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
-            let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(s)) => s,
+            let key = match eval(environment, key)?.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -595,34 +588,38 @@ fn val_to_reference(
     environment: &mut Environment,
     namespace: Option<&'static str>,
     doc_string: Option<String>,
-    val_in: &Expression,
-) -> io::Result<(Rc<Reference>, Expression)> {
-    if let Expression::Atom(Atom::Symbol(s)) = val_in {
+    val_in: Expression,
+) -> io::Result<(Reference, Expression)> {
+    let val_in_d = val_in.get();
+    if let ExpEnum::Atom(Atom::Symbol(s)) = &val_in_d.data {
         if let Some(exp) = get_expression(environment, s) {
+            drop(val_in_d); // Free read lock on val_in.
             Ok((exp, eval(environment, val_in)?))
         } else {
-            let val = eval(environment, &val_in)?;
+            drop(val_in_d); // Free read lock on val_in.
+            let val = eval(environment, val_in)?;
             Ok((
-                Rc::new(Reference {
-                    exp: val.clone(),
-                    meta: RefMetaData {
+                Reference::new_rooted(
+                    val.clone_root(),
+                    RefMetaData {
                         namespace,
                         doc_string,
                     },
-                }),
+                ),
                 val,
             ))
         }
     } else {
+        drop(val_in_d); // Free read lock on val_in.
         let val = eval(environment, val_in)?;
         Ok((
-            Rc::new(Reference {
-                exp: val.clone(),
-                meta: RefMetaData {
+            Reference::new_rooted(
+                val.clone_root(),
+                RefMetaData {
                     namespace,
                     doc_string,
                 },
-            }),
+            ),
             val,
         ))
     }
@@ -630,13 +627,19 @@ fn val_to_reference(
 
 fn builtin_set(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
         // XXX TODO, eval val here?
-        entry.insert(Rc::new(val.clone()));
-        Ok(val.clone())
+        entry.insert(Reference::new_rooted(
+            val.clone_root(),
+            RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        ));
+        Ok(val)
     } else if let Some(scope) = get_symbols_scope(environment, &key) {
         let name = scope.borrow().name;
         let (reference, val) = val_to_reference(environment, name, doc_str, val)?;
@@ -652,15 +655,16 @@ fn builtin_set(
 
 fn builtin_export(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if let Some(val) = args.next() {
             if args.next().is_none() {
                 let key = eval(environment, key)?;
                 let val = eval(environment, val)?;
-                let key = match key {
-                    Expression::Atom(Atom::Symbol(s)) => s,
+                let key_d = &key.get().data;
+                let key = match key_d {
+                    ExpEnum::Atom(Atom::Symbol(s)) => s,
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -668,39 +672,31 @@ fn builtin_export(
                         ));
                     }
                 };
-                let val = match &val {
-                    Expression::Atom(Atom::Symbol(s)) => Expression::Atom(Atom::StringRef(s)),
-                    Expression::Atom(Atom::StringRef(s)) => Expression::Atom(Atom::StringRef(s)),
-                    Expression::Atom(Atom::String(s)) => {
-                        Expression::Atom(Atom::String(s.to_string()))
+                let val = match &val.get().data {
+                    ExpEnum::Atom(Atom::Symbol(s)) => ExpEnum::Atom(Atom::StringRef(s)),
+                    ExpEnum::Atom(Atom::StringRef(s)) => ExpEnum::Atom(Atom::StringRef(s)),
+                    ExpEnum::Atom(Atom::String(s)) => ExpEnum::Atom(Atom::String(s.to_string())),
+                    ExpEnum::Atom(Atom::StringBuf(s)) => {
+                        ExpEnum::Atom(Atom::String(s.borrow().clone()))
                     }
-                    Expression::Atom(Atom::StringBuf(s)) => {
-                        Expression::Atom(Atom::String(s.borrow().clone()))
-                    }
-                    Expression::Atom(Atom::Int(i)) => {
-                        Expression::Atom(Atom::String(format!("{}", i)))
-                    }
-                    Expression::Atom(Atom::Float(f)) => {
-                        Expression::Atom(Atom::String(format!("{}", f)))
-                    }
-                    Expression::Process(ProcessState::Running(_pid)) => {
-                        Expression::Atom(Atom::String(
+                    ExpEnum::Atom(Atom::Int(i)) => ExpEnum::Atom(Atom::String(format!("{}", i))),
+                    ExpEnum::Atom(Atom::Float(f)) => ExpEnum::Atom(Atom::String(format!("{}", f))),
+                    ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::Atom(Atom::String(
+                        val.as_string(environment)
+                            .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                    )),
+                    ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
+                        ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
                         ))
                     }
-                    Expression::Process(ProcessState::Over(_pid, _exit_status)) => {
-                        Expression::Atom(Atom::String(
-                            val.as_string(environment)
-                                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
-                        ))
-                    }
-                    Expression::File(file) => match &*file.borrow() {
-                        FileState::Stdin => Expression::Atom(Atom::String(
+                    ExpEnum::File(file) => match &*file.borrow() {
+                        FileState::Stdin => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "STDIN FAILED".to_string()),
                         )),
-                        FileState::Read(_) => Expression::Atom(Atom::String(
+                        FileState::Read(_) => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
                         )),
@@ -718,7 +714,7 @@ fn builtin_export(
                         ));
                     }
                 };
-                let val = val.as_string(environment)?;
+                let val = Expression::alloc_data(val).as_string(environment)?;
                 let val = match expand_tilde(&val) {
                     Some(v) => v,
                     None => val,
@@ -728,7 +724,7 @@ fn builtin_export(
                 } else {
                     env::remove_var(key);
                 }
-                return Ok(Expression::Atom(Atom::String(val)));
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(val))));
             }
         }
     }
@@ -740,14 +736,15 @@ fn builtin_export(
 
 fn builtin_unexport(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
-            if let Expression::Atom(Atom::Symbol(k)) = key {
+            let key_d = &key.get().data;
+            if let ExpEnum::Atom(Atom::Symbol(k)) = key_d {
                 env::remove_var(k);
-                return Ok(Expression::nil());
+                return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
         }
     }
@@ -759,14 +756,14 @@ fn builtin_unexport(
 
 fn builtin_def(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
-            match &exp.exp {
-                Expression::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
-                Expression::Atom(Atom::StringRef(s)) => Some(s),
-                Expression::Atom(Atom::StringBuf(s)) => {
+            match &exp.exp.get().data {
+                ExpEnum::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
+                ExpEnum::Atom(Atom::StringRef(s)) => Some(s),
+                ExpEnum::Atom(Atom::StringBuf(s)) => {
                     Some(environment.interner.intern(&*s.borrow()))
                 }
                 _ => None,
@@ -817,14 +814,15 @@ fn builtin_def(
 
 fn builtin_undef(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
-            if let Expression::Atom(Atom::Symbol(k)) = key {
+            let key_d = &key.get().data;
+            if let ExpEnum::Atom(Atom::Symbol(k)) = key_d {
                 remove_expression_current(environment, &k);
-                return Ok(Expression::nil());
+                return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
         }
     }
@@ -836,12 +834,13 @@ fn builtin_undef(
 
 fn builtin_dyn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let (key, val) = if let Some(key) = args.next() {
+        let key = eval(environment, key)?;
         if let Some(val) = args.next() {
-            let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(s)) => s,
+            let key = match key.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -863,49 +862,63 @@ fn builtin_dyn(
             "dyn requires a key and value",
         ));
     };
-    let old_val = if environment.dynamic_scope.contains_key(&key) {
-        Some(environment.dynamic_scope.remove(&key).unwrap())
+    let old_val = if environment.dynamic_scope.contains_key(key) {
+        Some(environment.dynamic_scope.remove(key).unwrap())
     } else {
         None
     };
     if let Some(exp) = args.next() {
-        environment.dynamic_scope.insert(key, Rc::new(val));
-        let res = eval(environment, exp);
-        if let Some(old_val) = old_val {
-            environment.dynamic_scope.insert(key, old_val);
-        } else {
-            environment.dynamic_scope.remove(&key);
+        if args.next().is_none() {
+            environment.dynamic_scope.insert(
+                key,
+                Reference::new_rooted(
+                    val,
+                    RefMetaData {
+                        namespace: None,
+                        doc_string: None,
+                    },
+                ),
+            );
+            let res = eval(environment, exp);
+            if let Some(old_val) = old_val {
+                environment.dynamic_scope.insert(key, old_val);
+            } else {
+                environment.dynamic_scope.remove(key);
+            }
+            return res;
         }
-        res
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "dyn requires three expressions (symbol, value, form to evaluate)",
-        ))
     }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "dyn requires three expressions (symbol, value, form to evaluate)",
+    ))
 }
 
 fn builtin_to_symbol(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match &arg0 {
-                Expression::Atom(Atom::String(s)) => Ok(Expression::Atom(Atom::Symbol(
-                    environment.interner.intern(s),
+            return match &arg0.get().data {
+                ExpEnum::Atom(Atom::String(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::Symbol(environment.interner.intern(&s)),
                 ))),
-                Expression::Atom(Atom::StringRef(s)) => Ok(Expression::Atom(Atom::Symbol(s))),
-                Expression::Atom(Atom::StringBuf(s)) => Ok(Expression::Atom(Atom::Symbol(
-                    environment.interner.intern(&s.borrow()),
+                ExpEnum::Atom(Atom::StringRef(s)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
+                }
+                ExpEnum::Atom(Atom::StringBuf(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::Symbol(environment.interner.intern(&s.borrow())),
                 ))),
-                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::Symbol(s))),
-                Expression::Atom(Atom::Int(i)) => Ok(Expression::Atom(Atom::Symbol(
-                    environment.interner.intern(&format!("{}", i)),
+                ExpEnum::Atom(Atom::Symbol(s)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
+                }
+                ExpEnum::Atom(Atom::Int(i)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::Symbol(environment.interner.intern(&format!("{}", i))),
                 ))),
-                Expression::Atom(Atom::Float(f)) => Ok(Expression::Atom(Atom::Symbol(
-                    environment.interner.intern(&format!("{}", f)),
+                ExpEnum::Atom(Atom::Float(f)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::Symbol(environment.interner.intern(&format!("{}", f))),
                 ))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -922,13 +935,15 @@ fn builtin_to_symbol(
 
 fn builtin_symbol_name(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match &arg0 {
-                Expression::Atom(Atom::Symbol(s)) => Ok(Expression::Atom(Atom::StringRef(s))),
+            return match &arg0.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))))
+                }
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "symbol-name can only convert a symbol to a string",
@@ -944,16 +959,20 @@ fn builtin_symbol_name(
 
 fn builtin_fn(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
-                return Ok(Expression::Atom(Atom::Lambda(Lambda {
-                    params: Box::new(params.clone()),
-                    body: Box::new(body.clone()),
-                    capture: environment.current_scope.last().unwrap().clone(),
-                })));
+                let params = params.handle_no_root();
+                let body = body.handle_no_root();
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
+                    Lambda {
+                        params,
+                        body,
+                        capture: environment.current_scope.last().unwrap().clone(),
+                    },
+                ))));
             }
         }
     }
@@ -965,11 +984,11 @@ fn builtin_fn(
 
 fn builtin_quote(
     _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            return Ok(arg.clone());
+            return Ok(arg);
         }
     }
     Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"))
@@ -977,112 +996,118 @@ fn builtin_quote(
 
 fn replace_commas(
     environment: &mut Environment,
-    list: &mut dyn Iterator<Item = &Expression>,
+    list: &mut dyn Iterator<Item = Expression>,
     is_vector: bool,
     meta: Option<ExpMeta>,
 ) -> io::Result<Expression> {
-    let mut output: Vec<Expression> = Vec::new(); //with_capacity(list.len());
+    let mut output: Vec<Handle> = Vec::new();
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
-        let exp = match exp {
-            Expression::Vector(tlist, m) => replace_commas(
-                environment,
-                &mut tlist.borrow().iter(),
-                is_vector,
-                m.clone(),
-            )?,
-            Expression::Pair(_, m) => {
-                replace_commas(environment, &mut exp.iter(), is_vector, m.clone())?
+        let meta = exp.meta();
+        let exp_d = exp.get();
+        let exp = match &exp_d.data {
+            ExpEnum::Vector(list) => {
+                let mut i = Box::new(ListIter::new_list(&list));
+                replace_commas(environment, &mut i, is_vector, meta)?
             }
+            ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             _ => exp.clone(),
         };
-        if let Expression::Atom(Atom::Symbol(symbol)) = &exp {
+        if let ExpEnum::Atom(Atom::Symbol(symbol)) = &exp_d.data {
             if symbol == &"," {
                 comma_next = true;
             } else if symbol == &",@" {
                 amp_next = true;
             } else if comma_next {
-                output.push(eval(environment, &exp)?);
+                drop(exp_d);
+                output.push(eval(environment, exp)?.into());
                 comma_next = false;
             } else if amp_next {
-                let nl = eval(environment, &exp)?;
-                if let Expression::Vector(new_list, _) = nl {
-                    for item in new_list.borrow().iter() {
-                        output.push(item.clone());
+                drop(exp_d);
+                let nl = eval(environment, exp)?;
+                match &nl.get().data {
+                    ExpEnum::Vector(new_list) => {
+                        for item in new_list {
+                            output.push(item.clone());
+                        }
                     }
-                } else if let Expression::Pair(_, _) = nl {
+                    ExpEnum::Pair(_, _) => {
+                        for item in nl.iter() {
+                            output.push(item.into());
+                        }
+                    }
+                    ExpEnum::Nil => {}
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            ",@ must be applied to a list",
+                        ));
+                    }
+                }
+                amp_next = false;
+            } else {
+                output.push(exp.into());
+            }
+        } else if comma_next {
+            drop(exp_d);
+            output.push(eval(environment, exp)?.into());
+            comma_next = false;
+        } else if amp_next {
+            drop(exp_d);
+            let nl = eval(environment, exp)?;
+            match &nl.get().data {
+                ExpEnum::Vector(new_list) => {
+                    for item in new_list {
+                        output.push(item.clone_no_root());
+                    }
+                }
+                ExpEnum::Pair(_, _) => {
                     for item in nl.iter() {
-                        output.push(item.clone());
+                        output.push(item.into());
                     }
-                } else {
+                }
+                ExpEnum::Nil => {}
+                _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         ",@ must be applied to a list",
                     ));
                 }
-                amp_next = false;
-            } else {
-                output.push(exp);
-            }
-        } else if comma_next {
-            output.push(eval(environment, &exp)?);
-            comma_next = false;
-        } else if amp_next {
-            let nl = eval(environment, &exp)?;
-            if let Expression::Vector(new_list, _) = nl {
-                for item in new_list.borrow_mut().drain(..) {
-                    output.push(item);
-                }
-            } else if let Expression::Pair(_, _) = nl {
-                for item in nl.iter() {
-                    output.push(item.clone());
-                }
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    ",@ must be applied to a list",
-                ));
             }
             amp_next = false;
         } else {
-            output.push(exp);
+            output.push(exp.into());
         }
     }
     if is_vector {
         Ok(Expression::with_list_meta(output, meta))
     } else {
-        Ok(Expression::cons_from_vec(&mut output, meta))
+        Ok(Expression::cons_from_vec(&output, meta))
     }
 }
 
 fn builtin_bquote(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let ret = if let Some(arg) = args.next() {
-        match arg {
-            Expression::Atom(Atom::Symbol(s)) if s == &"," => {
+        let meta = arg.meta();
+        match &arg.get().data {
+            ExpEnum::Atom(Atom::Symbol(s)) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
-                    Ok(Expression::nil())
+                    Ok(Expression::alloc_data(ExpEnum::Nil))
                 }
             }
-            Expression::Vector(list, meta) => replace_commas(
+            ExpEnum::Vector(list) => replace_commas(
                 environment,
-                &mut Box::new(list.borrow().iter()),
+                &mut Box::new(ListIter::new_list(list)),
                 true,
-                meta.clone(),
+                meta,
             ),
-            Expression::Pair(p, meta) => {
-                if let Some((_, _)) = &*p.borrow() {
-                    replace_commas(environment, &mut arg.iter(), false, meta.clone())
-                } else {
-                    // Nil
-                    Ok(arg.clone())
-                }
-            }
+            ExpEnum::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false, meta),
             _ => Ok(arg.clone()),
         }
     } else {
@@ -1119,49 +1144,49 @@ fn builtin_bquote(
         }
     });
     //let res = child.join()
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }*/
 
 fn builtin_and(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut last_exp = Expression::Atom(Atom::True);
+    let mut last_exp = None;
     for arg in args {
-        let arg = eval(environment, &arg)?;
+        let arg = eval(environment, arg)?;
         if arg.is_nil() {
-            return Ok(Expression::nil());
+            return Ok(Expression::alloc_data(ExpEnum::Nil));
         } else {
-            last_exp = arg;
+            last_exp = Some(arg);
         }
     }
-    Ok(last_exp)
+    Ok(last_exp.unwrap_or_else(Expression::make_true))
 }
 
 fn builtin_or(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     for arg in args {
-        let arg = eval(environment, &arg)?;
+        let arg = eval(environment, arg)?;
         if !arg.is_nil() {
             return Ok(arg);
         }
     }
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
 fn builtin_not(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return if arg0.is_nil() {
-                Ok(Expression::Atom(Atom::True))
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
             } else {
-                Ok(Expression::nil())
+                Ok(Expression::alloc_data(ExpEnum::Nil))
             };
         }
     }
@@ -1170,23 +1195,23 @@ fn builtin_not(
 
 fn builtin_is_def(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn get_ret(environment: &mut Environment, name: &str) -> io::Result<Expression> {
         if is_expression(environment, name) {
-            Ok(Expression::Atom(Atom::True))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     }
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match arg0 {
-                Expression::Atom(Atom::Symbol(s)) => get_ret(environment, s),
-                Expression::Atom(Atom::StringRef(s)) => get_ret(environment, s),
-                Expression::Atom(Atom::String(s)) => get_ret(environment, &s),
-                Expression::Atom(Atom::StringBuf(s)) => get_ret(environment, &s.borrow()),
+            return match &arg0.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
+                ExpEnum::Atom(Atom::StringRef(s)) => get_ret(environment, s),
+                ExpEnum::Atom(Atom::String(s)) => get_ret(environment, &s),
+                ExpEnum::Atom(Atom::StringBuf(s)) => get_ret(environment, &s.borrow()),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "def? takes a symbol or string (will be treated as a symbol) to lookup",
@@ -1202,15 +1227,17 @@ fn builtin_is_def(
 
 fn builtin_macro(
     _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
-                return Ok(Expression::Atom(Atom::Macro(Macro {
-                    params: Box::new(params.clone()),
-                    body: Box::new(body.clone()),
-                })));
+                let params = params.handle_no_root();
+                let body = body.handle_no_root();
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Macro {
+                    params,
+                    body,
+                }))));
             }
         }
     }
@@ -1223,23 +1250,23 @@ fn builtin_macro(
 fn do_expansion(
     environment: &mut Environment,
     command: &Expression,
-    parts: &mut dyn Iterator<Item = &Expression>,
+    parts: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Option<Expression>> {
-    if let Expression::Atom(Atom::Symbol(command)) = command {
+    if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
         if let Some(exp) = get_expression(environment, &command) {
-            if let Expression::Atom(Atom::Macro(sh_macro)) = &exp.exp {
+            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
+                let params: Expression = sh_macro.params.clone().into();
+                let body: Expression = sh_macro.body.clone().into();
                 let new_scope = match environment.current_scope.last() {
                     Some(last) => build_new_scope(Some(last.clone())),
                     None => build_new_scope(None),
                 };
                 environment.current_scope.push(new_scope);
-                let args: Vec<Expression> = parts.cloned().collect();
-                let ib: Box<(dyn Iterator<Item = &Expression>)> = Box::new(args.iter());
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, ib, false) {
+                if let Err(err) = setup_args(environment, None, &params, parts, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
-                let expansion = eval(environment, &sh_macro.body);
+                let expansion = eval(environment, &body);
                 if let Err(err) = expansion {
                     environment.current_scope.pop();
                     return Err(err);
@@ -1263,15 +1290,19 @@ fn expand_macro_internal(
     arg: &Expression,
     one: bool,
 ) -> io::Result<Option<Expression>> {
-    if let Expression::Vector(list, _) = arg {
-        let list = list.borrow();
+    let arg_d = arg.get();
+    if let ExpEnum::Vector(list) = &arg_d.data {
         let (command, parts) = match list.split_first() {
             Some((c, p)) => (c, p),
             None => {
                 return Ok(None);
             }
         };
-        let expansion = do_expansion(environment, command, &mut parts.iter())?;
+        let expansion = do_expansion(
+            environment,
+            &command.clone_no_root().into(),
+            &mut Box::new(ListIter::new_slice(parts)),
+        )?;
         if let Some(expansion) = expansion {
             if !one {
                 if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
@@ -1285,21 +1316,26 @@ fn expand_macro_internal(
         } else {
             Ok(None)
         }
-    } else if let Expression::Pair(p, _) = arg {
-        if let Some((e1, e2)) = &*p.borrow() {
-            let expansion = do_expansion(environment, &e1, &mut *e2.iter())?;
-            if let Some(expansion) = expansion {
-                if !one {
-                    if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
-                        Ok(Some(new_expansion))
-                    } else {
-                        Ok(Some(expansion))
-                    }
+    } else if let ExpEnum::Pair(e1, e2) = &arg_d.data {
+        let e1: Expression = e1.into();
+        let e2: Expression = e2.into();
+        let e2_d = e2.get();
+        let mut e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
+            Box::new(ListIter::new_list(&list))
+        } else {
+            drop(e2_d);
+            e2.iter()
+        };
+        let expansion = do_expansion(environment, &e1, &mut e2_iter)?;
+        if let Some(expansion) = expansion {
+            if !one {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                    Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
                 }
             } else {
-                Ok(None)
+                Ok(Some(expansion))
             }
         } else {
             Ok(None)
@@ -1311,9 +1347,10 @@ fn expand_macro_internal(
 
 pub fn expand_macro(
     environment: &mut Environment,
-    arg: &Expression,
+    arg: impl AsRef<Expression>,
     one: bool,
 ) -> io::Result<Option<Expression>> {
+    let arg = arg.as_ref();
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
     let res = expand_macro_internal(environment, arg, one);
@@ -1322,54 +1359,68 @@ pub fn expand_macro(
 }
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
-    if let Some(exp) = expand_macro(environment, arg, false)? {
-        if let Expression::Vector(list, _) = &exp {
-            let mut nv = Vec::new();
-            for item in &*list.borrow() {
-                nv.push(expand_macro_all(environment, &item)?);
+    if let Some(exp_outer) = expand_macro(environment, arg, false)? {
+        let exp_outer_c = exp_outer.clone();
+        let exp_d = exp_outer_c.get();
+        if let ExpEnum::Vector(list) = &exp_d.data {
+            let mut nv: Vec<Handle> = Vec::new();
+            for item in list {
+                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
             }
-            list.replace(nv);
-        } else if let Expression::Pair(p, _) = &exp {
-            let mut nv = Vec::new();
-            for item in exp.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
+            drop(exp_d);
+            exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
+            // XXX
+            gc_mut().down_root(&exp_outer);
+        } else if let ExpEnum::Pair(_, _) = &exp_d.data {
+            let mut nv: Vec<Handle> = Vec::new();
+            drop(exp_d);
+            for item in exp_outer.iter() {
+                nv.push(expand_macro_all(environment, &item)?.into());
             }
-            if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
-                p.replace(np.borrow().clone());
-            }
+            exp_outer
+                .get_mut()
+                .data
+                .replace(ExpEnum::cons_from_vec(&mut nv));
+            // XXX
+            gc_mut().down_root(&exp_outer);
         }
-        Ok(exp)
+        Ok(exp_outer)
     } else {
-        let arg = arg.clone();
-        if let Expression::Vector(list, _) = &arg {
+        let arg2 = arg;
+        let arg_d = arg.get();
+        if let ExpEnum::Vector(list) = &arg_d.data {
+            let mut nv: Vec<Handle> = Vec::new();
+            for item in list {
+                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
+            }
+            drop(arg_d);
+            arg.get_mut().data.replace(ExpEnum::Vector(nv));
+            // XXX
+            gc_mut().down_root(arg);
+        } else if let ExpEnum::Pair(_, _) = &arg_d.data {
             let mut nv = Vec::new();
-            for item in &*list.borrow() {
-                nv.push(expand_macro_all(environment, &item)?);
+            drop(arg_d);
+            for item in arg2.iter() {
+                nv.push(expand_macro_all(environment, &item)?.into());
             }
-            list.replace(nv);
-        } else if let Expression::Pair(p, _) = &arg {
-            let mut nv = Vec::new();
-            for item in arg.iter() {
-                nv.push(expand_macro_all(environment, &item)?);
-            }
-            if let Expression::Pair(np, _) = Expression::cons_from_vec(&mut nv, None) {
-                p.replace(np.borrow().clone());
-            }
+            arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
+            // XXX
+            gc_mut().down_root(arg);
         }
-        Ok(arg)
+        Ok(arg2.clone())
     }
 }
 
 fn builtin_expand_macro(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, arg0, false)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, false)? {
                 Ok(exp)
             } else {
-                Ok(arg0.clone())
+                Ok(arg0)
             };
         }
     }
@@ -1381,14 +1432,14 @@ fn builtin_expand_macro(
 
 fn builtin_expand_macro1(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, arg0, true)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, true)? {
                 Ok(exp)
             } else {
-                Ok(arg0.clone())
+                Ok(arg0)
             };
         }
     }
@@ -1400,11 +1451,11 @@ fn builtin_expand_macro1(
 
 fn builtin_expand_macro_all(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return expand_macro_all(environment, arg0);
+            return expand_macro_all(environment, &arg0);
         }
     }
     Err(io::Error::new(
@@ -1415,13 +1466,13 @@ fn builtin_expand_macro_all(
 
 fn builtin_recur(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut arg_list: Vec<Expression> = Vec::new();
+    let mut arg_list: Vec<Handle> = Vec::new();
     let mut arg_num = 0;
     for a in args {
         let a = eval(environment, a)?;
-        arg_list.push(a);
+        arg_list.push(a.into());
         arg_num += 1;
     }
     environment.state.recur_num_args = Some(arg_num);
@@ -1430,7 +1481,7 @@ fn builtin_recur(
 
 fn builtin_gensym(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1440,17 +1491,17 @@ fn builtin_gensym(
     } else {
         let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
-        Ok(Expression::Atom(Atom::Symbol(
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
             environment
                 .interner
                 .intern(&format!("gs@@{}", *gensym_count)),
-        )))
+        ))))
     }
 }
 
 fn builtin_jobs(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1467,14 +1518,14 @@ fn builtin_jobs(
                 job.names
             );
         }
-        Ok(Expression::nil())
+        Ok(Expression::alloc_data(ExpEnum::Nil))
     }
 }
 
 fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Option<u32> {
     if let Some(arg) = arg {
-        if let Expression::Atom(Atom::Int(ji)) = arg {
-            let ji = ji as usize;
+        if let ExpEnum::Atom(Atom::Int(ji)) = &arg.get().data {
+            let ji = *ji as usize;
             let jobs = &*environment.jobs.borrow();
             if ji < jobs.len() {
                 let pid = jobs[ji].pids[0];
@@ -1504,7 +1555,7 @@ fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Op
 
 fn builtin_bg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
@@ -1526,12 +1577,12 @@ fn builtin_bg(
             mark_job_running(environment, pid);
         }
     }
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
 fn builtin_fg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
@@ -1559,12 +1610,12 @@ fn builtin_fg(
             wait_pid(environment, pid, Some(&term_settings));
         }
     }
-    Ok(Expression::nil())
+    Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
 fn builtin_version(
     _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1572,17 +1623,19 @@ fn builtin_version(
             "version takes no arguments",
         ))
     } else {
-        Ok(Expression::Atom(Atom::StringRef(VERSION_STRING)))
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
+            VERSION_STRING,
+        ))))
     }
 }
 
 fn builtin_command(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::ExternalOnly;
-    let mut last_eval = Ok(Expression::nil());
+    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1596,10 +1649,10 @@ fn builtin_command(
 
 fn builtin_run_bg(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     environment.run_background = true;
-    let mut last_eval = Ok(Expression::nil());
+    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1613,11 +1666,11 @@ fn builtin_run_bg(
 
 fn builtin_form(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let old_form = environment.form_type;
     environment.form_type = FormType::FormOnly;
-    let mut last_eval = Ok(Expression::nil());
+    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1631,11 +1684,11 @@ fn builtin_form(
 
 fn builtin_loose_symbols(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
-    let mut last_eval = Ok(Expression::nil());
+    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
     for a in args {
         last_eval = eval(environment, a);
         if let Err(err) = last_eval {
@@ -1649,14 +1702,14 @@ fn builtin_loose_symbols(
 
 fn builtin_exit(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(exit_code) = args.next() {
         if args.next().is_none() {
             let exit_code = eval(environment, exit_code)?;
-            return if let Expression::Atom(Atom::Int(exit_code)) = exit_code {
-                environment.exit_code = Some(exit_code as i32);
-                Ok(Expression::nil())
+            return if let ExpEnum::Atom(Atom::Int(exit_code)) = &exit_code.get().data {
+                environment.exit_code = Some(*exit_code as i32);
+                Ok(Expression::alloc_data(ExpEnum::Nil))
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1666,7 +1719,7 @@ fn builtin_exit(
         }
     } else {
         environment.exit_code = Some(0);
-        return Ok(Expression::nil());
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1676,11 +1729,11 @@ fn builtin_exit(
 
 fn builtin_error_stack_on(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = true;
-        return Ok(Expression::nil());
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1690,11 +1743,11 @@ fn builtin_error_stack_on(
 
 fn builtin_error_stack_off(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         environment.stack_on_error = false;
-        return Ok(Expression::nil());
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1704,61 +1757,69 @@ fn builtin_error_stack_off(
 
 fn builtin_get_error(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::nil();
+    let mut ret = None;
     let old_err = environment.stack_on_error;
     environment.stack_on_error = false;
     for arg in args {
-        match eval(environment, &arg) {
-            Ok(exp) => ret = exp,
+        match eval(environment, arg) {
+            Ok(exp) => ret = Some(exp),
             Err(err) => {
                 let mut v = Vec::new();
-                v.push(Expression::Atom(Atom::Symbol(
+                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(":error"),
-                )));
+                ))));
                 let msg = format!("{}", err);
-                v.push(Expression::Atom(Atom::String(msg)));
+                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg))));
                 environment.stack_on_error = old_err;
                 return Ok(Expression::with_list(v));
             }
         }
     }
     environment.stack_on_error = old_err;
-    Ok(ret)
+    Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
-    let l;
-    let p_iter = match exp {
-        Expression::Atom(Atom::Lambda(f)) => match &*f.params {
-            Expression::Vector(li, _) => {
-                l = li.borrow();
-                Box::new(l.iter())
+    let exp_d = exp.get();
+    let params: Expression;
+    let f_d;
+    let m_d;
+    let p_iter = match &exp_d.data {
+        ExpEnum::Atom(Atom::Lambda(f)) => {
+            params = f.params.clone_no_root().into();
+            f_d = params.get();
+            if let ExpEnum::Vector(list) = &f_d.data {
+                Box::new(ListIter::new_list(&list))
+            } else {
+                params.iter()
             }
-            _ => f.params.iter(),
-        },
-        Expression::Atom(Atom::Macro(m)) => match &*m.params {
-            Expression::Vector(li, _) => {
-                l = li.borrow();
-                Box::new(l.iter())
+        }
+        ExpEnum::Atom(Atom::Macro(m)) => {
+            params = m.params.clone_no_root().into();
+            m_d = params.get();
+            if let ExpEnum::Vector(list) = &m_d.data {
+                Box::new(ListIter::new_list(&list))
+            } else {
+                params.iter()
             }
-            _ => m.params.iter(),
-        },
+        }
         _ => return,
     };
     doc_str.push_str("\n\nUsage: (");
     doc_str.push_str(sym);
     for arg in p_iter {
-        if let Expression::Atom(Atom::Symbol(s)) = arg {
+        if let ExpEnum::Atom(Atom::Symbol(s)) = &arg.get().data {
             doc_str.push(' ');
             doc_str.push_str(s);
         }
     }
     doc_str.push(')');
+    //drop(p_iter);
 }
 
-fn make_doc(exp: &Reference, key: &str) -> io::Result<Expression> {
+fn make_doc(_environment: &mut Environment, exp: &Reference, key: &str) -> io::Result<Expression> {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
@@ -1777,18 +1838,22 @@ fn make_doc(exp: &Reference, key: &str) -> io::Result<Expression> {
         add_usage(&mut new_docs, key, &exp.exp);
     }
     new_docs.push('\n');
-    Ok(Expression::Atom(Atom::String(new_docs)))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        new_docs,
+    ))))
 }
 
 fn get_doc(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     is_raw: bool,
 ) -> io::Result<Expression> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match eval(environment, key)? {
-                Expression::Atom(Atom::Symbol(s)) => s,
+            let key = eval(environment, key)?;
+            let key_d = &key.get().data;
+            let key = match key_d {
+                ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -1803,10 +1868,10 @@ fn get_doc(
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = get_expression(environment, "*ns*") {
-                                match &exp.exp {
-                                    Expression::Atom(Atom::String(s)) => s.to_string(),
-                                    Expression::Atom(Atom::StringRef(s)) => (*s).to_string(),
-                                    Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
+                                match &exp.exp.get().data {
+                                    ExpEnum::Atom(Atom::String(s)) => s.to_string(),
+                                    ExpEnum::Atom(Atom::StringRef(s)) => (*s).to_string(),
+                                    ExpEnum::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
                             } else {
@@ -1819,33 +1884,35 @@ fn get_doc(
                             if is_raw {
                                 if let Some(exp) = scope.borrow().data.get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
-                                        return Ok(Expression::Atom(Atom::String(
-                                            doc_string.to_string(),
+                                        return Ok(Expression::alloc_data(ExpEnum::Atom(
+                                            Atom::String(doc_string.to_string()),
                                         )));
                                     } else {
-                                        return Ok(Expression::nil());
+                                        return Ok(Expression::alloc_data(ExpEnum::Nil));
                                     }
                                 }
-                                return Ok(Expression::nil());
+                                return Ok(Expression::alloc_data(ExpEnum::Nil));
                             } else if let Some(exp) = scope.borrow().data.get(key) {
-                                return make_doc(&exp, key);
+                                return make_doc(environment, &exp, key);
                             }
                         }
                     }
                 }
-                return Ok(Expression::nil());
+                return Ok(Expression::alloc_data(ExpEnum::Nil));
             } else if let Some(scope) = get_symbols_scope(environment, &key) {
                 if is_raw {
-                    if let Some(exp) = scope.borrow().data.get(&key) {
+                    if let Some(exp) = scope.borrow().data.get(key) {
                         if let Some(doc_string) = &exp.meta.doc_string {
-                            return Ok(Expression::Atom(Atom::String(doc_string.to_string())));
+                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                doc_string.to_string(),
+                            ))));
                         } else {
-                            return Ok(Expression::nil());
+                            return Ok(Expression::alloc_data(ExpEnum::Nil));
                         }
                     }
-                    return Ok(Expression::nil());
-                } else if let Some(exp) = scope.borrow().data.get(&key) {
-                    return make_doc(&exp, &key);
+                    return Ok(Expression::alloc_data(ExpEnum::Nil));
+                } else if let Some(exp) = scope.borrow().data.get(key) {
+                    return make_doc(environment, &exp, &key);
                 }
             } else {
                 return Err(io::Error::new(
@@ -1863,25 +1930,26 @@ fn get_doc(
 
 fn builtin_doc(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     get_doc(environment, args, false)
 }
 
 fn builtin_doc_raw(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     get_doc(environment, args, true)
 }
 
 pub fn builtin_block(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::nil();
+    let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
-        let name = if let Expression::Atom(Atom::Symbol(n)) = name {
+        let name_d = &name.get().data;
+        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name_d {
             n
         } else {
             return Err(io::Error::new(
@@ -1890,31 +1958,35 @@ pub fn builtin_block(
             ));
         };
         for arg in args {
-            ret = ret.resolve(environment)?;
+            ret = if let Some(ret) = ret {
+                Some(ret.resolve(environment)?)
+            } else {
+                None
+            };
             if environment.return_val.is_none() {
-                ret = eval_nr(environment, &arg)?;
+                ret = Some(eval_nr(environment, arg)?);
             }
             let mut returned = false;
             if let Some((ret_name, exp)) = &environment.return_val {
                 if let Some(ret_name) = ret_name {
                     if name == ret_name {
                         returned = true;
-                        ret = exp.clone();
+                        ret = Some(exp.clone());
                     }
                 } else {
                     returned = true;
-                    ret = exp.clone();
+                    ret = Some(exp.clone());
                 }
             }
             if returned {
                 environment.return_val = None;
-                return Ok(ret);
+                return Ok(ret.unwrap_or_else(Expression::make_nil));
             }
             if environment.return_val.is_some() {
                 break;
             }
         }
-        Ok(ret)
+        Ok(ret.unwrap_or_else(Expression::make_nil))
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -1925,11 +1997,10 @@ pub fn builtin_block(
 
 pub fn builtin_return_from(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut ret = Expression::nil();
     if let Some(name) = args.next() {
-        let name = if let Expression::Atom(Atom::Symbol(n)) = name {
+        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = &name.get().data {
             Some(*n)
         } else if name.is_nil() {
             None
@@ -1941,7 +2012,8 @@ pub fn builtin_return_from(
         };
         if let Some(exp) = args.next() {
             if args.next().is_none() {
-                ret = eval_nr(environment, exp)?;
+                let ret = eval_nr(environment, exp)?;
+                environment.return_val = Some((name, ret));
             } else {
                 return Err(io::Error::new(
         io::ErrorKind::Other,
@@ -1949,8 +2021,7 @@ pub fn builtin_return_from(
                 ));
             }
         }
-        environment.return_val = Some((name, ret));
-        Ok(Expression::nil())
+        Ok(Expression::alloc_data(ExpEnum::Nil))
     } else {
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -1961,7 +2032,7 @@ pub fn builtin_return_from(
 
 pub fn builtin_intern_stats(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_some() {
         Err(io::Error::new(
@@ -1975,19 +2046,21 @@ pub fn builtin_intern_stats(
             environment.interner.used(),
             environment.interner.len()
         );
-        Ok(Expression::nil())
+        Ok(Expression::alloc_data(ExpEnum::Nil))
     }
 }
 
 pub fn builtin_meta_line_no(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(Expression::Atom(Atom::Int(meta.line as i64)))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                meta.line as i64,
+            ))))
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -1999,13 +2072,15 @@ pub fn builtin_meta_line_no(
 
 pub fn builtin_meta_column_no(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(Expression::Atom(Atom::Int(meta.col as i64)))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                meta.col as i64,
+            ))))
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -2017,13 +2092,15 @@ pub fn builtin_meta_column_no(
 
 pub fn builtin_meta_file_name(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(Expression::Atom(Atom::StringRef(meta.file)))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
+                meta.file,
+            ))))
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
         Err(io::Error::new(
@@ -2047,42 +2124,84 @@ macro_rules! ensure_tonicity {
             }
         };
         if f(first, rest) {
-            Ok(Expression::Atom(Atom::True))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     }};
 }
 
 macro_rules! ensure_tonicity_all {
-    ($check_fn:expr) => {{
-        |environment: &mut Environment,
-         args: &mut dyn Iterator<Item = &Expression>|
-         -> io::Result<Expression> {
-            let mut list: Vec<Expression> = Vec::new();
-            for arg in args {
-                list.push(eval(environment, &arg)?);
-            }
-            if let Ok(ints) = parse_list_of_ints(environment, &mut list) {
-                ensure_tonicity!($check_fn, ints, &i64, i64)
-            } else if let Ok(floats) = parse_list_of_floats(environment, &mut list) {
-                ensure_tonicity!($check_fn, floats, &f64, f64)
-            } else {
-                let strings = parse_list_of_strings(environment, &mut list)?;
-                ensure_tonicity!($check_fn, strings, &str, String)
-            }
+    ($environment:expr, $args:expr, $check_fn:expr) => {{
+        let mut list: Vec<Expression> = Vec::new();
+        for arg in $args {
+            list.push(eval($environment, arg)?);
+        }
+        if let Ok(ints) = parse_list_of_ints($environment, &mut list) {
+            ensure_tonicity!($check_fn, ints, &i64, i64)
+        } else if let Ok(floats) = parse_list_of_floats($environment, &mut list) {
+            ensure_tonicity!($check_fn, floats, &f64, f64)
+        } else {
+            let strings = parse_list_of_strings($environment, &mut list)?;
+            ensure_tonicity!($check_fn, strings, &str, String)
         }
     }};
 }
 
+pub fn builtin_equal(
+    environment: &mut Environment,
+    parts: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    let mut args: Vec<Expression> = Vec::new();
+    for a in parts {
+        args.push(eval(environment, a)?);
+    }
+    if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
+        ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
+    } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
+        ensure_tonicity!(|a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
+    } else {
+        let strings = parse_list_of_strings(environment, &mut args)?;
+        ensure_tonicity!(|a, b| a == b, strings, &str, String)
+    }
+}
+
+pub fn builtin_less_than(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    ensure_tonicity_all!(environment, args, |a, b| a < b)
+}
+
+pub fn builtin_greater_than(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    ensure_tonicity_all!(environment, args, |a, b| a > b)
+}
+
+pub fn builtin_less_than_equal(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    ensure_tonicity_all!(environment, args, |a, b| a <= b)
+}
+
+pub fn builtin_greater_than_equal(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    ensure_tonicity_all!(environment, args, |a, b| a >= b)
+}
+
 pub fn add_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("eval"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_eval,
             "Usage: (eval expression)
 
@@ -2102,11 +2221,11 @@ Example:
 (test::assert-equal \"TWO\" test-eval-one)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fncall"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_fncall,
             "Usage: (fncall function arg0 ... argN)
 
@@ -2121,11 +2240,11 @@ Example:
 (test::assert-equal 10 (fncall + 1 2 7))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("apply"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_apply,
             "Usage: (apply function arg* list)
 
@@ -2140,11 +2259,11 @@ Example:
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("unwind-protect"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_unwind_protect,
             "Usage: (unwind-protect protected cleanup*) -> [protected result]
 
@@ -2173,11 +2292,11 @@ Example:
 (test::assert-equal \"set three\" test-unwind-three)
 (test::assert-equal \"set four\" test-unwind-four)
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("err"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_err,
             "Usage: (err string) -> raises an error
 
@@ -2190,11 +2309,11 @@ Example:
 (test::assert-equal '#(:error \"Test Error\") test-err-err)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("load"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_load,
             "Usage: (load path) -> [last form value]
 
@@ -2205,16 +2324,19 @@ Section: scripting
 Example:
 (def 'test-load-one nil)
 (def 'test-load-two nil)
-(write-line (open \"/tmp/slsh-test-load.testing\" :create :truncate) \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(def 'test-load-fn (open \"/tmp/slsh-test-load.testing\" :create :truncate))
+(write-line test-load-fn \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(close test-load-fn)
 (set 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
-", root
-        )),
+",
+            root,
+        ),
     );
     data.insert(
         interner.intern("length"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_length,
             "Usage: (length expression) -> int
 
@@ -2236,11 +2358,11 @@ Example:
 (test::assert-equal 1 (length #\\x))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("if"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_if,
             "Usage: (if condition then-form else-form?) -> [evaled form result]
 
@@ -2264,11 +2386,11 @@ Example:
 (test::assert-equal nil test-if-two2)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("print"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_print,
             "Usage: (print arg0 ... argN) -> nil
 
@@ -2278,15 +2400,15 @@ Section: core
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (print \"Print test out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (progn (print \"Print test out\") (close *stdout*)))
 (test::assert-equal \"Print test out\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("println"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_println,
             "Usage: (println arg0 ... argN) -> nil
 
@@ -2296,15 +2418,15 @@ Section: core
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (println \"Println test out\"))
+(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (progn (println \"Println test out\") (close *stdout*)))
 (test::assert-equal \"Println test out\n\" (read-line (open \"/tmp/sl-sh.println.test\" :read)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("eprint"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_eprint,
             "Usage: (eprint arg0 ... argN) -> nil
 
@@ -2314,15 +2436,15 @@ Section: core
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (eprint \"eprint test out\"))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (progn (eprint \"eprint test out\") (close *stderr*)))
 (test::assert-equal \"eprint test out\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("eprintln"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_eprintln,
             "Usage: (eprintln arg0 ... argN) -> nil
 
@@ -2332,14 +2454,14 @@ Section: core
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (eprintln \"eprintln test out\"))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (progn (eprintln \"eprintln test out\") (close *stderr*)))
 (test::assert-equal \"eprintln test out\n\" (read-line (open \"/tmp/sl-sh.eprintln.test\" :read)))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("format"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_format,
             "Usage: (format arg0 ... argN) -> string
 
@@ -2356,11 +2478,11 @@ Example:
 (test::assert-equal \"string 50 100.5\" (format \"string\" \" \" 50 \" \" 100.5))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("progn"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_progn,
             "Usage: (progn exp0 ... expN) -> expN
 
@@ -2377,11 +2499,11 @@ Example:
 (test::assert-equal \"Three\" test-progn-three)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("set"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_set,
             "Usage: (set symbol expression) -> expression
 
@@ -2404,11 +2526,11 @@ Example:
 (test::assert-equal \"One\" test-progn-one)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("export"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_export,
             "Usage: (export symbol string) -> string
 
@@ -2421,11 +2543,11 @@ Example:
 (test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("unexport"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_unexport,
             "Usage: (unexport symbol)
 
@@ -2440,11 +2562,11 @@ Example:
 (test::assert-false $TEST_EXPORT_ONE)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("def"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_def,
             "Usage: (def symbol expression) -> expression
 
@@ -2471,11 +2593,11 @@ Example:
 (test::assert-equal \"One\" test-progn-one)
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("undef"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_undef,
             "Usage: (undef symbol)
 
@@ -2490,11 +2612,11 @@ Example:
 (test::assert-false (def? 'test-undef))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("dyn"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_dyn,
             "Usage: (dyn key value expression) -> nil
 
@@ -2510,15 +2632,15 @@ Section: core
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
-(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (progn (test-dyn-fn)))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("to-symbol"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_to_symbol,
             "Usage: (to-symbol expression) -> symbol
 
@@ -2538,11 +2660,11 @@ Example:
 (test::assert-true (symbol? (to-symbol (symbol-name 'test-to-symbol-sym))))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("symbol-name"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_symbol_name,
             "Usage: (symbol-name symbol) -> string
 
@@ -2558,11 +2680,11 @@ Example:
 (test::assert-equal \"test-symbol-name-sym\" (symbol-name 'test-symbol-name-sym))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fn"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_fn,
             "Usage: (fn (x) (x + 1))
 
@@ -2571,11 +2693,11 @@ Create a function (lambda).
 Section: core
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("quote"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_quote,
             "Usage: (quote expression) -> expression
 
@@ -2589,11 +2711,11 @@ Example:
 (test::assert-equal '(1 2 3) (quote (1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("bquote"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_bquote,
             "Usage: (bquote expression) -> expression
 
@@ -2614,15 +2736,15 @@ Example:
 (test::assert-equal (list 1 2 3) (bquote (,@test-bquote-list)))
 ",
             root,
-        )),
+        ),
     );
     /*data.insert(
         "spawn"),
-        Rc::new(Expression::Func(builtin_spawn)),
+        Expression::Func(builtin_spawn)),
     );*/
     data.insert(
         interner.intern("and"),
-        Rc::new(Expression::make_special(builtin_and,
+        Expression::make_special(builtin_and,
         "Usage: (and exp0 ... expN) -> [nil or expN result]
 
 Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
@@ -2637,11 +2759,11 @@ Example:
 (test::assert-equal \"and- done\" (and t t \"and- done\"))
 (test::assert-equal 6 (and t t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
-", root)),
+", root),
     );
     data.insert(
         interner.intern("or"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_or,
             "Usage: (or exp0 ... expN) -> [nil or first non nil expression]
 
@@ -2660,11 +2782,11 @@ Example:
 (test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("not"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_not,
             "Usage: (not expression)
 
@@ -2679,11 +2801,11 @@ Example:
 (test::assert-false (not (+ 1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("null"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_not,
             "Usage: (null expression)
 
@@ -2698,11 +2820,11 @@ Example:
 (test::assert-false (null (+ 1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("def?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_is_def,
             "Usage: (def? expression) -> t|nil
 
@@ -2722,11 +2844,11 @@ Example:
 (test::assert-false (def? \"test-is-def-not-defined\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("macro"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_macro,
             "Usage: (macro (&rest args) `(apply + ,@args))
 
@@ -2735,11 +2857,11 @@ Define an anonymous macro.
 Section: core
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("expand-macro"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_expand_macro,
             "Usage: (expand-macro expression)
 
@@ -2769,11 +2891,11 @@ Example:
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("expand-macro1"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_expand_macro1,
             "Usage: (expand-macro1 expression)
 
@@ -2801,11 +2923,11 @@ Example:
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("expand-macro-all"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
 
@@ -2836,17 +2958,21 @@ Example:
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("recur"),
-        Rc::new(Expression::make_function(builtin_recur, "Usage: (recur &rest)
+        Expression::make_function(
+            builtin_recur,
+            "Usage: (recur &rest)
 
-Section: core", root)),
+Section: core",
+            root,
+        ),
     );
     data.insert(
         interner.intern("gensym"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_gensym,
             "Usage: (gensym) -> symbol
 
@@ -2870,11 +2996,11 @@ Example:
 (test::assert-true (symbol? test-gensym-three))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("jobs"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_jobs,
             "Usage: (jobs)
 
@@ -2887,11 +3013,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("bg"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_bg,
             "Usage: (bg job-id?)
 
@@ -2906,11 +3032,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fg"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_fg,
             "Usage: (fg job-id?)
 
@@ -2925,11 +3051,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("version"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_version,
             "Usage: (version)
 
@@ -2941,11 +3067,11 @@ Example:
 (test::assert-true (string? (version)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("command"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_command,
             "Usage: (command exp0 ... expN)
 
@@ -2957,11 +3083,11 @@ Example:
 (test::assert-equal '#(:error \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("run-bg"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_run_bg,
             "Usage: (run-bg exp0 ... expN)
 
@@ -2974,11 +3100,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("form"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_form,
             "Usage: (form exp0 ... expN)
 
@@ -2991,11 +3117,11 @@ Example:
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("loose-symbols"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_loose_symbols,
             "Usage: (loose-symbols exp0 ... expN)
 
@@ -3007,11 +3133,11 @@ Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("exit"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_exit,
             "Usage: (exit code?)
 
@@ -3025,11 +3151,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("error-stack-on"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_error_stack_on,
             "Usage: (error-stack-on)
 
@@ -3042,11 +3168,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("error-stack-off"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_error_stack_off,
             "Usage: (error-stack-off)
 
@@ -3059,11 +3185,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("get-error"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_get_error,
             "Usage: (get-error exp0 ... expN)
 
@@ -3078,11 +3204,11 @@ Example:
 (test::assert-equal \"Some String\" (get-error \"Some String\"))
 (test::assert-equal \"Some Other String\" (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("doc"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_doc,
             "Usage: (doc symbol)
 
@@ -3095,11 +3221,11 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("doc-raw"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_doc_raw,
             "Usage: (doc-raw symbol)
 
@@ -3112,12 +3238,12 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("block"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_block,
             "Usage: (block name form*)
 
@@ -3133,12 +3259,12 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
 ", root
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("return-from"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_return_from,
             "Usage: (return-from name expression?)
 
@@ -3153,12 +3279,12 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
 ", root
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("intern-stats"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_intern_stats,
             "Usage: (intern-stats)
 
@@ -3171,12 +3297,12 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("meta-line-no"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_meta_line_no,
             "Usage: (meta-line-no)
 
@@ -3189,12 +3315,12 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("meta-column-no"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_meta_column_no,
             "Usage: (meta-column-no)
 
@@ -3207,12 +3333,12 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("meta-file-name"),
-        Rc::new(Expression::make_special(
+        Expression::make_special(
             builtin_meta_file_name,
             "Usage: (meta-file-name)
 
@@ -3225,28 +3351,13 @@ Example:
 t
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("="),
-        Rc::new(Expression::make_function(
-            |environment: &mut Environment,
-             parts: &mut dyn Iterator<Item = &Expression>|
-             -> io::Result<Expression> {
-                let mut args: Vec<Expression> = Vec::new();
-                for a in parts {
-                    args.push(eval(environment, &a)?);
-                }
-                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    ensure_tonicity!(|a, b| a == b, ints, &i64, i64)
-                } else if let Ok(floats) = parse_list_of_floats(environment, &mut args) {
-                    ensure_tonicity!(|a, b| ((a - b) as f64).abs() < 0.000_001, floats, &f64, f64)
-                } else {
-                    let strings = parse_list_of_strings(environment, &mut args)?;
-                    ensure_tonicity!(|a, b| a == b, strings, &str, String)
-                }
-            },
+        Expression::make_function(
+            builtin_equal,
             "Usage: (= val0 ... valN)
 
 Equals.  Works for int, float or string.
@@ -3276,12 +3387,12 @@ Example:
 (test::assert-false (= \"aaa\" \"aab\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern(">"),
-        Rc::new(Expression::make_function(
-            ensure_tonicity_all!(|a, b| a > b),
+        Expression::make_function(
+            builtin_greater_than,
             "Usage: (> val0 ... valN)
 
 Greater than.  Works for int, float or string.
@@ -3308,12 +3419,12 @@ Example:
 (test::assert-false (> \"aaa\" \"aab\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern(">="),
-        Rc::new(Expression::make_function(
-            ensure_tonicity_all!(|a, b| a >= b),
+        Expression::make_function(
+            builtin_greater_than_equal,
             "Usage: (>= val0 ... valN)
 
 Greater than or equal.  Works for int, float or string.
@@ -3339,12 +3450,12 @@ Example:
 (test::assert-false (>= \"aaa\" \"aab\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("<"),
-        Rc::new(Expression::make_function(
-            ensure_tonicity_all!(|a, b| a < b),
+        Expression::make_function(
+            builtin_less_than,
             "Usage: (< val0 ... valN)
 
 Less than.  Works for int, float or string.
@@ -3370,12 +3481,12 @@ Example:
 (test::assert-false (< \"baa\" \"aab\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("<="),
-        Rc::new(Expression::make_function(
-            ensure_tonicity_all!(|a, b| a <= b),
+        Expression::make_function(
+            builtin_less_than_equal,
             "Usage: (<= val0 ... valN)
 
 Less than or equal.  Works for int, float or string.
@@ -3400,6 +3511,6 @@ Example:
 (test::assert-false (<= \"baa\" \"aab\"))
 ",
             root,
-        )),
+        ),
     );
 }

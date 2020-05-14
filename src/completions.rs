@@ -95,19 +95,20 @@ impl ShellCompleter {
         }
         let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
         if let Some(comp_exp) = comp_exp {
-            let exp = match comp_exp.exp {
-                Expression::Atom(Atom::Lambda(_)) => {
+            let exp = match &comp_exp.exp.get().data {
+                ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    v.push(Expression::Atom(Atom::Symbol(
-                        self.environment
-                            .borrow_mut()
-                            .interner
-                            .intern("__completion_hook"),
-                    )));
+                    let mut environment = self.environment.borrow_mut();
+                    let data = ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern("__completion_hook"),
+                    ));
+                    v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
-                        v.push(Expression::Atom(Atom::String(a)));
+                        v.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a))).handle_no_root(),
+                        );
                     }
-                    Rc::new(Expression::with_list(v))
+                    Expression::with_list(v)
                 }
                 _ => {
                     eprintln!("WARNING: __completion_hook not a function, ignoring.");
@@ -115,11 +116,20 @@ impl ShellCompleter {
                 }
             };
             let envir = &mut self.environment.borrow_mut();
-            match eval(envir, &exp) {
+            match eval(envir, exp) {
                 Ok(res) => {
-                    match &res {
-                        Expression::Atom(Atom::StringRef(s))
-                        | Expression::Atom(Atom::Symbol(s)) => match *s {
+                    match &res.get().data {
+                        ExpEnum::Atom(Atom::StringRef(s)) | ExpEnum::Atom(Atom::Symbol(s)) => {
+                            match *s {
+                                "path" => HookResult::Path,
+                                "default" => HookResult::Default,
+                                _ => {
+                                    eprintln!("ERROR: unknown completion hook command, {}", s);
+                                    HookResult::Default
+                                }
+                            }
+                        }
+                        ExpEnum::Atom(Atom::String(s)) => match s.as_ref() {
                             "path" => HookResult::Path,
                             "default" => HookResult::Default,
                             _ => {
@@ -127,15 +137,7 @@ impl ShellCompleter {
                                 HookResult::Default
                             }
                         },
-                        Expression::Atom(Atom::String(s)) => match s.as_ref() {
-                            "path" => HookResult::Path,
-                            "default" => HookResult::Default,
-                            _ => {
-                                eprintln!("ERROR: unknown completion hook command, {}", s);
-                                HookResult::Default
-                            }
-                        },
-                        Expression::Atom(Atom::StringBuf(s)) => match s.borrow().as_ref() {
+                        ExpEnum::Atom(Atom::StringBuf(s)) => match s.borrow().as_ref() {
                             "path" => HookResult::Path,
                             "default" => HookResult::Default,
                             _ => {
@@ -143,9 +145,10 @@ impl ShellCompleter {
                                 HookResult::Default
                             }
                         },
-                        Expression::Vector(list, _) => {
-                            let mut v = Vec::with_capacity(list.borrow().len());
-                            for l in list.borrow_mut().drain(..) {
+                        ExpEnum::Vector(list) => {
+                            let mut v = Vec::with_capacity(list.len());
+                            for l in list {
+                                let l: Expression = l.into();
                                 let s = match l.as_string(envir) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
@@ -154,22 +157,18 @@ impl ShellCompleter {
                             }
                             HookResult::UseList(v)
                         }
-                        Expression::Pair(p, _) => {
-                            if let Some((_, _)) = &*p.borrow() {
-                                let mut v = Vec::new();
-                                for l in res.iter() {
-                                    let s = match l.as_string(envir) {
-                                        Ok(s) => s.trim().to_string(),
-                                        Err(_) => "ERROR".to_string(),
-                                    };
-                                    v.push(s);
-                                }
-                                HookResult::UseList(v)
-                            } else {
-                                // Nil
-                                HookResult::Default
+                        ExpEnum::Pair(_, _) => {
+                            let mut v = Vec::new();
+                            for l in res.iter() {
+                                let s = match l.as_string(envir) {
+                                    Ok(s) => s.trim().to_string(),
+                                    Err(_) => "ERROR".to_string(),
+                                };
+                                v.push(s);
                             }
+                            HookResult::UseList(v)
                         }
+                        ExpEnum::Nil => HookResult::Default,
                         _ => {
                             eprintln!("WARNING: unexpected result from __completion_hook, {:?}, ignoring.", res);
                             HookResult::Default
@@ -413,18 +412,18 @@ fn find_lisp_things(
     need_quote: bool,
 ) {
     fn save_val(comps: &mut Vec<String>, data: &Expression, val: String, symbols: bool) {
-        match data {
-            Expression::Atom(Atom::Lambda(_)) => {
+        match &data.get().data {
+            ExpEnum::Atom(Atom::Lambda(_)) => {
                 if !symbols {
                     comps.push(val);
                 }
             }
-            Expression::Atom(Atom::Macro(_)) => {
+            ExpEnum::Atom(Atom::Macro(_)) => {
                 if !symbols {
                     comps.push(val);
                 }
             }
-            Expression::Function(_) => {
+            ExpEnum::Function(_) => {
                 if !symbols {
                     comps.push(val);
                 }

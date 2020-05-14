@@ -1,24 +1,20 @@
 use std::env;
 use std::io;
 use std::iter::FromIterator;
-use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::Handle;
 use crate::types::*;
 
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
-    if let Expression::Pair(p, _) = exp {
-        if let Some((_e1, e2)) = &*p.borrow() {
-            if e2.is_nil() {
-                true
-            } else {
-                is_proper_list(&e2)
-            }
+    if let ExpEnum::Pair(_e1, e2) = &exp.get().data {
+        let e2: Expression = e2.into();
+        if e2.is_nil() {
+            true
         } else {
-            // Nil
-            false
+            is_proper_list(&e2)
         }
     } else {
         false
@@ -27,7 +23,7 @@ pub fn is_proper_list(exp: &Expression) -> bool {
 
 pub fn list_to_args(
     environment: &mut Environment,
-    parts: &[Expression],
+    parts: &mut [Expression],
     do_eval: bool,
 ) -> io::Result<Vec<Expression>> {
     if do_eval {
@@ -40,54 +36,6 @@ pub fn list_to_args(
         let args: Vec<Expression> = Vec::from_iter(parts.iter().cloned());
         Ok(args)
     }
-}
-
-pub fn exp_to_args(
-    environment: &mut Environment,
-    parts: &Expression,
-    do_eval: bool,
-) -> io::Result<Vec<Expression>> {
-    if is_proper_list(parts) {
-        let mut args: Vec<Expression> = Vec::new();
-        let mut current = parts.clone();
-        while let Expression::Pair(p, _) = current {
-            if let Some((e1, e2)) = &*p.borrow() {
-                if do_eval {
-                    args.push(eval(environment, &e1)?);
-                } else {
-                    args.push(e1.clone());
-                }
-                current = e2.clone();
-            } else {
-                current = Expression::nil();
-            }
-        }
-        Ok(args)
-    } else if do_eval {
-        let mut args: Vec<Expression> = Vec::with_capacity(1);
-        args.push(eval(environment, parts)?);
-        Ok(args)
-    } else {
-        let mut args: Vec<Expression> = Vec::with_capacity(1);
-        args.push(parts.clone());
-        Ok(args)
-    }
-}
-
-pub fn to_args(env: &mut Environment, parts: &[Expression]) -> io::Result<Vec<Expression>> {
-    let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
-    for a in parts {
-        args.push(eval(env, a)?);
-    }
-    Ok(args)
-}
-
-pub fn to_args_str(environment: &mut Environment, parts: &[Expression]) -> io::Result<Vec<String>> {
-    let mut args: Vec<String> = Vec::with_capacity(parts.len());
-    for a in parts {
-        args.push(eval(environment, a)?.make_string(environment)?);
-    }
-    Ok(args)
 }
 
 pub fn parse_list_of_ints(
@@ -179,46 +127,49 @@ fn set_arg(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
     key: &'static str,
-    var: &Expression,
+    var: Expression,
     do_eval: bool,
 ) -> io::Result<()> {
-    let res_var;
-    let var = if let Expression::LazyFn(_, _) = var {
-        res_var = var.clone().resolve(environment)?;
-        &res_var
+    let var = if let ExpEnum::LazyFn(_, _) = &var.get().data {
+        var.resolve(environment)?
     } else {
-        var
+        var.clone()
     };
     let v2 = if do_eval {
-        if let Expression::Atom(Atom::Symbol(s)) = var {
+        let var_d = var.get();
+        if let ExpEnum::Atom(Atom::Symbol(s)) = &var_d.data {
             if let Some(reference) = get_expression(environment, s) {
                 reference
             } else {
-                Rc::new(Reference {
-                    exp: eval(environment, var)?,
-                    meta: RefMetaData {
+                drop(var_d); // Release the read lock on var.
+                let exp = eval(environment, var)?;
+                Reference::new_rooted(
+                    exp,
+                    RefMetaData {
                         namespace: None,
                         doc_string: None,
                     },
-                })
+                )
             }
         } else {
-            Rc::new(Reference {
-                exp: eval(environment, var)?,
-                meta: RefMetaData {
+            drop(var_d); // Release the read lock on var.
+            let exp = eval(environment, var)?;
+            Reference::new_rooted(
+                exp,
+                RefMetaData {
                     namespace: None,
                     doc_string: None,
                 },
-            })
+            )
         }
     } else {
-        Rc::new(Reference {
-            exp: var.clone(),
-            meta: RefMetaData {
+        Reference::new_rooted(
+            var,
+            RefMetaData {
                 namespace: None,
                 doc_string: None,
             },
-        })
+        )
     };
     if let Some(scope) = scope {
         scope.data.insert(key, v2);
@@ -228,11 +179,11 @@ fn set_arg(
     Ok(())
 }
 
-fn setup_args_final<'a>(
+fn setup_args_final(
     environment: &mut Environment,
     scope: &mut Option<&mut Scope>,
     var_names: &mut Vec<&'static str>,
-    mut vars: Box<dyn Iterator<Item = &Expression> + 'a>,
+    vars: &mut dyn Iterator<Item = Expression>,
     min_params: usize,
     use_rest: bool,
     do_eval: bool,
@@ -257,30 +208,24 @@ fn setup_args_final<'a>(
             set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
         }
-        let mut rest_data: Vec<Expression> = Vec::new();
+        let mut rest_data: Vec<Handle> = Vec::new();
         for v in vars {
-            let v2 = if do_eval {
-                eval(environment, v)?
-            } else {
-                v.clone()
-            };
+            let v2 = if do_eval { eval(environment, v)? } else { v };
+            let v2: Handle = v2.into();
             rest_data.push(v2);
         }
         if rest_data.is_empty() {
             if let Some(scope) = scope {
-                scope.insert_exp(rest_name, Expression::nil());
+                scope.insert_exp_data(rest_name, ExpEnum::Nil);
             } else {
-                set_expression_current(environment, rest_name, None, Expression::nil());
+                set_expression_current_data(environment, rest_name, None, ExpEnum::Nil);
             }
         } else if let Some(scope) = scope {
-            scope.insert_exp(rest_name, Expression::with_list(rest_data));
+            let data = Expression::with_list(rest_data);
+            scope.insert_exp(rest_name, data);
         } else {
-            set_expression_current(
-                environment,
-                rest_name,
-                None,
-                Expression::with_list(rest_data),
-            );
+            let data = Expression::with_list(rest_data);
+            set_expression_current(environment, rest_name, None, data);
         }
     } else {
         let mut names_iter = var_names.iter();
@@ -308,27 +253,26 @@ fn setup_args_final<'a>(
     Ok(())
 }
 
-pub fn setup_args<'a>(
+pub fn setup_args(
     environment: &mut Environment,
     mut new_scope: Option<&mut Scope>,
-    params: &Expression,
-    args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    params: impl AsRef<Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> io::Result<()> {
-    let l;
-    let p_iter = match params {
-        Expression::Vector(li, _) => {
-            l = li.borrow();
-            Box::new(l.iter())
-        }
-        _ => params.iter(),
+    let params = params.as_ref();
+    let p_d = params.get();
+    let p_iter = if let ExpEnum::Vector(list) = &p_d.data {
+        Box::new(ListIter::new_list(&list))
+    } else {
+        params.iter()
     };
     let mut var_names: Vec<&'static str> = Vec::new(); //with_capacity(l.len());
     let mut use_rest = false;
     let mut post_rest_cnt = 0;
     let mut min_params = 0;
     for arg in p_iter {
-        if let Expression::Atom(Atom::Symbol(s)) = arg {
+        if let ExpEnum::Atom(Atom::Symbol(s)) = &arg.get().data {
             match *s {
                 "&rest" => {
                     if use_rest {
