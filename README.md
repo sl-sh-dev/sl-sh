@@ -25,6 +25,7 @@ These files contain the lisp code for the shell (anything from the tables below 
 - [ ] better error-reporting and debugging.
 - [ ] benchmarks.
 - [ ] better maths.
+- [ ] add better documentation about some of the useful shell features implemented in sl-sh and goodies inherited from liner.
 
 ## Examples
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
