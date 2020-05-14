@@ -46,9 +46,9 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 (defn -get-directive-hash-map
 	"By convention sl-sh hashmaps in lisp strings exit betwen liquid templating
 	comment blocks located on the same line. these hash maps are directives that
-	aid in transforming an evalable md file into an evaluated md file.
+	aid in transforming an evalable md file into an evaled md file.
 	also, continue to write the line in the evalable md file into the
-	evaluated md file.
+	evaled md file.
 	Section: post"
 	(src-file dest-file) (block file-read
 	(defq line (read-line src-file))
@@ -69,7 +69,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 
 (defn -read-in-code-block
 	"read in code block from src-file into the code-snippets map.  also,
-	continue to write the lines in the evalable md file into the evaluated
+	continue to write the lines in the evalable md file into the evaled
 	md file..
 	Section: post"
 	(src-file dest-file directive-map code-snippets) (progn
@@ -98,7 +98,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(defq temp-dir (str-replace (str (mktemp -d)) "\n" ""))
 	(defq entrypoint nil)
 	;; write all the files to a temp directory so the entrypoint(s) can be
-	;; evaluated
+	;; evaled
 	(for file-name (hash-get directive-map :files) (progn
 		(defq snippet (hash-get code-snippets file-name))
 		(defq target-file-name (str temp-dir "/" file-name))
@@ -118,24 +118,17 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(out-err> temp-out (eval (entrypoint)))
 	;; write output in temp-out to the dest-file
 	(popd)
-	(loop (input-file) (open temp-out :read) (progn
+	(loop (input-file) ((open temp-out :read)) (progn
 			(defq line (read-line input-file))
 			(when (not (nil? line)) (progn
 				(write-line dest-file line)
-				(recur input-file)))
-			))
-	(println "output located: " temp-out)
-	)
-	)
+				(recur input-file)))))
+	(println "output located: " temp-out)))
 
-(defn eval-post
+(defn -eval-post
 	"enumerate different directive and expectations
 	Section: scripting"
-	(evalable-post-file-name evaled-post-file-name) (progn
-		(defq code-snippets (make-hash))
-		(defq src-file (open evalable-post-file-name :read))
-		(defq dest-file (open evaled-post-file-name :create :truncate))
-		(loop (src-file) (src-file) (progn
+	(src-file dest-file code-snippets) (progn
 			(defq directive-map (-get-directive-hash-map src-file dest-file))
 			(when (not (nil? directive-map)) (progn
 				(match (hash-get directive-map :type)
@@ -148,7 +141,17 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 					(:lib (-read-in-code-block src-file dest-file directive-map code-snippets))
 					(:eval (-eval-file src-file dest-file directive-map code-snippets))
 					(nil (err "Unknown hash map found")))
-				(recur src-file)))))))
+				(recur src-file dest-file code-snippets)))))
+
+(defn eval-post
+	"enumerate different directive and expectations
+	Section: scripting"
+	(evalable-post-file-name evaled-post-file-name) (progn
+		(defq code-snippets (make-hash))
+		(defq src-file (open evalable-post-file-name :read))
+		(defq dest-file (open evaled-post-file-name :create :truncate))
+		(write-line dest-file "ok")
+		(-eval-post src-file dest-file code-snippets)))
 
 (ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
 (ns-pop) ;; must be after body

@@ -64,7 +64,9 @@ add1.lisp
 
 (ns-auto-export 'add1)
 ```
+
 ```
+./ns-test.lisp
 {% comment %} (defq do (make-hash (list (join :type :eval) (join :files (list "ns-test.lisp" "add1.lisp" "add2.lisp"))))) {% endcomment %}
 ```
 
