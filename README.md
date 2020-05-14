@@ -1,6 +1,6 @@
 # Simple Lisp Shell
 
-This is a shell build around a simple version of lisp for scripting.  The prompt
+This is a shell built around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parentheses).  It is NOT a POSIX shell and makes no attempts to be one.
 
