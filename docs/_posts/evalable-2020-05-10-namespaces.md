@@ -7,29 +7,27 @@ categories: [stuff,things,youknow]
 <hr>
 
 ### mkli
-mkli is a tool that helps write executable sl-sh files.
-It is used in the following three ways
+- explain mkli!
 
 ### writing library sl-sh code with proper namespaces
 
 
 ## An example
 
-ns-test.lisp
-{% comment %} (defq do (make-hash (list (join :type :entrypoint) (join :name "ns-test.lisp")))) {% endcomment %}
+add1.lisp
+{% comment %} (defq do (make-hash (list (join :type :lib) (join :name "add1.lisp")))) {% endcomment %}
 ```
-#!/bin/sl-sh
+(if (ns-exists? 'add1) (ns-enter 'add1) (ns-create 'add1))
 
-(load "./add2.lisp")
-(if (ns-exists? 'ns-test) (ns-enter 'ns-test) (ns-create 'ns-test))
 (core::ns-import 'core)
 (ns-import 'shell)
-(ns-import 'add2)
 
-(println (add2 8))
+(defn add1 (x)
+	(+ x 1))
 
-(ns-pop)
+(ns-auto-export 'add1)
 ```
+
 add2.lisp
 {% comment %} (defq do (make-hash (list (join :type :lib) (join :name "add2.lisp")))) {% endcomment %}
 ```
@@ -51,20 +49,24 @@ add2.lisp
 (ns-pop)
 ```
 
-add1.lisp
-{% comment %} (defq do (make-hash (list (join :type :lib) (join :name "add1.lisp")))) {% endcomment %}
+ns-test.lisp
+{% comment %} (defq do (make-hash (list (join :type :entrypoint) (join :name "ns-test.lisp")))) {% endcomment %}
 ```
-(if (ns-exists? 'add1) (ns-enter 'add1) (ns-create 'add1))
+#!/bin/sl-sh
 
+(load "./add2.lisp")
+(if (ns-exists? 'ns-test) (ns-enter 'ns-test) (ns-create 'ns-test))
 (core::ns-import 'core)
 (ns-import 'shell)
+(ns-import 'add2)
 
-(defn add1 (x)
-	(+ x 1))
+(println (add2 8))
 
-(ns-auto-export 'add1)
+(ns-pop)
 ```
 
+
+result:
 ```
 ./ns-test.lisp
 {% comment %} (defq do (make-hash (list (join :type :eval) (join :files (list "ns-test.lisp" "add1.lisp" "add2.lisp"))))) {% endcomment %}
