@@ -21,7 +21,7 @@ These files contain the lisp code for the shell (anything from the tables below 
 * `cargo build --release`
 
 ## Tasks
-- [ ] file-io and idiomatic file iteratoin in sl-sh
+- [ ] file-io and idiomatic file iteration in sl-sh
 - [ ] better error-reporting and debugging.
 - [ ] benchmarks.
 - [ ] better maths.
