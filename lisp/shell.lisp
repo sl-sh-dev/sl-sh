@@ -491,24 +491,24 @@ Section: shell
 
 (load "endfix.lisp")
 (defmacro endfix-on "
-	Allows use of infix notation for common shell forms. The following is the
-	complete mapping in lisp/endfix.lisp of all supported infix operators and
-	the corresponding sl-sh function they map to:
-		'|| 'or
-		'| '|
-		'@@ 'progn (@@ is used instead of ; because ; is a comment in lisp)
-		'&& 'and
-		'out> 'out>
-		'out>> 'out>>
-		'err> 'err>
-		'err>> 'err>>
-		'out>null 'out>null
-		'out-err> 'out-err>
-		'out-err>> 'out-err>>
-		'out-err>null 'out-err>null
+Allows use of infix notation for common shell forms. The following is the
+complete mapping in lisp/endfix.lisp of all supported infix operators and
+the corresponding sl-sh function they map to:
+	'|| 'or
+	'| '|
+	'@@ 'progn (@@ is used instead of ; because ; is a comment in lisp)
+	'&& 'and
+	'out> 'out>
+	'out>> 'out>>
+	'err> 'err>
+	'err>> 'err>>
+	'out>null 'out>null
+	'out-err> 'out-err>
+	'out-err>> 'out-err>>
+	'out-err>null 'out-err>null
 
 
-	Section: shell
+Section: shell
 "
 	() '(def '__exec_hook shell::endfix-hook))
 
