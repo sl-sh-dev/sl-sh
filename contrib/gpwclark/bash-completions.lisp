@@ -15,7 +15,7 @@
 		# License: LGPLv3 (http://www.gnu.org/licenses/lgpl-3.0.txt)
 		#
 
-		load_extra_completions_only(){
+		load_extra_completions_only() {
 			declare -i COMP_CWORD=0 COMP_POINT=0
 			declare -x completion="" COMP_LINE=""
 			declare -a COMP_WORDS COMPREPLY
@@ -25,41 +25,41 @@
 				source /usr/share/bash-completion/bash_completion
 			}
 
-			COMP_LINE=$*
-			COMP_POINT=${#COMP_LINE}
+			COMP_LINE=\"\$*\"
+			COMP_POINT=\"\${#COMP_LINE}\"
 
-			eval set -- \"$@\"
+			eval set -- \"\$@\"
 
-			COMP_WORDS=(\"$@\")
+			COMP_WORDS=(\"\$@\")
 
 			# add '' to COMP_WORDS if the last character of the command line is a space
-			[[ ${COMP_LINE[@]: -1} = ' ' ]] && COMP_WORDS+=('')
+			[[ \"\${COMP_LINE[@]: -1}\" = ' ' ]] && COMP_WORDS+=('')
 
 			# index of the last word
-			COMP_CWORD=$(( ${#COMP_WORDS[@]} - 1 ))
+			COMP_CWORD=\"\$(( \${#COMP_WORDS[@]} - 1 ))\"
 
 			# determine completion function
-			completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
+			completion=\$(complete -p \"\$1\" 2>/dev/null | awk '{print \$(NF-1)}')
 
 			# only return if loading completion from _completion_loader was
 			# necessary. We are only interested in returning these completions
 			# sl-sh already has completions for things like cd
-			[[ -n $completion ]] || {
+			[[ -n \"\$completion\" ]] || {
 
 				# load completion
-				_completion_loader \"$1\"
+				_completion_loader \"\$1\"
 
 				# detect completion
-				completion=$(complete -p \"$1\" 2>/dev/null | awk '{print $(NF-1)}')
+				completion=\$(complete -p \"\$1\" 2>/dev/null | awk '{print \$(NF-1)}')
 
 				# ensure completion was detected
-				[[ -n $completion ]] || return 1
+				[[ -n \"\$completion\" ]] || return 1
 
 				# execute completion function
-				\"$completion\"
+				\"\$completion\"
 
 				# print completions to stdout
-				printf '%s\\n' \"${COMPREPLY[@]}\" | LC_ALL=C sort
+				printf '%s\\n' \"\${COMPREPLY[@]}\" | LC_ALL=C sort
 			}
 		}
 	"))
