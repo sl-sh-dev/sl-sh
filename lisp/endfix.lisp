@@ -69,13 +69,11 @@
 	"Build a lookup table of infix operators to a hash set of metadata
 	about those operators."
 	(metadata-list prefix-infix-map)
-	(progn
-		(defq fst (first metadata-list))
-		(if (not fst)
+		(if (empty-seq? metadata-list)
 			prefix-infix-map
 			(progn
-				(gen-prefix-set prefix-infix-map fst)
-				(recur (rest metadata-list) prefix-infix-map)))))
+				(gen-prefix-set prefix-infix-map (first metadata-list))
+				(recur (rest metadata-list) prefix-infix-map))))
 
 (defq prefix-infix-map (gen-prefix-infix-map prefix-metadata (make-hash)))
 

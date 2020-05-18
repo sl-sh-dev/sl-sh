@@ -98,13 +98,6 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 
 (defq post-list-html "
 <ul>
-	{% for post in site.posts %}
-		<li>
-			<a href=\"{{ post.url }}\">{{ post.title }}</a>
-		</li>
-	{% endfor %}
-</ul>
-<ul>
 	{% for category in site.categories %}
 		<li>
 			<h3>{{ category[0] }}</h3>

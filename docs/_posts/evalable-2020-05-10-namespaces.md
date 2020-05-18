@@ -1,7 +1,7 @@
 ---
 layout: default
 title: namespaces
-categories: [stuff,things,youknow]
+categories: [namespaces]
 ---
 # namespaces usage and formatting library files properly
 <hr>

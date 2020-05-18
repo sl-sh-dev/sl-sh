@@ -411,17 +411,14 @@ Example:
 (assert-equal '(2 4) (filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
 "
 	(pred coll)
-		(progn
-			(defq filtering-fcn
-				(fn (pred filtered-coll coll-to-filter)
-					(progn (defq fst (first coll-to-filter))
-					(if (not fst)
-						filtered-coll
-						(recur
-							pred
-							(if (pred fst) (append filtered-coll fst) filtered-coll)
-							(rest coll-to-filter))))))
-			(filtering-fcn pred (list) coll)))
+	(loop (filtered-coll coll-to-filter) ((list) coll)
+		(if (empty-seq? coll-to-filter)
+			filtered-coll
+			(progn
+				(defq fst (first coll-to-filter))
+				(recur
+					(if (pred fst) (append filtered-coll fst) filtered-coll)
+					(rest coll-to-filter))))))
 
 (defn reduce
 "
@@ -444,9 +441,12 @@ Example:
 (assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
 "
 	(reducing-fcn init-val coll)
-		(if (not (first coll))
+		(loop (init-val coll) (init-val coll)
+			(if (empty-seq? coll)
 				init-val
-				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
+				(recur
+					(reducing-fcn init-val (first coll))
+					(rest coll)))))
 
 (ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce))
 
