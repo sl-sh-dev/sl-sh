@@ -38,6 +38,9 @@
 			(not (= x '__line_handler))
 			(not (= x '__exec_hook))
 			(not (= x '__prompt))
+			(not (= x 'list-of-all-slsh-syms))
+			(not (= x 'filter-user-undocable-forms))
+			(not (= x 'filter-undocable-forms))
 			(not (= x 'args))))
 		sym-list))
 
