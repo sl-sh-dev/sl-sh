@@ -56,6 +56,36 @@ Section: namespace"
 			(core::for sym ,symbol_or_sequence (vec-push! *ns-exports* sym))
 			(err "ns-export takes a symbol or sequence.")))))
 
+(defmacro ns-auto-export
+"Exports all symbols defined in provided curr-ns. Symbols prefixed with a dash
+symbol, \"-\", will not be exported. Modifiers are functions that are applied
+as the predicate to a filter. The filters are applied in the order they are
+passed in, e.g.
+
+(ns-auto-export 'my-ns)
+(ns-auto-export 'my-ns func?)
+(ns-auto-export 'my-ns (fn (x) (not (func? x))))
+(ns-auto-export 'my-ns func? (fn (x) (str-contains \"42\" (str x))))
+
+Section: namespace
+"
+	(curr-ns &rest modifiers) `(progn
+	(defq curr-ns-syms (ns-symbols-only ,curr-ns))
+	(defq mod-len (length (list ,@modifiers)))
+	(defq exportable-syms
+		(filter
+			(fn (x) (not (str-starts-with "-" (str x))))
+			curr-ns-syms))
+	(if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
+	(when (not (= 0 mod-len))
+		(setq exportable-syms
+			(loop (mods syms) ((list ,@modifiers) exportable-syms)
+				(progn
+				 (if (empty-seq? mods)
+					syms
+					(recur (rest mods) (filter (fn (x) ((first mods) (eval x))) syms)))))))
+	(core::for sym exportable-syms (vec-push! *ns-exports* sym))))
+
 (defmacro ns-import
 "Import any symbols exported from namespace into the current namespace.
 
@@ -68,6 +98,26 @@ Section: namespace"
 			(vec-setnth! 0 '(to-symbol (str "ns::" sym)) import)
 			(vec-setnth! 1 (to-symbol (str ,namespace "::" sym)) import)
 			(apply def import)))))))
+
+(defmacro ns-symbols-only
+	"Get list of symbols created in provided namespace, sym, exluding all imported
+	symbols. All imported symbols defaults to all of the symbols from all of the
+	namespaces (ns-list). Optionally, pass in a N symbols representing
+	namespaces whose imported symbols should be excluded. This function
+	intentionally defines nothing so as to avoid polluting the calling
+	namespace.
+
+	Section: namespace"
+	(sym &rest exclusions)
+	`(loop (symbols namespaces)
+			((ns-symbols ,sym) (filter
+				(fn (x) (not (= x ,sym)))
+				(if (= 0 (length (list ,@exclusions))) (map! (fn (x) (to-symbol x)) (ns-list)) (list ,@exclusions))))
+		(if (empty-seq? namespaces)
+			symbols
+			(recur
+				(filter (fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x))) symbols)
+				(rest namespaces)))))
 
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression
@@ -288,4 +338,4 @@ Example:
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func?))
+(ns-export '(defmacro setmacro ns-export ns-auto-export ns-import ns-symbols-only setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func?))

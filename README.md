@@ -1,6 +1,6 @@
 # Simple Lisp Shell
 
-This is a shell build around a simple version of lisp for scripting.  The prompt
+This is a shell built around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parentheses).  It is NOT a POSIX shell and makes no attempts to be one.
 
@@ -22,10 +22,11 @@ These files contain the lisp code for the shell (anything from the tables below 
 
 ## Tasks
 - [ ] file-io and idiomatic file iteration in sl-sh
-- [ ] better error-reporting and debugging.
-- [ ] benchmarks.
-- [ ] better maths.
-- [ ] add better documentation about some of the useful shell features implemented in sl-sh and goodies inherited from liner.
+- [ ] better error reporting and debugging
+- [ ] benchmarks
+- [ ] better maths
+- [ ] regular expressions
+- [ ] add better documentation about some of the useful shell features implemented in sl-sh and goodies inherited from liner
 
 ## Examples
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.

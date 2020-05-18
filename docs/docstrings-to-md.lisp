@@ -96,14 +96,39 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(defq doc-namespace (hash-get doc-map :namespace))
 	(str doc-namespace "::" doc-form)))
 
+(defq post-list-html "
+<ul>
+	{% for category in site.categories %}
+		<li>
+			<h3>{{ category[0] }}</h3>
+			<ul>
+				{% for post in category[1] %}
+					<li>
+						<a href=\"{{ post.url }}\">{{ post.title }}</a>
+					</li>
+				{% endfor %}
+			</ul>
+		</li>
+	{% endfor %}
+</ul>
+")
+
+(defn list-posts (file-name) (progn
+	(defq file (open file-name :append))
+	(write-line file "")
+	(write-line file "Free form documentation:")
+	(write-line file post-list-html)
+	(write-line file "")
+	(close file)
+	file-name))
+
 (defn table-of-contents (key docstrings file-name) (progn
 	(defq file (open file-name :append))
 	(defq name (section-metadata key :name))
+	(write-line file "")
 	(write-line file (str "### "
 		(create-anchor (str name "-contents" ))
 		(make-md-link-able name (str "#" name "-body"))))
-	(write-line file "")
-	(write-line file "")
 	(defq is-first #t)
 	(for doc-map docstrings (progn
 		(if (is-first)
@@ -118,8 +143,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 				(create-anchor (str (get-anchor-link-id doc-map) "-contents"))
 				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-map)))))))
 	(write-line file "")
-	(close file)
-	file-name))
+	(close file)))
 
 (defn doc-structure (file-name) (progn
 	(defq file (open file-name :append))
@@ -203,6 +227,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(doc-structure index-file)
 	;; generate table of contents
 	(write-heading "Table of Contents" index-file)
+	(list-posts index-file)
 	(for key (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
 		(table-of-contents key docstrings index-file)))

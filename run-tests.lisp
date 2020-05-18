@@ -1,8 +1,9 @@
 #!./target/debug/sl-sh
+(error-stack-on)
+(load "tests/test.lisp")
 
 (core::ns-import 'core)
 (ns-import 'shell)
-(load "tests/test.lisp")
 (ns-import 'test)
 
 ;;TODO sstanfield replace get-error with prog-error

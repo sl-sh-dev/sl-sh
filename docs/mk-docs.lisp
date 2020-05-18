@@ -6,6 +6,16 @@
 (core::ns-import 'core)
 (ns-import 'shell)
 
+(defn filter-user-undocable-forms (sym-list)
+	(filter (fn (x)
+		(and (not (= x 'custom-lisp-config))
+			(not (= x '*repl-settings*))
+			(not (= x '__completion_hook))
+			(not (= x '__line_handler))
+			(not (= x '__exec_hook))
+				(not (= x '__prompt))))
+			sym-list))
+
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and
@@ -28,6 +38,9 @@
 			(not (= x '__line_handler))
 			(not (= x '__exec_hook))
 			(not (= x '__prompt))
+			(not (= x 'list-of-all-slsh-syms))
+			(not (= x 'filter-user-undocable-forms))
+			(not (= x 'filter-undocable-forms))
 			(not (= x 'args))))
 		sym-list))
 
@@ -57,6 +70,5 @@
 		(map! (fn (x) (doc (to-symbol x)))
 			  (get-doc-list-for target-doc-form))))
 
-(ns-export '(make-md-file get-doc-list-for make-md-file-with-docstrings))
-
+(ns-auto-export 'mkdocs)
 (ns-pop)

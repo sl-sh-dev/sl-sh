@@ -512,6 +512,8 @@ Section: shell
 "
 	() '(def '__exec_hook shell::endfix-hook))
 
+(load "scripting.lisp")
+
 (ns-export '(
 	alias
 	register-alias
