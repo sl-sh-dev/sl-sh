@@ -29,7 +29,8 @@ fn builtin_eval(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return match &arg.get().data {
+            let arg_d = arg.get();
+            return match &arg_d.data {
                 ExpEnum::Atom(Atom::String(s)) => match read(environment, &s, None) {
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
@@ -42,7 +43,10 @@ fn builtin_eval(
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                _ => eval(environment, &arg),
+                _ => {
+                    drop(arg_d);
+                    eval(environment, &arg)
+                }
             };
         }
     }
