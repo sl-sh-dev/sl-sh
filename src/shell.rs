@@ -209,7 +209,7 @@ fn handle_result(
         Ok(exp) => {
             if !input.is_empty() {
                 if save_history {
-                    if let Err(err) = con.history.push(input.into()) {
+                    if let Err(err) = con.history.push(input) {
                         eprintln!("Error saving history: {}", err);
                     }
                 }
@@ -235,7 +235,7 @@ fn handle_result(
         }
         Err(err) => {
             if save_history && !input.is_empty() {
-                if let Err(err) = con.history.push_throwaway(input.into()) {
+                if let Err(err) = con.history.push_throwaway(input) {
                     eprintln!("Error saving temp history: {}", err);
                 }
             }
@@ -554,7 +554,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                 let ast = exec_hook(&mut environment, &input);
                 match ast {
                     Ok(ast) => {
-                        if let Err(err) = con.history.push(input.into()) {
+                        if let Err(err) = con.history.push(input) {
                             eprintln!("Error saving history: {}", err);
                         }
                         environment.loose_symbols = true;
@@ -567,7 +567,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                     }
                     Err(err) => {
                         if !input.is_empty() {
-                            if let Err(err) = con.history.push_throwaway(input.into()) {
+                            if let Err(err) = con.history.push_throwaway(input) {
                                 eprintln!("Error saving temp history: {}", err);
                             }
                         }
