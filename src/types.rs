@@ -648,21 +648,27 @@ impl Expression {
             ExpEnum::Pair(_, _) => Ok(self.to_string()),
             ExpEnum::Nil => Ok(self.to_string()),
             ExpEnum::HashMap(_map) => Ok(self.to_string()),
-            ExpEnum::File(file) => match &*file.borrow_mut() {
-                FileState::Stdin => {
-                    let f = io::stdin();
-                    let mut f = f.lock();
-                    let mut out_str = String::new();
-                    f.read_to_string(&mut out_str)?;
-                    Ok(out_str)
+            ExpEnum::File(file) => {
+                let file_mut = file.borrow_mut();
+                match &*file_mut {
+                    FileState::Stdin => {
+                        let f = io::stdin();
+                        let mut f = f.lock();
+                        let mut out_str = String::new();
+                        f.read_to_string(&mut out_str)?;
+                        Ok(out_str)
+                    }
+                    FileState::Read(f) => {
+                        let mut out_str = String::new();
+                        f.borrow_mut().read_to_string(&mut out_str)?;
+                        Ok(out_str)
+                    }
+                    _ => {
+                        drop(file_mut);
+                        Ok(self.to_string())
+                    }
                 }
-                FileState::Read(f) => {
-                    let mut out_str = String::new();
-                    f.borrow_mut().read_to_string(&mut out_str)?;
-                    Ok(out_str)
-                }
-                _ => Ok(self.to_string()),
-            },
+            }
             ExpEnum::LazyFn(_, _) => Ok(self.to_string()),
         }
     }
