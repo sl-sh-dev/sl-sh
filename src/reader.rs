@@ -1,12 +1,16 @@
-use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::num::{ParseFloatError, ParseIntError};
-use std::rc::Rc;
 
 use crate::environment::*;
+use crate::gc::Handle;
 use crate::types::*;
 
-pub trait PeekableIterator: std::iter::Iterator {
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub reason: String,
+}
+
+trait PeekableIterator: std::iter::Iterator {
     fn peek(&mut self) -> Option<&Self::Item>;
 }
 
@@ -23,7 +27,7 @@ enum ListType {
 
 struct List {
     list_type: ListType,
-    vec: Vec<Expression>,
+    vec: Vec<Handle>,
 }
 
 fn is_whitespace(ch: char) -> bool {
@@ -71,20 +75,25 @@ fn escape_to_char(escape_code: &[char]) -> char {
 
 fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ParseError> {
     match stack.pop() {
-        Some(mut v) => match stack.pop() {
+        Some(v) => match stack.pop() {
             Some(mut v2) => {
                 match v.list_type {
                     ListType::Vector => {
-                        v2.vec.push(Expression::with_list(v.vec));
+                        v2.vec.push(Expression::with_list(v.vec).into());
                     }
                     ListType::List => {
-                        if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                            v2.vec.push(Expression::Pair(
-                                Rc::new(RefCell::new(Some((v.vec[0].clone(), v.vec[2].clone())))),
-                                exp_meta,
-                            ));
+                        if v.vec.len() == 3 && Expression::new(v.vec[1].clone()).to_string() == "."
+                        {
+                            v2.vec.push(
+                                Expression::alloc(ExpObj {
+                                    data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
+                                    meta: exp_meta,
+                                })
+                                .into(),
+                            );
                         } else {
-                            v2.vec.push(Expression::cons_from_vec(&mut v.vec, exp_meta));
+                            v2.vec
+                                .push(Expression::cons_from_vec(&v.vec, exp_meta).into());
                         }
                     }
                 }
@@ -169,13 +178,17 @@ fn end_symbol(ch: char) -> bool {
 
 fn do_char(symbol: &str, line: usize, column: usize) -> Result<Expression, ParseError> {
     match &symbol.to_lowercase()[..] {
-        "space" => return Ok(Expression::Atom(Atom::Char(' '))),
-        "tab" => return Ok(Expression::Atom(Atom::Char('\t'))),
+        "space" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(' ')))),
+        "tab" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\t')))),
         // newline should be the platform line end.
-        "newline" => return Ok(Expression::Atom(Atom::Char('\n'))),
-        "linefeed" => return Ok(Expression::Atom(Atom::Char('\n'))),
-        "return" => return Ok(Expression::Atom(Atom::Char('\r'))),
-        "backspace" => return Ok(Expression::Atom(Atom::Char('\u{0008}'))),
+        "newline" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
+        "linefeed" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
+        "return" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\r')))),
+        "backspace" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                '\u{0008}',
+            ))))
+        }
         _ => {}
     }
     if symbol.len() != 1 {
@@ -185,7 +198,9 @@ fn do_char(symbol: &str, line: usize, column: usize) -> Result<Expression, Parse
         );
         return Err(ParseError { reason });
     }
-    Ok(Expression::Atom(Atom::Char(symbol.chars().next().unwrap())))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+        symbol.chars().next().unwrap(),
+    ))))
 }
 
 fn read_string<P>(
@@ -251,26 +266,30 @@ where
             ch
         }
     }
-    Ok(Expression::Atom(Atom::String(symbol.clone())))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        symbol.clone(),
+    ))))
 }
 
 fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
     if symbol.is_empty() {
-        return Expression::nil();
+        return Expression::alloc_data(ExpEnum::Nil);
     }
     if symbol == "t" {
-        Expression::Atom(Atom::True)
+        Expression::alloc_data(ExpEnum::Atom(Atom::True))
     } else if symbol == "nil" {
-        Expression::nil()
+        Expression::alloc_data(ExpEnum::Nil)
     } else {
         let potential_int: Result<i64, ParseIntError> = symbol.parse();
         match potential_int {
-            Ok(v) => Expression::Atom(Atom::Int(v)),
+            Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Int(v))),
             Err(_) => {
                 let potential_float: Result<f64, ParseFloatError> = symbol.parse();
                 match potential_float {
-                    Ok(v) => Expression::Atom(Atom::Float(v)),
-                    Err(_) => Expression::Atom(Atom::Symbol(environment.interner.intern(symbol))),
+                    Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Float(v))),
+                    Err(_) => Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern(symbol),
+                    ))),
                 }
             }
         }
@@ -285,7 +304,7 @@ fn push_stack(
 ) -> Result<(), ParseError> {
     match stack.pop() {
         Some(mut v) => {
-            v.vec.push(expression);
+            v.vec.push(expression.handle_no_root());
             stack.push(v);
             Ok(())
         }
@@ -414,10 +433,13 @@ where
                 )?;
             }
             '\'' => {
-                let mut quoted = Vec::<Expression>::new();
-                quoted.push(Expression::Atom(Atom::Symbol(
-                    environment.interner.intern("quote"),
-                )));
+                let mut quoted = Vec::<Handle>::new();
+                quoted.push(
+                    Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern("quote"),
+                    )))
+                    .handle_no_root(),
+                );
                 stack.push(List {
                     list_type: ListType::List,
                     vec: quoted,
@@ -434,15 +456,21 @@ where
                 close_list(stack, get_meta(name, *line, *column))?;
             }
             '`' => {
-                let mut quoted = Vec::<Expression>::new();
+                let mut quoted = Vec::<Handle>::new();
                 if in_bquote {
-                    quoted.push(Expression::Atom(Atom::Symbol(
-                        environment.interner.intern("quote"),
-                    )));
+                    quoted.push(
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern("quote"),
+                        )))
+                        .handle_no_root(),
+                    );
                 } else {
-                    quoted.push(Expression::Atom(Atom::Symbol(
-                        environment.interner.intern("bquote"),
-                    )));
+                    quoted.push(
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern("bquote"),
+                        )))
+                        .handle_no_root(),
+                    );
                 }
                 stack.push(List {
                     list_type: ListType::List,
@@ -465,14 +493,18 @@ where
                     chars.next();
                     push_stack(
                         stack,
-                        Expression::Atom(Atom::Symbol(environment.interner.intern(",@"))),
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern(",@"),
+                        ))),
                         *line,
                         *column,
                     )?;
                 } else {
                     push_stack(
                         stack,
-                        Expression::Atom(Atom::Symbol(environment.interner.intern(","))),
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern(","),
+                        ))),
                         *line,
                         *column,
                     )?;
@@ -496,10 +528,15 @@ where
                         level += 1;
                         stack.push(List {
                             list_type: ListType::Vector,
-                            vec: Vec::<Expression>::new(),
+                            vec: Vec::<Handle>::new(),
                         });
                     }
-                    't' => push_stack(stack, Expression::Atom(Atom::True), *line, *column)?,
+                    't' => push_stack(
+                        stack,
+                        Expression::alloc_data(ExpEnum::Atom(Atom::True)),
+                        *line,
+                        *column,
+                    )?,
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
@@ -513,7 +550,7 @@ where
                 level += 1;
                 stack.push(List {
                     list_type: ListType::List,
-                    vec: Vec::<Expression>::new(),
+                    vec: Vec::<Handle>::new(),
                 });
             }
             ')' => {
@@ -563,7 +600,7 @@ fn read2(
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
-        vec: Vec::<Expression>::new(),
+        vec: Vec::<Handle>::new(),
     });
     let mut chars = text.chars().peekable();
     if text.starts_with("#!") {
@@ -587,7 +624,7 @@ fn read2(
         return Err(ParseError { reason });
     }
     let exp_meta = get_meta(name, 0, 0);
-    close_list(&mut stack, exp_meta.clone())?;
+    close_list(&mut stack, exp_meta)?;
     if stack.len() > 1 {
         Err(ParseError {
             reason: "WTF?".to_string(),
@@ -603,17 +640,19 @@ fn read2(
                     // If we only have one thing and it is a vector or list then
                     // remove the outer list that was added (unless always_wrap
                     // is set).
-                    let exp = v.vec.pop().unwrap();
-                    match exp {
-                        Expression::Vector(_, _) => Ok(exp),
-                        Expression::Pair(_, _) => Ok(exp),
+                    let exp: Expression = v.vec.pop().unwrap().into();
+                    let exp_d = &exp.get().data;
+                    match exp_d {
+                        ExpEnum::Vector(_) => Ok(exp.clone_root()),
+                        ExpEnum::Pair(_, _) => Ok(exp.clone_root()),
+                        ExpEnum::Nil => Ok(exp.clone_root()),
                         _ => {
-                            v.vec.push(exp);
-                            Ok(Expression::with_list_meta(v.vec, exp_meta))
+                            v.vec.push(exp.handle_no_root());
+                            Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
                         }
                     }
                 } else {
-                    Ok(Expression::with_list_meta(v.vec, exp_meta))
+                    Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
                 }
             }
             None => Err(ParseError {
@@ -646,37 +685,38 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::Once;
 
     use crate::builtins_util::is_proper_list;
+    use crate::gc::init_gc;
+
+    static INIT: Once = Once::new();
 
     fn to_strs(output: &mut Vec<String>, exp: &Expression) {
-        match exp {
-            Expression::Vector(list, _) => {
+        match &exp.get().data {
+            ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
-                for exp in list.borrow().iter() {
+                for exp in list.iter() {
                     to_strs(output, exp);
                 }
                 output.push(")".to_string());
             }
-            Expression::Pair(p, _) => {
-                if let Some((e1, e2)) = &*p.borrow() {
-                    if is_proper_list(exp) {
-                        output.push("(".to_string());
-                        for p in exp.iter() {
-                            to_strs(output, p);
-                        }
-                        output.push(")".to_string());
-                    } else {
-                        output.push("(".to_string());
-                        to_strs(output, e1);
-                        output.push(".".to_string());
-                        to_strs(output, e2);
-                        output.push(")".to_string());
+            ExpEnum::Pair(e1, e2) => {
+                if is_proper_list(&exp) {
+                    output.push("(".to_string());
+                    for p in exp.iter() {
+                        to_strs(output, &p);
                     }
+                    output.push(")".to_string());
                 } else {
-                    output.push("nil".to_string());
+                    output.push("(".to_string());
+                    to_strs(output, e1);
+                    output.push(".".to_string());
+                    to_strs(output, e2);
+                    output.push(")".to_string());
                 }
             }
+            ExpEnum::Nil => output.push("nil".to_string()),
             _ => {
                 output.push(format!("{}:{}", exp.display_type(), exp.to_string()));
             }
@@ -713,8 +753,14 @@ mod tests {
         tokens
     }
 
+    pub fn setup() {
+        INIT.call_once(|| {
+            init_gc();
+        });
+    }
     #[test]
     fn test_tokenize() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "one two three \"four\" 5 6", None);
         assert!(tokens.len() == 8);
@@ -784,6 +830,7 @@ mod tests {
 
     #[test]
     fn test_quotes() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "'(1 2 3)", None);
         assert!(tokens.len() == 8);
@@ -875,6 +922,7 @@ mod tests {
 
     #[test]
     fn test_types() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(
             &mut environment,
@@ -933,6 +981,7 @@ mod tests {
 
     #[test]
     fn test_wrap() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let tokens = tokenize(&mut environment, "(1 2 3)", None);
         assert!(tokens.len() == 5);
@@ -1038,6 +1087,7 @@ mod tests {
 
     #[test]
     fn test_tok_strings() {
+        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let input =
             "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";

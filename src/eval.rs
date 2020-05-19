@@ -8,28 +8,26 @@ use std::sync::atomic::Ordering;
 use crate::builtins::expand_macro;
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::gc::*;
 use crate::process::*;
 use crate::types::*;
 
-fn box_slice_it<'a>(v: &'a [Expression]) -> Box<dyn Iterator<Item = &Expression> + 'a> {
-    Box::new(v.iter())
-}
-
-pub fn call_lambda<'a>(
+pub fn call_lambda(
     environment: &mut Environment,
     lambda: &Lambda,
-    args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
+    let mut body: Expression = lambda.body.clone_root().into();
+    let mut params: Expression = lambda.params.clone_root().into();
     let mut looping = true;
-    let mut last_eval = Expression::nil();
     let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
         environment,
         Some(&mut new_scope.borrow_mut()),
-        &lambda.params,
+        &params,
         args,
         eval_args,
     ) {
@@ -38,16 +36,19 @@ pub fn call_lambda<'a>(
     environment.current_scope.push(new_scope);
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
-    let mut lambda = lambda;
+    let mut lambda; // = lambda;
     let mut lambda_int;
+    let mut llast_eval: Option<Expression> = None;
+    //let mut iii = 0;
     while looping {
+        //iii += 1;
         if environment.sig_int.load(Ordering::Relaxed) {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Lambda interupted by SIGINT.",
             ));
         }
-        last_eval = match eval_nr(environment, &lambda.body) {
+        let last_eval = match eval_nr(environment, &body) {
             Ok(e) => e,
             Err(err) => {
                 environment.current_scope.pop();
@@ -58,65 +59,65 @@ pub fn call_lambda<'a>(
         if looping {
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
-            if let Expression::Vector(new_args, _) = &last_eval {
-                if recur_args != new_args.borrow().len() {
+            if let ExpEnum::Vector(new_args) = &last_eval.get().data {
+                if recur_args != new_args.len() {
                     environment.current_scope.pop();
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Called recur in a non-tail position.",
                     ));
                 }
-                let new_args1 = new_args.borrow();
-                let ib = box_slice_it(&new_args1);
-                if let Err(err) = setup_args(environment, None, &lambda.params, ib, false) {
+                let mut ib = Box::new(ListIter::new_list(&new_args));
+                if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
                     environment.current_scope.pop();
                     return Err(err);
                 }
             }
         } else if environment.exit_code.is_none() {
-            if let Expression::LazyFn(lam, parts) = &last_eval {
+            if let ExpEnum::LazyFn(lam, parts) = &last_eval.get().data {
                 lambda_int = lam.clone();
-                lambda = &lambda_int;
+                lambda = &mut lambda_int;
+                body = lambda.body.clone_root().into();
+                params = lambda.params.clone_root().into();
                 looping = true;
                 environment.current_scope.pop();
-                // scope is popped so can use ? in this if now.
+                // scope is popped so can use ? now.
                 let new_scope = build_new_scope(Some(lambda.capture.clone()));
-                let ib = Box::new(parts.iter());
+                let mut ib = Box::new(ListIter::new_list(&parts));
                 setup_args(
                     environment,
                     Some(&mut new_scope.borrow_mut()),
-                    &lambda.params,
-                    ib,
+                    &params,
+                    &mut ib,
                     false,
                 )?;
                 environment.current_scope.push(new_scope);
             }
         }
+        llast_eval = Some(last_eval);
     }
     environment.loose_symbols = old_loose;
     environment.current_scope.pop();
-    Ok(last_eval.resolve(environment)?)
+    Ok(llast_eval
+        .unwrap_or_else(Expression::make_nil)
+        .resolve(environment)?)
 }
 
-fn exec_macro<'a>(
+fn exec_macro(
     environment: &mut Environment,
     sh_macro: &Macro,
-    args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
+    let body: Expression = sh_macro.body.clone().into();
+    let params: Expression = sh_macro.params.clone().into();
     let mut new_scope = Scope {
         data: HashMap::new(),
         outer: None,
         name: None,
     };
-    match setup_args(
-        environment,
-        Some(&mut new_scope),
-        &sh_macro.params,
-        args,
-        false,
-    ) {
+    match setup_args(environment, Some(&mut new_scope), &params, args, false) {
         Ok(_) => {}
         Err(err) => {
             return Err(err);
@@ -129,11 +130,11 @@ fn exec_macro<'a>(
         .push(Rc::new(RefCell::new(new_scope)));
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
-    match eval(environment, &sh_macro.body) {
+    match eval(environment, &body) {
         Ok(expansion) => {
             let expansion = expansion.resolve(environment)?;
             environment.current_scope.pop();
-            let res = eval(environment, &expansion);
+            let res = eval(environment, expansion);
             environment.allow_lazy_fn = lazy;
             res
         }
@@ -145,19 +146,17 @@ fn exec_macro<'a>(
     }
 }
 
-pub fn fn_call<'a>(
+pub fn fn_call(
     environment: &mut Environment,
-    command: &Expression,
-    mut args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    command: Expression,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    match command {
-        Expression::Atom(Atom::Symbol(command)) => {
-            if let Some(exp) = get_expression(environment, &command) {
-                match &exp.exp {
-                    Expression::Function(c) if !c.is_special_form => {
-                        (c.func)(environment, &mut *args)
-                    }
-                    Expression::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args, true),
+    match command.get().data.clone() {
+        ExpEnum::Atom(Atom::Symbol(command)) => {
+            if let Some(exp) = get_expression(environment, command) {
+                match exp.exp.get().data.clone() {
+                    ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
+                    ExpEnum::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args, true),
                     _ => {
                         let msg = format!(
                             "Symbol {} is not callable (or is macro or special form).",
@@ -174,9 +173,9 @@ pub fn fn_call<'a>(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args, true),
-        Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
-        Expression::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
+        ExpEnum::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args, true),
+        ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
+        ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
             let msg = format!(
                 "Called an invalid command {}, type {}.",
@@ -188,42 +187,52 @@ pub fn fn_call<'a>(
     }
 }
 
-fn make_lazy<'a>(
+fn make_lazy(
     environment: &mut Environment,
     lambda: &Lambda,
-    args: Box<dyn Iterator<Item = &Expression> + 'a>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let mut parms = Vec::new();
+    let mut parms: Vec<Handle> = Vec::new();
     for p in args {
-        parms.push(eval(environment, p)?);
+        parms.push(eval(environment, p)?.into());
     }
-    Ok(Expression::LazyFn(lambda.clone(), parms))
+    Ok(Expression::alloc(ExpObj {
+        data: ExpEnum::LazyFn(lambda.clone(), parms),
+        meta: None,
+    }))
+}
+
+pub fn box_slice_it<'a>(v: &'a [Handle]) -> Box<dyn Iterator<Item = Expression> + 'a> {
+    Box::new(ListIter::new_slice(v))
 }
 
 fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
-    let parts_int;
-    let p_int;
-    let p_bor;
-    let (command, mut parts) = match expression {
-        Expression::Vector(parts, _) => {
-            parts_int = parts.borrow();
-            let (command, parts) = match parts_int.split_first() {
+    let exp_d = expression.get();
+    let e2: Expression;
+    let e2_d;
+    let (command, mut parts) = match &exp_d.data {
+        ExpEnum::Vector(parts) => {
+            let (command, parts) = match parts.split_first() {
                 Some((c, p)) => (c, p),
                 None => {
                     return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
                 }
             };
-            let ib = box_slice_it(&parts);
-            (command, ib)
+            let ib = box_slice_it(parts);
+            (command.clone(), ib)
         }
-        Expression::Pair(p, _) => {
-            if p.borrow().is_none() {
-                return Ok(Expression::nil());
-            }
-            p_bor = p.borrow();
-            p_int = p_bor.as_ref().unwrap();
-            (&p_int.0, p_int.1.iter())
+        ExpEnum::Pair(e1, ie2) => {
+            e2 = ie2.into();
+            e2_d = e2.get();
+            let e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
+                Box::new(ListIter::new_list(&list))
+            } else {
+                drop(e2_d);
+                e2.iter()
+            };
+            (e1.clone(), e2_iter)
         }
+        ExpEnum::Nil => return Ok(Expression::alloc_data(ExpEnum::Nil)),
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -231,17 +240,17 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             ))
         }
     };
-    let com_int;
-    let command = if let Expression::LazyFn(_, _) = command {
-        com_int = command.clone().resolve(environment)?;
-        &com_int
+    let command: Expression = command.into();
+    let command = if let ExpEnum::LazyFn(_, _) = &command.get().data {
+        command.resolve(environment)?
     } else {
-        command
+        command.clone()
     };
-    match command {
-        Expression::Atom(Atom::Symbol(command)) => {
+    let command_d = command.get();
+    match &command_d.data {
+        ExpEnum::Atom(Atom::Symbol(command)) => {
             if command.is_empty() {
-                return Ok(Expression::nil());
+                return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
             let form = if environment.form_type == FormType::Any
                 || environment.form_type == FormType::FormOnly
@@ -251,91 +260,86 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 None
             };
             if let Some(exp) = form {
-                match &exp.exp {
-                    Expression::Function(c) => (c.func)(environment, &mut *parts),
-                    Expression::Atom(Atom::Lambda(f)) => {
+                match &exp.exp.get().data {
+                    ExpEnum::Function(c) => (c.func)(environment, &mut parts),
+                    ExpEnum::Atom(Atom::Lambda(f)) => {
                         if environment.allow_lazy_fn {
-                            make_lazy(environment, f, parts)
+                            make_lazy(environment, &f, &mut parts)
                         } else {
-                            call_lambda(environment, &f, parts, true)
+                            call_lambda(environment, &f, &mut parts, true)
                         }
                     }
-                    Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
+                    ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
                     _ => {
                         let exp = exp.exp.clone();
-                        eval(environment, &exp)
+                        eval(environment, exp)
                     }
                 }
             } else if environment.form_type == FormType::ExternalOnly
                 || environment.form_type == FormType::Any
             {
                 if command.starts_with('$') {
-                    if let Ok(Expression::Atom(Atom::String(command))) =
-                        str_process(environment, command)
+                    if let ExpEnum::Atom(Atom::String(command)) =
+                        &str_process(environment, command).get().data
                     {
-                        do_command(environment, &command, parts)
+                        do_command(environment, &command, &mut parts)
                     } else {
                         let msg = format!("Not a valid form {}, not found.", command);
                         Err(io::Error::new(io::ErrorKind::Other, msg))
                     }
                 } else {
-                    do_command(environment, command, parts)
+                    do_command(environment, command, &mut parts)
                 }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::Vector(list, _) => {
-            match eval(environment, &Expression::Vector(list.clone(), None))? {
-                Expression::Atom(Atom::Lambda(l)) => {
+        ExpEnum::Vector(_) => {
+            drop(command_d); // Drop the lock on command.
+            match &eval(environment, &command)?.get().data {
+                ExpEnum::Atom(Atom::Lambda(l)) => {
                     if environment.allow_lazy_fn {
-                        make_lazy(environment, &l, parts)
+                        make_lazy(environment, &l, &mut parts)
                     } else {
-                        call_lambda(environment, &l, parts, true)
+                        call_lambda(environment, &l, &mut parts, true)
                     }
                 }
-                Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
-                Expression::Function(c) => (c.func)(environment, &mut *parts),
+                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
+                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
                 _ => {
-                    let msg = format!("Not a valid command {:?}", list);
+                    let msg = format!("Not a valid command {:?}", command);
                     Err(io::Error::new(io::ErrorKind::Other, msg))
                 }
             }
         }
-        Expression::Pair(p, _) => {
-            if p.borrow().is_some() {
-                match eval(environment, &Expression::Pair(p.clone(), None))? {
-                    Expression::Atom(Atom::Lambda(l)) => {
-                        if environment.allow_lazy_fn {
-                            make_lazy(environment, &l, parts)
-                        } else {
-                            call_lambda(environment, &l, parts, true)
-                        }
-                    }
-                    Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
-                    Expression::Function(c) => (c.func)(environment, &mut *parts),
-                    _ => {
-                        let msg = format!("Not a valid command {:?}", command);
-                        Err(io::Error::new(io::ErrorKind::Other, msg))
+        ExpEnum::Pair(_, _) => {
+            drop(command_d); // Drop the lock on command.
+            match &eval(environment, &command)?.get().data {
+                ExpEnum::Atom(Atom::Lambda(l)) => {
+                    if environment.allow_lazy_fn {
+                        make_lazy(environment, &l, &mut parts)
+                    } else {
+                        call_lambda(environment, &l, &mut parts, true)
                     }
                 }
-            } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Not a valid command: nil.",
-                ))
+                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
+                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
+                _ => {
+                    let msg = format!("Not a valid command {:?}", command);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                }
             }
         }
-        Expression::Atom(Atom::Lambda(l)) => {
+        ExpEnum::Atom(Atom::Lambda(l)) => {
             if environment.allow_lazy_fn {
-                make_lazy(environment, &l, parts)
+                make_lazy(environment, &l, &mut parts)
             } else {
-                call_lambda(environment, &l, parts, true)
+                call_lambda(environment, &l, &mut parts, true)
             }
         }
-        Expression::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
-        Expression::Function(c) => (c.func)(environment, &mut *parts),
+        ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
+        ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
         _ => {
             let msg = format!(
                 "Not a valid command {}, type {}.",
@@ -347,7 +351,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
     }
 }
 
-fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expression> {
+fn str_process(environment: &mut Environment, string: &str) -> Expression {
     if !environment.str_ignore_expand && string.contains('$') {
         let mut new_string = String::new();
         let mut last_ch = '\0';
@@ -383,23 +387,26 @@ fn str_process(environment: &mut Environment, string: &str) -> io::Result<Expres
             }
         }
         if environment.interner.contains(&new_string) {
-            Ok(Expression::Atom(Atom::StringRef(
+            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
                 environment.interner.intern(&new_string),
             )))
         } else {
-            Ok(Expression::Atom(Atom::String(new_string)))
+            Expression::alloc_data(ExpEnum::Atom(Atom::String(new_string)))
         }
     } else if environment.interner.contains(string) {
-        Ok(Expression::Atom(Atom::StringRef(
+        Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
             environment.interner.intern(string),
         )))
     } else {
-        Ok(Expression::Atom(Atom::String(string.to_string())))
+        Expression::alloc_data(ExpEnum::Atom(Atom::String(string.to_string())))
     }
 }
 
-fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
-    let mut expression = expression;
+fn internal_eval(
+    environment: &mut Environment,
+    expression_in: &Expression,
+) -> io::Result<Expression> {
+    let mut expression = expression_in.clone_root();
     if environment.sig_int.load(Ordering::Relaxed) {
         return Err(io::Error::new(
             io::ErrorKind::Other,
@@ -408,7 +415,7 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
     }
     // exit was called so just return nil to unwind.
     if environment.exit_code.is_some() {
-        return Ok(Expression::nil());
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {
@@ -419,109 +426,110 @@ fn internal_eval(environment: &mut Environment, expression: &Expression) -> io::
         ));
     }
     // If we have a macro expand it and replace the expression with the expansion.
-    let texpression;
-    let mut macro_replace = true;
-    if let Some(exp) = expand_macro(environment, expression, false)? {
-        let mut nv = Vec::new();
-        if let Expression::Vector(list, _) = &exp {
-            for item in &*list.borrow() {
-                let item = if let Expression::LazyFn(_, _) = item {
-                    item.clone().resolve(environment)?
+    //println!("XXXXXX expand: {}", expression);
+    if let Some(exp) = expand_macro(environment, &expression, false)? {
+        let mut nv: Vec<Handle> = Vec::new();
+        let mut macro_replace = true;
+        if let ExpEnum::Vector(list) = &exp.get().data {
+            for item in list {
+                let item: Expression = item.into();
+                let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
+                    item.resolve(environment)?
                 } else {
                     item.clone()
                 };
-                nv.push(item);
+                nv.push(item.into());
             }
-        } else if let Expression::Pair(p, _) = &exp {
-            if p.borrow().is_some() {
-                for item in exp.iter() {
-                    let item = if let Expression::LazyFn(_, _) = item {
-                        item.clone().resolve(environment)?
-                    } else {
-                        item.clone()
-                    };
-                    nv.push(item);
-                }
-            } else {
-                texpression = exp.clone();
-                expression = &texpression;
-                macro_replace = false;
+        } else if let ExpEnum::Pair(_, _) = &exp.get().data {
+            for item in exp.iter() {
+                let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
+                    item.resolve(environment)?
+                } else {
+                    item.clone()
+                };
+                nv.push(item.into());
             }
         } else {
-            texpression = exp.clone();
-            expression = &texpression;
+            expression = exp.clone();
             macro_replace = false;
         }
         if macro_replace {
-            match expression {
-                Expression::Vector(list, _) => {
-                    list.replace(nv);
+            let mut exp_mut = expression.get_mut(); //.data;
+            match exp_mut.data {
+                ExpEnum::Vector(_) => {
+                    exp_mut.data.replace(ExpEnum::Vector(nv));
+                    drop(exp_mut);
+                    gc_mut().down_root(&expression);
                 }
-                Expression::Pair(p, meta) => {
-                    if let Expression::Pair(np, _) =
-                        Expression::cons_from_vec(&mut nv, meta.clone())
-                    {
-                        p.replace(np.borrow().clone());
-                    }
+                ExpEnum::Pair(_, _) => {
+                    exp_mut.data.replace(ExpEnum::cons_from_vec(&mut nv));
+                    drop(exp_mut);
+                    gc_mut().down_root(&expression);
                 }
                 _ => {}
             }
         }
     }
-    match expression {
-        Expression::Vector(_, meta) => {
-            environment.last_meta = meta.clone();
-            fn_eval_lazy(environment, expression)
+    let exp_a = expression.get();
+    let exp_d = &exp_a.data;
+    let ret = match exp_d {
+        ExpEnum::Vector(_) => {
+            drop(exp_a);
+            environment.last_meta = expression.meta();
+            fn_eval_lazy(environment, &expression)
         }
-        Expression::Pair(p, meta) => {
-            environment.last_meta = meta.clone();
-            if p.borrow().is_some() {
-                fn_eval_lazy(environment, expression)
-            } else {
-                Ok(Expression::nil())
-            }
+        ExpEnum::Pair(_, _) => {
+            drop(exp_a);
+            environment.last_meta = expression.meta();
+            fn_eval_lazy(environment, &expression)
         }
-        Expression::Atom(Atom::Symbol(s)) => {
+        ExpEnum::Nil => Ok(expression.clone()),
+        ExpEnum::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
-                    Ok(val) => Ok(Expression::Atom(Atom::StringRef(
+                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
                         environment.interner.intern(&val),
-                    ))),
-                    Err(_) => Ok(Expression::nil()),
+                    )))),
+                    Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
                 }
             } else if s.starts_with(':') {
                 // Got a keyword, so just be you...
-                Ok(Expression::Atom(Atom::Symbol(s)))
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
             } else if let Some(exp) = get_expression(environment, s) {
                 let exp = &exp.exp;
                 Ok(exp.clone())
             } else if environment.loose_symbols {
-                str_process(environment, s)
+                Ok(str_process(environment, s))
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        Expression::HashMap(map) => Ok(Expression::HashMap(map.clone())),
-        Expression::Atom(Atom::String(string)) => str_process(environment, &string),
-        Expression::Atom(Atom::StringRef(string)) => str_process(environment, string),
-        Expression::Atom(atom) => Ok(Expression::Atom(atom.clone())),
-        Expression::Function(_) => Ok(Expression::nil()),
-        Expression::Process(state) => Ok(Expression::Process(*state)),
-        Expression::File(_) => Ok(Expression::nil()),
-        Expression::LazyFn(_, _) => {
+        ExpEnum::HashMap(_) => Ok(expression.clone()),
+        ExpEnum::Atom(Atom::String(string)) => Ok(str_process(environment, &string)),
+        ExpEnum::Atom(Atom::StringRef(string)) => Ok(str_process(environment, string)),
+        ExpEnum::Atom(_) => Ok(expression.clone()),
+        ExpEnum::Function(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
+        ExpEnum::Process(_) => Ok(expression.clone()),
+        ExpEnum::File(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
+        ExpEnum::LazyFn(_, _) => {
             let int_exp = expression.clone().resolve(environment)?;
-            eval(environment, &int_exp)
+            eval(environment, int_exp)
         }
+    };
+    match ret {
+        Ok(ret) => Ok(ret.clone_root()),
+        Err(err) => Err(err),
     }
 }
 
-pub fn eval_nr<'a>(
+pub fn eval_nr(
     environment: &mut Environment,
-    expression: &'a Expression,
+    expression: impl AsRef<Expression>,
 ) -> io::Result<Expression> {
+    let expression = expression.as_ref();
     if environment.return_val.is_some() {
-        return Ok(Expression::nil());
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     if environment.state.eval_level > 500 {
         return Err(io::Error::new(io::ErrorKind::Other, "Eval calls to deep."));
@@ -548,29 +556,16 @@ pub fn eval_nr<'a>(
             if let Err(err) = expression.pretty_printf(environment, &mut handle) {
                 eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
             }
-            match expression {
-                Expression::Vector(_, Some(meta)) => eprint!(
+            if let Some(meta) = expression.meta() {
+                eprint!(
                     "\n[[[ {}, line: {}, column: {} ]]]",
                     meta.file, meta.line, meta.col
-                ),
-                Expression::Pair(_, Some(meta)) => eprint!(
-                    "\n[[[ {}, line: {}, column: {} ]]]",
-                    meta.file, meta.line, meta.col
-                ),
-                _ => {}
+                );
+                if environment.error_meta.is_none() {
+                    environment.error_meta = Some(meta);
+                }
             }
             eprintln!("\n=============================================================");
-        }
-        if environment.error_meta.is_none() {
-            match expression {
-                Expression::Vector(_, Some(meta)) => {
-                    environment.error_meta = Some(meta.clone());
-                }
-                Expression::Pair(_, Some(meta)) => {
-                    environment.error_meta = Some(meta.clone());
-                }
-                _ => {}
-            }
         }
     }
     environment.state.eval_level -= 1;
@@ -578,14 +573,20 @@ pub fn eval_nr<'a>(
     result
 }
 
-pub fn eval<'a>(
+pub fn eval(
     environment: &mut Environment,
-    expression: &'a Expression,
+    expression: impl AsRef<Expression>,
 ) -> io::Result<Expression> {
+    let expression = expression.as_ref();
     let result = eval_nr(environment, expression);
     if let Ok(res) = result {
         res.resolve(environment)
     } else {
         result
     }
+}
+
+pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> io::Result<Expression> {
+    let data = Expression::alloc_data(data);
+    eval(environment, data)
 }

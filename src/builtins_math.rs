@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
-use std::rc::Rc;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -11,7 +10,7 @@ use crate::types::*;
 
 fn make_args(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Vec<Expression>> {
     let mut list: Vec<Expression> = Vec::new();
     for arg in args {
@@ -22,22 +21,22 @@ fn make_args(
 
 pub fn add_math_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("+"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
-                    Ok(Expression::Atom(Atom::Int(sum)))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(sum))))
                 } else {
                     let sum: f64 = parse_list_of_floats(environment, &mut args)?.iter().sum();
-                    Ok(Expression::Atom(Atom::Float(sum)))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(sum))))
                 }
             },
             "Usage: (+ number+)
@@ -54,24 +53,24 @@ Example:
 (test::assert-equal 7 (+ 1 2 4))
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("*"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
-                    Ok(Expression::Atom(Atom::Int(prod)))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(prod))))
                 } else {
                     let prod: f64 = parse_list_of_floats(environment, &mut args)?
                         .iter()
                         .product();
-                    Ok(Expression::Atom(Atom::Float(prod)))
+                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(prod))))
                 }
             },
             "Usage: (* number+)
@@ -93,20 +92,22 @@ Example:
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("-"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
                         let sum_of_rest: i64 = ints[1..].iter().sum();
-                        Ok(Expression::Atom(Atom::Int(first - sum_of_rest)))
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                            first - sum_of_rest,
+                        ))))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -117,7 +118,9 @@ Example:
                     let floats = parse_list_of_floats(environment, &mut args)?;
                     if let Some(first) = floats.first() {
                         let sum_of_rest: f64 = floats[1..].iter().sum();
-                        Ok(Expression::Atom(Atom::Float(first - sum_of_rest)))
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
+                            first - sum_of_rest,
+                        ))))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -141,14 +144,14 @@ Example:
 (test::assert-equal 4.9 (- 10.9 2 4))
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("/"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
@@ -158,7 +161,7 @@ Example:
                         let div: i64 = ints[1..]
                             .iter()
                             .fold(*ints.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::Atom(Atom::Int(div)))
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(div))))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -173,7 +176,7 @@ Example:
                         let div: f64 = floats[1..]
                             .iter()
                             .fold(*floats.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::Atom(Atom::Float(div)))
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(div))))
                     } else {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -199,14 +202,14 @@ Example:
 (test::assert-equal 5 (/ 100 2 5 2))
 ",
             root,
-        )),
+        ),
     );
 
     data.insert(
         interner.intern("%"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = &Expression>|
+             args: &mut dyn Iterator<Item = Expression>|
              -> io::Result<Expression> {
                 let mut args = make_args(environment, args)?;
                 let ints = parse_list_of_ints(environment, &mut args)?;
@@ -221,7 +224,9 @@ Example:
                             "expected two ints, second can not be 0",
                         ))
                     } else {
-                        Ok(Expression::Atom(Atom::Int(arg1 % arg2)))
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                            arg1 % arg2,
+                        ))))
                     }
                 }
             },
@@ -237,6 +242,6 @@ Example:
 (test::assert-equal 1 (% 1 2))
 ",
             root,
-        )),
+        ),
     );
 }

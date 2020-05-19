@@ -3,7 +3,6 @@ use std::env;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
-use std::rc::Rc;
 
 use glob::glob;
 
@@ -40,7 +39,7 @@ fn cd_expand_all_dots(cd: String) -> String {
 
 fn builtin_cd(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let home = match env::var("HOME") {
         Ok(val) => val,
@@ -52,18 +51,21 @@ fn builtin_cd(
     };
     let new_dir = if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let new_arg = match arg {
-                Expression::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
-                    Some(exp) => match &exp.exp {
-                        Expression::Function(_) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
-                        }
-                        Expression::Atom(Atom::Lambda(_)) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
-                        }
-                        Expression::Atom(Atom::Macro(_)) => {
-                            eval(environment, &Expression::Atom(Atom::StringRef(s)))?
-                        }
+            let new_arg = match &arg.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                    Some(exp) => match &exp.exp.get().data {
+                        ExpEnum::Function(_) => eval(
+                            environment,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                        )?,
+                        ExpEnum::Atom(Atom::Lambda(_)) => eval(
+                            environment,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                        )?,
+                        ExpEnum::Atom(Atom::Macro(_)) => eval(
+                            environment,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                        )?,
                         _ => eval(environment, &arg)?,
                     },
                     _ => eval(environment, &arg)?,
@@ -91,35 +93,35 @@ fn builtin_cd(
     env::set_var("OLDPWD", env::current_dir()?);
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("Error changing to {}, {}", root.display(), e);
-        Ok(Expression::nil())
+        Ok(Expression::make_nil())
     } else {
         env::set_var("PWD", env::current_dir()?);
-        Ok(Expression::Atom(Atom::True))
+        Ok(Expression::make_true())
     }
 }
 
 fn file_test(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
     test: fn(path: &Path) -> bool,
     fn_name: &str,
 ) -> io::Result<Expression> {
     if let Some(p) = args.next() {
         if args.next().is_none() {
-            let p = match eval(environment, p)? {
-                Expression::Atom(Atom::String(p)) => {
+            let p = match &eval(environment, p)?.get().data {
+                ExpEnum::Atom(Atom::String(p)) => {
                     match expand_tilde(&p) {
                         Some(p) => p,
                         None => p.to_string(), // XXX not great.
                     }
                 }
-                Expression::Atom(Atom::StringRef(p)) => {
+                ExpEnum::Atom(Atom::StringRef(p)) => {
                     match expand_tilde(p) {
                         Some(p) => p,
-                        None => p.to_string(), // XXX not great.
+                        None => (*p).to_string(), // XXX not great.
                     }
                 }
-                Expression::Atom(Atom::StringBuf(p)) => {
+                ExpEnum::Atom(Atom::StringBuf(p)) => {
                     let pb = p.borrow();
                     match expand_tilde(&pb) {
                         Some(p) => p,
@@ -133,9 +135,9 @@ fn file_test(
             };
             let path = Path::new(&p);
             if test(path) {
-                return Ok(Expression::Atom(Atom::True));
+                return Ok(Expression::make_true());
             } else {
-                return Ok(Expression::nil());
+                return Ok(Expression::make_nil());
             }
         }
     }
@@ -145,52 +147,52 @@ fn file_test(
 
 fn builtin_path_exists(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     file_test(environment, args, |path| path.exists(), "fs-exists?")
 }
 
 fn builtin_is_file(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     file_test(environment, args, |path| path.is_file(), "fs-file?")
 }
 
 fn builtin_is_dir(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
 fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
     let mut do_write = false;
-    match &environment.data_in {
-        Some(Expression::Atom(_atom)) => {
-            do_write = true;
-        }
-        Some(Expression::Process(ProcessState::Running(_pid))) => {
-            do_write = true;
-        }
-        Some(Expression::File(file)) => match &*file.borrow() {
-            FileState::Stdin => {
+    if let Some(data_in) = environment.data_in.clone() {
+        match &data_in.get().data {
+            ExpEnum::Atom(_) => {
                 do_write = true;
             }
-            FileState::Read(_file) => {
+            ExpEnum::Process(ProcessState::Running(_)) => {
                 do_write = true;
             }
-            _ => {}
-        },
-        Some(val) => {
-            if !val.is_nil() {
+            ExpEnum::File(file) => match &*file.borrow() {
+                FileState::Stdin => {
+                    do_write = true;
+                }
+                FileState::Read(_file) => {
+                    do_write = true;
+                }
+                _ => {}
+            },
+            ExpEnum::Nil => {}
+            _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "Invalid expression state before file.",
                 ));
             }
         }
-        None => {}
     }
     if do_write {
         let data_in = environment.data_in.as_ref().unwrap().clone();
@@ -201,7 +203,7 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io:
 
 fn builtin_pipe(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if environment.in_pipe {
         return Err(io::Error::new(
@@ -211,7 +213,7 @@ fn builtin_pipe(
     }
     let old_out_status = environment.state.stdout_status.clone();
     environment.in_pipe = true;
-    let mut out = Expression::nil();
+    let mut out = Expression::make_nil();
     environment.state.stdout_status = Some(IOState::Pipe);
     let mut error: Option<io::Result<Expression>> = None;
     let mut i = 1; // Meant 1 here.
@@ -224,72 +226,79 @@ fn builtin_pipe(
         }
         environment.data_in = Some(out.clone());
         let res = eval(environment, p);
-        if let Err(err) = res {
-            error = Some(Err(err));
-            break;
-        }
-        if let Ok(Expression::Process(ProcessState::Running(pid))) = res {
-            if environment.state.pipe_pgid.is_none() {
-                environment.state.pipe_pgid = Some(pid);
-            }
-        }
-        if let Ok(Expression::Process(ProcessState::Over(pid, _exit_status))) = res {
-            if environment.state.pipe_pgid.is_none() {
-                environment.state.pipe_pgid = Some(pid);
-            }
-        }
-        if let Ok(Expression::File(file)) = &res {
-            match &*file.borrow() {
-                FileState::Stdout => {
-                    let stdout = io::stdout();
-                    let mut handle = stdout.lock();
-                    if let Err(err) = pipe_write_file(environment, &mut handle) {
-                        error = Some(Err(err));
-                        break;
+        match &res {
+            Ok(res) => match &res.get().data {
+                ExpEnum::Process(ProcessState::Running(pid)) => {
+                    if environment.state.pipe_pgid.is_none() {
+                        environment.state.pipe_pgid = Some(*pid);
                     }
                 }
-                FileState::Stderr => {
-                    let stderr = io::stderr();
-                    let mut handle = stderr.lock();
-                    if let Err(err) = pipe_write_file(environment, &mut handle) {
-                        error = Some(Err(err));
-                        break;
+                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
+                    if environment.state.pipe_pgid.is_none() {
+                        environment.state.pipe_pgid = Some(*pid);
                     }
                 }
-                FileState::Write(f) => {
-                    if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
-                        error = Some(Err(err));
-                        break;
+                ExpEnum::File(file) => match &*file.borrow() {
+                    FileState::Stdout => {
+                        let stdout = io::stdout();
+                        let mut handle = stdout.lock();
+                        if let Err(err) = pipe_write_file(environment, &mut handle) {
+                            error = Some(Err(err));
+                            break;
+                        }
                     }
-                }
-                FileState::Read(_) => {
-                    if i > 1 {
+                    FileState::Stderr => {
+                        let stderr = io::stderr();
+                        let mut handle = stderr.lock();
+                        if let Err(err) = pipe_write_file(environment, &mut handle) {
+                            error = Some(Err(err));
+                            break;
+                        }
+                    }
+                    FileState::Write(f) => {
+                        if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
+                            error = Some(Err(err));
+                            break;
+                        }
+                    }
+                    FileState::Read(_) => {
+                        if i > 1 {
+                            error = Some(Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Not a valid place for a read file (must be at start of pipe).",
+                            )));
+                            break;
+                        }
+                    }
+                    FileState::Stdin => {
+                        if i > 1 {
+                            error = Some(Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Not a valid place for stdin.",
+                            )));
+                            break;
+                        }
+                    }
+                    FileState::Closed => {
                         error = Some(Err(io::Error::new(
                             io::ErrorKind::Other,
-                            "Not a valid place for a read file (must be at start of pipe).",
+                            "Closed file not valid in pipe.",
                         )));
                         break;
                     }
-                }
-                FileState::Stdin => {
-                    if i > 1 {
-                        error = Some(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Not a valid place for stdin.",
-                        )));
-                        break;
-                    }
-                }
-                FileState::Closed => {
-                    error = Some(Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Closed file not valid in pipe.",
-                    )));
-                    break;
-                }
+                },
+                _ => {}
+            },
+            Err(err) => {
+                error = Some(Err(io::Error::new(err.kind(), err.to_string())));
+                break;
             }
         }
-        out = if let Ok(out) = res { out } else { out };
+        out = if let Ok(out) = res {
+            out.clone()
+        } else {
+            out.clone()
+        };
         i += 1;
         pipe = next_pipe;
     }
@@ -306,26 +315,28 @@ fn builtin_pipe(
 
 fn builtin_wait(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match arg0 {
-                Expression::Process(ProcessState::Running(pid)) => {
-                    match wait_pid(environment, pid, None) {
-                        Some(exit_status) => {
-                            Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
-                        }
-                        None => Ok(Expression::nil()),
+            return match &arg0.get().data {
+                ExpEnum::Process(ProcessState::Running(pid)) => {
+                    match wait_pid(environment, *pid, None) {
+                        Some(exit_status) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                            i64::from(exit_status),
+                        )))),
+                        None => Ok(Expression::make_nil()),
                     }
                 }
-                Expression::Process(ProcessState::Over(_pid, exit_status)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(exit_status))))
-                }
-                Expression::Atom(Atom::Int(pid)) => match wait_pid(environment, pid as u32, None) {
-                    Some(exit_status) => Ok(Expression::Atom(Atom::Int(i64::from(exit_status)))),
-                    None => Ok(Expression::nil()),
+                ExpEnum::Process(ProcessState::Over(_pid, exit_status)) => Ok(
+                    Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(*exit_status)))),
+                ),
+                ExpEnum::Atom(Atom::Int(pid)) => match wait_pid(environment, *pid as u32, None) {
+                    Some(exit_status) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                        i64::from(exit_status),
+                    )))),
+                    None => Ok(Expression::make_nil()),
                 },
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -342,18 +353,18 @@ fn builtin_wait(
 
 fn builtin_pid(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match arg0 {
-                Expression::Process(ProcessState::Running(pid)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-                }
-                Expression::Process(ProcessState::Over(pid, _exit_status)) => {
-                    Ok(Expression::Atom(Atom::Int(i64::from(pid))))
-                }
+            return match arg0.get().data {
+                ExpEnum::Process(ProcessState::Running(pid)) => Ok(Expression::alloc_data(
+                    ExpEnum::Atom(Atom::Int(i64::from(pid))),
+                )),
+                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => Ok(
+                    Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(pid)))),
+                ),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "pid error: not a process",
@@ -369,14 +380,14 @@ fn builtin_pid(
 
 fn builtin_glob(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut files = Vec::new();
     for pat in args {
-        let pat = match eval(environment, pat)? {
-            Expression::Atom(Atom::String(s)) => s,
-            Expression::Atom(Atom::StringRef(s)) => s.to_string(),
-            Expression::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
+        let pat = match &eval(environment, pat)?.get().data {
+            ExpEnum::Atom(Atom::String(s)) => s.to_string(),
+            ExpEnum::Atom(Atom::StringRef(s)) => (*s).to_string(),
+            ExpEnum::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -394,7 +405,9 @@ fn builtin_glob(
                     match p {
                         Ok(p) => {
                             if let Some(p) = p.to_str() {
-                                files.push(Expression::Atom(Atom::String(p.to_string())));
+                                files.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                                    p.to_string(),
+                                ))));
                             }
                         }
                         Err(err) => {
@@ -415,12 +428,12 @@ fn builtin_glob(
 
 pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("cd"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_cd,
             "Usage: (cd dir-to-change-to)
 
@@ -429,11 +442,11 @@ Change directory.
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fs-exists?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_path_exists,
             "Usage: (fs-exists? path-to-test)
 
@@ -442,11 +455,11 @@ Does the given path exist?
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fs-file?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_is_file,
             "Usage: (fs-file? path-to-test)
 
@@ -455,11 +468,11 @@ Is the given path a file?
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("fs-dir?"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_is_dir,
             "Usage: (fs-dir? path-to-test)
 
@@ -468,11 +481,11 @@ Is the given path a directory?
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("pipe"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_pipe,
             "Usage: (pipe (proc-whose-stdout) (is-inpup-here))
 
@@ -481,11 +494,11 @@ Setup a pipe between processes.
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("wait"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_wait,
             "Usage: (wait proc-to-wait-for)
 
@@ -494,11 +507,11 @@ Wait for a process to end and return it's exit status.
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("pid"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_pid,
             "Usage: (pid proc)
 
@@ -507,11 +520,11 @@ Return the pid of a process.
 Section: shell
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("glob"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_glob,
             "Usage: (glob /path/with/*)
 
@@ -520,6 +533,6 @@ Takes a list/varargs of globs and return the list of them expanded.
 Section: shell
 ",
             root,
-        )),
+        ),
     );
 }

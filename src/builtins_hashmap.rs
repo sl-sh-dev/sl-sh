@@ -1,48 +1,34 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
-use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
+use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
 fn build_map(
-    mut map: HashMap<String, Rc<Expression>>,
-    assocs: &mut dyn Iterator<Item = &Expression>,
+    mut map: HashMap<String, Handle>,
+    assocs: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     for key_val in assocs {
-        if let Expression::Pair(p, _) = key_val {
-            if let Some((key, val)) = &*p.borrow() {
-                match key {
-                    Expression::Atom(Atom::Symbol(sym)) => {
-                        map.insert((*sym).to_string(), Rc::new(val.clone()))
-                    }
-                    Expression::Atom(Atom::String(s)) => {
-                        map.insert(s.to_string(), Rc::new(val.clone()))
-                    }
-                    Expression::Atom(Atom::StringRef(s)) => {
-                        map.insert((*s).to_string(), Rc::new(val.clone()))
-                    }
-                    Expression::Atom(Atom::StringBuf(s)) => {
-                        map.insert(s.borrow().to_string(), Rc::new(val.clone()))
-                    }
-                    _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "make-hash key can only be a symbol or string",
-                        ))
-                    }
-                };
-            } else {
-                // Nil
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "make-hash each association must be a pair (key . val)",
-                ));
-            }
+        if let ExpEnum::Pair(key, val) = &key_val.get().data {
+            let key: Expression = key.into();
+            match &key.get().data {
+                ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
+                ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), val.clone()),
+                ExpEnum::Atom(Atom::StringRef(s)) => map.insert((*s).to_string(), val.clone()),
+                ExpEnum::Atom(Atom::StringBuf(s)) => {
+                    map.insert(s.borrow().to_string(), val.clone())
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "make-hash key can only be a symbol or string",
+                    ))
+                }
+            };
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -50,27 +36,22 @@ fn build_map(
             ));
         }
     }
-    Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
+    Ok(Expression::alloc_data(ExpEnum::HashMap(map)))
 }
 
 fn builtin_make_hash(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    let map: HashMap<String, Rc<Expression>> = HashMap::new();
+    let map: HashMap<String, Handle> = HashMap::new();
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
             let assocs = eval(environment, assocs)?;
-            match &assocs {
-                Expression::Pair(p, _) => {
-                    if let Some((_, _)) = &*p.borrow() {
-                        build_map(map, &mut *assocs.iter())
-                    } else {
-                        // Nil
-                        Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
-                    }
-                }
-                Expression::Vector(list, _) => build_map(map, &mut *Box::new(list.borrow().iter())),
+            let assocs_d = assocs.get();
+            match &assocs_d.data {
+                ExpEnum::Pair(_, _) => build_map(map, &mut assocs.iter()),
+                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::HashMap(map))),
+                ExpEnum::Vector(list) => build_map(map, &mut Box::new(ListIter::new_list(&list))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "make-hash takes a sequence",
@@ -83,39 +64,40 @@ fn builtin_make_hash(
             ))
         }
     } else {
-        Ok(Expression::HashMap(Rc::new(RefCell::new(map))))
+        Ok(Expression::alloc_data(ExpEnum::HashMap(map)))
     }
 }
 
 fn builtin_hash_set(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if let Some(val) = args.next() {
                 if args.next().is_none() {
-                    let map = eval(environment, map)?;
+                    let exp_map = eval(environment, map)?;
                     let key = eval(environment, key)?;
                     let val = eval(environment, val)?;
-                    if let Expression::HashMap(map) = map {
-                        match key {
-                            Expression::Atom(Atom::Symbol(sym)) => {
-                                map.borrow_mut().insert(sym.to_string(), Rc::new(val));
-                                return Ok(Expression::HashMap(map));
+                    let mut exp_map_d = exp_map.get_mut();
+                    if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
+                        let val: Handle = val.into();
+                        match &key.get().data {
+                            ExpEnum::Atom(Atom::Symbol(sym)) => {
+                                map.insert((*sym).to_string(), val);
+                                return Ok(exp_map.clone());
                             }
-                            Expression::Atom(Atom::String(s)) => {
-                                map.borrow_mut().insert(s, Rc::new(val));
-                                return Ok(Expression::HashMap(map));
+                            ExpEnum::Atom(Atom::String(s)) => {
+                                map.insert(s.to_string(), val);
+                                return Ok(exp_map.clone());
                             }
-                            Expression::Atom(Atom::StringRef(s)) => {
-                                map.borrow_mut().insert(s.to_string(), Rc::new(val));
-                                return Ok(Expression::HashMap(map));
+                            ExpEnum::Atom(Atom::StringRef(s)) => {
+                                map.insert((*s).to_string(), val);
+                                return Ok(exp_map.clone());
                             }
-                            Expression::Atom(Atom::StringBuf(s)) => {
-                                map.borrow_mut()
-                                    .insert(s.borrow().to_string(), Rc::new(val));
-                                return Ok(Expression::HashMap(map));
+                            ExpEnum::Atom(Atom::StringBuf(s)) => {
+                                map.insert(s.borrow().to_string(), val);
+                                return Ok(exp_map.clone());
                             }
                             _ => {
                                 return Err(io::Error::new(
@@ -137,34 +119,36 @@ fn builtin_hash_set(
 
 fn builtin_hash_remove(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_rem(map: &mut HashMap<String, Rc<Expression>>, sym: &str) -> io::Result<Expression> {
+    fn do_rem(map: &mut HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         let old = map.remove(sym);
         if let Some(old) = old {
-            let exp = &*old;
-            return Ok(exp.clone());
+            let old: Expression = old.into();
+            Ok(old)
+        } else {
+            Ok(Expression::make_nil())
         }
-        Ok(Expression::nil())
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if args.next().is_none() {
                 let map = eval(environment, map)?;
                 let key = eval(environment, key)?;
-                if let Expression::HashMap(map) = map {
-                    match key {
-                        Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_rem(&mut map.borrow_mut(), sym);
+                let mut map_d = map.get_mut();
+                if let ExpEnum::HashMap(map) = &mut map_d.data {
+                    match &key.get().data {
+                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                            return do_rem(map, sym);
                         }
-                        Expression::Atom(Atom::String(s)) => {
-                            return do_rem(&mut map.borrow_mut(), &s);
+                        ExpEnum::Atom(Atom::String(s)) => {
+                            return do_rem(map, &s);
                         }
-                        Expression::Atom(Atom::StringRef(s)) => {
-                            return do_rem(&mut map.borrow_mut(), s);
+                        ExpEnum::Atom(Atom::StringRef(s)) => {
+                            return do_rem(map, s);
                         }
-                        Expression::Atom(Atom::StringBuf(s)) => {
-                            return do_rem(&mut map.borrow_mut(), &s.borrow());
+                        ExpEnum::Atom(Atom::StringBuf(s)) => {
+                            return do_rem(map, &s.borrow());
                         }
                         _ => {
                             return Err(io::Error::new(
@@ -185,34 +169,36 @@ fn builtin_hash_remove(
 
 fn builtin_hash_get(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_get(map: &HashMap<String, Rc<Expression>>, sym: &str) -> io::Result<Expression> {
+    fn do_get(map: &HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         let old = map.get(sym);
         if let Some(old) = old {
-            let exp = &*old.clone();
-            return Ok(exp.clone());
+            let old: Expression = old.into();
+            Ok(old)
+        } else {
+            Ok(Expression::make_nil())
         }
-        Ok(Expression::nil())
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if args.next().is_none() {
                 let map = eval(environment, map)?;
                 let key = eval(environment, key)?;
-                if let Expression::HashMap(map) = map {
-                    match key {
-                        Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_get(&map.borrow(), sym);
+                let map_d = map.get();
+                if let ExpEnum::HashMap(map) = &map_d.data {
+                    match &key.get().data {
+                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                            return do_get(map, sym);
                         }
-                        Expression::Atom(Atom::String(s)) => {
-                            return do_get(&map.borrow(), &s);
+                        ExpEnum::Atom(Atom::String(s)) => {
+                            return do_get(map, &s);
                         }
-                        Expression::Atom(Atom::StringRef(s)) => {
-                            return do_get(&map.borrow(), s);
+                        ExpEnum::Atom(Atom::StringRef(s)) => {
+                            return do_get(map, s);
                         }
-                        Expression::Atom(Atom::StringBuf(s)) => {
-                            return do_get(&map.borrow(), &s.borrow());
+                        ExpEnum::Atom(Atom::StringBuf(s)) => {
+                            return do_get(map, &s.borrow());
                         }
                         _ => {
                             return Err(io::Error::new(
@@ -233,13 +219,13 @@ fn builtin_hash_get(
 
 fn builtin_hash_haskey(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_has(map: &HashMap<String, Rc<Expression>>, sym: &str) -> io::Result<Expression> {
+    fn do_has(map: &HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
         if map.contains_key(sym) {
-            Ok(Expression::Atom(Atom::True))
+            Ok(Expression::make_true())
         } else {
-            Ok(Expression::nil())
+            Ok(Expression::make_nil())
         }
     }
     if let Some(map) = args.next() {
@@ -247,19 +233,20 @@ fn builtin_hash_haskey(
             if args.next().is_none() {
                 let map = eval(environment, map)?;
                 let key = eval(environment, key)?;
-                if let Expression::HashMap(map) = map {
-                    match key {
-                        Expression::Atom(Atom::Symbol(sym)) => {
-                            return do_has(&map.borrow(), sym);
+                let map_d = map.get();
+                if let ExpEnum::HashMap(map) = &map_d.data {
+                    match &key.get().data {
+                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                            return do_has(map, sym);
                         }
-                        Expression::Atom(Atom::String(s)) => {
-                            return do_has(&map.borrow(), &s);
+                        ExpEnum::Atom(Atom::String(s)) => {
+                            return do_has(map, &s);
                         }
-                        Expression::Atom(Atom::StringRef(s)) => {
-                            return do_has(&map.borrow(), s);
+                        ExpEnum::Atom(Atom::StringRef(s)) => {
+                            return do_has(map, s);
                         }
-                        Expression::Atom(Atom::StringBuf(s)) => {
-                            return do_has(&map.borrow(), &s.borrow());
+                        ExpEnum::Atom(Atom::StringBuf(s)) => {
+                            return do_has(map, &s.borrow());
                         }
                         _ => {
                             let msg =
@@ -283,17 +270,18 @@ fn builtin_hash_haskey(
 
 fn builtin_hash_keys(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
             let map = eval(environment, map)?;
-            if let Expression::HashMap(map) = map {
-                let mut key_list = Vec::with_capacity(map.borrow().len());
-                for key in map.borrow().keys() {
-                    key_list.push(Expression::Atom(Atom::Symbol(
+            let map_d = map.get();
+            if let ExpEnum::HashMap(map) = &map_d.data {
+                let mut key_list = Vec::with_capacity(map.len());
+                for key in map.keys() {
+                    key_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
                         environment.interner.intern(key),
-                    )));
+                    ))));
                 }
                 return Ok(Expression::with_list(key_list));
             }
@@ -307,14 +295,15 @@ fn builtin_hash_keys(
 
 fn builtin_hash_clear(
     environment: &mut Environment,
-    args: &mut dyn Iterator<Item = &Expression>,
+    args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
             let map = eval(environment, map)?;
-            if let Expression::HashMap(map) = map {
-                map.borrow_mut().clear();
-                return Ok(Expression::nil());
+            let mut map_d = map.get_mut();
+            if let ExpEnum::HashMap(inner_map) = &mut map_d.data {
+                inner_map.clear();
+                return Ok(map.clone());
             }
         }
     }
@@ -326,12 +315,12 @@ fn builtin_hash_clear(
 
 pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Rc<Reference>, S>,
+    data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
     data.insert(
         interner.intern("make-hash"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_make_hash,
             "Usage: (make-hash associations?)
 
@@ -360,11 +349,11 @@ Example:
 (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
 ", root
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-set!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_set,
             "Usage: (hash-set! hashmap key value)
 
@@ -399,11 +388,11 @@ Example:
 (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-remove!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_remove,
             "Usage: (hash-remove! hashmap key)
 
@@ -428,11 +417,11 @@ Example:
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-get"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_get,
             "Usage: (hash-get hashmap key)
 
@@ -448,11 +437,11 @@ Example:
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-haskey"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_haskey,
             "Usage: (hash-haskey hashmap key)
 
@@ -475,11 +464,11 @@ Example:
 (test::assert-true (hash-haskey tst-hash :key1))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-keys"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_keys,
             "Usage: (hash-keys hashmap)
 
@@ -497,11 +486,11 @@ Example:
 (test::assert-false (in? (hash-keys tst-hash) :key4))
 ",
             root,
-        )),
+        ),
     );
     data.insert(
         interner.intern("hash-clear!"),
-        Rc::new(Expression::make_function(
+        Expression::make_function(
             builtin_hash_clear,
             "Usage: (hash-clear! hashmap)
 
@@ -522,6 +511,6 @@ Example:
 (test::assert-false (hash-haskey tst-hash \"key3\"))
 ",
             root,
-        )),
+        ),
     );
 }

@@ -199,7 +199,8 @@ Section: sequence
                             (set 'ret (copy-els ret l))
                             (progn
                                 (def 'tcell (join l nil))
-                                (xdr! tseq tcell)
+                                (if (not (null tseq))
+                                    (xdr! tseq tcell))
                                 (set 'tseq tcell)
                                 (if (null ret) (set 'ret tseq))
                                 ))))
@@ -415,7 +416,7 @@ Example:
 			(defq filtering-fcn
 				(fn (pred filtered-coll coll-to-filter)
 					(progn (defq fst (first coll-to-filter))
-					(if (not fst)
+					(if (empty-seq? coll-to-filter)
 						filtered-coll
 						(recur
 							pred
@@ -444,7 +445,7 @@ Example:
 (assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
 "
 	(reducing-fcn init-val coll)
-		(if (not (first coll))
+		(if (empty-seq? coll)
 				init-val
 				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
 
