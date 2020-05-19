@@ -71,7 +71,7 @@ Section: namespace
 "
 	(curr-ns &rest modifiers) `(progn
 	(defq curr-ns-syms (ns-symbols-only ,curr-ns))
-	(defq mod-len (length (list ,@modifiers)))
+	(defq mod-len (length ,modifiers))
 	(defq exportable-syms
 		(filter
 			(fn (x) (not (str-starts-with "-" (str x))))
@@ -79,7 +79,7 @@ Section: namespace
 	(if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
 	(when (not (= 0 mod-len))
 		(setq exportable-syms
-			(loop (mods syms) ((list ,@modifiers) exportable-syms)
+			(loop (mods syms) (,modifiers exportable-syms)
 				(progn
 				 (if (empty-seq? mods)
 					syms
@@ -112,7 +112,7 @@ Section: namespace"
 	`(loop (symbols namespaces)
 			((ns-symbols ,sym) (filter
 				(fn (x) (not (= x ,sym)))
-				(if (= 0 (length (list ,@exclusions))) (map! (fn (x) (to-symbol x)) (ns-list)) (list ,@exclusions))))
+				(if (= 0 (length ,exclusions)) (map! (fn (x) (to-symbol x)) (ns-list)) (list ,@exclusions))))
 		(if (empty-seq? namespaces)
 			symbols
 			(recur
