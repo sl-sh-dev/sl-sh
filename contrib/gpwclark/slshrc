@@ -11,7 +11,6 @@
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - address exec-hook.lisp stuff
 
-
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
 
