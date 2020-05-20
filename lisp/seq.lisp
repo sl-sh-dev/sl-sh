@@ -449,5 +449,68 @@ Example:
 				init-val
 				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce))
+(defn -wrap-times (x item times)
+	(if (< times 1)
+		(err "Must wrap item at least once.")
+		(if (= times 1)
+			(list item x)
+			(loop (lst iter) ((list item x) 1)
+				(if (> iter (- times 1))
+					lst
+					(recur (append (list item) (list lst)) (+ 1 iter)))))))
+
+(defmacro wrap-times
+"Wrap to-wrap in the given warpper number of iterations.
+
+Section: core
+
+Example:
+
+(assert-equal (list (list 3)) (wrap-times 3 'list 2))
+(assert-equal 5 (wrap-times '(wrap-times 5 'list 5) 'first 5))
+"
+	(to-wrap wrapper iterations &rest kwds) (progn
+		(defq wrapping-fcn (fn (x item times)
+			(if (< times 1)
+				(err "Must wrap item at least once.")
+				(if (= times 1)
+					(list item x)
+					(loop (lst iter) ((list item x) 1)
+						(if (> iter (- times 1))
+							lst
+							(recur (append (list item) (list lst)) (+ 1 iter))))))))
+		(eval `(wrapping-fcn ,to-wrap ,wrapper ,iterations))))
+
+(defn seq-nth
+"Get nth idx of a [seq?](#root::seq?). Supports positive and negative indexing.
+
+Section: sequence
+
+Example:
+
+(defq mylist (list 0 1 2 3 4))
+(defq myvec (vec 0 1 2 3 4))
+(assert-equal 4 (seq-nth 4 mylist))
+(assert-equal 4 (seq-nth 4 myvec))
+(assert-equal 0 (seq-nth 0 mylist))
+(assert-equal 4 (seq-nth 4 myvec))
+(assert-equal 4 (seq-nth -1 mylist))
+(assert-equal 0 (seq-nth -5 myvec))"
+(idx lst) (progn
+	(when (< idx 0)
+		(if (> (* -1 idx) (length lst))
+		(err "Absolute value of negative idx can't be greater than length of list.")
+		(setq idx (+ idx (length lst)))))
+	(if (vec? lst)
+		(vec-nth idx lst)
+		(if (list? lst)
+			(if (< idx (length lst))
+				(if (= idx 0)
+					(progn
+					  (first lst))
+					(first (wrap-times (quote lst) 'rest idx)))
+				(err "idx, must not equal or exceed length of lst, oob."))
+			(err "lst, must be a vector or list.")))))
+
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce seq-nth wrap-times))
 
