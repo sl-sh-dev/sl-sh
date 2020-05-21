@@ -42,6 +42,8 @@ function check_update_aur() {
 	# must update .SRCINFO or users won't be updated.
 	makepkg --printsrcinfo > .SRCINFO
 	rm -rf ${REPO}
+	git config user.name $(git config --get user.name)
+	git config user.email $(git config --get user.email)
 	git add --all && git commit -m "${CURRENT_SL_SH_VERSION_DESC}"
 	git push -u origin master
 
