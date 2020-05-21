@@ -5,6 +5,7 @@ use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::rc::Rc;
 
+use crate::builtins_util::expand_tilde;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
@@ -44,6 +45,10 @@ fn builtin_open(
                 "open: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
             ));
             }
+        };
+        let file_name = match expand_tilde(&file_name) {
+            Some(p) => p,
+            None => file_name,
         };
         let mut opts = OpenOptions::new();
         let mut is_read = false;

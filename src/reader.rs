@@ -697,7 +697,7 @@ mod tests {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {
-                    to_strs(output, exp);
+                    to_strs(output, &exp.into());
                 }
                 output.push(")".to_string());
             }
@@ -710,9 +710,9 @@ mod tests {
                     output.push(")".to_string());
                 } else {
                     output.push("(".to_string());
-                    to_strs(output, e1);
+                    to_strs(output, &e1.into());
                     output.push(".".to_string());
-                    to_strs(output, e2);
+                    to_strs(output, &e2.into());
                     output.push(")".to_string());
                 }
             }

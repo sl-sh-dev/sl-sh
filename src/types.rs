@@ -994,11 +994,12 @@ mod tests {
         init_gc();
         let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".to_string())));
         let n1 = Expression::make_nil_h();
-        let p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
-        let l1 = Expression::with_list(vec![
+        let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
+        let nlist = vec![
             Expression::make_nil_h().clone_no_root(),
             Expression::make_nil_h().clone_no_root(),
-        ]);
+        ];
+        let _l1 = Expression::with_list(nlist);
         gc_mut().clean();
         //println!("XXX {}, {}, {}", p1, s1, n1);
         //println!("XXX {}", l1);
