@@ -106,7 +106,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(write-line file "")
 	(defq is-first #t)
 	(for doc-map docstrings (progn
-		(if (is-first)
+		(if is-first
 			(setq is-first nil)
 			(write-string file ", "))
 		(defq doc-form (progn

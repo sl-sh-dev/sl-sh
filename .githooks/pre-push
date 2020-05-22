@@ -39,10 +39,10 @@ cargo build --release
 log "Build docs"
 ../target/release/sl-sh docify.lisp index.markdown :lang
 if [[ $? != "0" ]]; then
-    elog "Uncategorized forms found, not pushing. Please edit appropriate"
-    elog "docstrings printed as hashmap literals above. Run"
-    elog "$ cd docs && sl-sh docify.lisp index.markdown :lang to get started."
-    exit 1;
+	elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
+	elog "docstrings printed as hashmap literals above and or errors. Run"
+	elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
+	exit 1;
 fi
 
 
