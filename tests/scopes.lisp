@@ -13,18 +13,18 @@
     (let ((count 0))
         (setfn inc_count2 () (setq count (+ count 1)))
         (setfn dec_count2 () (setq count (- count 1)))
-        (setfn get_count2 () (count))
+        (setfn get_count2 () count)
         (setfn get_count02 () (get_count0)))
 
     (setfn inc_count () (setq count (+ count 1)))
     (setfn dec_count () (setq count (- count 1)))
-    (setfn get_count () (count))
+    (setfn get_count () count)
     (setfn print_count () (println count)))
 
 (defq count 0)
 
 (defn o_count () (println count))
-(defn get_count0 () (count))
+(defn get_count0 () count)
 
 (assert-equal (get_count) 0 (str ". line number: " (meta-line-no)))
 (assert-equal (get_count2) 0 (str ". line number: " (meta-line-no)))
