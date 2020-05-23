@@ -460,7 +460,7 @@ fn internal_eval(
         ));
     }
     // If we have a macro expand it and replace the expression with the expansion.
-    if let Some(exp) = expand_macro(environment, &expression, false)? {
+    if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
         let mut nv: Vec<Handle> = Vec::new();
         let mut macro_replace = true;
         if let ExpEnum::Vector(list) = &exp.get().data {

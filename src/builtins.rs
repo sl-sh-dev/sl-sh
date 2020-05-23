@@ -56,6 +56,31 @@ fn builtin_eval(
     ))
 }
 
+fn builtin_syscall(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(command) = args.next() {
+        let command = eval(environment, command)?;
+        let command_d = command.get();
+        match &command_d.data {
+            ExpEnum::Atom(Atom::String(s)) => do_command(environment, s, args),
+            ExpEnum::Atom(Atom::StringRef(s)) => do_command(environment, s, args),
+            ExpEnum::Atom(Atom::StringBuf(s)) => do_command(environment, &*s.borrow(), args),
+            _ => {
+                let msg = format!(
+                    "syscall: first argument {} not a string, type {}",
+                    command,
+                    command.display_type()
+                );
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "syscall: empty call"))
+    }
+}
+
 fn builtin_fncall(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -64,7 +89,7 @@ fn builtin_fncall(
         let command = eval(environment, command)?;
         fn_call(environment, command, args)
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"))
+        Err(io::Error::new(io::ErrorKind::Other, "fncall: empty call"))
     }
 }
 
@@ -1293,7 +1318,14 @@ fn expand_macro_internal(
     environment: &mut Environment,
     arg: &Expression,
     one: bool,
+    depth: usize,
 ) -> io::Result<Option<Expression>> {
+    if depth > 500 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Macro expand recursion to deep!",
+        ));
+    }
     let arg_d = arg.get();
     if let ExpEnum::Vector(list) = &arg_d.data {
         let (command, parts) = match list.split_first() {
@@ -1309,7 +1341,7 @@ fn expand_macro_internal(
         )?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1333,7 +1365,7 @@ fn expand_macro_internal(
         let expansion = do_expansion(environment, &e1, &mut e2_iter)?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1349,21 +1381,22 @@ fn expand_macro_internal(
     }
 }
 
-pub fn expand_macro(
+pub(crate) fn expand_macro(
     environment: &mut Environment,
     arg: impl AsRef<Expression>,
     one: bool,
+    depth: usize,
 ) -> io::Result<Option<Expression>> {
     let arg = arg.as_ref();
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
-    let res = expand_macro_internal(environment, arg, one);
+    let res = expand_macro_internal(environment, arg, one, depth + 1);
     environment.allow_lazy_fn = lazy;
     res
 }
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
-    if let Some(exp_outer) = expand_macro(environment, arg, false)? {
+    if let Some(exp_outer) = expand_macro(environment, arg, false, 0)? {
         let exp_outer_c = exp_outer.clone();
         let exp_d = exp_outer_c.get();
         if let ExpEnum::Vector(list) = &exp_d.data {
@@ -1421,7 +1454,7 @@ fn builtin_expand_macro(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, false)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, false, 0)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -1440,7 +1473,7 @@ fn builtin_expand_macro1(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, true)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, true, 0)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -2223,6 +2256,23 @@ Example:
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("syscall"),
+        Expression::make_function(
+            builtin_syscall,
+            "Usage: (syscall system-command arg0 ... argN)
+
+Execute the provided system command with the supplied arguments.
+
+Section: core
+
+Example:
+(def 'test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
+(test::assert-equal \"syscall-test\" test-syscall-one)
 ",
             root,
         ),
