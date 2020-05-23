@@ -449,18 +449,32 @@ Example:
 				init-val
 				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
 
-(defn -wrap-times (x item times)
-	(if (< times 1)
-		(err "Must wrap item at least once.")
-		(if (= times 1)
-			(list item x)
-			(loop (lst iter) ((list item x) 1)
-				(if (> iter (- times 1))
-					lst
-					(recur (append (list item) (list lst)) (+ 1 iter)))))))
+(defmacro wrap-times
+"Wrap to-wrap in the given wrapper the number of iterations.
+
+Section: macros
+
+Example:
+
+(assert-equal (list (list 3)) (eval (wrap-times 3 'list 2)))
+(assert-equal 5 (eval (wrap-times (eval '(wrap-times 5 'list 5)) 'first 5)))
+"
+	(to-wrap wrapper iterations) (progn
+		(defq wrapping-fcn (fn (x item times)
+			(if (< times 1)
+				(err "Must wrap item at least once.")
+				(if (= times 1)
+					(list item x)
+					(loop (lst iter) ((list item x) 1)
+						(if (> iter (- times 1))
+							lst
+							(recur (append (list item) (list lst)) (+ 1 iter))))))))
+		`(,wrapping-fcn ,to-wrap ,wrapper ,iterations)))
 
 (defn seq-nth
 "Get nth idx of a [seq?](#root::seq?). Supports positive and negative indexing.
+Because vectors support indexing and lists do not this is a much faster
+operation for a vector.
 
 Section: sequence
 
@@ -468,12 +482,17 @@ Example:
 
 (defq mylist (list 0 1 2 3 4))
 (defq myvec (vec 0 1 2 3 4))
+(assert-equal 0 (seq-nth -5 mylist))
+(assert-equal 1 (seq-nth 1 mylist))
+(assert-equal 2 (seq-nth 2 mylist))
+(assert-equal 3 (seq-nth -2 mylist))
 (assert-equal 4 (seq-nth 4 mylist))
-(assert-equal 4 (seq-nth 4 myvec))
-(assert-equal 0 (seq-nth 0 mylist))
-(assert-equal 4 (seq-nth 4 myvec))
-(assert-equal 4 (seq-nth -1 mylist))
-(assert-equal 0 (seq-nth -5 myvec))"
+
+(assert-equal 0 (seq-nth -5 myvec))
+(assert-equal 1 (seq-nth 1 myvec))
+(assert-equal 2 (seq-nth 2 myvec))
+(assert-equal 3 (seq-nth -2 myvec))
+(assert-equal 4 (seq-nth 4 myvec))"
 (idx lst) (progn
 	(when (< idx 0)
 		(if (> (* -1 idx) (length lst))
@@ -484,11 +503,10 @@ Example:
 		(if (list? lst)
 			(if (< idx (length lst))
 				(if (= idx 0)
-					(progn
-					  (first lst))
-					(first (wrap-times (quote lst) 'rest idx)))
+					(first lst)
+					(first (eval (wrap-times (quote lst) 'rest idx))))
 				(err "idx, must not equal or exceed length of lst, oob."))
 			(err "lst, must be a vector or list.")))))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce seq-nth))
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce wrap-times seq-nth))
 

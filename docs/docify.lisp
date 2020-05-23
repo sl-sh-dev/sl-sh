@@ -22,7 +22,7 @@
 	(defq kwd (to-symbol (first (rest args))))
 	(if (in? kwd-list kwd)
 		kwd
-		(err (str "Second argument must be one of " kwd-list)))))
+		(err (str "Second argument must be one of " kwd-list " was, " kwd ", type: " (type kwd))))))
 
 (for arg args (progn
 	(if (or (= arg ":lang") (= arg ":user") (= arg ":single"))

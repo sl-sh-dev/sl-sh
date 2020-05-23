@@ -300,6 +300,35 @@
 
 ;; }}}
 
+;; long lost documentation for system commands {{{
+
+(defq vimdocs (str "
+- how to replace something with a newline in vim.
+```
+:set magic
+:%s/{/{^M/g
+To get the ^M character, type Ctrl + V and hit Enter
+```
+"))
+
+(alias vi vimdocs ((str (which vim))))
+
+(alias vim vimdocs ((str (which vim))))
+
+(alias tmux
+"List of things no one can remember:
+- change cwd of session
+	- C-a + : then input attach-session -t . -c new-cwd
+- copy and paste
+	- initiate: C-a + [
+	- more initiate: hit space bar (enter visual block highlight text mode)
+	- hit enter to stick in paste buffer
+	- paste normally or with: C-a + ]
+Section: tmux"
+	((str (which tmux))))
+
+;; }}}
+
 ;; tmux aliases {{{
 
 (defn tmuxls

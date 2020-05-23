@@ -286,28 +286,6 @@ Example:
 	(provided-condition if-true)
 	`(if ,provided-condition ,if-true))
 
-(defmacro wrap-times
-"Wrap to-wrap in the given warpper number of iterations.
-
-Section: core
-
-Example:
-
-(assert-equal (list (list 3)) (wrap-times 3 'list 2))
-(assert-equal 5 (wrap-times '(wrap-times 5 'list 5) 'first 5))
-"
-	(to-wrap wrapper iterations &rest kwds) (progn
-		(defq wrapping-fcn (fn (x item times)
-			(if (< times 1)
-				(err "Must wrap item at least once.")
-				(if (= times 1)
-					(list item x)
-					(loop (lst iter) ((list item x) 1)
-						(if (> iter (- times 1))
-							lst
-							(recur (append (list item) (list lst)) (+ 1 iter))))))))
-		(eval `(wrapping-fcn ,to-wrap ,wrapper ,iterations))))
-
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? wrap-times))
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func?))
