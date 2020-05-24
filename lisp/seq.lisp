@@ -449,31 +449,25 @@ Example:
 				init-val
 				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
 
-(defmacro wrap-times
-"Wrap to-wrap in the given wrapper the number of iterations.
+(defn apply-times
+"Apply wrapping-fcn to value number of times. Function is recursive. Recursive
+binding for value is previous application of wrapping function to value.
 
-Section: macros
+Section: sequence
 
 Example:
 
-(assert-equal (list (list 3)) (eval (wrap-times 3 'list 2)))
-(assert-equal 5 (eval (wrap-times (eval '(wrap-times 5 'list 5)) 'first 5)))
+(assert-equal (list (list 3)) (apply-times 3 list 2))
+(assert-equal 5 (apply-times (apply-times 5 list 5) first 5))
 "
-	(to-wrap wrapper iterations) (progn
-		(defq wrapping-fcn (fn (x item times)
-			(if (< times 1)
-				(err "Must wrap item at least once.")
-				(if (= times 1)
-					(list item x)
-					(loop (lst iter) ((list item x) 1)
-						(if (> iter (- times 1))
-							lst
-							(recur (append (list item) (list lst)) (+ 1 iter))))))))
-		`(,wrapping-fcn ,to-wrap ,wrapper ,iterations)))
+	(value wrapping-fcn times)
+	(if (<= times 0)
+		value
+		(recur (wrapping-fcn value) wrapping-fcn (- times 1))))
 
 (defn seq-nth
 "Get nth idx of a [seq?](#root::seq?). Supports positive and negative indexing.
-Because vectors support indexing and lists do not this is a much faster
+Because vectors support indexing and lists do not, this is a much faster
 operation for a vector.
 
 Section: sequence
@@ -504,9 +498,9 @@ Example:
 			(if (< idx (length lst))
 				(if (= idx 0)
 					(first lst)
-					(first (eval (wrap-times (quote lst) 'rest idx))))
+					(first (apply-times lst rest idx)))
 				(err "idx, must not equal or exceed length of lst, oob."))
 			(err "lst, must be a vector or list.")))))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce wrap-times seq-nth))
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce apply-times seq-nth))
 
