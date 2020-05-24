@@ -187,7 +187,7 @@ Example:
         data.insert(
             interner.intern("*ns*"),
             Reference::new(
-                ExpEnum::Atom(Atom::StringRef(interner.intern("root"))),
+                ExpEnum::Atom(Atom::String(interner.intern("root").into())),
                 RefMetaData {
                     namespace: Some(root),
                     doc_string: Some(
@@ -410,7 +410,7 @@ pub fn build_new_namespace(
         data.insert(
             environment.interner.intern("*ns*"),
             Reference::new(
-                ExpEnum::Atom(Atom::StringRef(name)),
+                ExpEnum::Atom(Atom::String(name.into())),
                 RefMetaData {
                     namespace: Some(name),
                     doc_string: None,

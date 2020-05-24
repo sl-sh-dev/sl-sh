@@ -421,18 +421,18 @@ fn str_process(environment: &mut Environment, string: &str) -> Expression {
             }
         }
         if environment.interner.contains(&new_string) {
-            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-                environment.interner.intern(&new_string),
+            Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                environment.interner.intern(&new_string).into(),
             )))
         } else {
-            Expression::alloc_data(ExpEnum::Atom(Atom::String(new_string)))
+            Expression::alloc_data(ExpEnum::Atom(Atom::String(new_string.into())))
         }
     } else if environment.interner.contains(string) {
-        Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-            environment.interner.intern(string),
+        Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            environment.interner.intern(string).into(),
         )))
     } else {
-        Expression::alloc_data(ExpEnum::Atom(Atom::String(string.to_string())))
+        Expression::alloc_data(ExpEnum::Atom(Atom::String(string.to_string().into())))
     }
 }
 
@@ -520,8 +520,8 @@ fn internal_eval(
         ExpEnum::Atom(Atom::Symbol(s)) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
-                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-                        environment.interner.intern(&val),
+                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        environment.interner.intern(&val).into(),
                     )))),
                     Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
                 }
@@ -540,7 +540,6 @@ fn internal_eval(
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
         ExpEnum::Atom(Atom::String(string)) => Ok(str_process(environment, &string)),
-        ExpEnum::Atom(Atom::StringRef(string)) => Ok(str_process(environment, string)),
         ExpEnum::Atom(_) => Ok(expression.clone()),
         ExpEnum::Function(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
         ExpEnum::Process(_) => Ok(expression.clone()),

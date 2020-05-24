@@ -105,7 +105,8 @@ impl ShellCompleter {
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a))).handle_no_root(),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a.into())))
+                                .handle_no_root(),
                         );
                     }
                     Expression::with_list(v)
@@ -119,29 +120,11 @@ impl ShellCompleter {
             match eval(envir, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Atom(Atom::StringRef(s)) | ExpEnum::Atom(Atom::Symbol(s)) => {
-                            match *s {
-                                "path" => HookResult::Path,
-                                "default" => HookResult::Default,
-                                _ => {
-                                    eprintln!("ERROR: unknown completion hook command, {}", s);
-                                    HookResult::Default
-                                }
-                            }
-                        }
                         ExpEnum::Atom(Atom::String(s)) => match s.as_ref() {
                             "path" => HookResult::Path,
                             "default" => HookResult::Default,
                             _ => {
                                 eprintln!("ERROR: unknown completion hook command, {}", s);
-                                HookResult::Default
-                            }
-                        },
-                        ExpEnum::Atom(Atom::StringBuf(s)) => match s.borrow().as_ref() {
-                            "path" => HookResult::Path,
-                            "default" => HookResult::Default,
-                            _ => {
-                                eprintln!("ERROR: unknown completion hook command, {}", s.borrow());
                                 HookResult::Default
                             }
                         },

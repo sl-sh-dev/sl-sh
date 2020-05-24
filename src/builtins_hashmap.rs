@@ -18,10 +18,6 @@ fn build_map(
             match &key.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
                 ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), val.clone()),
-                ExpEnum::Atom(Atom::StringRef(s)) => map.insert((*s).to_string(), val.clone()),
-                ExpEnum::Atom(Atom::StringBuf(s)) => {
-                    map.insert(s.borrow().to_string(), val.clone())
-                }
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -91,14 +87,6 @@ fn builtin_hash_set(
                                 map.insert(s.to_string(), val);
                                 return Ok(exp_map.clone());
                             }
-                            ExpEnum::Atom(Atom::StringRef(s)) => {
-                                map.insert((*s).to_string(), val);
-                                return Ok(exp_map.clone());
-                            }
-                            ExpEnum::Atom(Atom::StringBuf(s)) => {
-                                map.insert(s.borrow().to_string(), val);
-                                return Ok(exp_map.clone());
-                            }
                             _ => {
                                 return Err(io::Error::new(
                                     io::ErrorKind::Other,
@@ -144,12 +132,6 @@ fn builtin_hash_remove(
                         ExpEnum::Atom(Atom::String(s)) => {
                             return do_rem(map, &s);
                         }
-                        ExpEnum::Atom(Atom::StringRef(s)) => {
-                            return do_rem(map, s);
-                        }
-                        ExpEnum::Atom(Atom::StringBuf(s)) => {
-                            return do_rem(map, &s.borrow());
-                        }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -194,12 +176,6 @@ fn builtin_hash_get(
                         ExpEnum::Atom(Atom::String(s)) => {
                             return do_get(map, &s);
                         }
-                        ExpEnum::Atom(Atom::StringRef(s)) => {
-                            return do_get(map, s);
-                        }
-                        ExpEnum::Atom(Atom::StringBuf(s)) => {
-                            return do_get(map, &s.borrow());
-                        }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -241,12 +217,6 @@ fn builtin_hash_haskey(
                         }
                         ExpEnum::Atom(Atom::String(s)) => {
                             return do_has(map, &s);
-                        }
-                        ExpEnum::Atom(Atom::StringRef(s)) => {
-                            return do_has(map, s);
-                        }
-                        ExpEnum::Atom(Atom::StringBuf(s)) => {
-                            return do_has(map, &s.borrow());
                         }
                         _ => {
                             let msg =

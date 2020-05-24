@@ -267,7 +267,7 @@ where
         }
     }
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-        symbol.clone(),
+        symbol.clone().into(),
     ))))
 }
 

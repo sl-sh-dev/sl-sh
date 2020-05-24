@@ -481,12 +481,6 @@ pub fn do_command(
         if let ExpEnum::Atom(Atom::String(_)) = a_exp_a.data {
             let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
-        } else if let ExpEnum::Atom(Atom::StringRef(_)) = a_exp_a.data {
-            let new_a = eval(environment, a_exp2)?;
-            args.push(new_a.as_string(environment)?);
-        } else if let ExpEnum::Atom(Atom::StringBuf(_)) = a_exp_a.data {
-            let new_a = eval(environment, a_exp2)?;
-            args.push(new_a.as_string(environment)?);
         } else {
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
@@ -495,15 +489,15 @@ pub fn do_command(
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
                         }
                         ExpEnum::Atom(Atom::Lambda(_)) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
                         }
                         ExpEnum::Atom(Atom::Macro(_)) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::StringRef(s)))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
                         }
                         _ => {
                             drop(a_exp_a);
@@ -523,10 +517,6 @@ pub fn do_command(
             let new_a_a = new_a.get();
             if let ExpEnum::Atom(Atom::String(s)) = &new_a_a.data {
                 prep_string_arg(environment, &s, &mut args)?;
-            } else if let ExpEnum::Atom(Atom::StringRef(s)) = &new_a_a.data {
-                prep_string_arg(environment, s, &mut args)?;
-            } else if let ExpEnum::Atom(Atom::StringBuf(s)) = &new_a_a.data {
-                prep_string_arg(environment, &s.borrow(), &mut args)?;
             } else {
                 args.push(new_a.as_string(environment)?);
             }

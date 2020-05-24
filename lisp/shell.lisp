@@ -374,8 +374,8 @@ Section: shell
 	(ch nil)
 	(bad-syms (make-hash))
 	(sys-syms (make-hash))
-	(out (str-buf ""))
-	(token (str-buf ""))
+	(out (str ""))
+	(token (str ""))
 	(in-sys-command nil)
 	(tok-command t))
 
@@ -420,11 +420,11 @@ Section: shell
 
 	(defn prrawtoken () (progn
 		(def 'ttok token)
-		(set 'token (str-buf ""))
+		(set 'token (str ""))
 		ttok))
 	(defn prtoken () (progn
 		(def 'ttok token)
-		(set 'token (str-buf ""))
+		(set 'token (str ""))
 		(command-color ttok)))
 	(defn paren-open () (progn
 		(def 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
@@ -442,7 +442,7 @@ Section: shell
 	(defn whitespace (ch) (progn
 		(def 'ret (str (prtoken) ch))
 		;(def 'ret (str token ch))
-		(set 'token (str-buf ""))
+		(set 'token (str ""))
 		(set 'tok-command nil)
 		ret))
 
@@ -451,33 +451,33 @@ Section: shell
 		(def 'last-ch #\ )
 		(set 'plev 0)
 		(set 'ch nil)
-		(set 'token (str-buf ""))
+		(set 'token (str ""))
 		(set 'tok-command t)
 		(set 'in-sys-command nil)
 		(if (<= (length line) 1) (progn
 			(hash-clear! bad-syms)
 			(hash-clear! sys-syms)))
-		(set 'out (str-buf-map (fn (ch) (progn
+		(set 'out (str-map (fn (ch) (progn
 			(def 'ret (if in-quote
 				(progn
-					(str-buf-push! token ch)
+					(str-push! token ch)
 					(if (and (not (char= last-ch #\\))(char= ch #\"))
 						(progn
 							(set 'in-quote nil)
-							(str-buf-push! token shell::*fg-default*)
+							(str-push! token shell::*fg-default*)
 							(prrawtoken))
 						""))
 				(if (and (not (char= last-ch #\\))(char= ch #\"))
-					(progn (str-buf-push! token (str tok-string-color ch))(set 'in-quote t) "")
+					(progn (str-push! token (str tok-string-color ch))(set 'in-quote t) "")
 					(if (char= ch #\()
 						(paren-open)
 						(if (char= ch #\))
 							(paren-close)
 							(if (char-whitespace? ch)
 								(whitespace ch)
-								(progn (str-buf-push! token ch) "")))))))
+								(progn (str-push! token ch) "")))))))
 			(progn (set 'last-ch ch) ret))) line))
-		(if in-quote (str-buf-push! out (prrawtoken)) (str-buf-push! out (prtoken)))
+		(if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
 		(str out)))
 		nil)))
 
