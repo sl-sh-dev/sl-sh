@@ -39,9 +39,7 @@ pub fn call_lambda(
     let mut lambda; // = lambda;
     let mut lambda_int;
     let mut llast_eval: Option<Expression> = None;
-    //let mut iii = 0;
     while looping {
-        //iii += 1;
         if environment.sig_int.load(Ordering::Relaxed) {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -156,7 +154,13 @@ pub fn fn_call(
             if let Some(exp) = get_expression(environment, command) {
                 match exp.exp.get().data.clone() {
                     ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
-                    ExpEnum::Atom(Atom::Lambda(f)) => call_lambda(environment, &f, args, true),
+                    ExpEnum::Atom(Atom::Lambda(f)) => {
+                        if environment.allow_lazy_fn {
+                            make_lazy(environment, &f, args)
+                        } else {
+                            call_lambda(environment, &f, args, true)
+                        }
+                    }
                     _ => {
                         let msg = format!(
                             "Symbol {} is not callable (or is macro or special form).",
@@ -173,7 +177,13 @@ pub fn fn_call(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        ExpEnum::Atom(Atom::Lambda(l)) => call_lambda(environment, &l, args, true),
+        ExpEnum::Atom(Atom::Lambda(l)) => {
+            if environment.allow_lazy_fn {
+                make_lazy(environment, &l, args)
+            } else {
+                call_lambda(environment, &l, args, true)
+            }
+        }
         ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
         ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
         _ => {
@@ -241,11 +251,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
         }
     };
     let command: Expression = command.into();
-    let command = if let ExpEnum::LazyFn(_, _) = &command.get().data {
-        command.resolve(environment)?
-    } else {
-        command.clone()
-    };
+    let command = command.resolve(environment)?;
     let command_d = command.get();
     let allow_sys_com =
         environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
@@ -466,20 +472,12 @@ fn internal_eval(
         if let ExpEnum::Vector(list) = &exp.get().data {
             for item in list {
                 let item: Expression = item.into();
-                let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
-                    item.resolve(environment)?
-                } else {
-                    item.clone()
-                };
+                let item = item.resolve(environment)?;
                 nv.push(item.into());
             }
         } else if let ExpEnum::Pair(_, _) = &exp.get().data {
             for item in exp.iter() {
-                let item = if let ExpEnum::LazyFn(_, _) = &item.get().data {
-                    item.resolve(environment)?
-                } else {
-                    item.clone()
-                };
+                let item = item.resolve(environment)?;
                 nv.push(item.into());
             }
         } else {
@@ -610,12 +608,7 @@ pub fn eval(
     expression: impl AsRef<Expression>,
 ) -> io::Result<Expression> {
     let expression = expression.as_ref();
-    let result = eval_nr(environment, expression);
-    if let Ok(res) = result {
-        res.resolve(environment)
-    } else {
-        result
-    }
+    eval_nr(environment, expression)?.resolve(environment)
 }
 
 pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> io::Result<Expression> {

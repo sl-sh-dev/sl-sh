@@ -394,14 +394,19 @@ impl Expression {
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
-    pub fn resolve(&self, environment: &mut Environment) -> io::Result<Self> {
-        if let ExpEnum::LazyFn(lambda, parts) = &self.get().data {
+    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+        let self_d = self.get();
+        if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
             let ib = &mut Box::new(ListIter::new_list(parts));
             let res = call_lambda(environment, &lambda, ib, false)?;
+            drop(self_d);
             res.resolve(environment)
+            //let res = res.resolve(environment)?;
+            //self.get_mut().data.replace(res.into());
+            //Ok(self)
         } else {
-            // XXX clone to a root..
-            Ok(self.clone())
+            drop(self_d);
+            Ok(self)
         }
     }
 
@@ -844,6 +849,15 @@ impl AsRef<Handle> for Expression {
 impl AsRef<Expression> for Expression {
     fn as_ref(&self) -> &Expression {
         &self
+    }
+}
+
+impl From<Expression> for ExpEnum {
+    fn from(item: Expression) -> Self {
+        match item.obj.try_unwrap() {
+            Ok(data) => data.data,
+            Err(handle) => handle.get().data.clone(),
+        }
     }
 }
 

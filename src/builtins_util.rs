@@ -130,11 +130,7 @@ fn set_arg(
     var: Expression,
     do_eval: bool,
 ) -> io::Result<()> {
-    let var = if let ExpEnum::LazyFn(_, _) = &var.get().data {
-        var.resolve(environment)?
-    } else {
-        var.clone()
-    };
+    let var = var.resolve(environment)?;
     let v2 = if do_eval {
         let var_d = var.get();
         if let ExpEnum::Atom(Atom::Symbol(s)) = &var_d.data {

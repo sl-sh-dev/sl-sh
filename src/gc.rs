@@ -131,6 +131,13 @@ impl Handle {
             data: self.data.clone(),
         }
     }
+
+    pub fn try_unwrap(self) -> Result<ExpObj, Handle> {
+        match Rc::try_unwrap(self.data) {
+            Ok(data) => Ok(data.into_inner()),
+            Err(handle) => Err(Handle { data: handle }),
+        }
+    }
 }
 
 impl Clone for Handle {
