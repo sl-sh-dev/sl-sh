@@ -56,7 +56,7 @@
               ;;(println "there aint no test")
              :no-test))))
 
-(ns-export '(assert-equal assert-true assert-false run-example))
+(ns-export '(assert-equal assert-not-equal assert-true assert-false run-example))
 
 (ns-pop)
 
