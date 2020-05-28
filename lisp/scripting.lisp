@@ -17,24 +17,22 @@
 
 (defn mkli
 	"Usage: (mkli filepath [namespace] [body])
-	\"make lisp\".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
-	to populate as the body (optional 3rd arg), make a canonincal blank sl-sh script
-	complete with all the relevant imports, and boilerplate namespace code taken
-	care of to speed up development.
+	\"MaKe LIsp file\", creates a sl-sh shell script. given a file, a namespace
+	(optional 2nd arg), and a string to populate as the body (optional 3rd arg),
+	make a canonincal blank sl-sh script complete with all the relevant imports,
+	and boilerplate namespace code taken care of to speed up development.
 
 	it is recommended all calls to load are done at the top of the file (before
-	the calls to ns-enter or ns-create, in case a library sl-sh script  calls a
-	library sl-sh script that created a namespace and forgot to call ns-pop.
-	this ensures the exported symbols for the first library's scripts
-	namespace are importable in the executing script's namespace.
+	the calls to [ns-enter](#root:ns-enter), [ns-create](#root::ns-create), and [ns-import](#root::ns-import)).
 
-	all calls to ns-import happen after a ns is created and entered so the
+	all calls to ns-import happen after a namespace is created and entered so the
 	current namespace is the namespace that houses all the imported symbols.
 
-	ns-export must be called before ns-pop so the appropriate symbols are
+	[ns-export](#root::ns-export) or [ns-auto-export](#root:ns-auto-export) must
+	be called before [ns-pop](root::ns-pop) so the appropriate symbols are
 	associated namespace, the one in which the symbols were created.
 
-	Section: scripting "
+	Section: scripting"
 	(&rest args) (progn
 	(defq filepath nil)
 	(defq namespace nil)
@@ -61,8 +59,8 @@
 		(write-line new-file ""))
 	(when (not (nil? namespace))
 		(progn
-		(write-line new-file "(ns-export '()) ;; export any ns symbols that should be importable")
-		(write-line new-file "(ns-pop) ;; must be after body")))
+		(write-line new-file (str "(ns-auto-export '" namespace ") ;; export any ns symbols that should be importable"))
+		(write-line new-file "(ns-pop) ;; must be after body and exports")))
 	(close new-file)))
 
 (ns-export '(mkli error-or-ok))

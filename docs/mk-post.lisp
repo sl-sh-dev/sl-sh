@@ -57,8 +57,8 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(progn
 		(write-string dest-file line)
 		(if (and
-			(str-contains begin-comment (line))
-			(str-contains end-comment (line)))
+			(str-contains begin-comment line)
+			(str-contains end-comment line))
 		(progn
 			(defq directive-metadata (vec-nth 1 (str-split begin-comment (vec-nth 0 (str-split end-comment line)))))
 			(eval (read directive-metadata))
