@@ -37,7 +37,7 @@ Section: shell
 "
 Redirect stdout to file, append the output.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -48,7 +48,7 @@ Section: shell
 "
 Redirect stdout to file, truncate the file first.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -59,7 +59,7 @@ Section: shell
 "
 Redirect stderr to file, append the output.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -70,7 +70,7 @@ Section: shell
 "
 Redirect stderr to file, truncate the file first.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -81,7 +81,7 @@ Section: shell
 "
 Redirect both stdout and stderr to the same file, append the output.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -92,7 +92,7 @@ Section: shell
 "
 Redirect both stdout and stderr to the same file, truncate the file first.
 
-Section: shell
+Section: file
 "
 	(file body)
 	`(if (file? ,file)
@@ -103,7 +103,7 @@ Section: shell
 "
 Redirect stdout to null (/dev/null equivelent).
 
-Section: shell
+Section: file
 "
 	(body)
 	`(dyn '*stdout* (open "/dev/null" :write) ,body))
@@ -112,7 +112,7 @@ Section: shell
 "
 Redirect stderr to null (/dev/null equivelent).
 
-Section: shell
+Section: file
 "
 (body)
 	`(dyn '*stderr* (open "/dev/null" :write) ,body))
@@ -121,7 +121,7 @@ Section: shell
 "
 Redirect both stdout and stderr to null (/dev/null equivelent).
 
-Section: shell
+Section: file
 "
 	(body)
 	`(dyn '*stdout* (open "/dev/null" :write) (dyn '*stderr* *stdout* ,body)))
