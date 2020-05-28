@@ -202,20 +202,93 @@ Section: shell
 				(if (> (length plist) 1) (recur (core::rest plist) (+ idx 1))))))))))
 
 (defmacro match
-"
+"Usage: (match condition (value form*)*) -> result
+
 Evaluate condition and look for matching value in each branch of type
-(val action). Use nil to take action if no match (encouraged!).
+(value form*). Form(s) will be wrapped in an implicit progn. Use nil to take
+action if no match (encouraged!).
 
 Section: core
+
+Example:
+
+(defn select-option (a)
+	(match a (1 \"opt-one\")
+	         (2 (set 'b 5) \"opt-two\")
+	         (3 (str \"opt\" \"-three\"))))
+(defn select-option-def (a)
+	(match a (1 \"opt-one\")
+	         (2 \"opt-two\")
+	         (3 (str \"opt\" \"-three\"))
+	         (nil \"default\")))
+(def 'b 0)
+(assert-equal b 0)
+(assert-equal \"opt-one\" (select-option 1))
+(assert-equal \"opt-two\" (select-option 2))
+(assert-equal b 5)
+(assert-equal \"opt-three\" (select-option 3))
+(assert-equal nil (select-option 4))
+(assert-equal \"opt-one\" (select-option-def 1))
+(assert-equal \"opt-two\" (select-option-def 2))
+(assert-equal \"opt-three\" (select-option-def 3))
+(assert-equal \"default\" (select-option-def 4))
 "
 	(condition &rest branches)
-	(core::let ((cond-name) (out_list (list)) (make-cond))
+	(core::let ((cond-name) (out_list (list)) (make-cond) (make-action))
+		(core::setq make-action (fn (action)
+			(if (seq? action)
+				`(progn ,@action)
+				`action)))
 		(core::setq make-cond (fn (condition val action others)
-			(if (null val) action
-				(if (null others) `(if (= ,condition ,val) ,action)
-					`(if (= ,condition ,val) ,action ,(make-cond condition (core::first (core::first others)) (core::nth 1 (core::first others)) (core::rest others)))))))
+			(if (null val) (make-action action)
+				(if (empty-seq? others) `(if (= ,condition ,val) ,(make-action action))
+					`(if (= ,condition ,val) ,(make-action action) ,(make-cond condition (core::first (core::first others)) (core::rest (core::first others)) (core::rest others)))))))
 		(core::setq cond-name condition)
-		(make-cond cond-name (core::first (core::first branches)) (core::nth 1 (core::first branches)) (core::rest branches))))
+		(make-cond cond-name (core::first (core::first branches)) (core::rest (core::first branches)) (core::rest branches))))
+
+(defmacro cond
+"Usage: (cond ((test form*)*) -> result
+
+Evaluate each test in order.  If it is true then evaluate the form(s) in an
+implicit progn and return the result.  Stop evaluting at the first true test.
+Return nil if no conditions are true.
+
+Section: core
+
+Example:
+
+(defn select-option (a)
+	(cond ((= a 1) \"opt-one\")
+	      ((= a 2) (set 'b 5) \"opt-two\")
+	      ((= a 3) (str \"opt\" \"-three\"))))
+(defn select-option-def (a)
+	(cond ((= a 1) \"opt-one\")
+	      ((= a 2) \"opt-two\")
+	      ((= a 3) (str \"opt\" \"-three\"))
+	      (t \"default\")))
+(def 'b 0)
+(assert-equal \"opt-one\" (select-option 1))
+(assert-equal b 0)
+(assert-equal \"opt-two\" (select-option 2))
+(assert-equal b 5)
+(assert-equal \"opt-three\" (select-option 3))
+(assert-equal nil (select-option 4))
+(assert-equal \"opt-one\" (select-option-def 1))
+(assert-equal \"opt-two\" (select-option-def 2))
+(assert-equal \"opt-three\" (select-option-def 3))
+(assert-equal \"default\" (select-option-def 4))
+"
+	(&rest branches)
+	(core::let ((out_list (list)) (make-cond) (make-action))
+		(core::setq make-action (fn (action)
+			(if (seq? action)
+				`(progn ,@action)
+				`action)))
+		(core::setq make-cond (fn (condition action others)
+			(if (empty-seq? others)
+				`(if ,condition ,(make-action action) nil)
+				`(if ,condition ,(make-action action) ,(make-cond (core::first (core::first others)) (core::rest (core::first others)) (core::rest others))))))
+		(make-cond (core::first (core::first branches)) (core::rest (core::first branches)) (core::rest branches))))
 
 (defmacro let
 "
@@ -346,4 +419,4 @@ Example:
 
 (load "seq.lisp")
 
-(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match let copy-seq when func? ->> ->))
+(ns-export '(defmacro setmacro ns-export ns-import setq defq defn setfn loop dotimes dotimesi for fori match cond let copy-seq when func? ->> ->))
