@@ -3,16 +3,9 @@
 (ns-import 'shell)
 
 ;; gpwclark TODOs
-;; getopts!
+;; - getopts!
 ;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
-;; - get slsh in AUR
-;; USE empty-seq? instead of (when not nil) for looping over list
 ;; - range? fcn
-;; - make cond macro?
-;; - need clojure's threading macro support but you know, we'll call it
-;;	"weaving" (which is sometimes used in AOP but not nearly as overlaoded as
-;;	the word "thread" in programming.)
-;; - bash completion not working with git checkout and filepaths?
 ;; - rewrite bash so we don't have gpl in here?
 ;; - CI on github? possible?
 ;; - track bkrd processes in PS1? could be helpful?
@@ -300,6 +293,35 @@
 
 ;; }}}
 
+;; long lost documentation for system commands {{{
+
+(alias vi "see doc 'vim'
+Section: sys-docs" ((str (which vim))))
+
+(alias vim
+"
+- how to replace something with a newline in vim.
+:set magic
+:%s/{/{^M/g
+To get the ^M character, type Ctrl + V and hit Enter
+Section: sys-docs
+"
+	((str (which vim))))
+
+(alias tmux
+"List of things no one can remember:
+- change cwd of session
+	- C-a + : then input attach-session -t . -c new-cwd
+- copy and paste
+	- initiate: C-a + [
+	- more initiate: hit space bar (enter visual block highlight text mode)
+	- hit enter to stick in paste buffer
+	- paste normally or with: C-a + ]
+Section: tmux"
+	((str (which tmux))))
+
+;; }}}
+
 ;; tmux aliases {{{
 
 (defn tmuxls
@@ -352,7 +374,7 @@
 
 (defn fromepoch
 	"
-	takes epock IN SECONDS and converts to nice date time
+	takes epoch IN SECONDS and converts to nice date time
 	Section: time"
 	(time)
 	(date -d (str "@" time)))

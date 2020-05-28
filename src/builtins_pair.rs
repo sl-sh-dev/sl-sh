@@ -251,7 +251,7 @@ Example:
             builtin_xar,
             "Usage: (xar! pair expression)
 
-Destructive form thst replaces the car (first item) in a pair with a new expression.
+Destructive form that replaces the car (first item) in a pair with a new expression.
 
 If used on a proper list will replace the first item.  Can be used on nil to
 create a pair (expression . nil).
