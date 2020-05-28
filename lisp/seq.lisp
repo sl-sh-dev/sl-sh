@@ -109,8 +109,37 @@ Section: sequence
 (defn setnth!
 "
 Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
+This is destructive!  Because vectors support indexing and lists do not, this is
+a much faster operation for a vector (uses [builtin](root::builtin?) [vec-setnth!](root::vec-setnth!)
+on input of type vector).
 
 Section: sequence
+Example:
+(defq vctr (vec 0 1 2 3))
+(defq vec-copy (copy-seq vctr))
+(setnth! 0 -5 vctr)
+(setnth! 1 -400000 vctr)
+(setnth! 2 -402202 vctr)
+(setnth! 3 -30000 vctr)
+(assert-not-equal vec-copy vctr)
+(setnth! 0 -4 vctr)
+(setnth! 1 -3 vctr)
+(setnth! 2 -2 vctr)
+(setnth! 3 -1 vctr)
+(assert-equal (list -4 -3 -2 -1) vctr)
+
+(defq lst (list 0 1 2 3))
+(defq list-copy (copy-seq lst))
+(setnth! 0 -4 lst)
+(setnth! 1 -3 lst)
+(setnth! 2 -2 lst)
+(setnth! 3 -1 lst)
+(assert-not-equal list-copy lst)
+(setnth! 0 -4 lst)
+(setnth! 1 -3 lst)
+(setnth! 2 -2 lst)
+(setnth! 3 -1 lst)
+(assert-equal (list -4 -3 -2 -1) lst)
 "
     (idx obj l)
     (if (vec? l)
@@ -122,15 +151,36 @@ Section: sequence
 (defn nth
 "
 Produces the element at the provided index (0 based), error if index is out of bounds.
+Because vectors support indexing and lists do not, this is a much faster
+operation for a vector (uses [builtin](root::builtin?) [vec-nth](root::vec-nth)
+on input of type vector). Supports negative indexing.
 
 Section: sequence
+
+Example:
+(defq mylist (list 0 1 2 3 4))
+(defq myvec (vec 0 1 2 3 4))
+(assert-equal 0 (nth -5 mylist))
+(assert-equal 1 (nth 1 mylist))
+(assert-equal 2 (nth 2 mylist))
+(assert-equal 3 (nth -2 mylist))
+(assert-equal 4 (nth 4 mylist))
+(assert-equal 0 (nth -5 myvec))
+(assert-equal 1 (nth 1 myvec))
+(assert-equal 2 (nth 2 myvec))
+(assert-equal 3 (nth -2 myvec))
+(assert-equal 4 (nth 4 myvec))
 "
-    (idx obj)
+    (idx obj) (progn
+    (when (< idx 0)
+        (if (> (* -1 idx) (length obj))
+        (err "Absolute value of negative idx can't be greater than length of list.")
+        (setq idx (+ idx (length obj)))))
     (if (vec? obj)
         (vec-nth idx obj)
         (if (list? obj)
-            (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
-            (err "Not a vector or list"))))
+        (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
+            (err "Not a vector or list")))))
 
 (defn in?
 "
@@ -449,7 +499,7 @@ Example:
 				init-val
 				(recur reducing-fcn (reducing-fcn init-val (first coll)) (rest coll))))
 
-(defn apply-times
+(defn reduce-times
 "Apply wrapping-fcn to value number of times. Function is recursive. Recursive
 binding for value is previous application of wrapping function to value.
 
@@ -457,50 +507,54 @@ Section: sequence
 
 Example:
 
-(assert-equal (list (list 3)) (apply-times 3 list 2))
-(assert-equal 5 (apply-times (apply-times 5 list 5) first 5))
+(assert-equal (list (list 3)) (reduce-times 3 list 2))
+(assert-equal 5 (reduce-times (reduce-times 5 list 5) first 5))
 "
 	(value wrapping-fcn times)
 	(if (<= times 0)
 		value
 		(recur (wrapping-fcn value) wrapping-fcn (- times 1))))
 
-(defn seq-nth
-"Get nth idx of a [seq?](#root::seq?). Supports positive and negative indexing.
-Because vectors support indexing and lists do not, this is a much faster
-operation for a vector.
+(defn slice
+"Returns a slice of a seq (0 based indexes, end is exclusive and optional).
 
 Section: sequence
 
 Example:
-
-(defq mylist (list 0 1 2 3 4))
-(defq myvec (vec 0 1 2 3 4))
-(assert-equal 0 (seq-nth -5 mylist))
-(assert-equal 1 (seq-nth 1 mylist))
-(assert-equal 2 (seq-nth 2 mylist))
-(assert-equal 3 (seq-nth -2 mylist))
-(assert-equal 4 (seq-nth 4 mylist))
-
-(assert-equal 0 (seq-nth -5 myvec))
-(assert-equal 1 (seq-nth 1 myvec))
-(assert-equal 2 (seq-nth 2 myvec))
-(assert-equal 3 (seq-nth -2 myvec))
-(assert-equal 4 (seq-nth 4 myvec))"
-(idx lst) (progn
-	(when (< idx 0)
-		(if (> (* -1 idx) (length lst))
-		(err "Absolute value of negative idx can't be greater than length of list.")
-		(setq idx (+ idx (length lst)))))
+(assert-equal '(5 6) (slice '#(1 2 3 4 5 6) 4 6))
+(assert-equal '(5 6) (slice '(1 2 3 4 5 6) 4 6))
+(assert-equal '(1 2 3) (slice '#(1 2 3 4 5 6) 0 3))
+(assert-equal '(1 2 3) (slice '(1 2 3 4 5 6) 0 3))
+(assert-equal '(3 4 5) (slice '#(1 2 3 4 5 6) 2 5))
+(assert-equal '(3 4 5) (slice '(1 2 3 4 5 6) 2 5))
+(assert-equal '(3 4 5 6) (slice '#(1 2 3 4 5 6) 2))
+(assert-equal '(3 4 5 6) (slice '(1 2 3 4 5 6) 2))
+(assert-equal nil (slice '#(1 2 3 4 5 6) 6))
+(assert-equal nil (slice '(1 2 3 4 5 6) 6))"
+	(lst start &rest end?) (block slice
+	(if (= 0 (length end?))
+		(if (vec? lst)
+			(return-from slice (vec-slice lst start))
+			(if (list? lst)
+				(if (= (length lst) start)
+					(return-from slice nil)
+					(if (> start (length lst))
+						(err (str "slice index out of range (start " start ", end 0, length " (length lst)))
+						(return-from slice (reduce-times lst rest start))))
+				(err "lst, must be a vector or list"))))
+	(when (and (not (> (length end?) 1)) (not (int? (first end?))) (> (first end?) 0))
+		(err "Function accepts two or three arguments. Third argument must be a postive integer."))
+	(defq end (first end?))
 	(if (vec? lst)
-		(vec-nth idx lst)
+		(vec-slice lst start end)
 		(if (list? lst)
-			(if (< idx (length lst))
-				(if (= idx 0)
-					(first lst)
-					(first (apply-times lst rest idx)))
-				(err "idx, must not equal or exceed length of lst, oob."))
-			(err "lst, must be a vector or list.")))))
+			(loop (accrual iter) ((list) start)
+				(if (>= iter end)
+					accrual
+					(progn
+						(defq val (nth iter lst))
+						(recur (append accrual (list val)) (+ 1 iter)))))
+			(err "lst, must be a vector or list")))))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce apply-times seq-nth))
+(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce reduce-times slice))
 
