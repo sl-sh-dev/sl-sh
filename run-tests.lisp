@@ -238,10 +238,10 @@
 (println)
 
 
+(defq *global-failed* 0)
 (defn pprint-final-test-report (report-list) (progn
 	(println (str shell::*fg-black* shell::*bg-white*))
 	(defq global-total 0)
-	(defq global-failed 0)
 	(defq global-notest 0)
 	(defq global-passed 0)
 	(for test report-list (progn
@@ -252,7 +252,7 @@
 		(defq passed (- total failed notest))
 
 		(setq global-notest (+ notest global-notest))
-		(setq global-failed (+ failed global-failed))
+		(setq *global-failed* (+ failed *global-failed*))
 		(setq global-total (+ total global-total))
 		(setq global-passed (+ passed global-passed))
 
@@ -266,7 +266,7 @@
 		(println "-----------------------------")
 		(println "All tests:")
 		(println "total: " global-total)
-		(println "failed: " global-failed)
+		(println "failed: " *global-failed*)
 		(println "passed: " global-passed)
 		(println "no test " global-notest)
 	(println (str shell::*fg-default* shell::*bg-default*))))
@@ -274,3 +274,4 @@
 (println)
 (printer "Test Summary")
 (pprint-final-test-report final-test-report)
+(if (> *global-failed* 0) (exit 1))
