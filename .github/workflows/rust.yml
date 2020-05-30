@@ -28,7 +28,7 @@ jobs:
     - name: Run Rust tests
       run: cargo test --verbose -- --test-threads=1
     - name: Run Lisp tests
-      run: cargo run --release -- ./run-tests.lisp
+      run: ./target/release/sl-sh ./run-tests.lisp
     - name: Deploy Docs
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
@@ -54,7 +54,7 @@ jobs:
           log "Push docs"
           git config --global user.email "docs@sl-sh.example.com"
           git config --global user.name "Doc CI"
-          REMOTE=$(git config --get remote.origin.url)
+          REMOTE=git@github.com:sstanfield/slsh.git
           rm -rf .git
           if [ ! -d ".git" ]; then
              git init
