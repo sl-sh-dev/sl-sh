@@ -25,10 +25,12 @@ jobs:
           cargo version
           rustc --version
           cargo build --release --verbose
+          cp ./target/release/sl-sh .
+          strip sl-sh
     - name: Run Rust tests
       run: cargo test --verbose -- --test-threads=1
     - name: Run Lisp tests
-      run: ./target/release/sl-sh ./run-tests.lisp
+      run: ./sl-sh ./run-tests.lisp
     - name: Deploy Docs
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
@@ -44,7 +46,7 @@ jobs:
           echo "$DOC_DEPLOY_KEY" | ssh-add -
           pushd docs
           log "Build docs"
-          ../target/release/sl-sh docify.lisp index.markdown :lang
+          ../sl-sh docify.lisp index.markdown :lang
           if [[ $? != "0" ]]; then
           	elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
           	elog "docstrings printed as hashmap literals above and or errors. Run"
@@ -66,6 +68,11 @@ jobs:
           rm -rf .git
           popd
           log "< Docs finished"
+    - name: Upload linux binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: linux-sl-sh
+        path: ./sl-sh
 
 
   build-macos:
