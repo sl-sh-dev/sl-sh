@@ -17,9 +17,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build
-      run: cargo version
-      run: rustc --version
-      run: cargo build --verbose
+      run: |
+          cargo version
+          rustc --version
+          cargo build --verbose
     - name: Run Rust tests
       run: cargo test --verbose -- --test-threads=1
     - name: Run Lisp tests
