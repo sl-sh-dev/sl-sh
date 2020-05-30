@@ -3479,7 +3479,7 @@ Less than.  Works for int, float or string.
 Section: conditional
 
 Example:
-(test::assert-true (< 1 2))
+(test::assert-true (> 1 2))
 (test::assert-true (< 1 2 3 4))
 (test::assert-false (< 2 2))
 (test::assert-false (< 2 2 2))
