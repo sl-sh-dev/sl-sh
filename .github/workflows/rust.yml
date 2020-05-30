@@ -24,11 +24,47 @@ jobs:
       run: |
           cargo version
           rustc --version
-          cargo build --verbose
+          cargo build --release --verbose
     - name: Run Rust tests
-      run: cargo test --verbose -- --test-threads=1
+      run: cargo test --release --verbose -- --test-threads=1
     - name: Run Lisp tests
-      run: cargo run -- ./run-tests.lisp
+      run: cargo run --release -- ./run-tests.lisp
+    - name: Deploy Docs
+      env:
+          DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
+      run: |
+          function log() {
+          	echo -e "\033[33;7m$1\033[0m $2"
+          }
+          function elog() {
+          	echo -e "\033[31;7m$1\033[0m $2"
+          }
+          log "> Docs started"
+          eval `ssh-agent -t 60 -s`
+          echo "$DOC_DEPLOY_KEY" | ssh-add -
+          pushd docs
+          log "Build docs"
+          ../target/release/sl-sh docify.lisp index.markdown :lang
+          if [[ $? != "0" ]]; then
+          	elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
+          	elog "docstrings printed as hashmap literals above and or errors. Run"
+          	elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
+          	exit 1;
+          fi
+          log "Push docs"
+          REMOTE=$(git config --get remote.origin.url)
+          rm -rf .git
+          if [ ! -d ".git" ]; then
+             git init
+          fi
+          git checkout -b gh-pages
+          git remote add origin ${REMOTE}
+          git add --all && git commit -m "Build $(date)"
+          git push -u -f origin gh-pages
+          rm -rf .git
+          popd docs
+          log "< Docs finished"
+
 
   build-macos:
 
