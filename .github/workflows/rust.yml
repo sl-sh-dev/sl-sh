@@ -64,7 +64,7 @@ jobs:
           git add --all && git commit -m "Build $(date)"
           git push -u -f origin gh-pages
           rm -rf .git
-          popd docs
+          popd
           log "< Docs finished"
 
 
@@ -82,4 +82,4 @@ jobs:
     - name: Run Rust tests
       run: cargo test --verbose -- --test-threads=1
     - name: Run Lisp tests
-      run: cargo run -- ./run-tests.lisp
+      run: ./target/debug/sl-sh ./run-tests.lisp
