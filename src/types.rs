@@ -401,9 +401,9 @@ impl Expression {
             let res = call_lambda(environment, &lambda, ib, false)?;
             drop(self_d);
             res.resolve(environment)
-            //let res = res.resolve(environment)?;
-            //self.get_mut().data.replace(res.into());
-            //Ok(self)
+        //let res = res.resolve(environment)?;
+        //self.get_mut().data.replace(res.into());
+        //Ok(self)
         } else {
             drop(self_d);
             Ok(self)
