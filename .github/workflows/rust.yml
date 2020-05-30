@@ -26,7 +26,7 @@ jobs:
           rustc --version
           cargo build --release --verbose
     - name: Run Rust tests
-      run: cargo test --release --verbose -- --test-threads=1
+      run: cargo test --verbose -- --test-threads=1
     - name: Run Lisp tests
       run: cargo run --release -- ./run-tests.lisp
     - name: Deploy Docs
@@ -52,6 +52,8 @@ jobs:
           	exit 1;
           fi
           log "Push docs"
+          git config --local user.email "docs@sl-sh.do.not.email"
+          git config --local user.name "Doc CI"
           REMOTE=$(git config --get remote.origin.url)
           rm -rf .git
           if [ ! -d ".git" ]; then
