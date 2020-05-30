@@ -1376,7 +1376,7 @@ Example:
             },
             "Usage: (char!= char0 char1 ... charN) -> t/nil
 
-Test chars for in-equality. XSX
+Test chars for in-equality.
 
 Section: char
 
