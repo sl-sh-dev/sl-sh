@@ -41,6 +41,15 @@ jobs:
           function elog() {
           	echo -e "\033[31;7m$1\033[0m $2"
           }
+          if [ -z "$DOC_DEPLOY_KEY" ]
+          then
+            log "No deploy key is set to update docs on gh-pages branch."
+            log "To fix this generate a ssh keypair (ie 'ssh-keygen -t ed25519')."
+            log "Install the public key as a deploy key in your project with"
+            log "write access and install the private key as a secret in the"
+            log "git repo with name 'DOC_DEPLOY_KEY'."
+            exit 0
+          fi
           log "> Docs started"
           eval `ssh-agent -t 60 -s`
           echo "$DOC_DEPLOY_KEY" | ssh-add -
