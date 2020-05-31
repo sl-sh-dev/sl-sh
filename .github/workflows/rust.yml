@@ -56,7 +56,7 @@ jobs:
           log "Push docs"
           git config --global user.email "docs@sl-sh.example.com"
           git config --global user.name "Doc CI"
-          REMOTE=git@github.com:sstanfield/slsh.git
+          REMOTE="$(git config --get remote.origin.url | sed 's#http.*com/#git@github.com:#g')"
           rm -rf .git
           if [ ! -d ".git" ]; then
              git init
