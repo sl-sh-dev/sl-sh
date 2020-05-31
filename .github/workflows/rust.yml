@@ -33,7 +33,7 @@ jobs:
       run: ./sl-sh ./run-tests.lisp
     - name: Deploy Docs
       env:
-          DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
+          DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY2 }}
       run: |
           function log() {
           	echo -e "\033[33;7m$1\033[0m $2"
