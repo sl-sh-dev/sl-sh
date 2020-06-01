@@ -31,21 +31,27 @@
 			(vec-push! meth-list (first method))
 			(vec-push! method-defs `(defn ,@method))))
 		(def 'accessors nil)
+		(def 'tags (vec))
+		(vec-push! tags :struct)
+		(vec-push! tags (to-symbol (str ":struct-" name)))
 		(def 'cur (make-vec (+ 1 (* 2 (length params)))))
 		(def 'tmp nil)
 		(core::for p params (progn
 			(def 'tsym (to-symbol (str ":" p)))
 			(set 'tmp `#(if (= msg ,tsym) ,p))
+			(vec-push! tags (to-symbol (str ":accessor:" p)))
 			(vec-push! cur tmp)
 			(set 'cur tmp)
 			(if (null accessors) (set 'accessors cur))
 			(def 'tsym (to-symbol (str ":set-" p)))
 			(set 'tmp `#(if (= msg ,tsym) (apply set ',p args)))
+			(vec-push! tags (to-symbol (str ":setter:" p)))
 			(vec-push! cur tmp)
 			(set 'cur tmp)))
 		(core::for m meth-list (progn
 			(def 'tsym (to-symbol (str ":" m)))
 			(set 'tmp `#(if (= msg ,tsym) (apply ,m args)))
+			(vec-push! tags (to-symbol (str ":method:" m)))
 			(vec-push! cur tmp)
 			(set 'cur tmp)
 			(if (null accessors) (set 'accessors cur))))
@@ -54,13 +60,17 @@
 		(set 'cur tmp)
 		(def 'err-msg (str "Invalid message to class: " name))
 		(vec-push! cur `(err ,err-msg))
+		(def 'make-sym (to-symbol (str "make-" name)))
 		`(progn
-			(def (to-symbol (str "make-" ',name)) nil)
+			(def ',make-sym nil)
 			((fn ,params (progn
 				,@method-defs
 				,@body
-				(set (to-symbol (str "make-" ',name))
-					(fn () (fn (msg &rest args) ,accessors)))))
+				(set ',make-sym (fn () (progn
+					(def 'ret (fn (msg &rest args) ,accessors))
+					(core::for tag ',tags (meta-add-tag ret tag))
+					ret
+					)))))
 			 ,@bindings)) )) ; bindings for params
 	 (make-vec (length fields)) ; params
 	 (make-vec (length fields)) ; bindings
