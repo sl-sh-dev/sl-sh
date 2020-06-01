@@ -1,5 +1,7 @@
 # Simple Lisp Shell
 
+![Rust](https://github.com/sstanfield/slsh/workflows/Rust/badge.svg?branch=master)
+
 This is a shell built around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
 parentheses).  It is NOT a POSIX shell and makes no attempts to be one.
