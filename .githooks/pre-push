@@ -52,7 +52,7 @@ function check_update_aur() {
 	git push -u origin master
 
 	rm -rf .git
-	sed -i "s/pkgver=VERSION/pkgver=${SL_SH_VERSION}/g" PKGBUILD
+	sed -i "s/pkgver=${SL_SH_VERSION}/pkgver=VERSION/g" PKGBUILD
 	rm .SRCINFO
 
 	return ${SUCCESS}
