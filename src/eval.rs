@@ -209,6 +209,7 @@ fn make_lazy(
     Ok(Expression::alloc(ExpObj {
         data: ExpEnum::LazyFn(lambda.clone(), parms),
         meta: None,
+        meta_tags: None,
     }))
 }
 

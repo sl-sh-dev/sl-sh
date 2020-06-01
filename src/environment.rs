@@ -79,6 +79,7 @@ impl Reference {
         let root = gc_mut().insert(ExpObj {
             data: exp,
             meta: None,
+            meta_tags: None,
         });
         Reference {
             exp: Expression::new(root),

@@ -5,7 +5,7 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
@@ -2109,6 +2109,76 @@ pub fn builtin_meta_file_name(
     }
 }
 
+pub fn builtin_meta_add_tag(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        let exp = eval(environment, exp)?;
+        if let Some(tag) = args.next() {
+            if args.next().is_none() {
+                let tag = eval(environment, tag)?;
+                let tag_d = tag.get();
+                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
+                    let mut exp_d = exp.get_mut();
+                    if let Some(tags) = &mut exp_d.meta_tags {
+                        tags.insert(s);
+                    } else {
+                        let mut tags: HashSet<&'static str> = HashSet::new();
+                        tags.insert(s);
+                        exp_d.meta_tags = Some(tags);
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "meta-add-tag: Takes an expression and a tag (symbol)",
+                    ));
+                }
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "meta-add-tag: Takes an expression and a tag to add to it..",
+                ));
+            }
+        }
+    }
+    Ok(Expression::alloc_data(ExpEnum::Nil))
+}
+
+pub fn builtin_meta_tag_set(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        let exp = eval(environment, exp)?;
+        if let Some(tag) = args.next() {
+            if args.next().is_none() {
+                let tag = eval(environment, tag)?;
+                let tag_d = tag.get();
+                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
+                    let exp_d = exp.get();
+                    if let Some(tags) = &exp_d.meta_tags {
+                        if tags.contains(s) {
+                            return Ok(Expression::make_true());
+                        }
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "meta-tag?: Takes an expression and a tag (symbol)",
+                    ));
+                }
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "meta-tag?: Takes an expression and a tag check for..",
+                ));
+            }
+        }
+    }
+    Ok(Expression::make_nil())
+}
+
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
         let first = $values.first().ok_or(io::Error::new(
@@ -3365,6 +3435,48 @@ Section: core
 Example:
 ;(meta-file-name)
 t
+",
+            root,
+        ),
+    );
+
+    data.insert(
+        interner.intern("meta-add-tag"),
+        Expression::make_function(
+            builtin_meta_add_tag,
+            "Usage: (meta-add-tag expression tag)
+
+Adds a meta tag to expression.  This is intended for helping with structs and
+interfaces in lisp, you probably do not want to use it.
+
+Section: core
+
+Example:
+(def 'meta-add-tag-var '(1 2 3))
+(meta-add-tag meta-add-tag-var :tag1)
+(test::assert-true (meta-tag? meta-add-tag-var :tag1))
+(test::assert-false (meta-tag? meta-add-tag-var :tag2))
+",
+            root,
+        ),
+    );
+
+    data.insert(
+        interner.intern("meta-tag?"),
+        Expression::make_function(
+            builtin_meta_tag_set,
+            "Usage: (meta-tag? expression tag)
+
+True if expression has the meta tag 'tag' set.  This is intended for helping
+with structs and interfaces in lisp, you probably do not want to use it.
+
+Section: core
+
+Example:
+(def 'meta-add-tag-var '(1 2 3))
+(meta-add-tag meta-add-tag-var :tag1)
+(test::assert-true (meta-tag? meta-add-tag-var :tag1))
+(test::assert-false (meta-tag? meta-add-tag-var :tag2))
 ",
             root,
         ),

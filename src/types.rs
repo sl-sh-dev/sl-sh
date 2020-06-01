@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -218,6 +218,7 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
+                            meta_tags: None,
                         })
                         .into(),
                     );
@@ -228,6 +229,7 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
+                            meta_tags: None,
                         })
                         .into(),
                     );
@@ -266,6 +268,7 @@ impl fmt::Debug for ExpEnum {
 pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
+    pub meta_tags: Option<HashSet<&'static str>>,
 }
 
 impl Trace for ExpEnum {
@@ -316,7 +319,11 @@ impl Expression {
     }
 
     pub fn alloc_data_h(data: ExpEnum) -> Handle {
-        gc_mut().insert(ExpObj { data, meta: None })
+        gc_mut().insert(ExpObj {
+            data,
+            meta: None,
+            meta_tags: None,
+        })
     }
 
     pub fn alloc(obj: ExpObj) -> Expression {
@@ -331,6 +338,7 @@ impl Expression {
         gc_mut().insert(ExpObj {
             data: ExpEnum::Nil,
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -338,6 +346,7 @@ impl Expression {
         gc_mut().insert(ExpObj {
             data: ExpEnum::Atom(Atom::True),
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -434,6 +443,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -441,6 +451,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta,
+            meta_tags: None,
         })
     }
 
@@ -454,6 +465,7 @@ impl Expression {
                     Expression::alloc(ExpObj {
                         data: last_pair.clone(),
                         meta: None,
+                        meta_tags: None,
                     })
                     .into(),
                 );
@@ -463,6 +475,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: last_pair,
             meta,
+            meta_tags: None,
         })
     }
 

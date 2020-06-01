@@ -88,6 +88,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
                                 Expression::alloc(ExpObj {
                                     data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                     meta: exp_meta,
+                                    meta_tags: None,
                                 })
                                 .into(),
                             );
