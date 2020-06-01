@@ -89,6 +89,14 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(close file)
 	file-name))
 
+(defn write-version (file-name) (progn
+	(defq file (open file-name :append))
+	(write-line file "")
+	(write-line file (str "version: " (version)))
+	(write-line file "")
+	(close file)
+	file-name))
+
 (defn get-anchor-link-id (doc-map) (progn
 	(defq doc-form (progn
 		(defq form (hash-get doc-map :form))
@@ -211,6 +219,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(for key (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
 		(write-md-table key docstrings index-file)))
+	(write-version index-file)
 	(progn
 		(defq uncat-syms (hash-get docstrings-map :uncategorized))
 		(when (not (empty-seq? uncat-syms)) (progn
