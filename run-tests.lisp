@@ -140,14 +140,14 @@
 ;; run tests for non-root namespaces
 (for a-ns (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
 	(printer (str "Tests from " a-ns))
-	(defq sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))
+	(defq sym-list (qsort (eval (to-symbol (str a-ns "::*ns-exports*")))))
 	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
 (progn
 (printer (str "Tests from root"))
-(defq sym-list (ns-symbols 'root))
+(defq sym-list (qsort (ns-symbols 'root)))
 (defq sym-list (make-test-list-from-symbols sym-list "root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 
@@ -162,6 +162,17 @@
 (hash-set! ns-test-set-item :no-test 0)
 
 (printer "Tests from namespace")
+
+(progn
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'root::*ns*)
+		(progn
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "*ns* "))
+		(progn
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "*ns* "))))
+
 (progn
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-create)
@@ -222,25 +233,15 @@
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-symbols"))))
 
-(progn
-	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
-	(if (test::run-ns-example 'root::*ns*)
-		(progn
-			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
-			(report-pretty-printer :passed "*ns* "))
-		(progn
-			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
-			(report-pretty-printer :failed "*ns* "))))
-
 (append! final-test-report ns-test-set-item)
 
 (println)
 
 
+(defq *global-failed* 0)
 (defn pprint-final-test-report (report-list) (progn
 	(println (str shell::*fg-black* shell::*bg-white*))
 	(defq global-total 0)
-	(defq global-failed 0)
 	(defq global-notest 0)
 	(defq global-passed 0)
 	(for test report-list (progn
@@ -251,7 +252,7 @@
 		(defq passed (- total failed notest))
 
 		(setq global-notest (+ notest global-notest))
-		(setq global-failed (+ failed global-failed))
+		(setq *global-failed* (+ failed *global-failed*))
 		(setq global-total (+ total global-total))
 		(setq global-passed (+ passed global-passed))
 
@@ -265,7 +266,7 @@
 		(println "-----------------------------")
 		(println "All tests:")
 		(println "total: " global-total)
-		(println "failed: " global-failed)
+		(println "failed: " *global-failed*)
 		(println "passed: " global-passed)
 		(println "no test " global-notest)
 	(println (str shell::*fg-default* shell::*bg-default*))))
@@ -273,3 +274,4 @@
 (println)
 (printer "Test Summary")
 (pprint-final-test-report final-test-report)
+(if (> *global-failed* 0) (exit 1))

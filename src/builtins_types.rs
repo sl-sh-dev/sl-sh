@@ -15,8 +15,8 @@ fn builtin_type(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-                environment.interner.intern(&arg.display_type()),
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                environment.interner.intern(&arg.display_type()).into(),
             ))));
         }
     }
@@ -123,8 +123,6 @@ fn builtin_is_string(
             let arg = eval(environment, arg)?;
             return if let ExpEnum::Atom(Atom::String(_)) = arg.get().data {
                 Ok(Expression::make_true())
-            } else if let ExpEnum::Atom(Atom::StringRef(_)) = arg.get().data {
-                Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
             };
@@ -133,26 +131,6 @@ fn builtin_is_string(
     Err(io::Error::new(
         io::ErrorKind::Other,
         "string? needs one form",
-    ))
-}
-
-fn builtin_is_string_buf(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::StringBuf(_)) = arg.get().data {
-                Ok(Expression::make_true())
-            } else {
-                Ok(Expression::make_nil())
-            };
-        }
-    }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "string-buf? needs one form",
     ))
 }
 
@@ -378,7 +356,6 @@ Example:
 (def 'type-sym 'symbol)
 (test::assert-equal \"Symbol\" (type type-sym))
 (test::assert-equal \"String\" (type \"string\"))
-(test::assert-equal \"StringBuf\" (type (str-buf \"buffer\")))
 (test::assert-equal \"Char\" (type #\\a))
 (test::assert-equal \"Lambda\" (type (fn () ())))
 (test::assert-equal \"Macro\" (type (macro () ())))
@@ -498,24 +475,6 @@ Section: type
 Example:
 (test::assert-true (string? \"string\"))
 (test::assert-false (string? 1))
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("string-buf?"),
-        Expression::make_function(
-            builtin_is_string_buf,
-            "Usage: (string-buf? expression)
-
-True if the expression is a string buffer, false otherwise.
-
-Section: type
-
-Example:
-(test::assert-true (string-buf? (str-buf \"string\")))
-(test::assert-false (string-buf? \"string\"))
-(test::assert-false (string-buf? 1))
 ",
             root,
         ),

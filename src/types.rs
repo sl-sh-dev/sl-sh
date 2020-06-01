@@ -1,5 +1,6 @@
+use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -33,9 +34,7 @@ pub enum Atom {
     Float(f64),
     Int(i64),
     Symbol(&'static str),
-    StringRef(&'static str),
-    String(String),
-    StringBuf(Rc<RefCell<String>>),
+    String(Cow<'static, str>),
     Char(char),
     Lambda(Lambda),
     Macro(Macro),
@@ -48,9 +47,7 @@ impl fmt::Display for Atom {
             Atom::Float(n) => write!(f, "{}", n),
             Atom::Int(i) => write!(f, "{}", i),
             Atom::Symbol(s) => write!(f, "{}", s),
-            Atom::StringRef(s) => write!(f, "\"{}\"", s),
             Atom::String(s) => write!(f, "\"{}\"", s),
-            Atom::StringBuf(s) => write!(f, "\"{}\"", s.borrow()),
             Atom::Char(c) => write!(f, "#\\{}", c),
             Atom::Lambda(l) => {
                 let params: Expression = l.params.clone().into();
@@ -69,12 +66,8 @@ impl fmt::Display for Atom {
 impl Atom {
     // Like to_string but don't put quotes around strings or #\ in front of chars.
     pub fn as_string(&self) -> String {
-        if let Atom::StringRef(s) = self {
+        if let Atom::String(s) = self {
             (*s).to_string()
-        } else if let Atom::String(s) = self {
-            s.to_string()
-        } else if let Atom::StringBuf(s) = self {
-            s.borrow().to_string()
         } else if let Atom::Char(c) = self {
             c.to_string()
         } else {
@@ -89,8 +82,6 @@ impl Atom {
             Atom::Int(_) => "Int".to_string(),
             Atom::Symbol(_) => "Symbol".to_string(),
             Atom::String(_) => "String".to_string(),
-            Atom::StringRef(_) => "String".to_string(),
-            Atom::StringBuf(_) => "StringBuf".to_string(),
             Atom::Char(_) => "Char".to_string(),
             Atom::Lambda(_) => "Lambda".to_string(),
             Atom::Macro(_) => "Macro".to_string(),
@@ -227,6 +218,7 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
+                            meta_tags: None,
                         })
                         .into(),
                     );
@@ -237,6 +229,7 @@ impl ExpEnum {
                         Expression::alloc(ExpObj {
                             data: last_pair.clone(),
                             meta: None,
+                            meta_tags: None,
                         })
                         .into(),
                     );
@@ -275,6 +268,7 @@ impl fmt::Debug for ExpEnum {
 pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
+    pub meta_tags: Option<HashSet<&'static str>>,
 }
 
 impl Trace for ExpEnum {
@@ -325,7 +319,11 @@ impl Expression {
     }
 
     pub fn alloc_data_h(data: ExpEnum) -> Handle {
-        gc_mut().insert(ExpObj { data, meta: None })
+        gc_mut().insert(ExpObj {
+            data,
+            meta: None,
+            meta_tags: None,
+        })
     }
 
     pub fn alloc(obj: ExpObj) -> Expression {
@@ -340,6 +338,7 @@ impl Expression {
         gc_mut().insert(ExpObj {
             data: ExpEnum::Nil,
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -347,6 +346,7 @@ impl Expression {
         gc_mut().insert(ExpObj {
             data: ExpEnum::Atom(Atom::True),
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -403,14 +403,19 @@ impl Expression {
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
-    pub fn resolve(&self, environment: &mut Environment) -> io::Result<Self> {
-        if let ExpEnum::LazyFn(lambda, parts) = &self.get().data {
+    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+        let self_d = self.get();
+        if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
             let ib = &mut Box::new(ListIter::new_list(parts));
             let res = call_lambda(environment, &lambda, ib, false)?;
+            drop(self_d);
             res.resolve(environment)
+        //let res = res.resolve(environment)?;
+        //self.get_mut().data.replace(res.into());
+        //Ok(self)
         } else {
-            // XXX clone to a root..
-            Ok(self.clone())
+            drop(self_d);
+            Ok(self)
         }
     }
 
@@ -438,6 +443,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta: None,
+            meta_tags: None,
         })
     }
 
@@ -445,6 +451,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta,
+            meta_tags: None,
         })
     }
 
@@ -458,6 +465,7 @@ impl Expression {
                     Expression::alloc(ExpObj {
                         data: last_pair.clone(),
                         meta: None,
+                        meta_tags: None,
                     })
                     .into(),
                 );
@@ -467,6 +475,7 @@ impl Expression {
         Expression::alloc(ExpObj {
             data: last_pair,
             meta,
+            meta_tags: None,
         })
     }
 
@@ -596,9 +605,6 @@ impl Expression {
             }
             ExpEnum::Atom(Atom::String(_s)) => {
                 write!(writer, "{}", self.to_string())?;
-            }
-            ExpEnum::Atom(Atom::StringBuf(_s)) => {
-                write!(writer, "(str-buf {})", self.to_string())?;
             }
             ExpEnum::Atom(Atom::Char(_c)) => {
                 write!(writer, "{}", self.to_string())?;
@@ -859,6 +865,15 @@ impl AsRef<Expression> for Expression {
     }
 }
 
+impl From<Expression> for ExpEnum {
+    fn from(item: Expression) -> Self {
+        match item.obj.try_unwrap() {
+            Ok(data) => data.data,
+            Err(handle) => handle.get().data.clone(),
+        }
+    }
+}
+
 impl From<Expression> for Handle {
     fn from(item: Expression) -> Self {
         item.obj
@@ -992,13 +1007,14 @@ mod tests {
     #[test]
     fn test_one() {
         init_gc();
-        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".to_string())));
+        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".into())));
         let n1 = Expression::make_nil_h();
-        let p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
-        let l1 = Expression::with_list(vec![
+        let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
+        let nlist = vec![
             Expression::make_nil_h().clone_no_root(),
             Expression::make_nil_h().clone_no_root(),
-        ]);
+        ];
+        let _l1 = Expression::with_list(nlist);
         gc_mut().clean();
         //println!("XXX {}, {}, {}", p1, s1, n1);
         //println!("XXX {}", l1);

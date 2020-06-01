@@ -130,11 +130,7 @@ fn set_arg(
     var: Expression,
     do_eval: bool,
 ) -> io::Result<()> {
-    let var = if let ExpEnum::LazyFn(_, _) = &var.get().data {
-        var.resolve(environment)?
-    } else {
-        var.clone()
-    };
+    let var = var.resolve(environment)?;
     let v2 = if do_eval {
         let var_d = var.get();
         if let ExpEnum::Atom(Atom::Symbol(s)) = &var_d.data {
@@ -211,8 +207,7 @@ fn setup_args_final(
         let mut rest_data: Vec<Handle> = Vec::new();
         for v in vars {
             let v2 = if do_eval { eval(environment, v)? } else { v };
-            let v2: Handle = v2.into();
-            rest_data.push(v2);
+            rest_data.push(v2.into());
         }
         if rest_data.is_empty() {
             if let Some(scope) = scope {
@@ -299,7 +294,11 @@ pub fn setup_args(
                 }
             }
         } else {
-            let msg = format!("parameter name must be symbol, got {:?}", arg);
+            let msg = format!(
+                "parameter {} must be a symbol got type {}",
+                arg,
+                arg.display_type()
+            );
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         }
     }

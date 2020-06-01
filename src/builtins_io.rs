@@ -5,6 +5,7 @@ use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::rc::Rc;
 
+use crate::builtins_util::expand_tilde;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
@@ -36,14 +37,16 @@ fn builtin_open(
         }
         let file_name = match &a.get().data {
             ExpEnum::Atom(Atom::String(name)) => name.to_string(),
-            ExpEnum::Atom(Atom::StringRef(name)) => (*name).to_string(),
-            ExpEnum::Atom(Atom::StringBuf(name)) => name.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "open: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
             ));
             }
+        };
+        let file_name = match expand_tilde(&file_name) {
+            Some(p) => p,
+            None => file_name,
         };
         let mut opts = OpenOptions::new();
         let mut is_read = false;
@@ -204,7 +207,9 @@ fn builtin_read_line(
                         if 0 == f.borrow_mut().read_line(&mut line)? {
                             Ok(Expression::make_nil())
                         } else {
-                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(line))))
+                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                line.into(),
+                            ))))
                         }
                     }
                     FileState::Stdin => {
@@ -212,7 +217,9 @@ fn builtin_read_line(
                         if 0 == io::stdin().read_line(&mut line)? {
                             Ok(Expression::make_nil())
                         } else {
-                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(line))))
+                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                                line.into(),
+                            ))))
                         }
                     }
                     _ => Err(io::Error::new(
@@ -265,8 +272,6 @@ fn builtin_read(
                     )),
                 },
                 ExpEnum::Atom(Atom::String(input)) => do_read(environment, input),
-                ExpEnum::Atom(Atom::StringRef(input)) => do_read(environment, input),
-                ExpEnum::Atom(Atom::StringBuf(input)) => do_read(environment, &input.borrow()),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",

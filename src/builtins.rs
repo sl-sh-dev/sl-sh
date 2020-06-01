@@ -5,7 +5,7 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::hash::BuildHasher;
@@ -35,14 +35,6 @@ fn builtin_eval(
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
-                ExpEnum::Atom(Atom::StringRef(s)) => match read(environment, s, None) {
-                    Ok(ast) => eval(environment, ast),
-                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-                },
-                ExpEnum::Atom(Atom::StringBuf(s)) => match read(environment, &s.borrow(), None) {
-                    Ok(ast) => eval(environment, ast),
-                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
-                },
                 _ => {
                     drop(arg_d);
                     eval(environment, &arg)
@@ -56,6 +48,29 @@ fn builtin_eval(
     ))
 }
 
+fn builtin_syscall(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(command) = args.next() {
+        let command = eval(environment, command)?;
+        let command_d = command.get();
+        match &command_d.data {
+            ExpEnum::Atom(Atom::String(s)) => do_command(environment, s, args),
+            _ => {
+                let msg = format!(
+                    "syscall: first argument {} not a string, type {}",
+                    command,
+                    command.display_type()
+                );
+                Err(io::Error::new(io::ErrorKind::Other, msg))
+            }
+        }
+    } else {
+        Err(io::Error::new(io::ErrorKind::Other, "syscall: empty call"))
+    }
+}
+
 fn builtin_fncall(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -64,7 +79,7 @@ fn builtin_fncall(
         let command = eval(environment, command)?;
         fn_call(environment, command, args)
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "fn_call: empty call"))
+        Err(io::Error::new(io::ErrorKind::Other, "fncall: empty call"))
     }
 }
 
@@ -169,8 +184,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             let path_name = match &l.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
                 ExpEnum::Atom(Atom::String(s)) => Some(s.to_string()),
-                ExpEnum::Atom(Atom::StringRef(s)) => Some((*s).to_string()),
-                ExpEnum::Atom(Atom::StringBuf(s)) => Some(s.borrow().to_string()),
                 _ => None,
             };
             if let Some(path_name) = path_name {
@@ -287,26 +300,6 @@ fn builtin_length(
                         i,
                     )))))
                 }
-                ExpEnum::Atom(Atom::StringRef(s)) => {
-                    let mut i = 0;
-                    // Need to walk the chars to get the length in utf8 chars not bytes.
-                    for _ in s.chars() {
-                        i += 1;
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
-                        i,
-                    )))))
-                }
-                ExpEnum::Atom(Atom::StringBuf(s)) => {
-                    let mut i = 0;
-                    // Need to walk the chars to get the length in utf8 chars not bytes.
-                    for _ in s.borrow().chars() {
-                        i += 1;
-                    }
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
-                        i,
-                    )))))
-                }
                 ExpEnum::Atom(_) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(1)))),
                 ExpEnum::Vector(list) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
                     list.len() as i64,
@@ -384,8 +377,6 @@ fn args_out(
         // If we have a standalone string do not quote it...
         let pretty = match &aa.get().data {
             ExpEnum::Atom(Atom::String(_)) => false,
-            ExpEnum::Atom(Atom::StringRef(_)) => false,
-            ExpEnum::Atom(Atom::StringBuf(_)) => false,
             _ => pretty,
         };
         if pretty {
@@ -430,8 +421,6 @@ fn print_to_oe(
                             // If we have a standalone string do not quote it...
                             let pretty = match &aa.get().data {
                                 ExpEnum::Atom(Atom::String(_)) => false,
-                                ExpEnum::Atom(Atom::StringRef(_)) => false,
-                                ExpEnum::Atom(Atom::StringBuf(_)) => false,
                                 _ => pretty,
                             };
                             if pretty {
@@ -535,7 +524,9 @@ fn builtin_format(
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(res))))
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        res.into(),
+    ))))
 }
 
 pub fn builtin_progn(
@@ -677,32 +668,38 @@ fn builtin_export(
                     }
                 };
                 let val = match &val.get().data {
-                    ExpEnum::Atom(Atom::Symbol(s)) => ExpEnum::Atom(Atom::StringRef(s)),
-                    ExpEnum::Atom(Atom::StringRef(s)) => ExpEnum::Atom(Atom::StringRef(s)),
-                    ExpEnum::Atom(Atom::String(s)) => ExpEnum::Atom(Atom::String(s.to_string())),
-                    ExpEnum::Atom(Atom::StringBuf(s)) => {
-                        ExpEnum::Atom(Atom::String(s.borrow().clone()))
+                    ExpEnum::Atom(Atom::Symbol(s)) => ExpEnum::Atom(Atom::String((*s).into())),
+                    ExpEnum::Atom(Atom::String(s)) => {
+                        ExpEnum::Atom(Atom::String(s.to_string().into()))
                     }
-                    ExpEnum::Atom(Atom::Int(i)) => ExpEnum::Atom(Atom::String(format!("{}", i))),
-                    ExpEnum::Atom(Atom::Float(f)) => ExpEnum::Atom(Atom::String(format!("{}", f))),
+                    ExpEnum::Atom(Atom::Int(i)) => {
+                        ExpEnum::Atom(Atom::String(format!("{}", i).into()))
+                    }
+                    ExpEnum::Atom(Atom::Float(f)) => {
+                        ExpEnum::Atom(Atom::String(format!("{}", f).into()))
+                    }
                     ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::Atom(Atom::String(
                         val.as_string(environment)
-                            .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                            .unwrap_or_else(|_| "PROCESS FAILED".to_string())
+                            .into(),
                     )),
                     ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
                         ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
-                                .unwrap_or_else(|_| "PROCESS FAILED".to_string()),
+                                .unwrap_or_else(|_| "PROCESS FAILED".to_string())
+                                .into(),
                         ))
                     }
                     ExpEnum::File(file) => match &*file.borrow() {
                         FileState::Stdin => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
-                                .unwrap_or_else(|_| "STDIN FAILED".to_string()),
+                                .unwrap_or_else(|_| "STDIN FAILED".to_string())
+                                .into(),
                         )),
                         FileState::Read(_) => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
-                                .unwrap_or_else(|_| "FILE READ FAILED".to_string()),
+                                .unwrap_or_else(|_| "FILE READ FAILED".to_string())
+                                .into(),
                         )),
                         _ => {
                             return Err(io::Error::new(
@@ -728,7 +725,9 @@ fn builtin_export(
                 } else {
                     env::remove_var(key);
                 }
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(val))));
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    val.into(),
+                ))));
             }
         }
     }
@@ -766,10 +765,6 @@ fn builtin_def(
         if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp.get().data {
                 ExpEnum::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
-                ExpEnum::Atom(Atom::StringRef(s)) => Some(s),
-                ExpEnum::Atom(Atom::StringBuf(s)) => {
-                    Some(environment.interner.intern(&*s.borrow()))
-                }
                 _ => None,
             }
         } else {
@@ -909,12 +904,6 @@ fn builtin_to_symbol(
                 ExpEnum::Atom(Atom::String(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
                     Atom::Symbol(environment.interner.intern(&s)),
                 ))),
-                ExpEnum::Atom(Atom::StringRef(s)) => {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
-                }
-                ExpEnum::Atom(Atom::StringBuf(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::Symbol(environment.interner.intern(&s.borrow())),
-                ))),
                 ExpEnum::Atom(Atom::Symbol(s)) => {
                     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
                 }
@@ -945,9 +934,9 @@ fn builtin_symbol_name(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
-                ExpEnum::Atom(Atom::Symbol(s)) => {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))))
-                }
+                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::String((*s).into()),
+                ))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "symbol-name can only convert a symbol to a string",
@@ -1213,9 +1202,7 @@ fn builtin_is_def(
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
-                ExpEnum::Atom(Atom::StringRef(s)) => get_ret(environment, s),
                 ExpEnum::Atom(Atom::String(s)) => get_ret(environment, &s),
-                ExpEnum::Atom(Atom::StringBuf(s)) => get_ret(environment, &s.borrow()),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "def? takes a symbol or string (will be treated as a symbol) to lookup",
@@ -1293,7 +1280,14 @@ fn expand_macro_internal(
     environment: &mut Environment,
     arg: &Expression,
     one: bool,
+    depth: usize,
 ) -> io::Result<Option<Expression>> {
+    if depth > 500 {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Macro expand recursion to deep!",
+        ));
+    }
     let arg_d = arg.get();
     if let ExpEnum::Vector(list) = &arg_d.data {
         let (command, parts) = match list.split_first() {
@@ -1309,7 +1303,7 @@ fn expand_macro_internal(
         )?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1333,7 +1327,7 @@ fn expand_macro_internal(
         let expansion = do_expansion(environment, &e1, &mut e2_iter)?;
         if let Some(expansion) = expansion {
             if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one)? {
+                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
                     Ok(Some(new_expansion))
                 } else {
                     Ok(Some(expansion))
@@ -1349,21 +1343,22 @@ fn expand_macro_internal(
     }
 }
 
-pub fn expand_macro(
+pub(crate) fn expand_macro(
     environment: &mut Environment,
     arg: impl AsRef<Expression>,
     one: bool,
+    depth: usize,
 ) -> io::Result<Option<Expression>> {
     let arg = arg.as_ref();
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
-    let res = expand_macro_internal(environment, arg, one);
+    let res = expand_macro_internal(environment, arg, one, depth + 1);
     environment.allow_lazy_fn = lazy;
     res
 }
 
 fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
-    if let Some(exp_outer) = expand_macro(environment, arg, false)? {
+    if let Some(exp_outer) = expand_macro(environment, arg, false, 0)? {
         let exp_outer_c = exp_outer.clone();
         let exp_d = exp_outer_c.get();
         if let ExpEnum::Vector(list) = &exp_d.data {
@@ -1421,7 +1416,7 @@ fn builtin_expand_macro(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, false)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, false, 0)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -1440,7 +1435,7 @@ fn builtin_expand_macro1(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, true)? {
+            return if let Some(exp) = expand_macro(environment, &arg0, true, 0)? {
                 Ok(exp)
             } else {
                 Ok(arg0)
@@ -1627,8 +1622,8 @@ fn builtin_version(
             "version takes no arguments",
         ))
     } else {
-        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-            VERSION_STRING,
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            VERSION_STRING.into(),
         ))))
     }
 }
@@ -1775,7 +1770,9 @@ fn builtin_get_error(
                     environment.interner.intern(":error"),
                 ))));
                 let msg = format!("{}", err);
-                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg))));
+                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                    msg.into(),
+                ))));
                 environment.stack_on_error = old_err;
                 return Ok(Expression::with_list(v));
             }
@@ -1843,7 +1840,7 @@ fn make_doc(_environment: &mut Environment, exp: &Reference, key: &str) -> io::R
     }
     new_docs.push('\n');
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-        new_docs,
+        new_docs.into(),
     ))))
 }
 
@@ -1874,8 +1871,6 @@ fn get_doc(
                             if let Some(exp) = get_expression(environment, "*ns*") {
                                 match &exp.exp.get().data {
                                     ExpEnum::Atom(Atom::String(s)) => s.to_string(),
-                                    ExpEnum::Atom(Atom::StringRef(s)) => (*s).to_string(),
-                                    ExpEnum::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
                             } else {
@@ -1889,7 +1884,7 @@ fn get_doc(
                                 if let Some(exp) = scope.borrow().data.get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
                                         return Ok(Expression::alloc_data(ExpEnum::Atom(
-                                            Atom::String(doc_string.to_string()),
+                                            Atom::String(doc_string.to_string().into()),
                                         )));
                                     } else {
                                         return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1908,7 +1903,7 @@ fn get_doc(
                     if let Some(exp) = scope.borrow().data.get(key) {
                         if let Some(doc_string) = &exp.meta.doc_string {
                             return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                doc_string.to_string(),
+                                doc_string.to_string().into(),
                             ))));
                         } else {
                             return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -2100,8 +2095,8 @@ pub fn builtin_meta_file_name(
 ) -> io::Result<Expression> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
-            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(
-                meta.file,
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                meta.file.into(),
             ))))
         } else {
             Ok(Expression::alloc_data(ExpEnum::Nil))
@@ -2112,6 +2107,76 @@ pub fn builtin_meta_file_name(
             "meta-file-name: takes no arguments.",
         ))
     }
+}
+
+pub fn builtin_meta_add_tag(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        let exp = eval(environment, exp)?;
+        if let Some(tag) = args.next() {
+            if args.next().is_none() {
+                let tag = eval(environment, tag)?;
+                let tag_d = tag.get();
+                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
+                    let mut exp_d = exp.get_mut();
+                    if let Some(tags) = &mut exp_d.meta_tags {
+                        tags.insert(s);
+                    } else {
+                        let mut tags: HashSet<&'static str> = HashSet::new();
+                        tags.insert(s);
+                        exp_d.meta_tags = Some(tags);
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "meta-add-tag: Takes an expression and a tag (symbol)",
+                    ));
+                }
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "meta-add-tag: Takes an expression and a tag to add to it..",
+                ));
+            }
+        }
+    }
+    Ok(Expression::alloc_data(ExpEnum::Nil))
+}
+
+pub fn builtin_meta_tag_set(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        let exp = eval(environment, exp)?;
+        if let Some(tag) = args.next() {
+            if args.next().is_none() {
+                let tag = eval(environment, tag)?;
+                let tag_d = tag.get();
+                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
+                    let exp_d = exp.get();
+                    if let Some(tags) = &exp_d.meta_tags {
+                        if tags.contains(s) {
+                            return Ok(Expression::make_true());
+                        }
+                    }
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "meta-tag?: Takes an expression and a tag (symbol)",
+                    ));
+                }
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "meta-tag?: Takes an expression and a tag check for..",
+                ));
+            }
+        }
+    }
+    Ok(Expression::make_nil())
 }
 
 macro_rules! ensure_tonicity {
@@ -2223,6 +2288,23 @@ Example:
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("syscall"),
+        Expression::make_function(
+            builtin_syscall,
+            "Usage: (syscall system-command arg0 ... argN)
+
+Execute the provided system command with the supplied arguments.
+
+Section: core
+
+Example:
+(def 'test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
+(test::assert-equal \"syscall-test\" test-syscall-one)
 ",
             root,
         ),
@@ -2659,7 +2741,7 @@ Example:
 (test::assert-true (symbol? (to-symbol 55)))
 (test::assert-true (symbol? (to-symbol 55.0)))
 (test::assert-true (symbol? (to-symbol \"to-symbol-test-new-symbol\")))
-(test::assert-true (symbol? (to-symbol (str-buf \"to-symbol-test-new-symbol-buf\"))))
+(test::assert-true (symbol? (to-symbol (str \"to-symbol-test-new-symbol-buf\"))))
 (test::assert-true (symbol? (to-symbol 'test-to-symbol-sym)))
 (test::assert-true (symbol? (to-symbol (symbol-name 'test-to-symbol-sym))))
 ",
@@ -3353,6 +3435,48 @@ Section: core
 Example:
 ;(meta-file-name)
 t
+",
+            root,
+        ),
+    );
+
+    data.insert(
+        interner.intern("meta-add-tag"),
+        Expression::make_function(
+            builtin_meta_add_tag,
+            "Usage: (meta-add-tag expression tag)
+
+Adds a meta tag to expression.  This is intended for helping with structs and
+interfaces in lisp, you probably do not want to use it.
+
+Section: core
+
+Example:
+(def 'meta-add-tag-var '(1 2 3))
+(meta-add-tag meta-add-tag-var :tag1)
+(test::assert-true (meta-tag? meta-add-tag-var :tag1))
+(test::assert-false (meta-tag? meta-add-tag-var :tag2))
+",
+            root,
+        ),
+    );
+
+    data.insert(
+        interner.intern("meta-tag?"),
+        Expression::make_function(
+            builtin_meta_tag_set,
+            "Usage: (meta-tag? expression tag)
+
+True if expression has the meta tag 'tag' set.  This is intended for helping
+with structs and interfaces in lisp, you probably do not want to use it.
+
+Section: core
+
+Example:
+(def 'meta-add-tag-var '(1 2 3))
+(meta-add-tag meta-add-tag-var :tag1)
+(test::assert-true (meta-tag? meta-add-tag-var :tag1))
+(test::assert-false (meta-tag? meta-add-tag-var :tag2))
 ",
             root,
         ),

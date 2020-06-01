@@ -56,15 +56,15 @@ fn builtin_cd(
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
                         )?,
                         ExpEnum::Atom(Atom::Lambda(_)) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
                         )?,
                         ExpEnum::Atom(Atom::Macro(_)) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::StringRef(s))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
                         )?,
                         _ => eval(environment, &arg)?,
                     },
@@ -113,19 +113,6 @@ fn file_test(
                     match expand_tilde(&p) {
                         Some(p) => p,
                         None => p.to_string(), // XXX not great.
-                    }
-                }
-                ExpEnum::Atom(Atom::StringRef(p)) => {
-                    match expand_tilde(p) {
-                        Some(p) => p,
-                        None => (*p).to_string(), // XXX not great.
-                    }
-                }
-                ExpEnum::Atom(Atom::StringBuf(p)) => {
-                    let pb = p.borrow();
-                    match expand_tilde(&pb) {
-                        Some(p) => p,
-                        None => pb.to_string(), // XXX not great.
                     }
                 }
                 _ => {
@@ -386,8 +373,6 @@ fn builtin_glob(
     for pat in args {
         let pat = match &eval(environment, pat)?.get().data {
             ExpEnum::Atom(Atom::String(s)) => s.to_string(),
-            ExpEnum::Atom(Atom::StringRef(s)) => (*s).to_string(),
-            ExpEnum::Atom(Atom::StringBuf(s)) => s.borrow().to_string(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -406,7 +391,7 @@ fn builtin_glob(
                         Ok(p) => {
                             if let Some(p) = p.to_str() {
                                 files.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
-                                    p.to_string(),
+                                    p.to_string().into(),
                                 ))));
                             }
                         }

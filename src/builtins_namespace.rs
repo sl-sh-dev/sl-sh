@@ -28,9 +28,7 @@ fn builtin_ns_create(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
-                ExpEnum::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -73,9 +71,7 @@ fn builtin_ns_enter(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
-                ExpEnum::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -108,9 +104,7 @@ fn builtin_ns_exists(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::StringRef(s)) => s,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
-                ExpEnum::Atom(Atom::StringBuf(s)) => environment.interner.intern(&s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -138,7 +132,9 @@ fn builtin_ns_list(
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
-            ns_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::StringRef(ns))));
+            ns_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                (*ns).into(),
+            ))));
         }
         return Ok(Expression::with_list(ns_list));
     }
@@ -208,8 +204,6 @@ fn builtin_ns_symbols(
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
-                ExpEnum::Atom(Atom::StringRef(s)) => s,
-                ExpEnum::Atom(Atom::StringBuf(s)) => environment.interner.intern(&*s.borrow()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,

@@ -36,7 +36,7 @@
       (progn
           (def 'found nil)
           (for v seq (if (= v value) (set 'found t)))
-          (if (found) (progn (println (str value " found in " seq))(exit 3)))))
+          (if found (progn (println (str value " found in " seq))(exit 3)))))
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
@@ -56,7 +56,7 @@
               ;;(println "there aint no test")
              :no-test))))
 
-(ns-export '(assert-equal assert-true assert-false run-example))
+(ns-export '(assert-equal assert-not-equal assert-true assert-false run-example))
 
 (ns-pop)
 

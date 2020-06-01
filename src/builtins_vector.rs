@@ -463,7 +463,8 @@ Example:
             builtin_vec_nth,
             "Usage: (vec-nth index vector)
 
-Get the nth element (0 based) of a vector.
+Get the nth element (0 based) of a vector. If you need the equivalent operation
+on a list use [nth](root::nth).
 
 Section: vector
 
@@ -482,7 +483,8 @@ Example:
             builtin_vec_setnth,
             "Usage: (vec-setnth! index value vector)
 
-Set the nth index (0 based) of a vector to value.  This is destructive!
+Set the nth index (0 based) of a vector to value. This is destructive! If you
+need the equivalent operation on a list use [setnth!](root::setnth!).
 
 Section: vector
 

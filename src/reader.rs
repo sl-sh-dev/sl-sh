@@ -88,6 +88,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
                                 Expression::alloc(ExpObj {
                                     data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                     meta: exp_meta,
+                                    meta_tags: None,
                                 })
                                 .into(),
                             );
@@ -267,7 +268,7 @@ where
         }
     }
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-        symbol.clone(),
+        symbol.clone().into(),
     ))))
 }
 
@@ -697,7 +698,7 @@ mod tests {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {
-                    to_strs(output, exp);
+                    to_strs(output, &exp.into());
                 }
                 output.push(")".to_string());
             }
@@ -710,9 +711,9 @@ mod tests {
                     output.push(")".to_string());
                 } else {
                     output.push("(".to_string());
-                    to_strs(output, e1);
+                    to_strs(output, &e1.into());
                     output.push(".".to_string());
-                    to_strs(output, e2);
+                    to_strs(output, &e2.into());
                     output.push(")".to_string());
                 }
             }
