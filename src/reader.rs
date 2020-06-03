@@ -160,7 +160,7 @@ where
     }
 }
 
-fn end_symbol(ch: char) -> bool {
+fn end_symbol(ch: char, in_back_quote: bool) -> bool {
     if is_whitespace(ch) {
         true
     } else {
@@ -169,7 +169,7 @@ fn end_symbol(ch: char) -> bool {
             ')' => true,
             '#' => true,
             '"' => true,
-            ',' => true,
+            ',' if in_back_quote => true,
             '\'' => true,
             '`' => true,
             _ => false,
@@ -325,13 +325,14 @@ fn read_symbol<P>(
     line: &mut usize,
     column: &mut usize,
     for_ch: bool,
+    in_back_quote: bool,
 ) where
     P: PeekableIterator<Item = char>,
 {
     let mut has_peek;
     let mut push_next = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(*ch) && !for_ch {
+        if end_symbol(*ch, in_back_quote) && !for_ch {
             return;
         }
     };
@@ -359,7 +360,7 @@ fn read_symbol<P>(
         if push_next {
             buffer.push(chars.next().unwrap());
             push_next = false;
-        } else if end_symbol(peek_ch) {
+        } else if end_symbol(peek_ch, in_back_quote) {
             break;
         }
         next_ch = chars.next();
@@ -390,7 +391,7 @@ fn read_inner<P>(
     buffer: &mut String,
     line_col: (&mut usize, &mut usize),
     name: Option<&'static str>,
-    in_bquote: bool,
+    in_back_quote: bool,
 ) -> Result<bool, ParseError>
 where
     P: PeekableIterator<Item = char>,
@@ -452,13 +453,13 @@ where
                     buffer,
                     (line, column),
                     name,
-                    in_bquote,
+                    in_back_quote,
                 )?;
                 close_list(stack, get_meta(name, *line, *column))?;
             }
             '`' => {
                 let mut quoted = Vec::<Handle>::new();
-                if in_bquote {
+                if in_back_quote {
                     quoted.push(
                         Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                             environment.interner.intern("quote"),
@@ -468,7 +469,7 @@ where
                 } else {
                     quoted.push(
                         Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern("bquote"),
+                            environment.interner.intern("back-quote"),
                         )))
                         .handle_no_root(),
                     );
@@ -488,7 +489,7 @@ where
                 )?;
                 close_list(stack, get_meta(name, *line, *column))?;
             }
-            ',' => {
+            ',' if in_back_quote => {
                 read_next = true; // , always needs the symbol after
                 if peek_ch == '@' {
                     chars.next();
@@ -517,7 +518,7 @@ where
                     '|' => consume_block_comment(chars, line, column),
                     '\\' => {
                         buffer.clear();
-                        read_symbol(buffer, chars, line, column, true);
+                        read_symbol(buffer, chars, line, column, true, in_back_quote);
                         push_stack(stack, do_char(buffer, *line, *column)?, *line, *column)?;
                     }
                     '<' => {
@@ -569,7 +570,7 @@ where
             _ => {
                 buffer.clear();
                 buffer.push(ch);
-                read_symbol(buffer, chars, line, column, false);
+                read_symbol(buffer, chars, line, column, false, in_back_quote);
                 push_stack(stack, do_atom(environment, buffer), *line, *column)?;
             }
         }
@@ -868,7 +869,7 @@ mod tests {
         let tokens = tokenize(&mut environment, "`(1 2 ,3)", None);
         assert!(tokens.len() == 9);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:bquote");
+        assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "Int:2");
@@ -879,7 +880,7 @@ mod tests {
         let tokens = tokenize(&mut environment, "`(1 2 ,@3)", None);
         assert!(tokens.len() == 9);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:bquote");
+        assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "Int:2");
@@ -890,7 +891,7 @@ mod tests {
         let tokens = tokenize(&mut environment, "`(1 `2 ,@3)", None);
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:bquote");
+        assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "(");
@@ -904,7 +905,7 @@ mod tests {
         let tokens = tokenize(&mut environment, "`(1 `(2 ,x) ,@3)", None);
         assert!(tokens.len() == 16);
         assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:bquote");
+        assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "(");

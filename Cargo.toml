@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.8.61"
+version = "0.8.62"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 

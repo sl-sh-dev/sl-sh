@@ -2785,9 +2785,10 @@ Section: core
         interner.intern("quote"),
         Expression::make_special(
             builtin_quote,
-            "Usage: (quote expression) -> expression
+            "Usage: 'expression -> expression
 
-Return expression without evaluation.  The reader macro ' will expand to a quote form.
+Return expression without evaluation.
+The reader macro 'expression will expand to (quote expression).
 
 Section: core
 
@@ -2800,26 +2801,26 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("bquote"),
+        interner.intern("back-quote"),
         Expression::make_special(
             builtin_bquote,
-            "Usage: (bquote expression) -> expression
+            "Usage: `expression -> expression
 
-Return expression without evaluation.  The reader macro ` will expand to a bquote form.
+Return expression without evaluation.
+Always use the ` reader macro or expansion will not work
+(i.e. (back-quote expression) will not do , expansion).
 
-The bquote form (unlike quote) allows for symbol/form evaluation using , or ,@.
+Backquote (unlike quote) allows for symbol/form evaluation using , or ,@.
 
 Section: core
 
 Example:
-(test::assert-equal (list 1 2 3) (bquote (1 2 3)))
 (test::assert-equal (list 1 2 3) `(1 2 3))
-(test::assert-equal `(1 2 3) (bquote (1 2 3)))
 (test::assert-equal `(1 2 3) '(1 2 3))
 (def 'test-bquote-one 1)
 (def 'test-bquote-list '(1 2 3))
-(test::assert-equal (list 1 2 3) (bquote (,test-bquote-one 2 3)))
-(test::assert-equal (list 1 2 3) (bquote (,@test-bquote-list)))
+(test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
+(test::assert-equal (list 1 2 3) `(,@test-bquote-list))
 ",
             root,
         ),
