@@ -36,10 +36,10 @@ jobs:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
       run: |
           function log() {
-          	echo -e "\033[33;7m$1\033[0m $2"
+            echo -e "\033[33;7m$1\033[0m $2"
           }
           function elog() {
-          	echo -e "\033[31;7m$1\033[0m $2"
+            echo -e "\033[31;7m$1\033[0m $2"
           }
           if [ -z "$DOC_DEPLOY_KEY" ]
           then
@@ -57,10 +57,10 @@ jobs:
           log "Build docs"
           ../sl-sh docify.lisp index.markdown :lang
           if [[ $? != "0" ]]; then
-          	elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
-          	elog "docstrings printed as hashmap literals above and or errors. Run"
-          	elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
-          	exit 1;
+            elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
+            elog "docstrings printed as hashmap literals above and or errors. Run"
+            elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
+            exit 1;
           fi
           log "Push docs"
           git config --global user.email "docs@sl-sh.example.com"
@@ -77,6 +77,74 @@ jobs:
           rm -rf .git
           popd
           log "< Docs finished"
+    - name: AUR Build
+      env:
+          AUR_DEPLOY_KEY: ${{ secrets.AUR_DEPLOY_KEY }}
+      run: |
+          function log() {
+              echo -e "\033[33;7m$1\033[0m $2"
+          }
+          function elog() {
+              echo -e "\033[31;7m$1\033[0m $2"
+          }
+          if [ -z "$AUR_DEPLOY_KEY" ]
+          then
+            log "No deploy key is set to push PKGBUILD to AUR."
+            log "To fix this generate a ssh keypair (ie 'ssh-keygen -t ed25519')."
+            log "Install the public key in the aur maintainer account public"
+            log "key section and install the private key as a secret in the"
+            log "git repo with name 'AUR_DEPLOY_KEY'."
+            exit 0
+          fi
+          log "> AUR deploy started"
+          eval `ssh-agent -t 60 -s`
+          echo "$AUR_DEPLOY_KEY" | ssh-add -
+          pushd distribution/aur/
+          rm -rf .git
+          REPO=sl-sh-git
+          rm -rf ${REPO}
+
+          REMOTE="ssh://aur@aur.archlinux.org/${REPO}.git"
+          mkdir -p ~/.ssh/
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          git clone ${REMOTE}
+          log "Check version to see if PKGBUILD should be updated"
+
+          CURRENT_SL_SH_VERSION_DESC=$("../../target/release/sl-sh" -v)
+          SL_SH_VERSION=$("../../sl-sh" -v | tr -s " " | cut -d " " -f 2)
+          PKGBUILD_VERSION=$(cat ${REPO}/PKGBUILD | grep -i pkgver= | cut -d "=" -f 2)
+
+          echo "slsh version ${SL_SH_VERSION}"
+          echo "pkgbuild version ${PKGBUILD_VERSION}"
+          if [[ ${SL_SH_VERSION} = ${PKGBUILD_VERSION} ]]; then
+            log "sl-sh version not updated, not pushing to AUR."
+            exit 0
+          fi
+
+          # handy trick to make sure all new changes are seen as updates.
+          mv ${REPO}/.git .
+          sed -i "s/pkgver=VERSION/pkgver=${SL_SH_VERSION}/g" PKGBUILD
+
+          # must update .SRCINFO or aur users won't see update.
+          sed -i "s/pkgver = VERSION/pkgver = ${SL_SH_VERSION}/g" .SRCINFO
+          rm -rf ${REPO}
+
+          git config --global user.email "aur@sl-sh.example.com"
+          git config --global user.name "AUR CI"
+
+          git add --all && git commit -m "${CURRENT_SL_SH_VERSION_DESC}"
+          git push origin master
+          if [[ $? != "0" ]]; then
+            elog "Error pushing AUR build artifacts to the AUR make sure keys"
+            elog "are configured properly."
+            exit 1;
+          fi
+          # cleanup src repo
+          rm -rf .git
+          sed -i "s/pkgver=${SL_SH_VERSION}/pkgver=VERSION/g" PKGBUILD
+          rm .SRCINFO
+          popd
+          log "< AUR deploy finished"
     - name: Upload linux binary
       uses: actions/upload-artifact@v1
       with:

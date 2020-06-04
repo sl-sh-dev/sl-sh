@@ -22,6 +22,11 @@ These files contain the lisp code for the shell (anything from the tables below 
 
 * `cargo build --release`
 
+## Pre-built packages
+
+### Arch
+* sl-sh is in the AUR as `sl-sh-git`
+
 ## Tasks
 - [ ] file-io and idiomatic file iteration in sl-sh
 - [ ] better error reporting and debugging
