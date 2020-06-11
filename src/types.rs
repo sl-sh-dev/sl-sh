@@ -198,7 +198,7 @@ pub enum ExpEnum {
     Function(Callable),
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),
-    LazyFn(Lambda, Vec<Handle>),
+    LazyFn(Handle, Vec<Handle>),
     Nil,
 }
 
@@ -281,8 +281,7 @@ impl Trace for ExpEnum {
             }
             Self::HashMap(map) => map.trace(tracer),
             Self::LazyFn(lambda, exp) => {
-                lambda.params.trace(tracer);
-                lambda.body.trace(tracer);
+                lambda.trace(tracer);
                 exp.trace(tracer);
             }
             Self::Atom(Atom::Lambda(lambda)) => {
@@ -406,8 +405,8 @@ impl Expression {
     pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
         let self_d = self.get();
         if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
-            let ib = &mut Box::new(ListIter::new_list(parts));
-            let res = call_lambda(environment, &lambda, ib, false)?;
+            let ib = &mut ListIter::new_list(parts);
+            let res = call_lambda(environment, lambda.clone().into(), ib, false)?;
             drop(self_d);
             res.resolve(environment)
         //let res = res.resolve(environment)?;

@@ -14,10 +14,16 @@ use crate::types::*;
 
 pub fn call_lambda(
     environment: &mut Environment,
-    lambda: &Lambda,
+    lambda_exp: Expression,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> io::Result<Expression> {
+    let lambda_d = lambda_exp.get();
+    let lambda = if let ExpEnum::Atom(Atom::Lambda(l)) = &lambda_d.data {
+        l
+    } else {
+        return Err(io::Error::new(io::ErrorKind::Other, "Lambda required."));
+    };
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let mut body: Expression = lambda.body.clone_root().into();
@@ -34,6 +40,7 @@ pub fn call_lambda(
         return Err(err);
     }
     environment.current_scope.push(new_scope);
+    set_expression_current(environment, "this-fn", None, lambda_exp.clone());
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     let mut lambda; // = lambda;
@@ -65,7 +72,7 @@ pub fn call_lambda(
                         "Called recur in a non-tail position.",
                     ));
                 }
-                let mut ib = Box::new(ListIter::new_list(&new_args));
+                let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
                     environment.current_scope.pop();
                     return Err(err);
@@ -73,23 +80,28 @@ pub fn call_lambda(
             }
         } else if environment.exit_code.is_none() {
             if let ExpEnum::LazyFn(lam, parts) = &last_eval.get().data {
-                lambda_int = lam.clone();
-                lambda = &mut lambda_int;
-                body = lambda.body.clone_root().into();
-                params = lambda.params.clone_root().into();
-                looping = true;
-                environment.current_scope.pop();
-                // scope is popped so can use ? now.
-                let new_scope = build_new_scope(Some(lambda.capture.clone()));
-                let mut ib = Box::new(ListIter::new_list(&parts));
-                setup_args(
-                    environment,
-                    Some(&mut new_scope.borrow_mut()),
-                    &params,
-                    &mut ib,
-                    false,
-                )?;
-                environment.current_scope.push(new_scope);
+                let lam_han: Expression = lam.into();
+                let lam_d = lam_han.get();
+                if let ExpEnum::Atom(Atom::Lambda(lam)) = &lam_d.data {
+                    lambda_int = lam.clone();
+                    lambda = &mut lambda_int;
+                    body = lambda.body.clone_root().into();
+                    params = lambda.params.clone_root().into();
+                    looping = true;
+                    environment.current_scope.pop();
+                    // scope is popped so can use ? now.
+                    let new_scope = build_new_scope(Some(lambda.capture.clone()));
+                    let mut ib = ListIter::new_list(&parts);
+                    setup_args(
+                        environment,
+                        Some(&mut new_scope.borrow_mut()),
+                        &params,
+                        &mut ib,
+                        false,
+                    )?;
+                    environment.current_scope.push(new_scope);
+                    set_expression_current(environment, "this-fn", None, lam_han.clone());
+                }
             }
         }
         llast_eval = Some(last_eval);
@@ -154,11 +166,11 @@ pub fn fn_call(
             if let Some(exp) = get_expression(environment, command) {
                 match exp.exp.get().data.clone() {
                     ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
-                    ExpEnum::Atom(Atom::Lambda(f)) => {
+                    ExpEnum::Atom(Atom::Lambda(_)) => {
                         if environment.allow_lazy_fn {
-                            make_lazy(environment, &f, args)
+                            make_lazy(environment, exp.exp.clone(), args)
                         } else {
-                            call_lambda(environment, &f, args, true)
+                            call_lambda(environment, exp.exp.clone(), args, true)
                         }
                     }
                     _ => {
@@ -177,11 +189,11 @@ pub fn fn_call(
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
-        ExpEnum::Atom(Atom::Lambda(l)) => {
+        ExpEnum::Atom(Atom::Lambda(_)) => {
             if environment.allow_lazy_fn {
-                make_lazy(environment, &l, args)
+                make_lazy(environment, command.clone(), args)
             } else {
-                call_lambda(environment, &l, args, true)
+                call_lambda(environment, command.clone(), args, true)
             }
         }
         ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, args),
@@ -199,7 +211,7 @@ pub fn fn_call(
 
 fn make_lazy(
     environment: &mut Environment,
-    lambda: &Lambda,
+    lambda: Expression,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     let mut parms: Vec<Handle> = Vec::new();
@@ -207,7 +219,7 @@ fn make_lazy(
         parms.push(eval(environment, p)?.into());
     }
     Ok(Expression::alloc(ExpObj {
-        data: ExpEnum::LazyFn(lambda.clone(), parms),
+        data: ExpEnum::LazyFn(lambda.into(), parms),
         meta: None,
         meta_tags: None,
     }))
@@ -267,11 +279,11 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             if let Some(exp) = form {
                 match &exp.exp.get().data {
                     ExpEnum::Function(c) if allow_form => (c.func)(environment, &mut parts),
-                    ExpEnum::Atom(Atom::Lambda(f)) if allow_form => {
+                    ExpEnum::Atom(Atom::Lambda(_)) if allow_form => {
                         if environment.allow_lazy_fn {
-                            make_lazy(environment, &f, &mut parts)
+                            make_lazy(environment, exp.exp.clone(), &mut parts)
                         } else {
-                            call_lambda(environment, &f, &mut parts, true)
+                            call_lambda(environment, exp.exp.clone(), &mut parts, true)
                         }
                     }
                     ExpEnum::Atom(Atom::Macro(m)) if allow_form => {
@@ -320,11 +332,11 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let com_exp = eval(environment, &command)?;
             let com_exp_d = com_exp.get();
             match &com_exp_d.data {
-                ExpEnum::Atom(Atom::Lambda(l)) => {
+                ExpEnum::Atom(Atom::Lambda(_)) => {
                     if environment.allow_lazy_fn {
-                        make_lazy(environment, &l, &mut parts)
+                        make_lazy(environment, com_exp.clone(), &mut parts)
                     } else {
-                        call_lambda(environment, &l, &mut parts, true)
+                        call_lambda(environment, com_exp.clone(), &mut parts, true)
                     }
                 }
                 ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
@@ -347,11 +359,11 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let com_exp = eval(environment, &command)?;
             let com_exp_d = com_exp.get();
             match &com_exp_d.data {
-                ExpEnum::Atom(Atom::Lambda(l)) => {
+                ExpEnum::Atom(Atom::Lambda(_)) => {
                     if environment.allow_lazy_fn {
-                        make_lazy(environment, &l, &mut parts)
+                        make_lazy(environment, com_exp.clone(), &mut parts)
                     } else {
-                        call_lambda(environment, &l, &mut parts, true)
+                        call_lambda(environment, com_exp.clone(), &mut parts, true)
                     }
                 }
                 ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
@@ -369,11 +381,11 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 }
             }
         }
-        ExpEnum::Atom(Atom::Lambda(l)) => {
+        ExpEnum::Atom(Atom::Lambda(_)) => {
             if environment.allow_lazy_fn {
-                make_lazy(environment, &l, &mut parts)
+                make_lazy(environment, command.clone(), &mut parts)
             } else {
-                call_lambda(environment, &l, &mut parts, true)
+                call_lambda(environment, command.clone(), &mut parts, true)
             }
         }
         ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),

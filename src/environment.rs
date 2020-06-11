@@ -528,14 +528,14 @@ pub fn set_expression_current_ref(
     current_scope.data.insert(key, reference);
 }
 
-pub fn remove_expression_current(environment: &mut Environment, key: &str) {
+pub fn remove_expression_current(environment: &mut Environment, key: &str) -> Option<Reference> {
     environment
         .current_scope
         .last()
         .unwrap() // Always has at least root scope unless horribly broken.
         .borrow_mut()
         .data
-        .remove(key);
+        .remove(key)
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {

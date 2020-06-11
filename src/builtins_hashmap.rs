@@ -153,17 +153,29 @@ fn builtin_hash_get(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    fn do_get(map: &HashMap<String, Handle>, sym: &str) -> io::Result<Expression> {
+    fn do_get(
+        environment: &mut Environment,
+        map: &HashMap<String, Handle>,
+        sym: &str,
+        default: Option<Expression>,
+    ) -> io::Result<Expression> {
         let old = map.get(sym);
         if let Some(old) = old {
             let old: Expression = old.into();
             Ok(old)
+        } else if let Some(exp) = default {
+            eval(environment, exp)
         } else {
             Ok(Expression::make_nil())
         }
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
+            let default = if let Some(default) = args.next() {
+                Some(default)
+            } else {
+                None
+            };
             if args.next().is_none() {
                 let map = eval(environment, map)?;
                 let key = eval(environment, key)?;
@@ -171,15 +183,15 @@ fn builtin_hash_get(
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
                         ExpEnum::Atom(Atom::Symbol(sym)) => {
-                            return do_get(map, sym);
+                            return do_get(environment, map, sym, default);
                         }
                         ExpEnum::Atom(Atom::String(s)) => {
-                            return do_get(map, &s);
+                            return do_get(environment, map, &s, default);
                         }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
-                                "hash-get key can only be a symbol or string",
+                                "hash-get: key can only be a symbol or string",
                             ));
                         }
                     }
@@ -189,7 +201,7 @@ fn builtin_hash_get(
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "hash-get takes a hashmap and key to get",
+        "hash-get: takes a hashmap and key to get and optional default value",
     ))
 }
 
@@ -391,11 +403,13 @@ Example:
     );
     data.insert(
         interner.intern("hash-get"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_hash_get,
-            "Usage: (hash-get hashmap key)
+            "Usage: (hash-get hashmap key default?) -> value
 
-Get a value for a key from a hashmap.
+Get a value for a key from a hashmap.  If the optional default is provided and
+the key is not in the hash then evaluate and return it.
+NOTE: default will only be evaluted if it is used.
 
 Section: hashmap
 
@@ -405,6 +419,8 @@ Example:
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal \"default\" (hash-get tst-hash :not-here \"default\"))
+(test::assert-equal \"string default\" (hash-get tst-hash :not-here (str \"string \" \"default\")))
 ",
             root,
         ),

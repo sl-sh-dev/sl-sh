@@ -111,7 +111,13 @@ fn builtin_apply(
             }
         };
         for a in itr {
-            call_list.push(a.into());
+            let b = ExpEnum::Pair(
+                Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                    environment.interner.intern("quote"),
+                ))),
+                Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
+            );
+            call_list.push(Expression::alloc_data_h(b));
         }
     }
     let mut args = box_slice_it(&call_list[..]);
@@ -346,22 +352,26 @@ fn builtin_if(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    if let Some(if_form) = args.next() {
-        if let Some(then_form) = args.next() {
-            return if eval(environment, if_form)?.is_nil() {
-                if let Some(else_form) = args.next() {
-                    eval_nr(environment, else_form)
-                } else {
-                    Ok(Expression::alloc_data(ExpEnum::Nil))
-                }
+    let mut next_arg = args.next();
+    while let Some(arg) = next_arg {
+        let cond = eval(environment, arg)?;
+        if cond.is_nil() {
+            args.next();
+        } else {
+            return if let Some(result) = args.next() {
+                eval_nr(environment, result)
             } else {
-                eval_nr(environment, then_form)
+                Ok(cond)
             };
+        }
+        next_arg = args.next();
+        if next_arg.is_none() {
+            return Ok(cond);
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "if needs exactly two or three expressions",
+        "if: requires expressions",
     ))
 }
 
@@ -820,14 +830,18 @@ fn builtin_undef(
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
             if let ExpEnum::Atom(Atom::Symbol(k)) = key_d {
-                remove_expression_current(environment, &k);
-                return Ok(Expression::alloc_data(ExpEnum::Nil));
+                return if let Some(rexp) = remove_expression_current(environment, &k) {
+                    Ok(rexp.exp)
+                } else {
+                    let msg = format!("undef: symbol {} not defined in current scope (can only undef symbols in current scope).", k);
+                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                };
             }
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "undef can only have one expression (symbol)",
+        "undef: can only have one expression (symbol)",
     ))
 }
 
@@ -2109,36 +2123,53 @@ pub fn builtin_meta_file_name(
     }
 }
 
-pub fn builtin_meta_add_tag(
+pub fn builtin_meta_add_tags(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
+    fn put_tag(exp: &Expression, tag: Expression) -> io::Result<()> {
+        if let ExpEnum::Atom(Atom::Symbol(s)) = &tag.get().data {
+            let mut exp_d = exp.get_mut();
+            if let Some(tags) = &mut exp_d.meta_tags {
+                tags.insert(s);
+            } else {
+                let mut tags: HashSet<&'static str> = HashSet::new();
+                tags.insert(s);
+                exp_d.meta_tags = Some(tags);
+            }
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "meta-add-tags: Found a non-symbol!",
+            ));
+        }
+        Ok(())
+    }
     if let Some(exp) = args.next() {
         let exp = eval(environment, exp)?;
-        if let Some(tag) = args.next() {
-            if args.next().is_none() {
-                let tag = eval(environment, tag)?;
-                let tag_d = tag.get();
-                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
-                    let mut exp_d = exp.get_mut();
-                    if let Some(tags) = &mut exp_d.meta_tags {
-                        tags.insert(s);
-                    } else {
-                        let mut tags: HashSet<&'static str> = HashSet::new();
-                        tags.insert(s);
-                        exp_d.meta_tags = Some(tags);
+        for arg in args {
+            let arg = eval(environment, arg)?;
+            let arg_d = arg.get();
+            match &arg_d.data {
+                ExpEnum::Pair(_, _) => {
+                    for tag in arg.iter() {
+                        put_tag(&exp, tag)?;
                     }
-                } else {
+                }
+                ExpEnum::Vector(v) => {
+                    for tag in v {
+                        put_tag(&exp, tag.into())?;
+                    }
+                }
+                ExpEnum::Atom(Atom::Symbol(_)) => {
+                    put_tag(&exp, arg.clone())?;
+                }
+                _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "meta-add-tag: Takes an expression and a tag (symbol)",
+                        "meta-add-tags: Takes an expression and symbols, vectors or lists of tags (symbols)",
                     ));
                 }
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "meta-add-tag: Takes an expression and a tag to add to it..",
-                ));
             }
         }
     }
@@ -2340,7 +2371,7 @@ Section: core
 
 Example:
 (def 'test-apply-one nil)
-(apply set '('test-apply-one \"ONE\"))
+(apply set '(test-apply-one \"ONE\"))
 (test::assert-equal \"ONE\" test-apply-one)
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
@@ -2450,9 +2481,12 @@ Example:
         interner.intern("if"),
         Expression::make_special(
             builtin_if,
-            "Usage: (if condition then-form else-form?) -> [evaled form result]
+            "Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]
 
-If then else conditional.
+If conditional.  Will evaluate p1 and if true (i.e. not nil) then return the
+evaluation of a1, if nil evaluate p2 and so on.  On an odd number of arguments
+(an is missing) then evaluate and return pn.  Return nil if no predicate is
+true.  This degenerates into the traditional (if predicate then-form else-form).
 
 Section: conditional
 
@@ -2470,6 +2504,16 @@ Example:
     (if nil \"TWO2 TRUE\"))
 (test::assert-equal \"ONE2 TRUE\" test-if-one2)
 (test::assert-equal nil test-if-two2)
+
+(def 'test-if-one2
+    (if nil \"ONE FALSE\" t \"ONE TRUE\" t \"ONE TRUE2\"))
+(def 'test-if-two2
+    (if nil \"TWO TRUE\" nil \"TWO FALSE\" t \"TWO TRUE2\"))
+(def 'test-if-three2
+    (if nil \"THREE TRUE\" nil \"THREE FALSE\" \"THREE DEFAULT\"))
+(test::assert-equal \"ONE TRUE\" test-if-one2)
+(test::assert-equal \"TWO TRUE2\" test-if-two2)
+(test::assert-equal \"THREE DEFAULT\" test-if-three2)
 ",
             root,
         ),
@@ -2685,9 +2729,10 @@ Example:
         interner.intern("undef"),
         Expression::make_function(
             builtin_undef,
-            "Usage: (undef symbol)
+            "Usage: (undef symbol) -> expression
 
-Remove a symbol from the current scope (if it exists).
+Remove a symbol from the current scope (if it exists).  Returns the expression
+that was removed.  It is an error if symbol is not defined in the current scope.
 
 Section: core
 
@@ -2696,6 +2741,10 @@ Example:
 (test::assert-true (def? 'test-undef))
 (undef 'test-undef)
 (test::assert-false (def? 'test-undef))
+(def 'test-undef \"undef\")
+(test::assert-equal \"undef\" (undef 'test-undef))
+(test::assert-false (def? 'test-undef))
+(test::assert-equal '#(:error \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\") (get-error (undef 'test-undef)))
 ",
             root,
         ),
@@ -2959,7 +3008,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro (defq xx \"value\")))
+(test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
 (test::assert-equal '(
     (fn
         #(i)
@@ -2993,7 +3042,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro1 (defq xx \"value\")))
+(test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
 (test::assert-equal '(core::let
     ((i))
     (if
@@ -3025,7 +3074,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(apply def 'xx '#(\"value\")) (expand-macro-all (defq xx \"value\")))
+(test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
 (test::assert-equal '(
     (fn
         #(i)
@@ -3036,7 +3085,7 @@ Example:
                     (fn
                         (plist)
                         (progn
-                            (apply set 'i '#((core::first plist))) nil
+                            (set 'i (core::first plist)) nil
                             (if
                                 (> (length plist) 1)
                                 (recur (core::rest plist)))))
@@ -3442,21 +3491,30 @@ t
     );
 
     data.insert(
-        interner.intern("meta-add-tag"),
+        interner.intern("meta-add-tags"),
         Expression::make_function(
-            builtin_meta_add_tag,
-            "Usage: (meta-add-tag expression tag)
+            builtin_meta_add_tags,
+            "Usage: (meta-add-tags expression tag*)
 
-Adds a meta tag to expression.  This is intended for helping with structs and
-interfaces in lisp, you probably do not want to use it.
+Adds multiple meta tags to an expression (see meta-add-tag).  It will work with 
+symbols or vectors or lists of symbols (or any combination).
+This is intended for helping with structs and interfaces in lisp, you probably
+do not want to use it.
 
 Section: core
 
 Example:
-(def 'meta-add-tag-var '(1 2 3))
-(meta-add-tag meta-add-tag-var :tag1)
-(test::assert-true (meta-tag? meta-add-tag-var :tag1))
-(test::assert-false (meta-tag? meta-add-tag-var :tag2))
+(def 'meta-add-tags-var '(1 2 3))
+(meta-add-tags meta-add-tags-var :tag1)
+(test::assert-true (meta-tag? meta-add-tags-var :tag1))
+(test::assert-false (meta-tag? meta-add-tags-var :tag2))
+(meta-add-tags meta-add-tags-var :tag2 '(:tag3 :tag4) '#(:tag5 :tag6) :tag7)
+(test::assert-true (meta-tag? meta-add-tags-var :tag2))
+(test::assert-true (meta-tag? meta-add-tags-var :tag3))
+(test::assert-true (meta-tag? meta-add-tags-var :tag4))
+(test::assert-true (meta-tag? meta-add-tags-var :tag5))
+(test::assert-true (meta-tag? meta-add-tags-var :tag6))
+(test::assert-true (meta-tag? meta-add-tags-var :tag7))
 ",
             root,
         ),
@@ -3475,7 +3533,7 @@ Section: core
 
 Example:
 (def 'meta-add-tag-var '(1 2 3))
-(meta-add-tag meta-add-tag-var :tag1)
+(meta-add-tags meta-add-tag-var :tag1)
 (test::assert-true (meta-tag? meta-add-tag-var :tag1))
 (test::assert-false (meta-tag? meta-add-tag-var :tag2))
 ",

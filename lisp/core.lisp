@@ -65,8 +65,8 @@ Section: namespace"
 		(def 'import (make-vec 2 1))
 		(core::for sym (eval (to-symbol (str ,namespace "::*ns-exports*")))
 		(progn
-			(vec-setnth! 0 '(to-symbol (str "ns::" sym)) import)
-			(vec-setnth! 1 (to-symbol (str ,namespace "::" sym)) import)
+			(vec-setnth! 0 (to-symbol (str "ns::" sym)) import)
+			(vec-setnth! 1 (eval (to-symbol (str ,namespace "::" sym))) import)
 			(apply def import)))))))
 
 (defmacro setq
@@ -77,7 +77,7 @@ Set an expession to a quoted symbol (ie set 'sym bind)
 Section: core
 "
 	(sym &rest args)
-	`(apply set ',sym ',args))
+	`(set ',sym ,@args))
 
 (defmacro defq
 "Usage: (defq sym doc-string? expression) -> expression
@@ -86,7 +86,7 @@ Binds an expession to a quoted symbol (ie def 'sym bind)
 
 Section: core"
 	(sym &rest args)
-	`(apply def ',sym ',args))
+	`(def ',sym ,@args))
 
 (defmacro defn
 "
