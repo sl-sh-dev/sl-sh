@@ -10,6 +10,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::gc::*;
 use crate::process::*;
+use crate::reader::read;
 use crate::types::*;
 
 pub fn call_lambda(
@@ -295,7 +296,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                     _ => {
                         if command.starts_with('$') {
                             if let ExpEnum::Atom(Atom::String(command)) =
-                                &str_process(environment, command).get().data
+                                &str_process(environment, command, true)?.get().data
                             {
                                 do_command(environment, &command, &mut parts)
                             } else {
@@ -310,7 +311,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             } else if allow_sys_com {
                 if command.starts_with('$') {
                     if let ExpEnum::Atom(Atom::String(command)) =
-                        &str_process(environment, command).get().data
+                        &str_process(environment, command, true)?.get().data
                     {
                         do_command(environment, &command, &mut parts)
                     } else {
@@ -404,23 +405,71 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
     }
 }
 
-fn str_process(environment: &mut Environment, string: &str) -> Expression {
-    if !environment.str_ignore_expand && string.contains('$') {
+fn str_process(
+    environment: &mut Environment,
+    string: &str,
+    expand: bool,
+) -> io::Result<Expression> {
+    if expand && !environment.str_ignore_expand && string.contains('$') {
         let mut new_string = String::new();
         let mut last_ch = '\0';
         let mut in_var = false;
+        let mut in_command = false;
+        let mut command_depth: i32 = 0;
         let mut var_start = 0;
         for (i, ch) in string.chars().enumerate() {
             if in_var {
-                if ch == ' ' || ch == '"' || (ch == '$' && last_ch != '\\') {
+                if ch == '(' && var_start + 1 == i {
+                    in_command = true;
                     in_var = false;
-                    match env::var(&string[var_start + 1..i]) {
-                        Ok(val) => new_string.push_str(&val),
-                        Err(_) => new_string.push_str(""),
+                    command_depth = 1;
+                } else {
+                    if ch == ' ' || ch == '"' || ch == ':' || (ch == '$' && last_ch != '\\') {
+                        in_var = false;
+                        match env::var(&string[var_start + 1..i]) {
+                            Ok(val) => new_string.push_str(&val),
+                            Err(_) => new_string.push_str(""),
+                        }
+                    }
+                    if ch == ' ' || ch == '"' || ch == ':' {
+                        new_string.push(ch);
                     }
                 }
-                if ch == ' ' || ch == '"' {
-                    new_string.push(ch);
+            } else if in_command {
+                if ch == ')' && last_ch != '\\' {
+                    command_depth -= 1;
+                }
+                if command_depth == 0 {
+                    in_command = false;
+                    let ast = read(environment, &string[var_start + 1..=i], None);
+                    match ast {
+                        Ok(ast) => {
+                            environment.loose_symbols = true;
+                            let old_out = environment.state.stdout_status.clone();
+                            let old_err = environment.state.stderr_status.clone();
+                            environment.state.stdout_status = Some(IOState::Pipe);
+                            environment.state.stderr_status = Some(IOState::Pipe);
+
+                            // Get out of a pipe for the str call if in one...
+                            let data_in = environment.data_in.clone();
+                            environment.data_in = None;
+                            let in_pipe = environment.in_pipe;
+                            environment.in_pipe = false;
+                            let pipe_pgid = environment.state.pipe_pgid;
+                            environment.state.pipe_pgid = None;
+                            new_string
+                                .push_str(eval(environment, ast)?.as_string(environment)?.trim());
+                            environment.state.stdout_status = old_out;
+                            environment.state.stderr_status = old_err;
+                            environment.data_in = data_in;
+                            environment.in_pipe = in_pipe;
+                            environment.state.pipe_pgid = pipe_pgid;
+                            environment.loose_symbols = false;
+                        }
+                        Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                    }
+                } else if ch == '(' && last_ch != '\\' {
+                    command_depth += 1;
                 }
             } else if ch == '$' && last_ch != '\\' {
                 in_var = true;
@@ -439,19 +488,29 @@ fn str_process(environment: &mut Environment, string: &str) -> Expression {
                 Err(_) => new_string.push_str(""),
             }
         }
+        if in_command {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Malformed command embedded in string (missing ')'?).",
+            ));
+        }
         if environment.interner.contains(&new_string) {
-            Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 environment.interner.intern(&new_string).into(),
-            )))
+            ))))
         } else {
-            Expression::alloc_data(ExpEnum::Atom(Atom::String(new_string.into())))
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                new_string.into(),
+            ))))
         }
     } else if environment.interner.contains(string) {
-        Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
             environment.interner.intern(string).into(),
-        )))
+        ))))
     } else {
-        Expression::alloc_data(ExpEnum::Atom(Atom::String(string.to_string().into())))
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            string.to_string().into(),
+        ))))
     }
 }
 
@@ -543,14 +602,14 @@ fn internal_eval(
                 let exp = &exp.exp;
                 Ok(exp.clone())
             } else if environment.loose_symbols {
-                Ok(str_process(environment, s))
+                str_process(environment, s, false)
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(io::Error::new(io::ErrorKind::Other, msg))
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
-        ExpEnum::Atom(Atom::String(string)) => Ok(str_process(environment, &string)),
+        ExpEnum::Atom(Atom::String(string)) => str_process(environment, &string, true),
         ExpEnum::Atom(_) => Ok(expression.clone()),
         ExpEnum::Function(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
         ExpEnum::Process(_) => Ok(expression.clone()),
