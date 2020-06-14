@@ -2753,7 +2753,7 @@ Example:
         interner.intern("dyn"),
         Expression::make_function(
             builtin_dyn,
-            "Usage: (dyn key value expression) -> nil
+            "Usage: (dyn key value expression) -> result_of_expression
 
 Creates a dynamic binding for key, assigns value to it and evals expression under it.
 
@@ -2761,7 +2761,8 @@ The binding is gone once the dyn form ends. The binding will take precedence ove
 any other binding in any scope with that name for any form that evaluates as a
 result of the dynamic binding (for instance creating a dynamic binding for
 *stdout* will cause all output to stdout to use the new binding in any print's
-used indirectly).
+used indirectly).  Calls to dyn can be nested and previous dynamic values will
+be restored as interior dyn's exit.
 
 Section: core
 
