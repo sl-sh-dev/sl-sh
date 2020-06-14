@@ -16,11 +16,20 @@ See the file slshrc.example (at least look at this one), lisp/slshrc (this is th
 or the contrib directory for example configs (contrib/gpwclark/ contains an example of using bash
 completions with sl-sh as well as other handy things).  The other files in lisp/ are also built
 into the binary but versions can be copied to \~/.config/sl-sh and those will be used instead.
-These files contain the lisp code for the shell (anything from the tables below that is not builtin).
+These files contain the lisp code for the shell.
 
 ## Building
 
-* `cargo build --release`
+With rust installed:
+```cargo build --release```
+
+Without rust but with docker (from within the sl-sh directory):
+```docker run --rm --net host --user "$(id -u):$(id -g)" -v "$PWD:/usr/src/sl-sh" -w /usr/src/sl-sh rust:alpine cargo build --release```
+
+Either command will leave you with a binary ```target/release/sl-sh``` that will run the shell.
+The above docker command will produce a completely static binary while compiling with rust will
+be linked to you systems libc.  You can use the musl target with cargo to produce a static binary
+with an installed rust.
 
 ## Pre-built packages
 
