@@ -25,8 +25,8 @@
 
 (defn __completion_hook (&rest args)
 	(match (first args)
-		("cd" 'path)
-		(nil 'default)))
+		("cd" :path)
+		(nil :default)))
 
 (endfix-on)
 

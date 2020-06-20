@@ -64,9 +64,9 @@ prompt in sl-sh would simply be:
 sl-sh offers two "hooks" for intercepting commands being executed:
 `__completion_hook` and `__exec_hook`.
 - `__completion_hook` is used to aid in tab completions. It takes a varargs and
-expects a list of string to be returned. For convenience 'path and 'default
-are also allowable return values. 'path represents the list of paths and
-'default is 'path concatenated with all valid sl-sh forms.
+expects a list of string to be returned. For convenience :path and :default
+are also allowable return values. :path represents the list of paths and
+:default is :path concatenated with all valid sl-sh forms.
 - `__exec_hook` is an intercept function for every command sent to sl-sh. The
 function takes a string and expects a string or list to be returned. The string
 returned will be evaluated as a sl-sh form and a list will just be evaluated.

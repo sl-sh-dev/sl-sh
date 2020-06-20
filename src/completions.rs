@@ -112,7 +112,7 @@ impl ShellCompleter {
                     Expression::with_list(v)
                 }
                 _ => {
-                    eprintln!("WARNING: __completion_hook not a function, ignoring.");
+                    eprintln!("WARNING: __completion_hook not a function, ignoring.\n");
                     return HookResult::Default;
                 }
             };
@@ -120,11 +120,11 @@ impl ShellCompleter {
             match eval(envir, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Atom(Atom::String(s)) => match s.as_ref() {
-                            "path" => HookResult::Path,
-                            "default" => HookResult::Default,
+                        ExpEnum::Atom(Atom::Symbol(s)) => match s.as_ref() {
+                            ":path" => HookResult::Path,
+                            ":default" => HookResult::Default,
                             _ => {
-                                eprintln!("ERROR: unknown completion hook command, {}", s);
+                                eprintln!("ERROR: unknown completion hook command, {}\n", s);
                                 HookResult::Default
                             }
                         },
@@ -153,13 +153,13 @@ impl ShellCompleter {
                         }
                         ExpEnum::Nil => HookResult::Default,
                         _ => {
-                            eprintln!("WARNING: unexpected result from __completion_hook, {:?}, ignoring.", res);
+                            eprintln!("WARNING: unexpected result from __completion_hook, {}, ignoring.\n", res);
                             HookResult::Default
                         }
                     }
                 }
                 Err(err) => {
-                    eprintln!("ERROR calling __completion_hook: {}", err);
+                    eprintln!("ERROR calling __completion_hook: {}\n", err);
                     HookResult::Default
                 }
             }
