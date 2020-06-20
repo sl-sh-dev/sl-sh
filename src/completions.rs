@@ -120,7 +120,7 @@ impl ShellCompleter {
             match eval(envir, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Atom(Atom::Symbol(s)) => match s.as_ref() {
+                        ExpEnum::Atom(Atom::Symbol(s)) => match *s {
                             ":path" => HookResult::Path,
                             ":default" => HookResult::Default,
                             _ => {
