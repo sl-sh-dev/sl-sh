@@ -1,5 +1,5 @@
 (if (ns-exists? 'test) (ns-enter 'test) (ns-create 'test))
-(core::ns-import 'core)
+;(ns-import 'core)
 
 (defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))

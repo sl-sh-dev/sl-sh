@@ -1,6 +1,6 @@
 #!./target/debug/sl-sh
 
-(core::ns-import 'core)
+(ns-import 'core)
 (ns-import 'shell)
 (load "tests/test.lisp")
 (ns-import 'test)

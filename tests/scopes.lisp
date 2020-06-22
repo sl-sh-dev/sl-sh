@@ -1,4 +1,3 @@
-(core::ns-import 'core)
 (ns-import 'test)
 
 (defq inc_count nil)

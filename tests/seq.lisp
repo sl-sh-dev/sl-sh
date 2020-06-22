@@ -9,7 +9,7 @@
 Some stuff
 |#
 
-(core::ns-import 'core)
+(ns-import 'core)
 (ns-import 'test)
 
 (let ((non-empty-vec (vec 'a))

@@ -509,7 +509,7 @@ Section: type
 
 Example:
 (test::assert-true (lambda? (fn () ())))
-(test::assert-true (lambda? copy-seq))
+(test::assert-true (lambda? caar))
 (test::assert-false (lambda? 1))
 (test::assert-false (lambda? if))
 ",
@@ -591,7 +591,7 @@ Example:
 (test::assert-true (builtin? type))
 (test::assert-true (builtin? if))
 (test::assert-false (builtin? (fn () ())))
-(test::assert-false (builtin? copy-seq))
+(test::assert-false (builtin? caar))
 (test::assert-false (builtin? 1))
 ",
             root,
@@ -610,7 +610,7 @@ Section: type
 Example:
 (test::assert-true (process? (true)))
 (test::assert-false (process? (fn () ())))
-(test::assert-false (process? copy-seq))
+(test::assert-false (process? caar))
 (test::assert-false (process? 1))
 ",
             root,
@@ -629,7 +629,7 @@ Section: type
 Example:
 (test::assert-true (file? (open :stdout)))
 (test::assert-false (file? (fn () ())))
-(test::assert-false (file? copy-seq))
+(test::assert-false (file? caar))
 (test::assert-false (file? 1))
 ",
             root,

@@ -1,4 +1,5 @@
 ;;; Forms that work with sequences (list or vectors).
+(if (ns-exists? 'core) (ns-enter 'core) (ns-create 'core))
 
 (defn seq?
 "Usage: (seq? expression) -> t/nil
@@ -48,32 +49,6 @@ Section: sequence
 			(not (not obj))
 			nil)))
 
-(defn first
-"
-Produces the first element of the provided list.  Nil if the list is empty.
-
-Section: sequence
-"
-    (obj)
-    (if (vec? obj)
-        (if (vec-empty? obj) nil (vec-nth 0 obj))
-        (if (list? obj)
-            (car obj)
-            (err "Not a vector or list"))))
-
-(defn rest
-"
-Produces the provided list minus the first element.  Nil if the list is empty or one element.
-
-Section: sequence
-"
-    (obj)
-    (if (vec? obj)
-        (vec-slice obj 1)
-        (if (list? obj)
-            (cdr obj)
-            (err "Not a vector or list"))))
-
 (defn last
 "
 Produces the last element in the list.  Nil if the list is empty.
@@ -116,7 +91,7 @@ on input of type vector).
 Section: sequence
 Example:
 (defq vctr (vec 0 1 2 3))
-(defq vec-copy (copy-seq vctr))
+(defq vec-copy (collect-copy vctr))
 (setnth! 0 -5 vctr)
 (setnth! 1 -400000 vctr)
 (setnth! 2 -402202 vctr)
@@ -129,7 +104,7 @@ Example:
 (assert-equal (list -4 -3 -2 -1) vctr)
 
 (defq lst (list 0 1 2 3))
-(defq list-copy (copy-seq lst))
+(defq list-copy (collect-copy lst))
 (setnth! 0 -4 lst)
 (setnth! 1 -3 lst)
 (setnth! 2 -2 lst)
@@ -147,40 +122,6 @@ Example:
         (if (list? l)
             (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))
             (err "Not a vector or list"))))
-
-(defn nth
-"
-Produces the element at the provided index (0 based), error if index is out of bounds.
-Because vectors support indexing and lists do not, this is a much faster
-operation for a vector (uses [builtin](root::builtin?) [vec-nth](root::vec-nth)
-on input of type vector). Supports negative indexing.
-
-Section: sequence
-
-Example:
-(defq mylist (list 0 1 2 3 4))
-(defq myvec (vec 0 1 2 3 4))
-(assert-equal 0 (nth -5 mylist))
-(assert-equal 1 (nth 1 mylist))
-(assert-equal 2 (nth 2 mylist))
-(assert-equal 3 (nth -2 mylist))
-(assert-equal 4 (nth 4 mylist))
-(assert-equal 0 (nth -5 myvec))
-(assert-equal 1 (nth 1 myvec))
-(assert-equal 2 (nth 2 myvec))
-(assert-equal 3 (nth -2 myvec))
-(assert-equal 4 (nth 4 myvec))
-"
-    (idx obj) (progn
-    (when (< idx 0)
-        (if (> (* -1 idx) (length obj))
-        (err "Absolute value of negative idx can't be greater than length of list.")
-        (setq idx (+ idx (length obj)))))
-    (if (vec? obj)
-        (vec-nth idx obj)
-        (if (list? obj)
-        (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
-            (err "Not a vector or list")))))
 
 (defn in?
 "
@@ -361,7 +302,7 @@ Section: sequence
             new-items)
         (if (list? items)
             (progn
-                (def 'titems (copy-seq items))
+                (def 'titems (collect-copy items))
                 (reverse! titems))
             (if (null items)
                 nil
@@ -556,5 +497,5 @@ Example:
 						(recur (append accrual (list val)) (+ 1 iter)))))
 			(err "lst, must be a vector or list")))))
 
-(ns-export '(seq? non-empty-seq? empty-seq? first rest last butlast setnth! nth append append! map map! reverse reverse! in? qsort filter reduce reduce-times slice))
+(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! append append! map map! reverse reverse! in? qsort filter reduce reduce-times slice))
 

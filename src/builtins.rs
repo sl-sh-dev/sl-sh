@@ -170,6 +170,9 @@ fn builtin_err(
 
 pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expression> {
     let core_lisp = include_bytes!("../lisp/core.lisp");
+    let struct_lisp = include_bytes!("../lisp/struct.lisp");
+    let iterator_lisp = include_bytes!("../lisp/iterator.lisp");
+    let collection_lisp = include_bytes!("../lisp/collection.lisp");
     let seq_lisp = include_bytes!("../lisp/seq.lisp");
     let shell_lisp = include_bytes!("../lisp/shell.lisp");
     let endfix_lisp = include_bytes!("../lisp/endfix.lisp");
@@ -218,6 +221,15 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         match &file_path[..] {
             "core.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(core_lisp), file_name)
+            }
+            "struct.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(struct_lisp), file_name)
+            }
+            "iterator.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(iterator_lisp), file_name)
+            }
+            "collection.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(collection_lisp), file_name)
             }
             "seq.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(seq_lisp), file_name)
@@ -3012,18 +3024,17 @@ Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
 (test::assert-equal '(
     (fn
-        #(i)
-        (progn
-            (if
-                (> (length '(1 2 3)) 0)
-                (core::loop
-                    (plist)
-                    ('(1 2 3))
-                    (progn
-                        (core::setq i (core::first plist)) nil
-                        (if
-                            (> (length plist) 1)
-                            (recur (core::rest plist)))))))) nil)
+        (i)
+        (if
+            (> (length '(1 2 3)) 0)
+            (root::loop
+                (plist)
+                ('(1 2 3))
+                (progn
+                    (set 'i (root::first plist)) nil
+                    (if
+                        (> (length plist) 1)
+                        (recur (root::rest plist))))))) nil)
     (expand-macro (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
@@ -3044,18 +3055,18 @@ Section: core
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
-(test::assert-equal '(core::let
-    ((i))
+(test::assert-equal '((fn
+    (i)
     (if
         (> (length '(1 2 3)) 0)
-        (core::loop
+        (root::loop
             (plist)
             ('(1 2 3))
             (progn
-                (core::setq i (core::first plist)) nil
+                (set 'i (root::first plist)) nil
                 (if
                     (> (length plist) 1)
-                    (recur (core::rest plist)))))))
+                    (recur (root::rest plist)))))))nil)
     (expand-macro1 (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
@@ -3078,19 +3089,18 @@ Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
 (test::assert-equal '(
     (fn
-        #(i)
-        (progn
-            (if
-                (> (length '(1 2 3)) 0)
-                (
-                    (fn
-                        (plist)
-                        (progn
-                            (set 'i (core::first plist)) nil
-                            (if
-                                (> (length plist) 1)
-                                (recur (core::rest plist)))))
-                    '(1 2 3))))) nil)
+        (i)
+        (if
+            (> (length '(1 2 3)) 0)
+            (
+                (fn
+                    (plist)
+                    (progn
+                        (set 'i (root::first plist)) nil
+                        (if
+                            (> (length plist) 1)
+                            (recur (root::rest plist)))))
+                '(1 2 3)))) nil)
     (expand-macro-all (for i '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",

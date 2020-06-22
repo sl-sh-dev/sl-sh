@@ -354,7 +354,7 @@ Section: namespace
 
 Example:
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'core))
-(test::assert-includes 'loop (ns-symbols 'core))
+(test::assert-includes 'loop (ns-symbols 'root))
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'root))
 (test::assert-includes 'car (ns-symbols 'root))
 t
