@@ -77,7 +77,7 @@ Example:
         (def 'tags-len (length tags))
         (def 'doc-final "")
         (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (defstruct ... (:impl " name "))\n\n"))
-        (str-push! doc-final doc "\nExample:\n" doc-exp)
+        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
         `(def ',name ,doc-final (fn (target-dispatch-map target-tags) (progn
             ((fn (idx) (progn
                 (if (< idx ,tags-len) (progn
@@ -87,7 +87,7 @@ Example:
                 (if (< idx ,keys-len) (progn
                     (def 'key (vec-nth idx ',keys))
                     (if (not (hash-haskey target-dispatch-map key)) (hash-set! target-dispatch-map key (hash-get ,dispatch-map key)))
-                    (recur (+ idx 1)) )))),idx-start) ))) ))))
+                    (recur (+ idx 1)) ))))0) ))) ))))
 
 ; macro to build a "struct"
 (defmacro defstruct
@@ -204,8 +204,10 @@ Example:
             ))))idx-start)
 
         (hash-set! dispatch-map :type `(fn (_) (symbol-name ',name)))
-        `(def ',name (str ,doc "\nExample:\n" ,doc-exp) (fn () ((fn (dispatch-map ,@params) (progn
-            (def 'self (fn (msg &rest args) (apply (eval (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ,name)))) this-fn args)))
+        (def 'doc-final "")
+        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
+        `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params) (progn
+            (def 'self (fn (msg &rest args) (apply (eval (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name)))) this-fn args)))
             (meta-add-tags self ',tags)
             (undef 'self))),dispatch-map ,@bindings))) )) ; bindings for params
      (make-vec (length fields)) ; params
