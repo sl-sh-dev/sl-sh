@@ -400,7 +400,7 @@ collection.
 Section: sequence
 
 Example:
-(assert-equal '(2 4) (filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
+(assert-equal '(2 4) (core::filter (fn (x) (= (% x 2) 0)) (list 1 2 3 4 5)))
 "
 	(pred coll)
 		(progn

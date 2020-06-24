@@ -12,16 +12,17 @@ redox_liner = { git = "https://github.com/sstanfield/liner.git" }
 glob = "0.3"
 nix = "0.15.0"
 libc = "0.2"
-# jemallocator = "0.3.0"
+#jemallocator = "0.3.2"
 
 [build-dependencies]
 chrono = "0.4.7"
 
 [profile.release]
 lto = true
+#codegen-units = 1
 #opt-level = 'z'
 #debug = true
-#panic = "abort"
+panic = "abort"
 
 [dev-dependencies]
 criterion = "0.3"
