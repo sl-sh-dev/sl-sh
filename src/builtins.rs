@@ -3035,7 +3035,7 @@ Example:
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist))))))) nil)
-    (expand-macro (root::for i '(1 2 3) ())))
+    (expand-macro (root::col-for i in '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
             root,
@@ -3067,7 +3067,7 @@ Example:
                 (if
                     (> (length plist) 1)
                     (recur (root::rest plist)))))))nil)
-    (expand-macro1 (root::for i '(1 2 3) ())))
+    (expand-macro1 (root::col-for i in '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
             root,
@@ -3101,7 +3101,7 @@ Example:
                             (> (length plist) 1)
                             (recur (root::rest plist)))))
                 '(1 2 3)))) nil)
-    (expand-macro-all (root::for i '(1 2 3) ())))
+    (expand-macro-all (root::col-for i in '(1 2 3) ())))
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",
             root,

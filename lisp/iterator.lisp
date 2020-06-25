@@ -42,11 +42,12 @@ Example:
     (def 'tseq nil)
     (def 'tcell nil)
     (def 'head nil)
-    (for v self (progn
+    (for v in self (progn
         (if (null head)
             (progn (set 'tseq (set 'head (join v nil))))
             (progn (set 'tcell (join v nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
     head))
+
   (:fn collect-vec
 "Collect all the values into a vector.  This will consume the iterator and
 produce a new list.
@@ -58,7 +59,7 @@ Example:
 "
     (self) (progn
     (def 'tseq (vec))
-    (for v self (vec-push! tseq v))
+    (for v in self (vec-push! tseq v))
     tseq))
 
   (:fn map
@@ -73,6 +74,7 @@ Example:
 (assert-true (tmap :empty?))
 "
        (self map-fn) ((map-iter) :init map-fn self))
+
   (:fn filter
 "Apply the provided predicate to the iterator producing only elements that are true.  Filter is lazy.
 
@@ -84,16 +86,17 @@ Example:
 (assert-true (tmap :empty?))
 "
        (self predicate) ((filter-iter) :init predicate self))
-  (:fn nth
-"Consume the iterator until the nth element and return it (0 based).
-Note that repeated called to nth will return new data since it consumes the iterator.
+
+  (:fn nth!
+"Consume the iterator until the nth! element and return it (0 based).
+Note that repeated called to nth! will return new data since it consumes the iterator.
 
 Example:
 (def 'tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
-(assert-equal 0 (tmap :nth 0))
-(assert-equal 1 (tmap :nth 0))
-(assert-equal 4 (tmap :nth 2))
+(assert-equal 0 (tmap :nth! 0))
+(assert-equal 1 (tmap :nth! 0))
+(assert-equal 4 (tmap :nth! 2))
 (assert-true (tmap :empty?))
 "
     (self idx) (progn
@@ -104,6 +107,81 @@ Example:
                                           (set 'ret (plist :next!))
                                           (progn (set 'i (+ i 1))(plist :next!)(recur plist)))))
       ret)))
+
+(deftrait double-ended-iterator
+"Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator double-ended-iterator))
+
+Trait that makes an iterator double ended (can get items from front and back.
+Requires a struct to define methods next-back! and implement iterator.
+Note that next! and next-back! can not cross, the iterator is empty when they meet.
+
+Section: iterator
+
+Example:
+(ns-import 'struct)
+(ns-import 'iterator)
+(defstruct test-double-iter
+  ; fields
+  (current 0)
+  (current-end 2)
+  ; methods
+  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next-back! (self) (progn (def 'val current-end)(set 'current-end (- current-end 1)) val))
+  (:fn empty? (self) (> current current-end))
+  (:impl iterator double-ended-iterator))
+(def 'tmap (test-double-iter))
+(assert-false (tmap :empty?))
+(assert-equal 0 (tmap :next!))
+(assert-equal 1 (tmap :next!))
+(assert-equal 2 (tmap :next!))
+(assert-true (tmap :empty?))
+(def 'tmap (test-double-iter))
+(assert-false (tmap :empty?))
+(assert-equal 2 (tmap :next-back!))
+(assert-equal 1 (tmap :next-back!))
+(assert-equal 0 (tmap :next-back!))
+(assert-true (tmap :empty?))
+(def 'tmap (test-double-iter))
+(assert-false (tmap :empty?))
+(assert-equal 0 (tmap :next!))
+(assert-equal 2 (tmap :next-back!))
+(assert-equal 1 (tmap :next-back!))
+(assert-true (tmap :empty?))
+"
+  ;(:fn next-back! (s) ((iter s) :next!))
+  (:fn nth-back!
+"Consume the iterator until the nth element from the end and return it (0 based).
+Note that repeated called to nth-back! will return new data since it consumes the iterator.
+
+Example:
+(def 'tmap ((vec-iter) :init '#(0 1 2 3 4) 0))
+(assert-false (tmap :empty?))
+(assert-equal 4 (tmap :nth-back! 0))
+(assert-equal 3 (tmap :nth-back! 0))
+(assert-equal 0 (tmap :nth-back! 2))
+(assert-true (tmap :empty?))
+"
+    (self idx) (progn
+    (def 'ret nil)
+    (def 'i 0)
+    (loop (plist) (self) (if (not (plist :empty?))
+                                        (if (= i idx)
+                                          (set 'ret (plist :next-back!))
+                                          (progn (set 'i (+ i 1))(plist :next-back!)(recur plist)))))
+      ret))
+
+  (:fn reverse
+"Produce an iterator the is the reverse of self.
+
+Example:
+(def 'tmap ((test-double-iter) :reverse))
+(assert-false (tmap :empty?))
+(assert-equal 2 (tmap :next!))
+(assert-equal 1 (tmap :next!))
+(assert-equal 0 (tmap :next!))
+(assert-true (tmap :empty?))
+"
+       (self) ((reverse-iter) :init self)))
 
 (defstruct list-iter
 "Iterator that wraps a lisp.
@@ -142,14 +220,17 @@ Example:
   ; fields
   (data nil)
   (start 0)
+  (end 0)
   ; methods
   (:fn next! (self) (progn (def 'val (vec-nth start data))(set 'start (+ 1 start)) val))
-  (:fn empty? (self) (>= start (length data)))
-  (:fn nth (self idx) (progn (set 'start (+ start idx))(self :next!)))
+  (:fn next-back! (self) (progn (def 'val (vec-nth end data))(set 'end (- end 1)) val))
+  (:fn empty? (self) (> start end))
+  (:fn nth! (self idx) (progn (set 'start (+ start idx))(self :next!)))
+  (:fn nth-back! (self idx) (progn (set 'end (- end idx))(self :next-back!)))
   (:fn init (self v s) (progn (if (vec? v)
-                                (progn (set 'data v) (set 'start s))
+                                (progn (set 'data v) (set 'start s) (set 'end (- (length v) 1)))
                                 (err "seq-vec requires a vector")) self))
-  (:impl iterator))
+  (:impl iterator double-ended-iterator))
 
 (defstruct map-iter 
 "Iterator that applies a lambda to each element of another iterator- is lazy.
@@ -210,38 +291,67 @@ Example:
           self))
   (:impl iterator))
 
+(defstruct reverse-iter
+"Iterator that reverses another iterators direction.  Requires a double ended iterator.
+
+Section: iterator
+
+Example:
+(def 'test-iter (((vec-iter) :init '#(1 2 3) 0) :reverse))
+(assert-false (test-iter :empty?))
+(assert-equal 3 (test-iter :next!))
+(assert-equal 2 (test-iter :next!))
+(assert-equal 1 (test-iter :next!))
+(assert-true (test-iter :empty?))
+"
+  ; fields
+  (wrapped nil)
+  ; methods
+  (:fn next! (self) (wrapped :next-back!))
+  (:fn next-back! (self) (wrapped :next!))
+  (:fn empty? (self) (wrapped :empty?))
+  (:fn init (self in-wrapped) (progn
+                                    (set 'wrapped in-wrapped)
+                                    self))
+  (:impl iterator double-ended-iterator))
+
 (defstruct range-iter
 "Iterator that generates numbers within a range.
 
 Section: iterator
 
 Example:
-(def 'test-iter ((range-iter) :init 3 7 3))
+(def 'test-iter ((range-iter) :init 3 6))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-equal 4 (test-iter :next!))
 (assert-equal 5 (test-iter :next!))
 (assert-equal 6 (test-iter :next!))
 (assert-true (test-iter :empty?))
+(def 'test-iter ((range-iter) :init 3 6))
+(assert-false (test-iter :empty?))
+(assert-equal 6 (test-iter :next-back!))
+(assert-equal 5 (test-iter :next-back!))
+(assert-equal 4 (test-iter :next-back!))
+(assert-equal 3 (test-iter :next-back!))
+(assert-true (test-iter :empty?))
 "
   ; fields
   (start 0)
   (end 0)
-  (current 0)
   ; methods
-  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
-  (:fn empty? (self) (>= current end))
-  (:fn init (self in-start in-end in-current) (progn
+  (:fn next! (self) (progn (def 'val start)(set 'start (+ start 1)) val))
+  (:fn next-back! (self) (progn (def 'val end)(set 'end (- end 1)) val))
+  (:fn empty? (self) (> start end))
+  (:fn init (self in-start in-end) (progn
                                     (set 'start in-start)
                                     (set 'end in-end)
-                                    (set 'current in-current)
                                     self))
   (:fn count (self total) (progn
                                     (set 'start 0)
-                                    (set 'end total)
-                                    (set 'current 0)
+                                    (set 'end (- total 1))
                                     self))
-  (:impl iterator))
+  (:impl iterator double-ended-iterator))
 
 (defn iter?
 "Return true if thing is an iterator, nil otherwise.
@@ -306,12 +416,12 @@ Example:
 (defn range
 "Create an iterator that generates numbers within a range.
 Can be called with one int (n) to produce 0..(n-1) or with two ints (m, n) to
-produce m..(n-1).
+produce m..n.
 
 Section: iterator
 
 Example:
-(def 'test-iter (iterator::range 3 7))
+(def 'test-iter (iterator::range 3 6))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-equal 4 (test-iter :next!))
@@ -330,7 +440,7 @@ Example:
     (if (= (length i) 1)
           ((range-iter) :count (si :next!))
         (= (length i) 2)
-          (progn (def 'first (si :next!)) ((range-iter) :init first (si :next!) first))
+          (progn (def 'first (si :next!)) ((range-iter) :init first (si :next!)))
         (err "range: requires one or two integers"))))
 
 (defn collect
@@ -392,19 +502,33 @@ Example:
 "
     (predicate items) ((iter items) :filter predicate))
 
-(defn nth
+(defn reverse
+"Produce an iterator the is the reverse of items.  Will call iter on items and 
+requires a double ended iterator.
+
+Example:
+(def 'tmap (reverse ((vec-iter) :init '#(0 1 2) 0)))
+(assert-false (tmap :empty?))
+(assert-equal 2 (tmap :next!))
+(assert-equal 1 (tmap :next!))
+(assert-equal 0 (tmap :next!))
+(assert-true (tmap :empty?))
+"
+       (items) ((iter items) :reverse))
+
+(defn nth!
 "Consume the iterator until the idx (nth) element and return it (0 based).
 Note that repeated called to nth will return new data since it consumes the iterator.
 
 Example:
 (def 'tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
-(assert-equal 0 (nth 0 tmap))
-(assert-equal 1 (nth 0 tmap))
-(assert-equal 4 (nth 2 tmap))
+(assert-equal 0 (nth! 0 tmap))
+(assert-equal 1 (nth! 0 tmap))
+(assert-equal 4 (nth! 2 tmap))
 (assert-true (tmap :empty?))
 "
-    (idx coll) ((iter coll) :nth idx))
+    (idx coll) ((iter coll) :nth! idx))
 
 (defmacro for
 "
@@ -417,10 +541,11 @@ Section: iterator
 
 Example:
 (def 'i 0)
-(iterator::for x (iterator::range 11) (set 'i (+ 1 i)))
+(iterator::for x in (iterator::range 11) (set 'i (+ 1 i)))
 (assert-equal 11 i)
 "
-	(bind items body) (progn
+	(bind in items body) (progn
+	(if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
 	`(loop (plist) ((iterator::iter ,items)) (if (not (plist :empty?)) (progn
 		(def ',bind (plist :next!))
 		(,@body)
@@ -428,12 +553,14 @@ Example:
 
 (ns-export '(
     iterator
+    double-ended-iterator
     vec-iter
     list-iter
     iter?
     iter
     map-iter
     filter-iter
+    reverse-iter
     range-iter
     next!
     empty?
@@ -442,5 +569,6 @@ Example:
     collect-vec
     map
     filter
-    nth
+    reverse
+    nth!
     for))

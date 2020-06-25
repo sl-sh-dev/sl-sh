@@ -153,7 +153,7 @@ nil)
 (let ((tseq))
     (defn copy-els (to l) (progn
         (def 'tcell nil)
-        (for el l
+        (col-for el in l
             (if (null to)
                 (progn (set 'tseq (set 'to (join el nil))))
                 (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell))))
@@ -177,15 +177,15 @@ Section: sequence
         (if (vec? l1)
             (progn
                 (set 'ret (make-vec))
-                (for el l1 (vec-push! ret el))
-                (for l others
+                (col-for el in l1 (vec-push! ret el))
+                (col-for l in others
                     (if (seq? l)
-                        (for el l (vec-push! ret el))
+                        (col-for el in l (vec-push! ret el))
                         (vec-push! ret l))))
             (if (list? l1)
                 (progn
                     (set 'ret (copy-els ret l1))
-                    (for l others
+                    (col-for l in others
                         (if (seq? l)
                             (set 'ret (copy-els ret l))
                             (progn
@@ -203,14 +203,14 @@ Section: sequence
         (def 'tret ret)
         (if (vec? ret)
             (progn
-                (for l others
+                (col-for l in others
                     (if (seq? l)
-                        (for el l (vec-push! ret el))
+                        (col-for el in l (vec-push! ret el))
                         (vec-push! ret l))))
             (if (list? ret)
                 (progn
                     (set 'tseq (last-cell tret))
-                    (for l others
+                    (col-for l in others
                         (if (seq? l)
                             (set 'tret (copy-els tret l))
                             (progn
@@ -246,7 +246,7 @@ Section: sequence
 
     (defn map-into (fun items new-items) (progn
         (def 'tcell nil)
-        (for i items
+        (col-for i in items
             (progn
                 (if (null new-items)
                     (progn (set 'tseq (set 'new-items (join (fun i) nil))))
@@ -263,7 +263,7 @@ Section: sequence
         (if (vec? items)
             (progn
                 (defq new-items (make-vec (length items)))
-                (for i items (vec-push! new-items (fun i)))
+                (col-for i in items (vec-push! new-items (fun i)))
                 new-items)
             (if (list? items)
                 (progn
@@ -282,7 +282,7 @@ Modifies a list by applying the lambda to each item in the list.
 Section: sequence
 "
     (fun items) (progn
-    (fori i it items
+    (col-for-i i it in items
         (setnth! i (fun it) items))
     items))
 
@@ -296,7 +296,7 @@ Section: sequence
     (if (vec? items)
         (progn
             (defn irev (items new-items num)
-                (if (>= num 0) (progn (vec-push! new-items (nth num items))(recur items new-items (- num 1)))))
+                (if (>= num 0) (progn (vec-push! new-items (col-nth num items))(recur items new-items (- num 1)))))
             (defq new-items (make-vec (length items)))
             (irev items new-items (- (length items) 1))
             new-items)
@@ -318,8 +318,8 @@ Section: sequence
 
     (defn irev (items first last)
         (if (> last first) (progn
-            (defq ftemp (nth first items))
-            (setnth! first (nth last items) items)
+            (defq ftemp (col-nth first items))
+            (setnth! first (col-nth last items) items)
             (setnth! last ftemp items)
             (recur items (+ first 1) (- last 1)))))
 
@@ -374,7 +374,7 @@ Example:
                         (def 'pivot (first lst))
                         (def 'less (vec))
                         (def 'greater (vec))
-                        (for i (rest lst)
+                        (col-for i in (rest lst)
                             (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
                         (vec-push! to-sort greater)
                         (vec-push! to-sort pivot)
@@ -493,7 +493,7 @@ Example:
 				(if (>= iter end)
 					accrual
 					(progn
-						(defq val (nth iter lst))
+						(defq val (col-nth iter lst))
 						(recur (append accrual (list val)) (+ 1 iter)))))
 			(err "lst, must be a vector or list")))))
 

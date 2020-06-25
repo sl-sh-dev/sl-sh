@@ -171,7 +171,7 @@ Section: shell
 		Section: shell
 		"
 		()
-		(for d dir_stack (println d)))
+		(col-for d in dir_stack (println d)))
 	(setfn get-dirs
 		"
 		Return the vector of directories.
@@ -207,7 +207,7 @@ Section: shell
 "
 	(vals &rest let_body)
 	((fn (params bindings olds) (progn
-		(fori idx el vals
+		(col-for-i idx el in vals
 			(if (= 1 (length el))
 				(progn
 					(vec-insert-nth! idx (nth 0 el) params)
@@ -224,12 +224,12 @@ Section: shell
 		`((fn (params bindings olds)
 			(unwind-protect
 				(progn
-					(fori i p params
+					(col-for-i i p in params
 						(if (null (nth i bindings))
 							(unexport p)
 							(export p (nth i bindings))))
 					,@let_body)
-				(fori i p params
+				(col-for-i i p in params
 					(if (null (nth i olds))
 						(unexport p)
 						(export p (nth i olds))))))
@@ -317,7 +317,7 @@ Section: shell
 			(set 'ret t)
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
 				(set 'ret t)
-				(for p (str-split ":" $PATH) (progn
+				(col-for p in (str-split ":" $PATH) (progn
 					(def 'path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
 	ret))
