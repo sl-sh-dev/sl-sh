@@ -222,15 +222,21 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             "core.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(core_lisp), file_name)
             }
-            "struct.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(struct_lisp), file_name)
-            }
-            "iterator.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(iterator_lisp), file_name)
-            }
-            "collection.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(collection_lisp), file_name)
-            }
+            "struct.lisp" => read_list_wrap(
+                environment,
+                &String::from_utf8_lossy(struct_lisp),
+                file_name,
+            ),
+            "iterator.lisp" => read_list_wrap(
+                environment,
+                &String::from_utf8_lossy(iterator_lisp),
+                file_name,
+            ),
+            "collection.lisp" => read_list_wrap(
+                environment,
+                &String::from_utf8_lossy(collection_lisp),
+                file_name,
+            ),
             "seq.lisp" => {
                 read_list_wrap(environment, &String::from_utf8_lossy(seq_lisp), file_name)
             }
