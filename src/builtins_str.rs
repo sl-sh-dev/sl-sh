@@ -1071,7 +1071,7 @@ Example:
         interner.intern("str-empty?"),
         Expression::make_function(
             builtin_str_empty,
-            "Usage: (str-empty?) -> t/nil
+            "Usage: (str-empty? string) -> t/nil
 
 Is a string empty?  Let's find out...
 
