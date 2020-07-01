@@ -1365,7 +1365,8 @@ Example:
 (def 'test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) (str \"xstringxstrx\")))
 (test::assert-equal \"XstringXstrX\" test-str-map)
 (test::assert-true (string? test-str-map))
-", root
+",
+            root,
         ),
     );
     data.insert(
@@ -1402,7 +1403,8 @@ Example:
 (test::assert-equal #\\s (str-iter-next! test-iter-start))
 (test::assert-equal #\\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
-", root
+",
+            root,
         ),
     );
     data.insert(

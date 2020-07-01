@@ -220,7 +220,7 @@ fn do_char(
         _ => {}
     }
     let mut chars = UnicodeSegmentation::graphemes(symbol, true);
-    let ret = if let Some(ch) = chars.next() {
+    if let Some(ch) = chars.next() {
         if chars.next().is_some() {
             let reason = format!(
                 "Not a valid char [{}]: line {}, col: {}",
@@ -236,9 +236,8 @@ fn do_char(
             "Not a valid char [{}]: line {}, col: {}",
             symbol, line, column
         );
-        return Err(ParseError { reason });
-    };
-    ret
+        Err(ParseError { reason })
+    }
 }
 
 fn read_string<P>(
