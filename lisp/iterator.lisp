@@ -62,6 +62,20 @@ Example:
     (for v in self (vec-push! tseq v))
     tseq))
 
+  (:fn collect-str
+"Collect all the values into a string.  This will consume the iterator and
+produce a new string.
+
+Example:
+(def 'collect-str-test (((iter \"λabc σ\") :map (fn (ch) (char-upper ch))) :collect-str))
+(assert-true (string? collect-str-test))
+(assert-equal \"ΛABC Σ\" collect-str-test)
+"
+    (self) (progn
+    (def 'tseq "")
+    (for v in self (str-push! tseq v))
+    tseq))
+
   (:fn map
 "Apply the provided function to each element of the iterator.  Map is lazy.
 
@@ -184,7 +198,7 @@ Example:
        (self) ((reverse-iter) :init self)))
 
 (defstruct list-iter
-"Iterator that wraps a lisp.
+"Iterator that wraps a list.
 
 Section: iterator
 
@@ -231,6 +245,29 @@ Example:
                                 (progn (set 'data v) (set 'start s) (set 'end (- (length v) 1)))
                                 (err "seq-vec requires a vector")) self))
   (:impl iterator double-ended-iterator))
+
+(defstruct string-iter
+"Iterator that wraps a string.
+
+Section: iterator
+
+Example:
+(def 'test-string-iter ((string-iter) :init \"123\"))
+(assert-false (test-string-iter :empty?))
+(assert-equal #\1 (test-string-iter :next!))
+(assert-equal #\2 (test-string-iter :next!))
+(assert-equal #\3 (test-string-iter :next!))
+(assert-true (test-string-iter :empty?))
+"
+  ; fields
+  (data nil)
+  ; methods
+  (:fn next! (self) (if data (str-iter-next! data) nil))
+  (:fn empty? (self) (if data (str-iter-empty? data) t))
+  (:fn init (self l) (progn (if (string? l)
+                       (set 'data (if (str-iter-empty? l) (str-iter-start l) (str-iter-start (str l))))
+                       (err "string-iter requires a string")) self))
+  (:impl iterator))
 
 (defstruct map-iter 
 "Iterator that applies a lambda to each element of another iterator- is lazy.
@@ -374,6 +411,7 @@ Section: iterator
 Example:
 (assert-true (iterator::iter? (iterator::iter '(1 2 3))))
 (assert-true (iterator::iter? (iterator::iter '#(1 2 3))))
+(assert-true (iterator::iter? (iterator::iter \"abc\")))
 (assert-true (iterator::iter? (iterator::iter (iterator::iter '(1 2 3)))))
 "
   (thing)
@@ -383,7 +421,9 @@ Example:
         ((list-iter) :init thing)
       (vec? thing)
         ((vec-iter) :init thing 0)
-      (err "iter: requires a list or vector or existing iterator")))
+      (string? thing)
+        ((string-iter) :init thing)
+      (err "iter: requires a list, vector, string or existing iterator")))
 
 (defn next!
 "Calls iter on s and returns the next item.
@@ -459,7 +499,7 @@ Example:
 
 (defn collect-vec
 "Collect all the values into a vector.  This will consume the iterator and
-produce a new list.  Will call iter on input to turn a collection into an iterator.
+produce a new vector.  Will call iter on input to turn a collection into an iterator.
 
 Section: iterator
 
@@ -470,6 +510,20 @@ Example:
 "
     (s)
     (if (vec? s) s ((iter s) :collect-vec)))
+
+(defn collect-str
+"Collect all the values into a string.  This will consume the iterator and
+produce a new string.  Will call iter on input to turn a collection into an iterator.
+
+Section: iterator
+
+Example:
+(def 'collect-str-test (iterator::collect-str (iterator::map (fn (ch) (char-upper ch)) \"λabc σ\")))
+(assert-true (string? collect-str-test))
+(assert-equal \"ΛABC Σ\" collect-str-test)
+"
+    (s)
+    (if (string? s) s ((iter s) :collect-str)))
 
 (defn map
 "Returns a map-iter around items (will call iter on items).
@@ -567,6 +621,7 @@ Example:
     range
     collect
     collect-vec
+    collect-str
     map
     filter
     reverse

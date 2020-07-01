@@ -478,7 +478,7 @@ pub fn do_command(
     for a_exp in parts {
         let a_exp2 = a_exp.clone();
         let a_exp_a = a_exp.get();
-        if let ExpEnum::Atom(Atom::String(_)) = a_exp_a.data {
+        if let ExpEnum::Atom(Atom::String(_, _)) = a_exp_a.data {
             let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
         } else {
@@ -489,15 +489,15 @@ pub fn do_command(
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
                         }
                         ExpEnum::Atom(Atom::Lambda(_)) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
                         }
                         ExpEnum::Atom(Atom::Macro(_)) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into())))?
+                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
                         }
                         _ => {
                             drop(a_exp_a);
@@ -515,7 +515,7 @@ pub fn do_command(
                 }
             };
             let new_a_a = new_a.get();
-            if let ExpEnum::Atom(Atom::String(s)) = &new_a_a.data {
+            if let ExpEnum::Atom(Atom::String(s, _)) = &new_a_a.data {
                 prep_string_arg(environment, &s, &mut args)?;
             } else {
                 args.push(new_a.as_string(environment)?);

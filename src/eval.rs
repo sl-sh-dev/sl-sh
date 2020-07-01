@@ -290,12 +290,12 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                     ExpEnum::Atom(Atom::Macro(m)) if allow_form => {
                         exec_macro(environment, &m, &mut parts)
                     }
-                    ExpEnum::Atom(Atom::String(s)) if allow_sys_com => {
+                    ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
                         do_command(environment, s.trim(), &mut parts)
                     }
                     _ => {
                         if command.starts_with('$') {
-                            if let ExpEnum::Atom(Atom::String(command)) =
+                            if let ExpEnum::Atom(Atom::String(command, _)) =
                                 &str_process(environment, command, true)?.get().data
                             {
                                 do_command(environment, &command, &mut parts)
@@ -310,7 +310,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 }
             } else if allow_sys_com {
                 if command.starts_with('$') {
-                    if let ExpEnum::Atom(Atom::String(command)) =
+                    if let ExpEnum::Atom(Atom::String(command, _)) =
                         &str_process(environment, command, true)?.get().data
                     {
                         do_command(environment, &command, &mut parts)
@@ -342,7 +342,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 }
                 ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
                 ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-                ExpEnum::Atom(Atom::String(s)) if allow_sys_com => {
+                ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
                     do_command(environment, s.trim(), &mut parts)
                 }
                 _ => {
@@ -369,7 +369,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 }
                 ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
                 ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-                ExpEnum::Atom(Atom::String(s)) if allow_sys_com => {
+                ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
                     do_command(environment, s.trim(), &mut parts)
                 }
                 _ => {
@@ -391,7 +391,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
         }
         ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
         ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-        ExpEnum::Atom(Atom::String(s)) if allow_sys_com => {
+        ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
             do_command(environment, s.trim(), &mut parts)
         }
         _ => {
@@ -497,19 +497,23 @@ fn str_process(
         if environment.interner.contains(&new_string) {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 environment.interner.intern(&new_string).into(),
+                None,
             ))))
         } else {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 new_string.into(),
+                None,
             ))))
         }
     } else if environment.interner.contains(string) {
         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
             environment.interner.intern(string).into(),
+            None,
         ))))
     } else {
         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
             string.to_string().into(),
+            None,
         ))))
     }
 }
@@ -592,6 +596,7 @@ fn internal_eval(
                 match env::var(&s[1..]) {
                     Ok(val) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                         environment.interner.intern(&val).into(),
+                        None,
                     )))),
                     Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
                 }
@@ -609,7 +614,7 @@ fn internal_eval(
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
-        ExpEnum::Atom(Atom::String(string)) => str_process(environment, &string, true),
+        ExpEnum::Atom(Atom::String(string, _)) => str_process(environment, &string, true),
         ExpEnum::Atom(_) => Ok(expression.clone()),
         ExpEnum::Function(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
         ExpEnum::Process(_) => Ok(expression.clone()),

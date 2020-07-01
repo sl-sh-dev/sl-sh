@@ -12,6 +12,8 @@ use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
@@ -31,7 +33,7 @@ fn builtin_eval(
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
             return match &arg_d.data {
-                ExpEnum::Atom(Atom::String(s)) => match read(environment, &s, None) {
+                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None) {
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
@@ -56,7 +58,7 @@ fn builtin_syscall(
         let command = eval(environment, command)?;
         let command_d = command.get();
         match &command_d.data {
-            ExpEnum::Atom(Atom::String(s)) => do_command(environment, s, args),
+            ExpEnum::Atom(Atom::String(s, _)) => do_command(environment, s, args),
             _ => {
                 let msg = format!(
                     "syscall: first argument {} not a string, type {}",
@@ -192,7 +194,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
         for l in p_itr {
             let path_name = match &l.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
-                ExpEnum::Atom(Atom::String(s)) => Some(s.to_string()),
+                ExpEnum::Atom(Atom::String(s, _)) => Some(s.to_string()),
                 _ => None,
             };
             if let Some(path_name) = path_name {
@@ -314,10 +316,10 @@ fn builtin_length(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg.get().data {
-                ExpEnum::Atom(Atom::String(s)) => {
+                ExpEnum::Atom(Atom::String(s, _)) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
-                    for _ in s.chars() {
+                    for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
                         i += 1;
                     }
                     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
@@ -404,7 +406,7 @@ fn args_out(
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
         let pretty = match &aa.get().data {
-            ExpEnum::Atom(Atom::String(_)) => false,
+            ExpEnum::Atom(Atom::String(_, _)) => false,
             _ => pretty,
         };
         if pretty {
@@ -448,7 +450,7 @@ fn print_to_oe(
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
                             let pretty = match &aa.get().data {
-                                ExpEnum::Atom(Atom::String(_)) => false,
+                                ExpEnum::Atom(Atom::String(_, _)) => false,
                                 _ => pretty,
                             };
                             if pretty {
@@ -554,6 +556,7 @@ fn builtin_format(
     }
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
         res.into(),
+        None,
     ))))
 }
 
@@ -696,26 +699,30 @@ fn builtin_export(
                     }
                 };
                 let val = match &val.get().data {
-                    ExpEnum::Atom(Atom::Symbol(s)) => ExpEnum::Atom(Atom::String((*s).into())),
-                    ExpEnum::Atom(Atom::String(s)) => {
-                        ExpEnum::Atom(Atom::String(s.to_string().into()))
+                    ExpEnum::Atom(Atom::Symbol(s)) => {
+                        ExpEnum::Atom(Atom::String((*s).into(), None))
+                    }
+                    ExpEnum::Atom(Atom::String(s, _)) => {
+                        ExpEnum::Atom(Atom::String(s.to_string().into(), None))
                     }
                     ExpEnum::Atom(Atom::Int(i)) => {
-                        ExpEnum::Atom(Atom::String(format!("{}", i).into()))
+                        ExpEnum::Atom(Atom::String(format!("{}", i).into(), None))
                     }
                     ExpEnum::Atom(Atom::Float(f)) => {
-                        ExpEnum::Atom(Atom::String(format!("{}", f).into()))
+                        ExpEnum::Atom(Atom::String(format!("{}", f).into(), None))
                     }
                     ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::Atom(Atom::String(
                         val.as_string(environment)
                             .unwrap_or_else(|_| "PROCESS FAILED".to_string())
                             .into(),
+                        None,
                     )),
                     ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
                         ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "PROCESS FAILED".to_string())
                                 .into(),
+                            None,
                         ))
                     }
                     ExpEnum::File(file) => match &*file.borrow() {
@@ -723,11 +730,13 @@ fn builtin_export(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "STDIN FAILED".to_string())
                                 .into(),
+                            None,
                         )),
                         FileState::Read(_) => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "FILE READ FAILED".to_string())
                                 .into(),
+                            None,
                         )),
                         _ => {
                             return Err(io::Error::new(
@@ -755,6 +764,7 @@ fn builtin_export(
                 }
                 return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                     val.into(),
+                    None,
                 ))));
             }
         }
@@ -792,7 +802,7 @@ fn builtin_def(
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp.get().data {
-                ExpEnum::Atom(Atom::String(s)) => Some(environment.interner.intern(s)),
+                ExpEnum::Atom(Atom::String(s, _)) => Some(environment.interner.intern(s)),
                 _ => None,
             }
         } else {
@@ -933,7 +943,7 @@ fn builtin_to_symbol(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
-                ExpEnum::Atom(Atom::String(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                ExpEnum::Atom(Atom::String(s, _)) => Ok(Expression::alloc_data(ExpEnum::Atom(
                     Atom::Symbol(environment.interner.intern(&s)),
                 ))),
                 ExpEnum::Atom(Atom::Symbol(s)) => {
@@ -967,7 +977,7 @@ fn builtin_symbol_name(
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::String((*s).into()),
+                    Atom::String((*s).into(), None),
                 ))),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1234,7 +1244,7 @@ fn builtin_is_def(
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
-                ExpEnum::Atom(Atom::String(s)) => get_ret(environment, &s),
+                ExpEnum::Atom(Atom::String(s, _)) => get_ret(environment, &s),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "def? takes a symbol or string (will be treated as a symbol) to lookup",
@@ -1656,6 +1666,7 @@ fn builtin_version(
     } else {
         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
             VERSION_STRING.into(),
+            None,
         ))))
     }
 }
@@ -1804,6 +1815,7 @@ fn builtin_get_error(
                 let msg = format!("{}", err);
                 v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
                     msg.into(),
+                    None,
                 ))));
                 environment.stack_on_error = old_err;
                 return Ok(Expression::with_list(v));
@@ -1873,6 +1885,7 @@ fn make_doc(_environment: &mut Environment, exp: &Reference, key: &str) -> io::R
     new_docs.push('\n');
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
         new_docs.into(),
+        None,
     ))))
 }
 
@@ -1902,7 +1915,7 @@ fn get_doc(
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = get_expression(environment, "*ns*") {
                                 match &exp.exp.get().data {
-                                    ExpEnum::Atom(Atom::String(s)) => s.to_string(),
+                                    ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
                             } else {
@@ -1916,7 +1929,7 @@ fn get_doc(
                                 if let Some(exp) = scope.borrow().data.get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
                                         return Ok(Expression::alloc_data(ExpEnum::Atom(
-                                            Atom::String(doc_string.to_string().into()),
+                                            Atom::String(doc_string.to_string().into(), None),
                                         )));
                                     } else {
                                         return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1936,6 +1949,7 @@ fn get_doc(
                         if let Some(doc_string) = &exp.meta.doc_string {
                             return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 doc_string.to_string().into(),
+                                None,
                             ))));
                         } else {
                             return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -2129,6 +2143,7 @@ pub fn builtin_meta_file_name(
         if let Some(meta) = &environment.last_meta {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 meta.file.into(),
+                None,
             ))))
         } else {
             Ok(Expression::alloc_data(ExpEnum::Nil))

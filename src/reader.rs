@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::num::{ParseFloatError, ParseIntError};
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::environment::*;
 use crate::gc::Handle;
 use crate::types::*;
@@ -177,31 +179,66 @@ fn end_symbol(ch: char, in_back_quote: bool) -> bool {
     }
 }
 
-fn do_char(symbol: &str, line: usize, column: usize) -> Result<Expression, ParseError> {
+fn do_char(
+    environment: &mut Environment,
+    symbol: &str,
+    line: usize,
+    column: usize,
+) -> Result<Expression, ParseError> {
     match &symbol.to_lowercase()[..] {
-        "space" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(' ')))),
-        "tab" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\t')))),
+        "space" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                " ".into(),
+            ))))
+        }
+        "tab" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                "\t".into(),
+            ))))
+        }
         // newline should be the platform line end.
-        "newline" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
-        "linefeed" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\n')))),
-        "return" => return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char('\r')))),
+        "newline" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                "\n".into(),
+            ))))
+        }
+        "linefeed" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                "\n".into(),
+            ))))
+        }
+        "return" => {
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                "\r".into(),
+            ))))
+        }
         "backspace" => {
             return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                '\u{0008}',
+                "\u{0008}".into(),
             ))))
         }
         _ => {}
     }
-    if symbol.len() != 1 {
+    let mut chars = UnicodeSegmentation::graphemes(symbol, true);
+    let ret = if let Some(ch) = chars.next() {
+        if chars.next().is_some() {
+            let reason = format!(
+                "Not a valid char [{}]: line {}, col: {}",
+                symbol, line, column
+            );
+            return Err(ParseError { reason });
+        }
+        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+            environment.interner.intern(ch).into(),
+        ))))
+    } else {
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",
             symbol, line, column
         );
         return Err(ParseError { reason });
-    }
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-        symbol.chars().next().unwrap(),
-    ))))
+    };
+    ret
 }
 
 fn read_string<P>(
@@ -269,6 +306,7 @@ where
     }
     Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
         symbol.clone().into(),
+        None,
     ))))
 }
 
@@ -519,7 +557,12 @@ where
                     '\\' => {
                         buffer.clear();
                         read_symbol(buffer, chars, line, column, true, in_back_quote);
-                        push_stack(stack, do_char(buffer, *line, *column)?, *line, *column)?;
+                        push_stack(
+                            stack,
+                            do_char(environment, buffer, *line, *column)?,
+                            *line,
+                            *column,
+                        )?;
                     }
                     '<' => {
                         let reason =

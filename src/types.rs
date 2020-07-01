@@ -34,8 +34,9 @@ pub enum Atom {
     Float(f64),
     Int(i64),
     Symbol(&'static str),
-    String(Cow<'static, str>),
-    Char(char),
+    String(Cow<'static, str>, Option<(usize, Vec<(usize, usize)>)>),
+    Char(Cow<'static, str>),
+    CodePoint(char),
     Lambda(Lambda),
     Macro(Macro),
 }
@@ -47,8 +48,9 @@ impl fmt::Display for Atom {
             Atom::Float(n) => write!(f, "{}", n),
             Atom::Int(i) => write!(f, "{}", i),
             Atom::Symbol(s) => write!(f, "{}", s),
-            Atom::String(s) => write!(f, "\"{}\"", s),
+            Atom::String(s, _) => write!(f, "\"{}\"", s),
             Atom::Char(c) => write!(f, "#\\{}", c),
+            Atom::CodePoint(c) => write!(f, "#\\{}", c),
             Atom::Lambda(l) => {
                 let params: Expression = l.params.clone().into();
                 let body: Expression = l.body.clone().into();
@@ -66,9 +68,11 @@ impl fmt::Display for Atom {
 impl Atom {
     // Like to_string but don't put quotes around strings or #\ in front of chars.
     pub fn as_string(&self) -> String {
-        if let Atom::String(s) = self {
+        if let Atom::String(s, _) = self {
             (*s).to_string()
         } else if let Atom::Char(c) = self {
+            (*c).to_string()
+        } else if let Atom::CodePoint(c) = self {
             c.to_string()
         } else {
             self.to_string()
@@ -81,8 +85,9 @@ impl Atom {
             Atom::Float(_) => "Float".to_string(),
             Atom::Int(_) => "Int".to_string(),
             Atom::Symbol(_) => "Symbol".to_string(),
-            Atom::String(_) => "String".to_string(),
+            Atom::String(_, _) => "String".to_string(),
             Atom::Char(_) => "Char".to_string(),
+            Atom::CodePoint(_) => "CodePoint".to_string(),
             Atom::Lambda(_) => "Lambda".to_string(),
             Atom::Macro(_) => "Macro".to_string(),
         }
@@ -602,10 +607,13 @@ impl Expression {
                     write!(writer, "))")?;
                 }
             }
-            ExpEnum::Atom(Atom::String(_s)) => {
+            ExpEnum::Atom(Atom::String(_, _)) => {
                 write!(writer, "{}", self.to_string())?;
             }
             ExpEnum::Atom(Atom::Char(_c)) => {
+                write!(writer, "{}", self.to_string())?;
+            }
+            ExpEnum::Atom(Atom::CodePoint(_c)) => {
                 write!(writer, "{}", self.to_string())?;
             }
             ExpEnum::Atom(Atom::Lambda(l)) => {
@@ -1006,7 +1014,7 @@ mod tests {
     #[test]
     fn test_one() {
         init_gc();
-        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".into())));
+        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".into(), None)));
         let n1 = Expression::make_nil_h();
         let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
         let nlist = vec![

@@ -12,6 +12,7 @@ redox_liner = { git = "https://github.com/sstanfield/liner.git" }
 glob = "0.3"
 nix = "0.15.0"
 libc = "0.2"
+unicode-segmentation = "1.6.0"
 #jemallocator = "0.3.2"
 
 [build-dependencies]

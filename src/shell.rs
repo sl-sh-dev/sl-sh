@@ -50,6 +50,7 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
                 .interner
                 .intern(&format!("{}/.config/sl-sh", home))
                 .into(),
+            None,
         )))
         .handle_no_root(),
     );
@@ -126,7 +127,10 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
         environment.save_exit_status = true;
         let ptext = res
             .unwrap_or_else(|e| {
-                Expression::alloc_data(ExpEnum::Atom(Atom::String(format!("ERROR: {}", e).into())))
+                Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    format!("ERROR: {}", e).into(),
+                    None,
+                )))
             })
             .as_string(environment)
             .unwrap_or_else(|_| "ERROR".to_string());
@@ -147,7 +151,7 @@ fn get_prompt(environment: &mut Environment) -> Prompt {
         };
         let namespace = if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp.get().data {
-                ExpEnum::Atom(Atom::String(s)) => s.to_string(),
+                ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
                 _ => "NO_NAME".to_string(),
             }
         } else {
@@ -178,6 +182,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
                     v.push(
                         Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             input.to_string().into(),
+                            None,
                         )))
                         .handle_no_root(),
                     );
@@ -191,7 +196,10 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
             environment.borrow_mut().str_ignore_expand = false;
             environment.borrow_mut().save_exit_status = true;
             res.unwrap_or_else(|e| {
-                Expression::alloc_data(ExpEnum::Atom(Atom::String(format!("ERROR: {}", e).into())))
+                Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    format!("ERROR: {}", e).into(),
+                    None,
+                )))
             })
             .as_string(&environment.borrow())
             .unwrap_or_else(|_| "ERROR".to_string())
@@ -217,15 +225,17 @@ fn handle_result(
                     }
                 }
                 let interned_sym = environment.interner.intern("*last-command*");
-                let data =
-                    Expression::alloc_data(ExpEnum::Atom(Atom::String(input.to_string().into())));
+                let data = Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    input.to_string().into(),
+                    None,
+                )));
                 environment.insert_into_root_scope(interned_sym, data);
             }
             match &exp.get().data {
                 ExpEnum::Nil => { /* don't print nil */ }
                 ExpEnum::File(_) => { /* don't print file contents */ }
                 ExpEnum::Process(_) => { /* should have used stdout */ }
-                ExpEnum::Atom(Atom::String(_)) => {
+                ExpEnum::Atom(Atom::String(_, _)) => {
                     if let Err(err) = exp.write(environment) {
                         eprintln!("Error writing result: {}", err);
                     }
@@ -305,7 +315,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             let vi_esc: Expression = vi_esc.into();
             let mut i = vi_esc.iter();
             if let Some(arg0) = i.next() {
-                if let ExpEnum::Atom(Atom::String(keys)) = &arg0.get().data {
+                if let ExpEnum::Atom(Atom::String(keys, _)) = &arg0.get().data {
                     if let Some(arg1) = i.next() {
                         if let ExpEnum::Atom(Atom::Int(ms)) = &arg1.get().data {
                             if keys.len() == 2 {
@@ -337,25 +347,25 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
         }
         if let Some(prefix) = repl_settings.get(":vi-normal-prompt-prefix") {
             let prefix: Expression = prefix.into();
-            if let ExpEnum::Atom(Atom::String(prefix)) = &prefix.get().data {
+            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
                 ret.vi_normal_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-normal-prompt-suffix") {
             let suffix: Expression = suffix.into();
-            if let ExpEnum::Atom(Atom::String(suffix)) = &suffix.get().data {
+            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
                 ret.vi_normal_prompt_suffix = Some(suffix.to_string());
             };
         }
         if let Some(prefix) = repl_settings.get(":vi-insert-prompt-prefix") {
             let prefix: Expression = prefix.into();
-            if let ExpEnum::Atom(Atom::String(prefix)) = &prefix.get().data {
+            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
                 ret.vi_insert_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-insert-prompt-suffix") {
             let suffix: Expression = suffix.into();
-            if let ExpEnum::Atom(Atom::String(suffix)) = &suffix.get().data {
+            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
                 ret.vi_insert_prompt_suffix = Some(suffix.to_string());
             };
         }
@@ -375,8 +385,11 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
                     .handle_no_root(),
                 );
                 v.push(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::String(input.to_string().into())))
-                        .handle_no_root(),
+                    Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        input.to_string().into(),
+                        None,
+                    )))
+                    .handle_no_root(),
                 );
                 Expression::with_list(v)
             }
@@ -387,7 +400,7 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
         };
         match eval(environment, &exp) {
             Ok(res) => match &res.get().data {
-                ExpEnum::Atom(Atom::String(s)) => read(environment, &s, None),
+                ExpEnum::Atom(Atom::String(s, _)) => read(environment, &s, None),
                 _ => Ok(res.clone()),
             },
             Err(err) => {
@@ -504,7 +517,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     env.insert_into_root_scope(interned_sym, data);
     interned_sym = env.interner.intern("*last-command*");
     let interned_sym2 = env.interner.intern("");
-    let data = Expression::alloc_data(ExpEnum::Atom(Atom::String(interned_sym2.into())));
+    let data = Expression::alloc_data(ExpEnum::Atom(Atom::String(interned_sym2.into(), None)));
     env.insert_into_root_scope(interned_sym, data);
     let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
     apply_repl_settings(&mut con, &current_repl_settings);
@@ -756,6 +769,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         exp_args.push(
             Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 environment.interner.intern(a).into(),
+                None,
             )))
             .handle_no_root(),
         );

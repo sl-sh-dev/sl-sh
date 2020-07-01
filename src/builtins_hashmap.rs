@@ -17,7 +17,7 @@ fn build_map(
             let key: Expression = key.into();
             match &key.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
-                ExpEnum::Atom(Atom::String(s)) => map.insert(s.to_string(), val.clone()),
+                ExpEnum::Atom(Atom::String(s, _)) => map.insert(s.to_string(), val.clone()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -83,7 +83,7 @@ fn builtin_hash_set(
                                 map.insert((*sym).to_string(), val);
                                 return Ok(exp_map.clone());
                             }
-                            ExpEnum::Atom(Atom::String(s)) => {
+                            ExpEnum::Atom(Atom::String(s, _)) => {
                                 map.insert(s.to_string(), val);
                                 return Ok(exp_map.clone());
                             }
@@ -129,7 +129,7 @@ fn builtin_hash_remove(
                         ExpEnum::Atom(Atom::Symbol(sym)) => {
                             return do_rem(map, sym);
                         }
-                        ExpEnum::Atom(Atom::String(s)) => {
+                        ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_rem(map, &s);
                         }
                         _ => {
@@ -185,7 +185,7 @@ fn builtin_hash_get(
                         ExpEnum::Atom(Atom::Symbol(sym)) => {
                             return do_get(environment, map, sym, default);
                         }
-                        ExpEnum::Atom(Atom::String(s)) => {
+                        ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_get(environment, map, &s, default);
                         }
                         _ => {
@@ -227,7 +227,7 @@ fn builtin_hash_haskey(
                         ExpEnum::Atom(Atom::Symbol(sym)) => {
                             return do_has(map, sym);
                         }
-                        ExpEnum::Atom(Atom::String(s)) => {
+                        ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_has(map, &s);
                         }
                         _ => {

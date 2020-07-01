@@ -56,15 +56,15 @@ fn builtin_cd(
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
                         )?,
                         ExpEnum::Atom(Atom::Lambda(_)) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
                         )?,
                         ExpEnum::Atom(Atom::Macro(_)) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into()))),
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
                         )?,
                         _ => eval(environment, &arg)?,
                     },
@@ -109,7 +109,7 @@ fn file_test(
     if let Some(p) = args.next() {
         if args.next().is_none() {
             let p = match &eval(environment, p)?.get().data {
-                ExpEnum::Atom(Atom::String(p)) => {
+                ExpEnum::Atom(Atom::String(p, _)) => {
                     match expand_tilde(&p) {
                         Some(p) => p,
                         None => p.to_string(), // XXX not great.
@@ -372,7 +372,7 @@ fn builtin_glob(
     let mut files = Vec::new();
     for pat in args {
         let pat = match &eval(environment, pat)?.get().data {
-            ExpEnum::Atom(Atom::String(s)) => s.to_string(),
+            ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -392,6 +392,7 @@ fn builtin_glob(
                             if let Some(p) = p.to_str() {
                                 files.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
                                     p.to_string().into(),
+                                    None,
                                 ))));
                             }
                         }

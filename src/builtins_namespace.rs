@@ -28,7 +28,7 @@ fn builtin_ns_create(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -71,7 +71,7 @@ fn builtin_ns_enter(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -104,7 +104,7 @@ fn builtin_ns_exists(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -134,6 +134,7 @@ fn builtin_ns_list(
         for ns in environment.namespaces.keys() {
             ns_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
                 (*ns).into(),
+                None,
             ))));
         }
         return Ok(Expression::with_list(ns_list));
@@ -203,7 +204,7 @@ fn builtin_ns_symbols(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s)) => environment.interner.intern(&s),
+                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,

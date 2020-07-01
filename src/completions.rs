@@ -105,7 +105,7 @@ impl ShellCompleter {
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a.into())))
+                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a.into(), None)))
                                 .handle_no_root(),
                         );
                     }

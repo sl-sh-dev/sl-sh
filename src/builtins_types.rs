@@ -17,6 +17,7 @@ fn builtin_type(
             let arg = eval(environment, arg)?;
             return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                 environment.interner.intern(&arg.display_type()).into(),
+                None,
             ))));
         }
     }
@@ -121,7 +122,7 @@ fn builtin_is_string(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::String(_)) = arg.get().data {
+            return if let ExpEnum::Atom(Atom::String(_, _)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())

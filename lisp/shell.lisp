@@ -461,17 +461,17 @@ Section: shell
 			(def 'ret (if in-quote
 				(progn
 					(str-push! token ch)
-					(if (and (not (char= last-ch #\\))(char= ch #\"))
+					(if (and (not (= last-ch #\\))(= ch #\"))
 						(progn
 							(set 'in-quote nil)
 							(str-push! token shell::*fg-default*)
 							(prrawtoken))
 						""))
-				(if (and (not (char= last-ch #\\))(char= ch #\"))
+				(if (and (not (= last-ch #\\))(= ch #\"))
 					(progn (str-push! token (str tok-string-color ch))(set 'in-quote t) "")
-					(if (char= ch #\()
+					(if (= ch #\()
 						(paren-open)
-						(if (char= ch #\))
+						(if (= ch #\))
 							(paren-close)
 							(if (char-whitespace? ch)
 								(whitespace ch)

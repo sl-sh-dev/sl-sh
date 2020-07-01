@@ -36,7 +36,7 @@ fn builtin_open(
             }
         }
         let file_name = match &a.get().data {
-            ExpEnum::Atom(Atom::String(name)) => name.to_string(),
+            ExpEnum::Atom(Atom::String(name, _)) => name.to_string(),
             _ => {
                 return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -209,6 +209,7 @@ fn builtin_read_line(
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 line.into(),
+                                None,
                             ))))
                         }
                     }
@@ -219,6 +220,7 @@ fn builtin_read_line(
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 line.into(),
+                                None,
                             ))))
                         }
                     }
@@ -271,7 +273,7 @@ fn builtin_read(
                         "read: requires a file opened for reading or string",
                     )),
                 },
-                ExpEnum::Atom(Atom::String(input)) => do_read(environment, input),
+                ExpEnum::Atom(Atom::String(input, _)) => do_read(environment, input),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",
