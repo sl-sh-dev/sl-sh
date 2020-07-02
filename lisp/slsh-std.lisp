@@ -5,4 +5,5 @@
 (load "struct.lisp")
 (load "iterator.lisp")
 (load "shell.lisp")
+(load "test.lisp")
 

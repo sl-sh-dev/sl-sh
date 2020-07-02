@@ -1,8 +1,8 @@
 #!./target/debug/sl-sh
 
 (ns-import 'core)
+(ns-import 'iterator)
 (ns-import 'shell)
-(load "tests/test.lisp")
 (ns-import 'test)
 
 ;;TODO sstanfield replace get-error with prog-error
@@ -31,7 +31,7 @@
 
 (defn make-test-list-from-symbols (symbols-list a-ns) (progn
 	(defq test-list (list))
-	(col-for sym in symbols-list (progn
+	(for sym in symbols-list (progn
 	(defq fully-qualified-symbol (to-symbol (str a-ns "::" sym)))
 	(when (and
 			(func? (eval fully-qualified-symbol))
@@ -138,7 +138,7 @@
 (run-tests-for "module tests" file-test-list final-test-report)
 
 ;; run tests for non-root namespaces
-(col-for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
+(for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
 	(printer (str "Tests from " a-ns))
 	(defq sym-list (qsort (eval (to-symbol (str a-ns "::*ns-exports*")))))
 	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
@@ -244,7 +244,7 @@
 	(defq global-total 0)
 	(defq global-notest 0)
 	(defq global-passed 0)
-	(col-for test in report-list (progn
+	(for test in report-list (progn
 		(defq total (hash-get test :total))
 
 		(defq failed (hash-get test :failed))

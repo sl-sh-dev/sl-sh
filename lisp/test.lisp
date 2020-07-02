@@ -1,5 +1,4 @@
 (if (ns-exists? 'test) (ns-enter 'test) (ns-create 'test))
-;(ns-import 'core)
 
 (defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))
@@ -40,20 +39,15 @@
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
-	;`(eval (str "(progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) ")")))
-	`(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
+    `(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (progn "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
 
 (defmacro run-example (sym)
-	`(progn
-       ;;(println "hey! " sym)
-		(defq doc-list (str-split "Example:" (str (doc ,sym))))
-        ;;(println "doc-list len: " (vec-nth 0 doc-list))
-		(if (> (length doc-list) 1)
-			(progn
-              ;;(println "ok i will run the test")
+    `(progn
+        (defq doc-list (str-split "Example:" (str (doc ,sym))))
+        (if (> (length doc-list) 1)
+            (progn
              (eval (str "(progn " (println (vec-nth 1 doc-list)) (str (vec-nth 1 doc-list)) ")")))
-			(progn
-              ;;(println "there aint no test")
+            (progn
              :no-test))))
 
 (ns-export '(assert-equal assert-not-equal assert-true assert-false run-example))

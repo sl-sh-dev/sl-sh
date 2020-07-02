@@ -101,6 +101,12 @@ Example:
 "
        (self predicate) ((filter-iter) :init predicate self))
 
+  (:fn slice
+       (self start &rest end)
+           (if (= (length end) 1) ((slice-iter) :init self start (vec-nth 0 end))
+               (> (length end) 1) (err "iter :slice Wrong number of arge (start end?)")
+               ((slice-iter) :init self start)))
+
   (:fn nth!
 "Consume the iterator until the nth! element and return it (0 based).
 Note that repeated called to nth! will return new data since it consumes the iterator.
@@ -291,6 +297,49 @@ Example:
   (:fn init (self mfn d) (progn (set 'data (iter d))
                                 (set 'map-fn mfn)
                                 self))
+  (:impl iterator))
+
+(defstruct slice-iter 
+"Iterator that provides a slice of the underlying iter.  Slice iter will consume
+the iterator it is slicing.
+
+Section: iterator
+
+Example:
+(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 3 6))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-equal 4 (test-slice-iter :next!))
+(assert-equal 5 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 0 3))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 0 (test-slice-iter :next!))
+(assert-equal 1 (test-slice-iter :next!))
+(assert-equal 2 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 7 (test-slice-iter :next!))
+(assert-equal 8 (test-slice-iter :next!))
+(assert-equal 9 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+"
+  ; fields
+  (data nil)
+  (start 0)
+  (total nil)
+  (count 0)
+  ; methods
+  (:fn next! (self) (progn (set 'count (+ count 1)) (if (or (null total)(<= count total)) (data :next!) nil)))
+  (:fn empty? (self) (or (data :empty?)(and (not (null total))(>= count total))))
+  (:fn init (self d s &rest e) (progn
+                                 (set 'data (iter d))
+                                 (for _ in (range s) (data :next!))
+                                 (set 'start s)
+                                 (if (= (length e) 1) (set 'total (- (vec-nth 0 e) start))
+                                     (> (length e) 1) (err "slice-iter :init Wrong number of arge (iter start end?)"))
+                                 self))
   (:impl iterator))
 
 (defstruct filter-iter
@@ -541,6 +590,36 @@ Example:
 "
     (map-fn items) ((iter items) :map map-fn))
 
+(defn slice
+"Provides a slice of iterator.  Will call iter on items.  Slice iter will consume
+the iterator it is slicing.
+
+Section: iterator
+
+Example:
+(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 3 6))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-equal 4 (test-slice-iter :next!))
+(assert-equal 5 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 0 3))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 0 (test-slice-iter :next!))
+(assert-equal 1 (test-slice-iter :next!))
+(assert-equal 2 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 7 (test-slice-iter :next!))
+(assert-equal 8 (test-slice-iter :next!))
+(assert-equal 9 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+"
+    (items start &rest end) (if (= (length end) 1) ((iter items) :slice start (vec-nth 0 end))
+                           (> (length end) 1) (err "slice: Wrong number of args (items start end?).")
+                           ((iter items) :slice start)))
+
 (defn filter
 "Returns a filter-iter around items (will call iter on items).
 Iterator that applies a lambda to each element to determine if is returned- is lazy.
@@ -560,6 +639,8 @@ Example:
 "Produce an iterator the is the reverse of items.  Will call iter on items and 
 requires a double ended iterator.
 
+Section: iterator
+
 Example:
 (def 'tmap (reverse ((vec-iter) :init '#(0 1 2) 0)))
 (assert-false (tmap :empty?))
@@ -574,6 +655,8 @@ Example:
 "Consume the iterator until the idx (nth) element and return it (0 based).
 Note that repeated called to nth will return new data since it consumes the iterator.
 
+Section: iterator
+
 Example:
 (def 'tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
@@ -583,6 +666,51 @@ Example:
 (assert-true (tmap :empty?))
 "
     (idx coll) ((iter coll) :nth! idx))
+
+(defn reduce
+"
+reduce is used to amalgamate a provided iterator, coll, and an intitial value,
+init-val, according to the reducing function, reducing-fcn, provided.  The
+iter function will be called on coll to make sure it is an iterator. The
+reducing-fcn should be a function of two arguments. In the first iteration of
+reduce, the init-val will be used as the first argument to the reducing-fcn and
+(next! coll) will be used as the second argument. For all subsequent iterations,
+The result from the previous application of the reducing-fcn will be used as the
+first argument to the reducing-fcn and the second argument will be the next item
+in the collection when the collection is empty reduce will return the
+amalgamated result.
+
+Section: iterator
+
+Example:
+
+(assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))))
+(assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
+(assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
+"
+    (reducing-fcn init-val coll) (progn
+    ; Only call iter on coll once.
+    (defn inner-reduce (reducing-fcn init-val coll)
+        (if (coll :empty?)
+                init-val
+                (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll)))
+    (inner-reduce reducing-fcn init-val (iter coll))))
+
+(defn reduce-times
+"Apply wrapping-fcn to value number of times. Function is recursive. Recursive
+binding for value is previous application of wrapping function to value.
+
+Section: iterator
+
+Example:
+
+(assert-equal (list (list 3)) (reduce-times 3 list 2))
+(assert-equal 5 (reduce-times (reduce-times 5 list 5) first 5))
+"
+    (value wrapping-fcn times)
+    (if (<= times 0)
+        value
+        (recur (wrapping-fcn value) wrapping-fcn (- times 1))))
 
 (defmacro for
 "
@@ -598,12 +726,12 @@ Example:
 (iterator::for x in (iterator::range 11) (set 'i (+ 1 i)))
 (assert-equal 11 i)
 "
-	(bind in items body) (progn
-	(if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-	`(loop (plist) ((iterator::iter ,items)) (if (not (plist :empty?)) (progn
-		(def ',bind (plist :next!))
-		(,@body)
-		(recur plist))))))
+    (bind in items body) (progn
+    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
+    `(loop (plist) ((iterator::iter ,items)) (if (not (plist :empty?)) (progn
+        (def ',bind (plist :next!))
+        (,@body)
+        (recur plist))))))
 
 (ns-export '(
     iterator
@@ -613,6 +741,7 @@ Example:
     iter?
     iter
     map-iter
+    slice-iter
     filter-iter
     reverse-iter
     range-iter
@@ -623,7 +752,10 @@ Example:
     collect-vec
     collect-str
     map
+    slice
     filter
     reverse
     nth!
+    reduce
+    reduce-times
     for))
