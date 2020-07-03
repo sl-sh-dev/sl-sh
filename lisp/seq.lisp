@@ -308,5 +308,5 @@ Example:
     (quick-inner comp-fn sorted to-sort)
     sorted))
 
-(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! append append! in? qsort))
+(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! in? qsort))
 

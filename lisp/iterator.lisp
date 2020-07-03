@@ -107,6 +107,17 @@ Example:
                (> (length end) 1) (err "iter :slice Wrong number of arge (start end?)")
                ((slice-iter) :init self start)))
 
+  (:fn count
+"Consume the iterator and return the number of items.
+
+Example:
+(def 'tmap (test-iter))
+(assert-false (tmap :empty?))
+(assert-equal 3 (tmap :count))
+(assert-true (tmap :empty?))
+"
+       (self) (progn (def 'count 0) (iterator::for _ in self (set 'count (+ count 1))) count))
+
   (:fn nth!
 "Consume the iterator until the nth! element and return it (0 based).
 Note that repeated called to nth! will return new data since it consumes the iterator.
@@ -297,6 +308,56 @@ Example:
   (:fn init (self mfn d) (progn (set 'data (iter d))
                                 (set 'map-fn mfn)
                                 self))
+  (:impl iterator))
+
+(defstruct append-iter 
+"Iterator that appends multiple iterators.  Append iter will consume
+the iterators it is appending.
+
+Section: iterator
+
+Example:
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def 'test-slice-iter (test-iter :slice 3 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-equal 4 (test-slice-iter :next!))
+(assert-equal 5 (test-slice-iter :next!))
+(assert-equal 6 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def 'test-slice-iter (test-iter :slice 0 4))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 0 (test-slice-iter :next!))
+(assert-equal 1 (test-slice-iter :next!))
+(assert-equal 2 (test-slice-iter :next!))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def 'test-slice-iter (test-iter :slice 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 7 (test-slice-iter :next!))
+(assert-equal 8 (test-slice-iter :next!))
+(assert-equal 9 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+"
+  ; fields
+  (iters nil)
+  ; methods
+  (:fn next! (self) (progn (def 'res ((car iters) :next!)) (if ((car iters) :empty?) (set 'iters (cdr iters))) res))
+  (:fn empty? (self) (null iters))
+  (:fn init (self first-iter &rest rest-iters) (progn
+    (def 'tcell nil)
+    (def 'tseq (set 'iters (join (iterator::iter first-iter) nil)))
+    (iterator::for v in rest-iters (progn
+        (set 'tcell (join (iterator::iter v) nil))
+        (xdr! tseq tcell)
+        (set 'tseq tcell)))
+    self))
   (:impl iterator))
 
 (defstruct slice-iter 
@@ -712,6 +773,56 @@ Example:
         value
         (recur (wrapping-fcn value) wrapping-fcn (- times 1))))
 
+(defn append
+"Combine the provided items into a single iterator (calls iter on each parameter).
+
+Example:
+(def 'test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+"
+    (first-iter &rest rest-iters) (apply (append-iter) :init first-iter rest-iters))
+
+(defmacro append!
+"Combine the provided items into a single iterator (calls iter on each parameter).
+Sets the first parameter to the value of the new iterator.
+
+Example:
+(def 'test-iter '(0 1 2))
+(append! test-iter '#(3 4 5) '(6 7 8 9))
+(def 'test-slice-iter (test-iter :slice 3 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-equal 4 (test-slice-iter :next!))
+(assert-equal 5 (test-slice-iter :next!))
+(assert-equal 6 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append! test-iter '#(3 4 5) '(6 7 8 9))
+(def 'test-slice-iter (test-iter :slice 0 4))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 0 (test-slice-iter :next!))
+(assert-equal 1 (test-slice-iter :next!))
+(assert-equal 2 (test-slice-iter :next!))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append! test-iter '#(3 4 5) '(6 7 8 9))
+(def 'test-slice-iter (test-iter :slice 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 7 (test-slice-iter :next!))
+(assert-equal 8 (test-slice-iter :next!))
+(assert-equal 9 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append! test-iter '#(3 4 5) '(6 7 8 9))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+"
+    (first-iter &rest rest-iters) `(set ',first-iter ((iterator::append-iter) :init ,first-iter ,@rest-iters)))
+
 (defmacro for
 "
 Loops over each element in an iterator.  Will call iter on the input object.
@@ -741,6 +852,7 @@ Example:
     iter?
     iter
     map-iter
+    append-iter
     slice-iter
     filter-iter
     reverse-iter
@@ -758,4 +870,6 @@ Example:
     nth!
     reduce
     reduce-times
+    append
+    append!
     for))

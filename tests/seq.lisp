@@ -46,7 +46,7 @@ Some stuff
     (assert-true (and (assert-equal (butlast l1) '(1 2)) (assert-equal l1 '(1 2 3)))  (str ". line number: " (meta-line-no)))
     (assert-true (and (= (vec-nth 1 l1) 2) (assert-equal l1 '(1 2 3)))  (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (vec-setnth! 1 'x l1) '(1 x 3)) (assert-equal l1 '(1 x 3))) (str ". line number: " (meta-line-no)))
-    (assert-true (and (assert-equal (append l1 l2) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
+    (assert-true (and (assert-equal (core::append l1 l2) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (vec-push! l1 4) '(1 x 3 4)) (assert-equal l1 '(1 x 3 4))) (str ". line number: " (meta-line-no)))
     (setq l4 (vec-nth 2 l3))
     (vec-push! l4 'd)
@@ -77,16 +77,16 @@ Some stuff
 (let ((long-list (list "A" (list "B")))
     (short-list '("A" ("B")))
     (model-list (list "A" (list "B" "C"))))
-    (assert-equal model-list (progn (append! (last long-list) "C") long-list) (str ". line number: " (meta-line-no)))
-    (assert-equal model-list (progn (append! (last short-list) "C") short-list)) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (progn (core::append! (last long-list) "C") long-list) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (progn (core::append! (last short-list) "C") short-list)) (str ". line number: " (meta-line-no)))
 
 ;; check mutability of nested lists
 (let ((list-of-lists (list (list "1") (list "A")))
     (list-of-empty-lists (list (list) (list)))
     (add-to-front-and-back-list (fn (target to-first to-last)
         (progn
-            (append! (first target) to-first)
-            (append! (last target) to-last)
+            (core::append! (first target) to-first)
+            (core::append! (last target) to-last)
             target))))
     (assert-equal
         (list (list "1" "2") (list "A" "B"))
@@ -98,5 +98,5 @@ Some stuff
 ;; check adding lists to lists
 (let ((initial-list (list "A"))
     (complete-list (list "A" "B")))
-    (assert-equal complete-list (append initial-list "B") (str ". line number: " (meta-line-no)))
-    (assert-equal (list "A" "B" (list "C")) (append complete-list (list (list "C")))) (str ". line number: " (meta-line-no)))
+    (assert-equal complete-list (core::append initial-list "B") (str ". line number: " (meta-line-no)))
+    (assert-equal (list "A" "B" (list "C")) (core::append complete-list (list (list "C")))) (str ". line number: " (meta-line-no)))
