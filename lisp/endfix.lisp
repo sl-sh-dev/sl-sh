@@ -24,6 +24,8 @@
 ;; 4. need ability to include any number of exec hooks to allow for conditionally
 ;;	adding completions.
 
+(ns-import 'iterator)
+
 (defn identity ()
 	(fn (x) x))
 
@@ -84,7 +86,7 @@
 		(err "Expressions with infix symbols must have at least 3 forms")
 		(match order
 			(:as-is ast)
-			(:swap-last-for-first (append (list (first ast)) (last ast) (butlast (rest ast))))
+			(:swap-last-for-first (collect-vec (append (list (first ast)) (last ast) (butlast (rest ast)))))
 			(nil (err "Unable to apply ordering, unknown order symbol.")))))
 
 (defn prefixify-cmd (cmd-toks prefix-props)
@@ -101,12 +103,12 @@
 							(if (= infix-symbol next-tok)
 								(progn
 									(apply-xform cmd-ast)
-										(append!
+										(append-to!
 										cmd-ast
 										(vec (make-vec)))
 										cmd-ast)
 								(progn
-									(append!
+									(append-to!
 										(last cmd-ast)
 										(if (seq? next-tok) next-tok (vec next-tok)))
 									cmd-ast))
@@ -161,12 +163,12 @@
 		(defq rst (rest orig-ast))
 		(if (empty-seq? orig-ast)
 			(check-for-infix-notation new-ast)
-			(recur (append new-ast
+			(recur (collect-vec (append new-ast
 						(if (non-empty-seq? fst)
 							(progn
 								(defq prefixified-subform (check-for-infix-notation fst))
 								(vec (recursively-check-for-infix-notation (make-vec) prefixified-subform)))
-							(vec fst)))
+							(vec fst))))
 				rst))))
 
 (defn remove-any-infix-notation (cmd-ast)
@@ -177,7 +179,7 @@
 	of the properties needed to prexfixify the command and the index of the
 	infix symbol."
 	(cmd-ast idx)
-	(if (= idx (length cmd-ast))
+	(if (>= idx (length cmd-ast))
 	  nil
 	  (progn
 		(defq nxt (vec-nth idx cmd-ast))
@@ -196,7 +198,7 @@
 	`((cat file | grep -i user) out> users)`
 	which can be more easily processed and turned into the prefixified version"
 	(cmd-ast idx)
-	(append (vec (vec-slice cmd-ast 0 idx)) (vec-slice cmd-ast idx (length cmd-ast))))
+	(collect-vec (append (vec (vec-slice cmd-ast 0 idx)) (vec-slice cmd-ast idx (length cmd-ast)))))
 
 (defn modify-if-mixed-infix-notation (cmd-ast idx previous)
 	(progn
@@ -258,8 +260,7 @@
 
 (defn endfix-hook (cmd-str)
 	(progn
-		(defq parsed (get-error (defq cmd-ast (read cmd-str)) :success))
-		(if (not (= parsed :success))
+		(if (= (car (get-error (defq cmd-ast (read cmd-str)))) :error)
 		cmd-str
 		(progn
 			(match (length cmd-ast)

@@ -354,7 +354,6 @@ Returns the list of all symbols in namespace (must evaluate to a string or symbo
 Section: namespace
 
 Example:
-(test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'core))
 (test::assert-includes 'loop (ns-symbols 'root))
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'root))
 (test::assert-includes 'car (ns-symbols 'root))

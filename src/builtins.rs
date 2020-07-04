@@ -251,11 +251,9 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
                 &String::from_utf8_lossy(endfix_lisp),
                 file_name,
             ),
-            "test.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(test_lisp),
-                file_name,
-            ),
+            "test.lisp" => {
+                read_list_wrap(environment, &String::from_utf8_lossy(test_lisp), file_name)
+            }
             "slsh-std.lisp" => read_list_wrap(
                 environment,
                 &String::from_utf8_lossy(slsh_std_lisp),
@@ -1814,22 +1812,26 @@ fn builtin_get_error(
         match eval(environment, arg) {
             Ok(exp) => ret = Some(exp),
             Err(err) => {
-                let mut v = Vec::new();
-                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                let err_sym = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
                     environment.interner.intern(":error"),
-                ))));
+                )));
                 let msg = format!("{}", err);
-                v.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
-                    msg.into(),
-                    None,
-                ))));
+                let err_msg =
+                    Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg.into(), None)));
                 environment.stack_on_error = old_err;
-                return Ok(Expression::with_list(v));
+                return Ok(Expression::alloc_data_h(ExpEnum::Pair(err_sym, err_msg)).into());
             }
         }
     }
     environment.stack_on_error = old_err;
-    Ok(ret.unwrap_or_else(Expression::make_nil))
+    let ok = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+        environment.interner.intern(":ok"),
+    )));
+    Ok(Expression::alloc_data_h(ExpEnum::Pair(
+        ok,
+        ret.unwrap_or_else(Expression::make_nil).into(),
+    ))
+    .into())
 }
 
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
@@ -2350,7 +2352,7 @@ If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
 provided expression will be evaluated as part of call).
 
-Section: core
+Section: root
 
 Example:
 (def 'test-eval-one nil)
@@ -2370,7 +2372,7 @@ Example:
 
 Execute the provided system command with the supplied arguments.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
@@ -2387,7 +2389,7 @@ Example:
 
 Call the provided function with the supplied arguments.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-fncall-one nil)
@@ -2406,7 +2408,7 @@ Example:
 
 Call the provided function with the suplied arguments, last is a list that will be expanded.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-apply-one nil)
@@ -2425,13 +2427,13 @@ Example:
 
 After evaluation first form, make sure the following cleanup forms run (returns first form's result).
 
-Section: core
+Section: root
 
 Example:
 (def 'test-unwind-one nil)
 (def 'test-unwind-err (get-error
 (unwind-protect (err \"Some protected error\") (set 'test-unwind-one \"got it\"))))
-(test::assert-equal '#(:error \"Some protected error\") test-unwind-err)
+(test::assert-equal '(:error . \"Some protected error\") test-unwind-err)
 (test::assert-equal \"got it\" test-unwind-one)
 
 (def 'test-unwind-one nil)
@@ -2442,7 +2444,7 @@ Example:
 (unwind-protect
     (progn (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
     (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
-(test::assert-equal '#(:error \"Some protected error two\") test-unwind-err)
+(test::assert-equal '(:error . \"Some protected error two\") test-unwind-err)
 (test::assert-equal \"set one\" test-unwind-one)
 (test::assert-equal nil test-unwind-two)
 (test::assert-equal \"set three\" test-unwind-three)
@@ -2458,11 +2460,11 @@ Example:
 
 Raise an error with the supplied string.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-err-err (get-error (err \"Test Error\")))
-(test::assert-equal '#(:error \"Test Error\") test-err-err)
+(test::assert-equal '(:error . \"Test Error\") test-err-err)
 ",
             root,
         ),
@@ -2498,7 +2500,7 @@ Example:
 
 Return length of suplied expression.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal 0 (length nil))
@@ -2565,7 +2567,7 @@ Example:
 
 Print the arguments (as strings) to *stdout*.
 
-Section: core
+Section: root
 
 Example:
 ; Use a file for stdout for test.
@@ -2583,7 +2585,7 @@ Example:
 
 Print the arguments (as strings) to *stdout* and then a newline.
 
-Section: core
+Section: root
 
 Example:
 ; Use a file for stdout for test.
@@ -2601,7 +2603,7 @@ Example:
 
 Print the arguments (as strings) to *stderr*.
 
-Section: core
+Section: root
 
 Example:
 ; Use a file for stderr for test.
@@ -2619,7 +2621,7 @@ Example:
 
 Print the arguments (as strings) to *stderr* and then a newline.
 
-Section: core
+Section: root
 
 Example:
 ; Use a file for stderr for test.
@@ -2638,7 +2640,7 @@ Build a formatted string from arguments.
 
 Arguments will be turned into strings.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal \"stringsome\" (format \"string\" \"some\"))
@@ -2657,7 +2659,7 @@ Example:
 
 Evaluatate each form and return the last.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-progn-one nil)
@@ -2678,7 +2680,7 @@ Example:
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-progn-one nil)
@@ -2741,7 +2743,7 @@ Example:
 
 Adds an expression to the current scope.  Return the expression that was defined.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-progn-one nil)
@@ -2773,7 +2775,7 @@ Example:
 Remove a symbol from the current scope (if it exists).  Returns the expression
 that was removed.  It is an error if symbol is not defined in the current scope.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-undef nil)
@@ -2783,7 +2785,7 @@ Example:
 (def 'test-undef \"undef\")
 (test::assert-equal \"undef\" (undef 'test-undef))
 (test::assert-false (def? 'test-undef))
-(test::assert-equal '#(:error \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\") (get-error (undef 'test-undef)))
+(test::assert-equal '(:error . \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\") (get-error (undef 'test-undef)))
 ",
             root,
         ),
@@ -2803,7 +2805,7 @@ result of the dynamic binding (for instance creating a dynamic binding for
 used indirectly).  Calls to dyn can be nested and previous dynamic values will
 be restored as interior dyn's exit.
 
-Section: core
+Section: root
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
@@ -2823,7 +2825,7 @@ Convert a string, symbol, int or float to a symbol.
 
 If the symbol is new it will be interned.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-to-symbol-sym nil)
@@ -2847,7 +2849,7 @@ Convert a symbol to its string representation.
 
 The string will be the symbol name as a string.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-symbol-name-sym nil)
@@ -2865,7 +2867,7 @@ Example:
 
 Create a function (lambda).
 
-Section: core
+Section: root
 ",
             root,
         ),
@@ -2879,7 +2881,7 @@ Section: core
 Return expression without evaluation.
 The reader macro 'expression will expand to (quote expression).
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal (list 1 2 3) (quote (1 2 3)))
@@ -2901,7 +2903,7 @@ Always use the ` reader macro or expansion will not work
 
 Backquote (unlike quote) allows for symbol/form evaluation using , or ,@.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal (list 1 2 3) `(1 2 3))
@@ -3009,7 +3011,7 @@ Return true if symbol is defined.
 Expression will be evaluated and if a symbol or string it will look up that
 name in the symbol table and return true if it exists.
 
-Section: core
+Section: root
 
 Example:
 (def 'test-is-def t)
@@ -3030,7 +3032,7 @@ Example:
 
 Define an anonymous macro.
 
-Section: core
+Section: root
 ",
             root,
         ),
@@ -3045,7 +3047,7 @@ Expands a macro expression.  If that expansion is also a macro then expand it re
 
 Just returns the expression if not a macro.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
@@ -3078,7 +3080,7 @@ Expands a macro expression.  Only expand the first macro.
 
 Just returns the expression if not a macro.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
@@ -3110,7 +3112,7 @@ Expands a macro expression like expand-macro but also expand any embedded macros
 
 Just returns the expression if not a macro.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
@@ -3140,7 +3142,7 @@ Example:
             builtin_recur,
             "Usage: (recur &rest)
 
-Section: core",
+Section: root",
             root,
         ),
     );
@@ -3155,7 +3157,7 @@ Generate a unique symbol.
 Gensym uses a prefix of gs@@ followed by an incrementing counter.
 It is useful to generate unique symbol names when writing macros (for instance).
 
-Section: core
+Section: root
 
 Example:
 (def 'test-gensym-one (gensym))
@@ -3254,7 +3256,7 @@ Only execute system commands not forms within this form.
 Section: shell
 
 Example:
-(test::assert-equal '#(:error \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
+(test::assert-equal '(:error . \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
 ", root
         ),
@@ -3287,7 +3289,7 @@ Like progn but do not execute system commands within this form.
 Section: shell
 
 Example:
-(test::assert-equal '#(:error \"Not a valid form true, not found.\") (get-error (form (true))))
+(test::assert-equal '(:error . \"Not a valid form true, not found.\") (get-error (form (true))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
             root,
@@ -3335,7 +3337,7 @@ t
 
 Print the eval stack on error.
 
-Section: core
+Section: root
 
 Example:
 ;(error-stack-on)
@@ -3352,7 +3354,7 @@ t
 
 Do not print the eval stack on error.
 
-Section: core
+Section: root
 
 Example:
 ;(error-stack-off)
@@ -3365,18 +3367,20 @@ t
         interner.intern("get-error"),
         Expression::make_function(
             builtin_get_error,
-            "Usage: (get-error exp0 ... expN)
+            "Usage: (get-error exp0 ... expN) -> pair
 
-Evaluate each form (like progn) but on error return #(:error msg) instead of aborting.
+Evaluate each form (like progn) but on error return (:error . msg) instead of aborting.
+On success return (:ok . expN-result).
 
-If there is no error will return the value of the last expression.
+If there is no error will return the value of the last expression as the cdr of
+the pair.  Always returns a pair with the first value either being :ok or :error.
 
-Section: core
+Section: root
 
 Example:
-(test::assert-equal '#(:error \"Some Error\") (get-error (err \"Some Error\")))
-(test::assert-equal \"Some String\" (get-error \"Some String\"))
-(test::assert-equal \"Some Other String\" (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
+(test::assert-equal '(:error . \"Some Error\") (get-error (err \"Some Error\")))
+(test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
+(test::assert-equal '(:ok . \"Some Other String\") (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
 ", root
         ),
     );
@@ -3388,7 +3392,7 @@ Example:
 
 Return the doc string for a symbol or nil if no string.
 
-Section: core
+Section: root
 
 Example:
 ;(doc 'car)
@@ -3405,7 +3409,7 @@ t
 
 Return the raw (unexpanded) doc string for a symbol or nil if no string.
 
-Section: core
+Section: root
 
 Example:
 ;(doc-raw 'car)
@@ -3424,7 +3428,7 @@ t
 Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like progn).
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3444,7 +3448,7 @@ Example:
 
 Causes enclosing block with name (name is not evaluated) to evaluate to expression.
 
-Section: core
+Section: root
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3464,7 +3468,7 @@ Example:
 
 Prints the stats for interned symbols.
 
-Section: core
+Section: root
 
 Example:
 ;(intern-stats)
@@ -3482,7 +3486,7 @@ t
 
 Line number from the file this came from.
 
-Section: core
+Section: root
 
 Example:
 ;(meta-line-no)
@@ -3500,7 +3504,7 @@ t
 
 Column number from the file this came from.
 
-Section: core
+Section: root
 
 Example:
 ;(meta-column-no)
@@ -3518,7 +3522,7 @@ t
 
 File name of the file this came from.
 
-Section: core
+Section: root
 
 Example:
 ;(meta-file-name)
@@ -3539,7 +3543,7 @@ symbols or vectors or lists of symbols (or any combination).
 This is intended for helping with structs and interfaces in lisp, you probably
 do not want to use it.
 
-Section: core
+Section: root
 
 Example:
 (def 'meta-add-tags-var '(1 2 3))
@@ -3567,7 +3571,7 @@ Example:
 True if expression has the meta tag 'tag' set.  This is intended for helping
 with structs and interfaces in lisp, you probably do not want to use it.
 
-Section: core
+Section: root
 
 Example:
 (def 'meta-add-tag-var '(1 2 3))

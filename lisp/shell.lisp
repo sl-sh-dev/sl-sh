@@ -1,5 +1,4 @@
 (if (ns-exists? 'shell) (ns-enter 'shell) (ns-create 'shell))
-(ns-import 'core)
 
 ;;; Macros to make working with the shell easier.
 
@@ -20,11 +19,11 @@ Section: shell
 			(defq docstring (vec-nth 0 args))
 			(defq body (vec-nth 1 args))
 			`(defmacro ,name ,docstring (&rest ars)
-				(append (quote ,body) ars))))
+				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(1 (progn
 			(defq body (vec-nth 0 args))
 			`(defmacro ,name (&rest ars)
-				(append (quote ,body) ars))))
+				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
 		(nil (err usage)))))
 

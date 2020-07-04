@@ -9,7 +9,6 @@
 Some stuff
 |#
 
-(ns-import 'core)
 (ns-import 'test)
 
 (let ((non-empty-vec (vec 'a))
@@ -46,7 +45,7 @@ Some stuff
     (assert-true (and (assert-equal (butlast l1) '(1 2)) (assert-equal l1 '(1 2 3)))  (str ". line number: " (meta-line-no)))
     (assert-true (and (= (vec-nth 1 l1) 2) (assert-equal l1 '(1 2 3)))  (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (vec-setnth! 1 'x l1) '(1 x 3)) (assert-equal l1 '(1 x 3))) (str ". line number: " (meta-line-no)))
-    (assert-true (and (assert-equal (core::append l1 l2) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
+    (assert-true (and (assert-equal (collect (append l1 l2)) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (vec-push! l1 4) '(1 x 3 4)) (assert-equal l1 '(1 x 3 4))) (str ". line number: " (meta-line-no)))
     (setq l4 (vec-nth 2 l3))
     (vec-push! l4 'd)
@@ -98,5 +97,5 @@ Some stuff
 ;; check adding lists to lists
 (let ((initial-list (list "A"))
     (complete-list (list "A" "B")))
-    (assert-equal complete-list (core::append initial-list "B") (str ". line number: " (meta-line-no)))
-    (assert-equal (list "A" "B" (list "C")) (core::append complete-list (list (list "C")))) (str ". line number: " (meta-line-no)))
+    (assert-equal complete-list (collect (append initial-list '("B"))) (str ". line number: " (meta-line-no)))
+    (assert-equal (list "A" "B" (list "C")) (collect (append complete-list (list (list "C")))) (str ". line number: " (meta-line-no))))

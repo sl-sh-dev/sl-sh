@@ -134,10 +134,8 @@ fn builtin_vec_nth(
                 if let ExpEnum::Atom(Atom::Int(idx)) = &eval(environment, idx)?.get().data {
                     if let ExpEnum::Vector(list) = &eval(environment, list)?.get().data {
                         if *idx < 0 || *idx >= list.len() as i64 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "vec-nth index out of range",
-                            ));
+                            let msg = format!("vec-nth index {} out of range {}", idx, list.len());
+                            return Err(io::Error::new(io::ErrorKind::Other, msg));
                         }
                         return Ok(list[*idx as usize].clone().into());
                     }

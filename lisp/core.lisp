@@ -324,7 +324,7 @@ Example:
                     (defq sexp nil)
                     (defq fcn (first forms))
                     (if (seq? fcn)
-                        (setq sexp (collect (append (list (first fcn)) curr-form (rest fcn))))
+                        (setq sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
                         (setq sexp (list fcn curr-form)))
                     (recur (eval sexp) (rest forms))))))))
 
@@ -353,7 +353,7 @@ Example:
                     (defq sexp nil)
                     (defq fcn (first forms))
                     (if (seq? fcn)
-                        (setq sexp (collect (append fcn curr-form)))
+                        (setq sexp (collect (iterator::append fcn curr-form)))
                         (setq sexp (list fcn curr-form)))
                     (recur (eval sexp) (rest forms))))))))
 

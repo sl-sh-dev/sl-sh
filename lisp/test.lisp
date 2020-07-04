@@ -9,15 +9,34 @@
                 nil
                 (recur (rest list1) (rest list2))))))
 
+(defn pair= (pair1 pair2)
+    (if (not (and (pair? pair1)(pair? pair2))) nil
+        (and (null pair1)(null pair2)) t
+        (and (null pair1)(not (null pair2))) nil
+        (and (not (null pair1))(null pair2)) nil
+        (not (= (car pair1)(car pair2))) nil
+        (not (= (cdr pair1)(cdr pair2))) nil
+        t))
+
 (defn assert-equal (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
-          (if (lists= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
-          (if (= expected-val right-val) t (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))))
+              (if (lists= expected-val right-val) t
+                  (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
+          (pair? expected-val)
+              (if (pair= expected-val right-val) t
+                  (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))
+          (= expected-val right-val) t
+          (progn (println (apply str "Expected " expected-val " got " right-val args))(exit 1))))
 
 (defn assert-not-equal (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
-          (if (not (lists= expected-val right-val)) t (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 2)))
-          (if (not (= expected-val right-val)) t (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1)))))
+              (if (not (lists= expected-val right-val)) t
+                  (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 2)))
+          (pair? expected-val)
+              (if (not (pair= expected-val right-val)) t
+                  (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1)))
+          (not (= expected-val right-val)) t
+          (progn (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1))))
 
 (defn assert-true (value &rest args)
       (apply assert-equal t value args))

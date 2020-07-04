@@ -1,6 +1,5 @@
 #!./target/debug/sl-sh
 
-(ns-import 'core)
 (ns-import 'iterator)
 (ns-import 'shell)
 (ns-import 'test)
@@ -115,10 +114,10 @@
 				(setq exit-status :no-test))
 			(progn
 				(defq test-result
-					(prog-error
+					(get-error
 						((hash-get fst :load-fcn))))
-				(when (and (hash? test-result) (hash-haskey test-result :error)) (progn
-					(setq exit-status (hash-get test-result :error))
+				(when (= (car test-result) :error) (progn
+					(setq exit-status (cdr test-result))
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
 		(recur (rest tests) test-report)))))))

@@ -1,5 +1,5 @@
 ;;; Forms that work with sequences (list or vectors).
-(if (ns-exists? 'core) (ns-enter 'core) (ns-create 'core))
+;(if (ns-exists? 'core) (ns-enter 'core) (ns-create 'core))
 
 (defn seq?
 "Usage: (seq? expression) -> t/nil
@@ -140,56 +140,6 @@ Example:
     (when (and (seq? seq-to-search ) (not (empty-seq? seq-to-search)))
         (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
 
-(def 'append nil)
-(let ((tseq))
-    (defn copy-els (to l) (progn
-        (def 'tcell nil)
-        (col-for el in l
-            (if (null to)
-                (progn (set 'tseq (set 'to (join el nil))))
-                (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell))))
-        to))
-
-    (defn last-cell (obj)
-        (if (list? obj)
-            (if (null (cdr obj))
-                obj
-                (recur (cdr obj)))
-            (err "Not a list")))
-
-    (setfn append
-"
-Produces a new list (type will be same as first parameter) by appending the other lists onto the first.
-
-Section: sequence
-"
-        (l1 &rest others) (progn
-        (def 'ret nil)
-        (if (vec? l1)
-            (progn
-                (set 'ret (make-vec))
-                (col-for el in l1 (vec-push! ret el))
-                (col-for l in others
-                    (if (seq? l)
-                        (col-for el in l (vec-push! ret el))
-                        (vec-push! ret l))))
-            (if (list? l1)
-                (progn
-                    (set 'ret (copy-els ret l1))
-                    (col-for l in others
-                        (if (seq? l)
-                            (set 'ret (copy-els ret l))
-                            (progn
-                                (def 'tcell (join l nil))
-                                (if (not (null tseq))
-                                    (xdr! tseq tcell))
-                                (set 'tseq tcell)
-                                (if (null ret) (set 'ret tseq))
-                                ))))
-                (err "append: First element not a list or vector.")))
-        (set 'tseq nil)
-        ret)))
-
 (defn qsort
 "Usage: (qsort sequence comp-lambda?) -> [sorted vector]
 
@@ -255,5 +205,5 @@ Example:
     (quick-inner comp-fn sorted to-sort)
     sorted))
 
-(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! in? qsort))
+;(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! in? qsort))
 

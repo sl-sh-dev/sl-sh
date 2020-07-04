@@ -247,6 +247,8 @@ Example:
 (assert-equal 2 (test-vec-iter :next!))
 (assert-equal 3 (test-vec-iter :next!))
 (assert-true (test-vec-iter :empty?))
+(def 'test-vec-iter ((vec-iter) :init (vec) 0))
+(assert-true (test-vec-iter :empty?))
 "
   ; fields
   (data nil)
@@ -312,7 +314,8 @@ Example:
 
 (defstruct append-iter 
 "Iterator that appends multiple iterators.  Append iter will consume
-the iterators it is appending.
+the iterators it is appending.  If non-list items are passed they are wrapped in
+a singleton iterator (i.e. will work with loose object).
 
 Section: iterator
 
@@ -325,7 +328,7 @@ Example:
 (assert-equal 5 (test-slice-iter :next!))
 (assert-equal 6 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) nil '#(3 4 5) nil '(6 7 8 9)))
 (def 'test-slice-iter (test-iter :slice 0 4))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 0 (test-slice-iter :next!))
@@ -344,19 +347,32 @@ Example:
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
+(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '() '#(3 4 5) nil '(6 7 8 9)))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+(def 'test-iter ((iterator::append-iter) :init nil '(0 1 2) (vec) '#(3 4 5) '(6 7 8 9) nil))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
 "
   ; fields
   (iters nil)
   ; methods
-  (:fn next! (self) (progn (def 'res ((car iters) :next!)) (if ((car iters) :empty?) (set 'iters (cdr iters))) res))
-  (:fn empty? (self) (null iters))
-  (:fn init (self first-iter &rest rest-iters) (progn
+  (:fn next! (self)
+      (if (self :empty?) nil ((car iters) :next!)))
+  (:fn empty? (self) (progn
+      (loop () ()
+          (if (and (not (null iters))((car iters) :empty?)) (progn (set 'iters (cdr iters))(recur))))
+      (null iters)))
+  (:fn init (self &rest rest-iters) (progn
     (def 'tcell nil)
-    (def 'tseq (set 'iters (join (iterator::iter-or-single first-iter) nil)))
+    (def 'tseq nil)
     (iterator::for v in rest-iters (progn
-        (set 'tcell (join (iterator::iter-or-single v) nil))
-        (xdr! tseq tcell)
-        (set 'tseq tcell)))
+        (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (progn
+            (set 'tcell (join (iterator::iter-or-single v) nil))
+            (if (null tseq) (set 'iters tcell) (xdr! tseq tcell))
+            (set 'tseq tcell)))))
     self))
   (:impl iterator))
 
@@ -832,57 +848,47 @@ Example:
 
 (defn append
 "Combine the provided items into a single iterator (calls iter on each parameter).
+If non-list items are passed they are wrapped in a singleton iterator (i.e. will
+work with loose object).  Note that nil is an empty list not a \"loose item\".
 
 Example:
 (def 'test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-"
-    (first-iter &rest rest-iters) (apply (append-iter) :init first-iter rest-iters))
-
-(defmacro append!
-"Combine the provided items into a single iterator (calls iter on each parameter).
-Sets the first parameter to the value of the new iterator.
-
-Example:
-(def 'test-iter '(0 1 2))
-(append! test-iter '#(3 4 5) '(6 7 8 9))
-(def 'test-slice-iter (test-iter :slice 3 7))
-(assert-false (test-slice-iter :empty?))
-(assert-equal 3 (test-slice-iter :next!))
-(assert-equal 4 (test-slice-iter :next!))
-(assert-equal 5 (test-slice-iter :next!))
-(assert-equal 6 (test-slice-iter :next!))
-(assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
-(append! test-iter '#(3 4 5) '(6 7 8 9))
-(def 'test-slice-iter (test-iter :slice 0 4))
-(assert-false (test-slice-iter :empty?))
-(assert-equal 0 (test-slice-iter :next!))
-(assert-equal 1 (test-slice-iter :next!))
-(assert-equal 2 (test-slice-iter :next!))
-(assert-equal 3 (test-slice-iter :next!))
-(assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
-(append! test-iter '#(3 4 5) '(6 7 8 9))
-(def 'test-slice-iter (test-iter :slice 7))
-(assert-false (test-slice-iter :empty?))
-(assert-equal 7 (test-slice-iter :next!))
-(assert-equal 8 (test-slice-iter :next!))
-(assert-equal 9 (test-slice-iter :next!))
-(assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
-(append! test-iter '#(3 4 5) '(6 7 8 9))
+(def 'test-iter (append '(0 1 2) 3 4 5 '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
+(def 'test-iter (append 0 1 2 '(3 4)))
+(assert-false (test-iter :empty?))
+(assert-equal 0 (test-iter :next!))
+(assert-equal 1 (test-iter :next!))
+(assert-equal 2 (test-iter :next!))
+(assert-equal 3 (test-iter :next!))
+(assert-equal 4 (test-iter :next!))
+(assert-true (test-iter :empty?))
+(def 'test-iter (append 0 1 2 nil))
+(assert-false (test-iter :empty?))
+(assert-equal 0 (test-iter :next!))
+(assert-equal 1 (test-iter :next!))
+(assert-equal 2 (test-iter :next!))
+(assert-true (test-iter :empty?))
+(def 'test-iter (append 0 1 2 '(nil)))
+(assert-false (test-iter :empty?))
+(assert-equal 0 (test-iter :next!))
+(assert-equal 1 (test-iter :next!))
+(assert-equal 2 (test-iter :next!))
+(assert-equal nil (test-iter :next!))
+(assert-true (test-iter :empty?))
 "
-    (first-iter &rest rest-iters) `(set ',first-iter ((iterator::append-iter) :init ,first-iter ,@rest-iters)))
+    (first-iter &rest rest-iters) (apply (append-iter) :init first-iter rest-iters))
 
 (defn append-to!
 "Combine the provided items after the first (first must be a vector or list)
 into a single iterator.  These values are added the first argument destructively.
+If non-list items are passed they are wrapped in a singleton iterator (i.e. will
+work with loose object).  Note that nil is an empty list not a \"loose item\".
 
 Example:
 (def 'test-iter '(0 1 2))
@@ -921,10 +927,19 @@ Example:
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
 (def 'test-iter nil)
-(append-to! test-iter '(0 1 2) '#(3 4 5) '(6 7 8 9))
+(append-to! test-iter nil '(0 1 2) nil '#(3 4 5) '(6 7 8 9) nil)
 (set 'test-iter (iter test-iter))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+(def 'test-iter (vec 0))
+(append-to! test-iter nil '#(1) '(2 3) nil)
+(set 'test-iter (iter test-iter))
+(assert-false (test-iter :empty?))
+(assert-equal 0 (test-iter :next!))
+(assert-equal 1 (test-iter :next!))
+(assert-equal 2 (test-iter :next!))
+(assert-equal 3 (test-iter :next!))
 (assert-true (test-iter :empty?))
 "
     (ret &rest others) (progn
@@ -965,10 +980,11 @@ Example:
 "
     (bind in items body) (progn
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    `(loop (plist) ((iterator::iter ,items)) (if (not (plist :empty?)) (progn
-        (def ',bind (plist :next!))
-        (,@body)
-        (recur plist))))))
+    `(loop (plist) ((iterator::iter ,items))
+         (if (not (plist :empty?)) (progn
+             (def ',bind (plist :next!))
+             (,@body)
+             (recur plist))))))
 
 (ns-export '(
     iterator
