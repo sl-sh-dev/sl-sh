@@ -77,22 +77,22 @@ Some stuff
 (let ((long-list (list "A" (list "B")))
     (short-list '("A" ("B")))
     (model-list (list "A" (list "B" "C"))))
-    (assert-equal model-list (progn (core::append! (last long-list) "C") long-list) (str ". line number: " (meta-line-no)))
-    (assert-equal model-list (progn (core::append! (last short-list) "C") short-list)) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (progn (iterator::append-to! (last long-list) (list "C")) long-list) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (progn (iterator::append-to! (last short-list) (list "C")) short-list)) (str ". line number: " (meta-line-no)))
 
 ;; check mutability of nested lists
 (let ((list-of-lists (list (list "1") (list "A")))
     (list-of-empty-lists (list (list) (list)))
     (add-to-front-and-back-list (fn (target to-first to-last)
         (progn
-            (core::append! (first target) to-first)
-            (core::append! (last target) to-last)
+            (iterator::append-to! (first target) to-first)
+            (iterator::append-to! (last target) to-last)
             target))))
     (assert-equal
-        (list (list "1" "2") (list "A" "B"))
+        (list (list "1" #\2) (list "A" #\B))
         (add-to-front-and-back-list list-of-lists "2" "B") (str ". line number: " (meta-line-no)))
     (assert-equal
-        (list (list "1") (list "A"))
+        (list (list #\1) (list #\A))
         (add-to-front-and-back-list list-of-empty-lists "1" "A")) (str ". line number: " (meta-line-no)))
 
 ;; check adding lists to lists

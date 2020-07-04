@@ -352,9 +352,9 @@ Example:
   (:fn empty? (self) (null iters))
   (:fn init (self first-iter &rest rest-iters) (progn
     (def 'tcell nil)
-    (def 'tseq (set 'iters (join (iterator::iter first-iter) nil)))
+    (def 'tseq (set 'iters (join (iterator::iter-or-single first-iter) nil)))
     (iterator::for v in rest-iters (progn
-        (set 'tcell (join (iterator::iter v) nil))
+        (set 'tcell (join (iterator::iter-or-single v) nil))
         (xdr! tseq tcell)
         (set 'tseq tcell)))
     self))
@@ -500,6 +500,39 @@ Example:
                                     self))
   (:impl iterator double-ended-iterator))
 
+(defstruct single-iter
+"Iterator that wraps and returns a single object.
+
+Section: iterator
+
+Example:
+(def 'test-iter ((single-iter) :init 3))
+(assert-false (test-iter :empty?))
+(assert-equal 3 (test-iter :next!))
+(assert-true (test-iter :empty?))
+(def 'test-iter ((single-iter) :init \"iter\"))
+(assert-false (test-iter :empty?))
+(assert-equal \"iter\" (test-iter :next!))
+(assert-true (test-iter :empty?))
+(def 'test-iter ((single-iter) :init 3))
+(assert-false (test-iter :empty?))
+(assert-equal 3 (test-iter :next-back!))
+(assert-true (test-iter :empty?))
+(def 'test-iter ((single-iter) :init \"iter\"))
+(assert-false (test-iter :empty?))
+(assert-equal \"iter\" (test-iter :next-back!))
+(assert-true (test-iter :empty?))
+"
+  ; fields
+  (value nil)
+  (done nil)
+  ; methods
+  (:fn next! (self) (progn (def 'ret (if done nil value))(set 'done t)ret))
+  (:fn next-back! (self) (progn (def 'ret (if done nil value))(set 'done t)ret))
+  (:fn empty? (self) done)
+  (:fn init (self v) (progn (set 'value v)self))
+  (:impl iterator double-ended-iterator))
+
 (defn iter?
 "Return true if thing is an iterator, nil otherwise.
 
@@ -510,8 +543,7 @@ Example:
 (assert-false (iterator::iter? '(1 2 3)))
 "
   (thing)
-  (and (meta-tag? thing :method:next!)
-       (meta-tag? thing :method:empty?)))
+  (meta-tag? thing :trait-iterator))
 
 (defn iter
 "Return thing as an iterator if possible (if it is an iterator just return thing).
@@ -534,6 +566,31 @@ Example:
       (string? thing)
         ((string-iter) :init thing)
       (err "iter: requires a list, vector, string or existing iterator")))
+
+(defn iter-or-single
+"Return thing as an iterator if possible (if it is an iterator just return thing).
+If not possible then wrap thing in a single iter and return that.
+
+Section: iterator
+
+Example:
+(assert-true (iterator::iter? (iterator::iter-or-single '(1 2 3))))
+(assert-true (iterator::iter? (iterator::iter-or-single '#(1 2 3))))
+(assert-true (iterator::iter? (iterator::iter-or-single \"abc\")))
+(assert-true (iterator::iter? (iterator::iter-or-single (iterator::iter '(1 2 3)))))
+(assert-true (iterator::iter? (iterator::iter-or-single 1)))
+(assert-true (iterator::iter? (iterator::iter-or-single #\A)))
+"
+  (thing)
+  (if (iter? thing)
+        thing
+      (list? thing)
+        ((list-iter) :init thing)
+      (vec? thing)
+        ((vec-iter) :init thing 0)
+      (string? thing)
+        ((string-iter) :init thing)
+      ((single-iter) :init thing)))
 
 (defn next!
 "Calls iter on s and returns the next item.
@@ -823,6 +880,75 @@ Example:
 "
     (first-iter &rest rest-iters) `(set ',first-iter ((iterator::append-iter) :init ,first-iter ,@rest-iters)))
 
+(defn append-to!
+"Combine the provided items after the first (first must be a vector or list)
+into a single iterator.  These values are added the first argument destructively.
+
+Example:
+(def 'test-iter '(0 1 2))
+(append-to! test-iter '#(3 4 5) '(6 7 8 9))
+(set 'test-iter (iter test-iter))
+(def 'test-slice-iter (test-iter :slice 3 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-equal 4 (test-slice-iter :next!))
+(assert-equal 5 (test-slice-iter :next!))
+(assert-equal 6 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append-to! test-iter '#(3 4 5) '(6 7 8 9))
+(set 'test-iter (iter test-iter))
+(def 'test-slice-iter (test-iter :slice 0 4))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 0 (test-slice-iter :next!))
+(assert-equal 1 (test-slice-iter :next!))
+(assert-equal 2 (test-slice-iter :next!))
+(assert-equal 3 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append-to! test-iter '#(3 4 5) '(6 7 8 9))
+(set 'test-iter (iter test-iter))
+(def 'test-slice-iter (test-iter :slice 7))
+(assert-false (test-slice-iter :empty?))
+(assert-equal 7 (test-slice-iter :next!))
+(assert-equal 8 (test-slice-iter :next!))
+(assert-equal 9 (test-slice-iter :next!))
+(assert-true (test-slice-iter :empty?))
+(def 'test-iter '(0 1 2))
+(append-to! test-iter '#(3 4 5) '(6 7 8 9))
+(set 'test-iter (iter test-iter))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+(def 'test-iter nil)
+(append-to! test-iter '(0 1 2) '#(3 4 5) '(6 7 8 9))
+(set 'test-iter (iter test-iter))
+(assert-false (test-iter :empty?))
+(assert-equal 10 (test-iter :count))
+(assert-true (test-iter :empty?))
+"
+    (ret &rest others) (progn
+
+    (defn last-cell (obj)
+        (if (null (cdr obj))
+            obj
+            (recur (cdr obj))))
+
+    (set 'others (apply append others))
+    (if (vec? ret) (for l in others (vec-push! ret l))
+        (list? ret) (progn
+                (def 'tseq (last-cell ret))
+                (for l in others
+                        (progn
+                            (if (null tseq)
+                                (xar! tseq l)
+                                (progn
+                                    (def 'tcell (join l nil))
+                                    (xdr! tseq tcell)
+                                    (set 'tseq tcell))))))
+        (err "append-to!: First element not a list or vector."))
+    ret))
+
 (defmacro for
 "
 Loops over each element in an iterator.  Will call iter on the input object.
@@ -871,5 +997,5 @@ Example:
     reduce
     reduce-times
     append
-    append!
+    append-to!
     for))

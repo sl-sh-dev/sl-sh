@@ -141,14 +141,6 @@ Example:
         (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
 
 (def 'append nil)
-(def 'append!
-"
-Modifies the first list by appending the other lists onto it.
-
-Section: sequence
-"
-nil)
-(def 'fn-append! nil)
 (let ((tseq))
     (defn copy-els (to l) (progn
         (def 'tcell nil)
@@ -196,52 +188,7 @@ Section: sequence
                                 ))))
                 (err "append: First element not a list or vector.")))
         (set 'tseq nil)
-        ret))
-
-    (setfn fn-append! (ret &rest others) (progn
-        (def 'tret ret)
-        (if (vec? ret)
-            (progn
-                (col-for l in others
-                    (if (seq? l)
-                        (col-for el in l (vec-push! ret el))
-                        (vec-push! ret l))))
-            (if (list? ret)
-                (progn
-                    (set 'tseq (last-cell tret))
-                    (col-for l in others
-                        (if (seq? l)
-                            (set 'tret (copy-els tret l))
-                            (progn
-                                (if (null tseq)
-                                    (xar! tseq l)
-                                    (progn
-                                        (def 'tcell (join l nil))
-                                        (xdr! tseq tcell)
-                                        (set 'tseq tcell)))
-                                (if (null tret) (set 'tret tseq))
-                                )))
-                    (if (and (null ret) (not (null tret)))
-                        (progn (xar! ret (car tret))(xdr! ret (cdr tret)))))
-                (err "append!: First element not a list or vector.")))
-        (set 'tseq nil)
-        ret))
-
-    ; If you have more then one reference to the same nil instance then only
-    ; the reference passed to append! will change (ie symbols pointing to nil
-    ; are unique even if one is set from the other).
-    ; If using an actual sequence with two or more symbols pointing to it then
-    ; all will be updated.
-    (setmacro append!
-"
-Modifies the first list by appending the other lists onto it.
-
-Section: sequence
-"
-			  (ret &rest others)
-        `(if (and (symbol? (quote ,ret)) (null ,ret))
-            (set (quote ,ret) (core::fn-append! ,ret ,@others))
-            (core::fn-append! ,ret ,@others))))
+        ret)))
 
 (defn qsort
 "Usage: (qsort sequence comp-lambda?) -> [sorted vector]

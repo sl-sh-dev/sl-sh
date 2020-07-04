@@ -44,15 +44,15 @@
 		(if (has-example docstring)
 			(progn
 				(hash-set! test-set-item :load-fcn (exec-str docstring))
-				(core::append! test-list test-set-item))
+				(append-to! test-list test-set-item))
 			(progn
 				(hash-set! test-set-item :load-fcn :no-test)
-				(core::append! test-list test-set-item)))))))
+				(append-to! test-list test-set-item)))))))
 	test-list))
 
 (defq file-test-list
 	(reduce
-		(fn (lst filename) (core::append! lst (progn
+		(fn (lst filename) (append-to! lst (progn
 			(defq name (str tests-dir "/" filename))
 			(defq load-fcn (fn () (load name)))
 			(defq test-set-item (make-hash))
@@ -132,7 +132,7 @@
     (hash-set! test-data :failed 0)
     (hash-set! test-data :no-test 0)
     (report-test-results test-list test-data)
-    (core::append! test-report test-data)))
+    (append-to! test-report test-data)))
 
 (printer "Tests from test directory")
 (run-tests-for "module tests" file-test-list final-test-report)
@@ -233,7 +233,7 @@
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-symbols"))))
 
-(core::append! final-test-report ns-test-set-item)
+(append-to! final-test-report ns-test-set-item)
 
 (println)
 
