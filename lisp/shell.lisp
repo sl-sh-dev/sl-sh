@@ -1,5 +1,7 @@
 (if (ns-exists? 'shell) (ns-enter 'shell) (ns-create 'shell))
 
+(ns-import 'iterator)
+
 ;;; Macros to make working with the shell easier.
 
 (defmacro alias
@@ -143,11 +145,18 @@ Section: shell
 ;; Scope to contain then pushd/popd/dirs functions.
 (let ((dir_stack (make-vec 20)) (dir_stack_max 20))
 	(setfn pushd
-		"
-		Push current directory on the directory stack and change to new directory.
+"
+Push current directory on the directory stack and change to new directory.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(def 'cur-test-path (str (pwd)))
+(pushd \"/tmp\")
+(assert-equal \"/tmp\n\" (str (pwd)))
+(popd)
+(assert-equal cur-test-path (str (pwd)))
+"
 		(dir) (if (form (cd dir))
 		(progn
 			(vec-push! dir_stack $OLDPWD)
@@ -155,43 +164,111 @@ Section: shell
 			t)
 		nil))
 	(setfn popd
-		"
-		Pop first directory from directory stack and change to it.
+"
+Pop first directory from directory stack and change to it.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(def 'cur-test-path (str (pwd)))
+(pushd \"/tmp\")
+(assert-equal \"/tmp\n\" (str (pwd)))
+(popd)
+(assert-equal cur-test-path (str (pwd)))
+"
 		() (if (> (length dir_stack) 0)
 		(cd (vec-pop! dir_stack))
 		(println "Dir stack is empty")))
 	(setfn dirs
-		"
-		List the directory stack.
+"
+List the directory stack.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(clear-dirs)
+(def 'cur-test-path (str (pwd)))
+(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+(test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+(pushd \"/tmp\")
+(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+(test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+(pushd (str-trim cur-test-path))
+(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+(def 'test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
+(test::assert-equal cur-test-path (read-line test-dirs-file))
+(test::assert-equal \"/tmp\n\" (read-line test-dirs-file))
+(close test-dirs-file)
+(popd)
+(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+(test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+(popd)
+(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+(test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+"
 		()
-		(col-for d in dir_stack (println d)))
+		(for d in dir_stack (println d)))
 	(setfn get-dirs
-		"
-		Return the vector of directories.
+"
+Return the vector of directories.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(clear-dirs)
+(def 'cur-test-path (str-trim (str (pwd))))
+(test::assert-equal '() (get-dirs))
+(pushd \"/tmp\")
+(test::assert-equal `(,cur-test-path) (get-dirs))
+(pushd (str-trim cur-test-path))
+(test::assert-equal `(,cur-test-path \"/tmp\") (get-dirs))
+(popd)
+(test::assert-equal `(,cur-test-path) (get-dirs))
+(popd)
+(test::assert-equal '() (get-dirs))
+"
 		() dir_stack)
 	(setfn clear-dirs
-		"
-		Clears the directory stack.
+"
+Clears the directory stack.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(clear-dirs)
+(def 'cur-test-path (str-trim (str (pwd))))
+(test::assert-equal '() (get-dirs))
+(pushd \"/tmp\")
+(test::assert-equal `(,cur-test-path) (get-dirs))
+(pushd (str-trim cur-test-path))
+(test::assert-equal `(,cur-test-path \"/tmp\") (get-dirs))
+(clear-dirs)
+(test::assert-equal '() (get-dirs))
+"
 		()
 		(vec-clear! dir_stack))
 	(setfn set-dirs-max
-		"
-		Sets the max number of directories to save in the stack.
+"
+Sets the max number of directories to save in the stack.
 
-		Section: shell
-		"
+Section: shell
+
+Example:
+(clear-dirs)
+(def 'cur-test-path (str-trim (str (pwd))))
+(pushd \"/tmp\")
+(pushd (str-trim cur-test-path))
+(pushd \"/tmp\")
+(pushd (str-trim cur-test-path))
+(test::assert-equal `(,cur-test-path \"/tmp\" ,cur-test-path \"/tmp\") (get-dirs))
+(clear-dirs)
+(set-dirs-max 3)
+(pushd \"/tmp\")
+(pushd (str-trim cur-test-path))
+(pushd \"/tmp\")
+(pushd (str-trim cur-test-path))
+(test::assert-equal `(\"/tmp\" ,cur-test-path \"/tmp\") (get-dirs))
+"
 		(max)
 		(if (and (= (type max) "Int")(> max 1))
 			(setq dir_stack_max max)
@@ -203,35 +280,41 @@ Section: shell
 Like let but sets environment variables that are reset after the macro finishes.
 
 Section: shell
+
+Example:
+(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
+(let-env ((LET-ENV-TEST-VAR-NOT-HERE \"here\"))
+    (test::assert-equal \"here\" \$LET-ENV-TEST-VAR-NOT-HERE))
+(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
 	((fn (params bindings olds) (progn
-		(col-for-i idx el in vals
+		(iterator::for-i idx el in vals
 			(if (= 1 (length el))
 				(progn
-					(vec-insert-nth! idx (nth 0 el) params)
+					(vec-insert-nth! idx (iterator::nth 0 el) params)
 					(vec-insert-nth! idx nil bindings)
-					(vec-insert-nth! idx (eval (to-symbol (str "\$" (nth 0 el)))) olds))
+					(vec-insert-nth! idx (eval (to-symbol (str "\$" (iterator::nth 0 el)))) olds))
 				(if (= 2 (length el))
 					(progn
-						(def 'binding (nth 1 el))
+						(def 'binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
-						(vec-insert-nth! idx (nth 0 el) params)
+						(vec-insert-nth! idx (iterator::nth 0 el) params)
 						(vec-insert-nth! idx binding bindings)
-						(vec-insert-nth! idx (eval (to-symbol (str "\$" (nth 0 el)))) olds))
+						(vec-insert-nth! idx (eval (to-symbol (str "\$" (iterator::nth 0 el)))) olds))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
 				(progn
-					(col-for-i i p in params
-						(if (null (nth i bindings))
+					(iterator::for-i i p in params
+						(if (null (iterator::nth i bindings))
 							(unexport p)
-							(export p (nth i bindings))))
+							(export p (iterator::nth i bindings))))
 					,@let_body)
-				(col-for-i i p in params
-					(if (null (nth i olds))
+				(iterator::for-i i p in params
+					(if (null (iterator::nth i olds))
 						(unexport p)
-						(export p (nth i olds))))))
+						(export p (iterator::nth i olds))))))
 		(quote ,params) (quote ,bindings) (quote ,olds))))
 	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
 
@@ -307,6 +390,10 @@ Section: shell
 True if the supplied command is a system command.
 
 Section: shell
+
+Example:
+(assert-true (sys-command? \"ls\"))
+(assert-false (sys-command? \"rst-not-a-comand-strsnt\"))
 "
 	(com) (progn
 	(def 'ret nil)
@@ -316,7 +403,7 @@ Section: shell
 			(set 'ret t)
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
 				(set 'ret t)
-				(col-for p in (str-split ":" $PATH) (progn
+				(for p in (str-split ":" $PATH) (progn
 					(def 'path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
 	ret))

@@ -4,7 +4,7 @@
 (defn seq?
 "Usage: (seq? expression) -> t/nil
 
-True if expression is a sequence, nil otherwise.
+True if expression is a list or vector, nil otherwise.
 
 Section: sequence
 
@@ -20,73 +20,101 @@ Example:
     (or (vec? obj)(list? obj)))
 
 (defn empty-seq?
-"Usage: (empty-seq? obj)
+"Usage: (empty-seq? obj) -> t/nil
 
-`empty-seq?` returns true if a list or vector is empty and false
-otherwise. If a non list or non vector is passed in it returns false.
+`empty-seq?` returns true if a list or vector is empty and false/nil
+otherwise. If a non list or non vector is passed in it returns nil.
 
 Section: sequence
+
+Example:
+(test::assert-false (empty-seq? '(1 2 3)))
+(test::assert-false (empty-seq? '#(1 2 3)))
+(test::assert-true (empty-seq? '()))
+(test::assert-true (empty-seq? '#()))
+(test::assert-false (empty-seq? \"aaa\"))
+(test::assert-false (empty-seq? 1))
 "
-	(obj)
-	(if (vec? obj)
-		(vec-empty? obj)
-		(if (list? obj)
-			(not obj)
-			nil)))
+    (obj)
+    (if (vec? obj) (vec-empty? obj)
+        (list? obj) (not obj)
+        nil))
 
 (defn non-empty-seq?
-"Usage: (non-empty-seq? obj)
+"Usage: (non-empty-seq? obj) -> t/nil
 
-`non-empty-seq?` returns true if a list or vector is non-empty and false
-otherwise. If a non list or non vector is passed in it returns false.
+`non-empty-seq?` returns true if a list or vector is not empty and false/nil
+otherwise. If a non list or non vector is passed in it returns nil.
 
 Section: sequence
+
+Example:
+(test::assert-true (non-empty-seq? '(1 2 3)))
+(test::assert-true (non-empty-seq? '#(1 2 3)))
+(test::assert-false (non-empty-seq? '()))
+(test::assert-false (non-empty-seq? '#()))
+(test::assert-false (non-empty-seq? \"aaa\"))
+(test::assert-false (non-empty-seq? 1))
 "
-	(obj)
-	(if (vec? obj)
-		(not (vec-empty? obj))
-		(if (list? obj)
-			(not (not obj))
-			nil)))
+    (obj)
+    (if (vec? obj) (not (vec-empty? obj))
+        (list? obj) (not (not obj))
+        nil))
 
 (defn last
 "
-Produces the last element in the list.  Nil if the list is empty.
+Produces the last element in a list or vector.  Nil if the list/vector is empty.
 
 Section: sequence
+
+Example:
+(assert-equal 3 (last '(1 2 3)))
+(assert-equal 3 (last '#(1 2 3)))
+(assert-equal nil (last '()))
+(assert-equal nil (last nil))
+(assert-equal nil (last '#()))
 "
-    (obj)
-    (if (vec? obj)
-        (vec-nth (- (length obj) 1) obj)
-        (if (list? obj)
-            (if (null (cdr obj))
-                (car obj)
-                (recur (cdr obj)))
-            (err "Not a vector or list"))))
+    (obj) (progn
+
+    (defn last-list (obj)
+        (if (null (cdr obj)) (car obj)
+            (recur (cdr obj))))
+
+    (if (vec? obj) (if (> (length obj) 0) (vec-nth (- (length obj) 1) obj) nil)
+        (list? obj) (last-list obj)
+        (err "Not a vector or list"))))
 
 (defn butlast
 "
 Produces the provided list minus the last element.  Nil if the list is empty or one element.
 
 Section: sequence
+
+Example:
+(assert-equal '(1 2) (butlast '(1 2 3)))
+(assert-equal '(1 2) (butlast '#(1 2 3)))
+(assert-equal nil (butlast '(1)))
+(assert-equal nil (butlast '#(1)))
+(assert-equal nil (butlast '()))
+(assert-equal nil (butlast nil))
+(assert-equal nil (butlast '#()))
 "
     (obj)
-    (if (vec? obj)
-        (vec-slice obj 0 (- (length obj) 1))
-        (if (list? obj) (progn
+    (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
+        (list? obj) (progn
             (defq new-link (join nil nil))
             (if (null (cdr obj))
                 (setq new-link nil)
                 (setq new-link (join (car obj) (butlast (cdr obj)))))
             new-link)
-            (err "Not a vector or list"))))
+        (err "Not a vector or list")))
 
 (defn setnth!
 "
 Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 This is destructive!  Because vectors support indexing and lists do not, this is
 a much faster operation for a vector (uses [builtin](root::builtin?) [vec-setnth!](root::vec-setnth!)
-on input of type vector).
+on input of type vector).  Return the list or vector that was modified.
 
 Section: sequence
 Example:
@@ -102,6 +130,9 @@ Example:
 (setnth! 2 -2 vctr)
 (setnth! 3 -1 vctr)
 (assert-equal (list -4 -3 -2 -1) vctr)
+(assert-equal '(1 5 3) (setnth! 1 5 '#(1 2 3)) \" Vector check\")
+(assert-error (setnth! 0 1 '#()))
+(assert-error (setnth! 0 1 (vec)))
 
 (defq lst (list 0 1 2 3))
 (defq list-copy (collect-copy lst))
@@ -115,17 +146,22 @@ Example:
 (setnth! 2 -2 lst)
 (setnth! 3 -1 lst)
 (assert-equal (list -4 -3 -2 -1) lst)
+(assert-equal '(1 5 3) (setnth! 1 5 '(1 2 3)) \" List check\")
+(assert-error (setnth! 0 1 '()))
+(assert-error (setnth! 0 1 (list)))
 "
-    (idx obj l)
-    (if (vec? l)
-        (progn (vec-setnth! idx obj l) nil)
-        (if (list? l)
-            (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))
-            (err "Not a vector or list"))))
+    (idx obj sequence) (progn
+
+    (defn setnth-list (idx obj l) (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l))))
+
+    (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
+    (if (vec? sequence) (vec-setnth! idx obj sequence)
+        (list? sequence) (progn (setnth-list idx obj sequence) sequence)
+        (err "setnth!: Not a vector or list"))))
 
 (defn in?
 "
-Takes a [seq?](#core::seq?) that is not an [empty-seq?](#core::empty-seq?) and returns true if the second argument is is in list, false otherwise.
+Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and returns true if the second argument is is in list, false otherwise.
 
 Section: sequence
 
@@ -137,8 +173,13 @@ Example:
     (assert-false (in? 8 18)))
 "
   (seq-to-search item-to-match)
-    (when (and (seq? seq-to-search ) (not (empty-seq? seq-to-search)))
-        (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
+    (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (progn
+        (def 'seq-iter (iterator::iter seq-to-search))
+        (defn inner-in (seq-iter item-to-match)
+            (if (iterator::empty? seq-iter) nil
+                (if (= item-to-match (iterator::next! seq-iter)) t
+                    (recur seq-iter item-to-match))))
+        (inner-in seq-iter item-to-match))))
 
 (defn qsort
 "Usage: (qsort sequence comp-lambda?) -> [sorted vector]
@@ -188,7 +229,7 @@ Example:
                         (def 'pivot (first lst))
                         (def 'less (vec))
                         (def 'greater (vec))
-                        (col-for i in (rest lst)
+                        (iterator::for i in (rest lst)
                             (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
                         (vec-push! to-sort greater)
                         (vec-push! to-sort pivot)
@@ -204,6 +245,4 @@ Example:
     (vec-push! to-sort lst)
     (quick-inner comp-fn sorted to-sort)
     sorted))
-
-;(ns-export '(seq? non-empty-seq? empty-seq? last butlast setnth! in? qsort))
 

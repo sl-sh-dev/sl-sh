@@ -52,7 +52,7 @@ Section: namespace"
     (if (symbol? ,symbol_or_sequence)
         (vec-push! *ns-exports* (quote ,symbol_or_sequence))
         (if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
-            (root::col-for sym in ,symbol_or_sequence (vec-push! *ns-exports* sym))
+            (iterator::for sym in ,symbol_or_sequence (vec-push! *ns-exports* sym))
             (err "ns-export takes a symbol or sequence.")))))
 
 (defmacro ns-import
@@ -62,7 +62,7 @@ Section: namespace"
     (namespace)
     `((fn () (progn
         (def 'import (make-vec 2 1))
-        (root::col-for sym in (eval (to-symbol (str ,namespace "::*ns-exports*")))
+        (iterator::for sym in (eval (to-symbol (str ,namespace "::*ns-exports*")))
         (progn
             (vec-setnth! 0 (to-symbol (str "ns::" sym)) import)
             (vec-setnth! 1 (eval (to-symbol (str ,namespace "::" sym))) import)
@@ -265,11 +265,11 @@ Section: core
 "
     (vals &rest let_body)
     ((fn (params bindings) (progn
-        (root::col-for-i idx el in vals
+        (iterator::for-i idx el in vals
             (if (= 1 (length el))
-                (progn (vec-insert-nth! idx (root::col-nth 0 el) params) (vec-insert-nth! idx nil bindings))
+                (progn (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx nil bindings))
                 (if (= 2 (length el))
-                    (progn (vec-insert-nth! idx (root::col-nth 0 el) params) (vec-insert-nth! idx (root::col-nth 1 el) bindings))
+                    (progn (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx (iterator::nth 1 el) bindings))
                     (err "ERROR: invalid bindings on let"))))
         `((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
 

@@ -1,5 +1,7 @@
 (if (ns-exists? 'test) (ns-enter 'test) (ns-create 'test))
 
+(ns-import 'iterator)
+
 (defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))
         nil
@@ -47,14 +49,17 @@
 (defn assert-includes (value seq)
       (progn
           (def 'found nil)
-          (col-for v in seq (if (= v value) (set 'found t)))
+          (for v in seq (if (= v value) (set 'found t)))
           (if (not found) (progn (println (str value " not found in " seq))(exit 3)))))
 
 (defn assert-not-includes (value seq)
       (progn
           (def 'found nil)
-          (col-for v in seq (if (= v value) (set 'found t)))
+          (for v in seq (if (= v value) (set 'found t)))
           (if found (progn (println (str value " found in " seq))(exit 3)))))
+
+(defmacro assert-error (form)
+    `(test::assert-equal :error (car (get-error ,form)) " Expected ERROR, did not get it!"))
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
@@ -69,7 +74,7 @@
             (progn
              :no-test))))
 
-(ns-export '(assert-equal assert-not-equal assert-true assert-false run-example))
+(ns-export '(assert-equal assert-not-equal assert-true assert-false assert-error run-example))
 
 (ns-pop)
 

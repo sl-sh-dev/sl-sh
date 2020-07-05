@@ -1,6 +1,8 @@
 (if (ns-exists? 'iterator) (ns-enter 'iterator) (ns-create 'iterator))
 
-(ns-import 'struct)
+; Due to bootstrapping order can not use ns-import yet (needs iterators...).
+(def 'defstruct struct::defstruct)
+(def 'deftrait struct::deftrait)
 
 (deftrait iterator
 "Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator))
@@ -785,7 +787,7 @@ Example:
 "
        (items) ((iter items) :reverse))
 
-(defn nth!
+(defn nth
 "Consume the iterator until the idx (nth) element and return it (0 based).
 Note that repeated called to nth will return new data since it consumes the iterator.
 
@@ -794,9 +796,9 @@ Section: iterator
 Example:
 (def 'tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
-(assert-equal 0 (nth! 0 tmap))
-(assert-equal 1 (nth! 0 tmap))
-(assert-equal 4 (nth! 2 tmap))
+(assert-equal 0 (nth 0 tmap))
+(assert-equal 1 (nth 0 tmap))
+(assert-equal 4 (nth 2 tmap))
 (assert-true (tmap :empty?))
 "
     (idx coll) ((iter coll) :nth! idx))
@@ -986,6 +988,32 @@ Example:
              (,@body)
              (recur plist))))))
 
+(defmacro for-i
+"
+Loops over each element in an iterator.  Will call iter on the input object.
+idx-bind is bound to an incrementing number starting with 0.
+bind is bound to the current element of items and is accesible
+in body. body is evaluated a number of times equal to the the number of items
+in in_list.
+
+Section: iterator
+
+Example:
+(def 'i 0)
+(def 'i-tot 0)
+(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (progn (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
+(assert-equal 11 i)
+(assert-equal 55 i-tot)
+"
+    (idx-bind bind in items body) (progn
+    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
+    `(loop (plist idx) ((iterator::iter ,items) 0)
+         (if (not (plist :empty?)) (progn
+             (def ',bind (plist :next!))
+             (def ',idx-bind idx)
+             (,@body)
+             (recur plist (+ idx 1)))))))
+
 (ns-export '(
     iterator
     double-ended-iterator
@@ -1009,9 +1037,10 @@ Example:
     slice
     filter
     reverse
-    nth!
+    nth
     reduce
     reduce-times
     append
     append-to!
-    for))
+    for
+    for-i))

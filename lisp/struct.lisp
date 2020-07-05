@@ -213,7 +213,6 @@ Example:
      (make-vec (length fields)) ; params
      (make-vec (length fields)))) ; bindings
 
-(ns-export '(
-    deftrait
-    defstruct))
+; Due to the bootstrap order of std lib files can not use the ns-export macro at this point.
+(def '*ns-exports* (vec 'deftrait 'defstruct))
 

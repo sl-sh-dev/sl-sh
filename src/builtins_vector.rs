@@ -60,20 +60,32 @@ fn builtin_vec_slice(
     let (vec, start, end, has_end) = if let Some(vec) = args.next() {
         if let Some(start) = args.next() {
             let start = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, start)?.get().data {
+                if i < 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "vec-slice second arg (start) must be a positive integer",
+                    ));
+                }
                 i as usize
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "vec-slice second arg must be an integer",
+                    "vec-slice second arg (start) must be an integer",
                 ));
             };
             if let Some(end) = args.next() {
                 let end = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, end)?.get().data {
+                    if i < 0 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "vec-slice third arg (end) must be a positive integer",
+                        ));
+                    }
                     i as usize
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "vec-slice third arg must be an integer",
+                        "vec-slice third arg (end) must be an integer",
                     ));
                 };
                 (eval(environment, vec)?, start, end, true)

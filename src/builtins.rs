@@ -3051,6 +3051,17 @@ Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
+
+(defmacro mac-test-for
+    (bind in in_list body) (progn
+	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
+    `((fn (,bind)
+        (if (> (length ,in_list) 0)
+            (root::loop (plist) (,in_list) (progn
+                (set ',bind (root::first plist))
+                (,@body)
+                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
+
 (test::assert-equal '(
     (fn
         (i)
@@ -3064,7 +3075,8 @@ Example:
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist))))))) nil)
-    (expand-macro (root::col-for i in '(1 2 3) ())))
+    (expand-macro (mac-test-for i in '(1 2 3) ())))
+
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
             root,
@@ -3084,6 +3096,17 @@ Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
+
+(defmacro mac-test-for
+    (bind in in_list body) (progn
+	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
+    `((fn (,bind)
+        (if (> (length ,in_list) 0)
+            (root::loop (plist) (,in_list) (progn
+                (set ',bind (root::first plist))
+                (,@body)
+                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
+
 (test::assert-equal '((fn
     (i)
     (if
@@ -3096,7 +3119,8 @@ Example:
                 (if
                     (> (length plist) 1)
                     (recur (root::rest plist)))))))nil)
-    (expand-macro1 (root::col-for i in '(1 2 3) ())))
+    (expand-macro1 (mac-test-for i in '(1 2 3) ())))
+
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
             root,
@@ -3116,6 +3140,17 @@ Section: root
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
+
+(defmacro mac-test-for
+    (bind in in_list body) (progn
+	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
+    `((fn (,bind)
+        (if (> (length ,in_list) 0)
+            (root::loop (plist) (,in_list) (progn
+                (set ',bind (root::first plist))
+                (,@body)
+                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
+
 (test::assert-equal '(
     (fn
         (i)
@@ -3130,7 +3165,8 @@ Example:
                             (> (length plist) 1)
                             (recur (root::rest plist)))))
                 '(1 2 3)))) nil)
-    (expand-macro-all (root::col-for i in '(1 2 3) ())))
+    (expand-macro-all (mac-test-for i in '(1 2 3) ())))
+
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",
             root,

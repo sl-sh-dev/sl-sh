@@ -26,102 +26,19 @@ Example:
     (if (vec? seq)
         (progn
             (def 'tseq (make-vec (length seq)))
-            (col-for el in seq (vec-push! tseq el))
+            (iterator::for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
             (progn
                 (def 'tseq nil)
                 (def 'tcell nil)
                 (def 'head nil)
-                (col-for el in seq (progn
+                (iterator::for el in seq (progn
                     (if (null head)
                         (progn (set 'tseq (set 'head (join el nil))))
                         (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
                 head)
             (err "Not a list or vector."))))
-
-(defn col-nth
-"
-Produces the element at the provided index (0 based), error if index is out of bounds.
-Because vectors support indexing and lists do not, this is a much faster
-operation for a vector (uses [builtin](root::builtin?) [vec-nth](root::vec-nth)
-on input of type vector). Supports negative indexing.
-
-Section: collection
-
-Example:
-(defq mylist (list 0 1 2 3 4))
-(defq myvec (vec 0 1 2 3 4))
-(assert-equal 0 (col-nth -5 mylist))
-(assert-equal 1 (col-nth 1 mylist))
-(assert-equal 2 (col-nth 2 mylist))
-(assert-equal 3 (col-nth -2 mylist))
-(assert-equal 4 (col-nth 4 mylist))
-(assert-equal 0 (col-nth -5 myvec))
-(assert-equal 1 (col-nth 1 myvec))
-(assert-equal 2 (col-nth 2 myvec))
-(assert-equal 3 (col-nth -2 myvec))
-(assert-equal 4 (col-nth 4 myvec))
-"
-    (idx obj) (progn
-    (when (< idx 0)
-        (if (> (* -1 idx) (length obj))
-        (err "Absolute value of negative idx can't be greater than length of list.")
-        (setq idx (+ idx (length obj)))))
-    (if (vec? obj)
-        (vec-nth idx obj)
-        (if (list? obj)
-        (if (= idx 0) (car obj) (recur (- idx 1) (cdr obj)))
-            (err "Not a vector or list")))))
-
-(defmacro col-for
-"
-bind is bound to the current element of in_list and is accesible
-in body. body is evaluated a number of times equal to the the number of items
-in in_list.
-
-Section: collection
-
-Example:
-(def 'i 0)
-(col-for x in '(0 1 2 3 4 5 6 7 8 9 10) (set 'i (+ 1 i)))
-(assert-equal 11 i)
-"
-    (bind in in_list body) (progn
-	(if (not (= in 'in)) (err "Invalid col-for: (col-for [v] in [iterator] (body))"))
-    `((fn (,bind)
-        (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (progn
-                (set ',bind (root::first plist))
-                (,@body)
-                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
-
-(defmacro col-for-i
-"
-idx-bind is an incrementing reference bound to current elemt in in_list and is
-accesible in body. bind is bound to the current element of in_list as is also
-accesible in body.  body is evaluated a number of times equal to the the number
-of items in in_list.
-
-Section: collection
-
-Example:
-(def 'i 0)
-(def 'i-tot 0)
-(col-for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (progn (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
-(assert-equal 11 i)
-(assert-equal 55 i-tot)
-"
-    (idx_bind bind in in_list body) (progn
-	(if (not (= in 'in)) (err "Invalid col-for-i: (col-for-i i [v] in [iterator] (body))"))
-    `((fn () (progn
-        (root::defq ,bind nil)(root::defq ,idx_bind nil)
-        (if (> (length ,in_list) 0)
-            (root::loop (plist idx) (,in_list 0) (progn
-                (root::setq ,bind (root::first plist))
-                (root::setq ,idx_bind idx)
-                (,@body)
-                (if (> (length plist) 1) (recur (root::rest plist) (+ idx 1)))))))))))
 
 (defn first
 "
@@ -139,11 +56,9 @@ Example:
 (assert-equal nil (first '#()))
 "
     (obj)
-    (if (vec? obj)
-        (if (vec-empty? obj) nil (vec-nth 0 obj))
-        (if (list? obj)
-            (car obj)
-            (err "Not a vector or list"))))
+    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth 0 obj))
+        (list? obj) (car obj)
+        (err "Not a vector or list")))
 
 (defn rest
 "
@@ -164,11 +79,9 @@ Example:
 (assert-equal nil (rest '#()))
 "
     (obj)
-    (if (vec? obj)
-        (vec-slice obj 1)
-        (if (list? obj)
-            (cdr obj)
-            (err "Not a vector or list"))))
+    (if (vec? obj) (vec-slice obj 1)
+        (list? obj) (cdr obj)
+        (err "Not a vector or list")))
 
 ;; Shorthands for strings of car/cdr calls.
 (defn caar
