@@ -1,7 +1,7 @@
 (load "parse-docstrings.lisp")
 (if (ns-exists? 'docmd) (ns-enter 'docmd) (ns-create 'docmd))
 
-(core::ns-import 'core)
+(ns-import 'iterator)
 (ns-import 'shell)
 (ns-import 'docparse)
 
@@ -113,7 +113,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(write-line file "")
 	(write-line file "")
 	(defq is-first #t)
-	(for doc-map docstrings (progn
+	(for doc-map in docstrings (progn
 		(if is-first
 			(setq is-first nil)
 			(write-string file ", "))
@@ -156,7 +156,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	;; if first char in str is delim, 0th elem is "" when we don't need to
 	;; bracket with backticks
 	(defq trim-arr (if (= "" (first arr)) (rest arr) arr))
-	(str-cat-list delim (append (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``")) (rest trim-arr))))))
+	(str-cat-list delim (collect-vec (append (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``")) (rest trim-arr)))))))
 
 (defn sanitize-for-md-row (to-sanitize)
 		(str-replace to-sanitize "|" "\|"))
@@ -172,7 +172,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		 (if (nil? data)
 			""
 			data)))
-	(for doc-map docstrings (progn
+	(for doc-map in docstrings (progn
 		(defq doc-form (progn
 			(defq form (hash-get doc-map :form))
 			(if (= "\|" form) "|" (sanitize-for-md-row form))))
@@ -195,7 +195,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		(if (not (nil? doc-example))
 			(progn
 				(write-line file "```")
-					(for line (str-split "\n" doc-example) (write-line file line))
+					(for line in (str-split "\n" doc-example) (write-line file line))
 				(write-line file "```"))
 			(write-line file "<br>"))))
 	(close file)
@@ -211,12 +211,12 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(doc-structure index-file)
 	;; generate table of contents
 	(write-heading "Table of Contents" index-file)
-	(for key (qsort (hash-keys docstrings-map)) (progn
+	(for key in (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
 		(table-of-contents key docstrings index-file)))
 	;; generate markdown body
 	(write-heading "Documentation" index-file)
-	(for key (qsort (hash-keys docstrings-map)) (progn
+	(for key in (qsort (hash-keys docstrings-map)) (progn
 		(defq docstrings (hash-get docstrings-map key))
 		(write-md-table key docstrings index-file)))
 	(write-version index-file)
@@ -224,7 +224,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 		(defq uncat-syms (hash-get docstrings-map :uncategorized))
 		(when (not (empty-seq? uncat-syms)) (progn
 			(println "Found :uncategorized symbols: ")
-			(for sym uncat-syms (println "symbol: " sym))
+			(for sym in uncat-syms (println "symbol: " sym))
 			nil))
 		 #t)))
 

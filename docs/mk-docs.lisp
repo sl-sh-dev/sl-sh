@@ -3,8 +3,10 @@
 (load "docstrings-to-md.lisp")
 
 (if (ns-exists? 'mkdocs) (ns-enter 'mkdocs) (ns-create 'mkdocs))
-(core::ns-import 'core)
+(ns-import 'iterator)
 (ns-import 'shell)
+(ns-import 'struct)
+(ns-import 'test)
 
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
@@ -33,13 +35,14 @@
 
 (defn list-of-all-slsh-syms () (progn
 	(defq sym-list (ns-symbols 'root))
-	(for a-ns (filter (fn (x) (and
+	(for a-ns in (filter (fn (x) (and
 						(not (= x "docmd"))
 						(not (= x "docparse"))
 						(not (= x "docify"))
 						(not (= x "root"))
+						(not (= x "test"))
 						(not (= x "user")))) (ns-list)) (progn
-		(append! sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))))
+		(append-to! sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))))
 	(filter-undocable-forms (qsort sym-list))))
 
 (defn get-doc-list-for
@@ -54,8 +57,8 @@
 (defn make-md-file (index-file target-doc-form)
 	(docmd::make-md-file
 		index-file
-		(map! (fn (x) (doc (to-symbol x)))
-			  (get-doc-list-for target-doc-form))))
+		(collect-vec (map (fn (x) (doc (to-symbol x)))
+			  (get-doc-list-for target-doc-form)))))
 
 (ns-export '(make-md-file get-doc-list-for make-md-file-with-docstrings))
 

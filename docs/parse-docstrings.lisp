@@ -1,5 +1,5 @@
 (if (ns-exists? 'docparse) (ns-enter 'docparse) (ns-create 'docparse))
-(core::ns-import 'core)
+(ns-import 'iterator)
 (ns-import 'shell)
 
 (defn get-doc-section-if-exists (key idx docstring) (progn
@@ -74,7 +74,7 @@ organization of docstrings.
 				(defq doc-map (parse-doc (first docs)))
 				(defq section-key (hash-get doc-map :section))
 				(if (hash-haskey docstring-sections section-key)
-					(append! (hash-get docstring-sections section-key) doc-map)
+					(append-to! (hash-get docstring-sections section-key) doc-map)
 					(hash-set! docstring-sections section-key (list doc-map)))
 				(recur (rest docs))))))
 	(section-builder docstring-list)

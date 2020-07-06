@@ -1,7 +1,7 @@
 #!/usr/bin/env sl-sh
 
 (load "mk-docs.lisp")
-(core::ns-import 'core)
+(ns-import 'iterator)
 (ns-import 'shell)
 
 (error-stack-on)
@@ -24,7 +24,7 @@
 		kwd
 		(err (str "Second argument must be one of " kwd-list " was, " kwd ", type: " (type kwd))))))
 
-(for arg args (progn
+(for arg in args (progn
 	(if (or (= arg ":lang") (= arg ":user") (= arg ":single"))
 		(setq target-doc-form (to-symbol arg))
 		(setq index-file arg))))
