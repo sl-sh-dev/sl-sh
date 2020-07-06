@@ -1,6 +1,5 @@
 #!/usr/bin/env sl-sh
 
-(core::ns-import 'core)
 (ns-import 'shell)
 
 (pushd "~/development/slsh/docs")

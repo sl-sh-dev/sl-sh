@@ -1,6 +1,7 @@
 ;; This is a config file for people named price, you would put it in ~/.config/slsh/slshrc to use it.
-(core::ns-import 'core)
+
 (ns-import 'shell)
+(ns-import 'iterator)
 
 ;; gpwclark TODOs
 ;; - getopts!
@@ -11,7 +12,6 @@
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - address exec-hook.lisp stuff
 
-
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
 
@@ -19,6 +19,7 @@
 (endfix-on)
 
 ;; shell helpers {{{
+
 	(defn dush
 		"With no arguments: alias for du ./* -sh
 		With any args: provides size of each provided argument
@@ -441,7 +442,7 @@ Section: tmux"
 		(str
 			"\n"
 			(if (> (length (get-dirs)) 0)
-				(str (map! smaller_path (reverse (get-dirs))))
+				(collect-str (map smaller_path (reverse (get-dirs))))
 				"")
 			"\n\r" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
 			(set_prompt_tail))))
@@ -482,6 +483,7 @@ Section: tmux"
 						(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
 						sym-list))
 					(recur sym-list (rest namespaces)))))))
+
 	(defn filter-undocable-forms (sym-list)
 		(filter (fn (x)
 			(and (not (= x 'custom-lisp-config))
