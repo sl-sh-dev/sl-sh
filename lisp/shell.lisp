@@ -262,7 +262,7 @@ Example:
 (clear-dirs)
 (def 'cur-test-path (str-trim (str (pwd))))
 (pushd \"/tmp\")
-(def 'cur-test-path2 (str-trim (str (pwd))))
+(def 'cur-test-path2 \"/tmp\")
 (pushd (str-trim cur-test-path))
 (pushd \"/tmp\")
 (pushd (str-trim cur-test-path))
