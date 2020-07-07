@@ -73,7 +73,22 @@ Section: namespace"
 
 Set an expession to a quoted symbol (ie set 'sym bind)
 
-Section: core
+Section: root
+
+Example:
+(def 'test-progn-one nil)
+(def 'test-progn-two nil)
+(def 'test-progn-three (progn (setq test-progn-one \"One\")(setq test-progn-two \"Two\")\"Three\"))
+(test::assert-error (setq xyryx-dont-exist \"something\"))
+(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"Two\" test-progn-two)
+(test::assert-equal \"Three\" test-progn-three)
+(let ((test-progn-one nil))
+    ; set the currently scoped value.
+    (test::assert-equal \"1111\" (setq test-progn-one \"1111\"))
+    (test::assert-equal \"1111\" test-progn-one))
+; Original outer scope not changed.
+(test::assert-equal \"One\" test-progn-one)
 "
     (sym &rest args)
     `(set ',sym ,@args))
@@ -83,7 +98,26 @@ Section: core
 
 Binds an expession to a quoted symbol (ie def 'sym bind)
 
-Section: core"
+Section: root
+
+Example:
+(defq test-progn-one \"One\")
+(defq test-progn-two \"Two\")
+(defq test-progn-three \"Three\")
+(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"Two\" test-progn-two)
+(test::assert-equal \"Three\" test-progn-three)
+(let ((test-progn-one nil))
+    ; Add this to the let's scope (shadow the outer test-progn-two).
+    (test::assert-equal \"Default\" (defq test-progn-two \"Default\"))
+    ; set the currently scoped value.
+    (set 'test-progn-one \"1111\")
+    (set 'test-progn-two \"2222\")
+    (test::assert-equal \"1111\" test-progn-one)
+    (test::assert-equal \"2222\" test-progn-two))
+; Original outer scope not changed.
+(test::assert-equal \"One\" test-progn-one)
+"
     (sym &rest args)
     `(def ',sym ,@args))
 
@@ -141,7 +175,12 @@ Section: sequence
 "
 Evaluate body a number of times equal to times' numerical value.
 
-Section: shell
+Section: root
+
+Example:
+(def 'i 0)
+(dotimes 11 (set 'i (+ 1 i)))
+(assert-equal 11 i)
 "
     (times body)
     ((fn (idx-name)
@@ -150,12 +189,19 @@ Section: shell
             (,@body)
             (if (> ,idx-name 1) (recur (- ,idx-name 1)))))))(gensym)))
 
-(defmacro dotimesi
+(defmacro dotimes-i
 "
 Evaluate body a number of times equal to times' numnrical value. Includes an
 incrementing reference binding, idx-bind, accesible in body.
 
-Section: shell
+Section: root
+
+Example:
+(def 'i 0)
+(def 'i-tot 0)
+(dotimes-i idx 11 (progn (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
+(assert-equal 11 i)
+(assert-equal 55 i-tot)
 "
     (idx-bind times body)
     ((fn (stop-name)

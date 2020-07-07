@@ -228,14 +228,42 @@ Example:
 (assert-equal 2 (test-list-iter :next!))
 (assert-equal 3 (test-list-iter :next!))
 (assert-true (test-list-iter :empty?))
+(def 'test-list-iter ((list-iter) :init '(1 2 3)))
+(assert-false (test-list-iter :empty?))
+(assert-equal 1 (test-list-iter :next!))
+(assert-equal 3 (test-list-iter :next-back!))
+(assert-equal 2 (test-list-iter :next!))
+(assert-true (test-list-iter :empty?))
+(def 'test-list-iter ((list-iter) :init '(1 2 3)))
+(assert-false (test-list-iter :empty?))
+(assert-equal 3 (test-list-iter :next-back!))
+(assert-equal 2 (test-list-iter :next-back!))
+(assert-equal 1 (test-list-iter :next-back!))
+(assert-true (test-list-iter :empty?))
 "
   ; fields
   (data nil)
+  (rev-data nil)
+  (elements nil)
   ; methods
-  (:fn next! (self) (progn (def 'val (car data))(set 'data (cdr data)) val))
-  (:fn empty? (self) (if data nil t))
+  (:fn next! (self) (progn
+    (def 'val (car data))
+    (set 'data (cdr data))
+    (if elements (set 'elements (- elements 1)))
+    val))
+  (:fn next-back! (self) (progn
+    (if (not rev-data) (progn (set 'elements (length data))(set 'rev-data (self :make-rev))))
+    (def 'val (car rev-data))
+    (set 'rev-data (cdr rev-data))
+    (if elements (set 'elements (- elements 1)))
+    val))
+  (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) t nil))
   (:fn init (self l) (progn (if (list? l) (set 'data l) (err "list-iter requires a list")) self))
-  (:impl iterator))
+  (:fn make-rev (self) (progn
+    (def 'node nil)
+    ((fn (data) (if data (progn (set 'node (join (car data) node)) (recur (cdr data)))))data)
+    node))
+  (:impl iterator double-ended-iterator))
 
 (defstruct vec-iter
 "Iterator that wraps a vector.
