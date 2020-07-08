@@ -166,7 +166,14 @@ Section: core
 Binds bindings to parameters in body. Use recur with desired bindings for
 subsequent iteration.
 
-Section: sequence
+Section: root
+
+Example:
+(def 'tot 0)
+(loop (idx) (3) (progn
+    (set 'tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))
+(assert-equal 3 tot)
 "
     (params bindings body)
         `((fn ,params ,body) ,@bindings))

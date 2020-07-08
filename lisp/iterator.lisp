@@ -139,7 +139,27 @@ Example:
                                         (if (= i idx)
                                           (set 'ret (plist :next!))
                                           (progn (set 'i (+ i 1))(plist :next!)(recur plist)))))
-      ret)))
+      ret))
+
+  (:fn double-ended?
+"Return t if this iterator is double ended, nil otherwise.
+
+Example:
+(ns-import 'struct)
+(ns-import 'iterator)
+(defstruct test-double-iter
+  ; fields
+  (current 0)
+  (current-end 2)
+  ; methods
+  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next-back! (self) (progn (def 'val current-end)(set 'current-end (- current-end 1)) val))
+  (:fn empty? (self) (> current current-end))
+  (:impl iterator double-ended-iterator))
+(assert-false ((test-iter) :double-ended?))
+(assert-true ((test-double-iter) :double-ended?))
+"
+    (self) (meta-tag? self :trait-double-ended-iterator)))
 
 (deftrait double-ended-iterator
 "Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator double-ended-iterator))
@@ -336,11 +356,14 @@ Example:
   (map-fn nil)
   ; methods
   (:fn next! (self) (map-fn (data :next!)))
+  (:fn next-back! (self) (map-fn (data :next-back!)))
   (:fn empty? (self) (data :empty?))
   (:fn init (self mfn d) (progn (set 'data (iter d))
                                 (set 'map-fn mfn)
                                 self))
-  (:impl iterator))
+  (:fn double-ended? (self) (data :double-ended?))
+
+  (:impl iterator double-ended-iterator))
 
 (defstruct append-iter 
 "Iterator that appends multiple iterators.  Append iter will consume
@@ -591,6 +614,26 @@ Example:
   (thing)
   (meta-tag? thing :trait-iterator))
 
+(defn double-ended-iter?
+"Return true if thing is an iterator and double ended, nil otherwise.
+
+Section: iterator
+
+Example:
+(struct::defstruct test-iter
+  ; fields
+  (current 0)
+  ; methods
+  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn empty? (self) (>= current 3))
+  (:impl iterator))
+(assert-true (iterator::double-ended-iter? (iterator::iter '(1 2 3))))
+(assert-false (iterator::double-ended-iter? '(1 2 3)))
+(assert-false (iterator::double-ended-iter? (test-iter)))
+"
+  (thing)
+  (if (and (iter? thing)(thing :double-ended?)) t nil))
+
 (defn iter
 "Return thing as an iterator if possible (if it is an iterator just return thing).
 
@@ -751,6 +794,12 @@ Example:
 (assert-equal 2 (tmap :next!))
 (assert-equal 3 (tmap :next!))
 (assert-true (tmap :empty?))
+(def 'tmap (iterator::reverse (iterator::map (fn (x) (+ 1 x)) '(0 1 2))))
+(assert-false (tmap :empty?))
+(assert-equal 3 (tmap :next!))
+(assert-equal 2 (tmap :next!))
+(assert-equal 1 (tmap :next!))
+(assert-true (tmap :empty?))
 "
     (map-fn items) ((iter items) :map map-fn))
 
@@ -812,8 +861,12 @@ Example:
 (assert-equal 1 (tmap :next!))
 (assert-equal 0 (tmap :next!))
 (assert-true (tmap :empty?))
+(assert-error (reverse \"string\"))
 "
-       (items) ((iter items) :reverse))
+       (items) (progn
+                 (def 'i (iter items))
+                 (if (double-ended-iter? i) (i :reverse)
+                     (err "Not a double ended iterator or collection, can not reverse"))))
 
 (defn nth
 "Consume the iterator until the idx (nth) element and return it (0 based).
@@ -1048,6 +1101,7 @@ Example:
     vec-iter
     list-iter
     iter?
+    double-ended-iter?
     iter
     map-iter
     append-iter

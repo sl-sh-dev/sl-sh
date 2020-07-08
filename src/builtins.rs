@@ -3178,7 +3178,31 @@ Example:
             builtin_recur,
             "Usage: (recur &rest)
 
-Section: root",
+Recursively call the enclosing function with the given parameters.  Recur uses
+tail call optimization and must be in the tail position or it is an error.  For
+a named function it would be equivalent to a normal recursive call in a tail
+position but it requires a tail position and does not need a name (a normal
+recursive call would work in a non-tail position but could blow the stack if
+it is to deep- unlike a recur or tail position recursive call).
+NOTE: potential footgun, the let macro expands to a lambda (fn) and a recur used
+inside the let would bind with the let not the enclosing lambda (this would
+apply to any macro that also expands to a lamda- this is by design with the
+loop macro but would be unexpected with let).
+
+Section: root
+
+Example:
+(def 'tot 0)
+(loop (idx) (3) (progn
+    (set 'tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))
+(assert-equal 3 tot)
+(set 'tot 0)
+((fn (idx) (progn
+    (set 'tot (+ tot 1))
+    (if (> idx 1) (recur (- idx 1)))))5)
+(assert-equal 5 tot)
+",
             root,
         ),
     );
