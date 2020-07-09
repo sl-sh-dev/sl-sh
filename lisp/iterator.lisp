@@ -338,6 +338,38 @@ Example:
                        (err "string-iter requires a string")) self))
   (:impl iterator))
 
+(defstruct file-iter
+"Iterator that wraps a file.  Each call to next! returns the next line (with 
+trailing newline.
+
+Section: iterator
+
+Example:
+(def 'tst-file (open \"/tmp/file-iter-test.txt\" :create :truncate))
+(write-line tst-file \"line 1\")
+(write-line tst-file \"line 2\")
+(write-line tst-file \"line 3\")
+(write-string tst-file \"line 4\")
+(close tst-file)
+(def 'test-iter ((iterator::file-iter) :init (open \"/tmp/file-iter-test.txt\")))
+(assert-false (test-iter :empty?))
+(assert-equal \"line 1\\n\" (test-iter :next!))
+(assert-equal \"line 2\\n\" (test-iter :next!))
+(assert-equal \"line 3\\n\" (test-iter :next!))
+(assert-equal \"line 4\" (test-iter :next!))
+(assert-true (test-iter :empty?))
+"
+  ; fields
+  (file nil)
+  (next-line nil)
+  ; methods
+  (:fn next! (self) (progn (def 'val next-line) (set 'next-line (read-line file)) val))
+  (:fn empty? (self) (not next-line))
+  (:fn init (self f) (if (file? f)
+                       (progn (set 'file f) (set 'next-line (read-line file))self)
+                       (err "file-iter requires a file")))
+  (:impl iterator))
+
 (defstruct map-iter 
 "Iterator that applies a lambda to each element of another iterator- is lazy.
 
@@ -654,7 +686,9 @@ Example:
         ((vec-iter) :init thing 0)
       (string? thing)
         ((string-iter) :init thing)
-      (err "iter: requires a list, vector, string or existing iterator")))
+      (file? thing)
+        ((file-iter) :init thing)
+      (err "iter: requires a list, vector, string, file or existing iterator")))
 
 (defn iter-or-single
 "Return thing as an iterator if possible (if it is an iterator just return thing).
@@ -679,6 +713,8 @@ Example:
         ((vec-iter) :init thing 0)
       (string? thing)
         ((string-iter) :init thing)
+      (file? thing)
+        ((file-iter) :init thing)
       ((single-iter) :init thing)))
 
 (defn next!
@@ -1099,6 +1135,8 @@ Example:
     iterator
     double-ended-iterator
     vec-iter
+    string-iter
+    file-iter
     list-iter
     iter?
     double-ended-iter?
