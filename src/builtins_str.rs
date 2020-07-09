@@ -803,10 +803,7 @@ fn builtin_str_iter_next(
             }
             if let ExpEnum::Atom(Atom::String(string, Some((idx, ch_map)))) = &mut string_d.data {
                 if *idx >= ch_map.len() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "str-iter-next: iteration done",
-                    ));
+                    return Ok(Expression::make_nil());
                 }
                 let start = ch_map[*idx].0;
                 let end = start + ch_map[*idx].1;
@@ -1413,7 +1410,8 @@ Example:
             builtin_str_iter_next,
             "Usage: (str-iter-next! string) -> char
 
-Returns the next char in the iterator for string.
+Returns the next char in the iterator for string.  Returns nil if iteration
+is done.
 
 Section: string
 
