@@ -253,27 +253,30 @@ fn handle_result(
                     eprintln!("Error saving temp history: {}", err);
                 }
             }
-            if !environment.stack_on_error {
-                if let Some(exp) = &environment.error_expression {
-                    let exp = exp.clone();
-                    eprintln!("Error evaluating:");
-                    let stderr = io::stderr();
-                    let mut handle = stderr.lock();
-                    if let Err(err) = exp.pretty_printf(environment, &mut handle) {
-                        eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
-                    }
-                    if let Some(meta) = &environment.error_meta {
-                        eprint!(
-                            "\n[[[ {}, line: {}, column: {} ]]]",
-                            meta.file, meta.line, meta.col
-                        )
-                    }
-                    eprintln!("");
+            if let Some(exp) = &environment.error_exp_with_meta {
+                let exp = exp.clone();
+                eprintln!("Error evaluating:");
+                let stderr = io::stderr();
+                let mut handle = stderr.lock();
+                if let Err(err) = exp.pretty_printf(environment, &mut handle) {
+                    eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
                 }
-                eprintln!("{}", err);
-            } else {
-                eprintln!("{}", err);
+            } else if let Some(exp) = &environment.error_expression {
+                let exp = exp.clone();
+                eprintln!("Error evaluating:");
+                let stderr = io::stderr();
+                let mut handle = stderr.lock();
+                if let Err(err) = exp.pretty_printf(environment, &mut handle) {
+                    eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
+                }
             }
+            if let Some(meta) = &environment.error_meta {
+                eprintln!(
+                    "\n[[[ {}, line: {}, column: {} ]]]",
+                    meta.file, meta.line, meta.col
+                )
+            }
+            eprintln!("{}", err);
         }
     }
 }

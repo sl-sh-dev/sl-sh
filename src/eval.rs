@@ -668,11 +668,12 @@ pub fn eval_nr(
                     "\n[[[ {}, line: {}, column: {} ]]]",
                     meta.file, meta.line, meta.col
                 );
-                if environment.error_meta.is_none() {
-                    environment.error_meta = Some(meta);
-                }
             }
             eprintln!("\n=============================================================");
+        }
+        if environment.error_meta.is_none() && expression.meta().is_some() {
+            environment.error_exp_with_meta = Some(expression.clone());
+            environment.error_meta = expression.meta();
         }
     }
     environment.state.eval_level -= 1;

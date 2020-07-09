@@ -434,6 +434,7 @@ where
     P: PeekableIterator<Item = char>,
 {
     let mut level = 0;
+    let mut line_stack: Vec<(usize, usize)> = Vec::new();
     let mut next_chars = next2(chars);
     let mut read_next = false;
     let (line, column) = line_col;
@@ -483,6 +484,8 @@ where
                     list_type: ListType::List,
                     vec: quoted,
                 });
+                let save_line = *line;
+                let save_col = *column;
                 read_inner(
                     environment,
                     chars,
@@ -492,7 +495,7 @@ where
                     name,
                     in_back_quote,
                 )?;
-                close_list(stack, get_meta(name, *line, *column))?;
+                close_list(stack, get_meta(name, save_line, save_col))?;
             }
             '`' => {
                 let mut quoted = Vec::<Handle>::new();
@@ -515,6 +518,8 @@ where
                     list_type: ListType::List,
                     vec: quoted,
                 });
+                let save_line = *line;
+                let save_col = *column;
                 read_inner(
                     environment,
                     chars,
@@ -524,7 +529,7 @@ where
                     name,
                     true,
                 )?;
-                close_list(stack, get_meta(name, *line, *column))?;
+                close_list(stack, get_meta(name, save_line, save_col))?;
             }
             ',' if in_back_quote => {
                 read_next = true; // , always needs the symbol after
@@ -592,6 +597,7 @@ where
             }
             '(' => {
                 level += 1;
+                line_stack.push((*line, *column));
                 stack.push(List {
                     list_type: ListType::List,
                     vec: Vec::<Handle>::new(),
@@ -604,7 +610,8 @@ where
                     });
                 }
                 level -= 1;
-                close_list(stack, get_meta(name, *line, *column))?;
+                let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
+                close_list(stack, get_meta(name, line, column))?;
             }
             ';' => {
                 consume_line_comment(chars, line, column);
