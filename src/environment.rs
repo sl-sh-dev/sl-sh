@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::builtins::add_builtins;
+use crate::builtins_system::add_system_builtins;
 use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
@@ -105,6 +106,7 @@ impl Scope {
     fn new_root(interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, Reference> = HashMap::new();
         add_builtins(interner, &mut data);
+        add_system_builtins(interner, &mut data);
         add_math_builtins(interner, &mut data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
