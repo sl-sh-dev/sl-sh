@@ -5,10 +5,11 @@ use nix::{
     },
     unistd::{self, Pid},
 };
-use std::io;
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
+use std::io;
+use std::{thread, time};
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -287,6 +288,49 @@ fn builtin_run_bg(
     last_eval
 }
 
+fn builtin_sleep(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(millis) = args.next() {
+        if args.next().is_none() {
+            if let ExpEnum::Atom(Atom::Int(millis)) = eval(environment, millis)?.get().data {
+                if millis > 0 {
+                    let millis = time::Duration::from_millis(millis as u64);
+                    thread::sleep(millis);
+                    return Ok(Expression::make_nil());
+                }
+            }
+            //let now = time::Instant::now();
+
+            // assert!(now.elapsed() >= ten_millis)
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "sleep: can only have one argument (milliseconds to sleep- positive integer)",
+    ))
+}
+
+fn builtin_time(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(form) = args.next() {
+        if args.next().is_none() {
+            let now = time::Instant::now();
+            eval(environment, form)?;
+            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
+                now.elapsed().as_secs_f64(),
+            ))));
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "time: can only have one argument (form to time)",
+    ))
+}
+
 fn builtin_exit(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -458,6 +502,40 @@ Example:
 ;(exit)
 ;(exit 0)
 t
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("sleep"),
+        Expression::make_function(
+            builtin_sleep,
+            "Usage: (sleep milliseconds) -> nil
+
+Sleep for the provided milliseconds (must be a positive integer).
+
+Section: shell
+
+Example:
+(def 'test-sleep-var (time (sleep 1000)))
+(assert-true (> test-sleep-var 1.0))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("time"),
+        Expression::make_function(
+            builtin_time,
+            "Usage: (time form) -> eval-time
+
+Evalutes the provided form and returns the seconds it ran for (as float with fractional part).
+
+Section: shell
+
+Example:
+(def 'test-sleep-var (time (sleep 1100)))
+(assert-true (> test-sleep-var 1.1))
 ",
             root,
         ),

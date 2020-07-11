@@ -9,7 +9,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::builtins::add_builtins;
-use crate::builtins_system::add_system_builtins;
 use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
@@ -17,6 +16,7 @@ use crate::builtins_math::add_math_builtins;
 use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
+use crate::builtins_system::add_system_builtins;
 use crate::builtins_types::add_type_builtins;
 use crate::builtins_vector::add_vec_builtins;
 use crate::gc::*;
