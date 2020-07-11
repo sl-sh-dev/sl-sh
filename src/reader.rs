@@ -32,38 +32,38 @@ struct List {
     vec: Vec<Handle>,
 }
 
-fn is_whitespace(ch: char) -> bool {
+fn is_whitespace(ch: &str) -> bool {
     match ch {
-        ' ' => true,
-        '\t' => true,
-        '\n' => true,
+        " " => true,
+        "\t" => true,
+        "\n" => true,
         _ => false,
     }
 }
 
-fn char_to_hex_num(ch: char) -> u8 {
-    if ch > '0' && ch < '9' {
-        ch as u8 - b'0'
+fn char_to_hex_num(ch: &str) -> u8 {
+    if ch > "0" && ch < "9" {
+        ch.chars().next().unwrap() as u8 - b'0'
     } else {
         match ch {
-            'a' => 10,
-            'A' => 10,
-            'b' => 11,
-            'B' => 11,
-            'c' => 12,
-            'C' => 12,
-            'd' => 13,
-            'D' => 13,
-            'e' => 14,
-            'E' => 14,
-            'f' => 15,
-            'F' => 15,
+            "a" => 10,
+            "A" => 10,
+            "b" => 11,
+            "B" => 11,
+            "c" => 12,
+            "C" => 12,
+            "d" => 13,
+            "D" => 13,
+            "e" => 14,
+            "E" => 14,
+            "f" => 15,
+            "F" => 15,
             _ => 0,
         }
     }
 }
 
-fn escape_to_char(escape_code: &[char]) -> char {
+fn escape_to_char<'a>(escape_code: &[&'a str]) -> char {
     let mut ch_n: u8 = 0;
     match escape_code.len().cmp(&1) {
         Ordering::Greater => {
@@ -123,12 +123,12 @@ fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMe
     }
 }
 
-fn consume_line_comment<P>(chars: &mut P, line: &mut usize, column: &mut usize)
+fn consume_line_comment<'a, P>(chars: &mut P, line: &mut usize, column: &mut usize)
 where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     for ch in chars {
-        if ch == '\n' {
+        if ch == "\n" {
             *line += 1;
             *column = 0;
             return;
@@ -136,23 +136,23 @@ where
     }
 }
 
-fn consume_block_comment<P>(chars: &mut P, line: &mut usize, column: &mut usize)
+fn consume_block_comment<'a, P>(chars: &mut P, line: &mut usize, column: &mut usize)
 where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     let mut depth = 1;
-    let mut last_ch = ' ';
+    let mut last_ch = " ";
     for ch in chars {
-        if ch == '\n' {
+        if ch == "\n" {
             *line += 1;
             *column = 0;
         } else {
             *column += 1;
         }
-        if last_ch == '|' && ch == '#' {
+        if last_ch == "|" && ch == "#" {
             depth -= 1;
         }
-        if last_ch == '#' && ch == '|' {
+        if last_ch == "#" && ch == "|" {
             depth += 1;
         }
         last_ch = ch;
@@ -162,18 +162,18 @@ where
     }
 }
 
-fn end_symbol(ch: char, in_back_quote: bool) -> bool {
+fn end_symbol(ch: &str, in_back_quote: bool) -> bool {
     if is_whitespace(ch) {
         true
     } else {
         match ch {
-            '(' => true,
-            ')' => true,
-            '#' => true,
-            '"' => true,
-            ',' if in_back_quote => true,
-            '\'' => true,
-            '`' => true,
+            "(" => true,
+            ")" => true,
+            "#" => true,
+            "\"" => true,
+            "," if in_back_quote => true,
+            "\\" => true,
+            "`" => true,
             _ => false,
         }
     }
@@ -240,23 +240,23 @@ fn do_char(
     }
 }
 
-fn read_string<P>(
+fn read_string<'a, P>(
     chars: &mut P,
     symbol: &mut String,
     line: &mut usize,
     column: &mut usize,
 ) -> Result<Expression, ParseError>
 where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     symbol.clear();
-    let mut escape_code: Vec<char> = Vec::with_capacity(2);
+    let mut escape_code: Vec<&'a str> = Vec::with_capacity(2);
     let mut in_escape_code = false;
-    let mut last_ch = ' ';
+    let mut last_ch = " ";
     let mut skip_last_ch = false;
 
     for ch in chars {
-        if ch == '\n' {
+        if ch == "\n" {
             *line += 1;
             *column = 0;
         } else {
@@ -269,36 +269,36 @@ where
                 escape_code.clear();
                 in_escape_code = false;
             }
-        } else if last_ch == '\\' {
+        } else if last_ch == "\\" {
             match ch {
-                'n' => symbol.push('\n'),
-                'r' => symbol.push('\r'),
-                't' => symbol.push('\t'),
-                '"' => symbol.push('"'),
-                'x' => {
+                "n" => symbol.push('\n'),
+                "r" => symbol.push('\r'),
+                "t" => symbol.push('\t'),
+                "\"" => symbol.push('"'),
+                "x" => {
                     in_escape_code = true;
                 }
-                '\\' => {
+                "\\" => {
                     skip_last_ch = true;
                     symbol.push('\\');
                 }
                 _ => {
                     symbol.push('\\');
-                    symbol.push(ch);
+                    symbol.push_str(ch);
                 }
             }
         } else {
-            if ch == '"' {
+            if ch == "\"" {
                 break;
             }
-            if ch != '\\' {
-                symbol.push(ch);
+            if ch != "\\" {
+                symbol.push_str(ch);
             }
         }
 
         last_ch = if skip_last_ch {
             skip_last_ch = false;
-            ' '
+            " "
         } else {
             ch
         }
@@ -356,7 +356,7 @@ fn push_stack(
     }
 }
 
-fn read_symbol<P>(
+fn read_symbol<'a, P>(
     buffer: &mut String,
     chars: &mut P,
     line: &mut usize,
@@ -364,7 +364,7 @@ fn read_symbol<P>(
     for_ch: bool,
     in_back_quote: bool,
 ) where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     let mut has_peek;
     let mut push_next = false;
@@ -381,21 +381,21 @@ fn read_symbol<P>(
             *pch
         } else {
             has_peek = false;
-            ' '
+            " "
         };
-        if ch == '\n' {
+        if ch == "\n" {
             *line += 1;
             *column = 0;
         } else {
             *column += 1;
         }
-        if ch == '\\' && has_peek && !for_ch {
+        if ch == "\\" && has_peek && !for_ch {
             push_next = true;
         } else {
-            buffer.push(ch);
+            buffer.push_str(ch);
         }
         if push_next {
-            buffer.push(chars.next().unwrap());
+            buffer.push_str(chars.next().unwrap());
             push_next = false;
         } else if end_symbol(peek_ch, in_back_quote) {
             break;
@@ -404,16 +404,16 @@ fn read_symbol<P>(
     }
 }
 
-fn next2<P>(chars: &mut P) -> Option<(char, char)>
+fn next2<'a, P>(chars: &mut P) -> Option<(&'a str, &'a str)>
 where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     let next_ch = chars.next();
     if let Some(ch) = next_ch {
         let peek_ch = if let Some(pch) = chars.peek() {
             *pch
         } else {
-            ' '
+            " "
         };
         Some((ch, peek_ch))
     } else {
@@ -421,7 +421,7 @@ where
     }
 }
 
-fn read_inner<P>(
+fn read_inner<'a, P>(
     environment: &mut Environment,
     chars: &mut P,
     stack: &mut Vec<List>,
@@ -431,7 +431,7 @@ fn read_inner<P>(
     in_back_quote: bool,
 ) -> Result<bool, ParseError>
 where
-    P: PeekableIterator<Item = char>,
+    P: PeekableIterator<Item = &'a str>,
 {
     let mut level = 0;
     let mut line_stack: Vec<(usize, usize)> = Vec::new();
@@ -443,7 +443,7 @@ where
 
         // Consume leading whitespace.
         while is_whitespace(ch) {
-            if ch == '\n' {
+            if ch == "\n" {
                 *line += 1;
                 *column = 0;
             } else {
@@ -457,14 +457,14 @@ where
             };
         }
 
-        if ch == '\n' {
+        if ch == "\n" {
             *line += 1;
             *column = 0;
         } else {
             *column += 1;
         }
         match ch {
-            '"' => {
+            "\"" => {
                 push_stack(
                     stack,
                     read_string(chars, buffer, line, column)?,
@@ -472,7 +472,7 @@ where
                     *column,
                 )?;
             }
-            '\'' => {
+            "'" => {
                 let mut quoted = Vec::<Handle>::new();
                 quoted.push(
                     Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
@@ -497,7 +497,7 @@ where
                 )?;
                 close_list(stack, get_meta(name, save_line, save_col))?;
             }
-            '`' => {
+            "`" => {
                 let mut quoted = Vec::<Handle>::new();
                 if in_back_quote {
                     quoted.push(
@@ -531,9 +531,9 @@ where
                 )?;
                 close_list(stack, get_meta(name, save_line, save_col))?;
             }
-            ',' if in_back_quote => {
+            "," if in_back_quote => {
                 read_next = true; // , always needs the symbol after
-                if peek_ch == '@' {
+                if peek_ch == "@" {
                     chars.next();
                     push_stack(
                         stack,
@@ -554,11 +554,11 @@ where
                     )?;
                 }
             }
-            '#' => {
+            "#" => {
                 chars.next();
                 match peek_ch {
-                    '|' => consume_block_comment(chars, line, column),
-                    '\\' => {
+                    "|" => consume_block_comment(chars, line, column),
+                    "\\" => {
                         buffer.clear();
                         read_symbol(buffer, chars, line, column, true, in_back_quote);
                         push_stack(
@@ -568,19 +568,19 @@ where
                             *column,
                         )?;
                     }
-                    '<' => {
+                    "<" => {
                         let reason =
                             format!("Found an unreadable token: line {}, col: {}", line, column);
                         return Err(ParseError { reason });
                     }
-                    '(' => {
+                    "(" => {
                         level += 1;
                         stack.push(List {
                             list_type: ListType::Vector,
                             vec: Vec::<Handle>::new(),
                         });
                     }
-                    't' => push_stack(
+                    "t" => push_stack(
                         stack,
                         Expression::alloc_data(ExpEnum::Atom(Atom::True)),
                         *line,
@@ -595,7 +595,7 @@ where
                     }
                 }
             }
-            '(' => {
+            "(" => {
                 level += 1;
                 line_stack.push((*line, *column));
                 stack.push(List {
@@ -603,7 +603,7 @@ where
                     vec: Vec::<Handle>::new(),
                 });
             }
-            ')' => {
+            ")" => {
                 if level <= 0 {
                     return Err(ParseError {
                         reason: "Unexpected `)`".to_string(),
@@ -613,12 +613,12 @@ where
                 let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
                 close_list(stack, get_meta(name, line, column))?;
             }
-            ';' => {
+            ";" => {
                 consume_line_comment(chars, line, column);
             }
             _ => {
                 buffer.clear();
-                buffer.push(ch);
+                buffer.push_str(ch);
                 read_symbol(buffer, chars, line, column, false, in_back_quote);
                 push_stack(stack, do_atom(environment, buffer), *line, *column)?;
             }
@@ -653,7 +653,7 @@ fn read2(
         list_type: ListType::Vector,
         vec: Vec::<Handle>::new(),
     });
-    let mut chars = text.chars().peekable();
+    let mut chars = UnicodeSegmentation::graphemes(text, true).peekable();
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         consume_line_comment(&mut chars, &mut line, &mut column);
