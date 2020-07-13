@@ -9,6 +9,9 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
+use core::iter::Peekable;
+use unicode_segmentation::Graphemes;
+
 use crate::builtins_util::is_proper_list;
 use crate::environment::*;
 use crate::eval::call_lambda;
@@ -28,17 +31,43 @@ pub struct Macro {
     pub body: Handle,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)] //, Debug)]
 pub enum Atom {
     True,
     Float(f64),
     Int(i64),
     Symbol(&'static str),
-    String(Cow<'static, str>, Option<(usize, Vec<(usize, usize)>)>),
+    // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
+    // to None if it is Some.
+    String(Cow<'static, str>, Option<Peekable<Graphemes<'static>>>),
     Char(Cow<'static, str>),
     CodePoint(char),
     Lambda(Lambda),
     Macro(Macro),
+}
+
+impl fmt::Debug for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Atom::True => write!(f, "true"),
+            Atom::Float(n) => write!(f, "{}", n),
+            Atom::Int(i) => write!(f, "{}", i),
+            Atom::Symbol(s) => write!(f, "{}", s),
+            Atom::String(s, _) => write!(f, "\"{}\"", s),
+            Atom::Char(c) => write!(f, "#\\{}", c),
+            Atom::CodePoint(c) => write!(f, "#\\{}", c),
+            Atom::Lambda(l) => {
+                let params: Expression = l.params.clone().into();
+                let body: Expression = l.body.clone().into();
+                write!(f, "(fn {} {})", params.to_string(), body.to_string())
+            }
+            Atom::Macro(m) => {
+                let params: Expression = m.params.clone().into();
+                let body: Expression = m.body.clone().into();
+                write!(f, "(macro {} {})", params.to_string(), body.to_string())
+            }
+        }
+    }
 }
 
 impl fmt::Display for Atom {

@@ -614,6 +614,9 @@ fn internal_eval(
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
+        // If we have an iterator on the string then assume it is already processed and being used.
+        // XXX TODO- verify this assumption is correct, maybe change when to process strings.
+        ExpEnum::Atom(Atom::String(_, Some(_))) => Ok(expression.clone()),
         ExpEnum::Atom(Atom::String(string, _)) => str_process(environment, &string, true),
         ExpEnum::Atom(_) => Ok(expression.clone()),
         ExpEnum::Function(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),

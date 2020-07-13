@@ -410,4 +410,7 @@ Example:
                         (setq sexp (list fcn curr-form)))
                     (recur (eval sexp) (rest forms))))))))
 
+; Reader macro for #.
+(defn reader-macro-dot (stream ch) (eval (read stream)))
+
 (load "collection.lisp")

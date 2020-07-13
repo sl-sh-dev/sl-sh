@@ -656,14 +656,7 @@ fn builtin_str_push(
                 let a = eval(environment, a)?;
                 res.to_mut().push_str(&as_string(environment, &a)?);
             }
-            if let Some((idx, _)) = chars {
-                // If iterating, since we only added to the end then just update not invalidate.
-                let ch_map: Vec<(usize, usize)> =
-                    UnicodeSegmentation::grapheme_indices(res.as_ref(), true)
-                        .map(|(idx, s)| (idx, s.len()))
-                        .collect();
-                *chars = Some((*idx, ch_map));
-            }
+            *chars = None; // maintian the iterator invariant.
             drop(s_d);
             Ok(s)
         } else {
@@ -689,7 +682,7 @@ fn builtin_str_clear(
             let s = eval(environment, arg0)?;
             let mut s_d = s.get_mut();
             if let ExpEnum::Atom(Atom::String(res, chars)) = &mut s_d.data {
-                *chars = None;
+                *chars = None; // maintian the iterator invariant.
                 res.to_mut().clear();
                 drop(s_d);
                 Ok(s)
@@ -715,7 +708,6 @@ fn builtin_str_clear(
 
 fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> io::Result<String> {
     let mut res = String::new();
-    //for ch in string.chars() {
     for ch in UnicodeSegmentation::graphemes(string, true) {
         let mut list = Vec::with_capacity(2);
         list.push(
@@ -767,15 +759,10 @@ fn builtin_str_iter_start(
             let string_outer = eval(environment, string)?;
             let mut string_d = string_outer.get_mut();
             if let ExpEnum::Atom(Atom::String(string, chars)) = &mut string_d.data {
-                if let Some((idx, _)) = chars {
-                    *idx = 0;
-                } else {
-                    let ch_map: Vec<(usize, usize)> =
-                        UnicodeSegmentation::grapheme_indices(string.as_ref(), true)
-                            .map(|(idx, s)| (idx, s.len()))
-                            .collect();
-                    *chars = Some((0, ch_map));
-                }
+                // This unsafe should be fine as long as the iterator is invalidated (set to None)
+                // on ANY change to string.
+                let nstr = unsafe { &*(string.as_ref() as *const str) };
+                *chars = Some(UnicodeSegmentation::graphemes(nstr, true).peekable());
                 drop(string_d);
                 return Ok(string_outer);
             }
@@ -801,24 +788,14 @@ fn builtin_str_iter_next(
                     "str-iter-next: not an iterator",
                 ));
             }
-            if let ExpEnum::Atom(Atom::String(string, Some((idx, ch_map)))) = &mut string_d.data {
-                if *idx >= ch_map.len() {
+            if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
+                if let Some(ch) = ch_iter.next() {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                        ch.to_string().into(),
+                    ))));
+                } else {
                     return Ok(Expression::make_nil());
                 }
-                let start = ch_map[*idx].0;
-                let end = start + ch_map[*idx].1;
-                let ch = string.get(start..end);
-                return if let Some(ch) = &ch {
-                    *idx += 1;
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                        ch.to_string().into(),
-                    ))))
-                } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "str-iter-next: iteration invalid",
-                    ))
-                };
             }
         }
     }
@@ -835,12 +812,12 @@ fn builtin_str_iter_empty(
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let string = eval(environment, string)?;
-            let string_d = string.get();
+            let mut string_d = string.get_mut();
             if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
                 return Ok(Expression::make_true());
             }
-            if let ExpEnum::Atom(Atom::String(_, Some((idx, ch_map)))) = &string_d.data {
-                return if *idx == ch_map.len() {
+            if let ExpEnum::Atom(Atom::String(_, Some(ch_iter))) = &mut string_d.data {
+                return if ch_iter.peek().is_none() {
                     Ok(Expression::make_true())
                 } else {
                     Ok(Expression::make_nil())
@@ -1452,11 +1429,14 @@ Example:
 (test::assert-equal #\\s (str-iter-next! test-iter-start))
 (test::assert-equal #\\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
-(str-push! test-iter-start \"one\")
+
+(def 'test-iter-start \"test\")
+(test::assert-true (str-iter-empty? test-iter-start))
+(str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\o (str-iter-next! test-iter-start))
-(test::assert-equal #\\n (str-iter-next! test-iter-start))
+(test::assert-equal #\\t (str-iter-next! test-iter-start))
 (test::assert-equal #\\e (str-iter-next! test-iter-start))
+(str-push! test-iter-start \"one\")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))

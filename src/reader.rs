@@ -1,9 +1,12 @@
+use core::iter::Peekable;
 use std::cmp::Ordering;
 use std::num::{ParseFloatError, ParseIntError};
 
+use unicode_segmentation::Graphemes;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::environment::*;
+use crate::eval::eval;
 use crate::gc::Handle;
 use crate::types::*;
 
@@ -421,21 +424,120 @@ where
     }
 }
 
-fn read_inner<'a, P>(
+fn call_reader_macro(
     environment: &mut Environment,
-    chars: &mut P,
+    name: &str,
+    stream: Expression,
+    ch: &str,
+    file: Option<&'static str>,
+    column: usize,
+    line: usize,
+) -> Result<Expression, ParseError> {
+    if let Some(exp) = get_expression(environment, name) {
+        let exp = match &exp.exp.get().data {
+            ExpEnum::Atom(Atom::Lambda(_)) => {
+                let mut v = Vec::with_capacity(1);
+                v.push(
+                    Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        environment.interner.intern(name),
+                    )))
+                    .handle_no_root(),
+                );
+                v.push(stream.handle_no_root());
+                v.push(
+                    Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch.to_string().into())))
+                        .handle_no_root(),
+                );
+                Expression::with_list(v)
+            }
+            _ => {
+                let reason = format!(
+                    "Error calling reader macro (not a lambda) {}, {} : line {}, col: {}",
+                    name,
+                    file.unwrap_or_else(|| ""),
+                    line,
+                    column
+                );
+                return Err(ParseError { reason });
+            }
+        };
+        match eval(environment, exp) {
+            Ok(exp) => Ok(exp),
+            Err(err) => {
+                let reason = format!(
+                    "Error in reader {}: {} ({} : line {}, col: {})",
+                    name,
+                    err,
+                    file.unwrap_or_else(|| ""),
+                    line,
+                    column
+                );
+                Err(ParseError { reason })
+            }
+        }
+    } else {
+        let reason = format!(
+            "Error calling reader macro (not found) {}, {} : line {}, col: {}",
+            name,
+            file.unwrap_or_else(|| ""),
+            line,
+            column
+        );
+        Err(ParseError { reason })
+    }
+}
+
+fn prep_reader_macro(
+    environment: &mut Environment,
+    mut chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
+    stack: &mut Vec<List>,
+    name: &str,
+    ch: &str,
+    file: Option<&'static str>,
+    line_col: (&mut usize, &mut usize),
+) -> Result<Peekable<Graphemes<'static>>, ParseError> {
+    let (line, column) = line_col;
+    chars = {
+        let stream_exp =
+            Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
+        push_stack(
+            stack,
+            call_reader_macro(
+                environment,
+                name,
+                stream_exp.clone(),
+                ch,
+                file,
+                *column,
+                *line,
+            )?,
+            *line,
+            *column,
+        )?;
+        let mut exp_d = stream_exp.get_mut();
+        let res = if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
+            chars_iter.take().unwrap()
+        } else {
+            panic!("read: something happened to char iterator in reader macro!");
+        };
+        exp_d.data.replace(ExpEnum::Nil);
+        res
+    };
+    Ok(chars)
+}
+
+fn read_inner(
+    environment: &mut Environment,
+    mut chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
     stack: &mut Vec<List>,
     buffer: &mut String,
     line_col: (&mut usize, &mut usize),
     name: Option<&'static str>,
     in_back_quote: bool,
-) -> Result<bool, ParseError>
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+) -> Result<(bool, Peekable<Graphemes<'static>>), ParseError> {
     let mut level = 0;
     let mut line_stack: Vec<(usize, usize)> = Vec::new();
-    let mut next_chars = next2(chars);
+    let mut next_chars = next2(&mut chars);
     let mut read_next = false;
     let (line, column) = line_col;
     while next_chars.is_some() {
@@ -449,11 +551,11 @@ where
             } else {
                 *column += 1;
             }
-            if let Some((tch, pch)) = next2(chars) {
+            if let Some((tch, pch)) = next2(&mut chars) {
                 ch = tch;
                 peek_ch = pch;
             } else {
-                return Ok(false);
+                return Ok((false, chars));
             };
         }
 
@@ -467,7 +569,7 @@ where
             "\"" => {
                 push_stack(
                     stack,
-                    read_string(chars, buffer, line, column)?,
+                    read_string(&mut chars, buffer, line, column)?,
                     *line,
                     *column,
                 )?;
@@ -486,7 +588,7 @@ where
                 });
                 let save_line = *line;
                 let save_col = *column;
-                read_inner(
+                let (_, ichars) = read_inner(
                     environment,
                     chars,
                     stack,
@@ -495,6 +597,7 @@ where
                     name,
                     in_back_quote,
                 )?;
+                chars = ichars;
                 close_list(stack, get_meta(name, save_line, save_col))?;
             }
             "`" => {
@@ -520,7 +623,7 @@ where
                 });
                 let save_line = *line;
                 let save_col = *column;
-                read_inner(
+                let (_, ichars) = read_inner(
                     environment,
                     chars,
                     stack,
@@ -529,6 +632,7 @@ where
                     name,
                     true,
                 )?;
+                chars = ichars;
                 close_list(stack, get_meta(name, save_line, save_col))?;
             }
             "," if in_back_quote => {
@@ -557,10 +661,10 @@ where
             "#" => {
                 chars.next();
                 match peek_ch {
-                    "|" => consume_block_comment(chars, line, column),
+                    "|" => consume_block_comment(&mut chars, line, column),
                     "\\" => {
                         buffer.clear();
-                        read_symbol(buffer, chars, line, column, true, in_back_quote);
+                        read_symbol(buffer, &mut chars, line, column, true, in_back_quote);
                         push_stack(
                             stack,
                             do_char(environment, buffer, *line, *column)?,
@@ -586,6 +690,17 @@ where
                         *line,
                         *column,
                     )?,
+                    "." => {
+                        chars = prep_reader_macro(
+                            environment,
+                            chars,
+                            stack,
+                            "reader-macro-dot",
+                            ".",
+                            name,
+                            (column, line),
+                        )?
+                    }
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
@@ -614,67 +729,35 @@ where
                 close_list(stack, get_meta(name, line, column))?;
             }
             ";" => {
-                consume_line_comment(chars, line, column);
+                consume_line_comment(&mut chars, line, column);
             }
             _ => {
                 buffer.clear();
                 buffer.push_str(ch);
-                read_symbol(buffer, chars, line, column, false, in_back_quote);
+                read_symbol(buffer, &mut chars, line, column, false, in_back_quote);
                 push_stack(stack, do_atom(environment, buffer), *line, *column)?;
             }
         }
         if level == 0 && !read_next {
-            return Ok(true);
+            return Ok((true, chars));
         }
         read_next = false;
-        next_chars = next2(chars);
+        next_chars = next2(&mut chars);
     }
     if level != 0 {
         Err(ParseError {
             reason: "Unclosed list(s)".to_string(),
         })
     } else {
-        Ok(false)
+        Ok((false, chars))
     }
 }
 
-fn read2(
-    environment: &mut Environment,
-    text: &str,
-    name: Option<&'static str>,
+fn stack_to_exp(
+    mut stack: &mut Vec<List>,
+    exp_meta: Option<ExpMeta>,
     always_wrap: bool,
 ) -> Result<Expression, ParseError> {
-    let mut buffer = String::new();
-    let mut line = 1;
-    let mut column = 0;
-
-    let mut stack: Vec<List> = Vec::new();
-    stack.push(List {
-        list_type: ListType::Vector,
-        vec: Vec::<Handle>::new(),
-    });
-    let mut chars = UnicodeSegmentation::graphemes(text, true).peekable();
-    if text.starts_with("#!") {
-        // Work with shebanged scripts.
-        consume_line_comment(&mut chars, &mut line, &mut column);
-    }
-    while read_inner(
-        environment,
-        &mut chars,
-        &mut stack,
-        &mut buffer,
-        (&mut line, &mut column),
-        name,
-        false,
-    )? {}
-    if chars.next().is_some() {
-        let reason = format!(
-            "Premature end (to many ')'?) line: {}, column: {}",
-            line, column
-        );
-        return Err(ParseError { reason });
-    }
-    let exp_meta = get_meta(name, 0, 0);
     close_list(&mut stack, exp_meta)?;
     if stack.len() > 1 {
         Err(ParseError {
@@ -711,6 +794,80 @@ fn read2(
             }),
         }
     }
+}
+
+fn read2(
+    environment: &mut Environment,
+    text: &str,
+    name: Option<&'static str>,
+    always_wrap: bool,
+) -> Result<Expression, ParseError> {
+    let mut buffer = String::new();
+    let mut line = 1;
+    let mut column = 0;
+
+    let mut stack: Vec<List> = Vec::new();
+    stack.push(List {
+        list_type: ListType::Vector,
+        vec: Vec::<Handle>::new(),
+    });
+    // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
+    // reference and iterator go away at the end of this function.
+    let ntext = unsafe { &*(text as *const str) };
+    let mut chars = UnicodeSegmentation::graphemes(ntext, true).peekable();
+    if text.starts_with("#!") {
+        // Work with shebanged scripts.
+        consume_line_comment(&mut chars, &mut line, &mut column);
+    }
+    let mut cont = true;
+    while cont {
+        let (icont, ichars) = read_inner(
+            environment,
+            chars,
+            &mut stack,
+            &mut buffer,
+            (&mut line, &mut column),
+            name,
+            false,
+        )?;
+        cont = icont;
+        chars = ichars;
+    }
+    if chars.next().is_some() {
+        let reason = format!(
+            "Premature end (to many ')'?) line: {}, column: {}",
+            line, column
+        );
+        return Err(ParseError { reason });
+    }
+    let exp_meta = get_meta(name, 0, 0);
+    stack_to_exp(&mut stack, exp_meta, always_wrap)
+}
+
+pub fn read_form(
+    environment: &mut Environment,
+    chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
+    line: &mut usize,
+    column: &mut usize,
+    name: Option<&'static str>,
+) -> Result<(Expression, Peekable<Graphemes<'static>>), ParseError> {
+    let mut buffer = String::new();
+    let mut stack: Vec<List> = Vec::new();
+    stack.push(List {
+        list_type: ListType::Vector,
+        vec: Vec::<Handle>::new(),
+    });
+    let (_, chars) = read_inner(
+        environment,
+        chars,
+        &mut stack,
+        &mut buffer,
+        (line, column),
+        name,
+        false,
+    )?;
+    let exp_meta = get_meta(name, *line, *column);
+    Ok((stack_to_exp(&mut stack, exp_meta, false)?, chars))
 }
 
 pub fn read(

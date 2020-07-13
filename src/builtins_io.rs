@@ -253,10 +253,12 @@ fn builtin_read(
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
     }
+    //XXX TODO- clean this up- do not read everthing, just the next expression and do better with
+    //files...
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return match &exp.get().data {
+            return match &mut exp.get_mut().data {
                 ExpEnum::File(file) => match &*file.borrow() {
                     FileState::Read(file) => {
                         let mut input = String::new();
@@ -273,7 +275,27 @@ fn builtin_read(
                         "read: requires a file opened for reading or string",
                     )),
                 },
-                ExpEnum::Atom(Atom::String(input, _)) => do_read(environment, input),
+                ExpEnum::Atom(Atom::String(input, char_iter)) => {
+                    if char_iter.is_some() {
+                        let mut line = 0;
+                        let mut column = 0;
+                        let mut chars = char_iter.take().unwrap();
+                        let res = match read_form(environment, chars, &mut line, &mut column, None)
+                        {
+                            Ok((ast, ichars)) => {
+                                chars = ichars;
+                                Ok(ast)
+                            }
+                            Err(err) => {
+                                return Err(io::Error::new(io::ErrorKind::Other, err.reason))
+                            }
+                        };
+                        char_iter.replace(chars);
+                        res
+                    } else {
+                        do_read(environment, input)
+                    }
+                }
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
                     "read: requires a file opened for reading or string",
