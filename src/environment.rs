@@ -56,6 +56,13 @@ impl Default for EnvState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ReaderState {
+    pub line: usize,
+    pub column: usize,
+    pub file_name: Option<&'static str>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FormType {
     Any,
@@ -308,6 +315,7 @@ pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
+    pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
     pub in_pipe: bool,
@@ -365,6 +373,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     Environment {
         sig_int,
         state: EnvState::default(),
+        reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
         in_pipe: false,

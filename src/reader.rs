@@ -126,20 +126,20 @@ fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMe
     }
 }
 
-fn consume_line_comment<'a, P>(chars: &mut P, line: &mut usize, column: &mut usize)
+fn consume_line_comment<'a, P>(chars: &mut P, reader_state: &mut ReaderState)
 where
     P: PeekableIterator<Item = &'a str>,
 {
     for ch in chars {
         if ch == "\n" {
-            *line += 1;
-            *column = 0;
+            reader_state.line += 1;
+            reader_state.column = 0;
             return;
         }
     }
 }
 
-fn consume_block_comment<'a, P>(chars: &mut P, line: &mut usize, column: &mut usize)
+fn consume_block_comment<'a, P>(chars: &mut P, reader_state: &mut ReaderState)
 where
     P: PeekableIterator<Item = &'a str>,
 {
@@ -147,10 +147,10 @@ where
     let mut last_ch = " ";
     for ch in chars {
         if ch == "\n" {
-            *line += 1;
-            *column = 0;
+            reader_state.line += 1;
+            reader_state.column = 0;
         } else {
-            *column += 1;
+            reader_state.column += 1;
         }
         if last_ch == "|" && ch == "#" {
             depth -= 1;
@@ -246,8 +246,7 @@ fn do_char(
 fn read_string<'a, P>(
     chars: &mut P,
     symbol: &mut String,
-    line: &mut usize,
-    column: &mut usize,
+    reader_state: &mut ReaderState,
 ) -> Result<Expression, ParseError>
 where
     P: PeekableIterator<Item = &'a str>,
@@ -260,10 +259,10 @@ where
 
     for ch in chars {
         if ch == "\n" {
-            *line += 1;
-            *column = 0;
+            reader_state.line += 1;
+            reader_state.column = 0;
         } else {
-            *column += 1;
+            reader_state.column += 1;
         }
         if in_escape_code {
             escape_code.push(ch);
@@ -362,8 +361,7 @@ fn push_stack(
 fn read_symbol<'a, P>(
     buffer: &mut String,
     chars: &mut P,
-    line: &mut usize,
-    column: &mut usize,
+    reader_state: &mut ReaderState,
     for_ch: bool,
     in_back_quote: bool,
 ) where
@@ -387,10 +385,10 @@ fn read_symbol<'a, P>(
             " "
         };
         if ch == "\n" {
-            *line += 1;
-            *column = 0;
+            reader_state.line += 1;
+            reader_state.column = 0;
         } else {
-            *column += 1;
+            reader_state.column += 1;
         }
         if ch == "\\" && has_peek && !for_ch {
             push_next = true;
@@ -429,9 +427,6 @@ fn call_reader_macro(
     name: &str,
     stream: Expression,
     ch: &str,
-    file: Option<&'static str>,
-    column: usize,
-    line: usize,
 ) -> Result<Expression, ParseError> {
     if let Some(exp) = get_expression(environment, name) {
         let exp = match &exp.exp.get().data {
@@ -454,9 +449,9 @@ fn call_reader_macro(
                 let reason = format!(
                     "Error calling reader macro (not a lambda) {}, {} : line {}, col: {}",
                     name,
-                    file.unwrap_or_else(|| ""),
-                    line,
-                    column
+                    environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+                    environment.reader_state.as_ref().unwrap().line,
+                    environment.reader_state.as_ref().unwrap().column
                 );
                 return Err(ParseError { reason });
             }
@@ -468,9 +463,9 @@ fn call_reader_macro(
                     "Error in reader {}: {} ({} : line {}, col: {})",
                     name,
                     err,
-                    file.unwrap_or_else(|| ""),
-                    line,
-                    column
+                    environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+                    environment.reader_state.as_ref().unwrap().line,
+                    environment.reader_state.as_ref().unwrap().column
                 );
                 Err(ParseError { reason })
             }
@@ -479,9 +474,9 @@ fn call_reader_macro(
         let reason = format!(
             "Error calling reader macro (not found) {}, {} : line {}, col: {}",
             name,
-            file.unwrap_or_else(|| ""),
-            line,
-            column
+            environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+            environment.reader_state.as_ref().unwrap().line,
+            environment.reader_state.as_ref().unwrap().column
         );
         Err(ParseError { reason })
     }
@@ -493,10 +488,7 @@ fn prep_reader_macro(
     stack: &mut Vec<List>,
     name: &str,
     ch: &str,
-    file: Option<&'static str>,
-    line_col: (&mut usize, &mut usize),
 ) -> Result<Peekable<Graphemes<'static>>, ParseError> {
-    let (line, column) = line_col;
     chars = {
         let stream_exp =
             Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
@@ -507,12 +499,9 @@ fn prep_reader_macro(
                 name,
                 stream_exp.clone(),
                 ch,
-                file,
-                *column,
-                *line,
             )?,
-            *line,
-            *column,
+            environment.reader_state.as_ref().unwrap().line,
+            environment.reader_state.as_ref().unwrap().column,
         )?;
         let mut exp_d = stream_exp.get_mut();
         let res = if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
@@ -531,25 +520,25 @@ fn read_inner(
     mut chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
     stack: &mut Vec<List>,
     buffer: &mut String,
-    line_col: (&mut usize, &mut usize),
-    name: Option<&'static str>,
     in_back_quote: bool,
 ) -> Result<(bool, Peekable<Graphemes<'static>>), ParseError> {
+    if environment.reader_state.is_none() {
+        panic!("tried to read with no state!");
+    }
     let mut level = 0;
     let mut line_stack: Vec<(usize, usize)> = Vec::new();
     let mut next_chars = next2(&mut chars);
     let mut read_next = false;
-    let (line, column) = line_col;
     while next_chars.is_some() {
         let (mut ch, mut peek_ch) = next_chars.unwrap();
 
         // Consume leading whitespace.
         while is_whitespace(ch) {
             if ch == "\n" {
-                *line += 1;
-                *column = 0;
+                environment.reader_state.as_mut().unwrap().line += 1;
+                environment.reader_state.as_mut().unwrap().column = 0;
             } else {
-                *column += 1;
+                environment.reader_state.as_mut().unwrap().column += 1;
             }
             if let Some((tch, pch)) = next2(&mut chars) {
                 ch = tch;
@@ -560,18 +549,18 @@ fn read_inner(
         }
 
         if ch == "\n" {
-            *line += 1;
-            *column = 0;
+            environment.reader_state.as_mut().unwrap().line += 1;
+            environment.reader_state.as_mut().unwrap().column = 0;
         } else {
-            *column += 1;
+            environment.reader_state.as_mut().unwrap().column += 1;
         }
         match ch {
             "\"" => {
                 push_stack(
                     stack,
-                    read_string(&mut chars, buffer, line, column)?,
-                    *line,
-                    *column,
+                    read_string(&mut chars, buffer, &mut environment.reader_state.as_mut().unwrap())?,
+                    environment.reader_state.as_ref().unwrap().line,
+                    environment.reader_state.as_ref().unwrap().column,
                 )?;
             }
             "'" => {
@@ -586,19 +575,17 @@ fn read_inner(
                     list_type: ListType::List,
                     vec: quoted,
                 });
-                let save_line = *line;
-                let save_col = *column;
+                let save_line = environment.reader_state.as_ref().unwrap().line;
+                let save_col = environment.reader_state.as_ref().unwrap().column;
                 let (_, ichars) = read_inner(
                     environment,
                     chars,
                     stack,
                     buffer,
-                    (line, column),
-                    name,
                     in_back_quote,
                 )?;
                 chars = ichars;
-                close_list(stack, get_meta(name, save_line, save_col))?;
+                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, save_line, save_col))?;
             }
             "`" => {
                 let mut quoted = Vec::<Handle>::new();
@@ -621,19 +608,17 @@ fn read_inner(
                     list_type: ListType::List,
                     vec: quoted,
                 });
-                let save_line = *line;
-                let save_col = *column;
+                let save_line = environment.reader_state.as_ref().unwrap().line;
+                let save_col = environment.reader_state.as_ref().unwrap().column;
                 let (_, ichars) = read_inner(
                     environment,
                     chars,
                     stack,
                     buffer,
-                    (line, column),
-                    name,
                     true,
                 )?;
                 chars = ichars;
-                close_list(stack, get_meta(name, save_line, save_col))?;
+                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, save_line, save_col))?;
             }
             "," if in_back_quote => {
                 read_next = true; // , always needs the symbol after
@@ -644,8 +629,8 @@ fn read_inner(
                         Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                             environment.interner.intern(",@"),
                         ))),
-                        *line,
-                        *column,
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
                     )?;
                 } else {
                     push_stack(
@@ -653,28 +638,28 @@ fn read_inner(
                         Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                             environment.interner.intern(","),
                         ))),
-                        *line,
-                        *column,
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
                     )?;
                 }
             }
             "#" => {
                 chars.next();
                 match peek_ch {
-                    "|" => consume_block_comment(&mut chars, line, column),
+                    "|" => consume_block_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap()),
                     "\\" => {
                         buffer.clear();
-                        read_symbol(buffer, &mut chars, line, column, true, in_back_quote);
+                        read_symbol(buffer, &mut chars, &mut environment.reader_state.as_mut().unwrap(), true, in_back_quote);
                         push_stack(
                             stack,
-                            do_char(environment, buffer, *line, *column)?,
-                            *line,
-                            *column,
+                            do_char(environment, buffer, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column)?,
+                            environment.reader_state.as_ref().unwrap().line,
+                            environment.reader_state.as_ref().unwrap().column,
                         )?;
                     }
                     "<" => {
                         let reason =
-                            format!("Found an unreadable token: line {}, col: {}", line, column);
+                            format!("Found an unreadable token: line {}, col: {}", environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column);
                         return Err(ParseError { reason });
                     }
                     "(" => {
@@ -687,8 +672,8 @@ fn read_inner(
                     "t" => push_stack(
                         stack,
                         Expression::alloc_data(ExpEnum::Atom(Atom::True)),
-                        *line,
-                        *column,
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
                     )?,
                     "." => {
                         chars = prep_reader_macro(
@@ -697,14 +682,12 @@ fn read_inner(
                             stack,
                             "reader-macro-dot",
                             ".",
-                            name,
-                            (column, line),
                         )?
                     }
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
-                            peek_ch, line, column
+                            peek_ch, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column
                         );
                         return Err(ParseError { reason });
                     }
@@ -712,7 +695,7 @@ fn read_inner(
             }
             "(" => {
                 level += 1;
-                line_stack.push((*line, *column));
+                line_stack.push((environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column));
                 stack.push(List {
                     list_type: ListType::List,
                     vec: Vec::<Handle>::new(),
@@ -725,17 +708,16 @@ fn read_inner(
                     });
                 }
                 level -= 1;
-                let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
-                close_list(stack, get_meta(name, line, column))?;
+                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column))?;
             }
             ";" => {
-                consume_line_comment(&mut chars, line, column);
+                consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
             }
             _ => {
                 buffer.clear();
                 buffer.push_str(ch);
-                read_symbol(buffer, &mut chars, line, column, false, in_back_quote);
-                push_stack(stack, do_atom(environment, buffer), *line, *column)?;
+                read_symbol(buffer, &mut chars, &mut environment.reader_state.as_mut().unwrap(), false, in_back_quote);
+                push_stack(stack, do_atom(environment, buffer), environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column)?;
             }
         }
         if level == 0 && !read_next {
@@ -799,12 +781,16 @@ fn stack_to_exp(
 fn read2(
     environment: &mut Environment,
     text: &str,
-    name: Option<&'static str>,
     always_wrap: bool,
+    file_name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
+    let had_state = if environment.reader_state.is_none() {
+        environment.reader_state = Some(ReaderState { file_name, column: 0, line: 1 });
+        false
+    } else {
+        true
+    };
     let mut buffer = String::new();
-    let mut line = 1;
-    let mut column = 0;
 
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
@@ -817,7 +803,7 @@ fn read2(
     let mut chars = UnicodeSegmentation::graphemes(ntext, true).peekable();
     if text.starts_with("#!") {
         // Work with shebanged scripts.
-        consume_line_comment(&mut chars, &mut line, &mut column);
+        consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
     }
     let mut cont = true;
     while cont {
@@ -826,8 +812,6 @@ fn read2(
             chars,
             &mut stack,
             &mut buffer,
-            (&mut line, &mut column),
-            name,
             false,
         )?;
         cont = icont;
@@ -836,20 +820,21 @@ fn read2(
     if chars.next().is_some() {
         let reason = format!(
             "Premature end (to many ')'?) line: {}, column: {}",
-            line, column
+            environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column
         );
         return Err(ParseError { reason });
     }
-    let exp_meta = get_meta(name, 0, 0);
-    stack_to_exp(&mut stack, exp_meta, always_wrap)
+    let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
+    let res = stack_to_exp(&mut stack, exp_meta, always_wrap);
+    if !had_state {
+        environment.reader_state = None;
+    }
+    res
 }
 
 pub fn read_form(
     environment: &mut Environment,
     chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
-    line: &mut usize,
-    column: &mut usize,
-    name: Option<&'static str>,
 ) -> Result<(Expression, Peekable<Graphemes<'static>>), ParseError> {
     let mut buffer = String::new();
     let mut stack: Vec<List> = Vec::new();
@@ -862,11 +847,9 @@ pub fn read_form(
         chars,
         &mut stack,
         &mut buffer,
-        (line, column),
-        name,
         false,
     )?;
-    let exp_meta = get_meta(name, *line, *column);
+    let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column);
     Ok((stack_to_exp(&mut stack, exp_meta, false)?, chars))
 }
 
@@ -875,7 +858,7 @@ pub fn read(
     text: &str,
     name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
-    read2(environment, text, name, false)
+    read2(environment, text, false, name)
 }
 
 // Read the text but always wrap in an outer list even if text is one list.
@@ -885,7 +868,7 @@ pub fn read_list_wrap(
     text: &str,
     name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
-    read2(environment, text, name, true)
+    read2(environment, text, true, name)
 }
 
 #[cfg(test)]
@@ -961,6 +944,12 @@ mod tests {
         tokens
     }
 
+    fn build_def_env() -> Environment {
+        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        environment.reader_state = Some(ReaderState {line: 0, column: 0, file_name: None });
+        environment
+    }
+
     pub fn setup() {
         INIT.call_once(|| {
             init_gc();
@@ -969,7 +958,7 @@ mod tests {
     #[test]
     fn test_tokenize() {
         setup();
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "one two three \"four\" 5 6", None);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "#(");
@@ -1039,7 +1028,7 @@ mod tests {
     #[test]
     fn test_quotes() {
         setup();
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "'(1 2 3)", None);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "(");
@@ -1129,7 +1118,7 @@ mod tests {
     #[test]
     fn test_types() {
         setup();
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_def_env();
         let tokens = tokenize(
             &mut environment,
             "(one 2 3.0 \"four\" #\\B #t nil 3.5 ())",
@@ -1188,7 +1177,7 @@ mod tests {
     #[test]
     fn test_wrap() {
         setup();
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "(1 2 3)", None);
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
@@ -1294,7 +1283,7 @@ mod tests {
     #[test]
     fn test_tok_strings() {
         setup();
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_def_env();
         let input =
             "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut environment, input, None);

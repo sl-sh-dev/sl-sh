@@ -277,19 +277,29 @@ fn builtin_read(
                 },
                 ExpEnum::Atom(Atom::String(input, char_iter)) => {
                     if char_iter.is_some() {
-                        let mut line = 0;
-                        let mut column = 0;
                         let mut chars = char_iter.take().unwrap();
-                        let res = match read_form(environment, chars, &mut line, &mut column, None)
+                        let had_state = if environment.reader_state.is_none() {
+                            environment.reader_state = Some(ReaderState{ file_name: None, line: 0, column: 0 });
+                            false
+                        } else {
+                            true
+                        };
+                        let res = match read_form(environment, chars)
                         {
                             Ok((ast, ichars)) => {
                                 chars = ichars;
                                 Ok(ast)
                             }
                             Err(err) => {
+                                if !had_state {
+                                    environment.reader_state = None;
+                                }
                                 return Err(io::Error::new(io::ErrorKind::Other, err.reason))
                             }
                         };
+                                if !had_state {
+                                    environment.reader_state = None;
+                                }
                         char_iter.replace(chars);
                         res
                     } else {
