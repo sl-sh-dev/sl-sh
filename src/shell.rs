@@ -83,9 +83,9 @@ t
     match dname {
         Ok(scope) => {
             let mut settings = HashMap::new();
-            let data = ExpEnum::Atom(Atom::Symbol(environment.interner.intern("emacs")));
+            let data = ExpEnum::Atom(Atom::Symbol(environment.interner.intern(":emacs")));
             settings.insert(
-                "keybindings".to_string(),
+                ":keybindings".to_string(),
                 Expression::alloc_data(data).handle_no_root(),
             );
             let data = Expression::alloc_data(ExpEnum::HashMap(settings));
