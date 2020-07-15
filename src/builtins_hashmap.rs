@@ -18,6 +18,7 @@ fn build_map(
             match &key.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => map.insert((*sym).to_string(), val.clone()),
                 ExpEnum::Atom(Atom::String(s, _)) => map.insert(s.to_string(), val.clone()),
+                ExpEnum::Atom(Atom::Char(ch)) => map.insert(ch.to_string(), val.clone()),
                 _ => {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -87,6 +88,10 @@ fn builtin_hash_set(
                                 map.insert(s.to_string(), val);
                                 return Ok(exp_map.clone());
                             }
+                            ExpEnum::Atom(Atom::Char(ch)) => {
+                                map.insert(ch.to_string(), val);
+                                return Ok(exp_map.clone());
+                            }
                             _ => {
                                 return Err(io::Error::new(
                                     io::ErrorKind::Other,
@@ -131,6 +136,9 @@ fn builtin_hash_remove(
                         }
                         ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_rem(map, &s);
+                        }
+                        ExpEnum::Atom(Atom::Char(ch)) => {
+                            return do_rem(map, &ch);
                         }
                         _ => {
                             return Err(io::Error::new(
@@ -188,6 +196,9 @@ fn builtin_hash_get(
                         ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_get(environment, map, &s, default);
                         }
+                        ExpEnum::Atom(Atom::Char(ch)) => {
+                            return do_get(environment, map, &ch, default);
+                        }
                         _ => {
                             return Err(io::Error::new(
                                 io::ErrorKind::Other,
@@ -229,6 +240,9 @@ fn builtin_hash_haskey(
                         }
                         ExpEnum::Atom(Atom::String(s, _)) => {
                             return do_has(map, &s);
+                        }
+                        ExpEnum::Atom(Atom::Char(ch)) => {
+                            return do_has(map, &ch);
                         }
                         _ => {
                             let msg =
@@ -383,19 +397,25 @@ Remove a key from a hashmap.  This is a destructive form!
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 (hash-remove! tst-hash 'key2)
-(test::assert-equal 2 (length (hash-keys tst-hash)))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 (hash-remove! tst-hash :key1)
-(test::assert-equal 1 (length (hash-keys tst-hash)))
+(test::assert-equal 2 (length (hash-keys tst-hash)))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 (hash-remove! tst-hash \"key3\")
+(test::assert-equal 1 (length (hash-keys tst-hash)))
+(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
+(hash-remove! tst-hash #\\S)
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 ",
             root,
@@ -414,11 +434,12 @@ NOTE: default will only be evaluted if it is used.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
 (test::assert-equal \"default\" (hash-get tst-hash :not-here \"default\"))
 (test::assert-equal \"string default\" (hash-get tst-hash :not-here (str \"string \" \"default\")))
 ",
@@ -436,11 +457,12 @@ Checks if a key is in a hashmap.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-true (hash-haskey tst-hash :key1))
 (test::assert-true (hash-haskey tst-hash 'key2))
 (test::assert-true (hash-haskey tst-hash \"key3\"))
+(test::assert-true (hash-haskey tst-hash #\\S))
 (test::assert-false (hash-haskey tst-hash 'key1))
 (test::assert-false (hash-haskey tst-hash :key2))
 (test::assert-false (hash-haskey tst-hash \"keynone\"))
@@ -463,12 +485,13 @@ Returns a vector of all the hashmaps keys.  The keys will be unordered.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-true (in? (hash-keys tst-hash) :key1) \"Test :key1\")
-(test::assert-true (in? (hash-keys tst-hash) 'key2) \"Test key2\")
-; Note string used as a key will be a symbol in the hash-keys list...
-(test::assert-true (in? (hash-keys tst-hash) 'key3) \"Test key3\")
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
+(test::assert-true (in? (hash-keys tst-hash) :key1) \" Test :key1\")
+(test::assert-true (in? (hash-keys tst-hash) 'key2) \" Test key2\")
+; Note string or char used as a key will be a symbol in the hash-keys list...
+(test::assert-true (in? (hash-keys tst-hash) 'S) \" Test S\")
+(test::assert-true (in? (hash-keys tst-hash) 'key3) \" Test key3\")
 (test::assert-false (in? (hash-keys tst-hash) :key4))
 ",
             root,
@@ -485,16 +508,18 @@ Clears a hashmap.  This is a destructive form!
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
-(test::assert-equal 3 (length (hash-keys tst-hash)))
+(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-true (hash-haskey tst-hash :key1))
 (test::assert-true (hash-haskey tst-hash 'key2))
 (test::assert-true (hash-haskey tst-hash \"key3\"))
+(test::assert-true (hash-haskey tst-hash #\\S))
 (hash-clear! tst-hash)
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 (test::assert-false (hash-haskey tst-hash :key1))
 (test::assert-false (hash-haskey tst-hash 'key2))
 (test::assert-false (hash-haskey tst-hash \"key3\"))
+(test::assert-false (hash-haskey tst-hash #\\S))
 ",
             root,
         ),
