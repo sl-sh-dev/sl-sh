@@ -330,13 +330,11 @@ Example:
 "
   ; fields
   (data nil)
-  (next-ch nil)
   ; methods
-  (:fn next! (self) (progn (def 'val next-ch) (if data (set 'next-ch (str-iter-next! data))) val))
-  (:fn empty? (self) (not next-ch))
+  (:fn next! (self) (str-iter-next! data))
+  (:fn empty? (self) (not (str-iter-peek data)))
   (:fn init (self l) (progn (if (string? l)
-                       (progn (set 'data (if (str-iter-empty? l) (str-iter-start l) (str-iter-start (str l))))
-                              (set 'next-ch (str-iter-next! data)))
+                       (set 'data (if (str-iter-empty? l) (str-iter-start l) l))
                        (err "string-iter requires a string")) self))
   (:impl iterator))
 

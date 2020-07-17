@@ -790,6 +790,19 @@ fn builtin_str_iter_next(
             }
             if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
                 if let Some(ch) = ch_iter.next() {
+                    // If this is the reader text stream then advance line/column.
+                    if let Some(tags) = &mut string_d.meta_tags {
+                        if tags.contains("--reader-text-stream--") {
+                            if let Some(reader_state) = &mut environment.reader_state {
+                                if ch == "\n" {
+                                    reader_state.line += 1;
+                                    reader_state.column = 0;
+                                } else {
+                                    reader_state.column += 1;
+                                }
+                            }
+                        }
+                    }
                     return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
                         ch.to_string().into(),
                     ))));
@@ -802,6 +815,37 @@ fn builtin_str_iter_next(
     Err(io::Error::new(
         io::ErrorKind::Other,
         "str-iter-next takes a string",
+    ))
+}
+
+fn builtin_str_iter_peek(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(string) = args.next() {
+        if args.next().is_none() {
+            let string = eval(environment, string)?;
+            let mut string_d = string.get_mut();
+            if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "str-iter-peek: not an iterator",
+                ));
+            }
+            if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
+                if let Some(ch) = ch_iter.peek() {
+                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                        ch.to_string().into(),
+                    ))));
+                } else {
+                    return Ok(Expression::make_nil());
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "str-iter-peek takes a string",
     ))
 }
 
@@ -1403,6 +1447,38 @@ Example:
 (test::assert-equal #\\Λ (str-iter-next! test-iter-start))
 (test::assert-equal #\\λ (str-iter-next! test-iter-start))
 (test::assert-equal #\\Σ (str-iter-next! test-iter-start))
+(test::assert-equal #\\σ (str-iter-next! test-iter-start))
+(test::assert-true (str-iter-empty? test-iter-start))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("str-iter-peek"),
+        Expression::make_function(
+            builtin_str_iter_peek,
+            "Usage: (str-iter-peek string) -> char
+
+Returns the char that next will return in the iterator for string.  Returns nil if iteration
+is done.  Does not advance the iterator.
+
+Section: string
+
+Example:
+(def 'test-iter-start \"y̆ΛλΣσ\")
+(str-iter-start test-iter-start)
+(test::assert-false (str-iter-empty? test-iter-start))
+(def 'test-iter-one (str-iter-next! test-iter-start))
+(test::assert-equal #\\y̆ test-iter-one)
+(test::assert-true (= #\\y̆ test-iter-one))
+(test::assert-false (= #\\y test-iter-one))
+(test::assert-equal #\\Λ (str-iter-peek test-iter-start))
+(test::assert-equal #\\Λ (str-iter-next! test-iter-start))
+(test::assert-equal #\\λ (str-iter-peek test-iter-start))
+(test::assert-equal #\\λ (str-iter-next! test-iter-start))
+(test::assert-equal #\\Σ (str-iter-peek test-iter-start))
+(test::assert-equal #\\Σ (str-iter-next! test-iter-start))
+(test::assert-equal #\\σ (str-iter-peek test-iter-start))
 (test::assert-equal #\\σ (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
 ",

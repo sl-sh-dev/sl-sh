@@ -441,7 +441,7 @@ fn str_process(
                 }
                 if command_depth == 0 {
                     in_command = false;
-                    let ast = read(environment, &string[var_start + 1..=i], None);
+                    let ast = read(environment, &string[var_start + 1..=i], None, false);
                     match ast {
                         Ok(ast) => {
                             environment.loose_symbols = true;

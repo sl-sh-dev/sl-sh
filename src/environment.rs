@@ -61,6 +61,7 @@ pub struct ReaderState {
     pub line: usize,
     pub column: usize,
     pub file_name: Option<&'static str>,
+    pub end_ch: Option<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

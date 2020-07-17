@@ -85,7 +85,7 @@ t
             let mut settings = HashMap::new();
             let data = ExpEnum::Atom(Atom::Symbol(environment.interner.intern(":emacs")));
             settings.insert(
-                ":keybindings".to_string(),
+                environment.interner.intern(":keybindings"),
                 Expression::alloc_data(data).handle_no_root(),
             );
             let data = Expression::alloc_data(ExpEnum::HashMap(settings));
@@ -398,21 +398,21 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
             }
             _ => {
                 eprintln!("WARNING: __exec_hook not a lambda, ignoring.");
-                return read(environment, input, None);
+                return read(environment, input, None, true);
             }
         };
         match eval(environment, &exp) {
             Ok(res) => match &res.get().data {
-                ExpEnum::Atom(Atom::String(s, _)) => read(environment, &s, None),
+                ExpEnum::Atom(Atom::String(s, _)) => read(environment, &s, None, true),
                 _ => Ok(res.clone()),
             },
             Err(err) => {
                 eprintln!("ERROR calling __exec_hook: {}", err);
-                read(environment, input, None)
+                read(environment, input, None, true)
             }
         }
     } else {
-        read(environment, input, None)
+        read(environment, input, None, true)
     }
 }
 
@@ -637,7 +637,7 @@ pub fn read_stdin() -> i32 {
             Ok(_n) => {
                 let input = input.trim();
                 environment.state.stdout_status = None;
-                let ast = read(&mut environment, input, None);
+                let ast = read(&mut environment, input, None, true);
                 match ast {
                     Ok(ast) => {
                         environment.loose_symbols = true;

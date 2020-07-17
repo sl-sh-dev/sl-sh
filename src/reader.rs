@@ -1,10 +1,12 @@
 use core::iter::Peekable;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::num::{ParseFloatError, ParseIntError};
 
 use unicode_segmentation::Graphemes;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::builtins_hashmap::cow_to_ref;
 use crate::environment::*;
 use crate::eval::eval;
 use crate::gc::Handle;
@@ -165,8 +167,8 @@ where
     }
 }
 
-fn end_symbol(ch: &str, in_back_quote: bool) -> bool {
-    if is_whitespace(ch) {
+fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> bool {
+    if is_whitespace(ch) || reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap() {
         true
     } else {
         match ch {
@@ -370,7 +372,7 @@ fn read_symbol<'a, P>(
     let mut has_peek;
     let mut push_next = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(*ch, in_back_quote) && !for_ch {
+        if end_symbol(*ch, in_back_quote, reader_state) && !for_ch {
             return;
         }
     };
@@ -398,7 +400,7 @@ fn read_symbol<'a, P>(
         if push_next {
             buffer.push_str(chars.next().unwrap());
             push_next = false;
-        } else if end_symbol(peek_ch, in_back_quote) {
+        } else if end_symbol(peek_ch, in_back_quote, reader_state) {
             break;
         }
         next_ch = chars.next();
@@ -427,6 +429,7 @@ fn call_reader_macro(
     name: &str,
     stream: Expression,
     ch: &str,
+    end_ch: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
     if let Some(exp) = get_expression(environment, name) {
         let exp = match &exp.exp.get().data {
@@ -449,32 +452,51 @@ fn call_reader_macro(
                 let reason = format!(
                     "Error calling reader macro (not a lambda) {}, {} : line {}, col: {}",
                     name,
-                    environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+                    environment
+                        .reader_state
+                        .as_ref()
+                        .unwrap()
+                        .file_name
+                        .unwrap_or_else(|| ""),
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
                 return Err(ParseError { reason });
             }
         };
-        match eval(environment, exp) {
+        let old_end_ch = environment.reader_state.as_ref().unwrap().end_ch;
+        environment.reader_state.as_mut().unwrap().end_ch = end_ch;
+        let res = match eval(environment, exp) {
             Ok(exp) => Ok(exp),
             Err(err) => {
                 let reason = format!(
                     "Error in reader {}: {} ({} : line {}, col: {})",
                     name,
                     err,
-                    environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+                    environment
+                        .reader_state
+                        .as_ref()
+                        .unwrap()
+                        .file_name
+                        .unwrap_or_else(|| ""),
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
                 Err(ParseError { reason })
             }
-        }
+        };
+        environment.reader_state.as_mut().unwrap().end_ch = old_end_ch;
+        res
     } else {
         let reason = format!(
             "Error calling reader macro (not found) {}, {} : line {}, col: {}",
             name,
-            environment.reader_state.as_ref().unwrap().file_name.unwrap_or_else(|| ""),
+            environment
+                .reader_state
+                .as_ref()
+                .unwrap()
+                .file_name
+                .unwrap_or_else(|| ""),
             environment.reader_state.as_ref().unwrap().line,
             environment.reader_state.as_ref().unwrap().column
         );
@@ -488,18 +510,24 @@ fn prep_reader_macro(
     stack: &mut Vec<List>,
     name: &str,
     ch: &str,
+    end_ch: Option<&'static str>,
 ) -> Result<Peekable<Graphemes<'static>>, ParseError> {
     chars = {
         let stream_exp =
             Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
+        {
+            let mut exp_d = stream_exp.get_mut();
+            if let Some(tags) = &mut exp_d.meta_tags {
+                tags.insert("--reader-text-stream--");
+            } else {
+                let mut tags: HashSet<&'static str> = HashSet::new();
+                tags.insert("--reader-text-stream--");
+                exp_d.meta_tags = Some(tags);
+            }
+        }
         push_stack(
             stack,
-            call_reader_macro(
-                environment,
-                name,
-                stream_exp.clone(),
-                ch,
-            )?,
+            call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch)?,
             environment.reader_state.as_ref().unwrap().line,
             environment.reader_state.as_ref().unwrap().column,
         )?;
@@ -509,10 +537,32 @@ fn prep_reader_macro(
         } else {
             panic!("read: something happened to char iterator in reader macro!");
         };
+        // Clear the stream expression in case the reader macro saved it for some dumb reason.
         exp_d.data.replace(ExpEnum::Nil);
+        exp_d.meta_tags = None;
         res
     };
     Ok(chars)
+}
+
+fn consume_trailing_whitespace<'a, P>(environment: &mut Environment, chars: &mut P)
+where
+    P: PeekableIterator<Item = &'a str>,
+{
+    // Consume trailing whitespace.
+    let mut ch = chars.peek();
+    while ch.is_some() && is_whitespace(ch.unwrap()) {
+        if let Some(ch) = ch {
+            if *ch == "\n" {
+                environment.reader_state.as_mut().unwrap().line += 1;
+                environment.reader_state.as_mut().unwrap().column = 0;
+            } else {
+                environment.reader_state.as_mut().unwrap().column += 1;
+            }
+            chars.next();
+        }
+        ch = chars.peek();
+    }
 }
 
 fn read_inner(
@@ -529,6 +579,16 @@ fn read_inner(
     let mut line_stack: Vec<(usize, usize)> = Vec::new();
     let mut next_chars = next2(&mut chars);
     let mut read_next = false;
+    let read_table = get_expression(&environment, "*read-table*");
+    let mut read_table_chars: HashSet<&'static str> = HashSet::new();
+    if let Some(read_table) = &read_table {
+        if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
+            for key in map.keys() {
+                read_table_chars.insert(key);
+            }
+        }
+    }
+    let read_table_end_char = get_expression(&environment, "*read-table-end-char*");
     while next_chars.is_some() {
         let (mut ch, mut peek_ch) = next_chars.unwrap();
 
@@ -554,173 +614,250 @@ fn read_inner(
         } else {
             environment.reader_state.as_mut().unwrap().column += 1;
         }
-        match ch {
-            "\"" => {
-                push_stack(
-                    stack,
-                    read_string(&mut chars, buffer, &mut environment.reader_state.as_mut().unwrap())?,
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column,
-                )?;
+        let mut do_match = true;
+        if read_table_chars.contains(ch) {
+            let mut end_ch = None;
+            if let Some(read_table_end_char) = &read_table_end_char {
+                if let ExpEnum::HashMap(map) = &read_table_end_char.exp.get().data {
+                    if map.contains_key(ch) {
+                        if let ExpEnum::Atom(Atom::Char(ch)) = &map.get(ch).unwrap().get().data {
+                            end_ch = Some(cow_to_ref(environment, &ch));
+                        }
+                    }
+                }
             }
-            "'" => {
-                let mut quoted = Vec::<Handle>::new();
-                quoted.push(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                        environment.interner.intern("quote"),
-                    )))
-                    .handle_no_root(),
-                );
-                stack.push(List {
-                    list_type: ListType::List,
-                    vec: quoted,
-                });
-                let save_line = environment.reader_state.as_ref().unwrap().line;
-                let save_col = environment.reader_state.as_ref().unwrap().column;
-                let (_, ichars) = read_inner(
-                    environment,
-                    chars,
-                    stack,
-                    buffer,
-                    in_back_quote,
-                )?;
-                chars = ichars;
-                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, save_line, save_col))?;
+            if let Some(read_table) = &read_table {
+                if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
+                    if map.contains_key(ch) {
+                        if let ExpEnum::Atom(Atom::Symbol(s)) = map.get(ch).unwrap().get().data {
+                            chars = prep_reader_macro(environment, chars, stack, s, ch, end_ch)?;
+                            do_match = false;
+                        }
+                    }
+                }
             }
-            "`" => {
-                let mut quoted = Vec::<Handle>::new();
-                if in_back_quote {
+        }
+        if do_match {
+            match ch {
+                "\"" => {
+                    push_stack(
+                        stack,
+                        read_string(
+                            &mut chars,
+                            buffer,
+                            &mut environment.reader_state.as_mut().unwrap(),
+                        )?,
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
+                    )?;
+                }
+                "'" => {
+                    let mut quoted = Vec::<Handle>::new();
                     quoted.push(
                         Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                             environment.interner.intern("quote"),
                         )))
                         .handle_no_root(),
                     );
-                } else {
-                    quoted.push(
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern("back-quote"),
-                        )))
-                        .handle_no_root(),
-                    );
-                }
-                stack.push(List {
-                    list_type: ListType::List,
-                    vec: quoted,
-                });
-                let save_line = environment.reader_state.as_ref().unwrap().line;
-                let save_col = environment.reader_state.as_ref().unwrap().column;
-                let (_, ichars) = read_inner(
-                    environment,
-                    chars,
-                    stack,
-                    buffer,
-                    true,
-                )?;
-                chars = ichars;
-                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, save_line, save_col))?;
-            }
-            "," if in_back_quote => {
-                read_next = true; // , always needs the symbol after
-                if peek_ch == "@" {
-                    chars.next();
-                    push_stack(
+                    stack.push(List {
+                        list_type: ListType::List,
+                        vec: quoted,
+                    });
+                    let save_line = environment.reader_state.as_ref().unwrap().line;
+                    let save_col = environment.reader_state.as_ref().unwrap().column;
+                    let (_, ichars) = read_inner(environment, chars, stack, buffer, in_back_quote)?;
+                    chars = ichars;
+                    close_list(
                         stack,
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern(",@"),
-                        ))),
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
-                    )?;
-                } else {
-                    push_stack(
-                        stack,
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern(","),
-                        ))),
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
+                        get_meta(
+                            environment.reader_state.as_ref().unwrap().file_name,
+                            save_line,
+                            save_col,
+                        ),
                     )?;
                 }
-            }
-            "#" => {
-                chars.next();
-                match peek_ch {
-                    "|" => consume_block_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap()),
-                    "\\" => {
-                        buffer.clear();
-                        read_symbol(buffer, &mut chars, &mut environment.reader_state.as_mut().unwrap(), true, in_back_quote);
+                "`" => {
+                    let mut quoted = Vec::<Handle>::new();
+                    if in_back_quote {
+                        quoted.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                                environment.interner.intern("quote"),
+                            )))
+                            .handle_no_root(),
+                        );
+                    } else {
+                        quoted.push(
+                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                                environment.interner.intern("back-quote"),
+                            )))
+                            .handle_no_root(),
+                        );
+                    }
+                    stack.push(List {
+                        list_type: ListType::List,
+                        vec: quoted,
+                    });
+                    let save_line = environment.reader_state.as_ref().unwrap().line;
+                    let save_col = environment.reader_state.as_ref().unwrap().column;
+                    let (_, ichars) = read_inner(environment, chars, stack, buffer, true)?;
+                    chars = ichars;
+                    close_list(
+                        stack,
+                        get_meta(
+                            environment.reader_state.as_ref().unwrap().file_name,
+                            save_line,
+                            save_col,
+                        ),
+                    )?;
+                }
+                "," if in_back_quote => {
+                    read_next = true; // , always needs the symbol after
+                    if peek_ch == "@" {
+                        chars.next();
                         push_stack(
                             stack,
-                            do_char(environment, buffer, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column)?,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                                environment.interner.intern(",@"),
+                            ))),
+                            environment.reader_state.as_ref().unwrap().line,
+                            environment.reader_state.as_ref().unwrap().column,
+                        )?;
+                    } else {
+                        push_stack(
+                            stack,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                                environment.interner.intern(","),
+                            ))),
                             environment.reader_state.as_ref().unwrap().line,
                             environment.reader_state.as_ref().unwrap().column,
                         )?;
                     }
-                    "<" => {
-                        let reason =
-                            format!("Found an unreadable token: line {}, col: {}", environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column);
-                        return Err(ParseError { reason });
+                }
+                "#" => {
+                    chars.next();
+                    match peek_ch {
+                        "|" => consume_block_comment(
+                            &mut chars,
+                            &mut environment.reader_state.as_mut().unwrap(),
+                        ),
+                        "\\" => {
+                            buffer.clear();
+                            read_symbol(
+                                buffer,
+                                &mut chars,
+                                &mut environment.reader_state.as_mut().unwrap(),
+                                true,
+                                in_back_quote,
+                            );
+                            push_stack(
+                                stack,
+                                do_char(
+                                    environment,
+                                    buffer,
+                                    environment.reader_state.as_ref().unwrap().line,
+                                    environment.reader_state.as_ref().unwrap().column,
+                                )?,
+                                environment.reader_state.as_ref().unwrap().line,
+                                environment.reader_state.as_ref().unwrap().column,
+                            )?;
+                        }
+                        "<" => {
+                            let reason = format!(
+                                "Found an unreadable token: line {}, col: {}",
+                                environment.reader_state.as_ref().unwrap().line,
+                                environment.reader_state.as_ref().unwrap().column
+                            );
+                            return Err(ParseError { reason });
+                        }
+                        "(" => {
+                            level += 1;
+                            stack.push(List {
+                                list_type: ListType::Vector,
+                                vec: Vec::<Handle>::new(),
+                            });
+                        }
+                        "t" => push_stack(
+                            stack,
+                            Expression::alloc_data(ExpEnum::Atom(Atom::True)),
+                            environment.reader_state.as_ref().unwrap().line,
+                            environment.reader_state.as_ref().unwrap().column,
+                        )?,
+                        "." => {
+                            chars = prep_reader_macro(
+                                environment,
+                                chars,
+                                stack,
+                                "reader-macro-dot",
+                                ".",
+                                None,
+                            )?
+                        }
+                        _ => {
+                            let reason = format!(
+                                "Found # with invalid char {}: line {}, col: {}",
+                                peek_ch,
+                                environment.reader_state.as_ref().unwrap().line,
+                                environment.reader_state.as_ref().unwrap().column
+                            );
+                            return Err(ParseError { reason });
+                        }
                     }
-                    "(" => {
-                        level += 1;
-                        stack.push(List {
-                            list_type: ListType::Vector,
-                            vec: Vec::<Handle>::new(),
-                        });
-                    }
-                    "t" => push_stack(
-                        stack,
-                        Expression::alloc_data(ExpEnum::Atom(Atom::True)),
+                }
+                "(" => {
+                    level += 1;
+                    line_stack.push((
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
-                    )?,
-                    "." => {
-                        chars = prep_reader_macro(
-                            environment,
-                            chars,
-                            stack,
-                            "reader-macro-dot",
-                            ".",
-                        )?
-                    }
-                    _ => {
-                        let reason = format!(
-                            "Found # with invalid char {}: line {}, col: {}",
-                            peek_ch, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column
-                        );
-                        return Err(ParseError { reason });
-                    }
-                }
-            }
-            "(" => {
-                level += 1;
-                line_stack.push((environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column));
-                stack.push(List {
-                    list_type: ListType::List,
-                    vec: Vec::<Handle>::new(),
-                });
-            }
-            ")" => {
-                if level <= 0 {
-                    return Err(ParseError {
-                        reason: "Unexpected `)`".to_string(),
+                    ));
+                    stack.push(List {
+                        list_type: ListType::List,
+                        vec: Vec::<Handle>::new(),
                     });
                 }
-                level -= 1;
-                close_list(stack, get_meta(environment.reader_state.as_ref().unwrap().file_name, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column))?;
-            }
-            ";" => {
-                consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
-            }
-            _ => {
-                buffer.clear();
-                buffer.push_str(ch);
-                read_symbol(buffer, &mut chars, &mut environment.reader_state.as_mut().unwrap(), false, in_back_quote);
-                push_stack(stack, do_atom(environment, buffer), environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column)?;
+                ")" => {
+                    if level <= 0 {
+                        return Err(ParseError {
+                            reason: "Unexpected `)`".to_string(),
+                        });
+                    }
+                    level -= 1;
+                    let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
+                    close_list(
+                        stack,
+                        get_meta(
+                            environment.reader_state.as_ref().unwrap().file_name,
+                            line,
+                            column,
+                        ),
+                    )?;
+                }
+                ";" => {
+                    consume_line_comment(
+                        &mut chars,
+                        &mut environment.reader_state.as_mut().unwrap(),
+                    );
+                }
+                _ => {
+                    buffer.clear();
+                    buffer.push_str(ch);
+                    read_symbol(
+                        buffer,
+                        &mut chars,
+                        &mut environment.reader_state.as_mut().unwrap(),
+                        false,
+                        in_back_quote,
+                    );
+                    push_stack(
+                        stack,
+                        do_atom(environment, buffer),
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
+                    )?;
+                }
             }
         }
         if level == 0 && !read_next {
+            consume_trailing_whitespace(environment, &mut chars);
             return Ok((true, chars));
         }
         read_next = false;
@@ -731,6 +868,7 @@ fn read_inner(
             reason: "Unclosed list(s)".to_string(),
         })
     } else {
+        consume_trailing_whitespace(environment, &mut chars);
         Ok((false, chars))
     }
 }
@@ -739,6 +877,7 @@ fn stack_to_exp(
     mut stack: &mut Vec<List>,
     exp_meta: Option<ExpMeta>,
     always_wrap: bool,
+    list_only: bool,
 ) -> Result<Expression, ParseError> {
     close_list(&mut stack, exp_meta)?;
     if stack.len() > 1 {
@@ -753,19 +892,23 @@ fn stack_to_exp(
                         reason: "Empty results".to_string(),
                     })
                 } else if v.vec.len() == 1 && !always_wrap {
-                    // If we only have one thing and it is a vector or list then
-                    // remove the outer list that was added (unless always_wrap
-                    // is set).
                     let exp: Expression = v.vec.pop().unwrap().into();
-                    let exp_d = &exp.get().data;
-                    match exp_d {
-                        ExpEnum::Vector(_) => Ok(exp.clone_root()),
-                        ExpEnum::Pair(_, _) => Ok(exp.clone_root()),
-                        ExpEnum::Nil => Ok(exp.clone_root()),
-                        _ => {
-                            v.vec.push(exp.handle_no_root());
-                            Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
+                    if list_only {
+                        // If we only have one thing and it is a vector or list then
+                        // remove the outer list that was added (unless always_wrap
+                        // is set).
+                        let exp_d = &exp.get().data;
+                        match exp_d {
+                            ExpEnum::Vector(_) => Ok(exp.clone_root()),
+                            ExpEnum::Pair(_, _) => Ok(exp.clone_root()),
+                            ExpEnum::Nil => Ok(exp.clone_root()),
+                            _ => {
+                                v.vec.push(exp.handle_no_root());
+                                Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
+                            }
                         }
+                    } else {
+                        Ok(exp.clone_root())
                     }
                 } else {
                     Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
@@ -783,12 +926,18 @@ fn read2(
     text: &str,
     always_wrap: bool,
     file_name: Option<&'static str>,
+    list_only: bool,
 ) -> Result<Expression, ParseError> {
-    let had_state = if environment.reader_state.is_none() {
-        environment.reader_state = Some(ReaderState { file_name, column: 0, line: 1 });
-        false
-    } else {
+    let clear_state = if environment.reader_state.is_none() {
+        environment.reader_state = Some(ReaderState {
+            file_name,
+            column: 0,
+            line: 1,
+            end_ch: None,
+        });
         true
+    } else {
+        false
     };
     let mut buffer = String::new();
 
@@ -807,26 +956,32 @@ fn read2(
     }
     let mut cont = true;
     while cont {
-        let (icont, ichars) = read_inner(
-            environment,
-            chars,
-            &mut stack,
-            &mut buffer,
-            false,
-        )?;
+        let (icont, ichars) = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
+            Ok((icont, ichars)) => (icont, ichars),
+            Err(err) => {
+                if clear_state {
+                    environment.reader_state = None;
+                }
+                return Err(err);
+            }
+        };
         cont = icont;
         chars = ichars;
     }
     if chars.next().is_some() {
+        if clear_state {
+            environment.reader_state = None;
+        }
         let reason = format!(
             "Premature end (to many ')'?) line: {}, column: {}",
-            environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column
+            environment.reader_state.as_ref().unwrap().line,
+            environment.reader_state.as_ref().unwrap().column
         );
         return Err(ParseError { reason });
     }
     let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
-    let res = stack_to_exp(&mut stack, exp_meta, always_wrap);
-    if !had_state {
+    let res = stack_to_exp(&mut stack, exp_meta, always_wrap, list_only);
+    if clear_state {
         environment.reader_state = None;
     }
     res
@@ -842,23 +997,22 @@ pub fn read_form(
         list_type: ListType::Vector,
         vec: Vec::<Handle>::new(),
     });
-    let (_, chars) = read_inner(
-        environment,
-        chars,
-        &mut stack,
-        &mut buffer,
-        false,
-    )?;
-    let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, environment.reader_state.as_ref().unwrap().line, environment.reader_state.as_ref().unwrap().column);
-    Ok((stack_to_exp(&mut stack, exp_meta, false)?, chars))
+    let (_, chars) = read_inner(environment, chars, &mut stack, &mut buffer, false)?;
+    let exp_meta = get_meta(
+        environment.reader_state.as_ref().unwrap().file_name,
+        environment.reader_state.as_ref().unwrap().line,
+        environment.reader_state.as_ref().unwrap().column,
+    );
+    Ok((stack_to_exp(&mut stack, exp_meta, false, false)?, chars))
 }
 
 pub fn read(
     environment: &mut Environment,
     text: &str,
     name: Option<&'static str>,
+    list_only: bool,
 ) -> Result<Expression, ParseError> {
-    read2(environment, text, false, name)
+    read2(environment, text, false, name, list_only)
 }
 
 // Read the text but always wrap in an outer list even if text is one list.
@@ -868,7 +1022,7 @@ pub fn read_list_wrap(
     text: &str,
     name: Option<&'static str>,
 ) -> Result<Expression, ParseError> {
-    read2(environment, text, true, name)
+    read2(environment, text, true, name, false)
 }
 
 #[cfg(test)]
@@ -919,7 +1073,7 @@ mod tests {
         input: &str,
         name: Option<&'static str>,
     ) -> Vec<String> {
-        let exp = read(environment, input, name);
+        let exp = read(environment, input, name, false);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
             to_strs(&mut tokens, &exp);
@@ -946,7 +1100,12 @@ mod tests {
 
     fn build_def_env() -> Environment {
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
-        environment.reader_state = Some(ReaderState {line: 0, column: 0, file_name: None });
+        environment.reader_state = Some(ReaderState {
+            line: 0,
+            column: 0,
+            file_name: None,
+            end_ch: None,
+        });
         environment
     }
 

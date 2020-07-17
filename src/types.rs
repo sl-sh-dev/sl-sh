@@ -228,7 +228,7 @@ pub enum ExpEnum {
     Atom(Atom),
     Vector(Vec<Handle>),
     Pair(Handle, Handle),
-    HashMap(HashMap<String, Handle>),
+    HashMap(HashMap<&'static str, Handle>),
     Function(Callable),
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),

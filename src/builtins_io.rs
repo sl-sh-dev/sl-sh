@@ -248,7 +248,7 @@ fn builtin_read(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn do_read(environment: &mut Environment, input: &str) -> io::Result<Expression> {
-        match read(environment, &input, None) {
+        match read(environment, &input, None, false) {
             Ok(ast) => Ok(ast),
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
@@ -279,13 +279,17 @@ fn builtin_read(
                     if char_iter.is_some() {
                         let mut chars = char_iter.take().unwrap();
                         let had_state = if environment.reader_state.is_none() {
-                            environment.reader_state = Some(ReaderState{ file_name: None, line: 0, column: 0 });
+                            environment.reader_state = Some(ReaderState {
+                                file_name: None,
+                                line: 0,
+                                column: 0,
+                                end_ch: None,
+                            });
                             false
                         } else {
                             true
                         };
-                        let res = match read_form(environment, chars)
-                        {
+                        let res = match read_form(environment, chars) {
                             Ok((ast, ichars)) => {
                                 chars = ichars;
                                 Ok(ast)
@@ -294,12 +298,12 @@ fn builtin_read(
                                 if !had_state {
                                     environment.reader_state = None;
                                 }
-                                return Err(io::Error::new(io::ErrorKind::Other, err.reason))
+                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
                             }
                         };
-                                if !had_state {
-                                    environment.reader_state = None;
-                                }
+                        if !had_state {
+                            environment.reader_state = None;
+                        }
                         char_iter.replace(chars);
                         res
                     } else {

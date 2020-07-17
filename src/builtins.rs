@@ -24,7 +24,7 @@ fn builtin_eval(
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
             return match &arg_d.data {
-                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None) {
+                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
                 },
