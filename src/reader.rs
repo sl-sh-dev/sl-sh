@@ -1,9 +1,7 @@
-use core::iter::Peekable;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::num::{ParseFloatError, ParseIntError};
 
-use unicode_segmentation::Graphemes;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::builtins_hashmap::cow_to_ref;
@@ -15,16 +13,6 @@ use crate::types::*;
 #[derive(Clone, Debug)]
 pub struct ParseError {
     pub reason: String,
-}
-
-trait PeekableIterator: std::iter::Iterator {
-    fn peek(&mut self) -> Option<&Self::Item>;
-}
-
-impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
-    fn peek(&mut self) -> Option<&Self::Item> {
-        std::iter::Peekable::peek(self)
-    }
 }
 
 enum ListType {
@@ -128,10 +116,7 @@ fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMe
     }
 }
 
-fn consume_line_comment<'a, P>(chars: &mut P, reader_state: &mut ReaderState)
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+fn consume_line_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     for ch in chars {
         if ch == "\n" {
             reader_state.line += 1;
@@ -141,10 +126,7 @@ where
     }
 }
 
-fn consume_block_comment<'a, P>(chars: &mut P, reader_state: &mut ReaderState)
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     let mut depth = 1;
     let mut last_ch = " ";
     for ch in chars {
@@ -245,14 +227,11 @@ fn do_char(
     }
 }
 
-fn read_string<'a, P>(
-    chars: &mut P,
+fn read_string<'a>(
+    chars: &'a mut CharIter,
     symbol: &mut String,
     reader_state: &mut ReaderState,
-) -> Result<Expression, ParseError>
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+) -> Result<Expression, ParseError> {
     symbol.clear();
     let mut escape_code: Vec<&'a str> = Vec::with_capacity(2);
     let mut in_escape_code = false;
@@ -360,15 +339,13 @@ fn push_stack(
     }
 }
 
-fn read_symbol<'a, P>(
+fn read_symbol(
     buffer: &mut String,
-    chars: &mut P,
+    chars: &mut CharIter,
     reader_state: &mut ReaderState,
     for_ch: bool,
     in_back_quote: bool,
-) where
-    P: PeekableIterator<Item = &'a str>,
-{
+) {
     let mut has_peek;
     let mut push_next = false;
     if let Some(ch) = chars.peek() {
@@ -407,10 +384,7 @@ fn read_symbol<'a, P>(
     }
 }
 
-fn next2<'a, P>(chars: &mut P) -> Option<(&'a str, &'a str)>
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+fn next2<'a>(chars: &mut CharIter) -> Option<(&'a str, &'a str)> {
     let next_ch = chars.next();
     if let Some(ch) = next_ch {
         let peek_ch = if let Some(pch) = chars.peek() {
@@ -506,49 +480,42 @@ fn call_reader_macro(
 
 fn prep_reader_macro(
     environment: &mut Environment,
-    mut chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
+    chars: CharIter, // Pass ownership in and out for reader macro support.
     stack: &mut Vec<List>,
     name: &str,
     ch: &str,
     end_ch: Option<&'static str>,
-) -> Result<Peekable<Graphemes<'static>>, ParseError> {
-    chars = {
-        let stream_exp =
-            Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
-        {
-            let mut exp_d = stream_exp.get_mut();
-            if let Some(tags) = &mut exp_d.meta_tags {
-                tags.insert("--reader-text-stream--");
-            } else {
-                let mut tags: HashSet<&'static str> = HashSet::new();
-                tags.insert("--reader-text-stream--");
-                exp_d.meta_tags = Some(tags);
-            }
-        }
-        push_stack(
-            stack,
-            call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch)?,
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column,
-        )?;
+) -> Result<CharIter, ParseError> {
+    let stream_exp = Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
+    {
         let mut exp_d = stream_exp.get_mut();
-        let res = if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
-            chars_iter.take().unwrap()
+        if let Some(tags) = &mut exp_d.meta_tags {
+            tags.insert("--reader-text-stream--");
         } else {
-            panic!("read: something happened to char iterator in reader macro!");
-        };
-        // Clear the stream expression in case the reader macro saved it for some dumb reason.
-        exp_d.data.replace(ExpEnum::Nil);
-        exp_d.meta_tags = None;
-        res
+            let mut tags: HashSet<&'static str> = HashSet::new();
+            tags.insert("--reader-text-stream--");
+            exp_d.meta_tags = Some(tags);
+        }
+    }
+    push_stack(
+        stack,
+        call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch)?,
+        environment.reader_state.as_ref().unwrap().line,
+        environment.reader_state.as_ref().unwrap().column,
+    )?;
+    let mut exp_d = stream_exp.get_mut();
+    let res = if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
+        chars_iter.take().unwrap()
+    } else {
+        panic!("read: something happened to char iterator in reader macro!");
     };
-    Ok(chars)
+    // Clear the stream expression in case the reader macro saved it for some dumb reason.
+    exp_d.data.replace(ExpEnum::Nil);
+    exp_d.meta_tags = None;
+    Ok(res)
 }
 
-fn consume_trailing_whitespace<'a, P>(environment: &mut Environment, chars: &mut P)
-where
-    P: PeekableIterator<Item = &'a str>,
-{
+fn consume_trailing_whitespace(environment: &mut Environment, chars: &mut CharIter) {
     // Consume trailing whitespace.
     let mut ch = chars.peek();
     while ch.is_some() && is_whitespace(ch.unwrap()) {
@@ -567,11 +534,11 @@ where
 
 fn read_inner(
     environment: &mut Environment,
-    mut chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
+    mut chars: CharIter, // Pass ownership in and out for reader macro support.
     stack: &mut Vec<List>,
     buffer: &mut String,
     in_back_quote: bool,
-) -> Result<(bool, Peekable<Graphemes<'static>>), ParseError> {
+) -> Result<(bool, CharIter), ParseError> {
     if environment.reader_state.is_none() {
         panic!("tried to read with no state!");
     }
@@ -790,7 +757,7 @@ fn read_inner(
                                 "reader-macro-dot",
                                 ".",
                                 None,
-                            )?
+                            )?;
                         }
                         _ => {
                             let reason = format!(
@@ -949,7 +916,7 @@ fn read2(
     // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
     // reference and iterator go away at the end of this function.
     let ntext = unsafe { &*(text as *const str) };
-    let mut chars = UnicodeSegmentation::graphemes(ntext, true).peekable();
+    let mut chars: CharIter = Box::new(UnicodeSegmentation::graphemes(ntext, true).peekable());
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
@@ -957,7 +924,7 @@ fn read2(
     let mut cont = true;
     while cont {
         let (icont, ichars) = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
-            Ok((icont, ichars)) => (icont, ichars),
+            Ok(icont) => icont,
             Err(err) => {
                 if clear_state {
                     environment.reader_state = None;
@@ -989,21 +956,21 @@ fn read2(
 
 pub fn read_form(
     environment: &mut Environment,
-    chars: Peekable<Graphemes<'static>>, // Pass ownership in and out for reader macro support.
-) -> Result<(Expression, Peekable<Graphemes<'static>>), ParseError> {
+    chars: CharIter,
+) -> Result<(Expression, CharIter), ParseError> {
     let mut buffer = String::new();
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
         vec: Vec::<Handle>::new(),
     });
-    let (_, chars) = read_inner(environment, chars, &mut stack, &mut buffer, false)?;
+    let (_, ichars) = read_inner(environment, chars, &mut stack, &mut buffer, false)?;
     let exp_meta = get_meta(
         environment.reader_state.as_ref().unwrap().file_name,
         environment.reader_state.as_ref().unwrap().line,
         environment.reader_state.as_ref().unwrap().column,
     );
-    Ok((stack_to_exp(&mut stack, exp_meta, false, false)?, chars))
+    Ok((stack_to_exp(&mut stack, exp_meta, false, false)?, ichars))
 }
 
 pub fn read(

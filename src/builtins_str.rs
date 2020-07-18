@@ -762,7 +762,9 @@ fn builtin_str_iter_start(
                 // This unsafe should be fine as long as the iterator is invalidated (set to None)
                 // on ANY change to string.
                 let nstr = unsafe { &*(string.as_ref() as *const str) };
-                *chars = Some(UnicodeSegmentation::graphemes(nstr, true).peekable());
+                *chars = Some(Box::new(
+                    UnicodeSegmentation::graphemes(nstr, true).peekable(),
+                ));
                 drop(string_d);
                 return Ok(string_outer);
             }

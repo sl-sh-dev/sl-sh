@@ -9,14 +9,23 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
-use core::iter::Peekable;
-use unicode_segmentation::Graphemes;
-
 use crate::builtins_util::is_proper_list;
 use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::gc::*;
 use crate::process::*;
+
+pub trait PeekableIterator: std::iter::Iterator {
+    fn peek(&mut self) -> Option<&Self::Item>;
+}
+
+impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
+    fn peek(&mut self) -> Option<&Self::Item> {
+        std::iter::Peekable::peek(self)
+    }
+}
+
+pub type CharIter = Box<dyn PeekableIterator<Item = &'static str>>;
 
 #[derive(Clone, Debug)]
 pub struct Lambda {
@@ -31,7 +40,6 @@ pub struct Macro {
     pub body: Handle,
 }
 
-#[derive(Clone)] //, Debug)]
 pub enum Atom {
     True,
     Float(f64),
@@ -39,11 +47,27 @@ pub enum Atom {
     Symbol(&'static str),
     // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
     // to None if it is Some.
-    String(Cow<'static, str>, Option<Peekable<Graphemes<'static>>>),
+    String(Cow<'static, str>, Option<CharIter>),
     Char(Cow<'static, str>),
     CodePoint(char),
     Lambda(Lambda),
     Macro(Macro),
+}
+
+impl Clone for Atom {
+    fn clone(&self) -> Atom {
+        match self {
+            Atom::True => Atom::True,
+            Atom::Float(n) => Atom::Float(*n),
+            Atom::Int(i) => Atom::Int(*i),
+            Atom::Symbol(s) => Atom::Symbol(s),
+            Atom::String(s, _) => Atom::String(s.clone(), None),
+            Atom::Char(c) => Atom::Char(c.clone()),
+            Atom::CodePoint(c) => Atom::CodePoint(*c),
+            Atom::Lambda(l) => Atom::Lambda(l.clone()),
+            Atom::Macro(m) => Atom::Macro(m.clone()),
+        }
+    }
 }
 
 impl fmt::Debug for Atom {
