@@ -25,7 +25,7 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
     }
 }
 
-pub type CharIter = Box<dyn PeekableIterator<Item = &'static str>>;
+pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
 #[derive(Clone, Debug)]
 pub struct Lambda {

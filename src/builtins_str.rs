@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
@@ -763,7 +764,9 @@ fn builtin_str_iter_start(
                 // on ANY change to string.
                 let nstr = unsafe { &*(string.as_ref() as *const str) };
                 *chars = Some(Box::new(
-                    UnicodeSegmentation::graphemes(nstr, true).peekable(),
+                    UnicodeSegmentation::graphemes(nstr, true)
+                        .map(|s| Cow::Borrowed(s))
+                        .peekable(),
                 ));
                 drop(string_d);
                 return Ok(string_outer);

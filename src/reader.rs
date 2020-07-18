@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::num::{ParseFloatError, ParseIntError};
@@ -56,13 +57,13 @@ fn char_to_hex_num(ch: &str) -> u8 {
     }
 }
 
-fn escape_to_char<'a>(escape_code: &[&'a str]) -> char {
+fn escape_to_char(escape_code: &[Cow<'static, str>]) -> char {
     let mut ch_n: u8 = 0;
     match escape_code.len().cmp(&1) {
         Ordering::Greater => {
-            ch_n = (char_to_hex_num(escape_code[0]) * 16) + (char_to_hex_num(escape_code[1]))
+            ch_n = (char_to_hex_num(&escape_code[0]) * 16) + (char_to_hex_num(&escape_code[1]))
         }
-        Ordering::Equal => ch_n = char_to_hex_num(escape_code[0]),
+        Ordering::Equal => ch_n = char_to_hex_num(&escape_code[0]),
         Ordering::Less => {}
     }
     ch_n as char
@@ -128,7 +129,7 @@ fn consume_line_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
 
 fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     let mut depth = 1;
-    let mut last_ch = " ";
+    let mut last_ch = Cow::Borrowed(" ");
     for ch in chars {
         if ch == "\n" {
             reader_state.line += 1;
@@ -227,15 +228,15 @@ fn do_char(
     }
 }
 
-fn read_string<'a>(
-    chars: &'a mut CharIter,
+fn read_string(
+    chars: &mut CharIter,
     symbol: &mut String,
     reader_state: &mut ReaderState,
 ) -> Result<Expression, ParseError> {
     symbol.clear();
-    let mut escape_code: Vec<&'a str> = Vec::with_capacity(2);
+    let mut escape_code: Vec<Cow<'static, str>> = Vec::with_capacity(2);
     let mut in_escape_code = false;
-    let mut last_ch = " ";
+    let mut last_ch = Cow::Borrowed(" ");
     let mut skip_last_ch = false;
 
     for ch in chars {
@@ -246,14 +247,14 @@ fn read_string<'a>(
             reader_state.column += 1;
         }
         if in_escape_code {
-            escape_code.push(ch);
+            escape_code.push(ch.clone());
             if escape_code.len() == 2 {
                 symbol.push(escape_to_char(&escape_code));
                 escape_code.clear();
                 in_escape_code = false;
             }
         } else if last_ch == "\\" {
-            match ch {
+            match &*ch {
                 "n" => symbol.push('\n'),
                 "r" => symbol.push('\r'),
                 "t" => symbol.push('\t'),
@@ -267,7 +268,7 @@ fn read_string<'a>(
                 }
                 _ => {
                     symbol.push('\\');
-                    symbol.push_str(ch);
+                    symbol.push_str(&ch);
                 }
             }
         } else {
@@ -275,13 +276,13 @@ fn read_string<'a>(
                 break;
             }
             if ch != "\\" {
-                symbol.push_str(ch);
+                symbol.push_str(&ch);
             }
         }
 
         last_ch = if skip_last_ch {
             skip_last_ch = false;
-            " "
+            Cow::Borrowed(" ")
         } else {
             ch
         }
@@ -349,7 +350,7 @@ fn read_symbol(
     let mut has_peek;
     let mut push_next = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(*ch, in_back_quote, reader_state) && !for_ch {
+        if end_symbol(&ch, in_back_quote, reader_state) && !for_ch {
             return;
         }
     };
@@ -358,7 +359,7 @@ fn read_symbol(
         let ch = next_ch.unwrap();
         let peek_ch = if let Some(pch) = chars.peek() {
             has_peek = true;
-            *pch
+            &pch
         } else {
             has_peek = false;
             " "
@@ -372,10 +373,10 @@ fn read_symbol(
         if ch == "\\" && has_peek && !for_ch {
             push_next = true;
         } else {
-            buffer.push_str(ch);
+            buffer.push_str(&ch);
         }
         if push_next {
-            buffer.push_str(chars.next().unwrap());
+            buffer.push_str(&chars.next().unwrap());
             push_next = false;
         } else if end_symbol(peek_ch, in_back_quote, reader_state) {
             break;
@@ -384,13 +385,12 @@ fn read_symbol(
     }
 }
 
-fn next2<'a>(chars: &mut CharIter) -> Option<(&'a str, &'a str)> {
-    let next_ch = chars.next();
-    if let Some(ch) = next_ch {
+fn next2(chars: &mut CharIter) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
+    if let Some(ch) = chars.next() {
         let peek_ch = if let Some(pch) = chars.peek() {
-            *pch
+            pch.clone()
         } else {
-            " "
+            Cow::Borrowed(" ")
         };
         Some((ch, peek_ch))
     } else {
@@ -560,7 +560,7 @@ fn read_inner(
         let (mut ch, mut peek_ch) = next_chars.unwrap();
 
         // Consume leading whitespace.
-        while is_whitespace(ch) {
+        while is_whitespace(&ch) {
             if ch == "\n" {
                 environment.reader_state.as_mut().unwrap().line += 1;
                 environment.reader_state.as_mut().unwrap().column = 0;
@@ -582,12 +582,12 @@ fn read_inner(
             environment.reader_state.as_mut().unwrap().column += 1;
         }
         let mut do_match = true;
-        if read_table_chars.contains(ch) {
+        if read_table_chars.contains(&*ch) {
             let mut end_ch = None;
             if let Some(read_table_end_char) = &read_table_end_char {
                 if let ExpEnum::HashMap(map) = &read_table_end_char.exp.get().data {
-                    if map.contains_key(ch) {
-                        if let ExpEnum::Atom(Atom::Char(ch)) = &map.get(ch).unwrap().get().data {
+                    if map.contains_key(&*ch) {
+                        if let ExpEnum::Atom(Atom::Char(ch)) = &map.get(&*ch).unwrap().get().data {
                             end_ch = Some(cow_to_ref(environment, &ch));
                         }
                     }
@@ -595,9 +595,9 @@ fn read_inner(
             }
             if let Some(read_table) = &read_table {
                 if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
-                    if map.contains_key(ch) {
-                        if let ExpEnum::Atom(Atom::Symbol(s)) = map.get(ch).unwrap().get().data {
-                            chars = prep_reader_macro(environment, chars, stack, s, ch, end_ch)?;
+                    if map.contains_key(&*ch) {
+                        if let ExpEnum::Atom(Atom::Symbol(s)) = map.get(&*ch).unwrap().get().data {
+                            chars = prep_reader_macro(environment, chars, stack, s, &ch, end_ch)?;
                             do_match = false;
                         }
                     }
@@ -605,7 +605,7 @@ fn read_inner(
             }
         }
         if do_match {
-            match ch {
+            match &*ch {
                 "\"" => {
                     push_stack(
                         stack,
@@ -702,7 +702,7 @@ fn read_inner(
                 }
                 "#" => {
                     chars.next();
-                    match peek_ch {
+                    match &*peek_ch {
                         "|" => consume_block_comment(
                             &mut chars,
                             &mut environment.reader_state.as_mut().unwrap(),
@@ -806,7 +806,7 @@ fn read_inner(
                 }
                 _ => {
                     buffer.clear();
-                    buffer.push_str(ch);
+                    buffer.push_str(&ch);
                     read_symbol(
                         buffer,
                         &mut chars,
@@ -916,7 +916,11 @@ fn read2(
     // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
     // reference and iterator go away at the end of this function.
     let ntext = unsafe { &*(text as *const str) };
-    let mut chars: CharIter = Box::new(UnicodeSegmentation::graphemes(ntext, true).peekable());
+    let mut chars: CharIter = Box::new(
+        UnicodeSegmentation::graphemes(ntext, true)
+            .map(|s| Cow::Borrowed(s))
+            .peekable(),
+    );
     if text.starts_with("#!") {
         // Work with shebanged scripts.
         consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
