@@ -157,7 +157,8 @@ pub enum FileState {
     Stdin,
     Stdout,
     Stderr,
-    Read(RefCell<BufReader<File>>),
+    Read(Option<CharIter>, i64),
+    ReadBinary(BufReader<File>),
     Write(RefCell<BufWriter<File>>),
     Closed,
 }
@@ -467,9 +468,6 @@ impl Expression {
             let res = call_lambda(environment, lambda.clone().into(), ib, false)?;
             drop(self_d);
             res.resolve(environment)
-        //let res = res.resolve(environment)?;
-        //self.get_mut().data.replace(res.into());
-        //Ok(self)
         } else {
             drop(self_d);
             Ok(self)
@@ -715,8 +713,8 @@ impl Expression {
             ExpEnum::Nil => Ok(self.to_string()),
             ExpEnum::HashMap(_map) => Ok(self.to_string()),
             ExpEnum::File(file) => {
-                let file_mut = file.borrow_mut();
-                match &*file_mut {
+                let mut file_mut = file.borrow_mut();
+                match &mut *file_mut {
                     FileState::Stdin => {
                         let f = io::stdin();
                         let mut f = f.lock();
@@ -724,9 +722,13 @@ impl Expression {
                         f.read_to_string(&mut out_str)?;
                         Ok(out_str)
                     }
-                    FileState::Read(f) => {
+                    FileState::Read(f_iter, _) => {
+                        let out_str: String = f_iter.as_mut().unwrap().collect();
+                        Ok(out_str)
+                    }
+                    FileState::ReadBinary(f) => {
                         let mut out_str = String::new();
-                        f.borrow_mut().read_to_string(&mut out_str)?;
+                        f.read_to_string(&mut out_str)?;
                         Ok(out_str)
                     }
                     _ => {
@@ -845,7 +847,7 @@ impl Expression {
             ExpEnum::Pair(_, _) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Nil => write!(writer, "{}", self.to_string())?,
             ExpEnum::HashMap(_map) => write!(writer, "{}", self.to_string())?,
-            ExpEnum::File(file) => match &*file.borrow_mut() {
+            ExpEnum::File(file) => match &mut *file.borrow_mut() {
                 FileState::Stdin => {
                     let f = io::stdin();
                     let mut f = f.lock();
@@ -858,10 +860,15 @@ impl Expression {
                         }
                     }
                 }
-                FileState::Read(f) => {
+                FileState::Read(f_iter, _) => {
+                    for ch in f_iter.as_mut().unwrap() {
+                        writer.write_all(ch.as_bytes())?;
+                    }
+                }
+                FileState::ReadBinary(f) => {
                     let mut buf = [0; 1024];
                     loop {
-                        match f.borrow_mut().read(&mut buf) {
+                        match f.read(&mut buf) {
                             Ok(0) => break,
                             Ok(n) => writer.write_all(&buf[..n])?,
                             Err(err) => return Err(err),
@@ -1046,7 +1053,8 @@ impl fmt::Display for Expression {
                 FileState::Stderr => write!(f, "#<STDERR>"),
                 FileState::Stdin => write!(f, "#<STDIN>"),
                 FileState::Closed => write!(f, "#<CLOSED FILE>"),
-                FileState::Read(_file) => write!(f, "#<READ FILE>"),
+                FileState::Read(_file, _) => write!(f, "#<READ FILE>"),
+                FileState::ReadBinary(_file) => write!(f, "#<READ (BIN) FILE>"),
                 FileState::Write(_file) => write!(f, "#<WRITE FILE>"),
             },
             ExpEnum::LazyFn(_, args) => {

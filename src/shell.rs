@@ -25,23 +25,6 @@ use crate::gc::*;
 use crate::reader::*;
 use crate::types::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Keys {
-    Vi,
-    Emacs,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ReplSettings {
-    key_bindings: Keys,
-    max_history: usize,
-    vi_esc_sequence: Option<(char, char, u32)>,
-    vi_normal_prompt_prefix: Option<String>,
-    vi_normal_prompt_suffix: Option<String>,
-    vi_insert_prompt_prefix: Option<String>,
-    vi_insert_prompt_suffix: Option<String>,
-}
-
 fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
     let mut load_path = Vec::new();
     load_path.push(
@@ -282,15 +265,7 @@ fn handle_result(
 }
 
 fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
-    let mut ret = ReplSettings {
-        key_bindings: Keys::Emacs,
-        max_history: 1000,
-        vi_esc_sequence: None,
-        vi_normal_prompt_prefix: None,
-        vi_normal_prompt_suffix: None,
-        vi_insert_prompt_prefix: None,
-        vi_insert_prompt_suffix: None,
-    };
+    let mut ret = ReplSettings::default();
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
             let keybindings: Expression = keybindings.into();
@@ -417,7 +392,7 @@ fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, P
 }
 
 // Like the liner default but make '(' and ')' their own words for cleaner completions.
-fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
+pub(crate) fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut res = Vec::new();
 
     let mut word_start = None;
@@ -453,7 +428,7 @@ fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
     res
 }
 
-fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
+pub fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
     let keymap: Box<dyn keymap::KeyMap> = match repl_settings.key_bindings {
         Keys::Vi => {
             let mut vi = keymap::Vi::new();
@@ -523,6 +498,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     let data = Expression::alloc_data(ExpEnum::Atom(Atom::String(interned_sym2.into(), None)));
     env.insert_into_root_scope(interned_sym, data);
     let mut current_repl_settings = load_repl_settings(&repl_settings.exp);
+    env.repl_settings = current_repl_settings.clone();
     apply_repl_settings(&mut con, &current_repl_settings);
     let mut new_repl_settings;
     if let Err(err) = con
@@ -536,6 +512,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     loop {
         new_repl_settings = load_repl_settings(&repl_settings.exp);
         if current_repl_settings != new_repl_settings {
+            environment.borrow_mut().repl_settings = new_repl_settings.clone();
             apply_repl_settings(&mut con, &new_repl_settings);
         };
         current_repl_settings = new_repl_settings;

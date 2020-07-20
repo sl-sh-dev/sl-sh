@@ -651,10 +651,16 @@ fn builtin_str_push(
 ) -> io::Result<Expression> {
     if let Some(arg0) = args.next() {
         let s = eval(environment, arg0)?;
+        let mut evalled_args = Vec::new();
+        if let ExpEnum::Atom(Atom::String(_, _)) = &s.get().data {
+            // Do this otherwise the get_mut on s can lead to hard to track panics in some code.
+            for a in args {
+                evalled_args.push(eval(environment, a)?);
+            }
+        }
         let mut s_d = s.get_mut();
         if let ExpEnum::Atom(Atom::String(res, chars)) = &mut s_d.data {
-            for a in args {
-                let a = eval(environment, a)?;
+            for a in evalled_args {
                 res.to_mut().push_str(&as_string(environment, &a)?);
             }
             *chars = None; // maintian the iterator invariant.

@@ -444,9 +444,10 @@ pub fn do_command(
             }
             ExpEnum::File(file) => match &*file.borrow() {
                 FileState::Stdin => Stdio::inherit(),
-                FileState::Read(file) => {
+                FileState::Read(_, fd) => unsafe { Stdio::from_raw_fd(*fd as i32) },
+                FileState::ReadBinary(file) => {
                     // If there is ever a Windows version then use raw_handle instead of raw_fd.
-                    unsafe { Stdio::from_raw_fd(file.borrow().get_ref().as_raw_fd()) }
+                    unsafe { Stdio::from_raw_fd(file.get_ref().as_raw_fd()) }
                 }
                 _ => {
                     return Err(io::Error::new(

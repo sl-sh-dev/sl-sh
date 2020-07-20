@@ -2248,8 +2248,8 @@ Section: root
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (progn (print \"Print test out\") (close *stdout*)))
-(test::assert-equal \"Print test out\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
+(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (progn (print \"Print test out\")(print \" two\") (close *stdout*)))
+(test::assert-equal \"Print test out two\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
             root,
         ),
@@ -2266,8 +2266,10 @@ Section: root
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (progn (println \"Println test out\") (close *stdout*)))
-(test::assert-equal \"Println test out\n\" (read-line (open \"/tmp/sl-sh.println.test\" :read)))
+(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (progn (println \"Println test out\")(println \"line two\") (close *stdout*)))
+(def 'topen (open \"/tmp/sl-sh.println.test\" :read))
+(test::assert-equal \"Println test out\n\" (read-line topen))
+(test::assert-equal \"line two\n\" (read-line topen))
 ",
             root,
         ),
@@ -2284,8 +2286,8 @@ Section: root
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (progn (eprint \"eprint test out\") (close *stderr*)))
-(test::assert-equal \"eprint test out\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (progn (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
+(test::assert-equal \"eprint test out two\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
             root,
         ),
@@ -2302,8 +2304,10 @@ Section: root
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (progn (eprintln \"eprintln test out\") (close *stderr*)))
-(test::assert-equal \"eprintln test out\n\" (read-line (open \"/tmp/sl-sh.eprintln.test\" :read)))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (progn (eprintln \"eprintln test out\")(eprintln \"line two\") (close *stderr*)))
+(def 'topen (open \"/tmp/sl-sh.eprintln.test\" :read))
+(test::assert-equal \"eprintln test out\n\" (read-line topen))
+(test::assert-equal \"line two\n\" (read-line topen))
 ", root
         ),
     );

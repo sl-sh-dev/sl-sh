@@ -167,7 +167,10 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io:
                 FileState::Stdin => {
                     do_write = true;
                 }
-                FileState::Read(_file) => {
+                FileState::Read(_file, _) => {
+                    do_write = true;
+                }
+                FileState::ReadBinary(_file) => {
                     do_write = true;
                 }
                 _ => {}
@@ -248,7 +251,16 @@ fn builtin_pipe(
                             break;
                         }
                     }
-                    FileState::Read(_) => {
+                    FileState::Read(_, _) => {
+                        if i > 1 {
+                            error = Some(Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Not a valid place for a read file (must be at start of pipe).",
+                            )));
+                            break;
+                        }
+                    }
+                    FileState::ReadBinary(_) => {
                         if i > 1 {
                             error = Some(Err(io::Error::new(
                                 io::ErrorKind::Other,

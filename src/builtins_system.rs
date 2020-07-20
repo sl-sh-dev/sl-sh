@@ -94,7 +94,13 @@ fn builtin_export(
                                 .into(),
                             None,
                         )),
-                        FileState::Read(_) => ExpEnum::Atom(Atom::String(
+                        FileState::Read(_, _) => ExpEnum::Atom(Atom::String(
+                            val.as_string(environment)
+                                .unwrap_or_else(|_| "FILE READ FAILED".to_string())
+                                .into(),
+                            None,
+                        )),
+                        FileState::ReadBinary(_) => ExpEnum::Atom(Atom::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "FILE READ FAILED".to_string())
                                 .into(),

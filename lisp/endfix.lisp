@@ -260,7 +260,7 @@
 
 (defn endfix-hook (cmd-str)
 	(progn
-		(if (= (car (get-error (defq cmd-ast (read cmd-str)))) :error)
+		(if (= (car (get-error (defq cmd-ast (read-all cmd-str)))) :error)
 		cmd-str
 		(progn
 			(match (length cmd-ast)
@@ -274,7 +274,7 @@
 
 #|
 ;; TODO need tests
-	(defq pipe-test-actual (recursively-check-for-infix-notation (list) (read "(echo first-partAsecond-partBthird-part | cut -d \"A\" -f 2 | cut -d \"B\" -f 2)")))
+	(defq pipe-test-actual (recursively-check-for-infix-notation (list) (read-all "(echo first-partAsecond-partBthird-part | cut -d \"A\" -f 2 | cut -d \"B\" -f 2)")))
 	(defq pipe-test-expected `(vec '| (vec echo first-partAsecond-partBthird-part) (vec cut -d "A" -f 2) (vec cut -d "B" -f 2)))
 	(println (str "expected " (pipe-test-expected)
 					"\nactual " pipe-test-actual

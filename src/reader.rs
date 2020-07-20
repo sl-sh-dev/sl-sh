@@ -485,7 +485,15 @@ fn prep_reader_macro(
     name: &str,
     ch: &str,
     end_ch: Option<&'static str>,
-) -> Result<CharIter, ParseError> {
+) -> Result<CharIter, (ParseError, CharIter)> {
+    fn recover_chars(stream_exp: &Expression) -> CharIter {
+        let mut exp_d = stream_exp.get_mut();
+        if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
+            chars_iter.take().unwrap()
+        } else {
+            panic!("read: something happened to char iterator in reader macro!");
+        }
+    }
     let stream_exp = Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
     {
         let mut exp_d = stream_exp.get_mut();
@@ -497,19 +505,25 @@ fn prep_reader_macro(
             exp_d.meta_tags = Some(tags);
         }
     }
-    push_stack(
+    let rm = match call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch) {
+        Ok(rm) => rm,
+        Err(e) => {
+            let chars = recover_chars(&stream_exp);
+            return Err((e, chars));
+        }
+    };
+    if let Err(e) = push_stack(
         stack,
-        call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch)?,
+        rm,
         environment.reader_state.as_ref().unwrap().line,
         environment.reader_state.as_ref().unwrap().column,
-    )?;
-    let mut exp_d = stream_exp.get_mut();
-    let res = if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
-        chars_iter.take().unwrap()
-    } else {
-        panic!("read: something happened to char iterator in reader macro!");
-    };
+    ) {
+        let chars = recover_chars(&stream_exp);
+        return Err((e, chars));
+    }
+    let res = recover_chars(&stream_exp);
     // Clear the stream expression in case the reader macro saved it for some dumb reason.
+    let mut exp_d = stream_exp.get_mut();
     exp_d.data.replace(ExpEnum::Nil);
     exp_d.meta_tags = None;
     Ok(res)
@@ -538,7 +552,7 @@ fn read_inner(
     stack: &mut Vec<List>,
     buffer: &mut String,
     in_back_quote: bool,
-) -> Result<(bool, CharIter), ParseError> {
+) -> Result<(bool, CharIter), (ParseError, CharIter)> {
     if environment.reader_state.is_none() {
         panic!("tried to read with no state!");
     }
@@ -607,16 +621,22 @@ fn read_inner(
         if do_match {
             match &*ch {
                 "\"" => {
-                    push_stack(
+                    let read_str = match read_string(
+                        &mut chars,
+                        buffer,
+                        &mut environment.reader_state.as_mut().unwrap(),
+                    ) {
+                        Ok(s) => s,
+                        Err(e) => return Err((e, chars)),
+                    };
+                    if let Err(e) = push_stack(
                         stack,
-                        read_string(
-                            &mut chars,
-                            buffer,
-                            &mut environment.reader_state.as_mut().unwrap(),
-                        )?,
+                        read_str,
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
-                    )?;
+                    ) {
+                        return Err((e, chars));
+                    }
                 }
                 "'" => {
                     let mut quoted = Vec::<Handle>::new();
@@ -634,14 +654,16 @@ fn read_inner(
                     let save_col = environment.reader_state.as_ref().unwrap().column;
                     let (_, ichars) = read_inner(environment, chars, stack, buffer, in_back_quote)?;
                     chars = ichars;
-                    close_list(
+                    if let Err(e) = close_list(
                         stack,
                         get_meta(
                             environment.reader_state.as_ref().unwrap().file_name,
                             save_line,
                             save_col,
                         ),
-                    )?;
+                    ) {
+                        return Err((e, chars));
+                    }
                 }
                 "`" => {
                     let mut quoted = Vec::<Handle>::new();
@@ -668,36 +690,40 @@ fn read_inner(
                     let save_col = environment.reader_state.as_ref().unwrap().column;
                     let (_, ichars) = read_inner(environment, chars, stack, buffer, true)?;
                     chars = ichars;
-                    close_list(
+                    if let Err(e) = close_list(
                         stack,
                         get_meta(
                             environment.reader_state.as_ref().unwrap().file_name,
                             save_line,
                             save_col,
                         ),
-                    )?;
+                    ) {
+                        return Err((e, chars));
+                    }
                 }
                 "," if in_back_quote => {
                     read_next = true; // , always needs the symbol after
                     if peek_ch == "@" {
                         chars.next();
-                        push_stack(
+                        if let Err(e) = push_stack(
                             stack,
                             Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
                                 environment.interner.intern(",@"),
                             ))),
                             environment.reader_state.as_ref().unwrap().line,
                             environment.reader_state.as_ref().unwrap().column,
-                        )?;
-                    } else {
-                        push_stack(
-                            stack,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                                environment.interner.intern(","),
-                            ))),
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column,
-                        )?;
+                        ) {
+                            return Err((e, chars));
+                        }
+                    } else if let Err(e) = push_stack(
+                        stack,
+                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            environment.interner.intern(","),
+                        ))),
+                        environment.reader_state.as_ref().unwrap().line,
+                        environment.reader_state.as_ref().unwrap().column,
+                    ) {
+                        return Err((e, chars));
                     }
                 }
                 "#" => {
@@ -716,17 +742,23 @@ fn read_inner(
                                 true,
                                 in_back_quote,
                             );
-                            push_stack(
-                                stack,
-                                do_char(
-                                    environment,
-                                    buffer,
-                                    environment.reader_state.as_ref().unwrap().line,
-                                    environment.reader_state.as_ref().unwrap().column,
-                                )?,
+                            let do_ch = match do_char(
+                                environment,
+                                buffer,
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column,
-                            )?;
+                            ) {
+                                Ok(ch) => ch,
+                                Err(e) => return Err((e, chars)),
+                            };
+                            if let Err(e) = push_stack(
+                                stack,
+                                do_ch,
+                                environment.reader_state.as_ref().unwrap().line,
+                                environment.reader_state.as_ref().unwrap().column,
+                            ) {
+                                return Err((e, chars));
+                            }
                         }
                         "<" => {
                             let reason = format!(
@@ -734,7 +766,7 @@ fn read_inner(
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column
                             );
-                            return Err(ParseError { reason });
+                            return Err((ParseError { reason }, chars));
                         }
                         "(" => {
                             level += 1;
@@ -743,12 +775,16 @@ fn read_inner(
                                 vec: Vec::<Handle>::new(),
                             });
                         }
-                        "t" => push_stack(
-                            stack,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::True)),
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column,
-                        )?,
+                        "t" => {
+                            if let Err(e) = push_stack(
+                                stack,
+                                Expression::alloc_data(ExpEnum::Atom(Atom::True)),
+                                environment.reader_state.as_ref().unwrap().line,
+                                environment.reader_state.as_ref().unwrap().column,
+                            ) {
+                                return Err((e, chars));
+                            }
+                        }
                         "." => {
                             chars = prep_reader_macro(
                                 environment,
@@ -766,7 +802,7 @@ fn read_inner(
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column
                             );
-                            return Err(ParseError { reason });
+                            return Err((ParseError { reason }, chars));
                         }
                     }
                 }
@@ -783,20 +819,25 @@ fn read_inner(
                 }
                 ")" => {
                     if level <= 0 {
-                        return Err(ParseError {
-                            reason: "Unexpected `)`".to_string(),
-                        });
+                        return Err((
+                            ParseError {
+                                reason: "Unexpected `)`".to_string(),
+                            },
+                            chars,
+                        ));
                     }
                     level -= 1;
                     let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
-                    close_list(
+                    if let Err(e) = close_list(
                         stack,
                         get_meta(
                             environment.reader_state.as_ref().unwrap().file_name,
                             line,
                             column,
                         ),
-                    )?;
+                    ) {
+                        return Err((e, chars));
+                    }
                 }
                 ";" => {
                     consume_line_comment(
@@ -814,12 +855,14 @@ fn read_inner(
                         false,
                         in_back_quote,
                     );
-                    push_stack(
+                    if let Err(e) = push_stack(
                         stack,
                         do_atom(environment, buffer),
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
-                    )?;
+                    ) {
+                        return Err((e, chars));
+                    }
                 }
             }
         }
@@ -831,9 +874,12 @@ fn read_inner(
         next_chars = next2(&mut chars);
     }
     if level != 0 {
-        Err(ParseError {
-            reason: "Unclosed list(s)".to_string(),
-        })
+        Err((
+            ParseError {
+                reason: "Unclosed list(s)".to_string(),
+            },
+            chars,
+        ))
     } else {
         consume_trailing_whitespace(environment, &mut chars);
         Ok((false, chars))
@@ -929,7 +975,7 @@ fn read2(
     while cont {
         let (icont, ichars) = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
             Ok(icont) => icont,
-            Err(err) => {
+            Err((err, _)) => {
                 if clear_state {
                     environment.reader_state = None;
                 }
@@ -961,20 +1007,45 @@ fn read2(
 pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
-) -> Result<(Expression, CharIter), ParseError> {
+) -> Result<(Expression, CharIter), (ParseError, CharIter)> {
+    let clear_state = if environment.reader_state.is_none() {
+        environment.reader_state = Some(ReaderState {
+            file_name: None,
+            column: 0,
+            line: 1,
+            end_ch: None,
+        });
+        true
+    } else {
+        false
+    };
     let mut buffer = String::new();
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
         vec: Vec::<Handle>::new(),
     });
-    let (_, ichars) = read_inner(environment, chars, &mut stack, &mut buffer, false)?;
+    let ichars = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
+        Ok((_, ichars)) => ichars,
+        Err((e, ichars)) => {
+            if clear_state {
+                environment.reader_state = None;
+            }
+            return Err((e, ichars));
+        }
+    };
     let exp_meta = get_meta(
         environment.reader_state.as_ref().unwrap().file_name,
         environment.reader_state.as_ref().unwrap().line,
         environment.reader_state.as_ref().unwrap().column,
     );
-    Ok((stack_to_exp(&mut stack, exp_meta, false, false)?, ichars))
+    if clear_state {
+        environment.reader_state = None;
+    }
+    match stack_to_exp(&mut stack, exp_meta, false, false) {
+        Ok(exp) => Ok((exp, ichars)),
+        Err(e) => Err((e, ichars)),
+    }
 }
 
 pub fn read(

@@ -1,15 +1,25 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::env;
 use std::fs::OpenOptions;
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
+
+use liner::{Context, Prompt};
+use unicode_segmentation::UnicodeSegmentation;
+extern crate unicode_reader;
+use unicode_reader::Graphemes;
 
 use crate::builtins_util::expand_tilde;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
+use crate::shell::apply_repl_settings;
+use crate::shell::get_liner_words;
 use crate::types::*;
 
 fn builtin_open(
@@ -117,8 +127,20 @@ fn builtin_open(
             }
         };
         return if !is_write {
+            let fd: i64 = file.as_raw_fd() as i64;
+            let file_iter: CharIter = Box::new(
+                Graphemes::from(BufReader::new(file))
+                    .map(|s| {
+                        if let Ok(s) = s {
+                            Cow::Owned(s)
+                        } else {
+                            Cow::Borrowed("")
+                        }
+                    })
+                    .peekable(),
+            );
             Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
-                RefCell::new(FileState::Read(RefCell::new(BufReader::new(file)))),
+                RefCell::new(FileState::Read(Some(file_iter), fd)),
             ))))
         } else {
             Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
@@ -201,10 +223,32 @@ fn builtin_read_line(
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
             return if let ExpEnum::File(file) = &exp.get().data {
-                match &*file.borrow() {
-                    FileState::Read(f) => {
+                match &mut *file.borrow_mut() {
+                    FileState::Read(f_iter, _) => {
                         let mut line = String::new();
-                        if 0 == f.borrow_mut().read_line(&mut line)? {
+                        if let Some(f_iter) = f_iter {
+                            let mut out_ch = f_iter.next();
+                            if out_ch.is_none() {
+                                return Ok(Expression::make_nil());
+                            }
+                            while let Some(ch) = out_ch {
+                                line.push_str(&ch);
+                                if ch == "\n" {
+                                    break;
+                                }
+                                out_ch = f_iter.next();
+                            }
+                        } else {
+                            return Ok(Expression::make_nil());
+                        }
+                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                            line.into(),
+                            None,
+                        ))))
+                    }
+                    FileState::ReadBinary(f) => {
+                        let mut line = String::new();
+                        if 0 == f.read_line(&mut line)? {
                             Ok(Expression::make_nil())
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -243,7 +287,165 @@ fn builtin_read_line(
     ))
 }
 
+pub fn read_prompt(
+    environment: &mut Environment,
+    prompt: &str,
+    history: Option<&str>,
+) -> io::Result<String> {
+    let mut con = Context::new();
+    apply_repl_settings(&mut con, &environment.repl_settings);
+    con.set_word_divider(Box::new(get_liner_words));
+    let mut home = match env::var("HOME") {
+        Ok(val) => val,
+        Err(_) => ".".to_string(),
+    };
+    if home.ends_with('/') {
+        home = home[..home.len() - 1].to_string();
+    }
+    if let Some(history) = history {
+        let history_file = if history.starts_with('/') || history.starts_with('.') {
+            history.to_string()
+        } else {
+            format!("{}/.local/share/sl-sh/{}", home, history)
+        };
+        if let Err(err) = con.history.set_file_name_and_load_history(history_file) {
+            eprintln!("WARNING: Unable to load read-line history: {}", err);
+        }
+    }
+    //con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
+    match con.read_line(Prompt::from(prompt), None) {
+        Ok(input) => {
+            let input = input.trim();
+            if history.is_some() {
+                if let Err(err) = con.history.push(input) {
+                    eprintln!("read-line: Error saving history: {}", err);
+                }
+            }
+            Ok(input.into())
+        }
+        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
+    }
+}
+
+fn builtin_read_prompt(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(exp) = args.next() {
+        let h_str;
+        let history_file = if let Some(h) = args.next() {
+            let hist = eval(environment, h)?;
+            let hist_d = hist.get();
+            if let ExpEnum::Atom(Atom::String(s, _)) = &hist_d.data {
+                h_str = s.to_string();
+                Some(&h_str[..])
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "read-prompt: history file (if provided) must be a string.",
+                ));
+            }
+        } else {
+            None
+        };
+        if args.next().is_none() {
+            let prompt = eval(environment, exp)?;
+            let prompt_d = prompt.get();
+            if let ExpEnum::Atom(Atom::String(s, _)) = &prompt_d.data {
+                let input = read_prompt(environment, s, history_file)?;
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    input.into(),
+                    None,
+                ))));
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "read-prompt: requires a prompt string and option history file.",
+    ))
+}
+
 fn builtin_read(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    fn read_stdin(environment: &mut Environment) -> io::Result<Expression> {
+        let input = read_prompt(environment, "read> ", Some("read_history"))?;
+        let input = unsafe { &*(input.as_ref() as *const str) };
+        let chars = Box::new(
+            UnicodeSegmentation::graphemes(&input[..], true)
+                .map(|s| Cow::Borrowed(s))
+                .peekable(),
+        );
+        match read_form(environment, chars) {
+            Ok((ast, _)) => Ok(ast),
+            Err((err, _)) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+        }
+    }
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let exp = eval(environment, exp)?;
+            let mut exp_d = exp.get_mut();
+            return match &mut exp_d.data {
+                ExpEnum::File(file) => match &mut *file.borrow_mut() {
+                    FileState::Read(file_iter, _) => {
+                        let iiter = file_iter.take().unwrap();
+                        match read_form(environment, iiter) {
+                            Ok((ast, i_iter)) => {
+                                file_iter.replace(i_iter);
+                                Ok(ast)
+                            }
+                            Err((err, i_iter)) => {
+                                file_iter.replace(i_iter);
+                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
+                            }
+                        }
+                    }
+                    FileState::Stdin => read_stdin(environment),
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "read: requires a character file opened for reading or string",
+                    )),
+                },
+                ExpEnum::Atom(Atom::String(input, char_iter)) => {
+                    if char_iter.is_none() {
+                        // This unsafe should be fine as long as the iterator is invalidated (set to None)
+                        // on ANY change to string.  See builtin_str_iter_start.
+                        let nstr = unsafe { &*(input.as_ref() as *const str) };
+                        *char_iter = Some(Box::new(
+                            UnicodeSegmentation::graphemes(nstr, true)
+                                .map(|s| Cow::Borrowed(s))
+                                .peekable(),
+                        ));
+                    }
+                    if char_iter.is_some() {
+                        let chars = char_iter.take().unwrap();
+                        match read_form(environment, chars) {
+                            Ok((ast, ichars)) => {
+                                char_iter.replace(ichars);
+                                Ok(ast)
+                            }
+                            Err((err, _)) => {
+                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
+                            }
+                        }
+                    } else {
+                        panic!("read: WTF, no char iter but just made one!");
+                    }
+                }
+                _ => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "read: requires a character file opened for reading or string",
+                )),
+            };
+        }
+    }
+    // No args, ask for input
+    read_stdin(environment)
+}
+
+fn builtin_read_all(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
@@ -253,74 +455,48 @@ fn builtin_read(
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
     }
-    //XXX TODO- clean this up- do not read everthing, just the next expression and do better with
-    //files...
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
-            return match &mut exp.get_mut().data {
-                ExpEnum::File(file) => match &*file.borrow() {
-                    FileState::Read(file) => {
+            let mut exp_d = exp.get_mut();
+            return match &mut exp_d.data {
+                ExpEnum::File(file) => match &mut *file.borrow_mut() {
+                    FileState::Read(file_iter, _) => {
+                        if let Some(file_iter) = file_iter {
+                            let input: String = file_iter.collect();
+                            do_read(environment, &input)
+                        } else {
+                            Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "read-all: invalid read character iterator!",
+                            ))
+                        }
+                    }
+                    FileState::ReadBinary(file) => {
                         let mut input = String::new();
-                        file.borrow_mut().read_to_string(&mut input)?;
+                        file.read_to_string(&mut input)?;
                         do_read(environment, &input)
                     }
                     FileState::Stdin => {
-                        let mut input = String::new();
-                        io::stdin().read_to_string(&mut input)?;
+                        let input = read_prompt(environment, "read-all> ", Some("read_history"))?;
                         do_read(environment, &input)
                     }
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "read: requires a file opened for reading or string",
+                        "read-all: requires a file opened for reading or string",
                     )),
                 },
-                ExpEnum::Atom(Atom::String(input, char_iter)) => {
-                    if char_iter.is_some() {
-                        let mut chars = char_iter.take().unwrap();
-                        let had_state = if environment.reader_state.is_none() {
-                            environment.reader_state = Some(ReaderState {
-                                file_name: None,
-                                line: 0,
-                                column: 0,
-                                end_ch: None,
-                            });
-                            false
-                        } else {
-                            true
-                        };
-                        let res = match read_form(environment, chars) {
-                            Ok((ast, ichars)) => {
-                                chars = ichars;
-                                Ok(ast)
-                            }
-                            Err(err) => {
-                                if !had_state {
-                                    environment.reader_state = None;
-                                }
-                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
-                            }
-                        };
-                        if !had_state {
-                            environment.reader_state = None;
-                        }
-                        char_iter.replace(chars);
-                        res
-                    } else {
-                        do_read(environment, input)
-                    }
-                }
+                ExpEnum::Atom(Atom::String(input, _char_iter)) => do_read(environment, input),
                 _ => Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "read: requires a file opened for reading or string",
+                    "read-all: requires a file opened for reading or string",
                 )),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "read: takes a file or string",
-    ))
+    // No args, ask for input
+    let input = read_prompt(environment, "read-all> ", Some("read_history"))?;
+    do_read(environment, &input)
 }
 
 fn builtin_write_line(
@@ -504,6 +680,24 @@ Example:
         ),
     );
     data.insert(
+        interner.intern("read-prompt"),
+        Expression::make_function(
+            builtin_read_prompt,
+            "Usage: (read-prompt string) -> string
+
+Starts an interactive prompt (like the repl prompt) with the supplied prompt and
+returns the input string.
+
+Section: file
+
+Example:
+;(def 'input-string (read-prompt \"prompt> \"))
+t
+",
+            root,
+        ),
+    );
+    data.insert(
         interner.intern("read"),
         Expression::make_function(
             builtin_read,
@@ -518,15 +712,47 @@ Section: file
 
 Example:
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
-(write-line tst-file \"(1 2 3)\")
+(write-line tst-file \"(1 2 3)(x y z)\")
 ;(write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
 (def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal '(1 2 3) (read tst-file))
+(test::assert-equal '(x y z) (read tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
-(test::assert-equal '(7 8 9) (read \"7 8 9\"))
+(def 'test-str \"7 8 9\")
+(test::assert-equal 7 (read test-str))
+(test::assert-equal 8 (read test-str))
+(test::assert-equal 9 (read test-str))
 (test::assert-equal '(x y z) (read \"(x y z)\"))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("read-all"),
+        Expression::make_function(
+            builtin_read_all,
+            "Usage: (read-all file|string) -> list
+
+Read a file or string and return the list representation.  This reads the entire
+file or string and will wrap in an outer vector if more then one form.
+
+Unlike most lisp readers this one will put loose symbols in a list (i.e. you
+enter things at the repl without the enclosing parens).
+
+Section: file
+
+Example:
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(write-line tst-file \"(1 2 3)(x y z)\")
+(flush tst-file)
+(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal '#((1 2 3)(x y z)) (read-all tst-file))
+(close tst-file)
+(test::assert-equal '(4 5 6) (read-all \"(4 5 6)\"))
+(test::assert-equal '(7 8 9) (read-all \"7 8 9\"))
+(test::assert-equal '(x y z) (read-all \"(x y z)\"))
 ",
             root,
         ),

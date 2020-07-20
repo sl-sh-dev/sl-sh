@@ -24,6 +24,37 @@ use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keys {
+    Vi,
+    Emacs,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplSettings {
+    pub key_bindings: Keys,
+    pub max_history: usize,
+    pub vi_esc_sequence: Option<(char, char, u32)>,
+    pub vi_normal_prompt_prefix: Option<String>,
+    pub vi_normal_prompt_suffix: Option<String>,
+    pub vi_insert_prompt_prefix: Option<String>,
+    pub vi_insert_prompt_suffix: Option<String>,
+}
+
+impl Default for ReplSettings {
+    fn default() -> Self {
+        ReplSettings {
+            key_bindings: Keys::Emacs,
+            max_history: 1000,
+            vi_esc_sequence: None,
+            vi_normal_prompt_prefix: None,
+            vi_normal_prompt_suffix: None,
+            vi_insert_prompt_prefix: None,
+            vi_insert_prompt_suffix: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum IOState {
     Pipe,
@@ -355,6 +386,7 @@ pub struct Environment {
     pub interner: Interner,
     // Save the meta data for the last expression evalled.
     pub last_meta: Option<ExpMeta>,
+    pub repl_settings: ReplSettings,
 }
 
 impl Environment {
@@ -400,6 +432,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         return_val: None,
         interner,
         last_meta: None,
+        repl_settings: ReplSettings::default(),
     }
 }
 

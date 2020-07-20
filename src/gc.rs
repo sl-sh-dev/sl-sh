@@ -115,6 +115,11 @@ impl Handle {
         self.data.borrow()
     }
 
+    /// Will a get succeed on this object?
+    pub fn can_get(&self) -> bool {
+        self.data.try_borrow().is_ok()
+    }
+
     /// Get a mutable reference to a heap object
     pub fn get_mut(&self) -> RefMut<ExpObj> {
         self.data.borrow_mut()
