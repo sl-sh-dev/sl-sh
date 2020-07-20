@@ -450,7 +450,7 @@ fn builtin_read_all(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn do_read(environment: &mut Environment, input: &str) -> io::Result<Expression> {
-        match read(environment, &input, None, false) {
+        match read(environment, &input, None, true) {
             Ok(ast) => Ok(ast),
             Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
         }
@@ -703,10 +703,7 @@ t
             builtin_read,
             "Usage: (read file|string) -> list
 
-Read a file or string and return the list representation.
-
-Unlike most lisp readers this one will put loose symbols in a list (i.e. you
-enter things at the repl without the enclosing parens).
+Read a file or string and return the next object (symbol, string, list, etc).
 
 Section: file
 
@@ -736,7 +733,8 @@ Example:
             "Usage: (read-all file|string) -> list
 
 Read a file or string and return the list representation.  This reads the entire
-file or string and will wrap in an outer vector if more then one form.
+file or string and will wrap in an outer vector if not a vector or list (always
+returns a vector or list).
 
 Unlike most lisp readers this one will put loose symbols in a list (i.e. you
 enter things at the repl without the enclosing parens).
