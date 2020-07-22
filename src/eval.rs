@@ -49,6 +49,7 @@ pub fn call_lambda(
     let mut llast_eval: Option<Expression> = None;
     while looping {
         if environment.sig_int.load(Ordering::Relaxed) {
+            environment.sig_int.store(false, Ordering::Relaxed);
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "Lambda interupted by SIGINT.",
@@ -524,6 +525,7 @@ fn internal_eval(
 ) -> io::Result<Expression> {
     let mut expression = expression_in.clone_root();
     if environment.sig_int.load(Ordering::Relaxed) {
+        environment.sig_int.store(false, Ordering::Relaxed);
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "Script interupted by SIGINT.",

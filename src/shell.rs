@@ -8,7 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use liner::{keymap, Buffer, ColorClosure, Context, Prompt};
@@ -518,11 +518,6 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         current_repl_settings = new_repl_settings;
         environment.borrow_mut().state.stdout_status = None;
         environment.borrow_mut().state.stderr_status = None;
-        // Clear the SIGINT if one occured.
-        environment
-            .borrow()
-            .sig_int
-            .compare_and_swap(true, false, Ordering::Relaxed);
         let prompt = get_prompt(&mut environment.borrow_mut());
         if let Err(err) = reap_procs(&environment.borrow()) {
             eprintln!("Error reaping processes: {}", err);
