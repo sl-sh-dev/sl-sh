@@ -587,6 +587,14 @@ fn internal_eval(
             environment.last_meta = expression.meta();
             fn_eval_lazy(environment, &expression)
         }
+        ExpEnum::Values(v) => {
+            if v.is_empty() {
+                Ok(Expression::make_nil())
+            } else {
+                let v: Expression = (&v[0]).into();
+                internal_eval(environment, &v)
+            }
+        }
         ExpEnum::Pair(_, _) => {
             drop(exp_a);
             environment.last_meta = expression.meta();

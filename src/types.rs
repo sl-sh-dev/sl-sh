@@ -252,6 +252,7 @@ pub struct ExpMeta {
 pub enum ExpEnum {
     Atom(Atom),
     Vector(Vec<Handle>),
+    Values(Vec<Handle>),
     Pair(Handle, Handle),
     HashMap(HashMap<&'static str, Handle>),
     Function(Callable),
@@ -305,6 +306,7 @@ impl fmt::Debug for ExpEnum {
         match &self {
             ExpEnum::Atom(a) => write!(f, "ExpEnum::Atom({:?})", a),
             ExpEnum::Vector(l) => write!(f, "ExpEnum::Vector({:?})", l),
+            ExpEnum::Values(v) => write!(f, "ExpEnum::Vector({:?})", v),
             ExpEnum::Pair(e1, e2) => write!(f, "ExpEnum::Pair({:?} . {:?})", e1, e2),
             ExpEnum::HashMap(map) => write!(f, "ExpEnum::HashMap({:?})", map),
             ExpEnum::Function(_) => write!(f, "ExpEnum::Function(_)"),
@@ -334,6 +336,7 @@ impl Trace for ExpEnum {
     fn trace(&self, tracer: &mut Tracer) {
         match self {
             Self::Vector(list) => list.trace(tracer),
+            Self::Values(list) => list.trace(tracer),
             Self::Pair(p1, p2) => {
                 p1.trace(tracer);
                 p2.trace(tracer);
@@ -447,6 +450,7 @@ impl Expression {
         match &data.data {
             ExpEnum::Pair(_, _) => Box::new(PairIter::new(self.clone())),
             ExpEnum::Vector(_) => panic!("Can not make a vector iterator this way!"),
+            ExpEnum::Values(_) => panic!("Can not make a values iterator this way!"),
             _ => Box::new(iter::empty()),
         }
     }
@@ -546,6 +550,14 @@ impl Expression {
                 }
             }
             ExpEnum::Vector(_) => "Vector".to_string(),
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    "Nil".to_string()
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.display_type()
+                }
+            }
             ExpEnum::Pair(_, _) => "Pair".to_string(),
             ExpEnum::HashMap(_) => "HashMap".to_string(),
             ExpEnum::File(_) => "File".to_string(),
@@ -609,6 +621,14 @@ impl Expression {
                         exp.pretty_print_int(environment, indent + 1, writer)?;
                     }
                     writer.write_all(b")")?;
+                }
+            }
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    write!(writer, "nil")?;
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.pretty_print_int(environment, indent, writer)?;
                 }
             }
             ExpEnum::Pair(e1, e2) => {
@@ -709,6 +729,14 @@ impl Expression {
             }
             ExpEnum::Function(_) => Ok(self.to_string()),
             ExpEnum::Vector(_) => Ok(self.to_string()),
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    Ok(self.to_string())
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.make_string(environment)
+                }
+            }
             ExpEnum::Pair(_, _) => Ok(self.to_string()),
             ExpEnum::Nil => Ok(self.to_string()),
             ExpEnum::HashMap(_map) => Ok(self.to_string()),
@@ -769,6 +797,14 @@ impl Expression {
             }
             ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    Err(io::Error::new(io::ErrorKind::Other, "Not a number"))
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.make_float(environment)
+                }
+            }
             ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
             ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
@@ -795,6 +831,14 @@ impl Expression {
             }
             ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    Err(io::Error::new(io::ErrorKind::Other, "Not an integer"))
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.make_int(environment)
+                }
+            }
             ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
             ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
@@ -844,6 +888,14 @@ impl Expression {
             }
             ExpEnum::Function(_) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Vector(_) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    write!(writer, "{}", self.to_string())?;
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.writef(environment, writer)?;
+                }
+            }
             ExpEnum::Pair(_, _) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Nil => write!(writer, "{}", self.to_string())?,
             ExpEnum::HashMap(_map) => write!(writer, "{}", self.to_string())?,
@@ -997,6 +1049,14 @@ impl fmt::Display for Expression {
                 list_out(&mut res, &mut ib);
                 res.push(')');
                 write!(f, "{}", res)
+            }
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    f.write_str("nil")
+                } else {
+                    let v: Expression = (&v[0]).into();
+                    v.fmt(f)
+                }
             }
             ExpEnum::Pair(e1, e2) => {
                 let e1: Expression = e1.into();

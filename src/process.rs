@@ -386,6 +386,16 @@ pub fn do_command(
             environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
         }
     }
+    if let Some(data_in) = environment.data_in.clone() {
+        if let ExpEnum::Values(v) = &data_in.get().data {
+            if v.is_empty() {
+                environment.data_in = Some(Expression::make_nil());
+            } else {
+                let exp: Expression = (&v[0]).into();
+                environment.data_in = Some(exp);
+            }
+        }
+    }
     let stdin = if let Some(data_in) = &environment.data_in {
         match &data_in.get().data {
             ExpEnum::Atom(atom) => {
@@ -428,6 +438,13 @@ pub fn do_command(
                     io::ErrorKind::Other,
                     "Invalid expression state before command (list).",
                 ))
+            }
+            ExpEnum::Values(_) => {
+                // Should never happen- gets resolved to first item above.
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Invalid expression state before command (list).",
+                ));
             }
             ExpEnum::Pair(_, _) => {
                 return Err(io::Error::new(
