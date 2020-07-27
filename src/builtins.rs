@@ -286,7 +286,7 @@ fn builtin_length(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return match &arg.get().data {
                 ExpEnum::Atom(Atom::String(s, _)) => {
                     let mut i = 0;

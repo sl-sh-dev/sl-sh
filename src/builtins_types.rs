@@ -24,13 +24,33 @@ fn builtin_type(
     Err(io::Error::new(io::ErrorKind::Other, "type takes one form"))
 }
 
-fn builtin_is_nil(
+fn builtin_is_values(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
+            return if let ExpEnum::Values(_) = arg.get().data {
+                Ok(Expression::make_true())
+            } else {
+                Ok(Expression::make_nil())
+            };
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "values? needs one form",
+    ))
+}
+
+fn builtin_is_nil(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval_no_values(environment, arg)?;
             return if arg.is_nil() {
                 Ok(Expression::make_true())
             } else {
@@ -47,7 +67,7 @@ fn builtin_is_true(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::True) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -64,7 +84,7 @@ fn builtin_is_float(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Float(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -84,7 +104,7 @@ fn builtin_is_int(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Int(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -101,7 +121,7 @@ fn builtin_is_symbol(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Symbol(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -121,7 +141,7 @@ fn builtin_is_string(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::String(_, _)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -141,7 +161,7 @@ fn builtin_is_char(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Char(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -158,7 +178,7 @@ fn builtin_is_lambda(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Lambda(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -178,7 +198,7 @@ fn builtin_is_macro(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Atom(Atom::Macro(_)) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -198,7 +218,7 @@ fn builtin_is_vec(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Vector(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -215,7 +235,7 @@ fn builtin_is_pair(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Pair(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -232,7 +252,7 @@ fn builtin_is_builtin(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            return match eval(environment, arg)?.get().data {
+            return match eval_no_values(environment, arg)?.get().data {
                 ExpEnum::Function(_) => Ok(Expression::make_true()),
                 _ => Ok(Expression::make_nil()),
             };
@@ -250,7 +270,7 @@ fn builtin_is_process(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::Process(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -270,7 +290,7 @@ fn builtin_is_file(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::File(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -287,7 +307,7 @@ fn builtin_is_hash(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if let ExpEnum::HashMap(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
@@ -304,7 +324,7 @@ fn builtin_is_list(
 ) -> io::Result<Expression> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval_no_values(environment, arg)?;
             return if arg.is_nil() || is_proper_list(&arg) {
                 Ok(Expression::make_true())
             } else {
@@ -372,6 +392,34 @@ Example:
 (test::assert-equal \"Nil\" (type '()))
 (test::assert-equal \"HashMap\" (type (make-hash)))
 (test::assert-equal \"File\" (type (open :stdin)))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("values?"),
+        Expression::make_function(
+            builtin_is_values,
+            "Usage: (values? expression)
+
+True if the expression is multi values object, false otherwise.
+NOTE: A values object will ALSO be the type of its first value.
+
+Section: type
+
+Example:
+(test::assert-true (values? (values 1 \"str\" 5.5)))
+(test::assert-false (values? '(1 2 3)))
+(test::assert-false (values? '(1 . 3)))
+(test::assert-false (values? 1))
+(test::assert-true (int? (values 1 \"str\" 5.5)))
+(test::assert-false (string? (values 1 \"str\" 5.5)))
+(test::assert-false (float? (values 1 \"str\" 5.5)))
+(def 'test-is-values (values 1 2 3 \"string\" 1.5))
+(test::assert-true (values? test-is-values))
+(test::assert-true (int? test-is-values))
+(test::assert-false (string? test-is-values))
+(test::assert-false (float? test-is-values))
 ",
             root,
         ),

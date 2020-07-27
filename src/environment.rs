@@ -18,6 +18,7 @@ use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_system::add_system_builtins;
 use crate::builtins_types::add_type_builtins;
+use crate::builtins_values::add_values_builtins;
 use crate::builtins_vector::add_vec_builtins;
 use crate::gc::*;
 use crate::interner::*;
@@ -149,6 +150,7 @@ impl Scope {
         add_math_builtins(interner, &mut data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
+        add_values_builtins(interner, &mut data);
         add_file_builtins(interner, &mut data);
         add_io_builtins(interner, &mut data);
         add_pair_builtins(interner, &mut data);

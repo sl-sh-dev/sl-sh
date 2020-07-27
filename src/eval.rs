@@ -706,3 +706,22 @@ pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> io::Result<Exp
     let data = Expression::alloc_data(data);
     eval(environment, data)
 }
+
+pub fn eval_no_values(
+    environment: &mut Environment,
+    expression: impl AsRef<Expression>,
+) -> io::Result<Expression> {
+    let expression = expression.as_ref();
+    let exp = eval(environment, expression)?;
+    let exp_d = exp.get();
+    if let ExpEnum::Values(v) = &exp_d.data {
+        if v.is_empty() {
+            Ok(Expression::make_nil())
+        } else {
+            Ok((&v[0]).into())
+        }
+    } else {
+        drop(exp_d);
+        Ok(exp)
+    }
+}
