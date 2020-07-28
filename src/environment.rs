@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::builtins::add_builtins;
+use crate::builtins_edit::add_edit_builtins;
 use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
@@ -151,6 +152,7 @@ impl Scope {
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
         add_values_builtins(interner, &mut data);
+        add_edit_builtins(interner, &mut data);
         add_file_builtins(interner, &mut data);
         add_io_builtins(interner, &mut data);
         add_pair_builtins(interner, &mut data);

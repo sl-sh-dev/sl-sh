@@ -63,6 +63,9 @@ pub use crate::builtins_namespace::*;
 pub mod builtins_values;
 pub use crate::builtins_values::*;
 
+pub mod builtins_edit;
+pub use crate::builtins_edit::*;
+
 pub mod process;
 pub use crate::process::*;
 

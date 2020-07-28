@@ -1,25 +1,22 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::env;
 use std::fs::OpenOptions;
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
 
-use liner::{Context, Prompt};
 use unicode_segmentation::UnicodeSegmentation;
 extern crate unicode_reader;
 use unicode_reader::Graphemes;
 
+use crate::builtins_edit::read_prompt;
 use crate::builtins_util::expand_tilde;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
-use crate::shell::apply_repl_settings;
-use crate::shell::get_liner_words;
 use crate::types::*;
 
 fn builtin_open(
@@ -284,85 +281,6 @@ fn builtin_read_line(
     Err(io::Error::new(
         io::ErrorKind::Other,
         "read-line takes one form (file)",
-    ))
-}
-
-pub fn read_prompt(
-    environment: &mut Environment,
-    prompt: &str,
-    history: Option<&str>,
-) -> io::Result<String> {
-    let mut con = Context::new();
-    apply_repl_settings(&mut con, &environment.repl_settings);
-    con.set_word_divider(Box::new(get_liner_words));
-    let mut home = match env::var("HOME") {
-        Ok(val) => val,
-        Err(_) => ".".to_string(),
-    };
-    if home.ends_with('/') {
-        home = home[..home.len() - 1].to_string();
-    }
-    if let Some(history) = history {
-        let history_file = if history.starts_with('/') || history.starts_with('.') {
-            history.to_string()
-        } else {
-            format!("{}/.local/share/sl-sh/{}", home, history)
-        };
-        if let Err(err) = con.history.set_file_name_and_load_history(history_file) {
-            eprintln!("WARNING: Unable to load read-line history: {}", err);
-        }
-    }
-    //con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
-    match con.read_line(Prompt::from(prompt), None) {
-        Ok(input) => {
-            let input = input.trim();
-            if history.is_some() {
-                if let Err(err) = con.history.push(input) {
-                    eprintln!("read-line: Error saving history: {}", err);
-                }
-            }
-            Ok(input.into())
-        }
-        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
-    }
-}
-
-fn builtin_read_prompt(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    if let Some(exp) = args.next() {
-        let h_str;
-        let history_file = if let Some(h) = args.next() {
-            let hist = eval(environment, h)?;
-            let hist_d = hist.get();
-            if let ExpEnum::Atom(Atom::String(s, _)) = &hist_d.data {
-                h_str = s.to_string();
-                Some(&h_str[..])
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "read-prompt: history file (if provided) must be a string.",
-                ));
-            }
-        } else {
-            None
-        };
-        if args.next().is_none() {
-            let prompt = eval(environment, exp)?;
-            let prompt_d = prompt.get();
-            if let ExpEnum::Atom(Atom::String(s, _)) = &prompt_d.data {
-                let input = read_prompt(environment, s, history_file)?;
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                    input.into(),
-                    None,
-                ))));
-            }
-        }
-    }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "read-prompt: requires a prompt string and option history file.",
     ))
 }
 
@@ -675,24 +593,6 @@ Example:
 (test::assert-equal \"Test Line Read Line One\n\" (read-line tst-file))
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("read-prompt"),
-        Expression::make_function(
-            builtin_read_prompt,
-            "Usage: (read-prompt string) -> string
-
-Starts an interactive prompt (like the repl prompt) with the supplied prompt and
-returns the input string.
-
-Section: file
-
-Example:
-;(def 'input-string (read-prompt \"prompt> \"))
-t
 ",
             root,
         ),

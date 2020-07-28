@@ -7,6 +7,34 @@ use crate::eval::*;
 use crate::gc::Handle;
 use crate::types::*;
 
+pub fn param_eval(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    form: &str,
+) -> io::Result<Expression> {
+    if let Some(arg) = args.next() {
+        eval(environment, arg)
+    } else {
+        let msg = format!(
+            "{}: Missing required argument, see (doc '{}) for usage.",
+            form, form
+        );
+        Err(io::Error::new(io::ErrorKind::Other, msg))
+    }
+}
+
+pub fn params_done(args: &mut dyn Iterator<Item = Expression>, form: &str) -> io::Result<()> {
+    if args.next().is_none() {
+        Ok(())
+    } else {
+        let msg = format!(
+            "{}: To many arguments, see (doc '{}) for usage.",
+            form, form
+        );
+        Err(io::Error::new(io::ErrorKind::Other, msg))
+    }
+}
+
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
     if let ExpEnum::Pair(_e1, e2) = &exp.get().data {

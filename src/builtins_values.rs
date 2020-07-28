@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::io;
 
+use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::Handle;
@@ -23,25 +24,21 @@ fn builtin_values_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    if let Some(idx) = args.next() {
-        if let Some(vals) = args.next() {
-            if args.next().is_none() {
-                if let ExpEnum::Atom(Atom::Int(idx)) = &eval(environment, idx)?.get().data {
-                    if let ExpEnum::Values(vals) = &eval(environment, vals)?.get().data {
-                        if *idx < 0 || *idx >= vals.len() as i64 {
-                            let msg =
-                                format!("values-nth index {} out of range {}", idx, vals.len());
-                            return Err(io::Error::new(io::ErrorKind::Other, msg));
-                        }
-                        return Ok(vals[*idx as usize].clone().into());
-                    }
-                }
+    let idx = param_eval(environment, args, "values-nth")?;
+    let vals = param_eval(environment, args, "values-nth")?;
+    params_done(args, "values-nth")?;
+    if let ExpEnum::Atom(Atom::Int(idx)) = &idx.get().data {
+        if let ExpEnum::Values(vals) = &vals.get().data {
+            if *idx < 0 || *idx >= vals.len() as i64 {
+                let msg = format!("values-nth: index {} out of range {}", idx, vals.len());
+                return Err(io::Error::new(io::ErrorKind::Other, msg));
             }
+            return Ok(vals[*idx as usize].clone().into());
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "values-nth takes two forms (int and multi values object)",
+        "values-nth: Requires an int and multi values object, see (doc 'values-nth) for usage.",
     ))
 }
 
@@ -49,18 +46,16 @@ fn builtin_values_length(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
-    if let Some(vals) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Values(vals) = &eval(environment, vals)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    vals.len() as i64
-                ))));
-            }
-        }
+    let vals = param_eval(environment, args, "values-length")?;
+    params_done(args, "values-length")?;
+    if let ExpEnum::Values(vals) = &vals.get().data {
+        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+            vals.len() as i64
+        ))));
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "values-length takes one form- a muti values object",
+        "values-length: Requires a muti values object, see (doc 'values-length) for usage.",
     ))
 }
 
