@@ -295,7 +295,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
                             unsafe { Ok(Stdio::from_raw_fd(io::stderr().as_raw_fd())) }
                         }
                     }
-                    FileState::Write(f) => Ok(Stdio::from(f.borrow().get_ref().try_clone()?)),
+                    FileState::Write(f) => Ok(Stdio::from(f.get_ref().try_clone()?)),
                     _ => Err(io::Error::new(
                         io::ErrorKind::Other,
                         "Can not write to a non-writable file.",

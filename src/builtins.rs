@@ -405,7 +405,7 @@ fn print_to_oe(
     match out {
         Some(out) => {
             if let ExpEnum::File(f) = &out.exp.get().data {
-                match &*f.borrow() {
+                match &mut *f.borrow_mut() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
                         let mut out = stdout.lock();
@@ -426,13 +426,13 @@ fn print_to_oe(
                                 _ => pretty,
                             };
                             if pretty {
-                                aa.pretty_printf(environment, &mut *f.borrow_mut())?;
+                                aa.pretty_printf(environment, f)?;
                             } else {
-                                aa.writef(environment, &mut *f.borrow_mut())?;
+                                aa.writef(environment, f)?;
                             }
                         }
                         if add_newline {
-                            (&mut *f.borrow_mut()).write_all(b"\n")?;
+                            f.write_all(b"\n")?;
                         }
                     }
                     _ => {

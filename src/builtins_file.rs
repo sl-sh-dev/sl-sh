@@ -228,7 +228,7 @@ fn builtin_pipe(
                         environment.state.pipe_pgid = Some(*pid);
                     }
                 }
-                ExpEnum::File(file) => match &*file.borrow() {
+                ExpEnum::File(file) => match &mut *file.borrow_mut() {
                     FileState::Stdout => {
                         let stdout = io::stdout();
                         let mut handle = stdout.lock();
@@ -246,7 +246,7 @@ fn builtin_pipe(
                         }
                     }
                     FileState::Write(f) => {
-                        if let Err(err) = pipe_write_file(environment, &mut *f.borrow_mut()) {
+                        if let Err(err) = pipe_write_file(environment, f) {
                             error = Some(Err(err));
                             break;
                         }

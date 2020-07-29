@@ -141,7 +141,7 @@ fn builtin_open(
             ))))
         } else {
             Ok(Expression::alloc_data(ExpEnum::File(Rc::new(
-                RefCell::new(FileState::Write(RefCell::new(BufWriter::new(file)))),
+                RefCell::new(FileState::Write(BufWriter::new(file))),
             ))))
         };
     }
@@ -186,7 +186,7 @@ fn builtin_flush(
             return if let ExpEnum::File(file) = &exp.get().data {
                 match &mut *file.borrow_mut() {
                     FileState::Write(f) => {
-                        f.borrow_mut().flush()?;
+                        f.flush()?;
                         Ok(Expression::make_true())
                     }
                     FileState::Stdout => {
@@ -427,9 +427,9 @@ fn builtin_write_line(
                 let file = eval(environment, file)?;
                 let line = eval(environment, line)?;
                 return if let ExpEnum::File(file) = &file.get().data {
-                    match &*file.borrow() {
+                    match &mut *file.borrow_mut() {
                         FileState::Write(file) => {
-                            writeln!(file.borrow_mut(), "{}", line.as_string(environment)?)?;
+                            writeln!(file, "{}", line.as_string(environment)?)?;
                             Ok(Expression::make_nil())
                         }
                         FileState::Stdout => {
@@ -470,9 +470,9 @@ fn builtin_write_string(
                 let file = eval(environment, file)?;
                 let string = eval(environment, string)?;
                 return if let ExpEnum::File(file) = &file.get().data {
-                    match &*file.borrow() {
+                    match &mut *file.borrow_mut() {
                         FileState::Write(file) => {
-                            write!(file.borrow_mut(), "{}", string.as_string(environment)?)?;
+                            write!(file, "{}", string.as_string(environment)?)?;
                             Ok(Expression::make_nil())
                         }
                         FileState::Stdout => {

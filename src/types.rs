@@ -159,7 +159,7 @@ pub enum FileState {
     Stderr,
     Read(Option<CharIter>, i64),
     ReadBinary(BufReader<File>),
-    Write(RefCell<BufWriter<File>>),
+    Write(BufWriter<File>),
     Closed,
 }
 
