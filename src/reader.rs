@@ -151,7 +151,7 @@ fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
 }
 
 fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> bool {
-    if is_whitespace(ch) || reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap() {
+    if is_whitespace(ch) || (reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap()) {
         true
     } else {
         match ch {
@@ -160,7 +160,7 @@ fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> 
             "#" => true,
             "\"" => true,
             "," if in_back_quote => true,
-            "\\" => true,
+            "'" => true,
             "`" => true,
             _ => false,
         }

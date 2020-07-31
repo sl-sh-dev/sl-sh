@@ -2940,6 +2940,7 @@ Section: shell
 
 Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
+(test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
 ",
             root,
         ),
