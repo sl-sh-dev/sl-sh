@@ -289,7 +289,7 @@ fn builtin_read(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> io::Result<Expression> {
     fn read_stdin(environment: &mut Environment) -> io::Result<Expression> {
-        let input = read_prompt(environment, "read> ", Some("read_history"))?;
+        let input = read_prompt(environment, "read> ", Some("read_history"), ":new")?;
         let input = unsafe { &*(input.as_ref() as *const str) };
         let chars = Box::new(
             UnicodeSegmentation::graphemes(&input[..], true)
@@ -396,7 +396,8 @@ fn builtin_read_all(
                         do_read(environment, &input)
                     }
                     FileState::Stdin => {
-                        let input = read_prompt(environment, "read-all> ", Some("read_history"))?;
+                        let input =
+                            read_prompt(environment, "read-all> ", Some("read_history"), ":new")?;
                         do_read(environment, &input)
                     }
                     _ => Err(io::Error::new(
@@ -413,7 +414,7 @@ fn builtin_read_all(
         }
     }
     // No args, ask for input
-    let input = read_prompt(environment, "read-all> ", Some("read_history"))?;
+    let input = read_prompt(environment, "read-all> ", Some("read_history"), ":new")?;
     do_read(environment, &input)
 }
 

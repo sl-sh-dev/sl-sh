@@ -8,6 +8,8 @@ use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use liner::Context;
+
 use crate::builtins::add_builtins;
 use crate::builtins_edit::add_edit_builtins;
 use crate::builtins_file::add_file_builtins;
@@ -391,6 +393,7 @@ pub struct Environment {
     // Save the meta data for the last expression evalled.
     pub last_meta: Option<ExpMeta>,
     pub repl_settings: ReplSettings,
+    pub liners: HashMap<&'static str, Context>,
 }
 
 impl Environment {
@@ -437,6 +440,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         interner,
         last_meta: None,
         repl_settings: ReplSettings::default(),
+        liners: HashMap::new(),
     }
 }
 
