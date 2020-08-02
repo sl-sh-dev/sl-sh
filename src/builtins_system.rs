@@ -8,7 +8,6 @@ use nix::{
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::io;
 use std::{thread, time};
 
 use crate::builtins_util::*;
@@ -21,7 +20,7 @@ use crate::types::*;
 fn builtin_syscall(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(command) = args.next() {
         let command = eval(environment, command)?;
         let command_d = command.get();
@@ -33,18 +32,18 @@ fn builtin_syscall(
                     command,
                     command.display_type()
                 );
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                Err(LispError::new(msg))
             }
         }
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "syscall: empty call"))
+        Err(LispError::new("syscall: empty call"))
     }
 }
 
 fn builtin_export(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if let Some(val) = args.next() {
             if args.next().is_none() {
@@ -54,8 +53,7 @@ fn builtin_export(
                 let key = match key_d {
                     ExpEnum::Atom(Atom::Symbol(s)) => s,
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        return Err(LispError::new(
                             "export: first form must evaluate to a symbol",
                         ));
                     }
@@ -106,18 +104,10 @@ fn builtin_export(
                                 .into(),
                             None,
                         )),
-                        _ => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "export: value not valid",
-                            ))
-                        }
+                        _ => return Err(LispError::new("export: value not valid")),
                     },
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "export: value not valid",
-                        ));
+                        return Err(LispError::new("export: value not valid"));
                     }
                 };
                 let val = Expression::alloc_data(val).as_string(environment)?;
@@ -137,16 +127,13 @@ fn builtin_export(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "export: can only have two expressions",
-    ))
+    Err(LispError::new("export: can only have two expressions"))
 }
 
 fn builtin_unexport(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
@@ -157,8 +144,7 @@ fn builtin_unexport(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "unexport can only have one expression (symbol)",
     ))
 }
@@ -166,12 +152,9 @@ fn builtin_unexport(
 fn builtin_jobs(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_some() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "jobs takes no arguments",
-        ))
+        Err(LispError::new("jobs takes no arguments"))
     } else {
         for (i, job) in environment.jobs.borrow().iter().enumerate() {
             println!(
@@ -220,11 +203,10 @@ fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Op
 fn builtin_bg(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "bg can only have one optional form (job id)",
             ));
         }
@@ -247,11 +229,10 @@ fn builtin_bg(
 fn builtin_fg(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let arg = if let Some(arg) = args.next() {
         if args.next().is_some() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "fg can only have one optional form (job id)",
             ));
         }
@@ -280,7 +261,7 @@ fn builtin_fg(
 fn builtin_run_bg(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     environment.run_background = true;
     let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
     for a in args {
@@ -297,7 +278,7 @@ fn builtin_run_bg(
 fn builtin_sleep(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(millis) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::Int(millis)) = eval(environment, millis)?.get().data {
@@ -312,8 +293,7 @@ fn builtin_sleep(
             // assert!(now.elapsed() >= ten_millis)
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "sleep: can only have one argument (milliseconds to sleep- positive integer)",
     ))
 }
@@ -321,7 +301,7 @@ fn builtin_sleep(
 fn builtin_time(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(form) = args.next() {
         if args.next().is_none() {
             let now = time::Instant::now();
@@ -331,8 +311,7 @@ fn builtin_time(
             ))));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "time: can only have one argument (form to time)",
     ))
 }
@@ -340,7 +319,7 @@ fn builtin_time(
 fn builtin_exit(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(exit_code) = args.next() {
         if args.next().is_none() {
             let exit_code = eval(environment, exit_code)?;
@@ -348,8 +327,7 @@ fn builtin_exit(
                 environment.exit_code = Some(*exit_code as i32);
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(LispError::new(
                     "exit can only take an optional integer (exit code- defaults to 0)",
                 ))
             };
@@ -358,8 +336,7 @@ fn builtin_exit(
         environment.exit_code = Some(0);
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "exit can only take an optional integer (exit code- defaults to 0)",
     ))
 }

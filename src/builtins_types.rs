@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -11,7 +10,7 @@ use crate::types::*;
 fn builtin_type(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -21,13 +20,13 @@ fn builtin_type(
             ))));
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "type takes one form"))
+    Err(LispError::new("type takes one form"))
 }
 
 fn builtin_is_values(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -38,16 +37,13 @@ fn builtin_is_values(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "values? needs one form",
-    ))
+    Err(LispError::new("values? needs one form"))
 }
 
 fn builtin_is_nil(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -58,13 +54,13 @@ fn builtin_is_nil(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "nil? needs one form"))
+    Err(LispError::new("nil? needs one form"))
 }
 
 fn builtin_is_true(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -75,13 +71,13 @@ fn builtin_is_true(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "true? needs one form"))
+    Err(LispError::new("true? needs one form"))
 }
 
 fn builtin_is_float(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -92,16 +88,13 @@ fn builtin_is_float(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "float? needs one form",
-    ))
+    Err(LispError::new("float? needs one form"))
 }
 
 fn builtin_is_int(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -112,13 +105,13 @@ fn builtin_is_int(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "int? needs one form"))
+    Err(LispError::new("int? needs one form"))
 }
 
 fn builtin_is_symbol(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -129,16 +122,13 @@ fn builtin_is_symbol(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "symbol? needs one form",
-    ))
+    Err(LispError::new("symbol? needs one form"))
 }
 
 fn builtin_is_string(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -149,16 +139,13 @@ fn builtin_is_string(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "string? needs one form",
-    ))
+    Err(LispError::new("string? needs one form"))
 }
 
 fn builtin_is_char(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -169,13 +156,13 @@ fn builtin_is_char(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "char? needs one form"))
+    Err(LispError::new("char? needs one form"))
 }
 
 fn builtin_is_lambda(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -186,16 +173,13 @@ fn builtin_is_lambda(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "lambda? needs one form",
-    ))
+    Err(LispError::new("lambda? needs one form"))
 }
 
 fn builtin_is_macro(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -206,16 +190,13 @@ fn builtin_is_macro(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "macro? needs one form",
-    ))
+    Err(LispError::new("macro? needs one form"))
 }
 
 fn builtin_is_vec(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -226,13 +207,13 @@ fn builtin_is_vec(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "vec? needs one form"))
+    Err(LispError::new("vec? needs one form"))
 }
 
 fn builtin_is_pair(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -243,13 +224,13 @@ fn builtin_is_pair(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "pair? needs one form"))
+    Err(LispError::new("pair? needs one form"))
 }
 
 fn builtin_is_builtin(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             return match eval_no_values(environment, arg)?.get().data {
@@ -258,16 +239,13 @@ fn builtin_is_builtin(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "builtin? needs one form",
-    ))
+    Err(LispError::new("builtin? needs one form"))
 }
 
 fn builtin_is_process(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -278,16 +256,13 @@ fn builtin_is_process(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "process? needs one form",
-    ))
+    Err(LispError::new("process? needs one form"))
 }
 
 fn builtin_is_file(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -298,13 +273,13 @@ fn builtin_is_file(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "file? needs one form"))
+    Err(LispError::new("file? needs one form"))
 }
 
 fn builtin_is_hash(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -315,13 +290,13 @@ fn builtin_is_hash(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "hash? needs one form"))
+    Err(LispError::new("hash? needs one form"))
 }
 
 fn builtin_is_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -332,7 +307,7 @@ fn builtin_is_list(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "list? needs one form"))
+    Err(LispError::new("list? needs one form"))
 }
 
 pub fn add_type_builtins<S: BuildHasher>(

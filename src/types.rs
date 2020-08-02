@@ -29,6 +29,14 @@ impl fmt::Display for LispError {
     }
 }
 
+impl From<io::Error> for LispError {
+    fn from(item: io::Error) -> Self {
+        LispError {
+            reason: item.to_string(),
+        }
+    }
+}
+
 impl LispError {
     pub fn new<S: Into<String>>(reason: S) -> LispError {
         LispError {
@@ -246,7 +254,7 @@ impl<'a> Iterator for ListIter<'a> {
 }
 
 type CallFunc =
-    fn(&mut Environment, &mut dyn Iterator<Item = Expression>) -> io::Result<Expression>;
+    fn(&mut Environment, &mut dyn Iterator<Item = Expression>) -> Result<Expression, LispError>;
 
 #[derive(Clone)]
 pub struct Callable {
@@ -487,7 +495,7 @@ impl Expression {
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
-    pub fn resolve(self, environment: &mut Environment) -> io::Result<Self> {
+    pub fn resolve(self, environment: &mut Environment) -> Result<Self, LispError> {
         let self_d = self.get();
         if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
             let ib = &mut ListIter::new_list(parts);
@@ -592,7 +600,7 @@ impl Expression {
         &self,
         procs: Rc<RefCell<HashMap<u32, Child>>>,
         pid: u32,
-    ) -> io::Result<String> {
+    ) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
             Some(child) => {
                 if child.stdout.is_some() {
@@ -612,8 +620,8 @@ impl Expression {
         environment: &mut Environment,
         indent: usize,
         writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        fn init_space(indent: usize, writer: &mut dyn Write) -> io::Result<()> {
+    ) -> Result<(), LispError> {
+        fn init_space(indent: usize, writer: &mut dyn Write) -> Result<(), LispError> {
             let mut i = 0;
             if indent > 0 {
                 writer.write_all(b"\n")?;
@@ -732,17 +740,17 @@ impl Expression {
         &self,
         environment: &mut Environment,
         writer: &mut dyn Write,
-    ) -> io::Result<()> {
+    ) -> Result<(), LispError> {
         self.pretty_print_int(environment, 0, writer)
     }
 
-    pub fn pretty_print(&self, environment: &mut Environment) -> io::Result<()> {
+    pub fn pretty_print(&self, environment: &mut Environment) -> Result<(), LispError> {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         self.pretty_print_int(environment, 0, &mut handle)
     }
 
-    pub fn make_string(&self, environment: &Environment) -> io::Result<String> {
+    pub fn make_string(&self, environment: &Environment) -> Result<String, LispError> {
         match &self.get().data {
             ExpEnum::Atom(a) => Ok(a.to_string()),
             ExpEnum::Process(ProcessState::Running(_pid)) => Ok(self.to_string()),
@@ -792,7 +800,7 @@ impl Expression {
     }
 
     // Like make_string but don't put quotes around strings.
-    pub fn as_string(&self, environment: &Environment) -> io::Result<String> {
+    pub fn as_string(&self, environment: &Environment) -> Result<String, LispError> {
         if let ExpEnum::Atom(a) = &self.get().data {
             Ok(a.as_string())
         } else {
@@ -800,76 +808,78 @@ impl Expression {
         }
     }
 
-    pub fn make_float(&self, environment: &Environment) -> io::Result<f64> {
+    pub fn make_float(&self, environment: &Environment) -> Result<f64, LispError> {
         match &self.get().data {
             ExpEnum::Atom(Atom::Float(f)) => Ok(*f),
             ExpEnum::Atom(Atom::Int(i)) => Ok(*i as f64),
-            ExpEnum::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Not a number (process still running!)",
-            )),
+            ExpEnum::Atom(_) => Err(LispError::new("Not a number")),
+            ExpEnum::Process(ProcessState::Running(_pid)) => {
+                Err(LispError::new("Not a number (process still running!)"))
+            }
             ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_float: Result<f64, ParseFloatError> = buffer.parse();
                 match potential_float {
                     Ok(v) => Ok(v),
-                    Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+                    Err(_) => Err(LispError::new("Not a number")),
                 }
             }
-            ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Function(_) => Err(LispError::new("Not a number")),
+            ExpEnum::Vector(_) => Err(LispError::new("Not a number")),
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    Err(io::Error::new(io::ErrorKind::Other, "Not a number"))
+                    Err(LispError::new("Not a number"))
                 } else {
                     let v: Expression = (&v[0]).into();
                     v.make_float(environment)
                 }
             }
-            ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
-            ExpEnum::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not a number")),
+            ExpEnum::Pair(_, _) => Err(LispError::new("Not a number")),
+            ExpEnum::Nil => Err(LispError::new("Not a number")),
+            ExpEnum::HashMap(_) => Err(LispError::new("Not a number")),
+            ExpEnum::File(_) => Err(LispError::new("Not a number")),
+            ExpEnum::LazyFn(_, _) => Err(LispError::new("Not a number")),
         }
     }
 
-    pub fn make_int(&self, environment: &Environment) -> io::Result<i64> {
+    pub fn make_int(&self, environment: &Environment) -> Result<i64, LispError> {
         match &self.get().data {
             ExpEnum::Atom(Atom::Int(i)) => Ok(*i),
-            ExpEnum::Atom(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::Process(ProcessState::Running(_pid)) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Not an integer (process still running!)",
-            )),
+            ExpEnum::Atom(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::Process(ProcessState::Running(_pid)) => {
+                Err(LispError::new("Not an integer (process still running!)"))
+            }
             ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 let buffer = self.pid_to_string(environment.procs.clone(), *pid)?;
                 let potential_int: Result<i64, ParseIntError> = buffer.parse();
                 match potential_int {
                     Ok(v) => Ok(v),
-                    Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+                    Err(_) => Err(LispError::new("Not an integer")),
                 }
             }
-            ExpEnum::Function(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::Vector(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Function(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::Vector(_) => Err(LispError::new("Not an integer")),
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    Err(io::Error::new(io::ErrorKind::Other, "Not an integer"))
+                    Err(LispError::new("Not an integer"))
                 } else {
                     let v: Expression = (&v[0]).into();
                     v.make_int(environment)
                 }
             }
-            ExpEnum::Pair(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::Nil => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::HashMap(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::File(_) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
-            ExpEnum::LazyFn(_, _) => Err(io::Error::new(io::ErrorKind::Other, "Not an integer")),
+            ExpEnum::Pair(_, _) => Err(LispError::new("Not an integer")),
+            ExpEnum::Nil => Err(LispError::new("Not an integer")),
+            ExpEnum::HashMap(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::File(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::LazyFn(_, _) => Err(LispError::new("Not an integer")),
         }
     }
 
-    pub fn writef(&self, environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
+    pub fn writef(
+        &self,
+        environment: &mut Environment,
+        writer: &mut dyn Write,
+    ) -> Result<(), LispError> {
         match &self.get().data {
             ExpEnum::Atom(a) => write!(writer, "{}", a.as_string())?,
             ExpEnum::Process(ps) => {
@@ -888,21 +898,15 @@ impl Expression {
                                 match out.read(&mut buf) {
                                     Ok(0) => break,
                                     Ok(n) => writer.write_all(&buf[..n])?,
-                                    Err(err) => return Err(err),
+                                    Err(err) => return Err(err.into()),
                                 }
                             }
                         } else {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "Failed to get process out to write to.",
-                            ));
+                            return Err(LispError::new("Failed to get process out to write to."));
                         }
                     }
                     None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Failed to get process to write to.",
-                        ));
+                        return Err(LispError::new("Failed to get process to write to."));
                     }
                 }
                 drop(procs);
@@ -930,7 +934,7 @@ impl Expression {
                         match f.read(&mut buf) {
                             Ok(0) => break,
                             Ok(n) => writer.write_all(&buf[..n])?,
-                            Err(err) => return Err(err),
+                            Err(err) => return Err(err.into()),
                         }
                     }
                 }
@@ -945,7 +949,7 @@ impl Expression {
                         match f.read(&mut buf) {
                             Ok(0) => break,
                             Ok(n) => writer.write_all(&buf[..n])?,
-                            Err(err) => return Err(err),
+                            Err(err) => return Err(err.into()),
                         }
                     }
                 }
@@ -957,7 +961,7 @@ impl Expression {
         Ok(())
     }
 
-    pub fn write(&self, environment: &mut Environment) -> io::Result<()> {
+    pub fn write(&self, environment: &mut Environment) -> Result<(), LispError> {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         self.writef(environment, &mut handle)

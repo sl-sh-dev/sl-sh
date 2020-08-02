@@ -16,8 +16,9 @@ use nix::{
 use ::sl_sh::config::*;
 use ::sl_sh::gc::init_gc;
 use ::sl_sh::shell::*;
+use ::sl_sh::types::LispError;
 
-fn main() -> io::Result<()> {
+fn main() -> Result<(), LispError> {
     init_gc();
     let config = get_config();
     if let Ok(config) = config {
@@ -61,7 +62,7 @@ fn main() -> io::Result<()> {
                 if let Err(err) = unistd::tcsetpgrp(shell_terminal, pgid) {
                     let msg = format!("Couldn't grab control of terminal: {}\n", err);
                     eprintln!("{}", msg);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return Err(LispError::new(msg));
                 }
 
                 // Block this signal so the thread below will get SIGINT.
@@ -79,9 +80,9 @@ fn main() -> io::Result<()> {
                 // code can stop (error out) or a process being waiting on will
                 // be sent signals to stop (INT -> TERM -> KILL)
                 let sig_child = std::thread::spawn(move || {
-                    fn ok_errno<T>(ok: T, ecode: libc::c_int) -> io::Result<T> {
+                    fn ok_errno<T>(ok: T, ecode: libc::c_int) -> Result<T, LispError> {
                         if ecode != 0 {
-                            Err(io::Error::from_raw_os_error(ecode))
+                            Err(io::Error::from_raw_os_error(ecode).into())
                         } else {
                             Ok(ok)
                         }

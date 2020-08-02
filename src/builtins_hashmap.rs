@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -21,7 +20,7 @@ fn build_map(
     environment: &mut Environment,
     mut map: HashMap<&'static str, Handle>,
     assocs: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
@@ -34,15 +33,13 @@ fn build_map(
                     map.insert(cow_to_ref(environment, &ch), val.clone())
                 }
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "make-hash key can only be a symbol or string",
                     ))
                 }
             };
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "make-hash each association must be a pair (key . val)",
             ));
         }
@@ -53,7 +50,7 @@ fn build_map(
 fn builtin_make_hash(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let map: HashMap<&'static str, Handle> = HashMap::new();
     if let Some(assocs) = args.next() {
         if args.next().is_none() {
@@ -65,16 +62,10 @@ fn builtin_make_hash(
                 ExpEnum::Vector(list) => {
                     build_map(environment, map, &mut Box::new(ListIter::new_list(&list)))
                 }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "make-hash takes a sequence",
-                )),
+                _ => Err(LispError::new("make-hash takes a sequence")),
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "make-hash takes one form, a sequence",
-            ))
+            Err(LispError::new("make-hash takes one form, a sequence"))
         }
     } else {
         Ok(Expression::alloc_data(ExpEnum::HashMap(map)))
@@ -84,7 +75,7 @@ fn builtin_make_hash(
 fn builtin_hash_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
             if let Some(val) = args.next() {
@@ -109,8 +100,7 @@ fn builtin_hash_set(
                                 return Ok(exp_map.clone());
                             }
                             _ => {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::Other,
+                                return Err(LispError::new(
                                     "hash-set! key can only be a symbol or string",
                                 ));
                             }
@@ -120,17 +110,14 @@ fn builtin_hash_set(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "hash-set! takes a hashmap, key and value",
-    ))
+    Err(LispError::new("hash-set! takes a hashmap, key and value"))
 }
 
 fn builtin_hash_remove(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn do_rem(map: &mut HashMap<&'static str, Handle>, sym: &str) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
+    fn do_rem(map: &mut HashMap<&'static str, Handle>, sym: &str) -> Result<Expression, LispError> {
         let old = map.remove(sym);
         if let Some(old) = old {
             let old: Expression = old.into();
@@ -157,8 +144,7 @@ fn builtin_hash_remove(
                             return do_rem(map, &ch);
                         }
                         _ => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(LispError::new(
                                 "hash-remove! key can only be a symbol or string",
                             ));
                         }
@@ -167,8 +153,7 @@ fn builtin_hash_remove(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "hash-remove! takes a hashmap and key to remove",
     ))
 }
@@ -176,13 +161,13 @@ fn builtin_hash_remove(
 fn builtin_hash_get(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     fn do_get(
         environment: &mut Environment,
         map: &HashMap<&'static str, Handle>,
         sym: &str,
         default: Option<Expression>,
-    ) -> io::Result<Expression> {
+    ) -> Result<Expression, LispError> {
         let old = map.get(sym);
         if let Some(old) = old {
             let old: Expression = old.into();
@@ -216,8 +201,7 @@ fn builtin_hash_get(
                             return do_get(environment, map, &ch, default);
                         }
                         _ => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(LispError::new(
                                 "hash-get: key can only be a symbol or string",
                             ));
                         }
@@ -226,8 +210,7 @@ fn builtin_hash_get(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "hash-get: takes a hashmap and key to get and optional default value",
     ))
 }
@@ -235,8 +218,8 @@ fn builtin_hash_get(
 fn builtin_hash_haskey(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn do_has(map: &HashMap<&'static str, Handle>, sym: &str) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
+    fn do_has(map: &HashMap<&'static str, Handle>, sym: &str) -> Result<Expression, LispError> {
         if map.contains_key(sym) {
             Ok(Expression::make_true())
         } else {
@@ -263,8 +246,7 @@ fn builtin_hash_haskey(
                         _ => {
                             let msg =
                                 format!("hash-haskey key can only be a symbol or string {:?}", key);
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(LispError::new(
                                 msg,
                                 //"hash-haskey key can only be a symbol or string",
                             ));
@@ -274,8 +256,7 @@ fn builtin_hash_haskey(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "hash-haskey takes a hashmap and key to test for existence of",
     ))
 }
@@ -283,7 +264,7 @@ fn builtin_hash_haskey(
 fn builtin_hash_keys(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
             let map = eval(environment, map)?;
@@ -299,8 +280,7 @@ fn builtin_hash_keys(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "hash-keys takes a hashmap and returns it's keys",
     ))
 }
@@ -308,7 +288,7 @@ fn builtin_hash_keys(
 fn builtin_hash_clear(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(map) = args.next() {
         if args.next().is_none() {
             let map = eval(environment, map)?;
@@ -319,10 +299,7 @@ fn builtin_hash_clear(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "hash-clear! takes a hashmap and clears it",
-    ))
+    Err(LispError::new("hash-clear! takes a hashmap and clears it"))
 }
 
 pub fn add_hash_builtins<S: BuildHasher>(

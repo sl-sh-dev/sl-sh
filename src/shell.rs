@@ -194,7 +194,7 @@ fn get_color_closure(environment: Rc<RefCell<Environment>>) -> Option<ColorClosu
 
 fn handle_result(
     environment: &mut Environment,
-    res: io::Result<Expression>,
+    res: Result<Expression, LispError>,
     con: &mut Context,
     input: &str,
     save_history: bool,
@@ -649,7 +649,7 @@ pub fn read_stdin() -> i32 {
     }
 }
 
-fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> io::Result<()> {
+fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> Result<(), LispError> {
     let mut in_string = false;
     let mut in_stringd = false;
     let mut token = String::new();
@@ -693,7 +693,7 @@ fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> io::Resul
     Ok(())
 }
 
-pub fn run_one_command(command: &str, args: &[String]) -> io::Result<()> {
+pub fn run_one_command(command: &str, args: &[String]) -> Result<(), LispError> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let mut nargs: Vec<String> = Vec::new();

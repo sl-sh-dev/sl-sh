@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -11,14 +10,14 @@ use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
-fn as_string(environment: &mut Environment, exp: &Expression) -> io::Result<String> {
+fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
     exp.as_string(environment)
 }
 
 fn builtin_str_trim(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -29,16 +28,13 @@ fn builtin_str_trim(
             ))));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-trim takes one form",
-    ))
+    Err(LispError::new("str-trim takes one form"))
 }
 
 fn builtin_str_ltrim(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -49,16 +45,13 @@ fn builtin_str_ltrim(
             ))));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-ltrim takes one form",
-    ))
+    Err(LispError::new("str-ltrim takes one form"))
 }
 
 fn builtin_str_rtrim(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -69,16 +62,13 @@ fn builtin_str_rtrim(
             ))));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-rtrim takes one form",
-    ))
+    Err(LispError::new("str-rtrim takes one form"))
 }
 
 fn builtin_str_replace(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
             if let Some(arg2) = args.next() {
@@ -98,16 +88,13 @@ fn builtin_str_replace(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-replace takes three forms",
-    ))
+    Err(LispError::new("str-replace takes three forms"))
 }
 
 fn builtin_str_split(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
             if args.next().is_none() {
@@ -141,16 +128,13 @@ fn builtin_str_split(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-split takes two forms",
-    ))
+    Err(LispError::new("str-split takes two forms"))
 }
 
 fn builtin_str_rsplit(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
             if args.next().is_none() {
@@ -172,33 +156,26 @@ fn builtin_str_rsplit(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-rsplit takes two forms",
-    ))
+    Err(LispError::new("str-rsplit takes two forms"))
 }
 
 fn builtin_str_splitn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(n) = args.next() {
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
                     let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
                         if n < 0 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(LispError::new(
                                 "str-splitn first form must be a positive integer",
                             ));
                         }
                         n
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-splitn first form must be an integer",
-                        ));
+                        return Err(LispError::new("str-splitn first form must be an integer"));
                     };
                     let pat = eval(environment, pat)?;
                     let pat = as_string(environment, &pat)?;
@@ -219,33 +196,26 @@ fn builtin_str_splitn(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-splitn takes three forms",
-    ))
+    Err(LispError::new("str-splitn takes three forms"))
 }
 
 fn builtin_str_rsplitn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(n) = args.next() {
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
                     let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
                         if n < 0 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            return Err(LispError::new(
                                 "str-splitn first form must be a positive integer",
                             ));
                         }
                         n
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-rsplitn first form must be an integer",
-                        ));
+                        return Err(LispError::new("str-rsplitn first form must be an integer"));
                     };
                     let pat = eval(environment, pat)?;
                     let pat = as_string(environment, &pat)?;
@@ -266,16 +236,13 @@ fn builtin_str_rsplitn(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-rsplitn takes three forms",
-    ))
+    Err(LispError::new("str-rsplitn takes three forms"))
 }
 
 fn builtin_str_cat_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(join_str) = args.next() {
         let join_str = eval(environment, join_str)?;
         let join_str = as_string(environment, &join_str)?;
@@ -308,10 +275,7 @@ fn builtin_str_cat_list(
                         }
                     }
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-cat-list second form must be a list",
-                        ));
+                        return Err(LispError::new("str-cat-list second form must be a list"));
                     }
                 }
                 return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -321,16 +285,13 @@ fn builtin_str_cat_list(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-cat-list takes two forms",
-    ))
+    Err(LispError::new("str-cat-list takes two forms"))
 }
 
 fn builtin_str_sub(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
             if let Some(arg2) = args.next() {
@@ -341,18 +302,12 @@ fn builtin_str_sub(
                     let start = if let ExpEnum::Atom(Atom::Int(i)) = arg0.get().data {
                         i as usize
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-sub first form must be an int",
-                        ));
+                        return Err(LispError::new("str-sub first form must be an int"));
                     };
                     let len = if let ExpEnum::Atom(Atom::Int(i)) = arg1.get().data {
                         i as usize
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-sub second form must be an int",
-                        ));
+                        return Err(LispError::new("str-sub second form must be an int"));
                     };
                     let arg2_d = arg2.get();
                     if let ExpEnum::Atom(Atom::String(s, _)) = &arg2_d.data {
@@ -362,23 +317,16 @@ fn builtin_str_sub(
                                 None,
                             ))));
                         } else {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "str-sub index out of range",
-                            ));
+                            return Err(LispError::new("str-sub index out of range"));
                         }
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-sub third form must be an String",
-                        ));
+                        return Err(LispError::new("str-sub third form must be an String"));
                     }
                 }
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "str-sub takes three forms (int, int String)",
     ))
 }
@@ -386,7 +334,7 @@ fn builtin_str_sub(
 fn builtin_str_append(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(start) = args.next() {
         if let Some(end) = args.next() {
             if args.next().is_none() {
@@ -403,30 +351,21 @@ fn builtin_str_append(
                             None,
                         ))));
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-append forms must both be strings",
-                        ));
+                        return Err(LispError::new("str-append forms must both be strings"));
                     }
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "str-append forms must both be strings",
-                    ));
+                    return Err(LispError::new("str-append forms must both be strings"));
                 }
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-append takes two strings",
-    ))
+    Err(LispError::new("str-append takes two strings"))
 }
 
 fn builtin_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let old_out = environment.state.stdout_status.clone();
     let old_err = environment.state.stderr_status.clone();
     environment.state.stdout_status = Some(IOState::Pipe);
@@ -475,7 +414,7 @@ fn builtin_str(
 fn builtin_str_empty(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let empty = match &eval(environment, string)?.get().data {
@@ -489,16 +428,13 @@ fn builtin_str_empty(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-empty? takes a string",
-    ))
+    Err(LispError::new("str-empty? takes a string"))
 }
 
 fn builtin_str_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(idx) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
@@ -517,29 +453,20 @@ fn builtin_str_nth(
                             }
                         }
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "str-nth second argument not a string",
-                        ));
+                        return Err(LispError::new("str-nth second argument not a string"));
                     }
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "str-nth index out of range",
-                    ));
+                    return Err(LispError::new("str-nth index out of range"));
                 }
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-nth takes two forms (int and string)",
-    ))
+    Err(LispError::new("str-nth takes two forms (int and string)"))
 }
 
 fn builtin_str_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, string)?.get().data {
@@ -550,16 +477,13 @@ fn builtin_str_lower(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-lower takes a string",
-    ))
+    Err(LispError::new("str-lower takes a string"))
 }
 
 fn builtin_str_upper(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, string)?.get().data {
@@ -570,16 +494,13 @@ fn builtin_str_upper(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-upper takes a string",
-    ))
+    Err(LispError::new("str-upper takes a string"))
 }
 
 fn builtin_str_bytes(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, arg)?.get().data {
@@ -589,16 +510,13 @@ fn builtin_str_bytes(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-bytes takes a string",
-    ))
+    Err(LispError::new("str-bytes takes a string"))
 }
 
 fn builtin_str_starts_with(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
             if args.next().is_none() {
@@ -614,8 +532,7 @@ fn builtin_str_starts_with(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "str-start-with takes two forms (pattern string)",
     ))
 }
@@ -623,7 +540,7 @@ fn builtin_str_starts_with(
 fn builtin_str_contains(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pat) = args.next() {
         if let Some(text) = args.next() {
             if args.next().is_none() {
@@ -639,8 +556,7 @@ fn builtin_str_contains(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "str-contains takes two forms (pattern string)",
     ))
 }
@@ -648,7 +564,7 @@ fn builtin_str_contains(
 fn builtin_str_push(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         let s = eval(environment, arg0)?;
         let mut evalled_args = Vec::new();
@@ -667,23 +583,19 @@ fn builtin_str_push(
             drop(s_d);
             Ok(s)
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
+            Err(LispError::new(
                 "str-push! takes a string buffer as first form",
             ))
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-push! takes at least one form",
-        ))
+        Err(LispError::new("str-push! takes at least one form"))
     }
 }
 
 fn builtin_str_clear(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let s = eval(environment, arg0)?;
@@ -694,26 +606,23 @@ fn builtin_str_clear(
                 drop(s_d);
                 Ok(s)
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(LispError::new(
                     "str-clear! takes a string buffer as first form",
                 ))
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "str-clear! takes only one form",
-            ))
+            Err(LispError::new("str-clear! takes only one form"))
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "str-clear! takes one form",
-        ))
+        Err(LispError::new("str-clear! takes one form"))
     }
 }
 
-fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> io::Result<String> {
+fn str_map_inner(
+    environment: &mut Environment,
+    func: &Lambda,
+    string: &str,
+) -> Result<String, LispError> {
     let mut res = String::new();
     for ch in UnicodeSegmentation::graphemes(string, true) {
         let mut list = Vec::with_capacity(2);
@@ -733,7 +642,7 @@ fn str_map_inner(environment: &mut Environment, func: &Lambda, string: &str) -> 
 fn builtin_str_map(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(func) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
@@ -751,16 +660,13 @@ fn builtin_str_map(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-map takes lambda and a string",
-    ))
+    Err(LispError::new("str-map takes lambda and a string"))
 }
 
 fn builtin_str_iter_start(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let string_outer = eval(environment, string)?;
@@ -779,25 +685,19 @@ fn builtin_str_iter_start(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-iter takes a string",
-    ))
+    Err(LispError::new("str-iter takes a string"))
 }
 
 fn builtin_str_iter_next(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let string = eval(environment, string)?;
             let mut string_d = string.get_mut();
             if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "str-iter-next: not an iterator",
-                ));
+                return Err(LispError::new("str-iter-next: not an iterator"));
             }
             if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
                 if let Some(ch) = ch_iter.next() {
@@ -823,25 +723,19 @@ fn builtin_str_iter_next(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-iter-next takes a string",
-    ))
+    Err(LispError::new("str-iter-next takes a string"))
 }
 
 fn builtin_str_iter_peek(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let string = eval(environment, string)?;
             let mut string_d = string.get_mut();
             if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "str-iter-peek: not an iterator",
-                ));
+                return Err(LispError::new("str-iter-peek: not an iterator"));
             }
             if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
                 if let Some(ch) = ch_iter.peek() {
@@ -854,16 +748,13 @@ fn builtin_str_iter_peek(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-iter-peek takes a string",
-    ))
+    Err(LispError::new("str-iter-peek takes a string"))
 }
 
 fn builtin_str_iter_empty(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let string = eval(environment, string)?;
@@ -880,16 +771,13 @@ fn builtin_str_iter_empty(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "str-iter-empty takes a string",
-    ))
+    Err(LispError::new("str-iter-empty takes a string"))
 }
 
 pub fn builtin_str_ignore_expand(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let save_ignore = environment.str_ignore_expand;
     environment.str_ignore_expand = true;
     let mut ret = Ok(Expression::make_nil());
@@ -906,7 +794,7 @@ pub fn builtin_str_ignore_expand(
 fn builtin_char_lower(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
@@ -916,8 +804,7 @@ fn builtin_char_lower(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "char-lower takes a single char and produces it's ascii lowercase char",
     ))
 }
@@ -925,7 +812,7 @@ fn builtin_char_lower(
 fn builtin_char_upper(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
@@ -935,8 +822,7 @@ fn builtin_char_upper(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "char-upper takes a single char and produces it's ascii upper char",
     ))
 }
@@ -944,7 +830,7 @@ fn builtin_char_upper(
 fn builtin_char_is_whitespace(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
@@ -956,8 +842,7 @@ fn builtin_char_is_whitespace(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "char-whitespace? takes a single char and returns true if it is whitespace",
     ))
 }

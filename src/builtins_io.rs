@@ -22,7 +22,7 @@ use crate::types::*;
 fn builtin_open(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(a) = args.next() {
         let a = eval(environment, a)?;
         if let ExpEnum::Atom(Atom::Symbol(sym)) = &a.get().data {
@@ -34,8 +34,7 @@ fn builtin_open(
             };
             if let Some(ret) = ret {
                 if args.next().is_some() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "open: if first form is a symbol then other forms not valid",
                     ));
                 }
@@ -45,8 +44,7 @@ fn builtin_open(
         let file_name = match &a.get().data {
             ExpEnum::Atom(Atom::String(name, _)) => name.to_string(),
             _ => {
-                return Err(io::Error::new(
-                io::ErrorKind::Other,
+                return Err(LispError::new(
                 "open: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
             ));
             }
@@ -96,17 +94,16 @@ fn builtin_open(
                     }
                     _ => {
                         let msg = format!("open: invalid directive, {}", sym);
-                        return Err(io::Error::new(io::ErrorKind::Other, msg));
+                        return Err(LispError::new(msg));
                     }
                 };
             } else {
                 let msg = format!("open: {} invalid", a);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
         }
         if is_read && is_write {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "open: only open file for read or write not both",
             ));
         }
@@ -119,7 +116,7 @@ fn builtin_open(
                 if error_nil {
                     return Ok(Expression::make_nil());
                 } else {
-                    return Err(err);
+                    return Err(err.into());
                 }
             }
         };
@@ -145,16 +142,13 @@ fn builtin_open(
             ))))
         };
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "open takes at least one form (a file name)",
-    ))
+    Err(LispError::new("open takes at least one form (a file name)"))
 }
 
 fn builtin_close(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
@@ -163,23 +157,17 @@ fn builtin_close(
                 file.replace(closed);
                 Ok(Expression::make_true())
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "close requires a file",
-                ))
+                Err(LispError::new("close requires a file"))
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "close takes one form (file to close)",
-    ))
+    Err(LispError::new("close takes one form (file to close)"))
 }
 
 fn builtin_flush(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
@@ -193,29 +181,20 @@ fn builtin_flush(
                         io::stdout().flush()?;
                         Ok(Expression::make_true())
                     }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "flush requires a writeable file",
-                    )),
+                    _ => Err(LispError::new("flush requires a writeable file")),
                 }
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "flush requires a file",
-                ))
+                Err(LispError::new("flush requires a file"))
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "flush takes one form (file to flush)",
-    ))
+    Err(LispError::new("flush takes one form (file to flush)"))
 }
 
 fn builtin_read_line(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
@@ -265,30 +244,23 @@ fn builtin_read_line(
                             ))))
                         }
                     }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    _ => Err(LispError::new(
                         "read-line requires a file opened for reading",
                     )),
                 }
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "read-line takes a file",
-                ))
+                Err(LispError::new("read-line takes a file"))
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "read-line takes one form (file)",
-    ))
+    Err(LispError::new("read-line takes one form (file)"))
 }
 
 fn builtin_read(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn read_stdin(environment: &mut Environment) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
+    fn read_stdin(environment: &mut Environment) -> Result<Expression, LispError> {
         let input = read_prompt(environment, "read> ", Some("read_history"), ":new")?;
         let input = unsafe { &*(input.as_ref() as *const str) };
         let chars = Box::new(
@@ -298,7 +270,7 @@ fn builtin_read(
         );
         match read_form(environment, chars) {
             Ok((ast, _)) => Ok(ast),
-            Err((err, _)) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+            Err((err, _)) => Err(LispError::new(err.reason)),
         }
     }
     if let Some(exp) = args.next() {
@@ -316,13 +288,12 @@ fn builtin_read(
                             }
                             Err((err, i_iter)) => {
                                 file_iter.replace(i_iter);
-                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
+                                return Err(LispError::new(err.reason));
                             }
                         }
                     }
                     FileState::Stdin => read_stdin(environment),
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    _ => Err(LispError::new(
                         "read: requires a character file opened for reading or string",
                     )),
                 },
@@ -345,15 +316,14 @@ fn builtin_read(
                                 Ok(ast)
                             }
                             Err((err, _)) => {
-                                return Err(io::Error::new(io::ErrorKind::Other, err.reason));
+                                return Err(LispError::new(err.reason));
                             }
                         }
                     } else {
                         panic!("read: WTF, no char iter but just made one!");
                     }
                 }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
+                _ => Err(LispError::new(
                     "read: requires a character file opened for reading or string",
                 )),
             };
@@ -366,11 +336,11 @@ fn builtin_read(
 fn builtin_read_all(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn do_read(environment: &mut Environment, input: &str) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
+    fn do_read(environment: &mut Environment, input: &str) -> Result<Expression, LispError> {
         match read(environment, &input, None, true) {
             Ok(ast) => Ok(ast),
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+            Err(err) => Err(LispError::new(err.reason)),
         }
     }
     if let Some(exp) = args.next() {
@@ -384,10 +354,7 @@ fn builtin_read_all(
                             let input: String = file_iter.collect();
                             do_read(environment, &input)
                         } else {
-                            Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "read-all: invalid read character iterator!",
-                            ))
+                            Err(LispError::new("read-all: invalid read character iterator!"))
                         }
                     }
                     FileState::ReadBinary(file) => {
@@ -400,14 +367,12 @@ fn builtin_read_all(
                             read_prompt(environment, "read-all> ", Some("read_history"), ":new")?;
                         do_read(environment, &input)
                     }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    _ => Err(LispError::new(
                         "read-all: requires a file opened for reading or string",
                     )),
                 },
                 ExpEnum::Atom(Atom::String(input, _char_iter)) => do_read(environment, input),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
+                _ => Err(LispError::new(
                     "read-all: requires a file opened for reading or string",
                 )),
             };
@@ -421,7 +386,7 @@ fn builtin_read_all(
 fn builtin_write_line(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(file) = args.next() {
         if let Some(line) = args.next() {
             if args.next().is_none() {
@@ -441,30 +406,25 @@ fn builtin_write_line(
                             eprintln!("{}", line.as_string(environment)?);
                             Ok(Expression::make_nil())
                         }
-                        _ => Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        _ => Err(LispError::new(
                             "write-line requires a file opened for writing",
                         )),
                     }
                 } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    Err(LispError::new(
                         "write-line requires a file opened for writing",
                     ))
                 };
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "write-line takes two forms (file and line)",
-    ))
+    Err(LispError::new("write-line takes two forms (file and line)"))
 }
 
 fn builtin_write_string(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(file) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
@@ -480,22 +440,19 @@ fn builtin_write_string(
                             print!("{}", string.as_string(environment)?);
                             Ok(Expression::make_nil())
                         }
-                        _ => Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        _ => Err(LispError::new(
                             "write-string requires a file opened for writing",
                         )),
                     }
                 } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    Err(LispError::new(
                         "write-string requires a file opened for writing",
                     ))
                 };
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "write-string takes two forms (file and string)",
     ))
 }

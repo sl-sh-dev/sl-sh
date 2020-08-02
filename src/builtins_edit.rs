@@ -75,7 +75,7 @@ pub fn read_prompt(
 fn builtin_read_prompt(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let (liner_id, prompt) = {
         let arg1 = param_eval(environment, args, "read-prompt")?;
         let arg_d = arg1.get();
@@ -97,8 +97,7 @@ fn builtin_read_prompt(
             };
             Some(&h_str[..])
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "read-prompt: history file (if provided) must be a string.",
             ));
         }
@@ -130,16 +129,12 @@ fn builtin_read_prompt(
                 }
                 _ => {
                     eprintln!("Error on input: {}", err);
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Unexpected input error!",
-                    ))
+                    Err(LispError::new("Unexpected input error!"))
                 }
             },
         };
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "read-prompt: requires a prompt string and option history file.",
     ))
 }

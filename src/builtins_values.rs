@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -12,7 +11,7 @@ use crate::types::*;
 fn builtin_values(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut vals: Vec<Handle> = Vec::new();
     for a in args {
         vals.push(eval(environment, a)?.handle_no_root());
@@ -23,7 +22,7 @@ fn builtin_values(
 fn builtin_values_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let idx = param_eval(environment, args, "values-nth")?;
     let vals = param_eval(environment, args, "values-nth")?;
     params_done(args, "values-nth")?;
@@ -31,13 +30,12 @@ fn builtin_values_nth(
         if let ExpEnum::Values(vals) = &vals.get().data {
             if *idx < 0 || *idx >= vals.len() as i64 {
                 let msg = format!("values-nth: index {} out of range {}", idx, vals.len());
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
             return Ok(vals[*idx as usize].clone().into());
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "values-nth: Requires an int and multi values object, see (doc 'values-nth) for usage.",
     ))
 }
@@ -45,7 +43,7 @@ fn builtin_values_nth(
 fn builtin_values_length(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let vals = param_eval(environment, args, "values-length")?;
     params_done(args, "values-length")?;
     if let ExpEnum::Values(vals) = &vals.get().data {
@@ -53,8 +51,7 @@ fn builtin_values_length(
             vals.len() as i64
         ))));
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "values-length: Requires a muti values object, see (doc 'values-length) for usage.",
     ))
 }

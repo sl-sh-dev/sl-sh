@@ -117,7 +117,7 @@ fn run_command(
     stdout: Stdio,
     stderr: Stdio,
     data_in: Option<Atom>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut command = command;
     let ncommand;
     if command.starts_with('~') {
@@ -267,12 +267,12 @@ fn run_command(
                     eprintln!("Error making shell {} foreground: {}", pid, err);
                 }
             }
-            Err(io::Error::new(io::ErrorKind::Other, err_msg))
+            Err(LispError::new(err_msg))
         }
     }
 }
 
-fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
+fn get_std_io(environment: &Environment, is_out: bool) -> Result<Stdio, LispError> {
     let key = if is_out { "*stdout*" } else { "*stderr*" };
     let out = get_expression(environment, key);
     match out {
@@ -296,16 +296,10 @@ fn get_std_io(environment: &Environment, is_out: bool) -> io::Result<Stdio> {
                         }
                     }
                     FileState::Write(f) => Ok(Stdio::from(f.get_ref().try_clone()?)),
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Can not write to a non-writable file.",
-                    )),
+                    _ => Err(LispError::new("Can not write to a non-writable file.")),
                 }
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Can not write to something not a file.",
-                ))
+                Err(LispError::new("Can not write to something not a file."))
             }
         }
         None => Ok(Stdio::inherit()),
@@ -316,7 +310,7 @@ fn get_output(
     environment: &Environment,
     out_status: &Option<IOState>,
     err_status: &Option<IOState>,
-) -> io::Result<(Stdio, Stdio)> {
+) -> Result<(Stdio, Stdio), LispError> {
     let out_res = match out_status {
         Some(IOState::Null) => Stdio::null(),
         Some(IOState::Inherit) => get_std_io(environment, true)?,
@@ -336,7 +330,7 @@ fn prep_string_arg(
     _environment: &mut Environment,
     s: &str,
     nargs: &mut Vec<String>,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     let s = match expand_tilde(&s) {
         Some(p) => p,
         None => s.to_string(), // XXX not great.
@@ -355,7 +349,7 @@ fn prep_string_arg(
                         }
                         Err(err) => {
                             let msg = format!("glob error on while iterating {}, {}", s, err);
-                            return Err(io::Error::new(io::ErrorKind::Other, msg));
+                            return Err(LispError::new(msg));
                         }
                     }
                 }
@@ -377,7 +371,7 @@ pub fn do_command(
     environment: &mut Environment,
     command: &str,
     parts: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut data = None;
     let foreground =
         !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
@@ -422,40 +416,34 @@ pub fn do_command(
                 }
             }
             ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (process is already done).",
                 ))
             }
             ExpEnum::Function(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (function).",
                 ))
             }
             ExpEnum::Vector(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (list).",
                 ))
             }
             ExpEnum::Values(_) => {
                 // Should never happen- gets resolved to first item above.
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (list).",
                 ));
             }
             ExpEnum::Pair(_, _) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (pair).",
                 ));
             }
             ExpEnum::Nil => Stdio::inherit(),
             ExpEnum::HashMap(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "Invalid expression state before command (hashmap).",
                 ))
             }
@@ -467,15 +455,13 @@ pub fn do_command(
                     unsafe { Stdio::from_raw_fd(file.get_ref().as_raw_fd()) }
                 }
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "Invalid expression state before command (not a readable file).",
                     ))
                 }
             },
             ExpEnum::LazyFn(_, _) => {
-                return Err(io::Error::new(
-                io::ErrorKind::Other,
+                return Err(LispError::new(
                 "Invalid expression state before command (lazyfn- this should be impossible...).",
             ));
             }

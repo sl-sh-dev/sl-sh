@@ -18,7 +18,7 @@ use crate::types::*;
 fn builtin_eval(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -26,7 +26,7 @@ fn builtin_eval(
             return match &arg_d.data {
                 ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
-                    Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                    Err(err) => Err(LispError::new(err.reason)),
                 },
                 _ => {
                     drop(arg_d);
@@ -35,28 +35,25 @@ fn builtin_eval(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "eval can only have one form",
-    ))
+    Err(LispError::new("eval can only have one form"))
 }
 
 fn builtin_fncall(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(command) = args.next() {
         let command = eval(environment, command)?;
         fn_call(environment, command, args)
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "fncall: empty call"))
+        Err(LispError::new("fncall: empty call"))
     }
 }
 
 fn builtin_apply(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut call_list: Vec<Handle> = Vec::new();
     let mut last_arg: Option<Expression> = None;
     for arg in args {
@@ -73,12 +70,7 @@ fn builtin_apply(
             ExpEnum::Vector(list) => Box::new(ListIter::new_list(&list)),
             ExpEnum::Pair(_, _) => last_evaled.iter(),
             ExpEnum::Nil => last_evaled.iter(),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "apply: last arg not a list",
-                ))
-            }
+            _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
             let b = ExpEnum::Pair(
@@ -95,14 +87,14 @@ fn builtin_apply(
         let command = eval(environment, command)?;
         fn_call(environment, command, &mut args)
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "apply: empty call"))
+        Err(LispError::new("apply: empty call"))
     }
 }
 
 fn builtin_unwind_protect(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(protected) = args.next() {
         let result = eval(environment, protected);
         for a in args {
@@ -122,23 +114,17 @@ fn builtin_unwind_protect(
 fn builtin_err(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                arg.as_string(environment)?,
-            ));
+            return Err(LispError::new(arg.as_string(environment)?));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "err can only have one form",
-    ))
+    Err(LispError::new("err can only have one form"))
 }
 
-pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expression> {
+pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression, LispError> {
     let core_lisp = include_bytes!("../lisp/core.lisp");
     let struct_lisp = include_bytes!("../lisp/struct.lisp");
     let iterator_lisp = include_bytes!("../lisp/iterator.lisp");
@@ -230,7 +216,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             "slshrc" => read_list_wrap(environment, &String::from_utf8_lossy(slshrc), file_name),
             _ => {
                 let msg = format!("{} not found", file_path);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
         }
     };
@@ -259,14 +245,14 @@ pub fn load(environment: &mut Environment, file_name: &str) -> io::Result<Expres
             environment.loose_symbols = old_loose_syms;
             Ok(res.unwrap_or_else(Expression::make_nil))
         }
-        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+        Err(err) => Err(LispError::new(err.reason)),
     }
 }
 
 fn builtin_load(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
@@ -274,16 +260,13 @@ fn builtin_load(
             return load(environment, &file_name);
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "load needs one argument",
-    ))
+    Err(LispError::new("load needs one argument"))
 }
 
 fn builtin_length(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
@@ -334,16 +317,13 @@ fn builtin_length(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "length takes one form",
-    ))
+    Err(LispError::new("length takes one form"))
 }
 
 fn builtin_if(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut next_arg = args.next();
     while let Some(arg) = next_arg {
         let cond = eval(environment, arg)?;
@@ -361,10 +341,7 @@ fn builtin_if(
             return Ok(cond);
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "if: requires expressions",
-    ))
+    Err(LispError::new("if: requires expressions"))
 }
 
 fn args_out(
@@ -373,7 +350,7 @@ fn args_out(
     add_newline: bool,
     pretty: bool,
     writer: &mut dyn Write,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
@@ -400,7 +377,7 @@ fn print_to_oe(
     pretty: bool,
     default_error: bool,
     key: &str,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     let out = get_expression(environment, key);
     match out {
         Some(out) => {
@@ -436,15 +413,14 @@ fn print_to_oe(
                         }
                     }
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        return Err(LispError::new(
                             "ERROR: Can not print to a non-writable file.",
                         ));
                     }
                 }
             } else {
                 let msg = format!("ERROR: {} is not a file!", key);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
         }
         None => {
@@ -466,7 +442,7 @@ fn print(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     match &environment.state.stdout_status {
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
@@ -480,7 +456,7 @@ pub fn eprint(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     match &environment.state.stderr_status {
         Some(IOState::Null) => { /* Nothing to do... */ }
         _ => {
@@ -493,35 +469,35 @@ pub fn eprint(
 fn builtin_print(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     print(environment, args, false)
 }
 
 fn builtin_println(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     print(environment, args, true)
 }
 
 fn builtin_eprint(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     eprint(environment, args, false)
 }
 
 fn builtin_eprintln(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     eprint(environment, args, true)
 }
 
 fn builtin_format(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut res = String::new();
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
@@ -535,7 +511,7 @@ fn builtin_format(
 pub fn builtin_progn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut ret: Option<Expression> = None;
     for arg in args {
         if let Some(ret) = ret {
@@ -549,14 +525,13 @@ pub fn builtin_progn(
 fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
-) -> io::Result<(&'static str, Option<String>, Expression)> {
+) -> Result<(&'static str, Option<String>, Expression), LispError> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key = match eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "first form (binding key) must evaluate to a symbol",
                     ));
                 }
@@ -576,8 +551,7 @@ fn proc_set_vars<'a>(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "def/set requires a key, optional docstring and value",
     ))
 }
@@ -587,7 +561,7 @@ fn val_to_reference(
     namespace: Option<&'static str>,
     doc_string: Option<String>,
     val_in: Expression,
-) -> io::Result<(Reference, Expression)> {
+) -> Result<(Reference, Expression), LispError> {
     let val_in_d = val_in.get();
     if let ExpEnum::Atom(Atom::Symbol(s)) = &val_in_d.data {
         if let Some(exp) = get_expression(environment, s) {
@@ -626,7 +600,7 @@ fn val_to_reference(
 fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     if let hash_map::Entry::Occupied(mut entry) = environment.dynamic_scope.entry(key) {
         // XXX TODO, eval val here?
@@ -644,8 +618,7 @@ fn builtin_set(
         scope.borrow_mut().data.insert(key, reference);
         Ok(val)
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(LispError::new(
             "set's first form must evaluate to an existing symbol",
         ))
     }
@@ -654,7 +627,7 @@ fn builtin_set(
 fn builtin_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
         if let Some(exp) = get_expression(environment, "*ns*") {
             match &exp.exp.get().data {
@@ -696,7 +669,7 @@ fn builtin_def(
             "def namespaced symbol {} not valid or namespace not a parent namespace",
             key
         );
-        Err(io::Error::new(io::ErrorKind::Other, msg))
+        Err(LispError::new(msg))
     } else {
         let ns = current_namespace(environment);
         let (reference, val) = val_to_reference(environment, ns, doc_string, val)?;
@@ -708,7 +681,7 @@ fn builtin_def(
 fn builtin_undef(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
@@ -718,13 +691,12 @@ fn builtin_undef(
                     Ok(rexp.exp)
                 } else {
                     let msg = format!("undef: symbol {} not defined in current scope (can only undef symbols in current scope).", k);
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                    Err(LispError::new(msg))
                 };
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "undef: can only have one expression (symbol)",
     ))
 }
@@ -732,15 +704,14 @@ fn builtin_undef(
 fn builtin_dyn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let (key, val) = if let Some(key) = args.next() {
         let key = eval(environment, key)?;
         if let Some(val) = args.next() {
             let key = match key.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "first form (binding key) must evaluate to a symbol",
                     ));
                 }
@@ -748,16 +719,10 @@ fn builtin_dyn(
             let val = eval(environment, val)?;
             (key, val)
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "dyn requires a key and value",
-            ));
+            return Err(LispError::new("dyn requires a key and value"));
         }
     } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "dyn requires a key and value",
-        ));
+        return Err(LispError::new("dyn requires a key and value"));
     };
     let old_val = if environment.dynamic_scope.contains_key(key) {
         Some(environment.dynamic_scope.remove(key).unwrap())
@@ -785,8 +750,7 @@ fn builtin_dyn(
             return res;
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "dyn requires three expressions (symbol, value, form to evaluate)",
     ))
 }
@@ -794,7 +758,7 @@ fn builtin_dyn(
 fn builtin_to_symbol(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
@@ -811,23 +775,19 @@ fn builtin_to_symbol(
                 ExpEnum::Atom(Atom::Float(f)) => Ok(Expression::alloc_data(ExpEnum::Atom(
                     Atom::Symbol(environment.interner.intern(&format!("{}", f))),
                 ))),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
+                _ => Err(LispError::new(
                     "to-symbol can only convert strings, symbols, ints and floats to a symbol",
                 )),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "to-symbol take one form",
-    ))
+    Err(LispError::new("to-symbol take one form"))
 }
 
 fn builtin_symbol_name(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
@@ -835,23 +795,19 @@ fn builtin_symbol_name(
                 ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
                     Atom::String((*s).into(), None),
                 ))),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
+                _ => Err(LispError::new(
                     "symbol-name can only convert a symbol to a string",
                 )),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "symbol-name take one form",
-    ))
+    Err(LispError::new("symbol-name take one form"))
 }
 
 fn builtin_fn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
@@ -867,22 +823,19 @@ fn builtin_fn(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "fn can only have two forms",
-    ))
+    Err(LispError::new("fn can only have two forms"))
 }
 
 fn builtin_quote(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             return Ok(arg);
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "quote takes one form"))
+    Err(LispError::new("quote takes one form"))
 }
 
 fn replace_commas(
@@ -890,7 +843,7 @@ fn replace_commas(
     list: &mut dyn Iterator<Item = Expression>,
     is_vector: bool,
     meta: Option<ExpMeta>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut output: Vec<Handle> = Vec::new();
     let mut comma_next = false;
     let mut amp_next = false;
@@ -930,10 +883,7 @@ fn replace_commas(
                     }
                     ExpEnum::Nil => {}
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            ",@ must be applied to a list",
-                        ));
+                        return Err(LispError::new(",@ must be applied to a list"));
                     }
                 }
                 amp_next = false;
@@ -960,10 +910,7 @@ fn replace_commas(
                 }
                 ExpEnum::Nil => {}
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        ",@ must be applied to a list",
-                    ));
+                    return Err(LispError::new(",@ must be applied to a list"));
                 }
             }
             amp_next = false;
@@ -981,7 +928,7 @@ fn replace_commas(
 fn builtin_bquote(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let ret = if let Some(arg) = args.next() {
         let meta = arg.meta();
         match &arg.get().data {
@@ -1002,22 +949,16 @@ fn builtin_bquote(
             _ => Ok(arg.clone()),
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "bquote takes one form",
-        ))
+        Err(LispError::new("bquote takes one form"))
     };
     if args.next().is_some() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "bquote takes one form",
-        ))
+        Err(LispError::new("bquote takes one form"))
     } else {
         ret
     }
 }
 
-/*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> io::Result<Expression> {
+/*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> Result<Expression, LispError> {
     let mut new_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
         new_args.push(a.clone());
@@ -1041,7 +982,7 @@ fn builtin_bquote(
 fn builtin_and(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut last_exp = None;
     for arg in args {
         let arg = eval(environment, arg)?;
@@ -1057,7 +998,7 @@ fn builtin_and(
 fn builtin_or(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     for arg in args {
         let arg = eval(environment, arg)?;
         if !arg.is_nil() {
@@ -1070,7 +1011,7 @@ fn builtin_or(
 fn builtin_not(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
@@ -1081,14 +1022,14 @@ fn builtin_not(
             };
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "not takes one form"))
+    Err(LispError::new("not takes one form"))
 }
 
 fn builtin_is_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn get_ret(environment: &mut Environment, name: &str) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
+    fn get_ret(environment: &mut Environment, name: &str) -> Result<Expression, LispError> {
         if is_expression(environment, name) {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
         } else {
@@ -1101,23 +1042,19 @@ fn builtin_is_def(
             return match &arg0.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
                 ExpEnum::Atom(Atom::String(s, _)) => get_ret(environment, &s),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
+                _ => Err(LispError::new(
                     "def? takes a symbol or string (will be treated as a symbol) to lookup",
                 )),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "def? takes one form (symbol or string)",
-    ))
+    Err(LispError::new("def? takes one form (symbol or string)"))
 }
 
 fn builtin_macro(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(params) = args.next() {
         if let Some(body) = args.next() {
             if args.next().is_none() {
@@ -1130,8 +1067,7 @@ fn builtin_macro(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "macro can only have two forms (bindings and body)",
     ))
 }
@@ -1140,7 +1076,7 @@ fn do_expansion(
     environment: &mut Environment,
     command: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Option<Expression>> {
+) -> Result<Option<Expression>, LispError> {
     if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
         if let Some(exp) = get_expression(environment, &command) {
             if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
@@ -1179,12 +1115,9 @@ fn expand_macro_internal(
     arg: &Expression,
     one: bool,
     depth: usize,
-) -> io::Result<Option<Expression>> {
+) -> Result<Option<Expression>, LispError> {
     if depth > 500 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Macro expand recursion to deep!",
-        ));
+        return Err(LispError::new("Macro expand recursion to deep!"));
     }
     let arg_d = arg.get();
     if let ExpEnum::Vector(list) = &arg_d.data {
@@ -1246,7 +1179,7 @@ pub(crate) fn expand_macro(
     arg: impl AsRef<Expression>,
     one: bool,
     depth: usize,
-) -> io::Result<Option<Expression>> {
+) -> Result<Option<Expression>, LispError> {
     let arg = arg.as_ref();
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
@@ -1255,7 +1188,10 @@ pub(crate) fn expand_macro(
     res
 }
 
-fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Result<Expression> {
+fn expand_macro_all(
+    environment: &mut Environment,
+    arg: &Expression,
+) -> Result<Expression, LispError> {
     if let Some(exp_outer) = expand_macro(environment, arg, false, 0)? {
         let exp_outer_c = exp_outer.clone();
         let exp_d = exp_outer_c.get();
@@ -1311,7 +1247,7 @@ fn expand_macro_all(environment: &mut Environment, arg: &Expression) -> io::Resu
 fn builtin_expand_macro(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             return if let Some(exp) = expand_macro(environment, &arg0, false, 0)? {
@@ -1321,8 +1257,7 @@ fn builtin_expand_macro(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "expand-macro can only have one form (list defining the macro call)",
     ))
 }
@@ -1330,7 +1265,7 @@ fn builtin_expand_macro(
 fn builtin_expand_macro1(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             return if let Some(exp) = expand_macro(environment, &arg0, true, 0)? {
@@ -1340,8 +1275,7 @@ fn builtin_expand_macro1(
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "expand-macro1 can only have one form (list defining the macro call)",
     ))
 }
@@ -1349,14 +1283,13 @@ fn builtin_expand_macro1(
 fn builtin_expand_macro_all(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             return expand_macro_all(environment, &arg0);
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "expand-macro-all can only have one form (list defining the macro call)",
     ))
 }
@@ -1364,7 +1297,7 @@ fn builtin_expand_macro_all(
 fn builtin_recur(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut arg_list: Vec<Handle> = Vec::new();
     let mut arg_num = 0;
     for a in args {
@@ -1379,12 +1312,9 @@ fn builtin_recur(
 fn builtin_gensym(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_some() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "gensym takes to arguments",
-        ))
+        Err(LispError::new("gensym takes to arguments"))
     } else {
         let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
@@ -1399,12 +1329,9 @@ fn builtin_gensym(
 fn builtin_version(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_some() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "version takes no arguments",
-        ))
+        Err(LispError::new("version takes no arguments"))
     } else {
         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
             VERSION_STRING.into(),
@@ -1416,7 +1343,7 @@ fn builtin_version(
 fn builtin_command(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let old_form = environment.form_type;
     environment.form_type = FormType::ExternalOnly;
     let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1434,7 +1361,7 @@ fn builtin_command(
 fn builtin_form(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let old_form = environment.form_type;
     environment.form_type = FormType::FormOnly;
     let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1452,7 +1379,7 @@ fn builtin_form(
 fn builtin_loose_symbols(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
     let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1470,35 +1397,29 @@ fn builtin_loose_symbols(
 fn builtin_error_stack_on(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         environment.stack_on_error = true;
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "error-stack-on takes no args",
-    ))
+    Err(LispError::new("error-stack-on takes no args"))
 }
 
 fn builtin_error_stack_off(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         environment.stack_on_error = false;
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "error-stack-on takes no args",
-    ))
+    Err(LispError::new("error-stack-on takes no args"))
 }
 
 fn builtin_get_error(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut ret = None;
     let old_err = environment.stack_on_error;
     environment.stack_on_error = false;
@@ -1566,7 +1487,11 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     //drop(p_iter);
 }
 
-fn make_doc(_environment: &mut Environment, exp: &Reference, key: &str) -> io::Result<Expression> {
+fn make_doc(
+    _environment: &mut Environment,
+    exp: &Reference,
+    key: &str,
+) -> Result<Expression, LispError> {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
@@ -1595,7 +1520,7 @@ fn get_doc(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     is_raw: bool,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = eval(environment, key)?;
@@ -1603,10 +1528,7 @@ fn get_doc(
             let key = match key_d {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "doc: first form must evaluate to a symbol",
-                    ));
+                    return Err(LispError::new("doc: first form must evaluate to a symbol"));
                 }
             };
             if key.contains("::") {
@@ -1662,45 +1584,40 @@ fn get_doc(
                     return make_doc(environment, &exp, &key);
                 }
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "doc: first form must evaluate to an existing symbol",
                 ));
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "doc: requires a single symbol to lookup.",
-    ))
+    Err(LispError::new("doc: requires a single symbol to lookup."))
 }
 
 fn builtin_doc(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     get_doc(environment, args, false)
 }
 
 fn builtin_doc_raw(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     get_doc(environment, args, true)
 }
 
 pub fn builtin_block(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
         let name_d = &name.get().data;
         let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name_d {
             n
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "block: Name must be a symbol (not evaluated).",
             ));
         };
@@ -1735,25 +1652,21 @@ pub fn builtin_block(
         }
         Ok(ret.unwrap_or_else(Expression::make_nil))
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "block: requires a name.",
-        ))
+        Err(LispError::new("block: requires a name."))
     }
 }
 
 pub fn builtin_return_from(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(name) = args.next() {
         let name = if let ExpEnum::Atom(Atom::Symbol(n)) = &name.get().data {
             Some(*n)
         } else if name.is_nil() {
             None
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "return-from: Name should be a symbol or nil (not evaluated).",
             ));
         };
@@ -1762,30 +1675,23 @@ pub fn builtin_return_from(
                 let ret = eval_nr(environment, exp)?;
                 environment.return_val = Some((name, ret));
             } else {
-                return Err(io::Error::new(
-        io::ErrorKind::Other,
+                return Err(LispError::new(
         "return-from: Requires a block name and optional expression, provided extra form(s).",
                 ));
             }
         }
         Ok(Expression::alloc_data(ExpEnum::Nil))
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "block: requires a name.",
-        ))
+        Err(LispError::new("block: requires a name."))
     }
 }
 
 pub fn builtin_intern_stats(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_some() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "intern-stats: takes no arguments.",
-        ))
+        Err(LispError::new("intern-stats: takes no arguments."))
     } else {
         println!(
             "allocated bytes: {}\nused bytes: {}\nsymbols interned: {}",
@@ -1800,7 +1706,7 @@ pub fn builtin_intern_stats(
 pub fn builtin_meta_line_no(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
@@ -1810,17 +1716,14 @@ pub fn builtin_meta_line_no(
             Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "meta-line-no: takes no arguments.",
-        ))
+        Err(LispError::new("meta-line-no: takes no arguments."))
     }
 }
 
 pub fn builtin_meta_column_no(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
@@ -1830,17 +1733,14 @@ pub fn builtin_meta_column_no(
             Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "meta-column-no: takes no arguments.",
-        ))
+        Err(LispError::new("meta-column-no: takes no arguments."))
     }
 }
 
 pub fn builtin_meta_file_name(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         if let Some(meta) = &environment.last_meta {
             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -1851,18 +1751,15 @@ pub fn builtin_meta_file_name(
             Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "meta-file-name: takes no arguments.",
-        ))
+        Err(LispError::new("meta-file-name: takes no arguments."))
     }
 }
 
 pub fn builtin_meta_add_tags(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
-    fn put_tag(exp: &Expression, tag: Expression) -> io::Result<()> {
+) -> Result<Expression, LispError> {
+    fn put_tag(exp: &Expression, tag: Expression) -> Result<(), LispError> {
         if let ExpEnum::Atom(Atom::Symbol(s)) = &tag.get().data {
             let mut exp_d = exp.get_mut();
             if let Some(tags) = &mut exp_d.meta_tags {
@@ -1873,10 +1770,7 @@ pub fn builtin_meta_add_tags(
                 exp_d.meta_tags = Some(tags);
             }
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "meta-add-tags: Found a non-symbol!",
-            ));
+            return Err(LispError::new("meta-add-tags: Found a non-symbol!"));
         }
         Ok(())
     }
@@ -1900,8 +1794,7 @@ pub fn builtin_meta_add_tags(
                     put_tag(&exp, arg.clone())?;
                 }
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "meta-add-tags: Takes an expression and symbols, vectors or lists of tags (symbols)",
                     ));
                 }
@@ -1914,7 +1807,7 @@ pub fn builtin_meta_add_tags(
 pub fn builtin_meta_tag_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         let exp = eval(environment, exp)?;
         if let Some(tag) = args.next() {
@@ -1929,14 +1822,12 @@ pub fn builtin_meta_tag_set(
                         }
                     }
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "meta-tag?: Takes an expression and a tag (symbol)",
                     ));
                 }
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "meta-tag?: Takes an expression and a tag check for..",
                 ));
             }
@@ -1947,10 +1838,9 @@ pub fn builtin_meta_tag_set(
 
 macro_rules! ensure_tonicity {
     ($check_fn:expr, $values:expr, $type:ty, $type_two:ty) => {{
-        let first = $values.first().ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "expected at least one value",
-        ))?;
+        let first = $values
+            .first()
+            .ok_or(LispError::new("expected at least one value"))?;
         let rest = &$values[1..];
         fn f(prev: $type, xs: &[$type_two]) -> bool {
             match xs.first() {
@@ -1986,7 +1876,7 @@ macro_rules! ensure_tonicity_all {
 pub fn builtin_equal(
     environment: &mut Environment,
     parts: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut args: Vec<Expression> = Vec::new();
     for a in parts {
         args.push(eval(environment, a)?);
@@ -2004,28 +1894,28 @@ pub fn builtin_equal(
 pub fn builtin_less_than(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     ensure_tonicity_all!(environment, args, |a, b| a < b)
 }
 
 pub fn builtin_greater_than(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     ensure_tonicity_all!(environment, args, |a, b| a > b)
 }
 
 pub fn builtin_less_than_equal(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     ensure_tonicity_all!(environment, args, |a, b| a <= b)
 }
 
 pub fn builtin_greater_than_equal(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     ensure_tonicity_all!(environment, args, |a, b| a >= b)
 }
 

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -10,7 +9,7 @@ use crate::types::*;
 fn builtin_ns_create(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if environment
         .current_scope
         .last()
@@ -19,8 +18,7 @@ fn builtin_ns_create(
         .name
         .is_none()
     {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(LispError::new(
             "ns-create can only create a namespace when not in a lexical scope",
         ));
     }
@@ -30,22 +28,20 @@ fn builtin_ns_create(
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "ns-create: namespace must be a symbol or string",
                     ))
                 }
             };
             let scope = match build_new_namespace(environment, key) {
                 Ok(scope) => scope,
-                Err(msg) => return Err(io::Error::new(io::ErrorKind::Other, msg)),
+                Err(msg) => return Err(LispError::new(msg)),
             };
             environment.current_scope.push(scope);
             return Ok(Expression::make_nil());
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "ns-create takes one arg, the name of the new namespace",
     ))
 }
@@ -53,7 +49,7 @@ fn builtin_ns_create(
 fn builtin_ns_enter(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if environment
         .current_scope
         .last()
@@ -62,8 +58,7 @@ fn builtin_ns_enter(
         .name
         .is_none()
     {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(LispError::new(
             "ns-enter can only enter a namespace when not in a lexical scope",
         ));
     }
@@ -73,8 +68,7 @@ fn builtin_ns_enter(
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "ns-enter: namespace must be a symbol or string",
                     ))
                 }
@@ -83,15 +77,14 @@ fn builtin_ns_enter(
                 Some(scope) => scope,
                 None => {
                     let msg = format!("Error, namespace {} does not exist!", key);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return Err(LispError::new(msg));
                 }
             };
             environment.current_scope.push(scope);
             return Ok(Expression::make_nil());
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "ns-enter takes one arg, the name of the namespace to enter",
     ))
 }
@@ -99,15 +92,14 @@ fn builtin_ns_enter(
 fn builtin_ns_exists(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "ns-exists?: namespace must be a symbol or string",
                     ))
                 }
@@ -119,8 +111,7 @@ fn builtin_ns_exists(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "ns-exists? takes one arg, the name of the namespace to test existance of",
     ))
 }
@@ -128,7 +119,7 @@ fn builtin_ns_exists(
 fn builtin_ns_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
@@ -139,28 +130,19 @@ fn builtin_ns_list(
         }
         return Ok(Expression::with_list(ns_list));
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "ns-list takes no args",
-    ))
+    Err(LispError::new("ns-list takes no args"))
 }
 
 fn builtin_ns_pop(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if args.next().is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "ns-pop: takes no parameters",
-        ));
+        return Err(LispError::new("ns-pop: takes no parameters"));
     }
 
     if environment.current_scope.len() < 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "ns-pop: no more namespaces",
-        ));
+        return Err(LispError::new("ns-pop: no more namespaces"));
     }
     if environment
         .current_scope
@@ -170,8 +152,7 @@ fn builtin_ns_pop(
         .name
         .is_none()
     {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(LispError::new(
             "ns-pop: can only be used when not in a lexical scope (current scope must be a namespace)",
         ));
     }
@@ -185,13 +166,10 @@ fn builtin_ns_pop(
             .is_none()
         {
             environment.current_scope.push(scope);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "ns-pop: outer scope must be a namespace",
-            ));
+            return Err(LispError::new("ns-pop: outer scope must be a namespace"));
         }
     } else {
-        return Err(io::Error::new(io::ErrorKind::Other, "ns-pop: NO SCOPES"));
+        return Err(LispError::new("ns-pop: NO SCOPES"));
     }
     Ok(Expression::make_nil())
 }
@@ -199,15 +177,14 @@ fn builtin_ns_pop(
 fn builtin_ns_symbols(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Atom(Atom::Symbol(sym)) => sym,
                 ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
                 _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "ns-symbols: namespace must be a symbol or string",
                     ))
                 }
@@ -222,17 +199,11 @@ fn builtin_ns_symbols(
                 }
                 return Ok(Expression::make_nil());
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "ns-symbols: namespace not found",
-                ));
+                return Err(LispError::new("ns-symbols: namespace not found"));
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "ns-symbols: requires one arg- a namespace",
-    ))
+    Err(LispError::new("ns-symbols: requires one arg- a namespace"))
 }
 
 pub fn add_namespace_builtins<S: BuildHasher>(

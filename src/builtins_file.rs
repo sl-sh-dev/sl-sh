@@ -40,7 +40,7 @@ fn cd_expand_all_dots(cd: String) -> String {
 fn builtin_cd(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => "/".to_string(),
@@ -79,10 +79,7 @@ fn builtin_cd(
                 new_arg
             }
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "cd can not have more then one form",
-            ));
+            return Err(LispError::new("cd can not have more then one form"));
         }
     } else {
         home
@@ -105,7 +102,7 @@ fn file_test(
     args: &mut dyn Iterator<Item = Expression>,
     test: fn(path: &Path) -> bool,
     fn_name: &str,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(p) = args.next() {
         if args.next().is_none() {
             let p = match &eval(environment, p)?.get().data {
@@ -117,7 +114,7 @@ fn file_test(
                 }
                 _ => {
                     let msg = format!("{} path must be a string", fn_name);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return Err(LispError::new(msg));
                 }
             };
             let path = Path::new(&p);
@@ -129,31 +126,31 @@ fn file_test(
         }
     }
     let msg = format!("{} takes a string (a path)", fn_name);
-    Err(io::Error::new(io::ErrorKind::Other, msg))
+    Err(LispError::new(msg))
 }
 
 fn builtin_path_exists(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     file_test(environment, args, |path| path.exists(), "fs-exists?")
 }
 
 fn builtin_is_file(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     file_test(environment, args, |path| path.is_file(), "fs-file?")
 }
 
 fn builtin_is_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io::Result<()> {
+fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Result<(), LispError> {
     let mut do_write = false;
     if let Some(data_in) = environment.data_in.clone() {
         match &data_in.get().data {
@@ -177,10 +174,7 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io:
             },
             ExpEnum::Nil => {}
             _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Invalid expression state before file.",
-                ));
+                return Err(LispError::new("Invalid expression state before file."));
             }
         }
     }
@@ -194,18 +188,15 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> io:
 fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if environment.in_pipe {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "pipe within pipe, not valid",
-        ));
+        return Err(LispError::new("pipe within pipe, not valid"));
     }
     let old_out_status = environment.state.stdout_status.clone();
     environment.in_pipe = true;
     let mut out = Expression::make_nil();
     environment.state.stdout_status = Some(IOState::Pipe);
-    let mut error: Option<io::Result<Expression>> = None;
+    let mut error: Option<Result<Expression, LispError>> = None;
     let mut i = 1; // Meant 1 here.
     let mut pipe = args.next();
     while let Some(p) = pipe {
@@ -253,8 +244,7 @@ fn builtin_pipe(
                     }
                     FileState::Read(_, _) => {
                         if i > 1 {
-                            error = Some(Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            error = Some(Err(LispError::new(
                                 "Not a valid place for a read file (must be at start of pipe).",
                             )));
                             break;
@@ -262,8 +252,7 @@ fn builtin_pipe(
                     }
                     FileState::ReadBinary(_) => {
                         if i > 1 {
-                            error = Some(Err(io::Error::new(
-                                io::ErrorKind::Other,
+                            error = Some(Err(LispError::new(
                                 "Not a valid place for a read file (must be at start of pipe).",
                             )));
                             break;
@@ -271,25 +260,19 @@ fn builtin_pipe(
                     }
                     FileState::Stdin => {
                         if i > 1 {
-                            error = Some(Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "Not a valid place for stdin.",
-                            )));
+                            error = Some(Err(LispError::new("Not a valid place for stdin.")));
                             break;
                         }
                     }
                     FileState::Closed => {
-                        error = Some(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Closed file not valid in pipe.",
-                        )));
+                        error = Some(Err(LispError::new("Closed file not valid in pipe.")));
                         break;
                     }
                 },
                 _ => {}
             },
             Err(err) => {
-                error = Some(Err(io::Error::new(err.kind(), err.to_string())));
+                error = Some(Err(LispError::new(err.to_string())));
                 break;
             }
         }
@@ -315,7 +298,7 @@ fn builtin_pipe(
 fn builtin_wait(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
@@ -337,23 +320,17 @@ fn builtin_wait(
                     )))),
                     None => Ok(Expression::make_nil()),
                 },
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "wait error: not a pid",
-                )),
+                _ => Err(LispError::new("wait error: not a pid")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "wait takes one form (a pid to wait on)",
-    ))
+    Err(LispError::new("wait takes one form (a pid to wait on)"))
 }
 
 fn builtin_pid(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
@@ -364,33 +341,22 @@ fn builtin_pid(
                 ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => Ok(
                     Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(pid)))),
                 ),
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "pid error: not a process",
-                )),
+                _ => Err(LispError::new("pid error: not a process")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "pid takes one form (a process)",
-    ))
+    Err(LispError::new("pid takes one form (a process)"))
 }
 
 fn builtin_glob(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut files = Vec::new();
     for pat in args {
         let pat = match &eval(environment, pat)?.get().data {
             ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "globs need to be strings",
-                ))
-            }
+            _ => return Err(LispError::new("globs need to be strings")),
         };
         let pat = match expand_tilde(&pat) {
             Some(p) => p,
@@ -410,14 +376,14 @@ fn builtin_glob(
                         }
                         Err(err) => {
                             let msg = format!("glob error on while iterating {}, {}", pat, err);
-                            return Err(io::Error::new(io::ErrorKind::Other, msg));
+                            return Err(LispError::new(msg));
                         }
                     }
                 }
             }
             Err(err) => {
                 let msg = format!("glob error on {}, {}", pat, err);
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
         }
     }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -11,7 +10,7 @@ use crate::types::*;
 fn builtin_join(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
             if args.next().is_none() {
@@ -24,13 +23,13 @@ fn builtin_join(
             }
         }
     }
-    Err(io::Error::new(io::ErrorKind::Other, "join needs two forms"))
+    Err(LispError::new("join needs two forms"))
 }
 
 fn builtin_list(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut head: Option<Expression> = None;
     let mut last = head.clone();
     for a in args {
@@ -63,48 +62,42 @@ fn builtin_list(
 fn builtin_car(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg.get().data {
                 ExpEnum::Pair(e1, _) => Ok(e1.into()),
                 ExpEnum::Nil => Ok(arg.clone()),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "car requires a pair")),
+                _ => Err(LispError::new("car requires a pair")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "car takes one form (pair)",
-    ))
+    Err(LispError::new("car takes one form (pair)"))
 }
 
 fn builtin_cdr(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg.get().data {
                 ExpEnum::Pair(_, e2) => Ok(e2.into()),
                 ExpEnum::Nil => Ok(arg.clone()),
-                _ => Err(io::Error::new(io::ErrorKind::Other, "cdr requires a pair")),
+                _ => Err(LispError::new("cdr requires a pair")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "cdr takes one form (pair)",
-    ))
+    Err(LispError::new("cdr takes one form (pair)"))
 }
 
 // Destructive
 fn builtin_xar(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
@@ -115,10 +108,7 @@ fn builtin_xar(
                     ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg.into(), e2.clone_no_root()),
                     ExpEnum::Nil => ExpEnum::Pair(arg.into(), Expression::make_nil_h()),
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "xar! requires a pair for it's first form",
-                        ));
+                        return Err(LispError::new("xar! requires a pair for it's first form"));
                     }
                 };
                 pair_d.data.replace(new_pair);
@@ -129,17 +119,14 @@ fn builtin_xar(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "xar! takes two forms (pair and expression)",
-    ))
+    Err(LispError::new("xar! takes two forms (pair and expression)"))
 }
 
 // Destructive
 fn builtin_xdr(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(pair) = args.next() {
         if let Some(arg) = args.next() {
             if args.next().is_none() {
@@ -150,10 +137,7 @@ fn builtin_xdr(
                     ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(e1.clone(), arg.into()),
                     ExpEnum::Nil => ExpEnum::Pair(Expression::make_nil_h(), arg.into()),
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "xdr! requires a pair for it's first form",
-                        ));
+                        return Err(LispError::new("xdr! requires a pair for it's first form"));
                     }
                 };
                 pair_d.data.replace(new_pair);
@@ -164,10 +148,7 @@ fn builtin_xdr(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "xdr! takes two forms (pair and expression)",
-    ))
+    Err(LispError::new("xdr! takes two forms (pair and expression)"))
 }
 
 pub fn add_pair_builtins<S: BuildHasher>(

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 use std::iter::FromIterator;
 
 use crate::environment::*;
@@ -12,7 +11,7 @@ use crate::types::*;
 fn builtin_vec(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut new_args: Vec<Handle> = Vec::new();
     for a in args {
         new_args.push(eval(environment, a)?.handle_no_root());
@@ -23,22 +22,19 @@ fn builtin_vec(
 fn builtin_make_vec(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let list = if let Some(cap) = args.next() {
         let cap = eval(environment, cap)?;
         let cap = if let ExpEnum::Atom(Atom::Int(c)) = cap.get().data {
             c
         } else {
             let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
-            return Err(io::Error::new(io::ErrorKind::Other, msg));
+            return Err(LispError::new(msg));
         };
         let mut list: Vec<Handle> = Vec::with_capacity(cap as usize);
         if let Some(item) = args.next() {
             if args.next().is_some() {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "make-vec takes at most two forms",
-                ));
+                return Err(LispError::new("make-vec takes at most two forms"));
             }
             let item = eval(environment, item)?;
             for _ in 0..cap {
@@ -56,35 +52,31 @@ fn builtin_make_vec(
 fn builtin_vec_slice(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let (vec, start, end, has_end) = if let Some(vec) = args.next() {
         if let Some(start) = args.next() {
             let start = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, start)?.get().data {
                 if i < 0 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "vec-slice second arg (start) must be a positive integer",
                     ));
                 }
                 i as usize
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(LispError::new(
                     "vec-slice second arg (start) must be an integer",
                 ));
             };
             if let Some(end) = args.next() {
                 let end = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, end)?.get().data {
                     if i < 0 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        return Err(LispError::new(
                             "vec-slice third arg (end) must be a positive integer",
                         ));
                     }
                     i as usize
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(LispError::new(
                         "vec-slice third arg (end) must be an integer",
                     ));
                 };
@@ -93,16 +85,10 @@ fn builtin_vec_slice(
                 (eval(environment, vec)?, start, 0, false)
             }
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "vec-slice takes two or three forms",
-            ));
+            return Err(LispError::new("vec-slice takes two or three forms"));
         }
     } else {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-slice takes two or three forms",
-        ));
+        return Err(LispError::new("vec-slice takes two or three forms"));
     };
     let vec_d = vec.get();
     match &vec_d.data {
@@ -117,7 +103,7 @@ fn builtin_vec_slice(
                         "vec-slice index out of range (start  {}, end {}, length {})",
                         start, end, len
                     );
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return Err(LispError::new(msg));
                 }
                 let slice = if has_end {
                     Vec::from_iter(list[start..end].iter().cloned())
@@ -129,17 +115,14 @@ fn builtin_vec_slice(
                 Ok(Expression::make_nil())
             }
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "vec-slice operates on a vector",
-        )),
+        _ => Err(LispError::new("vec-slice operates on a vector")),
     }
 }
 
 fn builtin_vec_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(idx) = args.next() {
         if let Some(list) = args.next() {
             if args.next().is_none() {
@@ -147,7 +130,7 @@ fn builtin_vec_nth(
                     if let ExpEnum::Vector(list) = &eval(environment, list)?.get().data {
                         if *idx < 0 || *idx >= list.len() as i64 {
                             let msg = format!("vec-nth index {} out of range {}", idx, list.len());
-                            return Err(io::Error::new(io::ErrorKind::Other, msg));
+                            return Err(LispError::new(msg));
                         }
                         return Ok(list[*idx as usize].clone().into());
                     }
@@ -155,17 +138,14 @@ fn builtin_vec_nth(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "vec-nth takes two forms (int and vector)",
-    ))
+    Err(LispError::new("vec-nth takes two forms (int and vector)"))
 }
 
 // Destructive
 fn builtin_vec_setnth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
             if let Some(list) = args.next() {
@@ -174,35 +154,25 @@ fn builtin_vec_setnth(
                         if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, idx)?.get().data {
                             i
                         } else {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "vec-setnth! first form must be an int",
-                            ));
+                            return Err(LispError::new("vec-setnth! first form must be an int"));
                         };
                     let new_element = eval(environment, new_element)?;
                     let vec = eval(environment, list)?;
                     return match &mut vec.get_mut().data {
                         ExpEnum::Vector(list) => {
                             if idx < 0 || idx >= list.len() as i64 {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    "vec-setnth! index out of range",
-                                ));
+                                return Err(LispError::new("vec-setnth! index out of range"));
                             }
                             list[idx as usize] = new_element.handle_no_root();
                             Ok(vec.clone())
                         }
-                        _ => Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "vec-setnth! third form must be a vector",
-                        )),
+                        _ => Err(LispError::new("vec-setnth! third form must be a vector")),
                     };
                 }
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "vec-setnth! takes three forms (index, new element and vector)",
     ))
 }
@@ -211,7 +181,7 @@ fn builtin_vec_setnth(
 fn builtin_vec_push(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(list) = args.next() {
         if let Some(new_item) = args.next() {
             if args.next().is_none() {
@@ -222,16 +192,12 @@ fn builtin_vec_push(
                         list.push(new_item.handle_no_root());
                         Ok(vec.clone())
                     }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "vec-push!'s first form must be a vector",
-                    )),
+                    _ => Err(LispError::new("vec-push!'s first form must be a vector")),
                 };
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "vec-push! takes two forms (vector and form)",
     ))
 }
@@ -240,7 +206,7 @@ fn builtin_vec_push(
 fn builtin_vec_pop(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
             return match &mut eval(environment, list)?.get_mut().data {
@@ -251,23 +217,17 @@ fn builtin_vec_pop(
                         Ok(Expression::make_nil())
                     }
                 }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "vec-pop!'s first form must be a vector",
-                )),
+                _ => Err(LispError::new("vec-pop!'s first form must be a vector")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "vec-pop! takes a vector",
-    ))
+    Err(LispError::new("vec-pop! takes a vector"))
 }
 
 fn builtin_vec_is_empty(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
             let list = eval(environment, list)?;
@@ -279,24 +239,18 @@ fn builtin_vec_is_empty(
                         Ok(Expression::make_nil())
                     }
                 }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "vec-empty?'s first form must be a vector",
-                )),
+                _ => Err(LispError::new("vec-empty?'s first form must be a vector")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "vec-empty? takes a vector",
-    ))
+    Err(LispError::new("vec-empty? takes a vector"))
 }
 
 // Destructive
 fn builtin_vec_vclear(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(list) = args.next() {
         if args.next().is_none() {
             let list = eval(environment, list)?;
@@ -305,24 +259,18 @@ fn builtin_vec_vclear(
                     list.clear();
                     Ok(Expression::make_nil())
                 }
-                _ => Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "vec-clear!'s first form must be a vector",
-                )),
+                _ => Err(LispError::new("vec-clear!'s first form must be a vector")),
             };
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        "vec-clear! takes a vector",
-    ))
+    Err(LispError::new("vec-clear! takes a vector"))
 }
 
 // Destructive
 fn builtin_vec_remove_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(idx) = args.next() {
         if let Some(list) = args.next() {
             if args.next().is_none() {
@@ -331,32 +279,24 @@ fn builtin_vec_remove_nth(
                 let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
                     i
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "vec-remove-nth! first form must be an int",
-                    ));
+                    return Err(LispError::new("vec-remove-nth! first form must be an int"));
                 };
                 return match &mut list.get_mut().data {
                     ExpEnum::Vector(inner_list) => {
                         if idx < 0 || idx >= inner_list.len() as i64 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "vec-remove-nth! index out of range",
-                            ));
+                            return Err(LispError::new("vec-remove-nth! index out of range"));
                         }
                         inner_list.remove(idx as usize);
                         Ok(list.clone())
                     }
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    _ => Err(LispError::new(
                         "vec-remove-nth! second form must be a vector",
                     )),
                 };
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "vec-remove-nth! takes two forms (index and vector)",
     ))
 }
@@ -365,7 +305,7 @@ fn builtin_vec_remove_nth(
 fn builtin_vec_insert_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(idx) = args.next() {
         if let Some(new_element) = args.next() {
             if let Some(list) = args.next() {
@@ -376,24 +316,17 @@ fn builtin_vec_insert_nth(
                     let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
                         i
                     } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "vec-insert-nth! first form must be an int",
-                        ));
+                        return Err(LispError::new("vec-insert-nth! first form must be an int"));
                     };
                     return match &mut list.get_mut().data {
                         ExpEnum::Vector(inner_list) => {
                             if idx < 0 || idx > inner_list.len() as i64 {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    "vec-insert-nth! index out of range",
-                                ));
+                                return Err(LispError::new("vec-insert-nth! index out of range"));
                             }
                             inner_list.insert(idx as usize, new_element.handle_no_root());
                             Ok(list.clone())
                         }
-                        _ => Err(io::Error::new(
-                            io::ErrorKind::Other,
+                        _ => Err(LispError::new(
                             "vec-insert-nth! third form must be a vector",
                         )),
                     };
@@ -401,8 +334,7 @@ fn builtin_vec_insert_nth(
             }
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(LispError::new(
         "vec-insert-nth! takes three forms (index, new element and vector)",
     ))
 }

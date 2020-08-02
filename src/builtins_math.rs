@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::io;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -11,7 +10,7 @@ use crate::types::*;
 fn make_args(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Vec<Expression>> {
+) -> Result<Vec<Expression>, LispError> {
     let mut list: Vec<Expression> = Vec::new();
     for arg in args {
         list.push(eval(environment, arg)?);
@@ -29,7 +28,7 @@ pub fn add_math_builtins<S: BuildHasher>(
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
-             -> io::Result<Expression> {
+             -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
@@ -61,7 +60,7 @@ Example:
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
-             -> io::Result<Expression> {
+             -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
@@ -100,7 +99,7 @@ Example:
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
-             -> io::Result<Expression> {
+             -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
@@ -109,10 +108,7 @@ Example:
                             first - sum_of_rest,
                         ))))
                     } else {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expected at least one number",
-                        ))
+                        Err(LispError::new("expected at least one number"))
                     }
                 } else {
                     let floats = parse_list_of_floats(environment, &mut args)?;
@@ -122,10 +118,7 @@ Example:
                             first - sum_of_rest,
                         ))))
                     } else {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expected at least one number",
-                        ))
+                        Err(LispError::new("expected at least one number"))
                     }
                 }
             },
@@ -152,36 +145,30 @@ Example:
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
-             -> io::Result<Expression> {
+             -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if ints[1..].iter().any(|&x| x == 0) {
-                        Err(io::Error::new(io::ErrorKind::Other, "can not divide by 0"))
+                        Err(LispError::new("can not divide by 0"))
                     } else if ints.len() > 1 {
                         let div: i64 = ints[1..]
                             .iter()
                             .fold(*ints.first().unwrap(), |div, a| div / a);
                         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(div))))
                     } else {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expected at least two numbers",
-                        ))
+                        Err(LispError::new("expected at least two numbers"))
                     }
                 } else {
                     let floats = parse_list_of_floats(environment, &mut args)?;
                     if floats[1..].iter().any(|&x| x == 0.0) {
-                        Err(io::Error::new(io::ErrorKind::Other, "can not divide by 0"))
+                        Err(LispError::new("can not divide by 0"))
                     } else if floats.len() > 1 {
                         let div: f64 = floats[1..]
                             .iter()
                             .fold(*floats.first().unwrap(), |div, a| div / a);
                         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(div))))
                     } else {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expected at least two numbers",
-                        ))
+                        Err(LispError::new("expected at least two numbers"))
                     }
                 }
             },
@@ -210,19 +197,16 @@ Example:
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
-             -> io::Result<Expression> {
+             -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 let ints = parse_list_of_ints(environment, &mut args)?;
                 if ints.len() != 2 {
-                    Err(io::Error::new(io::ErrorKind::Other, "expected two ints"))
+                    Err(LispError::new("expected two ints"))
                 } else {
                     let arg1 = ints.get(0).unwrap();
                     let arg2 = ints.get(1).unwrap();
                     if *arg2 == 0 {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "expected two ints, second can not be 0",
-                        ))
+                        Err(LispError::new("expected two ints, second can not be 0"))
                     } else {
                         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
                             arg1 % arg2,

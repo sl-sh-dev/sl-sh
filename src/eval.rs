@@ -18,12 +18,12 @@ pub fn call_lambda(
     lambda_exp: Expression,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let lambda_d = lambda_exp.get();
     let lambda = if let ExpEnum::Atom(Atom::Lambda(l)) = &lambda_d.data {
         l
     } else {
-        return Err(io::Error::new(io::ErrorKind::Other, "Lambda required."));
+        return Err(LispError::new("Lambda required."));
     };
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
@@ -50,10 +50,7 @@ pub fn call_lambda(
     while looping {
         if environment.sig_int.load(Ordering::Relaxed) {
             environment.sig_int.store(false, Ordering::Relaxed);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Lambda interupted by SIGINT.",
-            ));
+            return Err(LispError::new("Lambda interupted by SIGINT."));
         }
         let last_eval = match eval_nr(environment, &body) {
             Ok(e) => e,
@@ -69,10 +66,7 @@ pub fn call_lambda(
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
                     environment.current_scope.pop();
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Called recur in a non-tail position.",
-                    ));
+                    return Err(LispError::new("Called recur in a non-tail position."));
                 }
                 let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
@@ -119,7 +113,7 @@ fn exec_macro(
     environment: &mut Environment,
     sh_macro: &Macro,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let body: Expression = sh_macro.body.clone().into();
@@ -162,7 +156,7 @@ pub fn fn_call(
     environment: &mut Environment,
     command: Expression,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     match command.get().data.clone() {
         ExpEnum::Atom(Atom::Symbol(command)) => {
             if let Some(exp) = get_expression(environment, command) {
@@ -180,7 +174,7 @@ pub fn fn_call(
                             "Symbol {} is not callable (or is macro or special form).",
                             command
                         );
-                        Err(io::Error::new(io::ErrorKind::Other, msg))
+                        Err(LispError::new(msg))
                     }
                 }
             } else {
@@ -188,7 +182,7 @@ pub fn fn_call(
                     "Symbol {} is not callable (or is macro or special form).",
                     command
                 );
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                Err(LispError::new(msg))
             }
         }
         ExpEnum::Atom(Atom::Lambda(_)) => {
@@ -206,7 +200,7 @@ pub fn fn_call(
                 command.make_string(environment)?,
                 command.display_type()
             );
-            Err(io::Error::new(io::ErrorKind::Other, msg))
+            Err(LispError::new(msg))
         }
     }
 }
@@ -215,7 +209,7 @@ fn make_lazy(
     environment: &mut Environment,
     lambda: Expression,
     args: &mut dyn Iterator<Item = Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut parms: Vec<Handle> = Vec::new();
     for p in args {
         parms.push(eval(environment, p)?.into());
@@ -231,7 +225,10 @@ pub fn box_slice_it<'a>(v: &'a [Handle]) -> Box<dyn Iterator<Item = Expression> 
     Box::new(ListIter::new_slice(v))
 }
 
-fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::Result<Expression> {
+fn fn_eval_lazy(
+    environment: &mut Environment,
+    expression: &Expression,
+) -> Result<Expression, LispError> {
     let exp_d = expression.get();
     let e2: Expression;
     let e2_d;
@@ -240,7 +237,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             let (command, parts) = match parts.split_first() {
                 Some((c, p)) => (c, p),
                 None => {
-                    return Err(io::Error::new(io::ErrorKind::Other, "No valid command."));
+                    return Err(LispError::new("No valid command."));
                 }
             };
             let ib = box_slice_it(parts);
@@ -258,12 +255,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
             (e1.clone(), e2_iter)
         }
         ExpEnum::Nil => return Ok(Expression::alloc_data(ExpEnum::Nil)),
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Not a callable expression.",
-            ))
-        }
+        _ => return Err(LispError::new("Not a callable expression.")),
     };
     let command: Expression = command.into();
     let command = command.resolve(environment)?;
@@ -302,7 +294,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                                 do_command(environment, &command, &mut parts)
                             } else {
                                 let msg = format!("Not a valid form {}, not found.", command);
-                                Err(io::Error::new(io::ErrorKind::Other, msg))
+                                Err(LispError::new(msg))
                             }
                         } else {
                             do_command(environment, command, &mut parts)
@@ -317,14 +309,14 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                         do_command(environment, &command, &mut parts)
                     } else {
                         let msg = format!("Not a valid form {}, not found.", command);
-                        Err(io::Error::new(io::ErrorKind::Other, msg))
+                        Err(LispError::new(msg))
                     }
                 } else {
                     do_command(environment, command, &mut parts)
                 }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                Err(LispError::new(msg))
             }
         }
         ExpEnum::Vector(_) => {
@@ -352,7 +344,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                         com_exp,
                         com_exp.display_type()
                     );
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                    Err(LispError::new(msg))
                 }
             }
         }
@@ -379,7 +371,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                         com_exp,
                         com_exp.display_type()
                     );
-                    Err(io::Error::new(io::ErrorKind::Other, msg))
+                    Err(LispError::new(msg))
                 }
             }
         }
@@ -401,7 +393,7 @@ fn fn_eval_lazy(environment: &mut Environment, expression: &Expression) -> io::R
                 command.make_string(environment)?,
                 command.display_type()
             );
-            Err(io::Error::new(io::ErrorKind::Other, msg))
+            Err(LispError::new(msg))
         }
     }
 }
@@ -410,7 +402,7 @@ fn str_process(
     environment: &mut Environment,
     string: &str,
     expand: bool,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if expand && !environment.str_ignore_expand && string.contains('$') {
         let mut new_string = String::new();
         let mut last_ch = '\0';
@@ -467,7 +459,7 @@ fn str_process(
                             environment.state.pipe_pgid = pipe_pgid;
                             environment.loose_symbols = false;
                         }
-                        Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.reason)),
+                        Err(err) => return Err(LispError::new(err.reason)),
                     }
                 } else if ch == '(' && last_ch != '\\' {
                     command_depth += 1;
@@ -490,8 +482,7 @@ fn str_process(
             }
         }
         if in_command {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(LispError::new(
                 "Malformed command embedded in string (missing ')'?).",
             ));
         }
@@ -522,14 +513,11 @@ fn str_process(
 fn internal_eval(
     environment: &mut Environment,
     expression_in: &Expression,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let mut expression = expression_in.clone_root();
     if environment.sig_int.load(Ordering::Relaxed) {
         environment.sig_int.store(false, Ordering::Relaxed);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Script interupted by SIGINT.",
-        ));
+        return Err(LispError::new("Script interupted by SIGINT."));
     }
     // exit was called so just return nil to unwind.
     if environment.exit_code.is_some() {
@@ -538,10 +526,7 @@ fn internal_eval(
     let in_recur = environment.state.recur_num_args.is_some();
     if in_recur {
         environment.state.recur_num_args = None;
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Called recur in a non-tail position.",
-        ));
+        return Err(LispError::new("Called recur in a non-tail position."));
     }
     // If we have a macro expand it and replace the expression with the expansion.
     if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
@@ -620,7 +605,7 @@ fn internal_eval(
                 str_process(environment, s, false)
             } else {
                 let msg = format!("Symbol {} not found.", s);
-                Err(io::Error::new(io::ErrorKind::Other, msg))
+                Err(LispError::new(msg))
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
@@ -646,22 +631,19 @@ fn internal_eval(
 pub fn eval_nr(
     environment: &mut Environment,
     expression: impl AsRef<Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let expression = expression.as_ref();
     if environment.return_val.is_some() {
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
     if environment.state.eval_level > 500 {
-        return Err(io::Error::new(io::ErrorKind::Other, "Eval calls to deep."));
+        return Err(LispError::new("Eval calls to deep."));
     }
     environment.state.eval_level += 1;
     let tres = internal_eval(environment, expression);
     let result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Return without matching block.",
-        ))
+        Err(LispError::new("Return without matching block."))
     } else {
         tres
     };
@@ -697,12 +679,12 @@ pub fn eval_nr(
 pub fn eval(
     environment: &mut Environment,
     expression: impl AsRef<Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let expression = expression.as_ref();
     eval_nr(environment, expression)?.resolve(environment)
 }
 
-pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> io::Result<Expression> {
+pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> Result<Expression, LispError> {
     let data = Expression::alloc_data(data);
     eval(environment, data)
 }
@@ -710,7 +692,7 @@ pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> io::Result<Exp
 pub fn eval_no_values(
     environment: &mut Environment,
     expression: impl AsRef<Expression>,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     let expression = expression.as_ref();
     let exp = eval(environment, expression)?;
     let exp_d = exp.get();

@@ -1,5 +1,4 @@
 use std::env;
-use std::io;
 use std::iter::FromIterator;
 
 use crate::environment::*;
@@ -11,7 +10,7 @@ pub fn param_eval(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     form: &str,
-) -> io::Result<Expression> {
+) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         eval(environment, arg)
     } else {
@@ -19,11 +18,14 @@ pub fn param_eval(
             "{}: Missing required argument, see (doc '{}) for usage.",
             form, form
         );
-        Err(io::Error::new(io::ErrorKind::Other, msg))
+        Err(LispError::new(msg))
     }
 }
 
-pub fn params_done(args: &mut dyn Iterator<Item = Expression>, form: &str) -> io::Result<()> {
+pub fn params_done(
+    args: &mut dyn Iterator<Item = Expression>,
+    form: &str,
+) -> Result<(), LispError> {
     if args.next().is_none() {
         Ok(())
     } else {
@@ -31,7 +33,7 @@ pub fn params_done(args: &mut dyn Iterator<Item = Expression>, form: &str) -> io
             "{}: To many arguments, see (doc '{}) for usage.",
             form, form
         );
-        Err(io::Error::new(io::ErrorKind::Other, msg))
+        Err(LispError::new(msg))
     }
 }
 
@@ -53,7 +55,7 @@ pub fn list_to_args(
     environment: &mut Environment,
     parts: &mut [Expression],
     do_eval: bool,
-) -> io::Result<Vec<Expression>> {
+) -> Result<Vec<Expression>, LispError> {
     if do_eval {
         let mut args: Vec<Expression> = Vec::with_capacity(parts.len());
         for a in parts {
@@ -69,7 +71,7 @@ pub fn list_to_args(
 pub fn parse_list_of_ints(
     environment: &mut Environment,
     args: &mut [Expression],
-) -> io::Result<Vec<i64>> {
+) -> Result<Vec<i64>, LispError> {
     let mut list: Vec<i64> = Vec::with_capacity(args.len());
     for arg in args {
         list.push(arg.make_int(environment)?);
@@ -80,7 +82,7 @@ pub fn parse_list_of_ints(
 pub fn parse_list_of_floats(
     environment: &mut Environment,
     args: &mut [Expression],
-) -> io::Result<Vec<f64>> {
+) -> Result<Vec<f64>, LispError> {
     let mut list: Vec<f64> = Vec::with_capacity(args.len());
     for arg in args {
         list.push(arg.make_float(environment)?);
@@ -91,7 +93,7 @@ pub fn parse_list_of_floats(
 pub fn parse_list_of_strings(
     environment: &mut Environment,
     args: &mut [Expression],
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>, LispError> {
     let mut list: Vec<String> = Vec::with_capacity(args.len());
     for arg in args {
         list.push(arg.make_string(environment)?);
@@ -157,7 +159,7 @@ fn set_arg(
     key: &'static str,
     var: Expression,
     do_eval: bool,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     let var = var.resolve(environment)?;
     let v2 = if do_eval {
         let var_d = var.get();
@@ -211,7 +213,7 @@ fn setup_args_final(
     min_params: usize,
     use_rest: bool,
     do_eval: bool,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     if use_rest {
         let rest_name = var_names.pop().unwrap();
         let mut names_iter = var_names.iter();
@@ -227,7 +229,7 @@ fn setup_args_final(
                     "wrong number of parameters, expected {} got {}",
                     min_params, params
                 );
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
             set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
@@ -267,7 +269,7 @@ fn setup_args_final(
                     min_params,
                     (params + vars.count())
                 );
-                return Err(io::Error::new(io::ErrorKind::Other, msg));
+                return Err(LispError::new(msg));
             }
             set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
             params += 1;
@@ -282,7 +284,7 @@ pub fn setup_args(
     params: impl AsRef<Expression>,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
-) -> io::Result<()> {
+) -> Result<(), LispError> {
     let params = params.as_ref();
     let p_d = params.get();
     let p_iter = if let ExpEnum::Vector(list) = &p_d.data {
@@ -299,19 +301,13 @@ pub fn setup_args(
             match *s {
                 "&rest" => {
                     if use_rest {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "&rest can only appear once",
-                        ));
+                        return Err(LispError::new("&rest can only appear once"));
                     }
                     use_rest = true;
                 }
                 _ => {
                     if post_rest_cnt > 1 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "&rest can only have one symbol after",
-                        ));
+                        return Err(LispError::new("&rest can only have one symbol after"));
                     }
                     if use_rest {
                         post_rest_cnt += 1;
@@ -327,14 +323,11 @@ pub fn setup_args(
                 arg,
                 arg.display_type()
             );
-            return Err(io::Error::new(io::ErrorKind::Other, msg));
+            return Err(LispError::new(msg));
         }
     }
     if use_rest && post_rest_cnt != 1 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "&rest must have one symbol after",
-        ));
+        return Err(LispError::new("&rest must have one symbol after"));
     }
     setup_args_final(
         environment,
