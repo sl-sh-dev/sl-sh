@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -12,8 +14,16 @@ use crate::gc::Handle;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
-pub struct ParseError {
+pub struct ReadError {
     pub reason: String,
+}
+
+impl Error for ReadError {}
+
+impl fmt::Display for ReadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.reason)
+    }
 }
 
 enum ListType {
@@ -69,7 +79,7 @@ fn escape_to_char(escape_code: &[Cow<'static, str>]) -> char {
     ch_n as char
 }
 
-fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ParseError> {
+fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ReadError> {
     match stack.pop() {
         Some(v) => match stack.pop() {
             Some(mut v2) => {
@@ -101,7 +111,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Pa
             }
         },
         None => {
-            return Err(ParseError {
+            return Err(ReadError {
                 reason: "Unexpected `)`".to_string(),
             });
         }
@@ -172,7 +182,7 @@ fn do_char(
     symbol: &str,
     line: usize,
     column: usize,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     match &symbol.to_lowercase()[..] {
         "space" => {
             return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
@@ -214,7 +224,7 @@ fn do_char(
                 "Not a valid char [{}]: line {}, col: {}",
                 symbol, line, column
             );
-            return Err(ParseError { reason });
+            return Err(ReadError { reason });
         }
         Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
             environment.interner.intern(ch).into(),
@@ -224,7 +234,7 @@ fn do_char(
             "Not a valid char [{}]: line {}, col: {}",
             symbol, line, column
         );
-        Err(ParseError { reason })
+        Err(ReadError { reason })
     }
 }
 
@@ -232,7 +242,7 @@ fn read_string(
     chars: &mut CharIter,
     symbol: &mut String,
     reader_state: &mut ReaderState,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     symbol.clear();
     let mut escape_code: Vec<Cow<'static, str>> = Vec::with_capacity(2);
     let mut in_escape_code = false;
@@ -323,7 +333,7 @@ fn push_stack(
     expression: Expression,
     line: usize,
     column: usize,
-) -> Result<(), ParseError> {
+) -> Result<(), ReadError> {
     match stack.pop() {
         Some(mut v) => {
             v.vec.push(expression.handle_no_root());
@@ -335,7 +345,7 @@ fn push_stack(
                 "Found symbol without containing list: line {}, col: {}",
                 line, column
             );
-            Err(ParseError { reason })
+            Err(ReadError { reason })
         }
     }
 }
@@ -404,7 +414,7 @@ fn call_reader_macro(
     stream: Expression,
     ch: &str,
     end_ch: Option<&'static str>,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     if let Some(exp) = get_expression(environment, name) {
         let exp = match &exp.exp.get().data {
             ExpEnum::Atom(Atom::Lambda(_)) => {
@@ -435,7 +445,7 @@ fn call_reader_macro(
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
-                return Err(ParseError { reason });
+                return Err(ReadError { reason });
             }
         };
         let old_end_ch = environment.reader_state.as_ref().unwrap().end_ch;
@@ -456,7 +466,7 @@ fn call_reader_macro(
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
-                Err(ParseError { reason })
+                Err(ReadError { reason })
             }
         };
         environment.reader_state.as_mut().unwrap().end_ch = old_end_ch;
@@ -474,7 +484,7 @@ fn call_reader_macro(
             environment.reader_state.as_ref().unwrap().line,
             environment.reader_state.as_ref().unwrap().column
         );
-        Err(ParseError { reason })
+        Err(ReadError { reason })
     }
 }
 
@@ -485,7 +495,7 @@ fn prep_reader_macro(
     name: &str,
     ch: &str,
     end_ch: Option<&'static str>,
-) -> Result<CharIter, (ParseError, CharIter)> {
+) -> Result<CharIter, (ReadError, CharIter)> {
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
         if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
@@ -552,7 +562,7 @@ fn read_inner(
     stack: &mut Vec<List>,
     buffer: &mut String,
     in_back_quote: bool,
-) -> Result<(bool, CharIter), (ParseError, CharIter)> {
+) -> Result<(bool, CharIter), (ReadError, CharIter)> {
     if environment.reader_state.is_none() {
         panic!("tried to read with no state!");
     }
@@ -766,7 +776,7 @@ fn read_inner(
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column
                             );
-                            return Err((ParseError { reason }, chars));
+                            return Err((ReadError { reason }, chars));
                         }
                         "(" => {
                             level += 1;
@@ -802,7 +812,7 @@ fn read_inner(
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column
                             );
-                            return Err((ParseError { reason }, chars));
+                            return Err((ReadError { reason }, chars));
                         }
                     }
                 }
@@ -820,7 +830,7 @@ fn read_inner(
                 ")" => {
                     if level <= 0 {
                         return Err((
-                            ParseError {
+                            ReadError {
                                 reason: "Unexpected `)`".to_string(),
                             },
                             chars,
@@ -875,7 +885,7 @@ fn read_inner(
     }
     if level != 0 {
         Err((
-            ParseError {
+            ReadError {
                 reason: "Unclosed list(s)".to_string(),
             },
             chars,
@@ -891,17 +901,17 @@ fn stack_to_exp(
     exp_meta: Option<ExpMeta>,
     always_wrap: bool,
     list_only: bool,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     close_list(&mut stack, exp_meta)?;
     if stack.len() > 1 {
-        Err(ParseError {
+        Err(ReadError {
             reason: "WTF?".to_string(),
         })
     } else {
         match stack.pop() {
             Some(mut v) => {
                 if v.vec.is_empty() {
-                    Err(ParseError {
+                    Err(ReadError {
                         reason: "Empty results".to_string(),
                     })
                 } else if v.vec.len() == 1 && !always_wrap {
@@ -927,7 +937,7 @@ fn stack_to_exp(
                     Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
                 }
             }
-            None => Err(ParseError {
+            None => Err(ReadError {
                 reason: "WTF, Empty results".to_string(),
             }),
         }
@@ -940,7 +950,7 @@ fn read2(
     always_wrap: bool,
     file_name: Option<&'static str>,
     list_only: bool,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     let clear_state = if environment.reader_state.is_none() {
         environment.reader_state = Some(ReaderState {
             file_name,
@@ -994,7 +1004,7 @@ fn read2(
             environment.reader_state.as_ref().unwrap().line,
             environment.reader_state.as_ref().unwrap().column
         );
-        return Err(ParseError { reason });
+        return Err(ReadError { reason });
     }
     let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
     let res = stack_to_exp(&mut stack, exp_meta, always_wrap, list_only);
@@ -1007,7 +1017,7 @@ fn read2(
 pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
-) -> Result<(Expression, CharIter), (ParseError, CharIter)> {
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     let clear_state = if environment.reader_state.is_none() {
         environment.reader_state = Some(ReaderState {
             file_name: None,
@@ -1053,7 +1063,7 @@ pub fn read(
     text: &str,
     name: Option<&'static str>,
     list_only: bool,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     read2(environment, text, false, name, list_only)
 }
 
@@ -1063,7 +1073,7 @@ pub fn read_list_wrap(
     environment: &mut Environment,
     text: &str,
     name: Option<&'static str>,
-) -> Result<Expression, ParseError> {
+) -> Result<Expression, ReadError> {
     read2(environment, text, true, name, false)
 }
 

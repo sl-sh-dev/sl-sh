@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -14,6 +15,27 @@ use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::gc::*;
 use crate::process::*;
+
+#[derive(Clone, Debug)]
+pub struct LispError {
+    pub reason: String,
+}
+
+impl Error for LispError {}
+
+impl fmt::Display for LispError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.reason)
+    }
+}
+
+impl LispError {
+    pub fn new<S: Into<String>>(reason: S) -> LispError {
+        LispError {
+            reason: reason.into(),
+        }
+    }
+}
 
 pub trait PeekableIterator: std::iter::Iterator {
     fn peek(&mut self) -> Option<&Self::Item>;

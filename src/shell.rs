@@ -351,7 +351,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     ret
 }
 
-fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ParseError> {
+fn exec_hook(environment: &mut Environment, input: &str) -> Result<Expression, ReadError> {
     if let Some(exec_exp) = get_expression(&environment, "__exec_hook") {
         let exp = match &exec_exp.exp.get().data {
             ExpEnum::Atom(Atom::Lambda(_)) => {
@@ -561,7 +561,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
                                 eprintln!("Error saving temp history: {}", err);
                             }
                         }
-                        eprintln!("{:?}", err);
+                        eprintln!("{}", err);
                     }
                 }
             }
