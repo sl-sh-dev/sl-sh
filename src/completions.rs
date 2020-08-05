@@ -1,9 +1,7 @@
 use glob::{glob, glob_with, MatchOptions};
 use liner::{Completer, CursorPosition, Event, EventKind};
-use std::cell::RefCell;
 use std::env;
 use std::path::Path;
-use std::rc::Rc;
 
 use crate::builtins_util::compress_tilde;
 use crate::builtins_util::expand_tilde;
@@ -74,14 +72,16 @@ enum HookResult {
     UseList(Vec<String>),
 }
 
-pub struct ShellCompleter {
-    environment: Rc<RefCell<Environment>>,
+pub struct ShellCompleter<'env> {
+    //environment: Rc<RefCell<Environment>>,
+    environment: &'env mut Environment,
     comp_type: CompType,
     args: Vec<String>,
 }
 
-impl ShellCompleter {
-    pub fn new(environment: Rc<RefCell<Environment>>) -> ShellCompleter {
+impl<'env> ShellCompleter<'env> {
+    //pub fn new(environment: Rc<RefCell<Environment>>) -> ShellCompleter {
+    pub fn new(environment: &'env mut Environment) -> ShellCompleter {
         ShellCompleter {
             environment,
             comp_type: CompType::Nothing,
@@ -93,14 +93,14 @@ impl ShellCompleter {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let comp_exp = get_expression(&self.environment.borrow(), "__completion_hook");
+        let comp_exp = get_expression(&self.environment, "__completion_hook");
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.exp.get().data {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    let mut environment = self.environment.borrow_mut();
+                    //let mut environment = self.environment;
                     let data = ExpEnum::Atom(Atom::Symbol(
-                        environment.interner.intern("__completion_hook"),
+                        self.environment.interner.intern("__completion_hook"),
                     ));
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
@@ -116,8 +116,8 @@ impl ShellCompleter {
                     return HookResult::Default;
                 }
             };
-            let envir = &mut self.environment.borrow_mut();
-            match eval(envir, exp) {
+            //let envir = &mut self.environment;
+            match eval(self.environment, exp) {
                 Ok(res) => {
                     match &res.get().data {
                         ExpEnum::Atom(Atom::Symbol(s)) => match *s {
@@ -132,7 +132,7 @@ impl ShellCompleter {
                             let mut v = Vec::with_capacity(list.len());
                             for l in list {
                                 let l: Expression = l.into();
-                                let s = match l.as_string(envir) {
+                                let s = match l.as_string(self.environment) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
                                 };
@@ -143,7 +143,7 @@ impl ShellCompleter {
                         ExpEnum::Pair(_, _) => {
                             let mut v = Vec::new();
                             for l in res.iter() {
-                                let s = match l.as_string(envir) {
+                                let s = match l.as_string(self.environment) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),
                                 };
@@ -169,19 +169,19 @@ impl ShellCompleter {
     }
 }
 
-impl Completer for ShellCompleter {
+impl<'env> Completer for ShellCompleter<'env> {
     fn completions(&mut self, start: &str) -> Vec<String> {
         match self.comp_type {
             CompType::Nothing => Vec::new(),
             CompType::Command => {
                 let mut ret = get_dir_matches(start);
-                find_lisp_fns(&self.environment.borrow(), &mut ret, start);
+                find_lisp_fns(self.environment, &mut ret, start);
                 find_exes(&mut ret, start);
                 ret
             }
             CompType::CommandParen => {
                 let mut ret: Vec<String> = Vec::new();
-                find_lisp_fns(&self.environment.borrow(), &mut ret, start);
+                find_lisp_fns(self.environment, &mut ret, start);
                 find_exes(&mut ret, start);
                 ret
             }
@@ -193,7 +193,7 @@ impl Completer for ShellCompleter {
             CompType::Symbols => match self.run_hook() {
                 HookResult::Default => {
                     let mut ret: Vec<String> = Vec::new();
-                    find_lisp_symbols(&self.environment.borrow(), &mut ret, start);
+                    find_lisp_symbols(self.environment, &mut ret, start);
                     ret
                 }
                 HookResult::Path => get_path_matches(start),
@@ -202,7 +202,7 @@ impl Completer for ShellCompleter {
             CompType::Other => match self.run_hook() {
                 HookResult::Default => {
                     let mut ret = get_dir_matches(start);
-                    find_lisp_symbols(&self.environment.borrow(), &mut ret, start);
+                    find_lisp_symbols(self.environment, &mut ret, start);
                     ret
                 }
                 HookResult::Path => get_path_matches(start),

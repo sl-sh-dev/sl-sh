@@ -18,7 +18,7 @@ use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::{gethostname, Uid};
 
 use crate::builtins::load;
-use crate::completions::*;
+//use crate::completions::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::*;
@@ -264,7 +264,7 @@ fn handle_result(
     }
 }
 
-fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
+pub fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings::default();
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
@@ -508,7 +508,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         eprintln!("WARNING: Unable to load history: {}", err);
     }
     drop(env);
-    con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
+    //con.set_completer(Box::new(ShellCompleter::new(environment.clone())));
     loop {
         new_repl_settings = load_repl_settings(&repl_settings.exp);
         if current_repl_settings != new_repl_settings {

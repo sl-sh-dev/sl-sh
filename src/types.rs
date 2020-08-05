@@ -19,6 +19,7 @@ use crate::process::*;
 #[derive(Clone, Debug)]
 pub struct LispError {
     pub reason: String,
+    pub backtrace: Option<Vec<Handle>>,
 }
 
 impl Error for LispError {}
@@ -33,6 +34,7 @@ impl From<io::Error> for LispError {
     fn from(item: io::Error) -> Self {
         LispError {
             reason: item.to_string(),
+            backtrace: None,
         }
     }
 }
@@ -41,6 +43,7 @@ impl LispError {
     pub fn new<S: Into<String>>(reason: S) -> LispError {
         LispError {
             reason: reason.into(),
+            backtrace: None,
         }
     }
 }

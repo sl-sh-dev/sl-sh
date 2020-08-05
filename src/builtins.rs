@@ -382,15 +382,18 @@ fn print_to_oe(
     match out {
         Some(out) => {
             if let ExpEnum::File(f) = &out.exp.get().data {
-                match &mut *f.borrow_mut() {
+                let mut f_borrow = f.borrow_mut();
+                match &mut *f_borrow {
                     FileState::Stdout => {
                         let stdout = io::stdout();
                         let mut out = stdout.lock();
+                        drop(f_borrow);
                         args_out(environment, args, add_newline, pretty, &mut out)?;
                     }
                     FileState::Stderr => {
                         let stdout = io::stderr();
                         let mut out = stdout.lock();
+                        drop(f_borrow);
                         args_out(environment, args, add_newline, pretty, &mut out)?;
                     }
                     FileState::Write(f) => {
@@ -1434,7 +1437,12 @@ fn builtin_get_error(
                 let err_msg =
                     Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg.into(), None)));
                 environment.stack_on_error = old_err;
-                return Ok(Expression::alloc_data_h(ExpEnum::Pair(err_sym, err_msg)).into());
+                let res = if let Some(backtrace) = err.backtrace {
+                    vec![err_sym, err_msg, Expression::with_list(backtrace).into()]
+                } else {
+                    vec![err_sym, err_msg, Expression::make_nil_h()]
+                };
+                return Ok(Expression::cons_from_vec(&res, None));
             }
         }
     }
@@ -1484,7 +1492,6 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
         }
     }
     doc_str.push(')');
-    //drop(p_iter);
 }
 
 fn make_doc(
@@ -1707,16 +1714,32 @@ pub fn builtin_meta_line_no(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if args.next().is_none() {
-        if let Some(meta) = &environment.last_meta {
-            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                meta.line as i64,
-            ))))
-        } else {
-            Ok(Expression::alloc_data(ExpEnum::Nil))
+    match &args.next() {
+        None => {
+            if let Some(meta) = &environment.last_meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    meta.line as i64,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
         }
-    } else {
-        Err(LispError::new("meta-line-no: takes no arguments."))
+        Some(arg) => {
+            let exp = eval(environment, arg)?;
+            if args.next().is_some() {
+                return Err(LispError::new(
+                    "meta-column-no: takes zero or one argument.",
+                ));
+            }
+            let exp_d = exp.get();
+            if let Some(meta) = &exp_d.meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    meta.line as i64,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
+        }
     }
 }
 
@@ -1724,16 +1747,32 @@ pub fn builtin_meta_column_no(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if args.next().is_none() {
-        if let Some(meta) = &environment.last_meta {
-            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                meta.col as i64,
-            ))))
-        } else {
-            Ok(Expression::alloc_data(ExpEnum::Nil))
+    match &args.next() {
+        None => {
+            if let Some(meta) = &environment.last_meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    meta.col as i64,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
         }
-    } else {
-        Err(LispError::new("meta-column-no: takes no arguments."))
+        Some(arg) => {
+            let exp = eval(environment, arg)?;
+            if args.next().is_some() {
+                return Err(LispError::new(
+                    "meta-column-no: takes zero or one argument.",
+                ));
+            }
+            let exp_d = exp.get();
+            if let Some(meta) = &exp_d.meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+                    meta.col as i64,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
+        }
     }
 }
 
@@ -1741,17 +1780,34 @@ pub fn builtin_meta_file_name(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if args.next().is_none() {
-        if let Some(meta) = &environment.last_meta {
-            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                meta.file.into(),
-                None,
-            ))))
-        } else {
-            Ok(Expression::alloc_data(ExpEnum::Nil))
+    match &args.next() {
+        None => {
+            if let Some(meta) = &environment.last_meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    meta.file.into(),
+                    None,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
         }
-    } else {
-        Err(LispError::new("meta-file-name: takes no arguments."))
+        Some(arg) => {
+            let exp = eval(environment, arg)?;
+            if args.next().is_some() {
+                return Err(LispError::new(
+                    "meta-file-name: takes zero or one argument.",
+                ));
+            }
+            let exp_d = exp.get();
+            if let Some(meta) = &exp_d.meta {
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    meta.file.into(),
+                    None,
+                ))))
+            } else {
+                Ok(Expression::alloc_data(ExpEnum::Nil))
+            }
+        }
     }
 }
 
@@ -1999,8 +2055,9 @@ Section: root
 Example:
 (def 'test-unwind-one nil)
 (def 'test-unwind-err (get-error
-(unwind-protect (err \"Some protected error\") (set 'test-unwind-one \"got it\"))))
-(test::assert-equal '(:error . \"Some protected error\") test-unwind-err)
+    (unwind-protect (err \"Some protected error\") (set 'test-unwind-one \"got it\"))))
+(test::assert-equal :error (car test-unwind-err))
+(test::assert-equal \"Some protected error\" (cadr test-unwind-err))
 (test::assert-equal \"got it\" test-unwind-one)
 
 (def 'test-unwind-one nil)
@@ -2008,10 +2065,11 @@ Example:
 (def 'test-unwind-three nil)
 (def 'test-unwind-four nil)
 (def 'test-unwind-err (get-error
-(unwind-protect
-    (progn (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
-    (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
-(test::assert-equal '(:error . \"Some protected error two\") test-unwind-err)
+    (unwind-protect
+        (progn (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
+        (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
+(test::assert-equal :error (car test-unwind-err))
+(test::assert-equal \"Some protected error two\" (cadr test-unwind-err))
 (test::assert-equal \"set one\" test-unwind-one)
 (test::assert-equal nil test-unwind-two)
 (test::assert-equal \"set three\" test-unwind-three)
@@ -2031,7 +2089,8 @@ Section: root
 
 Example:
 (def 'test-err-err (get-error (err \"Test Error\")))
-(test::assert-equal '(:error . \"Test Error\") test-err-err)
+(test::assert-equal :error (car test-err-err))
+(test::assert-equal \"Test Error\" (cadr test-err-err))
 ",
             root,
         ),
@@ -2320,7 +2379,7 @@ Example:
 (def 'test-undef \"undef\")
 (test::assert-equal \"undef\" (undef 'test-undef))
 (test::assert-false (def? 'test-undef))
-(test::assert-equal '(:error . \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\") (get-error (undef 'test-undef)))
+(test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef 'test-undef))))
 ",
             root,
         ),
@@ -2796,7 +2855,7 @@ Only execute system commands not forms within this form.
 Section: shell
 
 Example:
-(test::assert-equal '(:error . \"Failed to execute [str string]: No such file or directory (os error 2)\") (get-error (command (str \"string\"))))
+(test::assert-equal \"Failed to execute [str string]: No such file or directory (os error 2)\" (cadr (get-error (command (str \"string\")))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
 ", root
         ),
@@ -2812,7 +2871,7 @@ Like progn but do not execute system commands within this form.
 Section: shell
 
 Example:
-(test::assert-equal '(:error . \"Not a valid form true, not found.\") (get-error (form (true))))
+(test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
             root,
@@ -2875,7 +2934,7 @@ t
             builtin_get_error,
             "Usage: (get-error exp0 ... expN) -> pair
 
-Evaluate each form (like progn) but on error return (:error . msg) instead of aborting.
+Evaluate each form (like progn) but on error return (:error msg backtrace) instead of aborting.
 On success return (:ok . expN-result).
 
 If there is no error will return the value of the last expression as the cdr of
@@ -2884,7 +2943,10 @@ the pair.  Always returns a pair with the first value either being :ok or :error
 Section: root
 
 Example:
-(test::assert-equal '(:error . \"Some Error\") (get-error (err \"Some Error\")))
+(def 'get-error-t1 (get-error (err \"Some Error\")))
+(test::assert-equal :error (car get-error-t1)) 
+(test::assert-equal \"Some Error\" (cadr get-error-t1)) 
+(test::assert-true (vec? (caddr get-error-t1)))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def 'test-get-error \"Some \") (str test-get-error \"Other String\")))
 ", root

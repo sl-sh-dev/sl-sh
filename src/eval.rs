@@ -641,13 +641,19 @@ pub fn eval_nr(
     }
     environment.state.eval_level += 1;
     let tres = internal_eval(environment, expression);
-    let result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
+    let mut result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
         Err(LispError::new("Return without matching block."))
     } else {
         tres
     };
-    if let Err(_err) = &result {
+    if let Err(err) = &mut result {
+        if err.backtrace.is_none() {
+            err.backtrace = Some(Vec::new());
+        }
+        if let Some(backtrace) = &mut err.backtrace {
+            backtrace.push(expression.clone().into());
+        }
         if environment.error_expression.is_none() {
             environment.error_expression = Some(expression.clone());
         }
