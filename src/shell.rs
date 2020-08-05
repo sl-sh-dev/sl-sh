@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::env;
 use std::ffi::CStr;
 use std::fs::create_dir_all;
@@ -62,7 +61,7 @@ t
             err
         );
     }
-    let dname = build_new_namespace(environment, "user");
+/*    let dname = build_new_namespace(environment, "user");
     match dname {
         Ok(scope) => {
             let mut settings = HashMap::new();
@@ -81,7 +80,7 @@ t
             "ERROR: Failed to create default namespace \"user\": {}",
             msg
         ),
-    }
+    }*/
     if loadrc {
         if let Err(err) = load(environment, "slshrc") {
             eprintln!("WARNING: Failed to load init script slshrc: {}", err);

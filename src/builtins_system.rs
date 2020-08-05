@@ -341,6 +341,15 @@ fn builtin_exit(
     ))
 }
 
+fn builtin_reap_jobs(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    params_done(args, "reap-jobs")?;
+    reap_procs(environment)?;
+    Ok(Expression::make_nil())
+}
+
 pub fn add_system_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
@@ -519,6 +528,24 @@ Section: shell
 Example:
 (def 'test-sleep-var (time (sleep 1100)))
 (assert-true (> test-sleep-var 1.1))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("reap-jobs"),
+        Expression::make_function(
+            builtin_reap_jobs,
+            "Usage: (reap-jobs) -> nil
+
+Reaps any completed jobs.  Only intended to be used by code implemeting the REPL
+loop or something similiar, this is probably not the form you are searching for.
+
+Section: shell
+
+Example:
+;(reap-jobs)
+t
 ",
             root,
         ),

@@ -450,8 +450,21 @@ fn str_process(
                             environment.in_pipe = false;
                             let pipe_pgid = environment.state.pipe_pgid;
                             environment.state.pipe_pgid = None;
-                            new_string
-                                .push_str(eval(environment, ast)?.as_string(environment)?.trim());
+                            new_string.push_str(
+                                eval(environment, ast)
+                                    .map_err(|e| {
+                                        environment.state.stdout_status = old_out.clone();
+                                        environment.state.stderr_status = old_err.clone();
+                                        e
+                                    })?
+                                    .as_string(environment)
+                                    .map_err(|e| {
+                                        environment.state.stdout_status = old_out.clone();
+                                        environment.state.stderr_status = old_err.clone();
+                                        e
+                                    })?
+                                    .trim(),
+                            );
                             environment.state.stdout_status = old_out;
                             environment.state.stderr_status = old_err;
                             environment.data_in = data_in;
