@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
-use std::io;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
@@ -667,26 +666,7 @@ pub fn eval_nr(
         if let Some(backtrace) = &mut err.backtrace {
             backtrace.push(expression.clone().into());
         }
-        if environment.error_expression.is_none() {
-            environment.error_expression = Some(expression.clone());
-        }
-        if environment.stack_on_error {
-            eprintln!("{}: Error evaluating:", environment.state.eval_level);
-            let stderr = io::stderr();
-            let mut handle = stderr.lock();
-            if let Err(err) = expression.pretty_printf(environment, &mut handle) {
-                eprintln!("\nGOT SECONDARY ERROR PRINTING EXPRESSION: {}", err);
-            }
-            if let Some(meta) = expression.meta() {
-                eprint!(
-                    "\n[[[ {}, line: {}, column: {} ]]]",
-                    meta.file, meta.line, meta.col
-                );
-            }
-            eprintln!("\n=============================================================");
-        }
         if environment.error_meta.is_none() && expression.meta().is_some() {
-            environment.error_exp_with_meta = Some(expression.clone());
             environment.error_meta = expression.meta();
         }
     }

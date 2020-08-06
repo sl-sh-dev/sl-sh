@@ -3,17 +3,157 @@ use std::env;
 use std::hash::BuildHasher;
 use std::io::{self, ErrorKind};
 
-use liner::{ColorClosure, Context, Prompt};
+use liner::{keymap, Buffer, ColorClosure, Context, Prompt};
 
 use crate::builtins_util::*;
 use crate::completions::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
-use crate::shell::apply_repl_settings;
-use crate::shell::get_liner_words;
-use crate::shell::load_repl_settings;
 use crate::types::*;
+
+fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
+    let mut ret = ReplSettings::default();
+    if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
+        if let Some(keybindings) = repl_settings.get(":keybindings") {
+            let keybindings: Expression = keybindings.into();
+            if let ExpEnum::Atom(Atom::Symbol(keybindings)) = &keybindings.get().data {
+                match &keybindings[..] {
+                    ":vi" => ret.key_bindings = Keys::Vi,
+                    ":emacs" => ret.key_bindings = Keys::Emacs,
+                    _ => eprintln!("Invalid keybinding setting: {}", keybindings),
+                }
+            };
+        }
+        if let Some(max) = repl_settings.get(":max-history") {
+            let max: Expression = max.into();
+            if let ExpEnum::Atom(Atom::Int(max)) = &max.get().data {
+                if *max >= 0 {
+                    ret.max_history = *max as usize;
+                } else {
+                    eprintln!("Max history must be positive: {}", max);
+                }
+            } else {
+                eprintln!("Max history must be a positive integer: {}", max);
+            };
+        }
+        if let Some(vi_esc) = repl_settings.get(":vi_esc_sequence") {
+            let vi_esc: Expression = vi_esc.into();
+            let mut i = vi_esc.iter();
+            if let Some(arg0) = i.next() {
+                if let ExpEnum::Atom(Atom::String(keys, _)) = &arg0.get().data {
+                    if let Some(arg1) = i.next() {
+                        if let ExpEnum::Atom(Atom::Int(ms)) = &arg1.get().data {
+                            if keys.len() == 2 {
+                                let mut chars = keys.chars();
+                                ret.vi_esc_sequence = Some((
+                                    chars.next().unwrap(),
+                                    chars.next().unwrap(),
+                                    *ms as u32,
+                                ));
+                            } else {
+                                eprintln!(":vi_esc_sequence first value should be a string of two characters (two key sequence for escape)");
+                            }
+                        } else {
+                            eprintln!(":vi_esc_sequence second value should be number (ms delay)");
+                        }
+                    } else {
+                        eprintln!(":vi_esc_sequence second value should be number (ms delay)");
+                    }
+                } else {
+                    eprintln!(
+                    ":vi_esc_sequence first value should be a string (two key sequence for escape)"
+                );
+                }
+            } else {
+                eprintln!(
+                    ":vi_esc_sequence first value should be a string (two key sequence for escape)"
+                );
+            }
+        }
+        if let Some(prefix) = repl_settings.get(":vi-normal-prompt-prefix") {
+            let prefix: Expression = prefix.into();
+            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
+                ret.vi_normal_prompt_prefix = Some(prefix.to_string());
+            };
+        }
+        if let Some(suffix) = repl_settings.get(":vi-normal-prompt-suffix") {
+            let suffix: Expression = suffix.into();
+            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
+                ret.vi_normal_prompt_suffix = Some(suffix.to_string());
+            };
+        }
+        if let Some(prefix) = repl_settings.get(":vi-insert-prompt-prefix") {
+            let prefix: Expression = prefix.into();
+            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
+                ret.vi_insert_prompt_prefix = Some(prefix.to_string());
+            };
+        }
+        if let Some(suffix) = repl_settings.get(":vi-insert-prompt-suffix") {
+            let suffix: Expression = suffix.into();
+            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
+                ret.vi_insert_prompt_suffix = Some(suffix.to_string());
+            };
+        }
+    }
+    ret
+}
+
+// Like the liner default but make '(' and ')' their own words for cleaner completions.
+fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
+    let mut res = Vec::new();
+
+    let mut word_start = None;
+    let mut just_had_backslash = false;
+
+    for (i, &c) in buf.chars().enumerate() {
+        if c == '\\' {
+            just_had_backslash = true;
+            continue;
+        }
+
+        if let Some(start) = word_start {
+            if (c == ' ' || c == '(' || c == ')') && !just_had_backslash {
+                res.push((start, i));
+                if c == '(' || c == ')' {
+                    res.push((i, i + 1));
+                }
+                word_start = None;
+            }
+        } else if c == '(' || c == ')' {
+            res.push((i, i + 1));
+        } else if c != ' ' {
+            word_start = Some(i);
+        }
+
+        just_had_backslash = false;
+    }
+
+    if let Some(start) = word_start {
+        res.push((start, buf.num_chars()));
+    }
+
+    res
+}
+
+fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
+    let keymap: Box<dyn keymap::KeyMap> = match repl_settings.key_bindings {
+        Keys::Vi => {
+            let mut vi = keymap::Vi::new();
+            if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
+                vi.set_esc_sequence(ch1, ch2, timeout);
+            }
+            vi.set_normal_prompt_prefix(repl_settings.vi_normal_prompt_prefix.clone());
+            vi.set_normal_prompt_suffix(repl_settings.vi_normal_prompt_suffix.clone());
+            vi.set_insert_prompt_prefix(repl_settings.vi_insert_prompt_prefix.clone());
+            vi.set_insert_prompt_suffix(repl_settings.vi_insert_prompt_suffix.clone());
+            Box::new(vi)
+        }
+        Keys::Emacs => Box::new(keymap::Emacs::new()),
+    };
+    con.set_keymap(keymap);
+    con.history.set_max_history_size(repl_settings.max_history);
+}
 
 fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
     let mut con = Context::new();
@@ -289,6 +429,45 @@ fn builtin_prompt_history_push_throwaway(
     result
 }
 
+fn builtin_prompt_history_context(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let liner_id = {
+        let arg = param_eval(environment, args, "prompt-history-context")?;
+        let arg_d = arg.get();
+        if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
+            s
+        } else {
+            return Err(LispError::new(
+                "prompt-history-context: context id must be a keyword.",
+            ));
+        }
+    };
+    let item = {
+        let arg = param_eval(environment, args, "prompt-history-context")?;
+        let arg_d = arg.get();
+        match &arg_d.data {
+            ExpEnum::Atom(Atom::String(s, _)) => Some(s.to_string()),
+            ExpEnum::Nil => None,
+            _ => {
+                return Err(LispError::new(
+                    "prompt-history-context: history context item must be a string.",
+                ))
+            }
+        }
+    };
+    params_done(args, "prompt-history-context")?;
+    let mut con = if environment.liners.contains_key(liner_id) {
+        environment.liners.remove(liner_id).unwrap()
+    } else {
+        return Ok(Expression::make_nil());
+    };
+    con.history.set_search_context(item);
+    environment.liners.insert(liner_id, con);
+    Ok(Expression::make_nil())
+}
+
 pub fn add_edit_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
@@ -345,6 +524,24 @@ Section: shell
 
 Example:
 ;(prompt-history-push-throwaway :repl \"Some broken command\")
+t
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("prompt-history-context"),
+        Expression::make_function(
+            builtin_prompt_history_context,
+            "Usage: (prompt-history-context :context_id context-string) -> nil
+
+Sets the history context for searches.  Usually the current path but can be any
+string.  Pass nil to set it to nothing.
+
+Section: shell
+
+Example:
+;(prompt-history-context :repl \"/home\")
 t
 ",
             root,

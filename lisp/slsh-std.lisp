@@ -14,6 +14,7 @@
 (hash-set! *repl-settings* :keybindings :emacs)
 
 (def '*last-status* 0)
+(def '*last-command* "")
 
 (defn print-backtrace (backtrace) 
     (for b in backtrace
@@ -34,17 +35,13 @@
                  (= 2 (values-length result))
                  (= :unexpected-eof (values-nth 1 result))))))
 
+(defn error-stack-on () nil)
+(defn error-stack-off () nil)
+
 (defn repl () (progn
       (defn repl-inner ()
             (progn
-              #|
-        con.history
-            .set_search_context(if let Ok(cur_dir) = env::current_dir() {
-                Some(cur_dir.to_string_lossy().to_string())
-            } else {
-                None
-            });
-              |#
+              (prompt-history-context :repl $PWD)
               (reap-jobs)
               ;(def 'result '(:ok . nil))
               (def 'save-last-status *last-status*)
@@ -84,3 +81,4 @@
                 (def 'result (get-error (repl-inner)))
                 (if (= :error (car result)) (progn (print-error result)(recur))))))))
 
+(if (def? '*interactive*) (progn (load "slshrc") (repl)))

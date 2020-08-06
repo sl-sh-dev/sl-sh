@@ -1397,35 +1397,11 @@ fn builtin_loose_symbols(
     last_eval
 }
 
-fn builtin_error_stack_on(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if args.next().is_none() {
-        environment.stack_on_error = true;
-        return Ok(Expression::alloc_data(ExpEnum::Nil));
-    }
-    Err(LispError::new("error-stack-on takes no args"))
-}
-
-fn builtin_error_stack_off(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if args.next().is_none() {
-        environment.stack_on_error = false;
-        return Ok(Expression::alloc_data(ExpEnum::Nil));
-    }
-    Err(LispError::new("error-stack-on takes no args"))
-}
-
 fn builtin_get_error(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let mut ret = None;
-    let old_err = environment.stack_on_error;
-    environment.stack_on_error = false;
     for arg in args {
         match eval(environment, arg) {
             Ok(exp) => ret = Some(exp),
@@ -1436,7 +1412,6 @@ fn builtin_get_error(
                 let msg = format!("{}", err);
                 let err_msg =
                     Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg.into(), None)));
-                environment.stack_on_error = old_err;
                 let res = if let Some(backtrace) = err.backtrace {
                     vec![err_sym, err_msg, Expression::with_list(backtrace).into()]
                 } else {
@@ -1446,7 +1421,6 @@ fn builtin_get_error(
             }
         }
     }
-    environment.stack_on_error = old_err;
     let ok = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
         environment.interner.intern(":ok"),
     )));
@@ -2890,40 +2864,6 @@ Section: shell
 Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 (test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("error-stack-on"),
-        Expression::make_function(
-            builtin_error_stack_on,
-            "Usage: (error-stack-on)
-
-Print the eval stack on error.
-
-Section: root
-
-Example:
-;(error-stack-on)
-t
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("error-stack-off"),
-        Expression::make_function(
-            builtin_error_stack_off,
-            "Usage: (error-stack-off)
-
-Do not print the eval stack on error.
-
-Section: root
-
-Example:
-;(error-stack-off)
-t
 ",
             root,
         ),
