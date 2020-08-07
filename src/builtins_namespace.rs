@@ -6,6 +6,19 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
+fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
+    environment.dynamic_scope.insert(
+        environment.interner.intern("*active-ns*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(ns.into(), None)),
+            RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        ),
+    );
+}
+
 fn builtin_ns_create(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -37,6 +50,7 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(LispError::new(msg)),
             };
+            set_active_namespace(environment, key);
             environment.current_scope.push(scope);
             return Ok(Expression::make_nil());
         }
@@ -80,6 +94,7 @@ fn builtin_ns_enter(
                     return Err(LispError::new(msg));
                 }
             };
+            set_active_namespace(environment, key);
             environment.current_scope.push(scope);
             return Ok(Expression::make_nil());
         }
@@ -170,6 +185,12 @@ fn builtin_ns_pop(
         }
     } else {
         return Err(LispError::new("ns-pop: NO SCOPES"));
+    }
+    if let Some(ns) = get_expression(environment, "*ns*") {
+        if let ExpEnum::Atom(Atom::String(ns, _)) = &ns.exp.get().data {
+            let ns = environment.interner.intern(&ns);
+            set_active_namespace(environment, ns);
+        }
     }
     Ok(Expression::make_nil())
 }

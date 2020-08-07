@@ -38,6 +38,53 @@ fn builtin_eval(
     Err(LispError::new("eval can only have one form"))
 }
 
+fn builtin_eval_in_namespace(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(ns) = args.next() {
+        let ns = match &eval(environment, ns)?.get().data {
+            ExpEnum::Atom(Atom::Symbol(sym)) => sym,
+            ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
+            _ => {
+                return Err(LispError::new(
+                    "eval-in-namespace: namespace must be a symbol or string",
+                ))
+            }
+        };
+        let scope = match get_namespace(environment, ns) {
+            Some(scope) => scope,
+            None => {
+                let msg = format!("Error, namespace {} does not exist!", ns);
+                return Err(LispError::new(msg));
+            }
+        };
+        if let Some(arg) = args.next() {
+            if args.next().is_none() {
+                let arg = eval(environment, arg)?;
+                let arg_d = arg.get();
+                // MAKE SURE to pop this when done or things will be fubar...
+                environment.current_scope.push(scope);
+                let ret = match &arg_d.data {
+                    ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
+                        Ok(ast) => eval(environment, ast),
+                        Err(err) => Err(LispError::new(err.reason)),
+                    },
+                    _ => {
+                        drop(arg_d);
+                        eval(environment, &arg)
+                    }
+                };
+                environment.current_scope.pop();
+                return ret;
+            }
+        }
+    }
+    Err(LispError::new(
+        "eval-in-namespace can only have two forms (namespace and form to eval)",
+    ))
+}
+
 fn builtin_fncall(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -1974,6 +2021,31 @@ Example:
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("eval-in-namespace"),
+        Expression::make_function(
+            builtin_eval_in_namespace,
+            "Usage: (eval-in-namespace ns expression)
+
+Evaluate the provided expression in the namespace (ns).  This is a specialized
+function that you probably do not want but is useful for things like REPL functions.
+Basically an eval that ignores current scope and happens at the root of the
+provided namespace.
+
+If expression is a string read it to make an ast first to evaluate otherwise
+evaluate the expression (note eval is a function not a special form, the
+provided expression will be evaluated as part of call).
+
+Section: root
+
+Example:
+;(def 'test-eval-one nil)
+;(eval-in-namespace 'user \"(set 'test-eval-one \\\"ONE\\\")\")
+t
 ",
             root,
         ),

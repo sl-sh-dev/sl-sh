@@ -604,6 +604,94 @@ Section: shell
 "
 	() '(def '__exec_hook shell::endfix-hook))
 
+
+
+(def '*last-status* 0)
+(def '*last-command* "")
+
+(defn print-backtrace (backtrace) 
+    (for b in backtrace
+        (print (if (def 'file (meta-file-name b)) file "??????") ":\t"
+               "line " (if (def 'line (meta-line-no b)) line "??") ":\t"
+               "column " (if (def 'col (meta-column-no b)) col "??") "\n")))
+
+(defn print-error (error)
+    (if (= :error (car error))
+        (progn
+            (println (cadr error))
+            (print-backtrace (caddr error)))
+        (err "Not an error!")))
+
+(defn repl-eof (result)
+      (progn
+        (if (and (values? result)
+                 (= 2 (values-length result))
+                 (= :unexpected-eof (values-nth 1 result))))))
+
+(defn path_list_trunc (plist)
+	(if (> (length plist) 1)
+		(if (> (length (first plist)) 0) 
+			(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+			(path_list_trunc (rest plist)))
+		plist))
+
+(defn get_pwd ()
+	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
+
+(defn set_prompt_tail ()
+	(if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m ")))
+
+(defn __prompt ()
+	(str "\x1b[32m[" *active-ns* "]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) (set_prompt_tail)))
+
+
+(defn repl-line (line line-len)
+      (progn
+        (export 'LAST_STATUS "0")
+        (set '*last-status* 0)
+        (def 'ast (if (and (def? '__exec_hook)(lambda? __exec_hook))
+                    (__exec_hook line)
+                    (read-all line)))
+        (set 'ast (if (string? ast) (read-all ast) ast))
+        (def 'result (loose-symbols (get-error (eval-in-namespace *active-ns* ast))))
+        (if (= :ok (car result))
+          (progn
+            (if (process? (cdr result)) nil
+              (nil? (cdr result)) nil
+              (file? (cdr result)) nil
+              (println (cdr result)))
+            (if (> line-len 0)
+              (progn
+                ; Save history
+                (prompt-history-push :repl line)
+                (set '*last-command* line))))
+          (progn 
+            ; Save temp history
+            (if (> line-len 0) (prompt-history-push-throwaway :repl line))
+            (print-error result)))))
+
+(defn repl () (progn
+      (defn get-prompt ()
+            (progn
+              (def 'ns-prompt (to-symbol (str *active-ns* "::__prompt")))
+              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
+      (defn repl-inner ()
+            (progn
+              (prompt-history-context :repl $PWD)
+              (reap-jobs)
+              ;(def 'result '(:ok . nil))
+              (def 'save-last-status *last-status*)
+              (def 'line (prompt :repl (str "XX " (get-prompt)) "~/.local/share/sl-sh/history"))
+              (export 'LAST_STATUS save-last-status)
+              ;(def (to-symbol (str *active-ns* "::*last-status*")) save-last-status)
+              (set '*last-status* save-last-status)
+              (def 'line-len (length (str-trim line)))
+              (if (and (> line-len 0)(not (values? line))) (repl-line line line-len))
+              (if (not (repl-eof line)) (recur))))
+      ((fn () (progn
+                (def 'result (get-error (repl-inner)))
+                (if (= :error (car result)) (progn (print-error result)(recur))))))))
+
 (ns-export '(
 	alias
 	register-alias
