@@ -184,7 +184,6 @@ fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> Result<()
     let mut last_ch = ' ';
     for ch in input.chars() {
         if ch == '\'' && last_ch != '\\' {
-            // Kakoune bug "
             in_string = !in_string;
             if !in_string {
                 nargs.push(token);
@@ -194,7 +193,6 @@ fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> Result<()
             continue;
         }
         if ch == '"' && last_ch != '\\' {
-            // Kakoune bug "
             in_stringd = !in_stringd;
             if !in_stringd {
                 nargs.push(token);
@@ -265,7 +263,13 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    load_user_env(&mut environment, &home, false);
+    environment.root_scope.borrow_mut().insert_exp(
+        environment.interner.intern("*run-script*"),
+        Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            environment.interner.intern(command).into(),
+            None,
+        ))),
+    );
 
     let mut exp_args: Vec<Handle> = Vec::with_capacity(args.len());
     for a in args {
@@ -282,19 +286,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         .root_scope
         .borrow_mut()
         .insert_exp(environment.interner.intern("args"), data);
-    if let Err(err) = load(&mut environment, command) {
-        eprint!("Error running {}: {}", command, err);
-        if let Some(meta) = &environment.error_meta {
-            eprint!(
-                "\n[[[ {}, line: {}, column: {} ]]]",
-                meta.file, meta.line, meta.col
-            )
-        }
-        eprintln!("");
-        if environment.exit_code.is_none() {
-            return 1;
-        }
-    }
+    load_user_env(&mut environment, &home, false);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
     } else {

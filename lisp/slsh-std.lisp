@@ -20,3 +20,10 @@
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? '*interactive*) (progn (load "slshrc") (shell::repl)))
+
+(if (def? '*run-script*)
+  (progn
+    (def 'result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
+    (if (= :error (car result))
+      (shell::print-error result))))
+

@@ -676,11 +676,9 @@ Section: shell
             (progn
               (prompt-history-context :repl $PWD)
               (reap-jobs)
-              ;(def 'result '(:ok . nil))
               (def 'save-last-status *last-status*)
-              (def 'line (prompt :repl (str "XX " (get-prompt)) "~/.local/share/sl-sh/history"))
+              (def 'line (prompt :repl (get-prompt) "~/.local/share/sl-sh/history"))
               (export 'LAST_STATUS save-last-status)
-              ;(def (to-symbol (str *active-ns* "::*last-status*")) save-last-status)
               (set '*last-status* save-last-status)
               (def 'line-len (length (str-trim line)))
               (if (and (> line-len 0)(not (values? line))) (repl-line line line-len))

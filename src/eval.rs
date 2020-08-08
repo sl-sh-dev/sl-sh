@@ -664,9 +664,6 @@ pub fn eval_nr(
         if let Some(backtrace) = &mut err.backtrace {
             backtrace.push(expression.clone().into());
         }
-        if environment.error_meta.is_none() && expression.meta().is_some() {
-            environment.error_meta = expression.meta();
-        }
     }
     environment.state.eval_level -= 1;
     environment.last_meta = None;

@@ -366,7 +366,6 @@ pub struct Environment {
     pub data_in: Option<Expression>,
     pub form_type: FormType,
     pub save_exit_status: bool,
-    pub error_meta: Option<ExpMeta>,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
@@ -435,7 +434,6 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
-        error_meta: None,
         exit_code: None,
         dynamic_scope: HashMap::new(),
         root_scope,
