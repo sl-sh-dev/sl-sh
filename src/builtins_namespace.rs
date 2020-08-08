@@ -1,16 +1,33 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
+use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
-fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
-    environment.dynamic_scope.insert(
+fn set_active_namespace(
+    environment: &mut Environment,
+    scope: Rc<RefCell<Scope>>,
+    ns: &'static str,
+    prev_ns: &'static str,
+) {
+    environment.root_scope.borrow_mut().data.insert(
         environment.interner.intern("*active-ns*"),
         Reference::new(
             ExpEnum::Atom(Atom::String(ns.into(), None)),
+            RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        ),
+    );
+    scope.borrow_mut().data.insert(
+        environment.interner.intern("*last-ns*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(prev_ns.into(), None)),
             RefMetaData {
                 namespace: None,
                 doc_string: None,
@@ -23,14 +40,7 @@ fn builtin_ns_create(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if environment
-        .current_scope
-        .last()
-        .unwrap()
-        .borrow()
-        .name
-        .is_none()
-    {
+    if !environment.scopes.is_empty() {
         return Err(LispError::new(
             "ns-create can only create a namespace when not in a lexical scope",
         ));
@@ -50,8 +60,9 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(LispError::new(msg)),
             };
-            set_active_namespace(environment, key);
-            environment.current_scope.push(scope);
+            let last_ns = environment.namespace.borrow().name.unwrap_or("root");
+            set_active_namespace(environment, scope.clone(), key, last_ns);
+            environment.namespace = scope;
             return Ok(Expression::make_nil());
         }
     }
@@ -64,18 +75,15 @@ fn builtin_ns_enter(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if environment
-        .current_scope
-        .last()
-        .unwrap()
-        .borrow()
-        .name
-        .is_none()
-    {
+    /*if !environment.scopes.is_empty() {
+        println!("Bad scopes: {:?}", environment.scopes);
+        for arg in args {
+        println!("ARG: {:?}", arg);
+        }
         return Err(LispError::new(
             "ns-enter can only enter a namespace when not in a lexical scope",
         ));
-    }
+    }*/
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
@@ -94,8 +102,9 @@ fn builtin_ns_enter(
                     return Err(LispError::new(msg));
                 }
             };
-            set_active_namespace(environment, key);
-            environment.current_scope.push(scope);
+            let last_ns = environment.namespace.borrow().name.unwrap_or("root");
+            set_active_namespace(environment, scope.clone(), key, last_ns);
+            environment.namespace = scope;
             return Ok(Expression::make_nil());
         }
     }
@@ -146,53 +155,6 @@ fn builtin_ns_list(
         return Ok(Expression::with_list(ns_list));
     }
     Err(LispError::new("ns-list takes no args"))
-}
-
-fn builtin_ns_pop(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if args.next().is_some() {
-        return Err(LispError::new("ns-pop: takes no parameters"));
-    }
-
-    if environment.current_scope.len() < 2 {
-        return Err(LispError::new("ns-pop: no more namespaces"));
-    }
-    if environment
-        .current_scope
-        .last()
-        .unwrap()
-        .borrow()
-        .name
-        .is_none()
-    {
-        return Err(LispError::new(
-            "ns-pop: can only be used when not in a lexical scope (current scope must be a namespace)",
-        ));
-    }
-    if let Some(scope) = environment.current_scope.pop() {
-        if environment
-            .current_scope
-            .last()
-            .unwrap()
-            .borrow()
-            .name
-            .is_none()
-        {
-            environment.current_scope.push(scope);
-            return Err(LispError::new("ns-pop: outer scope must be a namespace"));
-        }
-    } else {
-        return Err(LispError::new("ns-pop: NO SCOPES"));
-    }
-    if let Some(ns) = get_expression(environment, "*ns*") {
-        if let ExpEnum::Atom(Atom::String(ns, _)) = &ns.exp.get().data {
-            let ns = environment.interner.intern(&ns);
-            set_active_namespace(environment, ns);
-        }
-    }
-    Ok(Expression::make_nil())
 }
 
 fn builtin_ns_symbols(
@@ -312,25 +274,6 @@ Example:
 (ns-pop)
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
 t
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("ns-pop"),
-        Expression::make_function(
-            builtin_ns_pop,
-            "Usage: (ns-pop)
-
-Returns to the previous namespace.
-
-Section: namespace
-
-Example:
-(ns-create 'ns-pop-test-namespace)
-(test::assert-equal \"ns-pop-test-namespace\" *ns*)
-(ns-pop)
-(test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
 ",
             root,
         ),

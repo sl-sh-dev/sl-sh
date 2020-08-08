@@ -4,6 +4,9 @@
 (defn error-stack-on () nil)
 (defn error-stack-off () nil)
 
+(def '*last-status* 0)
+(def '*last-command* "")
+
 (def '*repl-settings* (make-hash))
 (hash-set! *repl-settings* :keybindings :emacs)
 
@@ -15,8 +18,5 @@
 
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
-
-(def '*last-status* 0)
-(def '*last-command* "")
 
 (if (def? '*interactive*) (progn (load "slshrc") (shell::repl)))

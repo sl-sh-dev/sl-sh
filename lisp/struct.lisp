@@ -184,7 +184,8 @@ Example:
                 (err "ERROR: invalid attribute bindings on defstruct"))))
 
         (defn impl (field doc)
-            (if (not (not field)) (progn (str-push! doc "impl " (car field) "\n")((eval (car field)) dispatch-map tags) (recur (cdr field) doc))))
+            ;(if (not (not field)) (progn (str-push! doc "impl " (car field) "\n")((eval (car field)) dispatch-map tags) (recur (cdr field) doc))))
+            (if (not (not field)) (progn (str-push! doc "impl " (car field) "\n")(apply (car field) dispatch-map tags nil) (recur (cdr field) doc))))
             ;(if (not (not field)) (progn ((eval (car field)) dispatch-map) (impl (cdr field)))))
 
         ((fn (idx) (progn
@@ -207,7 +208,8 @@ Example:
         (def 'doc-final "")
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
         `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params) (progn
-            (def 'self (fn (msg &rest args) (apply (eval (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name)))) this-fn args)))
+            (def 'self (fn (msg &rest args) (apply (eval-in-scope (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name)))) this-fn args)))
+            ;(def 'self (fn (msg &rest args) (apply (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name))) this-fn args)))
             (meta-add-tags self ',tags)
             (undef 'self))),dispatch-map ,@bindings))) )) ; bindings for params
      (make-vec (length fields)) ; params

@@ -489,7 +489,7 @@ Section: shell
 		(if (hash-haskey sys-syms command)
 			(set 'ret t)
 			(if (not (hash-haskey bad-syms command)) (progn
-				(set 'ret (sys-command? command))
+				(set 'ret (shell::sys-command? command))
 				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
 		ret))
 
@@ -498,17 +498,17 @@ Section: shell
 			(if (def? command)
 				(if (func? command)
 					(if in-sys-command
-						(str tok-default-color command shell::*fg-default*)
-						(str tok-slsh-fcn-color command shell::*fg-default*))
-					(str tok-slsh-form-color command shell::*fg-default*))
-				(str tok-default-color command shell::*fg-default*))
+						(str shell::tok-default-color command shell::*fg-default*)
+						(str shell::tok-slsh-fcn-color command shell::*fg-default*))
+					(str shell::tok-slsh-form-color command shell::*fg-default*))
+				(str shell::tok-default-color command shell::*fg-default*))
 			(if (func? command)
 				(if (or (shell::alias? command)(shell::sys-alias? command))
-					(progn (set 'in-sys-command t)(str tok-sys-alias-color command shell::*fg-default*))
-					(str tok-slsh-fcn-color command shell::*fg-default*))
+					(progn (set 'in-sys-command t)(str shell::tok-sys-alias-color command shell::*fg-default*))
+					(str shell::tok-slsh-fcn-color command shell::*fg-default*))
 				(if (my-sys-command? command)
-					(progn (set 'in-sys-command t)(str tok-sys-command-color command shell::*fg-default*))
-					(str tok-invalid-color command shell::*fg-default*)))))
+					(progn (set 'in-sys-command t)(str shell::tok-sys-command-color command shell::*fg-default*))
+					(str shell::tok-invalid-color command shell::*fg-default*)))))
 
 	(defn prrawtoken () (progn
 		(def 'ttok token)
@@ -560,7 +560,7 @@ Section: shell
 							(prrawtoken))
 						""))
 				(if (and (not (= last-ch #\\))(= ch #\"))
-					(progn (str-push! token (str tok-string-color ch))(set 'in-quote t) "")
+					(progn (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
 					(if (= ch #\()
 						(paren-open)
 						(if (= ch #\))
@@ -606,9 +606,6 @@ Section: shell
 
 
 
-(def '*last-status* 0)
-(def '*last-command* "")
-
 (defn print-backtrace (backtrace) 
     (for b in backtrace
         (print (if (def 'file (meta-file-name b)) file "??????") ":\t"
@@ -653,7 +650,7 @@ Section: shell
                     (__exec_hook line)
                     (read-all line)))
         (set 'ast (if (string? ast) (read-all ast) ast))
-        (def 'result (loose-symbols (get-error (eval-in-namespace *active-ns* ast))))
+        (def 'result (loose-symbols (get-error (eval ast))))
         (if (= :ok (car result))
           (progn
             (if (process? (cdr result)) nil

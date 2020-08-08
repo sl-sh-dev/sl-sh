@@ -141,6 +141,21 @@ Section: core
                 `(def ',name ,doc-str (fn ,ars (block ,name ,body))))
             (err "defn: Wrong number of args."))))))
 
+(defn ns-pop
+"Usage: (ns-pop)
+
+Returns to the previous namespace.
+
+Section: namespace
+
+Example:
+(ns-create 'ns-pop-test-namespace)
+(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+(ns-pop)
+(test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
+"
+    () (ns-enter *last-ns*))
+
 (defmacro setfn
 "
 Binds name to function body in current namespace.

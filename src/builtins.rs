@@ -23,6 +23,32 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
+            let old_scopes = std::mem::replace(&mut environment.scopes, Vec::new());
+            let ret = match &arg_d.data {
+                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
+                    Ok(ast) => eval(environment, ast),
+                    Err(err) => Err(LispError::new(err.reason)),
+                },
+                _ => {
+                    drop(arg_d);
+                    eval(environment, &arg)
+                }
+            };
+            let _ = std::mem::replace(&mut environment.scopes, old_scopes);
+            return ret;
+        }
+    }
+    Err(LispError::new("eval can only have one form"))
+}
+
+fn builtin_eval_in_scope(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval(environment, arg)?;
+            let arg_d = arg.get();
             return match &arg_d.data {
                 ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
@@ -36,53 +62,6 @@ fn builtin_eval(
         }
     }
     Err(LispError::new("eval can only have one form"))
-}
-
-fn builtin_eval_in_namespace(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(ns) = args.next() {
-        let ns = match &eval(environment, ns)?.get().data {
-            ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-            ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
-            _ => {
-                return Err(LispError::new(
-                    "eval-in-namespace: namespace must be a symbol or string",
-                ))
-            }
-        };
-        let scope = match get_namespace(environment, ns) {
-            Some(scope) => scope,
-            None => {
-                let msg = format!("Error, namespace {} does not exist!", ns);
-                return Err(LispError::new(msg));
-            }
-        };
-        if let Some(arg) = args.next() {
-            if args.next().is_none() {
-                let arg = eval(environment, arg)?;
-                let arg_d = arg.get();
-                // MAKE SURE to pop this when done or things will be fubar...
-                environment.current_scope.push(scope);
-                let ret = match &arg_d.data {
-                    ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
-                        Ok(ast) => eval(environment, ast),
-                        Err(err) => Err(LispError::new(err.reason)),
-                    },
-                    _ => {
-                        drop(arg_d);
-                        eval(environment, &arg)
-                    }
-                };
-                environment.current_scope.pop();
-                return ret;
-            }
-        }
-    }
-    Err(LispError::new(
-        "eval-in-namespace can only have two forms (namespace and form to eval)",
-    ))
 }
 
 fn builtin_fncall(
@@ -679,14 +658,7 @@ fn builtin_def(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
-        if let Some(exp) = get_expression(environment, "*ns*") {
-            match &exp.exp.get().data {
-                ExpEnum::Atom(Atom::String(s, _)) => Some(environment.interner.intern(s)),
-                _ => None,
-            }
-        } else {
-            None
-        }
+        environment.namespace.borrow().name
     }
     let (key, doc_string, val) = proc_set_vars(environment, args)?;
     if key.contains("::") {
@@ -700,7 +672,7 @@ fn builtin_def(
                 } else {
                     namespace
                 };
-                let mut scope = Some(environment.current_scope.last().unwrap().clone());
+                let mut scope = Some(get_current_scope(environment));
                 while let Some(in_scope) = scope {
                     let name = in_scope.borrow().name;
                     if let Some(name) = name {
@@ -867,7 +839,7 @@ fn builtin_fn(
                     Lambda {
                         params,
                         body,
-                        capture: environment.current_scope.last().unwrap().clone(),
+                        capture: get_current_scope(environment),
                     },
                 ))));
             }
@@ -1132,22 +1104,19 @@ fn do_expansion(
             if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
                 let params: Expression = sh_macro.params.clone().into();
                 let body: Expression = sh_macro.body.clone().into();
-                let new_scope = match environment.current_scope.last() {
-                    Some(last) => build_new_scope(Some(last.clone())),
-                    None => build_new_scope(None),
-                };
-                environment.current_scope.push(new_scope);
+                let new_scope = build_new_scope(Some(get_current_scope(environment)));
+                environment.scopes.push(new_scope);
                 if let Err(err) = setup_args(environment, None, &params, parts, false) {
-                    environment.current_scope.pop();
+                    environment.scopes.pop();
                     return Err(err);
                 }
                 let expansion = eval(environment, &body);
                 if let Err(err) = expansion {
-                    environment.current_scope.pop();
+                    environment.scopes.pop();
                     return Err(err);
                 }
                 let expansion = expansion.unwrap();
-                environment.current_scope.pop();
+                environment.scopes.pop();
                 Ok(Some(expansion))
             } else {
                 Ok(None)
@@ -2026,15 +1995,12 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("eval-in-namespace"),
+        interner.intern("eval-in-scope"),
         Expression::make_function(
-            builtin_eval_in_namespace,
-            "Usage: (eval-in-namespace ns expression)
+            builtin_eval_in_scope,
+            "Usage: (eval-in-scope expression)
 
-Evaluate the provided expression in the namespace (ns).  This is a specialized
-function that you probably do not want but is useful for things like REPL functions.
-Basically an eval that ignores current scope and happens at the root of the
-provided namespace.
+Evaluate the provided expression.  Does so in the context of the current scope.
 
 If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
@@ -2043,9 +2009,11 @@ provided expression will be evaluated as part of call).
 Section: root
 
 Example:
-;(def 'test-eval-one nil)
-;(eval-in-namespace 'user \"(set 'test-eval-one \\\"ONE\\\")\")
-t
+(def 'test-eval-one nil)
+(eval \"(set 'test-eval-one \\\"ONE\\\")\")
+(test::assert-equal \"ONE\" test-eval-one)
+(eval '(set 'test-eval-one \"TWO\"))
+(test::assert-equal \"TWO\" test-eval-one)
 ",
             root,
         ),

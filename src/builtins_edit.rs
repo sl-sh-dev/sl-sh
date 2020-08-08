@@ -183,20 +183,17 @@ fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
 }
 
 fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
-    let line_exp = get_expression(environment, "__line_handler");
+    let line_exp = get_from_namespace(environment, "__line_handler");
     if let Some(exp) = line_exp {
-        let exp = exp.exp;
+        let fn_exp = exp.exp;
         // This unsafe should be OK because the returned object is used in a call to read_line and
         // dropped after.
         let environment = unsafe { &mut *(environment as *mut Environment) };
         Some(Box::new(move |input: &str| -> String {
-            let exp = match &exp.get().data {
+            let exp = match &fn_exp.get().data {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1);
-                    let sym = environment.interner.intern("__line_handler");
-                    v.push(
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(sym))).handle_no_root(),
-                    );
+                    v.push(fn_exp.clone().into());
                     v.push(
                         Expression::alloc_data(ExpEnum::Atom(Atom::String(
                             input.to_string().into(),

@@ -440,7 +440,11 @@ fn find_lisp_things(
             }
         }
     } else {
-        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        let mut loop_scope = if !environment.scopes.is_empty() {
+            Some(environment.scopes.last().unwrap().clone())
+        } else {
+            Some(environment.namespace.clone())
+        };
         while let Some(scope) = loop_scope {
             let data = &scope.borrow().data;
             for key in data.keys() {

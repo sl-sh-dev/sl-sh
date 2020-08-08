@@ -39,7 +39,7 @@ pub fn call_lambda(
     ) {
         return Err(err);
     }
-    environment.current_scope.push(new_scope);
+    environment.scopes.push(new_scope);
     set_expression_current(environment, "this-fn", None, lambda_exp.clone());
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
@@ -54,7 +54,7 @@ pub fn call_lambda(
         let last_eval = match eval_nr(environment, &body) {
             Ok(e) => e,
             Err(err) => {
-                environment.current_scope.pop();
+                environment.scopes.pop();
                 return Err(err);
             }
         };
@@ -64,12 +64,12 @@ pub fn call_lambda(
             environment.state.recur_num_args = None;
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
-                    environment.current_scope.pop();
+                    environment.scopes.pop();
                     return Err(LispError::new("Called recur in a non-tail position."));
                 }
                 let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
-                    environment.current_scope.pop();
+                    environment.scopes.pop();
                     return Err(err);
                 }
             }
@@ -83,7 +83,7 @@ pub fn call_lambda(
                     body = lambda.body.clone_root().into();
                     params = lambda.params.clone_root().into();
                     looping = true;
-                    environment.current_scope.pop();
+                    environment.scopes.pop();
                     // scope is popped so can use ? now.
                     let new_scope = build_new_scope(Some(lambda.capture.clone()));
                     let mut ib = ListIter::new_list(&parts);
@@ -94,7 +94,7 @@ pub fn call_lambda(
                         &mut ib,
                         false,
                     )?;
-                    environment.current_scope.push(new_scope);
+                    environment.scopes.push(new_scope);
                     set_expression_current(environment, "this-fn", None, lam_han.clone());
                 }
             }
@@ -102,7 +102,7 @@ pub fn call_lambda(
         llast_eval = Some(last_eval);
     }
     environment.loose_symbols = old_loose;
-    environment.current_scope.pop();
+    environment.scopes.pop();
     Ok(llast_eval
         .unwrap_or_else(Expression::make_nil)
         .resolve(environment)?)
@@ -128,24 +128,22 @@ fn exec_macro(
             return Err(err);
         }
     };
-    new_scope.outer = Some(environment.current_scope.last().unwrap().clone());
+    new_scope.outer = Some(get_current_scope(environment));
 
-    environment
-        .current_scope
-        .push(Rc::new(RefCell::new(new_scope)));
+    environment.scopes.push(Rc::new(RefCell::new(new_scope)));
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
     match eval(environment, &body) {
         Ok(expansion) => {
             let expansion = expansion.resolve(environment)?;
-            environment.current_scope.pop();
+            environment.scopes.pop();
             let res = eval(environment, expansion);
             environment.allow_lazy_fn = lazy;
             res
         }
         Err(err) => {
             environment.allow_lazy_fn = lazy;
-            environment.current_scope.pop();
+            environment.scopes.pop();
             Err(err)
         }
     }

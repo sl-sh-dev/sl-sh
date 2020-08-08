@@ -272,10 +272,10 @@ t
             data.insert(k, v);
         }
         let outer = if let Some(environment) = environment {
-            if let Some(scope) = environment.current_scope.last() {
+            if let Some(scope) = environment.scopes.last() {
                 Some(scope.clone())
             } else {
-                None
+                Some(environment.namespace.clone())
             }
         } else {
             None
@@ -376,9 +376,11 @@ pub struct Environment {
     // higher level scopes and in the current_scope vector (the first item).
     // It's special so keep a reference here as well for handy access.
     pub root_scope: Rc<RefCell<Scope>>,
+    // This is the current namespace's scope.  Namespace scopes are NOT pushed onto scopes.
+    pub namespace: Rc<RefCell<Scope>>,
     // Use as a stack of scopes, entering a new pushes and it gets popped on exit
     // The actual lookups are done using the scope and it's outer chain NOT this stack.
-    pub current_scope: Vec<Rc<RefCell<Scope>>>,
+    pub scopes: Vec<Rc<RefCell<Scope>>>,
     // Map of all the created namespaces.
     pub namespaces: HashMap<&'static str, Rc<RefCell<Scope>>>,
     // Allow lazy functions (i.e. enable TCO).
@@ -403,8 +405,18 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
-    let mut current_scope = Vec::new();
-    current_scope.push(root_scope.clone());
+    root_scope.borrow_mut().data.insert(
+        interner.intern("*last-ns*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String("root".into(), None)),
+            RefMetaData {
+                namespace: None,
+                doc_string: None,
+            },
+        ),
+    );
+    let namespace = root_scope.clone();
+    let scopes = Vec::new();
     let mut namespaces = HashMap::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
@@ -427,7 +439,8 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         exit_code: None,
         dynamic_scope: HashMap::new(),
         root_scope,
-        current_scope,
+        namespace,
+        scopes,
         namespaces,
         allow_lazy_fn: true,
         return_val: None,
@@ -491,6 +504,17 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     }
 }
 
+pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Reference> {
+    let mut loop_scope = Some(environment.namespace.clone());
+    while let Some(scope) = loop_scope {
+        if let Some(exp) = scope.borrow().data.get(key) {
+            return Some(exp.clone());
+        }
+        loop_scope = scope.borrow().outer.clone();
+    }
+    None
+}
+
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference> {
     if key.starts_with('$') || key.starts_with(':') {
         // Can not lookup env vars or keywords...
@@ -511,7 +535,11 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference>
         }
         None
     } else {
-        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        let mut loop_scope = if !environment.scopes.is_empty() {
+            Some(environment.scopes.last().unwrap().clone())
+        } else {
+            Some(environment.namespace.clone())
+        };
         while let Some(scope) = loop_scope {
             if let Some(exp) = scope.borrow().data.get(key) {
                 return Some(exp.clone());
@@ -522,17 +550,22 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference>
     }
 }
 
+pub fn get_current_scope(environment: &mut Environment) -> Rc<RefCell<Scope>> {
+    if !environment.scopes.is_empty() {
+        environment.scopes.last().unwrap().clone()
+    } else {
+        environment.namespace.clone()
+    }
+}
+
 pub fn set_expression_current(
     environment: &mut Environment,
     key: &'static str,
     doc_str: Option<String>,
     expression: Expression,
 ) {
-    let mut current_scope = environment
-        .current_scope
-        .last()
-        .unwrap() // Always has at least root scope unless horribly broken.
-        .borrow_mut();
+    let current_scope = get_current_scope(environment);
+    let mut current_scope = current_scope.borrow_mut();
     let reference = Reference::new_rooted(
         expression,
         RefMetaData {
@@ -549,11 +582,8 @@ pub fn set_expression_current_data(
     doc_str: Option<String>,
     data: ExpEnum,
 ) {
-    let mut current_scope = environment
-        .current_scope
-        .last()
-        .unwrap() // Always has at least root scope unless horribly broken.
-        .borrow_mut();
+    let current_scope = get_current_scope(environment);
+    let mut current_scope = current_scope.borrow_mut();
     let reference = Reference::new(
         data,
         RefMetaData {
@@ -569,22 +599,14 @@ pub fn set_expression_current_ref(
     key: &'static str,
     reference: Reference,
 ) {
-    let mut current_scope = environment
-        .current_scope
-        .last()
-        .unwrap() // Always has at least root scope unless horribly broken.
-        .borrow_mut();
-    current_scope.data.insert(key, reference);
+    get_current_scope(environment)
+        .borrow_mut()
+        .data
+        .insert(key, reference);
 }
 
 pub fn remove_expression_current(environment: &mut Environment, key: &str) -> Option<Reference> {
-    environment
-        .current_scope
-        .last()
-        .unwrap() // Always has at least root scope unless horribly broken.
-        .borrow_mut()
-        .data
-        .remove(key)
+    get_current_scope(environment).borrow_mut().data.remove(key)
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
@@ -599,7 +621,11 @@ pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefC
     // DO NOT return a namespace for a namespace key otherwise set will work to
     // set symbols in other namespaces.
     if !key.contains("::") {
-        let mut loop_scope = Some(environment.current_scope.last().unwrap().clone());
+        let mut loop_scope = if !environment.scopes.is_empty() {
+            Some(environment.scopes.last().unwrap().clone())
+        } else {
+            Some(environment.namespace.clone())
+        };
         while loop_scope.is_some() {
             let scope = loop_scope.unwrap();
             if let Some(_exp) = scope.borrow().data.get(key) {
