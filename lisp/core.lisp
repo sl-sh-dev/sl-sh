@@ -121,25 +121,41 @@ Example:
     (sym &rest args)
     `(def ',sym ,@args))
 
-(defmacro defn
+(defmacro internal-fn
 "
-Define a named function in the current namespace.
+Template for macros the define functions, can pass an 'op' like def or set.
+Intended for use by other core macros.
 
 Section: core
 "
-    (name &rest args) ((fn ()
-    (if (= (length args) 2)
+    (op name &rest args) ((fn () (progn
+    (if (< (length args) 2) (err "defn: Wrong number of args."))
+    (if (string? (vec-nth 0 args))
+        (progn
+            (def 'doc-str (vec-nth 0 args))
+            (def 'ars (vec-nth 1 args))
+            (def 'body (vec-slice args 2))
+            `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
         (progn
             (def 'ars (vec-nth 0 args))
-            (def 'body (vec-nth 1 args))
-            `(def ',name (fn ,ars (block ,name ,body))))
-        (if (= (length args) 3)
-            (progn
-                (def 'doc-str (vec-nth 0 args))
-                (def 'ars (vec-nth 1 args))
-                (def 'body (vec-nth 2 args))
-                `(def ',name ,doc-str (fn ,ars (block ,name ,body))))
-            (err "defn: Wrong number of args."))))))
+            (def 'body (vec-slice args 1))
+            `(,op ',name (fn ,ars (block ,name ,@body)))))))))
+
+(defmacro defn
+"
+Define a named function in the current scope.
+
+Section: core
+"
+    (name &rest args) `(internal-fn def ,name ,@args)) 
+
+(defmacro setfn
+"
+Binds name to function body in current namespace.
+
+Section: core
+"
+    (name &rest args) `(internal-fn set ,name ,@args)) 
 
 (defn ns-pop
 "Usage: (ns-pop)
@@ -155,26 +171,6 @@ Example:
 (test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
 "
     () (ns-enter *last-ns*))
-
-(defmacro setfn
-"
-Binds name to function body in current namespace.
-
-Section: core
-"
-    (name &rest args) ((fn ()
-    (if (= (length args) 2)
-        (progn
-            (def 'ars (vec-nth 0 args))
-            (def 'body (vec-nth 1 args))
-            `(set ',name (fn ,ars ,body)))
-        (if (= (length args) 3)
-            (progn
-                (def 'doc-str (vec-nth 0 args))
-                (def 'ars (vec-nth 1 args))
-                (def 'body (vec-nth 2 args))
-                `(set ',name ,doc-str (fn ,ars ,body)))
-            (err "setfn: Wrong number of args."))))))
 
 (defmacro loop
 "
