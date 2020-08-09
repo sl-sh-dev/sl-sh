@@ -19,7 +19,7 @@
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
-(if (def? '*interactive*) (progn (load "slshrc") (shell::repl)))
+(if (def? '*interactive*) (progn (load "slshrc") (if (not (def? 'repl))(def 'repl shell::repl)) (repl)))
 
 (if (def? '*run-script*)
   (progn

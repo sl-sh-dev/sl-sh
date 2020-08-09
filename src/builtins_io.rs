@@ -222,10 +222,17 @@ fn builtin_read_line(
                             None,
                         ))))
                     }
-                    FileState::ReadBinary(f) => {
+                    FileState::ReadBinary(f) => {  // XXX TODO- something better if/when support binary.
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
-                            Ok(Expression::make_nil())
+                            let input = Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                                "".into(),
+                                None,
+                            )));
+                            let error = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                                ":unexpected-eof",
+                            )));
+                            Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 line.into(),
@@ -236,7 +243,14 @@ fn builtin_read_line(
                     FileState::Stdin => {
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
-                            Ok(Expression::make_nil())
+                            let input = Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                                "".into(),
+                                None,
+                            )));
+                            let error = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                                ":unexpected-eof",
+                            )));
+                            Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
                                 line.into(),

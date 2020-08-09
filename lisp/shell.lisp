@@ -660,11 +660,11 @@ Section: shell
             (if (> line-len 0)
               (progn
                 ; Save history
-                (prompt-history-push :repl line)
+                (if (not (def? '*repl-std-only*)) (prompt-history-push :repl line))
                 (set '*last-command* line))))
           (progn 
             ; Save temp history
-            (if (> line-len 0) (prompt-history-push-throwaway :repl line))
+            (if (and (> line-len 0)(not (def? '*repl-std-only*))) (prompt-history-push-throwaway :repl line))
             (print-error result)))))
 
 (defn repl () (progn
@@ -674,10 +674,12 @@ Section: shell
               (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
       (defn repl-inner ()
             (progn
-              (prompt-history-context :repl $PWD)
+              (if (not (def? '*repl-std-only*)) (prompt-history-context :repl $PWD))
               (reap-jobs)
               (def 'save-last-status *last-status*)
-              (def 'line (prompt :repl (get-prompt) "~/.local/share/sl-sh/history"))
+              (def 'line (if (def? '*repl-std-only*) 
+                           (progn (print (get-prompt))(read-line *stdin*))
+                           (prompt :repl (get-prompt) "~/.local/share/sl-sh/history")))
               (export 'LAST_STATUS save-last-status)
               (set '*last-status* save-last-status)
               (def 'line-len (length (str-trim line)))
