@@ -222,7 +222,8 @@ fn builtin_read_line(
                             None,
                         ))))
                     }
-                    FileState::ReadBinary(f) => {  // XXX TODO- something better if/when support binary.
+                    FileState::ReadBinary(f) => {
+                        // XXX TODO- something better if/when support binary.
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
                             let input = Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
