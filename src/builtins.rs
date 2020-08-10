@@ -64,18 +64,6 @@ fn builtin_eval_in_scope(
     Err(LispError::new("eval can only have one form"))
 }
 
-fn builtin_fncall(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(command) = args.next() {
-        let command = eval(environment, command)?;
-        fn_call(environment, command, args)
-    } else {
-        Err(LispError::new("fncall: empty call"))
-    }
-}
-
 fn builtin_apply(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -2014,25 +2002,6 @@ Example:
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("fncall"),
-        Expression::make_function(
-            builtin_fncall,
-            "Usage: (fncall function arg0 ... argN)
-
-Call the provided function with the supplied arguments.
-
-Section: root
-
-Example:
-(def 'test-fncall-one nil)
-(fncall set 'test-fncall-one \"ONE\")
-(test::assert-equal \"ONE\" test-fncall-one)
-(test::assert-equal 10 (fncall + 1 2 7))
 ",
             root,
         ),
