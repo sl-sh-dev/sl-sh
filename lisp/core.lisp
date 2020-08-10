@@ -1,6 +1,27 @@
 ;;; These are core forms that are installed in the root namespace so they
 ;;; are always available.
 
+(def 'internal-macro
+"
+Template for macros the define macros, can pass an 'op' like def or set.
+Intended for use by other core macros.
+
+Section: core
+"
+    (macro (op name &rest args)
+           ((fn ()
+                (if (< (length args) 2) (err "defmacro: Wrong number of args."))
+                (if (string? (vec-nth 0 args))
+                  (progn
+                    (def 'doc-str (vec-nth 0 args))
+                    (def 'ars (vec-nth 1 args))
+                    (def 'body (vec-slice args 2))
+                    `(progn (,op ',name ,doc-str (macro ,ars ,@body)) nil))
+                  (progn
+                    (def 'ars (vec-nth 0 args))
+                    (def 'body (vec-slice args 1))
+                    `(progn (,op ',name (macro ,ars ,@body)) nil)))))))
+
 (def 'defmacro
 "Usage: (defmacro name doc_string? argument_list body)
 
@@ -8,19 +29,7 @@ Create a macro and bind it to a symbol in the current scope.
 
 Section: core
 "
-    (macro (name &rest args) ((fn ()
-    (if (= (length args) 2)
-        (progn
-            (def 'ars (vec-nth 0 args))
-            (def 'body (vec-nth 1 args))
-            `(progn (def ',name (macro ,ars ,body)) nil))
-        (if (= (length args) 3)
-            (progn
-                (def 'doc-str (vec-nth 0 args))
-                (def 'ars (vec-nth 1 args))
-                (def 'body (vec-nth 2 args))
-                `(progn (def ',name ,doc-str (macro ,ars ,body)) nil))
-            (err "defmacro: Wrong number of args.")))))))
+    (macro (name &rest args) `(internal-macro def ,name ,@args)))
 
 (def 'setmacro
 "Usage: (setmacro name doc_string? argument_list body)
@@ -29,19 +38,7 @@ Set a macro to an existing symbol.
 
 Section: core
 "
-    (macro (name &rest args) ((fn ()
-    (if (= (length args) 2)
-        (progn
-            (def 'ars (vec-nth 0 args))
-            (def 'body (vec-nth 1 args))
-            `(progn (set ',name (macro ,ars ,body)) nil))
-        (if (= (length args) 3)
-            (progn
-                (def 'doc-str (vec-nth 0 args))
-                (def 'ars (vec-nth 1 args))
-                (def 'body (vec-nth 2 args))
-                `(progn (set ',name ,doc-str (macro ,ars ,body)) nil))
-            (err "setmacro: Wrong number of args.")))))))
+    (macro (name &rest args) `(internal-macro set ,name ,@args)))
 
 (defmacro ns-export
 "Export a symbol or list of symbols to be imported into other namespaces.
@@ -127,25 +124,41 @@ Template for macros the define functions, can pass an 'op' like def or set.
 Intended for use by other core macros.
 
 Section: core
+
+Example:
+; tested in defn and setfn.
+t
 "
-    (op name &rest args) ((fn () (progn
-    (if (< (length args) 2) (err "defn: Wrong number of args."))
-    (if (string? (vec-nth 0 args))
-        (progn
-            (def 'doc-str (vec-nth 0 args))
-            (def 'ars (vec-nth 1 args))
-            (def 'body (vec-slice args 2))
-            `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
-        (progn
-            (def 'ars (vec-nth 0 args))
-            (def 'body (vec-slice args 1))
-            `(,op ',name (fn ,ars (block ,name ,@body)))))))))
+    (op name &rest args)
+    ((fn ()
+         (if (< (length args) 1) (err "defn: Wrong number of args."))
+         (if (string? (vec-nth 0 args))
+           (progn
+             (if (< (length args) 2) (err "defn: Wrong number of args."))
+             (def 'doc-str (vec-nth 0 args))
+             (def 'ars (vec-nth 1 args))
+             (def 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
+             `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
+           (progn
+             (def 'ars (vec-nth 0 args)) 
+             (def 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
+             `(,op ',name (fn ,ars (block ,name ,@body))))))))
 
 (defmacro defn
 "
 Define a named function in the current scope.
 
 Section: core
+
+Example:
+(defn defn-test (x y) (+ x y))
+(test::assert-equal 5 (defn-test 2 3))
+(defn defn-test (x y) (set 'x (* x 2))(+ x y))
+(test::assert-equal 7 (defn-test 2 3))
+(defn defn-test (x y))
+(test::assert-false (defn-test 2 3))
+(defn defn-test (x y) t)
+(test::assert-true (defn-test 2 3))
 "
     (name &rest args) `(internal-fn def ,name ,@args)) 
 
@@ -154,6 +167,17 @@ Section: core
 Binds name to function body in current namespace.
 
 Section: core
+
+Example:
+(def 'defn-test nil)
+(setfn defn-test (x y) (+ x y))
+(test::assert-equal 5 (defn-test 2 3))
+(setfn defn-test (x y) (set 'x (* x 2))(+ x y))
+(test::assert-equal 7 (defn-test 2 3))
+(setfn defn-test (x y))
+(test::assert-false (defn-test 2 3))
+(setfn defn-test (x y) t)
+(test::assert-true (defn-test 2 3))
 "
     (name &rest args) `(internal-fn set ,name ,@args)) 
 

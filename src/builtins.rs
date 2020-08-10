@@ -819,21 +819,36 @@ fn builtin_fn(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(params) = args.next() {
-        if let Some(body) = args.next() {
-            if args.next().is_none() {
-                let params = params.handle_no_root();
-                let body = body.handle_no_root();
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
-                    Lambda {
-                        params,
-                        body,
-                        capture: get_current_scope(environment),
-                    },
+        let (first, second) = (args.next(), args.next());
+        let body = if let Some(first) = first {
+            if let Some(second) = second {
+                let mut body: Vec<Handle> = Vec::new();
+                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                    "progn",
                 ))));
+                body.push(first.into());
+                body.push(second.into());
+                for a in args {
+                    body.push(a.into());
+                }
+                Expression::with_list(body)
+            } else {
+                first
             }
-        }
+        } else {
+            Expression::make_nil()
+        };
+        let params = params.handle_no_root();
+        let body = body.handle_no_root();
+        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
+            Lambda {
+                params,
+                body,
+                capture: get_current_scope(environment),
+            },
+        ))));
     }
-    Err(LispError::new("fn can only have two forms"))
+    Err(LispError::new("fn: needs at least one form"))
 }
 
 fn builtin_quote(
@@ -1066,20 +1081,33 @@ fn builtin_macro(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(params) = args.next() {
-        if let Some(body) = args.next() {
-            if args.next().is_none() {
-                let params = params.handle_no_root();
-                let body = body.handle_no_root();
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Macro {
-                    params,
-                    body,
-                }))));
+        let (first, second) = (args.next(), args.next());
+        let body = if let Some(first) = first {
+            if let Some(second) = second {
+                let mut body: Vec<Handle> = Vec::new();
+                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                    "progn",
+                ))));
+                body.push(first.into());
+                body.push(second.into());
+                for a in args {
+                    body.push(a.into());
+                }
+                Expression::with_list(body)
+            } else {
+                first
             }
-        }
+        } else {
+            Expression::make_nil()
+        };
+        let params = params.handle_no_root();
+        let body = body.handle_no_root();
+        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Macro {
+            params,
+            body,
+        }))));
     }
-    Err(LispError::new(
-        "macro can only have two forms (bindings and body)",
-    ))
+    Err(LispError::new("macro: need at least a bindings form"))
 }
 
 fn do_expansion(
@@ -2440,11 +2468,32 @@ Example:
         interner.intern("fn"),
         Expression::make_special(
             builtin_fn,
-            "Usage: (fn (x) (x + 1))
+            "Usage: (fn (param*) expr*) -> exprN
 
 Create a function (lambda).
 
 Section: root
+
+Example:
+(def 'test-fn1 nil)
+(def 'test-fn2 nil)
+(def 'test-fn3 nil)
+(def 'test-fn-empty ((fn ())))
+(test::assert-false test-fn-empty)
+((fn () (set 'test-fn1 1)))
+(test::assert-equal 1 test-fn1)
+((fn () (set 'test-fn1 10)(set 'test-fn2 2)))
+(test::assert-equal 10 test-fn1)
+(test::assert-equal 2 test-fn2)
+((fn () (set 'test-fn1 11)(set 'test-fn2 20)(set 'test-fn3 3)))
+(test::assert-equal 11 test-fn1)
+(test::assert-equal 20 test-fn2)
+(test::assert-equal 3 test-fn3)
+((fn (x y z) (set 'test-fn1 x)(set 'test-fn2 y)(set 'test-fn3 z)) 12 21 30)
+(test::assert-equal 12 test-fn1)
+(test::assert-equal 21 test-fn2)
+(test::assert-equal 30 test-fn3)
+(test::assert-equal 63 ((fn (x y z) (set 'test-fn1 x)(set 'test-fn2 y)(set 'test-fn3 z)(+ x y z)) 12 21 30))
 ",
             root,
         ),
@@ -2605,11 +2654,32 @@ Example:
         interner.intern("macro"),
         Expression::make_function(
             builtin_macro,
-            "Usage: (macro (&rest args) `(apply + ,@args))
+            "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.
 
 Section: root
+
+Example:
+(def 'test-macro1 nil)
+(def 'test-macro2 nil)
+(def 'test-macro3 nil)
+(def 'test-macro-empty ((macro ())))
+(test::assert-false test-macro-empty)
+((macro () '(set 'test-macro1 1)))
+(test::assert-equal 1 test-macro1)
+((macro () (set 'test-macro1 10)'(set 'test-macro2 2)))
+(test::assert-equal 10 test-macro1)
+(test::assert-equal 2 test-macro2)
+((macro () (set 'test-macro1 11)(set 'test-macro2 20)'(set 'test-macro3 3)))
+(test::assert-equal 11 test-macro1)
+(test::assert-equal 20 test-macro2)
+(test::assert-equal 3 test-macro3)
+((macro (x y z) (set 'test-macro1 x)(set 'test-macro2 y)`(set 'test-macro3 ,z)) 12 21 30)
+(test::assert-equal 12 test-macro1)
+(test::assert-equal 21 test-macro2)
+(test::assert-equal 30 test-macro3)
+(test::assert-equal 63 ((macro (x y z) (set 'test-macro1 x)(set 'test-macro2 y)(set 'test-macro3 z)`(+ ,x ,y ,z)) 12 21 30))
 ",
             root,
         ),
