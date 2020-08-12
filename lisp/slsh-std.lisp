@@ -1,8 +1,29 @@
 ; core should be loaded into the root namespace (ie it does not set a namespace).
+(def 'prim-print-backtrace (fn (backtrace) 
+    (if (not (vec-empty? backtrace))
+        (do
+          (def 'b (first backtrace))
+          (print (if (def 'file (meta-file-name b)) file "??????") ":\t"
+               "line " (if (def 'line (meta-line-no b)) line "??") ":\t"
+               "column " (if (def 'col (meta-column-no b)) col "??") "\n")
+          (recur (rest backtrace))))))
+
+(def 'prim-print-error (fn (error)
+    (if (= :error (car error))
+        (do
+            (println (cadr error))
+            (prim-print-backtrace (caddr error)))
+        (err "Not an error!"))))
+
+(def 'result (get-error (do
+
 (load "core.lisp")
 
 (defn error-stack-on () nil)
 (defn error-stack-off () nil)
+
+; For compat.
+(defmacro progn (&rest args) `(do ,@args))
 
 (def '*last-status* 0)
 (def '*last-command* "")
@@ -14,15 +35,16 @@
 (load "struct.lisp")
 (load "iterator.lisp")
 (load "shell.lisp")
-(load "test.lisp")
+(load "test.lisp"))))
 
+(if (= :error (car result)) (do (prim-print-error result)(recur)))
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
-(if (def? '*interactive*) (progn (load "slshrc") (if (not (def? 'repl))(def 'repl shell::repl)) (repl)))
+(if (def? '*interactive*) (do (load "slshrc") (if (not (def? 'repl))(def 'repl shell::repl)) (repl)))
 
 (if (def? '*run-script*)
-  (progn
+  (do
     (def 'result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
     (if (= :error (car result))
       (shell::print-error result))))

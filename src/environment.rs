@@ -181,7 +181,7 @@ Example:
 (write-line stdin-test \"Test line\")
 (close stdin-test)
 ; Use a file for stdin for test.
-(dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (progn (test::assert-equal \"Test line\n\" (read-line *stdin*)) (close *stdin*)))
+(dyn '*stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (do (test::assert-equal \"Test line\n\" (read-line *stdin*)) (close *stdin*)))
 ".to_string()),
                 },
             ),
@@ -203,7 +203,7 @@ Section: shell
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (progn (write-line *stdout* \"Test out\") (close *stdout*)))
+(dyn '*stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (do (write-line *stdout* \"Test out\") (close *stdout*)))
 (test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
 ".to_string()),
                 },
@@ -226,7 +226,7 @@ Section: shell
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (progn (write-line *stderr* \"Test Error\") (close *stderr*)))
+(dyn '*stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (do (write-line *stderr* \"Test Error\") (close *stderr*)))
 (test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
 ".to_string()),
                 },

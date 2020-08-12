@@ -13,26 +13,26 @@ for that).
 
 Section: shell
 "
-	(name &rest args) (progn
+	(name &rest args)
 	(defq usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
 	(match (length args)
-		(2 (progn
+		(2 (do
 			(defq docstring (vec-nth 0 args))
 			(defq body (vec-nth 1 args))
 			`(defmacro ,name ,docstring (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
-		(1 (progn
+		(1 (do
 			(defq body (vec-nth 0 args))
 			`(defmacro ,name (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
-		(nil (err usage)))))
+		(nil (err usage))))
 
 ;; Remove an alias, this should be used instead of a raw undef for aliases.
-(defn unalias (name) (progn
+(defn unalias (name)
 	(shell::unregister-alias name)
-	(undef name)))
+	(undef name))
 
 (defmacro out>>
 "
@@ -159,7 +159,7 @@ Example:
 (assert-equal cur-test-path (str (pwd)))
 "
 		(dir) (if (form (cd dir))
-		(progn
+		(do
 			(vec-push! dir_stack $OLDPWD)
 			(if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
 			t)
@@ -294,15 +294,15 @@ Example:
 (test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
-	((fn (params bindings olds) (progn
+	((fn (params bindings olds)
 		(iterator::for-i idx el in vals
 			(if (= 1 (length el))
-				(progn
+				(do
 					(vec-insert-nth! idx (iterator::nth 0 el) params)
 					(vec-insert-nth! idx nil bindings)
 					(vec-insert-nth! idx (eval (to-symbol (str "\$" (iterator::nth 0 el)))) olds))
 				(if (= 2 (length el))
-					(progn
+					(do
 						(def 'binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
 						(vec-insert-nth! idx (iterator::nth 0 el) params)
@@ -311,7 +311,7 @@ Example:
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
-				(progn
+				(do
 					(iterator::for-i i p in params
 						(if (null (iterator::nth i bindings))
 							(unexport p)
@@ -321,7 +321,7 @@ Example:
 					(if (null (iterator::nth i olds))
 						(unexport p)
 						(export p (iterator::nth i olds))))))
-		(quote ,params) (quote ,bindings) (quote ,olds))))
+		(quote ,params) (quote ,bindings) (quote ,olds)))
 	(make-vec (length vals)) (make-vec (length vals)) (make-vec (length vals))))
 
 
@@ -381,7 +381,7 @@ True if the supplied command is an alias for a system command.
 
 Section: shell
 "
-	(com) `(progn
+	(com) `(do
 	(def 'ret nil)
 	(def 'val (to-symbol ,com))
 	(if (def? val)
@@ -401,7 +401,7 @@ Example:
 (assert-true (sys-command? \"ls\"))
 (assert-false (sys-command? \"rst-not-a-comand-strsnt\"))
 "
-	(com) (progn
+	(com)
 	(def 'ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
 		(if (fs-exists? com) (set 'ret t))
@@ -409,10 +409,10 @@ Example:
 			(set 'ret t)
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
 				(set 'ret t)
-				(for p in (str-split ":" $PATH) (progn
+				(for p in (str-split ":" $PATH) (do
 					(def 'path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
-	ret))
+	ret)
 
 (defq register-alias nil)
 (defq unregister-alias nil)
@@ -459,7 +459,7 @@ Turn on syntax highlighting at the repl.
 
 Section: shell
 "
-() '(progn
+() '(do
 ; Syntax highlight the supplied line.
 (def '__line_handler nil)
 (let ((plev 0)
@@ -471,27 +471,27 @@ Section: shell
 	(in-sys-command nil)
 	(tok-command t))
 
-	(defn func? (com) (progn
+	(defn func? (com)
 		; Want the actual thing pointed to by the symbol in com for the test.
 		(if (def? com)
 			(set 'com (eval (to-symbol com))))
-		(or (builtin? com)(lambda? com)(macro? com))))
+		(or (builtin? com)(lambda? com)(macro? com)))
 
-	(defn paren-color (level) (progn
+	(defn paren-color (level)
 		(def 'col (% level 4))
 		(if (= col 0) shell::*fg-white*
 			(if (= col 1) shell::*fg-cyan*
 				(if (= col 2) shell::*fg-yellow*
-					(if (= col 3) shell::*fg-blue*))))))
+					(if (= col 3) shell::*fg-blue*)))))
 
-	(defn my-sys-command? (command) (progn
+	(defn my-sys-command? (command)
 		(def 'ret nil)
 		(if (hash-haskey sys-syms command)
 			(set 'ret t)
-			(if (not (hash-haskey bad-syms command)) (progn
+			(if (not (hash-haskey bad-syms command)) (do
 				(set 'ret (shell::sys-command? command))
 				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
-		ret))
+		ret)
 
 	(defn command-color (command)
 		(if (not tok-command)
@@ -504,41 +504,41 @@ Section: shell
 				(str shell::tok-default-color command shell::*fg-default*))
 			(if (func? command)
 				(if (or (shell::alias? command)(shell::sys-alias? command))
-					(progn (set 'in-sys-command t)(str shell::tok-sys-alias-color command shell::*fg-default*))
+					(do (set 'in-sys-command t)(str shell::tok-sys-alias-color command shell::*fg-default*))
 					(str shell::tok-slsh-fcn-color command shell::*fg-default*))
 				(if (my-sys-command? command)
-					(progn (set 'in-sys-command t)(str shell::tok-sys-command-color command shell::*fg-default*))
+					(do (set 'in-sys-command t)(str shell::tok-sys-command-color command shell::*fg-default*))
 					(str shell::tok-invalid-color command shell::*fg-default*)))))
 
-	(defn prrawtoken () (progn
+	(defn prrawtoken ()
 		(def 'ttok token)
 		(set 'token (str ""))
-		ttok))
-	(defn prtoken () (progn
+		ttok)
+	(defn prtoken ()
 		(def 'ttok token)
 		(set 'token (str ""))
-		(command-color ttok)))
-	(defn paren-open () (progn
+		(command-color ttok))
+	(defn paren-open ()
 		(def 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
 		(set 'plev (+ plev 1))
 		(set 'tok-command t)
-		ret))
-	(defn paren-close () (progn
+		ret)
+	(defn paren-close ()
 		(set 'in-sys-command nil)
 		(if (> plev 0)
-			(progn
+			(do
 				(set 'plev (- plev 1))
 				(str (prtoken) (paren-color plev) #\) shell::*fg-default*))
-			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*))))
+			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
 
-	(defn whitespace (ch) (progn
+	(defn whitespace (ch)
 		(def 'ret (str (prtoken) ch))
 		;(def 'ret (str token ch))
 		(set 'token (str ""))
 		(set 'tok-command nil)
-		ret))
+		ret)
 
-	(setfn __line_handler (line) (progn
+	(setfn __line_handler (line)
 		(def 'in-quote nil)
 		(def 'last-ch #\ )
 		(set 'plev 0)
@@ -546,31 +546,31 @@ Section: shell
 		(set 'token (str ""))
 		(set 'tok-command t)
 		(set 'in-sys-command nil)
-		(if (<= (length line) 1) (progn
+		(if (<= (length line) 1) (do
 			(hash-clear! bad-syms)
 			(hash-clear! sys-syms)))
-		(set 'out (str-map (fn (ch) (progn
+		(set 'out (str-map (fn (ch)
 			(def 'ret (if in-quote
-				(progn
+				(do
 					(str-push! token ch)
 					(if (and (not (= last-ch #\\))(= ch #\"))
-						(progn
+						(do
 							(set 'in-quote nil)
 							(str-push! token shell::*fg-default*)
 							(prrawtoken))
 						""))
 				(if (and (not (= last-ch #\\))(= ch #\"))
-					(progn (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
+					(do (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
 					(if (= ch #\()
 						(paren-open)
 						(if (= ch #\))
 							(paren-close)
 							(if (char-whitespace? ch)
 								(whitespace ch)
-								(progn (str-push! token ch) "")))))))
-			(progn (set 'last-ch ch) ret))) line))
+								(do (str-push! token ch) "")))))))
+			(do (set 'last-ch ch) ret)) line))
 		(if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
-		(str out)))
+		(str out))
 		nil)))
 
 (defmacro syntax-off
@@ -588,7 +588,7 @@ complete mapping in lisp/endfix.lisp of all supported infix operators and
 the corresponding sl-sh function they map to:
 	'|| 'or
 	'| '|
-	'@@ 'progn (@@ is used instead of ; because ; is a comment in lisp)
+	'@@ 'do (@@ is used instead of ; because ; is a comment in lisp)
 	'&& 'and
 	'out> 'out>
 	'out>> 'out>>
@@ -614,13 +614,13 @@ Section: shell
 
 (defn print-error (error)
     (if (= :error (car error))
-        (progn
+        (do
             (println (cadr error))
             (print-backtrace (caddr error)))
         (err "Not an error!")))
 
 (defn repl-eof (result)
-      (progn
+      (do
         (if (and (values? result)
                  (= 2 (values-length result))
                  (= :unexpected-eof (values-nth 1 result))))))
@@ -643,7 +643,7 @@ Section: shell
 
 
 (defn repl-line (line line-len)
-      (progn
+      (do
         (export 'LAST_STATUS "0")
         (set '*last-status* 0)
         (def 'ast (if (and (def? '__exec_hook)(lambda? __exec_hook))
@@ -652,42 +652,40 @@ Section: shell
         (set 'ast (if (string? ast) (read-all ast) ast))
         (def 'result (loose-symbols (get-error (eval ast))))
         (if (= :ok (car result))
-          (progn
+          (do
             (if (process? (cdr result)) nil
               (nil? (cdr result)) nil
               (file? (cdr result)) nil
               (println (cdr result)))
             (if (> line-len 0)
-              (progn
+              (do
                 ; Save history
                 (if (not (def? '*repl-std-only*)) (prompt-history-push :repl line))
                 (set '*last-command* line))))
-          (progn 
+          (do 
             ; Save temp history
             (if (and (> line-len 0)(not (def? '*repl-std-only*))) (prompt-history-push-throwaway :repl line))
             (print-error result)))))
 
-(defn repl () (progn
+(defn repl ()
       (defn get-prompt ()
-            (progn
               (def 'ns-prompt (to-symbol (str *active-ns* "::__prompt")))
-              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
+              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt)))
       (defn repl-inner ()
-            (progn
               (if (not (def? '*repl-std-only*)) (prompt-history-context :repl $PWD))
               (reap-jobs)
               (def 'save-last-status *last-status*)
               (def 'line (if (def? '*repl-std-only*) 
-                           (progn (print (get-prompt))(read-line *stdin*))
+                           (do (print (get-prompt))(read-line *stdin*))
                            (prompt :repl (get-prompt) "~/.local/share/sl-sh/history")))
               (export 'LAST_STATUS save-last-status)
               (set '*last-status* save-last-status)
               (def 'line-len (length (str-trim line)))
               (if (and (> line-len 0)(not (values? line))) (repl-line line line-len))
-              (if (not (repl-eof line)) (recur))))
-      ((fn () (progn
-                (def 'result (get-error (repl-inner)))
-                (if (= :error (car result)) (progn (print-error result)(recur))))))))
+              (if (not (repl-eof line)) (recur)))
+      ((fn ()
+           (def 'result (get-error (repl-inner)))
+           (if (= :error (car result)) (do (print-error result)(recur))))))
 
 (ns-export '(
 	alias

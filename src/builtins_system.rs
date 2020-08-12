@@ -469,7 +469,7 @@ t
             builtin_run_bg,
             "Usage: (run-bg exp0 ... expN)
 
-Like progn except any system commands started within form will be in the background.
+Like do except any system commands started within form will be in the background.
 
 Section: shell
 

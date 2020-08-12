@@ -525,7 +525,7 @@ fn builtin_format(
     ))))
 }
 
-pub fn builtin_progn(
+pub fn builtin_do(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -823,9 +823,7 @@ fn builtin_fn(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-                    "progn",
-                ))));
+                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol("do"))));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -1085,9 +1083,7 @@ fn builtin_macro(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-                    "progn",
-                ))));
+                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol("do"))));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -2077,7 +2073,7 @@ Example:
 (def 'test-unwind-four nil)
 (def 'test-unwind-err (get-error
     (unwind-protect
-        (progn (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
+        (do (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
         (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
 (test::assert-equal :error (car test-unwind-err))
 (test::assert-equal \"Some protected error two\" (cadr test-unwind-err))
@@ -2208,7 +2204,7 @@ Section: root
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (progn (print \"Print test out\")(print \" two\") (close *stdout*)))
+(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (do (print \"Print test out\")(print \" two\") (close *stdout*)))
 (test::assert-equal \"Print test out two\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
             root,
@@ -2226,7 +2222,7 @@ Section: root
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (progn (println \"Println test out\")(println \"line two\") (close *stdout*)))
+(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (do (println \"Println test out\")(println \"line two\") (close *stdout*)))
 (def 'topen (open \"/tmp/sl-sh.println.test\" :read))
 (test::assert-equal \"Println test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
@@ -2246,7 +2242,7 @@ Section: root
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (progn (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (do (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
 (test::assert-equal \"eprint test out two\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
             root,
@@ -2264,7 +2260,7 @@ Section: root
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (progn (eprintln \"eprintln test out\")(eprintln \"line two\") (close *stderr*)))
+(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (do (eprintln \"eprintln test out\")(eprintln \"line two\") (close *stderr*)))
 (def 'topen (open \"/tmp/sl-sh.eprintln.test\" :read))
 (test::assert-equal \"eprintln test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
@@ -2293,22 +2289,22 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("progn"),
+        interner.intern("do"),
         Expression::make_special(
-            builtin_progn,
-            "Usage: (progn exp0 ... expN) -> expN
+            builtin_do,
+            "Usage: (do exp0 ... expN) -> expN
 
 Evaluatate each form and return the last.
 
 Section: root
 
 Example:
-(def 'test-progn-one nil)
-(def 'test-progn-two nil)
-(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
-(test::assert-equal \"One\" test-progn-one)
-(test::assert-equal \"Two\" test-progn-two)
-(test::assert-equal \"Three\" test-progn-three)
+(def 'test-do-one nil)
+(def 'test-do-two nil)
+(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
 ",
             root,
         ),
@@ -2324,18 +2320,18 @@ Sets an existing expression in the current scope(s).  Return the expression that
 Section: root
 
 Example:
-(def 'test-progn-one nil)
-(def 'test-progn-two nil)
-(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
-(test::assert-equal \"One\" test-progn-one)
-(test::assert-equal \"Two\" test-progn-two)
-(test::assert-equal \"Three\" test-progn-three)
-(let ((test-progn-one nil))
+(def 'test-do-one nil)
+(def 'test-do-two nil)
+(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+(let ((test-do-one nil))
     ; set the currently scoped value.
-    (test::assert-equal \"1111\" (set 'test-progn-one \"1111\"))
-    (test::assert-equal \"1111\" test-progn-one))
+    (test::assert-equal \"1111\" (set 'test-do-one \"1111\"))
+    (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
-(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"One\" test-do-one)
 ",
             root,
         ),
@@ -2351,22 +2347,22 @@ Adds an expression to the current scope.  Return the expression that was defined
 Section: root
 
 Example:
-(def 'test-progn-one nil)
-(def 'test-progn-two nil)
-(def 'test-progn-three (progn (set 'test-progn-one \"One\")(set 'test-progn-two \"Two\")\"Three\"))
-(test::assert-equal \"One\" test-progn-one)
-(test::assert-equal \"Two\" test-progn-two)
-(test::assert-equal \"Three\" test-progn-three)
-(let ((test-progn-one nil))
-    ; Add this to tthe let's scope (shadow the outer test-progn-two).
-    (test::assert-equal \"Default\" (def 'test-progn-two \"Default\"))
+(def 'test-do-one nil)
+(def 'test-do-two nil)
+(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+(let ((test-do-one nil))
+    ; Add this to tthe let's scope (shadow the outer test-do-two).
+    (test::assert-equal \"Default\" (def 'test-do-two \"Default\"))
     ; set the currently scoped value.
-    (set 'test-progn-one \"1111\")
-    (set 'test-progn-two \"2222\")
-    (test::assert-equal \"1111\" test-progn-one)
-    (test::assert-equal \"2222\" test-progn-two))
+    (set 'test-do-one \"1111\")
+    (set 'test-do-two \"2222\")
+    (test::assert-equal \"1111\" test-do-one)
+    (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
-(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"One\" test-do-one)
 ",
             root,
         ),
@@ -2414,7 +2410,7 @@ Section: root
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
-(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (progn (test-dyn-fn)))
+(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (do (test-dyn-fn)))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
 ",
             root,
@@ -2700,11 +2696,11 @@ Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
 
 (defmacro mac-test-for
-    (bind in in_list body) (progn
+    (bind in in_list body) (do
 	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
     `((fn (,bind)
         (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (progn
+            (root::loop (plist) (,in_list) (do
                 (set ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
@@ -2717,7 +2713,7 @@ Example:
             (root::loop
                 (plist)
                 ('(1 2 3))
-                (progn
+                (do
                     (set 'i (root::first plist)) nil
                     (if
                         (> (length plist) 1)
@@ -2745,11 +2741,11 @@ Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
 
 (defmacro mac-test-for
-    (bind in in_list body) (progn
+    (bind in in_list body) (do
 	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
     `((fn (,bind)
         (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (progn
+            (root::loop (plist) (,in_list) (do
                 (set ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
@@ -2761,7 +2757,7 @@ Example:
         (root::loop
             (plist)
             ('(1 2 3))
-            (progn
+            (do
                 (set 'i (root::first plist)) nil
                 (if
                     (> (length plist) 1)
@@ -2789,11 +2785,11 @@ Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
 
 (defmacro mac-test-for
-    (bind in in_list body) (progn
+    (bind in in_list body) (do
 	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
     `((fn (,bind)
         (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (progn
+            (root::loop (plist) (,in_list) (do
                 (set ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
@@ -2806,7 +2802,7 @@ Example:
             (
                 (fn
                     (plist)
-                    (progn
+                    (do
                         (set 'i (root::first plist)) nil
                         (if
                             (> (length plist) 1)
@@ -2840,12 +2836,12 @@ Section: root
 
 Example:
 (def 'tot 0)
-(loop (idx) (3) (progn
+(loop (idx) (3) (do
     (set 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
 (set 'tot 0)
-((fn (idx) (progn
+((fn (idx) (do
     (set 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))5)
 (assert-equal 5 tot)
@@ -2919,7 +2915,7 @@ Example:
             builtin_form,
             "Usage: (form exp0 ... expN)
 
-Like progn but do not execute system commands within this form.
+Like do but do not execute system commands within this form.
 
 Section: shell
 
@@ -2953,7 +2949,7 @@ Example:
             builtin_get_error,
             "Usage: (get-error exp0 ... expN) -> pair
 
-Evaluate each form (like progn) but on error return (:error msg backtrace) instead of aborting.
+Evaluate each form (like do) but on error return (:error msg backtrace) instead of aborting.
 On success return (:ok . expN-result).
 
 If there is no error will return the value of the last expression as the cdr of
@@ -3013,7 +3009,7 @@ t
             "Usage: (block name form*)
 
 Create a block with name (name is not evaluated), if no return-from encountered then
-return last expression (like progn).
+return last expression (like do).
 
 Section: root
 

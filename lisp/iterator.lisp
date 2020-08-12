@@ -19,7 +19,7 @@ Example:
   ; fields
   (current 0)
   ; methods
-  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next! (self) (do (def 'val current)(set 'current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
   (:impl iterator))
 (def 'tmap (test-iter))
@@ -40,14 +40,14 @@ Example:
 (assert-true (list? collect-test))
 (assert-equal '(1 2 3) collect-test)
 "
-    (self) (progn
+    (self) (do
     (def 'tseq nil)
     (def 'tcell nil)
     (def 'head nil)
-    (for v in self (progn
+    (for v in self (do
         (if (null head)
-            (progn (set 'tseq (set 'head (join v nil))))
-            (progn (set 'tcell (join v nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
+            (do (set 'tseq (set 'head (join v nil))))
+            (do (set 'tcell (join v nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
     head))
 
   (:fn collect-vec
@@ -59,7 +59,7 @@ Example:
 (assert-true (vec? collect-vec-test))
 (assert-equal '#(1 2 3) collect-vec-test)
 "
-    (self) (progn
+    (self) (do
     (def 'tseq (vec))
     (for v in self (vec-push! tseq v))
     tseq))
@@ -73,7 +73,7 @@ Example:
 (assert-true (string? collect-str-test))
 (assert-equal \"ΛABC Σ\" collect-str-test)
 "
-    (self) (progn
+    (self) (do
     (def 'tseq "")
     (for v in self (str-push! tseq v))
     tseq))
@@ -118,7 +118,7 @@ Example:
 (assert-equal 3 (tmap :count))
 (assert-true (tmap :empty?))
 "
-       (self) (progn (def 'count 0) (iterator::for _ in self (set 'count (+ count 1))) count))
+       (self) (do (def 'count 0) (iterator::for _ in self (set 'count (+ count 1))) count))
 
   (:fn nth!
 "Consume the iterator until the nth! element and return it (0 based).
@@ -132,13 +132,13 @@ Example:
 (assert-equal 4 (tmap :nth! 2))
 (assert-true (tmap :empty?))
 "
-    (self idx) (progn
+    (self idx) (do
     (def 'ret nil)
     (def 'i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
                                           (set 'ret (plist :next!))
-                                          (progn (set 'i (+ i 1))(plist :next!)(recur plist)))))
+                                          (do (set 'i (+ i 1))(plist :next!)(recur plist)))))
       ret))
 
   (:fn double-ended?
@@ -152,8 +152,8 @@ Example:
   (current 0)
   (current-end 2)
   ; methods
-  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
-  (:fn next-back! (self) (progn (def 'val current-end)(set 'current-end (- current-end 1)) val))
+  (:fn next! (self) (do (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next-back! (self) (do (def 'val current-end)(set 'current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
   (:impl iterator double-ended-iterator))
 (assert-false ((test-iter) :double-ended?))
@@ -178,8 +178,8 @@ Example:
   (current 0)
   (current-end 2)
   ; methods
-  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
-  (:fn next-back! (self) (progn (def 'val current-end)(set 'current-end (- current-end 1)) val))
+  (:fn next! (self) (do (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next-back! (self) (do (def 'val current-end)(set 'current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
   (:impl iterator double-ended-iterator))
 (def 'tmap (test-double-iter))
@@ -214,13 +214,13 @@ Example:
 (assert-equal 0 (tmap :nth-back! 2))
 (assert-true (tmap :empty?))
 "
-    (self idx) (progn
+    (self idx) (do
     (def 'ret nil)
     (def 'i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
                                           (set 'ret (plist :next-back!))
-                                          (progn (set 'i (+ i 1))(plist :next-back!)(recur plist)))))
+                                          (do (set 'i (+ i 1))(plist :next-back!)(recur plist)))))
       ret))
 
   (:fn reverse
@@ -266,22 +266,22 @@ Example:
   (rev-data nil)
   (elements nil)
   ; methods
-  (:fn next! (self) (progn
+  (:fn next! (self) (do
     (def 'val (car data))
     (set 'data (cdr data))
     (if elements (set 'elements (- elements 1)))
     val))
-  (:fn next-back! (self) (progn
-    (if (not rev-data) (progn (set 'elements (length data))(set 'rev-data (self :make-rev))))
+  (:fn next-back! (self) (do
+    (if (not rev-data) (do (set 'elements (length data))(set 'rev-data (self :make-rev))))
     (def 'val (car rev-data))
     (set 'rev-data (cdr rev-data))
     (if elements (set 'elements (- elements 1)))
     val))
   (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) t nil))
-  (:fn init (self l) (progn (if (list? l) (set 'data l) (err "list-iter requires a list")) self))
-  (:fn make-rev (self) (progn
+  (:fn init (self l) (do (if (list? l) (set 'data l) (err "list-iter requires a list")) self))
+  (:fn make-rev (self) (do
     (def 'node nil)
-    ((fn (data) (if data (progn (set 'node (join (car data) node)) (recur (cdr data)))))data)
+    ((fn (data) (if data (do (set 'node (join (car data) node)) (recur (cdr data)))))data)
     node))
   (:impl iterator double-ended-iterator))
 
@@ -305,13 +305,13 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (progn (def 'val (vec-nth start data))(set 'start (+ 1 start)) val))
-  (:fn next-back! (self) (progn (def 'val (vec-nth end data))(set 'end (- end 1)) val))
+  (:fn next! (self) (do (def 'val (vec-nth start data))(set 'start (+ 1 start)) val))
+  (:fn next-back! (self) (do (def 'val (vec-nth end data))(set 'end (- end 1)) val))
   (:fn empty? (self) (> start end))
-  (:fn nth! (self idx) (progn (set 'start (+ start idx))(self :next!)))
-  (:fn nth-back! (self idx) (progn (set 'end (- end idx))(self :next-back!)))
-  (:fn init (self v s) (progn (if (vec? v)
-                                (progn (set 'data v) (set 'start s) (set 'end (- (length v) 1)))
+  (:fn nth! (self idx) (do (set 'start (+ start idx))(self :next!)))
+  (:fn nth-back! (self idx) (do (set 'end (- end idx))(self :next-back!)))
+  (:fn init (self v s) (do (if (vec? v)
+                                (do (set 'data v) (set 'start s) (set 'end (- (length v) 1)))
                                 (err "seq-vec requires a vector")) self))
   (:impl iterator double-ended-iterator))
 
@@ -333,7 +333,7 @@ Example:
   ; methods
   (:fn next! (self) (str-iter-next! data))
   (:fn empty? (self) (not (str-iter-peek data)))
-  (:fn init (self l) (progn (if (string? l)
+  (:fn init (self l) (do (if (string? l)
                        (set 'data (if (str-iter-empty? l) (str-iter-start l) l))
                        (err "string-iter requires a string")) self))
   (:impl iterator))
@@ -363,10 +363,10 @@ Example:
   (file nil)
   (next-line nil)
   ; methods
-  (:fn next! (self) (progn (def 'val next-line) (set 'next-line (read-line file)) val))
+  (:fn next! (self) (do (def 'val next-line) (set 'next-line (read-line file)) val))
   (:fn empty? (self) (not next-line))
   (:fn init (self f) (if (file? f)
-                       (progn (set 'file f) (set 'next-line (read-line file))self)
+                       (do (set 'file f) (set 'next-line (read-line file))self)
                        (err "file-iter requires a file")))
   (:impl iterator))
 
@@ -390,7 +390,7 @@ Example:
   (:fn next! (self) (map-fn (data :next!)))
   (:fn next-back! (self) (map-fn (data :next-back!)))
   (:fn empty? (self) (data :empty?))
-  (:fn init (self mfn d) (progn (set 'data (iter d))
+  (:fn init (self mfn d) (do (set 'data (iter d))
                                 (set 'map-fn mfn)
                                 self))
   (:fn double-ended? (self) (data :double-ended?))
@@ -446,15 +446,15 @@ Example:
   ; methods
   (:fn next! (self)
       (if (self :empty?) nil ((car iters) :next!)))
-  (:fn empty? (self) (progn
+  (:fn empty? (self) (do
       (loop () ()
-          (if (and (not (null iters))((car iters) :empty?)) (progn (set 'iters (cdr iters))(recur))))
+          (if (and (not (null iters))((car iters) :empty?)) (do (set 'iters (cdr iters))(recur))))
       (null iters)))
-  (:fn init (self &rest rest-iters) (progn
+  (:fn init (self &rest rest-iters) (do
     (def 'tcell nil)
     (def 'tseq nil)
-    (iterator::for v in rest-iters (progn
-        (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (progn
+    (iterator::for v in rest-iters (do
+        (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
             (set 'tcell (join (iterator::iter-or-single v) nil))
             (if (null tseq) (set 'iters tcell) (xdr! tseq tcell))
             (set 'tseq tcell)))))
@@ -493,9 +493,9 @@ Example:
   (total nil)
   (count 0)
   ; methods
-  (:fn next! (self) (progn (set 'count (+ count 1)) (if (or (null total)(<= count total)) (data :next!) nil)))
+  (:fn next! (self) (do (set 'count (+ count 1)) (if (or (null total)(<= count total)) (data :next!) nil)))
   (:fn empty? (self) (or (data :empty?)(and (not (null total))(>= count total))))
-  (:fn init (self d s &rest e) (progn
+  (:fn init (self d s &rest e) (do
                                  (set 'data (iter d))
                                  (for _ in (range s) (data :next!))
                                  (set 'start s)
@@ -522,16 +522,16 @@ Example:
   (next nil)
   (is-empty nil)
   ; methods
-  (:fn next! (self) (progn (def 'val next)(self :advance-data!) val))
+  (:fn next! (self) (do (def 'val next)(self :advance-data!) val))
   (:fn empty? (self) is-empty)
-  (:fn advance-data! (self) (progn 
+  (:fn advance-data! (self) (do 
          (loop (plist) (data) (if (not (plist :empty?))
-             (progn
+             (do
                (set 'next (plist :next!))
                (if (not (predicate next))
                  (recur plist)))
              (set 'is-empty t)))))
-  (:fn init (self pred data-in) (progn
+  (:fn init (self pred data-in) (do
           (set 'data (iter data-in))
           (set 'predicate pred)
           (set 'is-empty (data :empty?))
@@ -558,7 +558,7 @@ Example:
   (:fn next! (self) (wrapped :next-back!))
   (:fn next-back! (self) (wrapped :next!))
   (:fn empty? (self) (wrapped :empty?))
-  (:fn init (self in-wrapped) (progn
+  (:fn init (self in-wrapped) (do
                                     (set 'wrapped in-wrapped)
                                     self))
   (:impl iterator double-ended-iterator))
@@ -588,14 +588,14 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (progn (def 'val start)(set 'start (+ start 1)) val))
-  (:fn next-back! (self) (progn (def 'val end)(set 'end (- end 1)) val))
+  (:fn next! (self) (do (def 'val start)(set 'start (+ start 1)) val))
+  (:fn next-back! (self) (do (def 'val end)(set 'end (- end 1)) val))
   (:fn empty? (self) (> start end))
-  (:fn init (self in-start in-end) (progn
+  (:fn init (self in-start in-end) (do
                                     (set 'start in-start)
                                     (set 'end in-end)
                                     self))
-  (:fn count (self total) (progn
+  (:fn count (self total) (do
                                     (set 'start 0)
                                     (set 'end (- total 1))
                                     self))
@@ -628,10 +628,10 @@ Example:
   (value nil)
   (done nil)
   ; methods
-  (:fn next! (self) (progn (def 'ret (if done nil value))(set 'done t)ret))
-  (:fn next-back! (self) (progn (def 'ret (if done nil value))(set 'done t)ret))
+  (:fn next! (self) (do (def 'ret (if done nil value))(set 'done t)ret))
+  (:fn next-back! (self) (do (def 'ret (if done nil value))(set 'done t)ret))
   (:fn empty? (self) done)
-  (:fn init (self v) (progn (set 'value v)self))
+  (:fn init (self v) (do (set 'value v)self))
   (:impl iterator double-ended-iterator))
 
 (defn iter?
@@ -656,7 +656,7 @@ Example:
   ; fields
   (current 0)
   ; methods
-  (:fn next! (self) (progn (def 'val current)(set 'current (+ 1 current)) val))
+  (:fn next! (self) (do (def 'val current)(set 'current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
   (:impl iterator))
 (assert-true (iterator::double-ended-iter? (iterator::iter '(1 2 3))))
@@ -767,12 +767,12 @@ Example:
 (assert-equal 2 (test-iter :next!))
 (assert-true (test-iter :empty?))
 "
-    (&rest i) (progn
+    (&rest i) (do
     (def 'si (iter i))
     (if (= (length i) 1)
           ((range-iter) :count (si :next!))
         (= (length i) 2)
-          (progn (def 'first (si :next!)) ((range-iter) :init first (si :next!)))
+          (do (def 'first (si :next!)) ((range-iter) :init first (si :next!)))
         (err "range: requires one or two integers"))))
 
 (defn collect
@@ -899,7 +899,7 @@ Example:
 (assert-true (tmap :empty?))
 (assert-error (reverse \"string\"))
 "
-       (items) (progn
+       (items) (do
                  (def 'i (iter items))
                  (if (double-ended-iter? i) (i :reverse)
                      (err "Not a double ended iterator or collection, can not reverse"))))
@@ -941,7 +941,7 @@ Example:
 (assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
 (assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
 "
-    (reducing-fcn init-val coll) (progn
+    (reducing-fcn init-val coll) (do
     ; Only call iter on coll once.
     (defn inner-reduce (reducing-fcn init-val coll)
         (if (coll :empty?)
@@ -1061,7 +1061,7 @@ Example:
 (assert-equal 3 (test-iter :next!))
 (assert-true (test-iter :empty?))
 "
-    (ret &rest others) (progn
+    (ret &rest others) (do
 
     (defn last-cell (obj)
         (if (null (cdr obj))
@@ -1070,13 +1070,13 @@ Example:
 
     (set 'others (apply append others))
     (if (vec? ret) (for l in others (vec-push! ret l))
-        (list? ret) (progn
+        (list? ret) (do
                 (def 'tseq (last-cell ret))
                 (for l in others
-                        (progn
+                        (do
                             (if (null tseq)
                                 (xar! tseq l)
-                                (progn
+                                (do
                                     (def 'tcell (join l nil))
                                     (xdr! tseq tcell)
                                     (set 'tseq tcell))))))
@@ -1097,10 +1097,10 @@ Example:
 (iterator::for x in (iterator::range 11) (set 'i (+ 1 i)))
 (assert-equal 11 i)
 "
-    (bind in items body) (progn
+    (bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
     `(loop (plist) ((iterator::iter ,items))
-         (if (not (plist :empty?)) (progn
+         (if (not (plist :empty?)) (do
              (def ',bind (plist :next!))
              (,@body)
              (recur plist))))))
@@ -1118,14 +1118,14 @@ Section: iterator
 Example:
 (def 'i 0)
 (def 'i-tot 0)
-(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (progn (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
+(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (do (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
 (assert-equal 11 i)
 (assert-equal 55 i-tot)
 "
-    (idx-bind bind in items body) (progn
+    (idx-bind bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
     `(loop (plist idx) ((iterator::iter ,items) 0)
-         (if (not (plist :empty?)) (progn
+         (if (not (plist :empty?)) (do
              (def ',bind (plist :next!))
              (def ',idx-bind idx)
              (,@body)

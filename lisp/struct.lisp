@@ -1,21 +1,21 @@
 (if (ns-exists? 'struct) (ns-enter 'struct) (ns-create 'struct))
 
-(defn method (field dispatch-map tags doc doc-exp) (progn
+(defn method (field dispatch-map tags doc doc-exp)
     (def 'tsym (to-symbol (str ":" (car field))))
     (def 'second (cadr field))
-    (if (string? second) (progn
+    (if (string? second) (do
         (def 'doc-split (str-splitn 2 "Example:" second))
         (str-push! doc "method: " tsym "\n\t" (vec-nth 0 doc-split) "\n")
         (if (= 2 (length doc-split))
           (str-push! doc-exp "; " tsym " Example\n" (vec-nth 1 doc-split) "\n"))
         (def 'm-params (caddr field))
         (def 'm-body (cadddr field)))
-      (progn
+      (do
         (str-push! doc "method: " tsym "\n")
         (def 'm-params (cadr field))
         (def 'm-body (caddr field))))
     (hash-set! dispatch-map tsym `(fn ,m-params ,m-body))
-    (vec-push! tags (to-symbol (str ":method" tsym)))))
+    (vec-push! tags (to-symbol (str ":method" tsym))))
 
 ; macro to build a "trait" that can be implemented by a struct
 (defmacro deftrait
@@ -50,7 +50,7 @@ Example:
 (assert-equal \"queen\" (ts :b))
 "
     (name &rest fields)
-    ((fn () (progn
+    ((fn ()
         (def 'tags (vec))
         (vec-push! tags (to-symbol (str ":trait-" name)))
         (def 'dispatch-map (make-hash))
@@ -59,35 +59,35 @@ Example:
         (def 'doc-exp "")
         (def 'idx-start 0)
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
-            (progn
+            (do
               (def 'doc-split (str-splitn 2 "Example:" (vec-nth 0 fields)))
               (set 'doc (vec-nth 0 doc-split))
               (set 'idx-start 1)
               (if (= 2 (length doc-split)) (set 'doc-exp (vec-nth 1 doc-split)))))
 
-        ((fn (idx) (progn
-            (if (< idx fields-len) (progn
+        ((fn (idx)
+            (if (< idx fields-len) (do
                 (def 'field (vec-nth idx fields))
                 (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
                     (err "Traits only have :fn fields!"))
                 (recur (+ idx 1))
-            ))))idx-start)
+            )))idx-start)
         (def 'keys (hash-keys dispatch-map))
         (def 'keys-len (length keys))
         (def 'tags-len (length tags))
         (def 'doc-final "")
         (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (defstruct ... (:impl " name "))\n\n"))
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
-        `(def ',name ,doc-final (fn (target-dispatch-map target-tags) (progn
-            ((fn (idx) (progn
-                (if (< idx ,tags-len) (progn
+        `(def ',name ,doc-final (fn (target-dispatch-map target-tags)
+            ((fn (idx)
+                (if (< idx ,tags-len) (do
                     (vec-push! target-tags (vec-nth idx ',tags))
-                    (recur (+ idx 1))))))0)
-            ((fn (idx) (progn
-                (if (< idx ,keys-len) (progn
+                    (recur (+ idx 1)))))0)
+            ((fn (idx)
+                (if (< idx ,keys-len) (do
                     (def 'key (vec-nth idx ',keys))
                     (if (not (hash-haskey target-dispatch-map key)) (hash-set! target-dispatch-map key (hash-get ,dispatch-map key)))
-                    (recur (+ idx 1)) ))))0) ))) ))))
+                    (recur (+ idx 1)) )))0) )) )))
 
 ; macro to build a "struct"
 (defmacro defstruct
@@ -120,7 +120,7 @@ Example:
 (assert-equal \"queen\" (ts :b))
 "
     (name &rest fields)
-    ((fn (params bindings) (progn
+    ((fn (params bindings)
         (def 'tags (vec))
         (vec-push! tags :struct)
         (vec-push! tags (to-symbol (str ":struct-" name)))
@@ -130,39 +130,39 @@ Example:
         (def 'doc-exp "")
         (def 'idx-start 0)
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
-            (progn
+            (do
               (def 'doc-split (str-splitn 2 "Example:" (vec-nth 0 fields)))
               (set 'doc (vec-nth 0 doc-split))
               (set 'idx-start 1)
               (if (= 2 (length doc-split)) (def 'doc-exp (vec-nth 1 doc-split))(def 'doc-exp ""))))
 
-        (defn attrib (field doc doc-exp) (progn
+        (defn attrib (field doc doc-exp)
             (def 'second (cadr field))
             (def 'fdoc "")
             (if (string? second)
-                (progn
+                (do
                   (def 'doc-split (str-splitn 2 "Example:" second))
                   (set 'fdoc (str "\n\t" (vec-nth 0 doc-split)))
                   (if (= 2 (length doc-split)) (str-push! doc-exp (vec-nth 1 doc-split)))
                   (xdr! field (cddr field))))
             (if (= 1 (length field))
-                    (progn
+                    (do
                       (str-push! doc "attribute: " (car field) " private" fdoc "\n")
                       (vec-push! params (car field))
                       (vec-push! bindings nil))
                 (= 2 (length field))
-                    (progn
+                    (do
                       (str-push! doc "attribute: " (car field) " private" fdoc "\n")
                       (vec-push! params (car field))
                       (vec-push! bindings (cadr field)))
                 (= 3 (length field))
-                    (progn
+                    (do
                       (def 'param (car field))
                       (def 'binding (cadr field))
                       (def 'perm (caddr field))
                       (vec-push! params param)
                       (vec-push! bindings binding)
-                      (if (= perm :rw) (progn
+                      (if (= perm :rw) (do
                               (str-push! doc "attribute: " (car field) " read/write" fdoc "\n")
                               (def 'tsym (to-symbol (str ":" param)))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
@@ -170,48 +170,46 @@ Example:
                               (def 'tsym (to-symbol (str ":set-" param)))
                               (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
                               (vec-push! tags (to-symbol (str ":setter:" param))))
-                          (= perm :ro) (progn
+                          (= perm :ro) (do
                               (str-push! doc "attribute: " (car field) " read" fdoc "\n")
                               (def 'tsym (to-symbol (str ":" param)))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
                               (vec-push! tags (to-symbol (str ":accessor:" param))))
-                          (= perm :wo) (progn
+                          (= perm :wo) (do
                               (str-push! doc "attribute: " (car field) " write" fdoc "\n")
                               (def 'tsym (to-symbol (str ":set-" param)))
                               (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
                               (vec-push! tags (to-symbol (str ":setter:" param))))
                           (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
-                (err "ERROR: invalid attribute bindings on defstruct"))))
+                (err "ERROR: invalid attribute bindings on defstruct")))
 
         (defn impl (field doc)
-            ;(if (not (not field)) (progn (str-push! doc "impl " (car field) "\n")((eval (car field)) dispatch-map tags) (recur (cdr field) doc))))
-            (if (not (not field)) (progn (str-push! doc "impl " (car field) "\n")(apply (car field) dispatch-map tags nil) (recur (cdr field) doc))))
-            ;(if (not (not field)) (progn ((eval (car field)) dispatch-map) (impl (cdr field)))))
+            (if (not (not field)) (do (str-push! doc "impl " (car field) "\n")(apply (car field) dispatch-map tags nil) (recur (cdr field) doc))))
 
-        ((fn (idx) (progn
-            (if (< idx fields-len) (progn
+        ((fn (idx)
+            (if (< idx fields-len) (do
                 (def 'field (vec-nth idx fields))
                 (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
                     (= (car field) :impl) nil ; do impls last (struct methods take precident).
                     (attrib field doc doc-exp))
                 (recur (+ idx 1))
-            ))))idx-start)
+            )))idx-start)
 
-        ((fn (idx) (progn
-            (if (< idx fields-len) (progn
+        ((fn (idx)
+            (if (< idx fields-len) (do
                 (def 'field (vec-nth idx fields))
                 (if (= (car field) :impl) (impl (cdr field) doc))
                 (recur (+ idx 1))
-            ))))idx-start)
+            )))idx-start)
 
         (hash-set! dispatch-map :type `(fn (_) (symbol-name ',name)))
         (def 'doc-final "")
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
-        `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params) (progn
+        `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params)
             (def 'self (fn (msg &rest args) (apply (eval-in-scope (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name)))) this-fn args)))
             ;(def 'self (fn (msg &rest args) (apply (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name))) this-fn args)))
             (meta-add-tags self ',tags)
-            (undef 'self))),dispatch-map ,@bindings))) )) ; bindings for params
+            (undef 'self)),dispatch-map ,@bindings))) ) ; bindings for params
      (make-vec (length fields)) ; params
      (make-vec (length fields)))) ; bindings
 

@@ -74,7 +74,7 @@ Example:
 (assert-equal nil (last nil))
 (assert-equal nil (last '#()))
 "
-    (obj) (progn
+    (obj)
 
     (defn last-list (obj)
         (if (null (cdr obj)) (car obj)
@@ -82,7 +82,7 @@ Example:
 
     (if (vec? obj) (if (> (length obj) 0) (vec-nth (- (length obj) 1) obj) nil)
         (list? obj) (last-list obj)
-        (err "Not a vector or list"))))
+        (err "Not a vector or list")))
 
 (defn butlast
 "
@@ -101,7 +101,7 @@ Example:
 "
     (obj)
     (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
-        (list? obj) (progn
+        (list? obj) (do
             (defq new-link (join nil nil))
             (if (null (cdr obj))
                 (setq new-link nil)
@@ -150,14 +150,14 @@ Example:
 (assert-error (setnth! 0 1 '()))
 (assert-error (setnth! 0 1 (list)))
 "
-    (idx obj sequence) (progn
+    (idx obj sequence)
 
-    (defn setnth-list (idx obj l) (if (= idx 0) (progn (xar! l obj) nil) (recur (- idx 1) obj (cdr l))))
+    (defn setnth-list (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l))))
 
     (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
     (if (vec? sequence) (vec-setnth! idx obj sequence)
-        (list? sequence) (progn (setnth-list idx obj sequence) sequence)
-        (err "setnth!: Not a vector or list"))))
+        (list? sequence) (do (setnth-list idx obj sequence) sequence)
+        (err "setnth!: Not a vector or list")))
 
 (defn in?
 "
@@ -173,7 +173,7 @@ Example:
     (assert-false (in? 8 18)))
 "
   (seq-to-search item-to-match)
-    (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (progn
+    (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (do
         (def 'seq-iter (iterator::iter seq-to-search))
         (defn inner-in (seq-iter item-to-match)
             (if (iterator::empty? seq-iter) nil
@@ -212,20 +212,20 @@ Example:
 (test::assert-equal '#() (qsort '()))
 (test::assert-equal '#() (qsort '#()))
 "
-    (lst &rest comp) (progn
-    (defn quick-inner (comp-fn sorted to-sort) (progn
-        (if (> (length to-sort) 0) (progn
+    (lst &rest comp)
+    (defn quick-inner (comp-fn sorted to-sort)
+        (if (> (length to-sort) 0) (do
             (def 'lst (vec-pop! to-sort))
             (if (not (seq? lst))
-                (progn
+                (do
                     (vec-push! sorted lst)
                     (recur comp-fn sorted to-sort))
                 (if (<= (length lst) 1)
-                    (progn
+                    (do
                         (if (= (length lst) 1)
                             (vec-push! sorted (vec-pop! lst)))
                         (recur comp-fn sorted to-sort))
-                    (progn
+                    (do
                         (def 'pivot (first lst))
                         (def 'less (vec))
                         (def 'greater (vec))
@@ -235,7 +235,7 @@ Example:
                         (vec-push! to-sort pivot)
                         (vec-push! to-sort less)
                         (recur comp-fn sorted to-sort)))))
-            sorted)))
+            sorted))
 
     (if (> (length comp) 1) (err "qsort takes one option compare lambda"))
     (def 'comp-fn (if (= (length comp) 1) (first comp) <))
@@ -244,5 +244,5 @@ Example:
     (def 'to-sort (vec))
     (vec-push! to-sort lst)
     (quick-inner comp-fn sorted to-sort)
-    sorted))
+    sorted)
 

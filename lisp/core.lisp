@@ -12,15 +12,15 @@ Section: core
            ((fn ()
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
                 (if (string? (vec-nth 0 args))
-                  (progn
+                  (do
                     (def 'doc-str (vec-nth 0 args))
                     (def 'ars (vec-nth 1 args))
                     (def 'body (vec-slice args 2))
-                    `(progn (,op ',name ,doc-str (macro ,ars ,@body)) nil))
-                  (progn
+                    `(do (,op ',name ,doc-str (macro ,ars ,@body)) nil))
+                  (do
                     (def 'ars (vec-nth 0 args))
                     (def 'body (vec-slice args 1))
-                    `(progn (,op ',name (macro ,ars ,@body)) nil)))))))
+                    `(do (,op ',name (macro ,ars ,@body)) nil)))))))
 
 (def 'defmacro
 "Usage: (defmacro name doc_string? argument_list body)
@@ -44,7 +44,7 @@ Section: core
 "Export a symbol or list of symbols to be imported into other namespaces.
 
 Section: namespace"
-    (symbol_or_sequence) `(progn
+    (symbol_or_sequence) `(do
     (if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
     (if (symbol? ,symbol_or_sequence)
         (vec-push! *ns-exports* (quote ,symbol_or_sequence))
@@ -57,13 +57,13 @@ Section: namespace"
 
 Section: namespace"
     (namespace)
-    `((fn () (progn
+    `((fn ()
         (def 'import (make-vec 2 1))
         (iterator::for sym in (eval (to-symbol (str ,namespace "::*ns-exports*")))
-        (progn
-            (vec-setnth! 0 (to-symbol (str "ns::" sym)) import)
-            (vec-setnth! 1 (eval (to-symbol (str ,namespace "::" sym))) import)
-            (apply def import)))))))
+                       (do
+                         (vec-setnth! 0 (to-symbol (str "ns::" sym)) import)
+                         (vec-setnth! 1 (eval (to-symbol (str ,namespace "::" sym))) import)
+                         (apply def import))))))
 
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression
@@ -73,19 +73,19 @@ Set an expession to a quoted symbol (ie set 'sym bind)
 Section: root
 
 Example:
-(def 'test-progn-one nil)
-(def 'test-progn-two nil)
-(def 'test-progn-three (progn (setq test-progn-one \"One\")(setq test-progn-two \"Two\")\"Three\"))
+(def 'test-do-one nil)
+(def 'test-do-two nil)
+(def 'test-do-three (do (setq test-do-one \"One\")(setq test-do-two \"Two\")\"Three\"))
 (test::assert-error (setq xyryx-dont-exist \"something\"))
-(test::assert-equal \"One\" test-progn-one)
-(test::assert-equal \"Two\" test-progn-two)
-(test::assert-equal \"Three\" test-progn-three)
-(let ((test-progn-one nil))
+(test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+(let ((test-do-one nil))
     ; set the currently scoped value.
-    (test::assert-equal \"1111\" (setq test-progn-one \"1111\"))
-    (test::assert-equal \"1111\" test-progn-one))
+    (test::assert-equal \"1111\" (setq test-do-one \"1111\"))
+    (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
-(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"One\" test-do-one)
 "
     (sym &rest args)
     `(set ',sym ,@args))
@@ -98,22 +98,22 @@ Binds an expession to a quoted symbol (ie def 'sym bind)
 Section: root
 
 Example:
-(defq test-progn-one \"One\")
-(defq test-progn-two \"Two\")
-(defq test-progn-three \"Three\")
-(test::assert-equal \"One\" test-progn-one)
-(test::assert-equal \"Two\" test-progn-two)
-(test::assert-equal \"Three\" test-progn-three)
-(let ((test-progn-one nil))
-    ; Add this to the let's scope (shadow the outer test-progn-two).
-    (test::assert-equal \"Default\" (defq test-progn-two \"Default\"))
+(defq test-do-one \"One\")
+(defq test-do-two \"Two\")
+(defq test-do-three \"Three\")
+(test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+(let ((test-do-one nil))
+    ; Add this to the let's scope (shadow the outer test-do-two).
+    (test::assert-equal \"Default\" (defq test-do-two \"Default\"))
     ; set the currently scoped value.
-    (set 'test-progn-one \"1111\")
-    (set 'test-progn-two \"2222\")
-    (test::assert-equal \"1111\" test-progn-one)
-    (test::assert-equal \"2222\" test-progn-two))
+    (set 'test-do-one \"1111\")
+    (set 'test-do-two \"2222\")
+    (test::assert-equal \"1111\" test-do-one)
+    (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
-(test::assert-equal \"One\" test-progn-one)
+(test::assert-equal \"One\" test-do-one)
 "
     (sym &rest args)
     `(def ',sym ,@args))
@@ -133,13 +133,13 @@ t
     ((fn ()
          (if (< (length args) 1) (err "defn: Wrong number of args."))
          (if (string? (vec-nth 0 args))
-           (progn
+           (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
              (def 'doc-str (vec-nth 0 args))
              (def 'ars (vec-nth 1 args))
              (def 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
              `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
-           (progn
+           (do
              (def 'ars (vec-nth 0 args)) 
              (def 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
              `(,op ',name (fn ,ars (block ,name ,@body))))))))
@@ -205,7 +205,7 @@ Section: root
 
 Example:
 (def 'tot 0)
-(loop (idx) (3) (progn
+(loop (idx) (3) (do
     (set 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
@@ -227,7 +227,7 @@ Example:
     (times body)
     ((fn (idx-name)
     `(if (> ,times 0)
-        (root::loop (,idx-name) (,times) (progn
+        (root::loop (,idx-name) (,times) (do
             (,@body)
             (if (> ,idx-name 1) (recur (- ,idx-name 1)))))))(gensym)))
 
@@ -241,14 +241,14 @@ Section: root
 Example:
 (def 'i 0)
 (def 'i-tot 0)
-(dotimes-i idx 11 (progn (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
+(dotimes-i idx 11 (do (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
 (assert-equal 11 i)
 (assert-equal 55 i-tot)
 "
     (idx-bind times body)
     ((fn (stop-name)
     `(if (> ,times 0)
-        (root::loop (,idx-bind ,stop-name) (0 (- ,times 1)) (progn
+        (root::loop (,idx-bind ,stop-name) (0 (- ,times 1)) (do
             (,@body)
             (if (< ,idx-bind ,stop-name) (recur (+ ,idx-bind 1) ,stop-name))))))(gensym)))
 
@@ -256,7 +256,7 @@ Example:
 "Usage: (match condition (value form*)*) -> result
 
 Evaluate condition and look for matching value in each branch of type
-(value form*). Form(s) will be wrapped in an implicit progn. Use nil to take
+(value form*). Form(s) will be wrapped in an implicit do. Use nil to take
 action if no match (encouraged!).
 
 Section: core
@@ -285,24 +285,24 @@ Example:
 (assert-equal \"default\" (select-option-def 4))
 "
     (condition &rest branches)
-    ((fn () (progn
+    ((fn ()
         (def 'out_list (list))
         (def 'make-action (fn (action)
             (if (seq? action)
-                `(progn ,@action)
+                `(do ,@action)
                 `action)))
         (def 'make-cond (fn (condition val action others)
             (if (null val) (make-action action)
                 (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
                     `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (root::first (root::first others)) (root::rest (root::first others)) (root::rest others)))))))
         (def 'cond-name condition)
-        `(if ,@(make-cond cond-name (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches)))))))
+        `(if ,@(make-cond cond-name (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
 
 (defmacro cond
 "Usage: (cond ((test form*)*) -> result
 
 Evaluate each test in order.  If it is true then evaluate the form(s) in an
-implicit progn and return the result.  Stop evaluting at the first true test.
+implicit do and return the result.  Stop evaluting at the first true test.
 Return nil if no conditions are true.
 
 Section: core
@@ -331,17 +331,17 @@ Example:
 (assert-equal \"default\" (select-option-def 4))
 "
     (&rest branches)
-    ((fn () (progn
+    ((fn ()
         (def 'out_list (list))
         (def 'make-action (fn (action)
             (if (seq? action)
-                `(progn ,@action)
+                `(do ,@action)
                 `action)))
         (def 'make-cond (fn (condition action others)
             (if (empty-seq? others)
                 `(,condition ,(make-action action) nil)
                 `(,condition ,(make-action action) ,@(make-cond (root::first (root::first others)) (root::rest (root::first others)) (root::rest others))))))
-        `(if ,@(make-cond (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches)))))))
+        `(if ,@(make-cond (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
 
 (defmacro let
 "
@@ -352,14 +352,14 @@ sexp.
 Section: core
 "
     (vals &rest let_body)
-    ((fn (params bindings) (progn
+    ((fn (params bindings)
         (iterator::for-i idx el in vals
             (if (= 1 (length el))
-                (progn (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx nil bindings))
+                (do (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx nil bindings))
                 (if (= 2 (length el))
-                    (progn (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx (iterator::nth 1 el) bindings))
+                    (do (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx (iterator::nth 1 el) bindings))
                     (err "ERROR: invalid bindings on let"))))
-        `((fn ,params (progn ,@let_body)) ,@bindings))) (make-vec (length vals)) (make-vec (length vals))))
+        `((fn ,params (do ,@let_body)) ,@bindings)) (make-vec (length vals)) (make-vec (length vals))))
 
 (defmacro func?
 "
@@ -367,8 +367,7 @@ True if the expression is a [builtin?](#root::builtin?), a [lambda?](#root::lamb
 
 Section: type
 "
-    (to-test) `(progn
-    (or (builtin? ,to-test) (lambda? ,to-test) (macro? ,to-test))))
+    (to-test) `(or (builtin? ,to-test) (lambda? ,to-test) (macro? ,to-test)))
 
 (defmacro when
 "Usage: (when provided-condition if-true)
@@ -403,12 +402,12 @@ Example:
 (&rest args)
     `(if (< (length (quote ,args)) 2)
         (err "-> (thush operator) requires at least two arguments")
-        (progn
+        (do
             (defq fst (first (quote ,args)))
             (loop (curr-form forms) (fst (rest (quote ,args)))
                 (if (empty-seq? forms)
                     curr-form
-                    (progn
+                    (do
                     (defq sexp nil)
                     (defq fcn (first forms))
                     (if (seq? fcn)
@@ -432,18 +431,18 @@ Example:
 (&rest args)
     `(if (< (length (quote ,args)) 2)
         (err "->> (thush operator) requires at least two arguments")
-        (progn
+        (do
             (defq fst (first (quote ,args)))
             (loop (curr-form forms) (fst (rest (quote ,args)))
                 (if (empty-seq? forms)
                     curr-form
-                    (progn
-                    (defq sexp nil)
-                    (defq fcn (first forms))
-                    (if (seq? fcn)
+                    (do
+                      (defq sexp nil)
+                      (defq fcn (first forms))
+                      (if (seq? fcn)
                         (setq sexp (collect (iterator::append fcn curr-form)))
                         (setq sexp (list fcn curr-form)))
-                    (recur (eval sexp) (rest forms))))))))
+                      (recur (eval sexp) (rest forms))))))))
 
 ; Reader macro for #.
 (defn reader-macro-dot (stream ch) (eval (read stream)))

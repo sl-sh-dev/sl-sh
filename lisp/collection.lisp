@@ -24,19 +24,19 @@ Example:
 "
 (seq)
     (if (vec? seq)
-        (progn
+        (do
             (def 'tseq (make-vec (length seq)))
             (iterator::for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
-            (progn
+            (do
                 (def 'tseq nil)
                 (def 'tcell nil)
                 (def 'head nil)
-                (iterator::for el in seq (progn
+                (iterator::for el in seq (do
                     (if (null head)
-                        (progn (set 'tseq (set 'head (join el nil))))
-                        (progn (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
+                        (do (set 'tseq (set 'head (join el nil))))
+                        (do (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
                 head)
             (err "Not a list or vector."))))
 

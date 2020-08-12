@@ -1424,7 +1424,7 @@ Example:
             builtin_str_ignore_expand,
             "Usage: (str-ignore-expand exp0 ... expN) -> [final expression]
 
-Like progn but any strings in the form will not be expanded.
+Like do but any strings in the form will not be expanded.
 
 Section: string
 
