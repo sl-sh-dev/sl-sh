@@ -539,6 +539,30 @@ pub fn builtin_do(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
+fn builtin_lex(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let outer = Some(get_current_scope(environment));
+    // Make sure not to return without popping this off the scope stack.
+    environment.scopes.push(build_new_scope(outer));
+    let mut ret: Option<Expression> = None;
+    for arg in args {
+        if let Some(ret) = ret {
+            ret.resolve(environment).map_err(|e| {
+                environment.scopes.pop();
+                e
+            })?;
+        }
+        ret = Some(eval_nr(environment, arg.clone_root()).map_err(|e| {
+            environment.scopes.pop();
+            e
+        })?);
+    }
+    environment.scopes.pop();
+    Ok(ret.unwrap_or_else(Expression::make_nil))
+}
+
 fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
@@ -2303,6 +2327,29 @@ Example:
 (def 'test-do-two nil)
 (def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("lex"),
+        Expression::make_special(
+            builtin_lex,
+            "Usage: (lex exp0 ... expN) -> expN
+
+Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
+This is basically like wrapping in a fn call but without the fn call or like a let
+without the initial bindings (you can use def to bind symbols in the new scope instead).
+
+Section: root
+
+Example:
+(def 'test-do-one \"One1\")
+(def 'test-do-two \"Two1\")
+(def 'test-do-three (lex (def 'test-do-one \"One\")(set 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 ",

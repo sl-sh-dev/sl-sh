@@ -359,6 +359,8 @@ Section: core
                 (if (= 2 (length el))
                     (do (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx (iterator::nth 1 el) bindings))
                     (err "ERROR: invalid bindings on let"))))
+;        `(lex
+;           ,(for i in (range (length params)) `(def ',(vec-nth i params) ,(vec-nth i bindings))))) (make-vec (length vals)) (make-vec (length vals))))
         `((fn ,params (do ,@let_body)) ,@bindings)) (make-vec (length vals)) (make-vec (length vals))))
 
 (defmacro func?

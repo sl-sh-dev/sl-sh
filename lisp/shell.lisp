@@ -607,6 +607,7 @@ Section: shell
 
 
 (defn print-backtrace (backtrace) 
+    (println (first backtrace))
     (for b in backtrace
         (if (builtin? b)(print "BUILTIN")
           (print (if (def 'file (meta-file-name b)) file "NO FILE") ":\t"
