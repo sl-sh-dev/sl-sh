@@ -970,6 +970,8 @@ Example:
 If non-list items are passed they are wrapped in a singleton iterator (i.e. will
 work with loose object).  Note that nil is an empty list not a \"loose item\".
 
+Section: iterator
+
 Example:
 (def 'test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))
 (assert-false (test-iter :empty?))
@@ -1008,6 +1010,8 @@ Example:
 into a single iterator.  These values are added the first argument destructively.
 If non-list items are passed they are wrapped in a singleton iterator (i.e. will
 work with loose object).  Note that nil is an empty list not a \"loose item\".
+
+Section: iterator
 
 Example:
 (def 'test-iter '(0 1 2))

@@ -23,6 +23,8 @@
 more methods in the struct.  Use them to provide common functionality shared by different structures.
 Use (:fn name doc-str? body) to add a method.
 
+Section: struct
+
 Example:
 (struct::deftrait test-trait
   ; Require what-a and what-d in the structures that implement this trait.
@@ -97,6 +99,8 @@ Use (attr-name doc-str? default? [:rw | :ro | :wo]?) if a final access modifier 
   NOTE: for attributes, if the default value is a string then doc-str is not optional (but can be empty).
 Use (:fn name doc-str? body) to add a method.
 Use (:impl trait) to add a trait.
+
+Section: struct
 
 Example:
 (struct::defstruct test-struct

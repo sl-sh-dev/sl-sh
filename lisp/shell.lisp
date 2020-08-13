@@ -608,9 +608,10 @@ Section: shell
 
 (defn print-backtrace (backtrace) 
     (for b in backtrace
-        (print (if (def 'file (meta-file-name b)) file "??????") ":\t"
-               "line " (if (def 'line (meta-line-no b)) line "??") ":\t"
-               "column " (if (def 'col (meta-column-no b)) col "??") "\n")))
+        (if (builtin? b)(print "BUILTIN")
+          (print (if (def 'file (meta-file-name b)) file "NO FILE") ":\t"
+                 "line " (if (def 'line (meta-line-no b)) line "XX") ":\t"
+                 "column " (if (def 'col (meta-column-no b)) col "XX") "\n"))))
 
 (defn print-error (error)
     (if (= :error (car error))
@@ -646,8 +647,9 @@ Section: shell
       (do
         (export 'LAST_STATUS "0")
         (set '*last-status* 0)
-        (def 'ast (if (and (def? '__exec_hook)(lambda? __exec_hook))
-                    (__exec_hook line)
+        (def 'exec-hook (to-symbol (str *active-ns* "::__exec_hook")))
+        (def 'ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
+                    (apply exec-hook line nil)
                     (read-all line)))
         (set 'ast (if (string? ast) (read-all ast) ast))
         (def 'result (loose-symbols (get-error (eval ast))))
