@@ -522,5 +522,6 @@ Section: tmux"
 		nil) ;; (println "not building docs")
 
 (popd)
-
 ;; }}}
+
+(ns-enter 'user)
