@@ -473,9 +473,9 @@ Section: shell
 
 	(defn func? (com)
 		; Want the actual thing pointed to by the symbol in com for the test.
-		(if (def? com)
-			(set 'com (eval (to-symbol com))))
-		(or (builtin? com)(lambda? com)(macro? com)))
+		; grab the error or you will get errors on local symbol names.
+		(set 'com (get-error (eval (to-symbol com))))
+		(or (= :ok (car com))(builtin? (cadr com))(lambda? (cadr com))(macro? (cadr com))))
 
 	(defn paren-color (level)
 		(def 'col (% level 4))
@@ -533,12 +533,11 @@ Section: shell
 
 	(defn whitespace (ch)
 		(def 'ret (str (prtoken) ch))
-		;(def 'ret (str token ch))
 		(set 'token (str ""))
 		(set 'tok-command nil)
 		ret)
 
-	(setfn __line_handler (line)
+	(defn line-handler (line)
 		(def 'in-quote nil)
 		(def 'last-ch #\ )
 		(set 'plev 0)
@@ -571,6 +570,11 @@ Section: shell
 			(do (set 'last-ch ch) ret)) line))
 		(if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
 		(str out))
+
+	(setfn __line_handler (line)
+           (def 'result (get-error (line-handler line)))
+           (if (= :error (car result)) (shell::print-error result) (cdr result)))
+
 		nil)))
 
 (defmacro syntax-off

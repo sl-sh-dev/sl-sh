@@ -346,28 +346,42 @@ Example:
 (defmacro let
 "
 Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
-let_body with all values of binding bound to the result of the evaluation of
+let-body with all values of binding bound to the result of the evaluation of
 sexp.
 
 Section: core
+
+Example:
+(def 'test-do-one \"One1\")
+(def 'test-do-two \"Two1\")
+(def 'test-do-three (let ((test-do-one \"One\")) (set 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(test::assert-equal \"One1\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
 "
-    (vals &rest let_body)
-    ((fn (params bindings)
+    (vals &rest let-body)
+    (lex
+      (def 'vars (make-vec (length vals)))
         (iterator::for-i idx el in vals
             (if (= 1 (length el))
-                (do (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx nil bindings))
+                (vec-push! vars `(def ',(iterator::nth 0 el) nil))
                 (if (= 2 (length el))
-                    (do (vec-insert-nth! idx (iterator::nth 0 el) params) (vec-insert-nth! idx (iterator::nth 1 el) bindings))
-                    (err "ERROR: invalid bindings on let"))))
-;        `(lex
-;           ,(for i in (range (length params)) `(def ',(vec-nth i params) ,(vec-nth i bindings))))) (make-vec (length vals)) (make-vec (length vals))))
-        `((fn ,params (do ,@let_body)) ,@bindings)) (make-vec (length vals)) (make-vec (length vals))))
+                  (vec-push! vars `(def ',(iterator::nth 0 el) ,(iterator::nth 1 el)))
+                  (err "ERROR: invalid bindings on let"))))
+        `(lex ,@vars ,@let-body)))
 
 (defmacro func?
 "
 True if the expression is a [builtin?](#root::builtin?), a [lambda?](#root::lambda?), or a [macro?](#root::macro?)
 
 Section: type
+
+Example:
+(def 'func?-test 1)
+(test::assert-false (func? func?-test))
+(test::assert-true (func? car))
+(test::assert-true (func? first))
+(test::assert-true (func? let))
 "
     (to-test) `(or (builtin? ,to-test) (lambda? ,to-test) (macro? ,to-test)))
 
