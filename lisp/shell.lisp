@@ -383,7 +383,7 @@ Section: shell
 "
 	(com) `(do
 	(def 'ret nil)
-	(def 'val (to-symbol ,com))
+	(def 'val (to-symbol ,(str *active-ns* "::" com)))
 	(if (def? val)
 		(set 'val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
@@ -473,9 +473,10 @@ Section: shell
 
 	(defn func? (com)
 		; Want the actual thing pointed to by the symbol in com for the test.
-		; grab the error or you will get errors on local symbol names.
-		(set 'com (get-error (eval (to-symbol com))))
-		(or (= :ok (car com))(builtin? (cadr com))(lambda? (cadr com))(macro? (cadr com))))
+	    (set 'com (to-symbol (str *active-ns* "::" com)))
+	    (if (def? com)
+		  (do (set 'com (eval (to-symbol com))) (or(builtin? com)(lambda? com)(macro? com)))
+		  nil))
 
 	(defn paren-color (level)
 		(def 'col (% level 4))
@@ -494,8 +495,9 @@ Section: shell
 		ret)
 
 	(defn command-color (command)
+	    (def 'ns-command (to-symbol (str *active-ns* "::" command)))
 		(if (not tok-command)
-			(if (def? command)
+			(if (def? ns-command)
 				(if (func? command)
 					(if in-sys-command
 						(str shell::tok-default-color command shell::*fg-default*)
