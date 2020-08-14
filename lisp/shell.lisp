@@ -375,6 +375,10 @@ Section: shell
              (:bkrd (make-color 48))
              (nil (make-color 38)))))
 
+(defn find-symbol (com)
+	(def 'val (to-symbol (str *active-ns* "::" com)))
+	(if (def? val) val (to-symbol (str "root::" com))))
+
 (defmacro sys-alias?
 "
 True if the supplied command is an alias for a system command.
@@ -383,7 +387,7 @@ Section: shell
 "
 	(com) `(do
 	(def 'ret nil)
-	(def 'val (to-symbol ,(str *active-ns* "::" com)))
+	(def 'val (shell::find-symbol ,com))
 	(if (def? val)
 		(set 'val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
@@ -473,7 +477,7 @@ Section: shell
 
 	(defn func? (com)
 		; Want the actual thing pointed to by the symbol in com for the test.
-	    (set 'com (to-symbol (str *active-ns* "::" com)))
+	    (set 'com (shell::find-symbol com))
 	    (if (def? com)
 		  (do (set 'com (eval (to-symbol com))) (or(builtin? com)(lambda? com)(macro? com)))
 		  nil))
@@ -495,7 +499,7 @@ Section: shell
 		ret)
 
 	(defn command-color (command)
-	    (def 'ns-command (to-symbol (str *active-ns* "::" command)))
+	    (def 'ns-command (shell::find-symbol command))
 		(if (not tok-command)
 			(if (def? ns-command)
 				(if (func? command)
