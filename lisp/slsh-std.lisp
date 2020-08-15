@@ -39,6 +39,9 @@
 
 (if (= :error (car result)) (do (prim-print-error result)(recur)))
 
+; Do not leave this laying around the root scope.
+(undef 'result)
+
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? '*interactive*) (do (load "slshrc") (if (not (def? 'repl))(def 'repl shell::repl)) (repl)))
@@ -48,4 +51,5 @@
     (def 'result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
     (if (= :error (car result))
       (shell::print-error result))))
+
 

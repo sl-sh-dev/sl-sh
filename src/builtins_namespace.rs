@@ -19,7 +19,7 @@ fn set_active_namespace(
         Reference::new(
             ExpEnum::Atom(Atom::String(ns.into(), None)),
             RefMetaData {
-                namespace: None,
+                namespace: Some("root"),
                 doc_string: None,
             },
         ),
@@ -29,7 +29,7 @@ fn set_active_namespace(
         Reference::new(
             ExpEnum::Atom(Atom::String(prev_ns.into(), None)),
             RefMetaData {
-                namespace: None,
+                namespace: Some("root"),
                 doc_string: None,
             },
         ),
