@@ -19,11 +19,27 @@
 
 (load "core.lisp")
 
-(defn error-stack-on () nil)
-(defn error-stack-off () nil)
+(defn error-stack-on
+"Currently a no-op, used to turn on error stacks.
+
+Section: core
+"
+      () nil)
+
+(defn error-stack-off
+"Currently a no-op, used to turn off error stacks.
+
+Section: core
+"
+      () nil)
 
 ; For compat.
-(defmacro progn (&rest args) `(do ,@args))
+(defmacro progn
+"Synonym for 'do', use it instead (this is depricated).
+
+Section: root
+"
+  (&rest args) `(do ,@args))
 
 (def '*last-status* 0)
 (def '*last-command* "")
@@ -39,8 +55,10 @@
 
 (if (= :error (car result)) (do (prim-print-error result)(recur)))
 
-; Do not leave this laying around the root scope.
+; Do not leave this stuff laying around the root scope.
 (undef 'result)
+(undef 'prim-print-backtrace)
+(undef 'prim-print-error)
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 

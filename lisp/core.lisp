@@ -461,6 +461,11 @@ Example:
                       (recur (eval sexp) (rest forms))))))))
 
 ; Reader macro for #.
-(defn reader-macro-dot (stream ch) (eval (read stream)))
+(defn reader-macro-dot
+"Reader macro for #.(...).  Do not call directly.
+
+Section: root
+"
+      (stream ch) (eval (read stream)))
 
 (load "collection.lisp")
