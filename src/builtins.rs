@@ -605,9 +605,9 @@ fn val_to_reference(
 ) -> Result<(Reference, Expression), LispError> {
     let val_in_d = val_in.get();
     if let ExpEnum::Atom(Atom::Symbol(s)) = &val_in_d.data {
-        if let Some(exp) = get_expression(environment, s) {
+        if let Some(reference) = get_expression(environment, s) {
             drop(val_in_d); // Free read lock on val_in.
-            Ok((exp, eval(environment, val_in)?))
+            Ok((reference, eval(environment, val_in)?))
         } else {
             drop(val_in_d); // Free read lock on val_in.
             let val = eval(environment, val_in)?;

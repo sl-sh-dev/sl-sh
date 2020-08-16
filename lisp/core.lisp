@@ -58,12 +58,12 @@ Section: namespace"
 Section: namespace"
     (namespace)
     `((fn ()
-        (def 'import (make-vec 2 1))
+        (def 'import (vec defq 1 2))
         (iterator::for sym in (eval (to-symbol (str ,namespace "::*ns-exports*")))
                        (do
-                         (vec-setnth! 0 (to-symbol (str "ns::" sym)) import)
-                         (vec-setnth! 1 (eval (to-symbol (str ,namespace "::" sym))) import)
-                         (apply def import))))))
+                         (vec-setnth! 1 (to-symbol (str "ns::" sym)) import)
+                         (vec-setnth! 2 (to-symbol (str ,namespace "::" sym)) import)
+                         (eval import))))))
 
 (defmacro setq
 "Usage: (setq sym doc-string? expression) -> expression
