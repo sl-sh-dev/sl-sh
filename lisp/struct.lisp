@@ -62,10 +62,11 @@ Example:
         (def 'idx-start 0)
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
             (do
-              (def 'doc-split (str-splitn 2 "Example:" (vec-nth 0 fields)))
+              (def 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
               (set 'doc (vec-nth 0 doc-split))
               (set 'idx-start 1)
               (if (= 2 (length doc-split)) (set 'doc-exp (vec-nth 1 doc-split)))))
+        (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         ((fn (idx)
             (if (< idx fields-len) (do
@@ -79,7 +80,7 @@ Example:
         (def 'tags-len (length tags))
         (def 'doc-final "")
         (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (defstruct ... (:impl " name "))\n\n"))
-        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
+        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
         `(def ',name ,doc-final (fn (target-dispatch-map target-tags)
             ((fn (idx)
                 (if (< idx ,tags-len) (do
@@ -135,10 +136,11 @@ Example:
         (def 'idx-start 0)
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
             (do
-              (def 'doc-split (str-splitn 2 "Example:" (vec-nth 0 fields)))
+              (def 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
               (set 'doc (vec-nth 0 doc-split))
               (set 'idx-start 1)
               (if (= 2 (length doc-split)) (def 'doc-exp (vec-nth 1 doc-split))(def 'doc-exp ""))))
+        (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         (defn attrib (field doc doc-exp)
             (def 'second (cadr field))
@@ -208,7 +210,7 @@ Example:
 
         (hash-set! dispatch-map :type `(fn (_) (symbol-name ',name)))
         (def 'doc-final "")
-        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nExample:\n" doc-exp)""))
+        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
         `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params)
             (def 'self (fn (msg &rest args) (apply (eval-in-scope (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name)))) this-fn args)))
             ;(def 'self (fn (msg &rest args) (apply (hash-get dispatch-map msg (err (str "Invalid message (" msg ") to struct: " ',name))) this-fn args)))
