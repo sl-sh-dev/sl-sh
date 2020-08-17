@@ -64,6 +64,6 @@
 		(collect-vec (map (fn (x) (doc (to-symbol x)))
 			  (get-doc-list-for target-doc-form)))))
 
-(ns-export '(make-md-file get-doc-list-for make-md-file-with-docstrings))
+(ns-export '(make-md-file get-doc-list-for make-md-file-with-docstrings filter-undocable-forms))
 
 (ns-pop)

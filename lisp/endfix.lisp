@@ -140,19 +140,11 @@
 				prefix-props
 				(recur cmd-ast (rest prefix-metadata))))))
 
-;; TODO this function could/should be applied recursively to handle any
-;; prefixification needs in inner forms.
 (defn check-for-infix-notation (cmd-ast)
 	;; confirm cmd ast needs prefixification ...then call prefixify.
 	(progn
 		(defq prefix-eligible
 			(confirm-prefix-eligible cmd-ast prefix-metadata))
-		;;TODO could loop by the infix symbols. this would allow us to
-		;; detect forms with infix symbols nested within infix symbols.
-		;; would start by finding the first instance of an infix symbol
-		;; in the ast. then group all forms after in list, until
-		;; occurrence of next of that infix symbol. then recursive
-			;; aplication could properly prefixify everything.
 		(if (not prefix-eligible)
 			cmd-ast
 			(prefixify-cmd cmd-ast prefix-eligible))))
@@ -237,11 +229,31 @@
 	(recursively-modify-if-mixed-infix-notation (make-vec) cmd-ast))
 
 (defn handle-parens (result cmd-ast) (progn
-	(if (empty-seq? cmd-ast) (return-from handle-parens nil))
-	(if (non-empty-seq? (first cmd-ast))
-		(vec-push! result (apply-infix-modifications (first cmd-ast)))
-		(vec-push! result (first cmd-ast)))
-	(recur result (rest cmd-ast))))
+    (if (empty-seq? cmd-ast) (return-from handle-parens nil))
+    (defq fst (first cmd-ast))
+    (if (non-empty-seq? fst)
+        (progn
+            (defq orig-fst fst)
+            (setq fst (first fst))
+            ;; special case list literal, make sure to return list prefixed
+            ;; with symbol 'list so type of list is preserved in AST, which
+            ;; is built as a vector, rather than recursing into the quoted
+            ;; list and building its components into a vector and not
+            ;; preserving the type of the list. It's ok to not recurse into
+            ;; the list because there's no prefixification that could happen
+            ;; in a list literal.
+            (if (= fst 'quote)
+                (progn
+                    (defq scnd (first (rest orig-fst)))
+                    (if (and (not (= nil scnd)) (list? scnd))
+                        (vec-push! result (join 'list scnd))
+                        (progn
+                          (if (vec? scnd)
+                             (vec-push! result (join 'vec scnd))
+                             (vec-push! result (apply-infix-modifications orig-fst))))))
+              (vec-push! result (apply-infix-modifications fst))))
+        (vec-push! result fst))
+    (recur result (rest cmd-ast))))
 
 ;; entrypoint for all multiargument commands, used to allow use of infix
 ;; notation.

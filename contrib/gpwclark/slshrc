@@ -3,6 +3,8 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
+(defq default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
+
 ;; gpwclark TODOs
 ;; - getopts!
 ;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
@@ -27,7 +29,7 @@
 		(&rest paths)
 		(if (= 0 (length paths))
 			(du ./* -sh)
-			(for path paths (du path -sh))))
+			(for path in paths (du path -sh))))
 
 	(defn pgz
 		"Parallelized gzip.
@@ -84,7 +86,7 @@
 		()
 		(progn
 			(defq most-recent-dir
-				(first (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf))))
+				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir))))
 
 ;; stdin to clipboard
@@ -101,7 +103,7 @@
 	Section: user-shell
 	"
 	()
-	`(| (pwd) (sc)))
+	`(| (echo -n (str-trim (str (pwd)))) (sc)))
 
 (defn zh
 	"
@@ -159,7 +161,7 @@
 	(let ((log-out-file "last_build.log"))
 	(progn
 		(|
-			(defq gradle-proc (eval (append '(./gradlew) args)))
+			(defq gradle-proc (eval (append-to! '(./gradlew) args)))
 			(tee log-out-file)
 		)
 		(defq gradle-ret-code (wait gradle-proc))
@@ -429,6 +431,12 @@ Section: tmux"
 		(str "")
 		(str "(" (str-trim branch) ")"))))
 
+(defn get-build-type () (progn
+	(defq build-type (nth 3 (str-split " " (version))))
+	(if (= build-type "debug")
+		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
+		"")))
+
 ;; prompt ensures
 ;;	1. always a new line above prompt
 ;;	2. if pushd has been used displays in reverse order dirs to popd
@@ -444,7 +452,7 @@ Section: tmux"
 			(if (> (length (get-dirs)) 0)
 				(collect-str (map smaller_path (reverse (get-dirs))))
 				"")
-			"\n\r" "\x1b[32m[slsh]:" $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+			"\n\r" "\x1b[32m[sl-sh" (get-build-type) "] " $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
 			(set_prompt_tail))))
 
 ;; }}}
@@ -472,54 +480,59 @@ Section: tmux"
 ;; user ns docs {{{
 
 (pushd "~/development/slsh/docs/")
-(if (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
-	(load "mk-docs.lisp")
-	(defn filter-non-user-forms (sym-list) (progn
-		(loop (sym-list namespaces) (sym-list '("root" "core" "shell"))
-			(if (empty-seq? namespaces)
-				sym-list
-				(progn
-					(setq sym-list (filter
-						(fn (x) (not (in? (ns-symbols (to-symbol (first namespaces))) x)))
-						sym-list))
-					(recur sym-list (rest namespaces)))))))
+(when (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
+    (load "mk-docs.lisp")
 
-	(defn filter-undocable-forms (sym-list)
-		(filter (fn (x)
-			(and (not (= x 'custom-lisp-config))
-				(not (= x 'filter-non-user-forms))
-				(not (= x 'filter-undocable-forms))
-				(not (= x 'list-of-user-slsh-syms))
-				(not (= x '*repl-settings*))
-				(not (= x '__completion_hook))
-				(not (= x '__line_handler))
-				(not (= x '__exec_hook))
-				(not (= x '__prompt))))
-			sym-list))
+    (defn filter-non-user-forms (sym-list namespaces) (progn
+            (if (empty-seq? namespaces)
+                sym-list
+                (progn
+                (defq the-ns (first namespaces))
+                (setq sym-list (filter (fn (x) (not (in? (ns-symbols (to-symbol the-ns)) x))) sym-list))
+                (recur sym-list (rest namespaces))))))
 
-	;;TODO ideally this would live in mk-docs.lisp
-	;; and :user would be an option as param fo mkdocs::get-doc-list-for
-	(defn list-of-user-slsh-syms () (progn
-		(defq user-syms (list))
-		(for a-ns (filter
-					(fn (x) (not (in? '("root" "shell" "core" "mkdocs" "docparse" "docmd") x)))
-					(ns-list))
-			(append! user-syms (ns-symbols (to-symbol a-ns))))
-		(filter-undocable-forms (filter-non-user-forms user-syms))))
+    (defn filter-user-undocable-forms (sym-list)
+        (filter (fn (x)
+            (and (not (= x 'custom-lisp-config))
+                (not (= x 'filter-non-user-forms))
+                (not (= x 'filter-user-undocable-forms))
+                (not (= x 'list-of-user-slsh-syms))
+                (not (= x '*repl-settings*))
+                (not (= x '__completion_hook))
+                (not (= x 'default-namespaces))
+                (not (= x '__line_handler))
+                (not (= x '__exec_hook))
+                (not (= x '__prompt))))
+            sym-list))
 
-	(defq all-docstrings
-		(map! (fn (x)
-			(progn
-				(doc (to-symbol x))))
-				(list-of-user-slsh-syms)))
+    ;; TODO ideally this would live in mk-docs.lisp
+    ;; and :user would be an option as param fo mkdocs::get-doc-list-for
+    (defn list-of-user-slsh-syms () (progn
+        (defq user-syms (list))
+        (defq all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
+        (for a-ns in (filter
+                    (fn (x) (not (in? all-non-user-namespaces x)))
+                    (ns-list))
+            (append-to! user-syms (ns-symbols (to-symbol a-ns))))
+        (defq user-forms (mkdocs::filter-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
+        (setq user-forms (filter-user-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
+        (println "user forms: " user-forms)
+        user-forms))
 
-	;; check the last modified time of index.markdown and only do this if
-	; has not been done in some amount of time.
-	(mkdocs::make-md-file-with-docstrings
-		"index.markdown"
-		all-docstrings)
-		(println "Built docs!"))
-		nil) ;; (println "not building docs")
+    (defq all-user-slsh-syms (list-of-user-slsh-syms))
+
+    (println "all my slsh-syms : " all-user-slsh-syms)
+
+    (defq all-docstrings
+        (map (fn (x) (doc (to-symbol x))) all-user-slsh-syms))
+
+    ;; check the last modified time of index.markdown and only do this if
+    ; has not been done in some amount of time.
+    (mkdocs::make-md-file-with-docstrings
+        "index.markdown"
+        (collect-vec all-docstrings))
+
+    (println "Built docs!"))) ;; (println "not building docs")
 
 (popd)
 ;; }}}
