@@ -224,7 +224,7 @@ Example:
       ret))
 
   (:fn reverse
-"Produce an iterator the is the reverse of self.
+"Produce an iterator that is the reverse of self.
 
 Example:
 (def 'tmap ((test-double-iter) :reverse))

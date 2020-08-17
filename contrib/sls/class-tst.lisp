@@ -55,7 +55,7 @@
 			(vec-push! cur tmp)
 			(set 'cur tmp)
 			(if (null accessors) (set 'accessors cur))))
-		(set 'tmp `#(if (= msg :type) (symbol-name ',name)))
+		(set 'tmp `#(if (= msg :type) (sym->str ',name)))
 		(vec-push! cur tmp)
 		(set 'cur tmp)
 		(def 'err-msg (str "Invalid message to class: " name))

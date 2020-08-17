@@ -49,7 +49,7 @@ Section: namespace"
     (if (symbol? ,symbol_or_sequence)
         (vec-push! *ns-exports* (quote ,symbol_or_sequence))
         (if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
-            (iterator::for sym in ,symbol_or_sequence (vec-push! *ns-exports* sym))
+            (iterator::for symbol in ,symbol_or_sequence (vec-push! *ns-exports* symbol))
             (err "ns-export takes a symbol or sequence.")))))
 
 (defmacro ns-import
@@ -59,18 +59,18 @@ Section: namespace"
     (namespace)
     `((fn ()
         (def 'import (vec defq 1 2))
-        (iterator::for sym in (eval (to-symbol (str ,namespace "::*ns-exports*")))
+        (iterator::for symbol in (eval (sym ,namespace "::*ns-exports*"))
                        (do
-                         (vec-setnth! 1 (to-symbol (str "ns::" sym)) import)
-                         (vec-setnth! 2 (to-symbol (str ,namespace "::" sym)) import)
+                         (vec-setnth! 1 (sym "ns::" symbol) import)
+                         (vec-setnth! 2 (sym ,namespace "::" symbol) import)
                          (eval import))))))
 
 (defmacro setq
-"Usage: (setq sym doc-string? expression) -> expression
+"Usage: (setq symbol doc-string? expression) -> expression
 
-Set an expession to a quoted symbol (ie set 'sym bind)
+Set an expession to a quoted symbol (ie set 'symbol bind)
 
-Section: root
+Section: core
 
 Example:
 (def 'test-do-one nil)
@@ -87,15 +87,15 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 "
-    (sym &rest args)
-    `(set ',sym ,@args))
+    (symbol &rest args)
+    `(set ',symbol ,@args))
 
 (defmacro defq
-"Usage: (defq sym doc-string? expression) -> expression
+"Usage: (defq symbol doc-string? expression) -> expression
 
-Binds an expession to a quoted symbol (ie def 'sym bind)
+Binds an expession to a quoted symbol (ie def 'symbol bind)
 
-Section: root
+Section: core
 
 Example:
 (defq test-do-one \"One\")
@@ -115,8 +115,8 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 "
-    (sym &rest args)
-    `(def ',sym ,@args))
+    (symbol &rest args)
+    `(def ',symbol ,@args))
 
 (defmacro internal-fn
 "
@@ -201,7 +201,7 @@ Example:
 Binds bindings to parameters in body. Use recur with desired bindings for
 subsequent iteration.
 
-Section: root
+Section: core
 
 Example:
 (def 'tot 0)
@@ -217,7 +217,7 @@ Example:
 "
 Evaluate body a number of times equal to times' numerical value.
 
-Section: root
+Section: core
 
 Example:
 (def 'i 0)
@@ -236,7 +236,7 @@ Example:
 Evaluate body a number of times equal to times' numnrical value. Includes an
 incrementing reference binding, idx-bind, accesible in body.
 
-Section: root
+Section: core
 
 Example:
 (def 'i 0)
@@ -259,7 +259,7 @@ Evaluate condition and look for matching value in each branch of type
 (value form*). Form(s) will be wrapped in an implicit do. Use nil to take
 action if no match (encouraged!).
 
-Section: core
+Section: conditional
 
 Example:
 
@@ -305,7 +305,7 @@ Evaluate each test in order.  If it is true then evaluate the form(s) in an
 implicit do and return the result.  Stop evaluting at the first true test.
 Return nil if no conditions are true.
 
-Section: core
+Section: conditional
 
 Example:
 
@@ -464,7 +464,7 @@ Example:
 (defn reader-macro-dot
 "Reader macro for #.(...).  Do not call directly.
 
-Section: root
+Section: core
 "
       (stream ch) (eval (read stream)))
 

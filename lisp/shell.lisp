@@ -300,14 +300,14 @@ Example:
 				(do
 					(vec-insert-nth! idx (iterator::nth 0 el) params)
 					(vec-insert-nth! idx nil bindings)
-					(vec-insert-nth! idx (eval (to-symbol (str "\$" (iterator::nth 0 el)))) olds))
+					(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
 				(if (= 2 (length el))
 					(do
 						(def 'binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
 						(vec-insert-nth! idx (iterator::nth 0 el) params)
 						(vec-insert-nth! idx binding bindings)
-						(vec-insert-nth! idx (eval (to-symbol (str "\$" (iterator::nth 0 el)))) olds))
+						(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
@@ -376,8 +376,8 @@ Section: shell
              (nil (make-color 38)))))
 
 (defn find-symbol (com)
-	(def 'val (to-symbol (str *active-ns* "::" com)))
-	(if (def? val) val (to-symbol (str "root::" com))))
+	(def 'val (sym *active-ns* "::" com))
+	(if (def? val) val (sym "root::" com)))
 
 (defmacro sys-alias?
 "
@@ -392,7 +392,7 @@ Section: shell
 		(set 'val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(def 'expansion (expand-macro (val)))
-		(set 'ret (sys-command? (symbol-name (first expansion))))))
+		(set 'ret (sys-command? (sym->str (first expansion))))))
 	ret))
 
 (defn sys-command?
@@ -479,7 +479,7 @@ Section: shell
 		; Want the actual thing pointed to by the symbol in com for the test.
 	    (set 'com (shell::find-symbol com))
 	    (if (def? com)
-		  (do (set 'com (eval (to-symbol com))) (or(builtin? com)(lambda? com)(macro? com)))
+		  (do (set 'com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
 		  nil))
 
 	(defn paren-color (level)
@@ -658,7 +658,7 @@ Section: shell
       (do
         (export 'LAST_STATUS "0")
         (set '*last-status* 0)
-        (def 'exec-hook (to-symbol (str *active-ns* "::__exec_hook")))
+        (def 'exec-hook (sym *active-ns* "::__exec_hook"))
         (def 'ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (read-all line)))
@@ -682,7 +682,7 @@ Section: shell
 
 (defn repl ()
       (defn get-prompt ()
-              (def 'ns-prompt (to-symbol (str *active-ns* "::__prompt")))
+              (def 'ns-prompt (sym *active-ns* "::__prompt"))
               (if (def? ns-prompt) (apply ns-prompt nil) (__prompt)))
       (defn repl-inner ()
               (if (not (def? '*repl-std-only*)) (prompt-history-context :repl $PWD))

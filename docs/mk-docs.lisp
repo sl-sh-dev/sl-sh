@@ -27,6 +27,8 @@
 			(not (= x '*run-script*))
 			(not (= x '*active-ns*))
 			(not (= x '*last-ns*))
+			(not (= x 'internal-fn))
+			(not (= x 'internal-macro))
 			(not (= x 'get-doc-list-for))
 			(not (= x 'make-md-file))
 			(not (= x 'make-md-file-with-docstrings))

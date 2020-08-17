@@ -71,7 +71,7 @@ Produces a multi values object.  Useful for returning more then one value from
 a function when most of time you only care about the first (primary) item.  When
 evaluting a muti values object it will evaluate as if it the first item only.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-true (values? (values 1 \"str\" 5.5)))
@@ -90,7 +90,7 @@ Example:
 
 If expression is a values object then return the item at index idx.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal 1 (values-nth 0 (values 1 \"str\" 5.5)))
@@ -112,7 +112,7 @@ Example:
 
 If expression is a values object then return it's length (number of values).
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal 3 (values-length (values 1 \"str\" 5.5)))

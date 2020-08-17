@@ -48,7 +48,7 @@
             (def 'm-body (first (rest (rest method))))
             (hash-set! dispatch-map tsym `(fn ,m-params ,m-body))
             (vec-push! tags (to-symbol (str ":method:" (first method))))))
-        (hash-set! dispatch-map :type `(fn (_) (symbol-name ',name)))
+        (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
         (def 'make-sym (to-symbol (str "make-" name)))
         `(def ',make-sym (fn () ((fn (dispatch-map ,@params) (progn
             (def 'self (fn (msg &rest args) (apply (eval (hash-get dispatch-map msg (err (str ("Invalid message (" msg ") to struct: " ,name))))) this-fn args)))

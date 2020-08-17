@@ -1,7 +1,7 @@
 (if (ns-exists? 'struct) (ns-enter 'struct) (ns-create 'struct))
 
 (defn method (field dispatch-map tags doc doc-exp)
-    (def 'tsym (to-symbol (str ":" (car field))))
+    (def 'tsym (sym ":" (car field)))
     (def 'second (cadr field))
     (if (string? second) (do
         (def 'doc-split (str-splitn 2 "Example:" second))
@@ -15,7 +15,7 @@
         (def 'm-params (cadr field))
         (def 'm-body (caddr field))))
     (hash-set! dispatch-map tsym `(fn ,m-params ,m-body))
-    (vec-push! tags (to-symbol (str ":method" tsym))))
+    (vec-push! tags (sym ":method" tsym)))
 
 ; macro to build a "trait" that can be implemented by a struct
 (defmacro deftrait
@@ -54,7 +54,7 @@ Example:
     (name &rest fields)
     ((fn ()
         (def 'tags (vec))
-        (vec-push! tags (to-symbol (str ":trait-" name)))
+        (vec-push! tags (sym ":trait-" name))
         (def 'dispatch-map (make-hash))
         (def 'fields-len (length fields))
         (def 'doc "")
@@ -128,7 +128,7 @@ Example:
     ((fn (params bindings)
         (def 'tags (vec))
         (vec-push! tags :struct)
-        (vec-push! tags (to-symbol (str ":struct-" name)))
+        (vec-push! tags (sym ":struct-" name))
         (def 'dispatch-map (make-hash))
         (def 'fields-len (length fields))
         (def 'doc "")
@@ -170,22 +170,22 @@ Example:
                       (vec-push! bindings binding)
                       (if (= perm :rw) (do
                               (str-push! doc "attribute: " (car field) " read/write" fdoc "\n")
-                              (def 'tsym (to-symbol (str ":" param)))
+                              (def 'tsym (sym ":" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
-                              (vec-push! tags (to-symbol (str ":accessor:" param)))
-                              (def 'tsym (to-symbol (str ":set-" param)))
+                              (vec-push! tags (sym ":accessor:" param))
+                              (def 'tsym (sym ":set-" param))
                               (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
-                              (vec-push! tags (to-symbol (str ":setter:" param))))
+                              (vec-push! tags (sym ":setter:" param)))
                           (= perm :ro) (do
                               (str-push! doc "attribute: " (car field) " read" fdoc "\n")
-                              (def 'tsym (to-symbol (str ":" param)))
+                              (def 'tsym (sym ":" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
-                              (vec-push! tags (to-symbol (str ":accessor:" param))))
+                              (vec-push! tags (sym ":accessor:" param)))
                           (= perm :wo) (do
                               (str-push! doc "attribute: " (car field) " write" fdoc "\n")
-                              (def 'tsym (to-symbol (str ":set-" param)))
+                              (def 'tsym (sym ":set-" param))
                               (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
-                              (vec-push! tags (to-symbol (str ":setter:" param))))
+                              (vec-push! tags (sym ":setter:" param)))
                           (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
                 (err "ERROR: invalid attribute bindings on defstruct")))
 
@@ -208,7 +208,7 @@ Example:
                 (recur (+ idx 1))
             )))idx-start)
 
-        (hash-set! dispatch-map :type `(fn (_) (symbol-name ',name)))
+        (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
         (def 'doc-final "")
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
         `(def ',name ,doc-final (fn () ((fn (dispatch-map ,@params)

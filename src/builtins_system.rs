@@ -363,7 +363,7 @@ pub fn add_system_builtins<S: BuildHasher>(
 
 Execute the provided system command with the supplied arguments.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))

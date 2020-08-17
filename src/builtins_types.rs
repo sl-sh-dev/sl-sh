@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
+use std::num::{ParseFloatError, ParseIntError};
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -310,6 +311,75 @@ fn builtin_is_list(
     Err(LispError::new("list? needs one form"))
 }
 
+fn builtin_str_to_int(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            if let ExpEnum::Atom(Atom::String(istr, _)) = &eval(environment, arg)?.get().data {
+                let potential_int: Result<i64, ParseIntError> = istr.parse();
+                return match potential_int {
+                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(v)))),
+                    Err(_) => Err(LispError::new("str->int: string is not a valid integer")),
+                };
+            }
+        }
+    }
+    Err(LispError::new("str->int: requires a string"))
+}
+
+fn builtin_str_to_float(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            if let ExpEnum::Atom(Atom::String(istr, _)) = &eval(environment, arg)?.get().data {
+                let potential_float: Result<f64, ParseFloatError> = istr.parse();
+                return match potential_float {
+                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(v)))),
+                    Err(_) => Err(LispError::new("str->float: string is not a valid float")),
+                };
+            }
+        }
+    }
+    Err(LispError::new("str->float: requires a string"))
+}
+
+fn builtin_to_symbol(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let mut res = String::new();
+    for a in args {
+        res.push_str(&eval(environment, a)?.as_string(environment)?);
+    }
+    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+        environment.interner.intern(&res),
+    ))))
+}
+
+fn builtin_symbol_to_str(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match &arg0.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
+                    Atom::String((*s).into(), None),
+                ))),
+                _ => Err(LispError::new(
+                    "sym->str: can only convert a symbol to a string",
+                )),
+            };
+        }
+    }
+    Err(LispError::new("sym->str: take one form (a symbol)"))
+}
+
 pub fn add_type_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
@@ -329,7 +399,6 @@ Types are:
     Int
     Symbol
     String
-    StringBuf
     Char
     Lambda
     Macro
@@ -696,6 +765,94 @@ Example:
 (test::assert-false (list? '#(1 2 3)))
 (test::assert-false (list? (vec)))
 (test::assert-false (list? '(1 . 2)))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("str->int"),
+        Expression::make_function(
+            builtin_str_to_int,
+            "Usage: (str->int string) -> int
+
+If string is a valid representation of an integer return that int.  Error if not.
+
+Section: type
+
+Example:
+(test::assert-equal 0 (str->int \"0\"))
+(test::assert-equal 101 (str->int \"101\"))
+(test::assert-equal -101 (str->int \"-101\"))
+(test::assert-error (str->int \"not int\"))
+(test::assert-error (str->int \"10.0\"))
+(test::assert-error (str->int \"--10\"))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("str->float"),
+        Expression::make_function(
+            builtin_str_to_float,
+            "Usage: (str->float string) -> float
+
+If string is a valid representation of a float return that float.  Error if not.
+
+Section: type
+
+Example:
+(test::assert-equal 0 (str->float \"0\"))
+(test::assert-equal 10.0 (str->float \"10.0\"))
+(test::assert-equal 10.5 (str->float \"10.5\"))
+(test::assert-equal 101 (str->float \"101\"))
+(test::assert-equal -101.95 (str->float \"-101.95\"))
+(test::assert-error (str->float \"not int\"))
+(test::assert-error (str->float \"--10\"))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("sym"),
+        Expression::make_function(
+            builtin_to_symbol,
+            "Usage: (sym expression+) -> symbol
+
+Takes one or more forms, converts them to strings, concatonates them and returns
+a symbol with that name.
+
+Section: type
+
+Example:
+(def 'test-to-symbol-sym nil)
+(test::assert-true (symbol? (sym 55)))
+(test::assert-true (symbol? (sym 55.0)))
+(test::assert-true (symbol? (sym \"to-symbol-test-new-symbol\")))
+(test::assert-true (symbol? (sym (str \"to-symbol-test-new-symbol-buf\"))))
+(test::assert-true (symbol? (sym 'test-to-symbol-sym)))
+(set 'test-to-symbol-sym \"testing-sym\")
+(test::assert-equal \"testing-sym\" (sym->str (sym test-to-symbol-sym)))
+(test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("sym->str"),
+        Expression::make_function(
+            builtin_symbol_to_str,
+            "Usage: (sym->str symbol) -> string
+
+Convert a symbol to the string representation representation of it's name.
+
+The string will be the symbol name as a string.
+
+Section: type
+
+Example:
+(def 'test-sym->str-sym nil)
+(test::assert-true (string? (sym->str 'test-sym->str-sym)))
+(test::assert-equal \"test-sym->str-sym\" (sym->str 'test-sym->str-sym))
 ",
             root,
         ),

@@ -30,15 +30,15 @@
 
 (defn make-test-list-from-symbols (symbols-list a-ns) (progn
 	(defq test-list (list))
-	(for sym in symbols-list (progn
-	(defq fully-qualified-symbol (to-symbol (str a-ns "::" sym)))
+	(for symbol in symbols-list (progn
+	(defq fully-qualified-symbol (sym a-ns "::" symbol))
 	(when (and
 			(func? (eval fully-qualified-symbol))
 			(not (or
-				(str-starts-with "ns-" (str sym))
-				(= "*ns*" (str sym))))) (progn
+				(str-starts-with "ns-" (str symbol))
+				(= "*ns*" (str symbol))))) (progn
 		(defq test-set-item (make-hash))
-		(hash-set! test-set-item :name (str sym))
+		(hash-set! test-set-item :name (str symbol))
 		(defq docstring (doc fully-qualified-symbol))
 		(if (has-example docstring)
 			(progn
@@ -139,7 +139,7 @@
 ;; run tests for non-root namespaces
 (for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
 	(printer (str "Tests from " a-ns))
-	(defq sym-list (qsort (eval (to-symbol (str a-ns "::*ns-exports*")))))
+	(defq sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
 	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 

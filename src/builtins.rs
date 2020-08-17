@@ -789,55 +789,6 @@ fn builtin_dyn(
     ))
 }
 
-fn builtin_to_symbol(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            return match &arg0.get().data {
-                ExpEnum::Atom(Atom::String(s, _)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::Symbol(environment.interner.intern(&s)),
-                ))),
-                ExpEnum::Atom(Atom::Symbol(s)) => {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
-                }
-                ExpEnum::Atom(Atom::Int(i)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::Symbol(environment.interner.intern(&format!("{}", i))),
-                ))),
-                ExpEnum::Atom(Atom::Float(f)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::Symbol(environment.interner.intern(&format!("{}", f))),
-                ))),
-                _ => Err(LispError::new(
-                    "to-symbol can only convert strings, symbols, ints and floats to a symbol",
-                )),
-            };
-        }
-    }
-    Err(LispError::new("to-symbol take one form"))
-}
-
-fn builtin_symbol_name(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            return match &arg0.get().data {
-                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::String((*s).into(), None),
-                ))),
-                _ => Err(LispError::new(
-                    "symbol-name can only convert a symbol to a string",
-                )),
-            };
-        }
-    }
-    Err(LispError::new("symbol-name take one form"))
-}
-
 fn builtin_fn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -2018,7 +1969,7 @@ If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
 provided expression will be evaluated as part of call).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-eval-one nil)
@@ -2042,7 +1993,7 @@ If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the
 provided expression will be evaluated as part of call).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-eval-one nil)
@@ -2062,7 +2013,7 @@ Example:
 
 Call the provided function with the suplied arguments, last is a list that will be expanded.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-apply-one nil)
@@ -2081,7 +2032,7 @@ Example:
 
 After evaluation first form, make sure the following cleanup forms run (returns first form's result).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-unwind-one nil)
@@ -2116,7 +2067,7 @@ Example:
 
 Raise an error with the supplied string.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-err-err (get-error (err \"Test Error\")))
@@ -2157,7 +2108,7 @@ Example:
 
 Return length of suplied expression.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal 0 (length nil))
@@ -2224,7 +2175,7 @@ Example:
 
 Print the arguments (as strings) to *stdout*.
 
-Section: root
+Section: core
 
 Example:
 ; Use a file for stdout for test.
@@ -2242,7 +2193,7 @@ Example:
 
 Print the arguments (as strings) to *stdout* and then a newline.
 
-Section: root
+Section: core
 
 Example:
 ; Use a file for stdout for test.
@@ -2262,7 +2213,7 @@ Example:
 
 Print the arguments (as strings) to *stderr*.
 
-Section: root
+Section: core
 
 Example:
 ; Use a file for stderr for test.
@@ -2280,7 +2231,7 @@ Example:
 
 Print the arguments (as strings) to *stderr* and then a newline.
 
-Section: root
+Section: core
 
 Example:
 ; Use a file for stderr for test.
@@ -2301,7 +2252,7 @@ Build a formatted string from arguments.
 
 Arguments will be turned into strings.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal \"stringsome\" (format \"string\" \"some\"))
@@ -2320,7 +2271,7 @@ Example:
 
 Evaluatate each form and return the last.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-do-one nil)
@@ -2343,7 +2294,7 @@ Evaluatate each form and return the last like do but it creates a new lexical sc
 This is basically like wrapping in a fn call but without the fn call or like a let
 without the initial bindings (you can use def to bind symbols in the new scope instead).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-do-one \"One1\")
@@ -2364,7 +2315,7 @@ Example:
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-do-one nil)
@@ -2391,7 +2342,7 @@ Example:
 
 Adds an expression to the current scope.  Return the expression that was defined.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-do-one nil)
@@ -2423,7 +2374,7 @@ Example:
 Remove a symbol from the current scope (if it exists).  Returns the expression
 that was removed.  It is an error if symbol is not defined in the current scope.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-undef nil)
@@ -2453,56 +2404,12 @@ result of the dynamic binding (for instance creating a dynamic binding for
 used indirectly).  Calls to dyn can be nested and previous dynamic values will
 be restored as interior dyn's exit.
 
-Section: root
+Section: core
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
 (dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (do (test-dyn-fn)))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("to-symbol"),
-        Expression::make_function(
-            builtin_to_symbol,
-            "Usage: (to-symbol expression) -> symbol
-
-Convert a string, symbol, int or float to a symbol.
-
-If the symbol is new it will be interned.
-
-Section: root
-
-Example:
-(def 'test-to-symbol-sym nil)
-(test::assert-true (symbol? (to-symbol 55)))
-(test::assert-true (symbol? (to-symbol 55.0)))
-(test::assert-true (symbol? (to-symbol \"to-symbol-test-new-symbol\")))
-(test::assert-true (symbol? (to-symbol (str \"to-symbol-test-new-symbol-buf\"))))
-(test::assert-true (symbol? (to-symbol 'test-to-symbol-sym)))
-(test::assert-true (symbol? (to-symbol (symbol-name 'test-to-symbol-sym))))
-",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("symbol-name"),
-        Expression::make_function(
-            builtin_symbol_name,
-            "Usage: (symbol-name symbol) -> string
-
-Convert a symbol to its string representation.
-
-The string will be the symbol name as a string.
-
-Section: root
-
-Example:
-(def 'test-symbol-name-sym nil)
-(test::assert-true (string? (symbol-name 'test-symbol-name-sym)))
-(test::assert-equal \"test-symbol-name-sym\" (symbol-name 'test-symbol-name-sym))
 ",
             root,
         ),
@@ -2515,7 +2422,7 @@ Example:
 
 Create a function (lambda).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-fn1 nil)
@@ -2550,7 +2457,7 @@ Example:
 Return expression without evaluation.
 The reader macro 'expression will expand to (quote expression).
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal (list 1 2 3) (quote (1 2 3)))
@@ -2572,7 +2479,7 @@ Always use the ` reader macro or expansion will not work
 
 Backquote (unlike quote) allows for symbol/form evaluation using , or ,@.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal (list 1 2 3) `(1 2 3))
@@ -2680,13 +2587,13 @@ Return true if symbol is defined.
 Expression will be evaluated and if a symbol or string it will look up that
 name in the symbol table and return true if it exists.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-is-def t)
 (test::assert-true (def? 'test-is-def))
 (test::assert-true (def? \"test-is-def\"))
-(test::assert-true (def? (symbol-name 'test-is-def)))
+(test::assert-true (def? (sym->str 'test-is-def)))
 (test::assert-false (def? 'test-is-def-not-defined))
 (test::assert-false (def? \"test-is-def-not-defined\"))
 ",
@@ -2701,7 +2608,7 @@ Example:
 
 Define an anonymous macro.
 
-Section: root
+Section: core
 
 Example:
 (def 'test-macro1 nil)
@@ -2737,7 +2644,7 @@ Expands a macro expression.  If that expansion is also a macro then expand it re
 
 Just returns the expression if not a macro.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro (defq xx \"value\")))
@@ -2782,7 +2689,7 @@ Expands a macro expression.  Only expand the first macro.
 
 Just returns the expression if not a macro.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro1 (defq xx \"value\")))
@@ -2826,7 +2733,7 @@ Expands a macro expression like expand-macro but also expand any embedded macros
 
 Just returns the expression if not a macro.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal '(def 'xx \"value\") (expand-macro-all (defq xx \"value\")))
@@ -2879,7 +2786,7 @@ inside the let would bind with the let not the enclosing lambda (this would
 apply to any macro that also expands to a lamda- this is by design with the
 loop macro but would be unexpected with let).
 
-Section: root
+Section: core
 
 Example:
 (def 'tot 0)
@@ -2907,15 +2814,15 @@ Generate a unique symbol.
 Gensym uses a prefix of gs@@ followed by an incrementing counter.
 It is useful to generate unique symbol names when writing macros (for instance).
 
-Section: root
+Section: core
 
 Example:
 (def 'test-gensym-one (gensym))
 (def 'test-gensym-two (gensym))
 (def 'test-gensym-three (gensym))
-(test::assert-true (str-starts-with \"gs@@\" (symbol-name test-gensym-one)))
-(test::assert-true (str-starts-with \"gs@@\" (symbol-name test-gensym-two)))
-(test::assert-true (str-starts-with \"gs@@\" (symbol-name test-gensym-three)))
+(test::assert-true (str-starts-with \"gs@@\" (sym->str test-gensym-one)))
+(test::assert-true (str-starts-with \"gs@@\" (sym->str test-gensym-two)))
+(test::assert-true (str-starts-with \"gs@@\" (sym->str test-gensym-three)))
 (test::assert-true (symbol? (gensym)))
 (test::assert-true (symbol? test-gensym-one))
 (test::assert-true (symbol? test-gensym-two))
@@ -3002,7 +2909,7 @@ On success return (:ok . expN-result).
 If there is no error will return the value of the last expression as the cdr of
 the pair.  Always returns a pair with the first value either being :ok or :error.
 
-Section: root
+Section: core
 
 Example:
 (def 'get-error-t1 (get-error (err \"Some Error\")))
@@ -3022,7 +2929,7 @@ Example:
 
 Return the doc string for a symbol or nil if no string.
 
-Section: root
+Section: core
 
 Example:
 ;(doc 'car)
@@ -3039,7 +2946,7 @@ t
 
 Return the raw (unexpanded) doc string for a symbol or nil if no string.
 
-Section: root
+Section: core
 
 Example:
 ;(doc-raw 'car)
@@ -3058,7 +2965,7 @@ t
 Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like do).
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3078,7 +2985,7 @@ Example:
 
 Causes enclosing block with name (name is not evaluated) to evaluate to expression.
 
-Section: root
+Section: core
 
 Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))
@@ -3098,7 +3005,7 @@ Example:
 
 Prints the stats for interned symbols.
 
-Section: root
+Section: core
 
 Example:
 ;(intern-stats)
@@ -3116,7 +3023,7 @@ t
 
 Line number from the file this came from.
 
-Section: root
+Section: core
 
 Example:
 ;(meta-line-no)
@@ -3134,7 +3041,7 @@ t
 
 Column number from the file this came from.
 
-Section: root
+Section: core
 
 Example:
 ;(meta-column-no)
@@ -3152,7 +3059,7 @@ t
 
 File name of the file this came from.
 
-Section: root
+Section: core
 
 Example:
 ;(meta-file-name)
@@ -3173,7 +3080,7 @@ symbols or vectors or lists of symbols (or any combination).
 This is intended for helping with structs and interfaces in lisp, you probably
 do not want to use it.
 
-Section: root
+Section: core
 
 Example:
 (def 'meta-add-tags-var '(1 2 3))
@@ -3201,7 +3108,7 @@ Example:
 True if expression has the meta tag 'tag' set.  This is intended for helping
 with structs and interfaces in lisp, you probably do not want to use it.
 
-Section: root
+Section: core
 
 Example:
 (def 'meta-add-tag-var '(1 2 3))
