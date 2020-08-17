@@ -222,9 +222,10 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(write-version index-file)
 	(progn
 		(defq uncat-syms (hash-get docstrings-map :uncategorized))
-		(when (not (empty-seq? uncat-syms))
+		(when (not (empty-seq? uncat-syms)) (do
 			(println "Found :uncategorized symbols: ")
-			nil)
+			(for symbol in uncat-syms (println "symbol: " symbol))
+			nil))
 		 #t)))
 
 (ns-export '(make-md-file))

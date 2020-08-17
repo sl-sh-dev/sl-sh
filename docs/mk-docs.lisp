@@ -11,6 +11,7 @@
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and
+			(not (= x 'filter-undocable-forms))
 			(not (= x '*ns*))
 			(not (= x '*repl-settings*))
 			(not (= x '*ns-exports*))
