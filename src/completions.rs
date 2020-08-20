@@ -91,15 +91,19 @@ impl<'env> ShellCompleter<'env> {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let comp_exp = get_expression_cur_ns(&self.environment, "__completion_hook");
+        let hook_name = if let Some(ns) = self.environment.namespace.borrow().name {
+            self.environment
+                .interner
+                .intern(&format!("{}::__completion_hook", ns))
+        } else {
+            self.environment.interner.intern("__completion_hook")
+        };
+        let comp_exp = get_expression(&self.environment, hook_name);
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.exp.get().data {
                 ExpEnum::Atom(Atom::Lambda(_)) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    //let mut environment = self.environment;
-                    let data = ExpEnum::Atom(Atom::Symbol(
-                        self.environment.interner.intern("__completion_hook"),
-                    ));
+                    let data = ExpEnum::Atom(Atom::Symbol(hook_name));
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
