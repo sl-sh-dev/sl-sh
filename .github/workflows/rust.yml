@@ -110,14 +110,20 @@ jobs:
           git clone ${REMOTE}
           log "Check version to see if PKGBUILD should be updated"
 
-          CURRENT_GIT_VERSION="$(git describe --always)"
           CURRENT_SL_SH_VERSION_DESC=$("../../target/release/sl-sh" -v)
           SL_SH_VERSION=$("../../sl-sh" -v | tr -s " " | cut -d " " -f 2)
           PKGBUILD_VERSION=$(cat ${REPO}/PKGBUILD | grep -i pkgver= | cut -d "=" -f 2)
 
           # handy trick to make sure all new changes are seen as updates.
           mv ${REPO}/.git .
-          sed -i "s/pkgver=VERSION/pkgver=${SL_SH_VERSION}/g" PKGBUILD
+          sed -i "s/echo \"VERSION_/echo \"${SL_SH_VERSION}_/g" PKGBUILD
+
+          echo "slsh version ${SL_SH_VERSION}"
+          echo "pkgbuild version ${PKGBUILD_VERSION}"
+          if [[ ${SL_SH_VERSION} = ${PKGBUILD_VERSION} ]]; then
+            log "sl-sh version not updated, not pushing to AUR."
+            exit 0
+         fi
 
           # must update .SRCINFO or aur users won't see update.
           sed -i "s/pkgver = VERSION/pkgver = ${SL_SH_VERSION}/g" .SRCINFO
