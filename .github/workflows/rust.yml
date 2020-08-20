@@ -116,7 +116,9 @@ jobs:
 
           # handy trick to make sure all new changes are seen as updates.
           mv ${REPO}/.git .
-          sed -i "s/echo \"VERSION_/echo \"${SL_SH_VERSION}_/g" PKGBUILD
+
+          sed -i "s/echo \"VERSION_\$(git describe --always)\"/echo \"${SL_SH_VERSION}_\$(git describe --always)\"/g" PKGBUILD
+          sed -i "s/pkgver=VERSION/pkgver=${SL_SH_VERSION}/g" PKGBUILD
 
           echo "slsh version ${SL_SH_VERSION}"
           echo "pkgbuild version ${PKGBUILD_VERSION}"
