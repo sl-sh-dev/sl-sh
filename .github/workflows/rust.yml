@@ -123,7 +123,7 @@ jobs:
           if [[ ${SL_SH_VERSION} = ${PKGBUILD_VERSION} ]]; then
             log "sl-sh version not updated, not pushing to AUR."
             exit 0
-         fi
+          fi
 
           # must update .SRCINFO or aur users won't see update.
           sed -i "s/pkgver = VERSION/pkgver = ${SL_SH_VERSION}/g" .SRCINFO
