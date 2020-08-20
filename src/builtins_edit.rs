@@ -258,11 +258,6 @@ pub fn read_prompt(
     let result = match con.read_line(Prompt::from(prompt), get_color_closure(environment)) {
         Ok(input) => {
             let input = input.trim();
-            /*if history.is_some() {
-                if let Err(err) = con.history.push(input) {
-                    eprintln!("read-line: Error saving history: {}", err);
-                }
-            }*/
             Ok(input.into())
         }
         Err(err) => Err(err),

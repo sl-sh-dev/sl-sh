@@ -1,8 +1,10 @@
+use std::borrow::Cow;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::fs;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
+use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -14,6 +16,17 @@ use crate::gc::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
+
+const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
+const STRUCT_LISP: &[u8] = include_bytes!("../lisp/struct.lisp");
+const ITERATOR_LISP: &[u8] = include_bytes!("../lisp/iterator.lisp");
+const COLLECTION_LISP: &[u8] = include_bytes!("../lisp/collection.lisp");
+const SEQ_LISP: &[u8] = include_bytes!("../lisp/seq.lisp");
+const SHELL_LISP: &[u8] = include_bytes!("../lisp/shell.lisp");
+const ENDFIX_LISP: &[u8] = include_bytes!("../lisp/endfix.lisp");
+const TEST_LISP: &[u8] = include_bytes!("../lisp/test.lisp");
+const SLSH_STD_LISP: &[u8] = include_bytes!("../lisp/slsh-std.lisp");
+const SLSHRC: &[u8] = include_bytes!("../lisp/slshrc");
 
 fn builtin_eval(
     environment: &mut Environment,
@@ -139,16 +152,6 @@ fn builtin_err(
 }
 
 pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression, LispError> {
-    let core_lisp = include_bytes!("../lisp/core.lisp");
-    let struct_lisp = include_bytes!("../lisp/struct.lisp");
-    let iterator_lisp = include_bytes!("../lisp/iterator.lisp");
-    let collection_lisp = include_bytes!("../lisp/collection.lisp");
-    let seq_lisp = include_bytes!("../lisp/seq.lisp");
-    let shell_lisp = include_bytes!("../lisp/shell.lisp");
-    let endfix_lisp = include_bytes!("../lisp/endfix.lisp");
-    let test_lisp = include_bytes!("../lisp/test.lisp");
-    let slsh_std_lisp = include_bytes!("../lisp/slsh-std.lisp");
-    let slshrc = include_bytes!("../lisp/slshrc");
     let file_name = match expand_tilde(&file_name) {
         Some(f) => f,
         None => file_name.to_string(),
@@ -189,45 +192,20 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         let contents = fs::read_to_string(file_path)?;
         read_list_wrap(environment, &contents, file_name)
     } else {
+        fn to_str(input: &'static [u8]) -> &'static str {
+            from_utf8(input).expect("Builtin file is not valid UTF8!")
+        }
         match &file_path[..] {
-            "core.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(core_lisp), file_name)
-            }
-            "struct.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(struct_lisp),
-                file_name,
-            ),
-            "iterator.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(iterator_lisp),
-                file_name,
-            ),
-            "collection.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(collection_lisp),
-                file_name,
-            ),
-            "seq.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(seq_lisp), file_name)
-            }
-            "shell.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(shell_lisp), file_name)
-            }
-            "endfix.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(endfix_lisp),
-                file_name,
-            ),
-            "test.lisp" => {
-                read_list_wrap(environment, &String::from_utf8_lossy(test_lisp), file_name)
-            }
-            "slsh-std.lisp" => read_list_wrap(
-                environment,
-                &String::from_utf8_lossy(slsh_std_lisp),
-                file_name,
-            ),
-            "slshrc" => read_list_wrap(environment, &String::from_utf8_lossy(slshrc), file_name),
+            "core.lisp" => read_list_wrap(environment, to_str(CORE_LISP), file_name),
+            "struct.lisp" => read_list_wrap(environment, to_str(STRUCT_LISP), file_name),
+            "iterator.lisp" => read_list_wrap(environment, to_str(ITERATOR_LISP), file_name),
+            "collection.lisp" => read_list_wrap(environment, to_str(COLLECTION_LISP), file_name),
+            "seq.lisp" => read_list_wrap(environment, to_str(SEQ_LISP), file_name),
+            "shell.lisp" => read_list_wrap(environment, to_str(SHELL_LISP), file_name),
+            "endfix.lisp" => read_list_wrap(environment, to_str(ENDFIX_LISP), file_name),
+            "test.lisp" => read_list_wrap(environment, to_str(TEST_LISP), file_name),
+            "slsh-std.lisp" => read_list_wrap(environment, to_str(SLSH_STD_LISP), file_name),
+            "slshrc" => read_list_wrap(environment, to_str(SLSHRC), file_name),
             _ => {
                 let msg = format!("{} not found", file_path);
                 return Err(LispError::new(msg));
@@ -3277,6 +3255,209 @@ Example:
 (test::assert-false (<= \"baa\" \"aab\"))
 ",
             root,
+        ),
+    );
+    fn to_cow(input: &'static [u8]) -> Cow<'static, str> {
+        Cow::Borrowed(from_utf8(input).expect("Builtin file is not valid UTF8!"))
+    }
+    data.insert(
+        interner.intern("*core-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(CORE_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for core.lisp.
+
+Section: core
+
+Example:
+;(print *core-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*struct-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(STRUCT_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for struct.lisp.
+
+Section: core
+
+Example:
+;(print *struct-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*iterator-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(ITERATOR_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for iterator.lisp.
+
+Section: core
+
+Example:
+;(print *iterator-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*collection-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(COLLECTION_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for collection.lisp.
+
+Section: core
+
+Example:
+;(print *collection-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*seq-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(SEQ_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for seq.lisp.
+
+Section: core
+
+Example:
+;(print *seq-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*shell-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(SHELL_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for shell.lisp.
+
+Section: core
+
+Example:
+;(print *shell-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*endfix-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(ENDFIX_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for endfix.lisp.
+
+Section: core
+
+Example:
+;(print *endfix-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*test-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(TEST_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for test.lisp.
+
+Section: core
+
+Example:
+;(print *test-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*slsh-std-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(SLSH_STD_LISP), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for slsh-std.lisp.
+
+Section: core
+
+Example:
+;(print *slsh-std-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
+        ),
+    );
+    data.insert(
+        interner.intern("*slshrc-src*"),
+        Reference::new(
+            ExpEnum::Atom(Atom::String(to_cow(SLSHRC), None)),
+            RefMetaData {
+                namespace: Some(root),
+                doc_string: Some(
+                    "The builtin source code for slshrc.
+
+Section: core
+
+Example:
+;(print *slshrc-src*)
+t
+"
+                    .to_string(),
+                ),
+            },
         ),
     );
 }

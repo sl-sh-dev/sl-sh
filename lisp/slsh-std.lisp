@@ -78,7 +78,13 @@ t
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
-(if (def? '*interactive*) (do (load "slshrc") (if (not (def? 'repl))(def 'repl shell::repl)) (repl)))
+(if (def? '*interactive*)
+  (do
+    (def 'config-file "$HOME$/.config/sl-sh/slshrc")
+    (if (not (fs-exists? config-file)) (write-string (open config-file :create) *slshrc-src*))
+    (load "slshrc")
+    (if (not (def? 'repl))(def 'repl shell::repl))
+    (repl)))
 
 (if (def? '*run-script*)
   (do

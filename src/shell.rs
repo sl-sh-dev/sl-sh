@@ -84,6 +84,13 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
+    let config_dir = format!("{}/.config/sl-sh", home);
+    if let Err(err) = create_dir_all(&config_dir) {
+        eprintln!(
+            "WARNING: Unable to create config directory: {}- {}",
+            config_dir, err
+        );
+    }
     let share_dir = format!("{}/.local/share/sl-sh", home);
     if let Err(err) = create_dir_all(&share_dir) {
         eprintln!(

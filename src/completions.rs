@@ -73,14 +73,12 @@ enum HookResult {
 }
 
 pub struct ShellCompleter<'env> {
-    //environment: Rc<RefCell<Environment>>,
     environment: &'env mut Environment,
     comp_type: CompType,
     args: Vec<String>,
 }
 
 impl<'env> ShellCompleter<'env> {
-    //pub fn new(environment: Rc<RefCell<Environment>>) -> ShellCompleter {
     pub fn new(environment: &'env mut Environment) -> ShellCompleter {
         ShellCompleter {
             environment,
@@ -93,7 +91,7 @@ impl<'env> ShellCompleter<'env> {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let comp_exp = get_expression(&self.environment, "__completion_hook");
+        let comp_exp = get_expression_cur_ns(&self.environment, "__completion_hook");
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.exp.get().data {
                 ExpEnum::Atom(Atom::Lambda(_)) => {

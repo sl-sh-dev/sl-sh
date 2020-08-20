@@ -1,49 +1,71 @@
-; This is an example config file, you would put it in ~/.config/slsh/slshrc to use it.
+(println (version))
 
+(println "Using default slshrc written to \"~/.config/sl-sh/slshrc\".")
+(println "Edit this file to remove this message and customize your shell")
+
+(ns-import 'iterator)
 (ns-import 'shell)
 
 ; Use vi keybindings
-(hash-set! *repl-settings* :keybindings :vi)
+;(hash-set! *repl-settings* :keybindings :vi)
+
 ; Use a key sequence in vi insert mode as ESC (string and milliseconds time)
-(hash-set! *repl-settings* :vi_esc_sequence '("jk" 500))
+;(hash-set! *repl-settings* :vi_esc_sequence '("jk" 500))
+
 ; Use emacs keybindings (default)
 ;(hash-set! *repl-settings* :keybindings :emacs)
-; Turn on syntax highlighting at the repl
+
+; Turn on syntax highlighting at the repl- use (syntax-off) to turn off.
 (syntax-on)
 
-(defn parse_git_branch () (let ((branch))
-	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
-	(if (= branch "")
-		(format "")
-		(format "(" (str-trim branch) ")"))))
+(defn parse_git_branch () 
+    (def 'branch "")
+    (if (sys-command? "git") (err>null (setq branch (str (git rev-parse --abbrev-ref HEAD)))))
+    (if (= branch "")
+        (format "")
+        (format "(" (str-trim branch) ")")))
 
 (defn path_list_trunc (plist)
-	(if (> (length plist) 1)
-		(if (> (length (first plist)) 0) 
-			(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
-			(path_list_trunc (rest plist)))
-		plist))
+    (if (> (length plist) 1)
+        (if (> (length (first plist)) 0) 
+            (vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+            (path_list_trunc (rest plist)))
+        plist))
 
 (defn get_pwd ()
-	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
+    (str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
 
-(defn set_prompt_tail ()
-	(if (= *last-status* 0) "\x1b[32m>\x1b[39m " (format "\x1b[31m(" *last-status* ")>\x1b[39m ")))
+(defn set_prompt_tail (last-status)
+    (def 'debug (if (str-contains "debug" (version)) "[DEBUG]" ""))
+    (def 'status (if (= last-status 0) "" (str "\x1b[31m(" last-status ")\x1b[39m")))
+    (if (= *euid* 0)
+        (str "\x1b[31m" status "\n\x1b[31m" debug "λ #\x1b[39m ")
+        (str "\x1b[32m" status "\n\x1b[32m" debug "λ >\x1b[39m ")))
 
 (defn __prompt ()
-	(str "\x1b[32m[" *ns* "]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail)))
+    (def 'last-status *last-status*)  ; Save this so it is not overwritten by commands run as part of prompt.
+    (str "\x1b[32m" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail last-status)))
 
-(alias ls (/bin/ls --color=auto -F))
+; How to set aliases.
+;(alias ls (/bin/ls --color=auto -F))
+;(alias ll (ls -al))
 
-(alias ll (ls -al))
+; How to change your PATH.
+;(export 'PATH (str "/bin:/usr/local/bin:" '~/bin))
+;(if (fs-dir? "/home/sstanf/.cargo") (export 'PATH (str $PATH ":" '~/.cargo/bin)))
+
+; Setting a general env variable.
+;(export 'LC_ALL 'en_US.UTF-8)
 
 ;; Completion hooks, the match is for the command and then custom completions can be returned.
+;; This is a simple example, makes cd better by only using paths in completions.
 (defn __completion_hook (&rest args)
-	(match (first args)
-		("cd" :path)
-		("ls" :default)
-		("git" :default)
-		(nil :default)))
+    (match (first args)
+        ("cd" :path)
+        ("ls" :default)
+        ("git" :default)
+        (nil :default)))
 
 ; Turn on endfix processing (i.e. "normal" style pipes, etc).
 (endfix-on)
+

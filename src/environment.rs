@@ -548,6 +548,27 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference>
     }
 }
 
+pub fn get_expression_cur_ns(environment: &Environment, key: &str) -> Option<Reference> {
+    if key.starts_with('$') || key.starts_with(':') {
+        // Can not lookup env vars or keywords...
+        None
+    } else if let Some(reference) = environment.dynamic_scope.get(key) {
+        Some(reference.clone())
+    } else if key.contains("::") {
+        // Only care about current namespace so ignore.
+        None
+    } else {
+        let mut loop_scope = Some(environment.namespace.clone());
+        while let Some(scope) = loop_scope {
+            if let Some(exp) = scope.borrow().data.get(key) {
+                return Some(exp.clone());
+            }
+            loop_scope = scope.borrow().outer.clone();
+        }
+        None
+    }
+}
+
 pub fn get_current_scope(environment: &mut Environment) -> Rc<RefCell<Scope>> {
     if !environment.scopes.is_empty() {
         environment.scopes.last().unwrap().clone()
