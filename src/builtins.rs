@@ -3267,7 +3267,9 @@ Example:
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for core.lisp.
+                    "Usage: (print *core-src*)
+
+The builtin source code for core.lisp.
 
 Section: core
 
@@ -3287,7 +3289,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for struct.lisp.
+                    "Usage: (print *struct-src*)
+
+The builtin source code for struct.lisp.
 
 Section: core
 
@@ -3307,7 +3311,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for iterator.lisp.
+                    "Usage: (print *iterator-src*)
+
+The builtin source code for iterator.lisp.
 
 Section: core
 
@@ -3327,7 +3333,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for collection.lisp.
+                    "Usage: (print *collection-src*)
+
+The builtin source code for collection.lisp.
 
 Section: core
 
@@ -3347,7 +3355,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for seq.lisp.
+                    "Usage: (print *seq-src*)
+
+The builtin source code for seq.lisp.
 
 Section: core
 
@@ -3367,7 +3377,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for shell.lisp.
+                    "Usage: (print *shell-src*)
+
+The builtin source code for shell.lisp.
 
 Section: core
 
@@ -3387,7 +3399,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for endfix.lisp.
+                    "Usage: (print *endfix-src*)
+
+The builtin source code for endfix.lisp.
 
 Section: core
 
@@ -3407,7 +3421,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for test.lisp.
+                    "Usage: (print *test-src*)
+
+The builtin source code for test.lisp.
 
 Section: core
 
@@ -3427,7 +3443,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for slsh-std.lisp.
+                    "Usage: (print *slsh-std-src*)
+
+The builtin source code for slsh-std.lisp.
 
 Section: core
 
@@ -3447,7 +3465,9 @@ t
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
-                    "The builtin source code for slshrc.
+                    "Usage: (print *slshrc-src*)
+
+The builtin source code for slshrc.
 
 Section: core
 
