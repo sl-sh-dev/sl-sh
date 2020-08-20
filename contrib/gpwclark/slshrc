@@ -453,7 +453,6 @@ Section: tmux"
                 (not (empty-seq? token-str)))
             (progn
                 (if (= (first token-str) '$la)
-                (if (= (first token-str) '$la)
                   (export 'la $la)
                   (export 'la (str (first token-str))))
                 (when (> (length token-str) 1)
