@@ -47,7 +47,7 @@ package() {
     cp ${srcdir}/${pkgname%-git}/LICENSE ${pkgdir}/usr/share/licenses/${pkgname}/LICENSE
 }
 
-
 pkgver() {
+    cd "${pkgname%-git}"
     echo "VERSION_$(git describe --always)"
 }
