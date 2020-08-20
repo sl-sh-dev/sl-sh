@@ -419,8 +419,8 @@ Section: tmux"
 	"used to grab return value of last command and put a non 0 error code in
 	the prompt for greater visibility.
 	Section: prompt"
-	()
-	(if (= *last-status* 0) "\x1b[39m❄ >\x1b[39m " (str "\x1b[31m(" *last-status* ")❄ >\x1b[39m ")))
+	(last-status)
+	(if (= last-status 0) "\x1b[39m❄ >\x1b[39m " (str "\x1b[31m(" last-status ")❄ >\x1b[39m ")))
 
 (defn parse_git_branch
 	"if in git repo, get the name of the branch
@@ -444,16 +444,34 @@ Section: tmux"
 ;;	4. if in git dir display current branch
 ;;	5. cursor on near empty line
 (defn __prompt ()
-	(progn
-		;; set $la to be the last argument of the last command.
-		(export 'la (str (first (str-rsplitn 2 " " *last-command*))))
-		(str
-			"\n"
-			(if (> (length (get-dirs)) 0)
-				(collect-str (map smaller_path (reverse (get-dirs))))
-				"")
-			"\n\r" "\x1b[32m[sl-sh" (get-build-type) "] " $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
-			(set_prompt_tail))))
+    (progn
+        (def 'token-str (str-trim *last-command*))
+        (when (> (length token-str) 0)
+            (set 'token-str (collect (reverse (read-all token-str)))))
+        (when (and
+                (> (length token-str) 0)
+                (not (empty-seq? token-str)))
+            (progn
+                (if (= (first token-str) '$la)
+                (if (= (first token-str) '$la)
+                  (export 'la $la)
+                  (export 'la (str (first token-str))))
+                (when (> (length token-str) 1)
+                  (if (= (nth 1 token-str) '$2la)
+                    (export '2la $2la)
+                    (export '2la (str (nth 1 token-str)))))
+                (when (> (length token-str) 2)
+                  (if (= (nth 2 token-str) '$3la)
+                    (export '3la $3la)
+                    (export '3la (str (nth 2 token-str)))))))
+        (def 'last-status *last-status*)
+        (str
+            "\n"
+            (if (> (length (get-dirs)) 0)
+                (collect-str (map smaller_path (reverse (get-dirs))))
+                "")
+            "\n\r" "\x1b[32m[sl-sh" (get-build-type) "] " $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+            (set_prompt_tail last-status))))
 
 ;; }}}
 
