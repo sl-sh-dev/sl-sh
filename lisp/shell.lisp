@@ -14,16 +14,16 @@ for that).
 Section: shell
 "
 	(name &rest args)
-	(defq usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
+	(var 'usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
 	(match (length args)
 		(2 (do
-			(defq docstring (vec-nth 0 args))
-			(defq body (vec-nth 1 args))
+			(var 'docstring (vec-nth 0 args))
+			(var 'body (vec-nth 1 args))
 			`(defmacro ,name ,docstring (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(1 (do
-			(defq body (vec-nth 0 args))
+			(var 'body (vec-nth 0 args))
 			`(defmacro ,name (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
@@ -136,149 +136,146 @@ Section: shell
 	(&rest body)
 	`(pipe ,@body))
 
-(defq pushd nil)
-(defq popd nil)
-(defq dirs nil)
-(defq get-dirs nil)
-(defq clear-dirs nil)
-(defq set-dirs-max nil)
 ;; Scope to contain then pushd/popd/dirs functions.
-(let ((dir_stack (make-vec 20)) (dir_stack_max 20))
-	(setfn pushd
-"
-Push current directory on the directory stack and change to new directory.
+(lex
+  (var 'dir_stack (make-vec 20))
+  (var 'dir_stack_max 20)
 
-Section: shell
+  (defn pushd
+        "
+        Push current directory on the directory stack and change to new directory.
 
-Example:
-(def 'cur-test-path (str (pwd)))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str (pwd)))
-(assert-equal cur-test-path2 (str (pwd)))
-(popd)
-(assert-equal cur-test-path (str (pwd)))
-"
-		(dir) (if (form (cd dir))
-		(do
-			(vec-push! dir_stack $OLDPWD)
-			(if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
-			t)
-		nil))
-	(setfn popd
-"
-Pop first directory from directory stack and change to it.
+        Section: shell
 
-Section: shell
+        Example:
+        (def 'cur-test-path (str (pwd)))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str (pwd)))
+        (assert-equal cur-test-path2 (str (pwd)))
+        (popd)
+        (assert-equal cur-test-path (str (pwd)))
+        "
+        (dir) (if (form (cd dir))
+                (do
+                  (vec-push! dir_stack $OLDPWD)
+                  (if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
+                  t)
+                nil))
+  (defn popd
+        "
+        Pop first directory from directory stack and change to it.
 
-Example:
-(def 'cur-test-path (str (pwd)))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str (pwd)))
-(assert-equal cur-test-path2 (str (pwd)))
-(popd)
-(assert-equal cur-test-path (str (pwd)))
-"
-		() (if (> (length dir_stack) 0)
-		(cd (vec-pop! dir_stack))
-		(println "Dir stack is empty")))
-	(setfn dirs
-"
-List the directory stack.
+        Section: shell
 
-Section: shell
+        Example:
+        (def 'cur-test-path (str (pwd)))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str (pwd)))
+        (assert-equal cur-test-path2 (str (pwd)))
+        (popd)
+        (assert-equal cur-test-path (str (pwd)))
+        "
+        () (if (> (length dir_stack) 0)
+             (cd (vec-pop! dir_stack))
+             (println "Dir stack is empty")))
+  (defn dirs
+        "
+        List the directory stack.
 
-Example:
-(clear-dirs)
-(def 'cur-test-path (str (pwd)))
-(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-(test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str (pwd)))
-(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-(test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
-(pushd (str-trim cur-test-path))
-(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-(def 'test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
-(test::assert-equal cur-test-path (read-line test-dirs-file))
-(test::assert-equal cur-test-path2 (read-line test-dirs-file))
-(close test-dirs-file)
-(popd)
-(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-(test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
-(popd)
-(dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-(test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
-"
-		()
-		(for d in dir_stack (println d)))
-	(setfn get-dirs
-"
-Return the vector of directories.
+        Section: shell
 
-Section: shell
+        Example:
+        (clear-dirs)
+        (def 'cur-test-path (str (pwd)))
+        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str (pwd)))
+        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (pushd (str-trim cur-test-path))
+        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (def 'test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
+        (test::assert-equal cur-test-path (read-line test-dirs-file))
+        (test::assert-equal cur-test-path2 (read-line test-dirs-file))
+        (close test-dirs-file)
+        (popd)
+        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (popd)
+        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        "
+        ()
+        (for d in dir_stack (println d)))
+  (defn get-dirs
+        "
+        Return the vector of directories.
 
-Example:
-(clear-dirs)
-(def 'cur-test-path (str-trim (str (pwd))))
-(test::assert-equal '() (get-dirs))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str-trim (str (pwd))))
-(test::assert-equal `(,cur-test-path) (get-dirs))
-(pushd (str-trim cur-test-path))
-(test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
-(popd)
-(test::assert-equal `(,cur-test-path) (get-dirs))
-(popd)
-(test::assert-equal '() (get-dirs))
-"
-		() dir_stack)
-	(setfn clear-dirs
-"
-Clears the directory stack.
+        Section: shell
 
-Section: shell
+        Example:
+        (clear-dirs)
+        (def 'cur-test-path (str-trim (str (pwd))))
+        (test::assert-equal '() (get-dirs))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str-trim (str (pwd))))
+        (test::assert-equal `(,cur-test-path) (get-dirs))
+        (pushd (str-trim cur-test-path))
+        (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
+        (popd)
+        (test::assert-equal `(,cur-test-path) (get-dirs))
+        (popd)
+        (test::assert-equal '() (get-dirs))
+        "
+        () dir_stack)
+  (defn clear-dirs
+        "
+        Clears the directory stack.
 
-Example:
-(clear-dirs)
-(def 'cur-test-path (str-trim (str (pwd))))
-(test::assert-equal '() (get-dirs))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str-trim (str (pwd))))
-(test::assert-equal `(,cur-test-path) (get-dirs))
-(pushd (str-trim cur-test-path))
-(test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
-(clear-dirs)
-(test::assert-equal '() (get-dirs))
-"
-		()
-		(vec-clear! dir_stack))
-	(setfn set-dirs-max
-"
-Sets the max number of directories to save in the stack.
+        Section: shell
 
-Section: shell
+        Example:
+        (clear-dirs)
+        (def 'cur-test-path (str-trim (str (pwd))))
+        (test::assert-equal '() (get-dirs))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str-trim (str (pwd))))
+        (test::assert-equal `(,cur-test-path) (get-dirs))
+        (pushd (str-trim cur-test-path))
+        (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
+        (clear-dirs)
+        (test::assert-equal '() (get-dirs))
+        "
+        ()
+        (vec-clear! dir_stack))
+  (defn set-dirs-max
+        "
+        Sets the max number of directories to save in the stack.
 
-Example:
-(clear-dirs)
-(def 'cur-test-path (str-trim (str (pwd))))
-(pushd \"/tmp\")
-(def 'cur-test-path2 (str-trim (str (pwd))))
-(pushd (str-trim cur-test-path))
-(pushd \"/tmp\")
-(pushd (str-trim cur-test-path))
-(test::assert-equal `(,cur-test-path ,cur-test-path2 ,cur-test-path ,cur-test-path2) (get-dirs))
-(clear-dirs)
-(set-dirs-max 3)
-(pushd \"/tmp\")
-(pushd (str-trim cur-test-path))
-(pushd \"/tmp\")
-(pushd (str-trim cur-test-path))
-(test::assert-equal `(,cur-test-path2 ,cur-test-path ,cur-test-path2) (get-dirs))
-"
-		(max)
-		(if (and (= (type max) "Int")(> max 1))
-			(setq dir_stack_max max)
-			(err "Error, max must be a positive Int greater then one"))))
+        Section: shell
+
+        Example:
+        (clear-dirs)
+        (def 'cur-test-path (str-trim (str (pwd))))
+        (pushd \"/tmp\")
+        (def 'cur-test-path2 (str-trim (str (pwd))))
+        (pushd (str-trim cur-test-path))
+        (pushd \"/tmp\")
+        (pushd (str-trim cur-test-path))
+        (test::assert-equal `(,cur-test-path ,cur-test-path2 ,cur-test-path ,cur-test-path2) (get-dirs))
+        (clear-dirs)
+        (set-dirs-max 3)
+        (pushd \"/tmp\")
+        (pushd (str-trim cur-test-path))
+        (pushd \"/tmp\")
+        (pushd (str-trim cur-test-path))
+        (test::assert-equal `(,cur-test-path2 ,cur-test-path ,cur-test-path2) (get-dirs))
+        "
+        (max)
+        (if (and (= (type max) "Int")(> max 1))
+          (setq dir_stack_max max)
+          (err "Error, max must be a positive Int greater then one"))))
 
 
 (defmacro let-env
@@ -303,7 +300,7 @@ Example:
 					(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
 				(if (= 2 (length el))
 					(do
-						(def 'binding (iterator::nth 1 el))
+						(var 'binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
 						(vec-insert-nth! idx (iterator::nth 0 el) params)
 						(vec-insert-nth! idx binding bindings)
@@ -376,7 +373,7 @@ Section: shell
              (nil (make-color 38)))))
 
 (defn find-symbol (com)
-	(def 'val (sym *active-ns* "::" com))
+	(var 'val (sym *active-ns* "::" com))
 	(if (def? val) val (sym "root::" com)))
 
 (defmacro sys-alias?
@@ -386,12 +383,12 @@ True if the supplied command is an alias for a system command.
 Section: shell
 "
 	(com) `(do
-	(def 'ret nil)
-	(def 'val (shell::find-symbol ,com))
+	(var 'ret nil)
+	(var 'val (shell::find-symbol ,com))
 	(if (def? val)
 		(set 'val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
-		(def 'expansion (expand-macro (val)))
+		(var 'expansion (expand-macro (val)))
 		(set 'ret (sys-command? (sym->str (first expansion))))))
 	ret))
 
@@ -406,7 +403,7 @@ Example:
 (assert-false (sys-command? \"rst-not-a-comand-strsnt\"))
 "
 	(com)
-	(def 'ret nil)
+	(var 'ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
 		(if (fs-exists? com) (set 'ret t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
@@ -414,15 +411,12 @@ Example:
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
 				(set 'ret t)
 				(for p in (str-split ":" $PATH) (do
-					(def 'path (str p "/" com))
+					(var 'path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
 	ret)
 
-(defq register-alias nil)
-(defq unregister-alias nil)
-(defq alias? nil)
 (let ((alias (make-hash)))
-	(setfn register-alias
+	(defn ns::register-alias
 		"
 		Registers an alias to the current scope. Useful if unregistering or
 		ability to know whether an alias has been registered is desirable.
@@ -430,14 +424,14 @@ Example:
 		Section: shell
 		"
 		(name) (hash-set! alias name t))
-	(setfn unregister-alias
+	(defn ns::unregister-alias
 		"
 		Unregisters an alias, removing it from scope.
 
 		Section: shell
 		"
 		(name) (hash-remove! alias name))
-	(setfn alias?
+	(defn ns::alias?
 		"
 		Provides boolean value confirming or denying given alias' presence
 		in set of registered aliases.
@@ -458,138 +452,143 @@ Example:
 (defq tok-invalid-color shell::*fg-red*)
 
 (defmacro syntax-on
-"
-Turn on syntax highlighting at the repl.
+  "
+  Turn on syntax highlighting at the repl.
 
-Section: shell
-"
-() '(do
-; Syntax highlight the supplied line.
-(def '__line_handler nil)
-(let ((plev 0)
-	(ch nil)
-	(bad-syms (make-hash))
-	(sys-syms (make-hash))
-	(out (str ""))
-	(token (str ""))
-	(in-sys-command nil)
-	(tok-command t))
+  Section: shell
+  "
+  ()
+  '(lex
+     (var 'plev 0)
+     (var 'ch nil)
+     (var 'bad-syms (make-hash))
+     (var 'sys-syms (make-hash))
+     (var 'out (str ""))
+     (var 'token (str ""))
+     (var 'in-sys-command nil)
+     (var 'tok-command t)
 
-	(defn func? (com)
-		; Want the actual thing pointed to by the symbol in com for the test.
-	    (set 'com (shell::find-symbol com))
-	    (if (def? com)
-		  (do (set 'com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
-		  nil))
+     (varfn func? (com)
+            ; Want the actual thing pointed to by the symbol in com for the test.
+            (set 'com (shell::find-symbol com))
+            (if (def? com)
+              (do (set 'com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
+              nil))
 
-	(defn paren-color (level)
-		(def 'col (% level 4))
-		(if (= col 0) shell::*fg-white*
-			(if (= col 1) shell::*fg-cyan*
-				(if (= col 2) shell::*fg-yellow*
-					(if (= col 3) shell::*fg-blue*)))))
+     (varfn paren-color (level)
+            (var 'col (% level 4))
+            (if (= col 0) shell::*fg-white*
+              (if (= col 1) shell::*fg-cyan*
+                (if (= col 2) shell::*fg-yellow*
+                  (if (= col 3) shell::*fg-blue*)))))
 
-	(defn my-sys-command? (command)
-		(def 'ret nil)
-		(if (hash-haskey sys-syms command)
-			(set 'ret t)
-			(if (not (hash-haskey bad-syms command)) (do
-				(set 'ret (shell::sys-command? command))
-				(if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
-		ret)
+     (varfn my-sys-command? (command)
+            (var 'ret nil)
+            (if (hash-haskey sys-syms command)
+              (set 'ret t)
+              (if (not (hash-haskey bad-syms command))
+                (do
+                  (set 'ret (shell::sys-command? command))
+                  (if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
+            ret)
 
-	(defn command-color (command)
-	    (def 'ns-command (shell::find-symbol command))
-		(if (not tok-command)
-			(if (def? ns-command)
-				(if (func? command)
-					(if in-sys-command
-						(str shell::tok-default-color command shell::*fg-default*)
-						(str shell::tok-slsh-fcn-color command shell::*fg-default*))
-					(str shell::tok-slsh-form-color command shell::*fg-default*))
-				(str shell::tok-default-color command shell::*fg-default*))
-			(if (func? command)
-				(if (or (shell::alias? command)(shell::sys-alias? command))
-					(do (set 'in-sys-command t)(str shell::tok-sys-alias-color command shell::*fg-default*))
-					(str shell::tok-slsh-fcn-color command shell::*fg-default*))
-				(if (my-sys-command? command)
-					(do (set 'in-sys-command t)(str shell::tok-sys-command-color command shell::*fg-default*))
-					(str shell::tok-invalid-color command shell::*fg-default*)))))
+     (varfn command-color (command)
+            (var 'ns-command (shell::find-symbol command))
+            (if (not tok-command)
+              (if (def? ns-command)
+                (if (func? command)
+                  (if in-sys-command
+                    (str shell::tok-default-color command shell::*fg-default*)
+                    (str shell::tok-slsh-fcn-color command shell::*fg-default*))
+                  (str shell::tok-slsh-form-color command shell::*fg-default*))
+                (str shell::tok-default-color command shell::*fg-default*))
+              (if (func? command)
+                (if (or (shell::alias? command)(shell::sys-alias? command))
+                  (do
+                    (set 'in-sys-command t)
+                    (str shell::tok-sys-alias-color command shell::*fg-default*))
+                  (str shell::tok-slsh-fcn-color command shell::*fg-default*))
+                (if (my-sys-command? command)
+                  (do
+                    (set 'in-sys-command t)
+                    (str shell::tok-sys-command-color command shell::*fg-default*))
+                  (str shell::tok-invalid-color command shell::*fg-default*)))))
 
-	(defn prrawtoken ()
-		(def 'ttok token)
-		(set 'token (str ""))
-		ttok)
-	(defn prtoken ()
-		(def 'ttok token)
-		(set 'token (str ""))
-		(command-color ttok))
-	(defn paren-open ()
-		(def 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
-		(set 'plev (+ plev 1))
-		(set 'tok-command t)
-		ret)
-	(defn paren-close ()
-		(set 'in-sys-command nil)
-		(if (> plev 0)
-			(do
-				(set 'plev (- plev 1))
-				(str (prtoken) (paren-color plev) #\) shell::*fg-default*))
-			(str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
+     (varfn prrawtoken ()
+            (var 'ttok token)
+            (set 'token (str ""))
+            ttok)
+     (varfn prtoken ()
+            (var 'ttok token)
+            (set 'token (str ""))
+            (command-color ttok))
+     (varfn paren-open ()
+            (var 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
+            (set 'plev (+ plev 1))
+            (set 'tok-command t)
+            ret)
+     (varfn paren-close ()
+            (set 'in-sys-command nil)
+            (if (> plev 0)
+              (do
+                (set 'plev (- plev 1))
+                (str (prtoken) (paren-color plev) #\) shell::*fg-default*))
+              (str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
 
-	(defn whitespace (ch)
-		(def 'ret (str (prtoken) ch))
-		(set 'token (str ""))
-		(set 'tok-command nil)
-		ret)
+     (varfn whitespace (ch)
+            (var 'ret (str (prtoken) ch))
+            (set 'token (str ""))
+            (set 'tok-command nil)
+            ret)
 
-	(defn line-handler (line)
-		(def 'in-quote nil)
-		(def 'last-ch #\ )
-		(set 'plev 0)
-		(set 'ch nil)
-		(set 'token (str ""))
-		(set 'tok-command t)
-		(set 'in-sys-command nil)
-		(if (<= (length line) 1) (do
-			(hash-clear! bad-syms)
-			(hash-clear! sys-syms)))
-		(set 'out (str-map (fn (ch)
-			(def 'ret (if in-quote
-				(do
-					(str-push! token ch)
-					(if (and (not (= last-ch #\\))(= ch #\"))
-						(do
-							(set 'in-quote nil)
-							(str-push! token shell::*fg-default*)
-							(prrawtoken))
-						""))
-				(if (and (not (= last-ch #\\))(= ch #\"))
-					(do (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
-					(if (= ch #\()
-						(paren-open)
-						(if (= ch #\))
-							(paren-close)
-							(if (char-whitespace? ch)
-								(whitespace ch)
-								(do (str-push! token ch) "")))))))
-			(do (set 'last-ch ch) ret)) line))
-		(if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
-		(str out))
+     (varfn line-handler (line)
+            (var 'in-quote nil)
+            (var 'last-ch #\ )
+            (set 'plev 0)
+            (set 'ch nil)
+            (set 'token (str ""))
+            (set 'tok-command t)
+            (set 'in-sys-command nil)
+            (if (<= (length line) 1)
+              (do
+                (hash-clear! bad-syms)
+                (hash-clear! sys-syms)))
+            (set 'out (str-map (fn (ch)
+                                   (var 'ret (if in-quote
+                                               (do
+                                                 (str-push! token ch)
+                                                 (if (and (not (= last-ch #\\))(= ch #\"))
+												   (do
+												     (set 'in-quote nil)
+												     (str-push! token shell::*fg-default*)
+												     (prrawtoken))
+												   ""))
+                                               (if (and (not (= last-ch #\\))(= ch #\"))
+                                                 (do (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
+                                                 (if (= ch #\()
+												   (paren-open)
+												   (if (= ch #\))
+												     (paren-close)
+												     (if (char-whitespace? ch)
+												       (whitespace ch)
+												       (do (str-push! token ch) "")))))))
+                                   (do (set 'last-ch ch) ret)) line))
+            (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
+            (str out))
 
-	(setfn __line_handler (line)
-           (def 'result (get-error (line-handler line)))
+     (defn __line_handler (line)
+           (var 'result (get-error (line-handler line)))
            (if (= :error (car result)) (shell::print-error result) (cdr result)))
 
-		nil)))
+     nil))
 
 (defmacro syntax-off
-"
-Turn off syntax highlighting at the repl.
+  "
+  Turn off syntax highlighting at the repl.
 
-Section: shell
-"
-	() '(undef '__line_handler))
+  Section: shell
+  "
+  () '(undef '__line_handler))
 
 (load "endfix.lisp")
 (defmacro endfix-on "
@@ -620,9 +619,9 @@ Section: shell
     (println (first backtrace))
     (for b in backtrace
         (if (builtin? b)(print "BUILTIN")
-          (print (if (def 'file (meta-file-name b)) file "NO FILE") ":\t"
-                 "line " (if (def 'line (meta-line-no b)) line "XX") ":\t"
-                 "column " (if (def 'col (meta-column-no b)) col "XX") "\n"))))
+          (print (if (var 'file (meta-file-name b)) file "NO FILE") ":\t"
+                 "line " (if (var 'line (meta-line-no b)) line "XX") ":\t"
+                 "column " (if (var 'col (meta-column-no b)) col "XX") "\n"))))
 
 (defn print-error (error)
     (if (= :error (car error))
@@ -658,12 +657,12 @@ Section: shell
       (do
         (export 'LAST_STATUS "0")
         (set '*last-status* 0)
-        (def 'exec-hook (sym *active-ns* "::__exec_hook"))
-        (def 'ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
+        (var 'exec-hook (sym *active-ns* "::__exec_hook"))
+        (var 'ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (read-all line)))
         (set 'ast (if (string? ast) (read-all ast) ast))
-        (def 'result (loose-symbols (get-error (eval ast))))
+        (var 'result (loose-symbols (get-error (eval ast))))
         (if (= :ok (car result))
           (do
             (if (process? (cdr result)) nil
@@ -681,23 +680,23 @@ Section: shell
             (print-error result)))))
 
 (defn repl ()
-      (defn get-prompt ()
-              (def 'ns-prompt (sym *active-ns* "::__prompt"))
-              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt)))
-      (defn repl-inner ()
+      (var 'get-prompt (fn ()
+              (var 'ns-prompt (sym *active-ns* "::__prompt"))
+              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
+      (var 'repl-inner (fn ()
               (if (not (def? '*repl-std-only*)) (prompt-history-context :repl $PWD))
               (reap-jobs)
-              (def 'save-last-status *last-status*)
-              (def 'line (if (def? '*repl-std-only*) 
+              (var 'save-last-status *last-status*)
+              (var 'line (if (def? '*repl-std-only*) 
                            (do (print (get-prompt))(read-line *stdin*))
                            (prompt :repl (get-prompt) "~/.local/share/sl-sh/history")))
               (export 'LAST_STATUS save-last-status)
               (set '*last-status* save-last-status)
-              (def 'line-len (length (str-trim line)))
+              (var 'line-len (length (str-trim line)))
               (if (and (> line-len 0)(not (values? line))) (repl-line line line-len))
-              (if (not (repl-eof line)) (recur)))
+              (if (not (repl-eof line)) (recur))))
       ((fn ()
-           (def 'result (get-error (repl-inner)))
+           (var 'result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(recur))))))
 
 (ns-export '(
@@ -736,3 +735,4 @@ Section: shell
 	bg-color-rgb
 	endfix-on))
 
+(ns-pop)

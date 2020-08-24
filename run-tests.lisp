@@ -5,11 +5,11 @@
 (ns-import 'test)
 
 ;;TODO sstanfield replace get-error with prog-error
-(defmacro prog-error (&rest args) `(progn
-	(defq ret (get-error ,@args))
+(defmacro prog-error (&rest args) `(do
+	(var 'ret (get-error ,@args))
 	(if (and (vec? ret) (= :error (first ret)))
-		(progn
-			(defq err-map (make-hash))
+		(do
+			(var 'err-map (make-hash))
 			(hash-set! err-map :error (first (rest ret))))
 		ret)))
 
@@ -21,40 +21,40 @@
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
 
-(defn exec-str (docstring) (progn
-	(defq test (vec-nth 1 (str-split "Example:" docstring)))
-	(fn () (eval (str "(progn " test ")")))))
+(defn exec-str (docstring) (do
+	(var 'test (vec-nth 1 (str-split "Example:" docstring)))
+	(fn () (eval (str "(do " test ")")))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
 
-(defn make-test-list-from-symbols (symbols-list a-ns) (progn
-	(defq test-list (list))
-	(for symbol in symbols-list (progn
-	(defq fully-qualified-symbol (sym a-ns "::" symbol))
+(defn make-test-list-from-symbols (symbols-list a-ns) (do
+	(var 'test-list (list))
+	(for symbol in symbols-list (do
+	(var 'fully-qualified-symbol (sym a-ns "::" symbol))
 	(when (and
 			(func? (eval fully-qualified-symbol))
 			(not (or
 				(str-starts-with "ns-" (str symbol))
-				(= "*ns*" (str symbol))))) (progn
-		(defq test-set-item (make-hash))
+				(= "*ns*" (str symbol))))) (do
+		(var 'test-set-item (make-hash))
 		(hash-set! test-set-item :name (str symbol))
-		(defq docstring (doc fully-qualified-symbol))
+		(var 'docstring (doc fully-qualified-symbol))
 		(if (has-example docstring)
-			(progn
+			(do
 				(hash-set! test-set-item :load-fcn (exec-str docstring))
 				(append-to! test-list test-set-item))
-			(progn
+			(do
 				(hash-set! test-set-item :load-fcn :no-test)
 				(append-to! test-list test-set-item)))))))
 	test-list))
 
 (defq file-test-list
 	(reduce
-		(fn (lst filename) (append-to! lst (progn
-			(defq name (str tests-dir "/" filename))
-			(defq load-fcn (fn () (load name)))
-			(defq test-set-item (make-hash))
+		(fn (lst filename) (append-to! lst (do
+			(var 'name (str tests-dir "/" filename))
+			(var 'load-fcn (fn () (load name)))
+			(var 'test-set-item (make-hash))
 			(hash-set! test-set-item :name name)
 			(hash-set! test-set-item :load-fcn load-fcn)
 			test-set-item)))
@@ -97,26 +97,26 @@
 			" " test-name)))
 		(nil (err (str "Invalid test result status for test name " test-name "\n Error: " result)))))
 
-(defn report-test-results (tests test-report) (progn
-	(defq exit-status :passed)
-	(dyn 'exit (fn (x) (progn
+(defn report-test-results (tests test-report) (do
+	(var 'exit-status :passed)
+	(dyn 'exit (fn (x) (do
 				(when (not (= x "0"))
-					(progn
+					(do
 						(setq exit-status :failed)
 						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))
-					x)) (progn
-	(defq fst (first tests))
-	(when fst (progn
+					x)) (do
+	(var 'fst (first tests))
+	(when fst (do
 		(hash-set! test-report :total (+ 1 (hash-get test-report :total)))
 		(if (= :no-test (hash-get fst :load-fcn))
-			(progn
+			(do
 				(hash-set! test-report :no-test (+ 1 (hash-get test-report :no-test)))
 				(setq exit-status :no-test))
-			(progn
-				(defq test-result
+			(do
+				(var 'test-result
 					(get-error
 						((hash-get fst :load-fcn))))
-				(when (= (car test-result) :error) (progn
+				(when (= (car test-result) :error) (do
 					(setq exit-status (cdr test-result))
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
@@ -124,8 +124,8 @@
 
 (defq final-test-report '())
 
-(defn run-tests-for (test-name test-list test-report) (progn
-    (defq test-data (make-hash))
+(defn run-tests-for (test-name test-list test-report) (do
+    (var 'test-data (make-hash))
     (hash-set! test-data :name test-name)
     (hash-set! test-data :total 0)
     (hash-set! test-data :failed 0)
@@ -137,17 +137,17 @@
 (run-tests-for "module tests" file-test-list final-test-report)
 
 ;; run tests for non-root namespaces
-(for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (progn
+(for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (do
 	(printer (str "Tests from " a-ns))
-	(defq sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
-	(defq sym-list (make-test-list-from-symbols sym-list a-ns))
+	(var 'sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
+	(set 'sym-list (make-test-list-from-symbols sym-list a-ns))
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
-(progn
+(lex
 (printer (str "Tests from root"))
-(defq sym-list (qsort (ns-symbols 'root)))
-(defq sym-list (make-test-list-from-symbols sym-list "root"))
+(var 'sym-list (qsort (ns-symbols 'root)))
+(set 'sym-list (make-test-list-from-symbols sym-list "root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 
 ;; run tests for root namespace special namespace tests (ns cmd can not be run
@@ -162,73 +162,73 @@
 
 (printer "Tests from namespace")
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'root::*ns*)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "*ns* "))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "*ns* "))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-create)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-create"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-create"))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-enter)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-enter"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-enter"))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-exists?)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-exists"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-exists"))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-list)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-list"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-list"))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-pop)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-pop"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-pop"))))
 
-(progn
+(do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-symbols)
-		(progn
+		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
 			(report-pretty-printer :passed "ns-symbols"))
-		(progn
+		(do
 			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
 			(report-pretty-printer :failed "ns-symbols"))))
 
@@ -238,17 +238,17 @@
 
 
 (defq *global-failed* 0)
-(defn pprint-final-test-report (report-list) (progn
+(defn pprint-final-test-report (report-list) (do
 	(println (str shell::*fg-black* shell::*bg-white*))
-	(defq global-total 0)
-	(defq global-notest 0)
-	(defq global-passed 0)
-	(for test in report-list (progn
-		(defq total (hash-get test :total))
+	(var 'global-total 0)
+	(var 'global-notest 0)
+	(var 'global-passed 0)
+	(for test in report-list (do
+		(var 'total (hash-get test :total))
 
-		(defq failed (hash-get test :failed))
-		(defq notest (hash-get test :no-test))
-		(defq passed (- total failed notest))
+		(var 'failed (hash-get test :failed))
+		(var 'notest (hash-get test :no-test))
+		(var 'passed (- total failed notest))
 
 		(setq global-notest (+ notest global-notest))
 		(setq *global-failed* (+ failed *global-failed*))

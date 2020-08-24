@@ -13,13 +13,13 @@ Section: core
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
                 (if (string? (vec-nth 0 args))
                   (do
-                    (def 'doc-str (vec-nth 0 args))
-                    (def 'ars (vec-nth 1 args))
-                    (def 'body (vec-slice args 2))
+                    (var 'doc-str (vec-nth 0 args))
+                    (var 'ars (vec-nth 1 args))
+                    (var 'body (vec-slice args 2))
                     `(do (,op ',name ,doc-str (macro ,ars ,@body)) nil))
                   (do
-                    (def 'ars (vec-nth 0 args))
-                    (def 'body (vec-slice args 1))
+                    (var 'ars (vec-nth 0 args))
+                    (var 'body (vec-slice args 1))
                     `(do (,op ',name (macro ,ars ,@body)) nil)))))))
 
 (def 'defmacro
@@ -106,7 +106,7 @@ Example:
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; Add this to the let's scope (shadow the outer test-do-two).
-    (test::assert-equal \"Default\" (defq test-do-two \"Default\"))
+    (test::assert-equal \"Default\" (defq ns::test-do-two \"Default\"))
     ; set the currently scoped value.
     (set 'test-do-one \"1111\")
     (set 'test-do-two \"2222\")
@@ -114,6 +114,7 @@ Example:
     (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
+(test::assert-equal \"2222\" test-do-two)
 "
     (symbol &rest args)
     `(def ',symbol ,@args))
@@ -126,7 +127,7 @@ Intended for use by other core macros.
 Section: core
 
 Example:
-; tested in defn and setfn.
+; tested in defn and varfn.
 t
 "
     (op name &rest args)
@@ -135,18 +136,18 @@ t
          (if (string? (vec-nth 0 args))
            (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
-             (def 'doc-str (vec-nth 0 args))
-             (def 'ars (vec-nth 1 args))
-             (def 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
+             (var 'doc-str (vec-nth 0 args))
+             (var 'ars (vec-nth 1 args))
+             (var 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
              `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
            (do
-             (def 'ars (vec-nth 0 args)) 
-             (def 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
+             (var 'ars (vec-nth 0 args)) 
+             (var 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
              `(,op ',name (fn ,ars (block ,name ,@body))))))))
 
 (defmacro defn
 "
-Define a named function in the current scope.
+Define a named function in the current namespace.
 
 Section: core
 
@@ -162,26 +163,26 @@ Example:
 "
     (name &rest args) `(internal-fn def ,name ,@args)) 
 
-(defmacro setfn
+(defmacro varfn
 "
-Binds name to function body in current namespace.
+Binds name to function body in current lexical scope (not namespace- like var).
 
 Section: core
 
 Example:
-(def 'defn-test nil)
-(setfn defn-test (x y) (+ x y))
-(test::assert-equal 5 (defn-test 2 3))
-(setfn defn-test (x y) (set 'x (* x 2))(+ x y))
-(test::assert-equal 7 (defn-test 2 3))
-(setfn defn-test (x y))
-(test::assert-false (defn-test 2 3))
-(setfn defn-test (x y) t)
-(test::assert-true (defn-test 2 3))
+(lex
+  (varfn varfn-test (x y) (+ x y))
+  (test::assert-equal 5 (varfn-test 2 3))
+  (varfn varfn-test2 (x y) (set 'x (* x 2))(+ x y))
+  (test::assert-equal 7 (varfn-test2 2 3))
+  (test::assert-true (def? 'varfn-test))
+  (test::assert-true (def? 'varfn-test2)))
+(test::assert-false (def? 'varfn-test))
+(test::assert-false (def? 'varfn-test2))
 "
-    (name &rest args) `(internal-fn set ,name ,@args)) 
+    (name &rest args) `(internal-fn var ,name ,@args)) 
 
-(defn ns-pop
+(defmacro ns-pop
 "Usage: (ns-pop)
 
 Returns to the previous namespace.
@@ -194,7 +195,7 @@ Example:
 (ns-pop)
 (test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
 "
-    () (ns-enter *last-ns*))
+    () `(ns-enter ,*last-ns*))
 
 (defmacro loop
 "
@@ -286,16 +287,16 @@ Example:
 "
     (condition &rest branches)
     ((fn ()
-        (def 'out_list (list))
-        (def 'make-action (fn (action)
+        (var 'out_list (list))
+        (var 'make-action (fn (action)
             (if (seq? action)
                 `(do ,@action)
                 `action)))
-        (def 'make-cond (fn (condition val action others)
+        (var 'make-cond (fn (condition val action others)
             (if (null val) (make-action action)
                 (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
                     `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (root::first (root::first others)) (root::rest (root::first others)) (root::rest others)))))))
-        (def 'cond-name condition)
+        (var 'cond-name condition)
         `(if ,@(make-cond cond-name (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
 
 (defmacro cond
@@ -332,12 +333,12 @@ Example:
 "
     (&rest branches)
     ((fn ()
-        (def 'out_list (list))
-        (def 'make-action (fn (action)
+        (var 'out_list (list))
+        (var 'make-action (fn (action)
             (if (seq? action)
                 `(do ,@action)
                 `action)))
-        (def 'make-cond (fn (condition action others)
+        (var 'make-cond (fn (condition action others)
             (if (empty-seq? others)
                 `(,condition ,(make-action action) nil)
                 `(,condition ,(make-action action) ,@(make-cond (root::first (root::first others)) (root::rest (root::first others)) (root::rest others))))))
@@ -361,12 +362,12 @@ Example:
 "
     (vals &rest let-body)
     (lex
-      (def 'vars (make-vec (length vals)))
+      (var 'vars (make-vec (length vals)))
         (iterator::for-i idx el in vals
             (if (= 1 (length el))
-                (vec-push! vars `(def ',(iterator::nth 0 el) nil))
+                (vec-push! vars `(var ',(iterator::nth 0 el) nil))
                 (if (= 2 (length el))
-                  (vec-push! vars `(def ',(iterator::nth 0 el) ,(iterator::nth 1 el)))
+                  (vec-push! vars `(var ',(iterator::nth 0 el) ,(iterator::nth 1 el)))
                   (err "ERROR: invalid bindings on let"))))
         `(lex ,@vars ,@let-body)))
 

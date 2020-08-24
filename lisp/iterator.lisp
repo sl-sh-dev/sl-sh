@@ -41,9 +41,9 @@ Example:
 (assert-equal '(1 2 3) collect-test)
 "
     (self) (do
-    (def 'tseq nil)
-    (def 'tcell nil)
-    (def 'head nil)
+    (var 'tseq nil)
+    (var 'tcell nil)
+    (var 'head nil)
     (for v in self (do
         (if (null head)
             (do (set 'tseq (set 'head (join v nil))))
@@ -60,7 +60,7 @@ Example:
 (assert-equal '#(1 2 3) collect-vec-test)
 "
     (self) (do
-    (def 'tseq (vec))
+    (var 'tseq (vec))
     (for v in self (vec-push! tseq v))
     tseq))
 
@@ -74,7 +74,7 @@ Example:
 (assert-equal \"ΛABC Σ\" collect-str-test)
 "
     (self) (do
-    (def 'tseq "")
+    (var 'tseq "")
     (for v in self (str-push! tseq v))
     tseq))
 
@@ -118,7 +118,7 @@ Example:
 (assert-equal 3 (tmap :count))
 (assert-true (tmap :empty?))
 "
-       (self) (do (def 'count 0) (iterator::for _ in self (set 'count (+ count 1))) count))
+       (self) (do (var 'count 0) (iterator::for _ in self (set 'count (+ count 1))) count))
 
   (:fn nth!
 "Consume the iterator until the nth! element and return it (0 based).
@@ -133,8 +133,8 @@ Example:
 (assert-true (tmap :empty?))
 "
     (self idx) (do
-    (def 'ret nil)
-    (def 'i 0)
+    (var 'ret nil)
+    (var 'i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
                                           (set 'ret (plist :next!))
@@ -215,8 +215,8 @@ Example:
 (assert-true (tmap :empty?))
 "
     (self idx) (do
-    (def 'ret nil)
-    (def 'i 0)
+    (var 'ret nil)
+    (var 'i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
                                           (set 'ret (plist :next-back!))
@@ -267,20 +267,20 @@ Example:
   (elements nil)
   ; methods
   (:fn next! (self) (do
-    (def 'val (car data))
+    (var 'val (car data))
     (set 'data (cdr data))
     (if elements (set 'elements (- elements 1)))
     val))
   (:fn next-back! (self) (do
     (if (not rev-data) (do (set 'elements (length data))(set 'rev-data (self :make-rev))))
-    (def 'val (car rev-data))
+    (var 'val (car rev-data))
     (set 'rev-data (cdr rev-data))
     (if elements (set 'elements (- elements 1)))
     val))
   (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) t nil))
   (:fn init (self l) (do (if (list? l) (set 'data l) (err "list-iter requires a list")) self))
   (:fn make-rev (self) (do
-    (def 'node nil)
+    (var 'node nil)
     ((fn (data) (if data (do (set 'node (join (car data) node)) (recur (cdr data)))))data)
     node))
   (:impl iterator double-ended-iterator))
@@ -305,8 +305,8 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (do (def 'val (vec-nth start data))(set 'start (+ 1 start)) val))
-  (:fn next-back! (self) (do (def 'val (vec-nth end data))(set 'end (- end 1)) val))
+  (:fn next! (self) (do (var 'val (vec-nth start data))(set 'start (+ 1 start)) val))
+  (:fn next-back! (self) (do (var 'val (vec-nth end data))(set 'end (- end 1)) val))
   (:fn empty? (self) (> start end))
   (:fn nth! (self idx) (do (set 'start (+ start idx))(self :next!)))
   (:fn nth-back! (self idx) (do (set 'end (- end idx))(self :next-back!)))
@@ -363,7 +363,7 @@ Example:
   (file nil)
   (next-line nil)
   ; methods
-  (:fn next! (self) (do (def 'val next-line) (set 'next-line (read-line file)) val))
+  (:fn next! (self) (do (var 'val next-line) (set 'next-line (read-line file)) val))
   (:fn empty? (self) (not next-line))
   (:fn init (self f) (if (file? f)
                        (do (set 'file f) (set 'next-line (read-line file))self)
@@ -451,8 +451,8 @@ Example:
           (if (and (not (null iters))((car iters) :empty?)) (do (set 'iters (cdr iters))(recur))))
       (null iters)))
   (:fn init (self &rest rest-iters) (do
-    (def 'tcell nil)
-    (def 'tseq nil)
+    (var 'tcell nil)
+    (var 'tseq nil)
     (iterator::for v in rest-iters (do
         (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
             (set 'tcell (join (iterator::iter-or-single v) nil))
@@ -522,7 +522,7 @@ Example:
   (next nil)
   (is-empty nil)
   ; methods
-  (:fn next! (self) (do (def 'val next)(self :advance-data!) val))
+  (:fn next! (self) (do (var 'val next)(self :advance-data!) val))
   (:fn empty? (self) is-empty)
   (:fn advance-data! (self) (do 
          (loop (plist) (data) (if (not (plist :empty?))
@@ -588,8 +588,8 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (do (def 'val start)(set 'start (+ start 1)) val))
-  (:fn next-back! (self) (do (def 'val end)(set 'end (- end 1)) val))
+  (:fn next! (self) (do (var 'val start)(set 'start (+ start 1)) val))
+  (:fn next-back! (self) (do (var 'val end)(set 'end (- end 1)) val))
   (:fn empty? (self) (> start end))
   (:fn init (self in-start in-end) (do
                                     (set 'start in-start)
@@ -628,8 +628,8 @@ Example:
   (value nil)
   (done nil)
   ; methods
-  (:fn next! (self) (do (def 'ret (if done nil value))(set 'done t)ret))
-  (:fn next-back! (self) (do (def 'ret (if done nil value))(set 'done t)ret))
+  (:fn next! (self) (do (var 'ret (if done nil value))(set 'done t)ret))
+  (:fn next-back! (self) (do (var 'ret (if done nil value))(set 'done t)ret))
   (:fn empty? (self) done)
   (:fn init (self v) (do (set 'value v)self))
   (:impl iterator double-ended-iterator))
@@ -768,11 +768,11 @@ Example:
 (assert-true (test-iter :empty?))
 "
     (&rest i) (do
-    (def 'si (iter i))
+    (var 'si (iter i))
     (if (= (length i) 1)
           ((range-iter) :count (si :next!))
         (= (length i) 2)
-          (do (def 'first (si :next!)) ((range-iter) :init first (si :next!)))
+          (do (var 'first (si :next!)) ((range-iter) :init first (si :next!)))
         (err "range: requires one or two integers"))))
 
 (defn collect
@@ -865,9 +865,10 @@ Example:
 (assert-equal 9 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
 "
-    (items start &rest end) (if (= (length end) 1) ((iter items) :slice start (vec-nth 0 end))
-                           (> (length end) 1) (err "slice: Wrong number of args (items start end?).")
-                           ((iter items) :slice start)))
+    (items start &rest end)
+    (if (= (length end) 1) ((iter items) :slice start (vec-nth 0 end))
+      (> (length end) 1) (err "slice: Wrong number of args (items start end?).")
+      ((iter items) :slice start)))
 
 (defn filter
 "Returns a filter-iter around items (will call iter on items).
@@ -899,10 +900,10 @@ Example:
 (assert-true (tmap :empty?))
 (assert-error (reverse \"string\"))
 "
-       (items) (do
-                 (def 'i (iter items))
-                 (if (double-ended-iter? i) (i :reverse)
-                     (err "Not a double ended iterator or collection, can not reverse"))))
+    (items)
+    (var 'i (iter items))
+    (if (double-ended-iter? i) (i :reverse)
+      (err "Not a double ended iterator or collection, can not reverse")))
 
 (defn nth
 "Consume the iterator until the idx (nth) element and return it (0 based).
@@ -943,10 +944,10 @@ Example:
 "
     (reducing-fcn init-val coll) (do
     ; Only call iter on coll once.
-    (defn inner-reduce (reducing-fcn init-val coll)
+    (var 'inner-reduce (fn (reducing-fcn init-val coll)
         (if (coll :empty?)
                 init-val
-                (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll)))
+                (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll))))
     (inner-reduce reducing-fcn init-val (iter coll))))
 
 (defn reduce-times
@@ -1067,21 +1068,21 @@ Example:
 "
     (ret &rest others) (do
 
-    (defn last-cell (obj)
+    (var 'last-cell (fn (obj)
         (if (null (cdr obj))
             obj
-            (recur (cdr obj))))
+            (recur (cdr obj)))))
 
     (set 'others (apply append others))
     (if (vec? ret) (for l in others (vec-push! ret l))
         (list? ret) (do
-                (def 'tseq (last-cell ret))
+                (var 'tseq (last-cell ret))
                 (for l in others
                         (do
                             (if (null tseq)
                                 (xar! tseq l)
                                 (do
-                                    (def 'tcell (join l nil))
+                                    (var 'tcell (join l nil))
                                     (xdr! tseq tcell)
                                     (set 'tseq tcell))))))
         (err "append-to!: First element not a list or vector."))
@@ -1105,7 +1106,7 @@ Example:
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
     `(loop (plist) ((iterator::iter ,items))
          (if (not (plist :empty?)) (do
-             (def ',bind (plist :next!))
+             (var ',bind (plist :next!))
              (,@body)
              (recur plist))))))
 
@@ -1128,12 +1129,13 @@ Example:
 "
     (idx-bind bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    `(loop (plist idx) ((iterator::iter ,items) 0)
+    (var 'loop-idx (gensym))
+    `(loop (plist ,loop-idx) ((iterator::iter ,items) 0)
          (if (not (plist :empty?)) (do
-             (def ',bind (plist :next!))
-             (def ',idx-bind idx)
+             (var ',bind (plist :next!))
+             (var ',idx-bind ,loop-idx)
              (,@body)
-             (recur plist (+ idx 1)))))))
+             (recur plist (+ ,loop-idx 1)))))))
 
 (ns-export '(
     iterator
@@ -1168,3 +1170,5 @@ Example:
     append-to!
     for
     for-i))
+
+(ns-pop)

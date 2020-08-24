@@ -67,6 +67,10 @@ pub fn call_lambda(
                     environment.scopes.pop();
                     return Err(LispError::new("Called recur in a non-tail position."));
                 }
+                if !environment.scopes.is_empty() {
+                    // Clear the old variables so no cruft is left on the recur.
+                    environment.scopes.last().unwrap().borrow_mut().data.clear();
+                }
                 let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
                     environment.scopes.pop();

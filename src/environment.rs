@@ -11,6 +11,7 @@ use std::sync::Arc;
 use liner::Context;
 
 use crate::builtins::add_builtins;
+use crate::builtins_bind::add_bind_builtins;
 use crate::builtins_edit::add_edit_builtins;
 use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
@@ -161,6 +162,7 @@ impl Scope {
         add_hash_builtins(interner, &mut data);
         add_type_builtins(interner, &mut data);
         add_namespace_builtins(interner, &mut data);
+        add_bind_builtins(interner, &mut data);
         let root = interner.intern("root");
         data.insert(
             interner.intern("*stdin*"),
@@ -590,6 +592,18 @@ pub fn set_expression_current_data(
         },
     );
     current_scope.data.insert(key, reference);
+}
+
+pub fn set_expression_current_namespace(
+    environment: &mut Environment,
+    key: &'static str,
+    reference: Reference,
+) {
+    environment
+        .namespace
+        .borrow_mut()
+        .data
+        .insert(key, reference);
 }
 
 pub fn set_expression_current_ref(

@@ -47,12 +47,12 @@
       (apply assert-equal nil value args))
 
 (defn assert-includes (value seq)
-      (def 'found nil)
+      (var 'found nil)
       (for v in seq (if (= v value) (set 'found t)))
       (if (not found) (do (println (str value " not found in " seq))(exit 3))))
 
 (defn assert-not-includes (value seq)
-      (def 'found nil)
+      (var 'found nil)
       (for v in seq (if (= v value) (set 'found t)))
       (if found (do (println (str value " found in " seq))(exit 3))))
 
@@ -64,8 +64,8 @@
     `(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
 
 (defmacro run-example (sym)
-    `(do
-        (defq doc-list (str-split "Example:" (str (doc ,sym))))
+    `(lex
+        (var 'doc-list (str-split "Example:" (str (doc ,sym))))
         (if (> (length doc-list) 1)
             (do
              (eval (str "(do " (println (vec-nth 1 doc-list)) (str (vec-nth 1 doc-list)) ")")))

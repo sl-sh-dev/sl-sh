@@ -78,9 +78,9 @@ Example:
 "
     (obj)
 
-    (defn last-list (obj)
+    (var 'last-list (fn (obj)
         (if (null (cdr obj)) (car obj)
-            (recur (cdr obj))))
+            (recur (cdr obj)))))
 
     (if (vec? obj) (if (> (length obj) 0) (vec-nth (- (length obj) 1) obj) nil)
         (list? obj) (last-list obj)
@@ -104,7 +104,7 @@ Example:
     (obj)
     (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
         (list? obj) (do
-            (defq new-link (join nil nil))
+            (var 'new-link (join nil nil))
             (if (null (cdr obj))
                 (setq new-link nil)
                 (setq new-link (join (car obj) (butlast (cdr obj)))))
@@ -154,7 +154,7 @@ Example:
 "
     (idx obj sequence)
 
-    (defn setnth-list (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l))))
+    (var 'setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))))
 
     (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
     (if (vec? sequence) (vec-setnth! idx obj sequence)
@@ -163,7 +163,8 @@ Example:
 
 (defn in?
 "
-Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and returns true if the second argument is is in list, false otherwise.
+Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and
+returns true if the second argument is is in list, false otherwise.
 
 Section: sequence
 
@@ -176,11 +177,11 @@ Example:
 "
   (seq-to-search item-to-match)
     (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (do
-        (def 'seq-iter (iterator::iter seq-to-search))
-        (defn inner-in (seq-iter item-to-match)
+        (var 'seq-iter (iterator::iter seq-to-search))
+        (var 'inner-in (fn (seq-iter item-to-match)
             (if (iterator::empty? seq-iter) nil
                 (if (= item-to-match (iterator::next! seq-iter)) t
-                    (recur seq-iter item-to-match))))
+                    (recur seq-iter item-to-match)))))
         (inner-in seq-iter item-to-match))))
 
 (defn collect-copy
@@ -205,14 +206,14 @@ Example:
 (seq)
     (if (vec? seq)
         (do
-            (def 'tseq (make-vec (length seq)))
+            (var 'tseq (make-vec (length seq)))
             (iterator::for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
             (do
-                (def 'tseq nil)
-                (def 'tcell nil)
-                (def 'head nil)
+                (var 'tseq nil)
+                (var 'tcell nil)
+                (var 'head nil)
                 (iterator::for el in seq (do
                     (if (null head)
                         (do (set 'tseq (set 'head (join el nil))))
@@ -295,9 +296,9 @@ Example:
 (test::assert-equal '#() (qsort '#()))
 "
     (lst &rest comp)
-    (defn quick-inner (comp-fn sorted to-sort)
+    (var 'quick-inner (fn (comp-fn sorted to-sort)
         (if (> (length to-sort) 0) (do
-            (def 'lst (vec-pop! to-sort))
+            (var 'lst (vec-pop! to-sort))
             (if (not (seq? lst))
                 (do
                     (vec-push! sorted lst)
@@ -308,22 +309,22 @@ Example:
                             (vec-push! sorted (vec-pop! lst)))
                         (recur comp-fn sorted to-sort))
                     (do
-                        (def 'pivot (first lst))
-                        (def 'less (vec))
-                        (def 'greater (vec))
+                        (var 'pivot (first lst))
+                        (var 'less (vec))
+                        (var 'greater (vec))
                         (iterator::for i in (rest lst)
                             (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
                         (vec-push! to-sort greater)
                         (vec-push! to-sort pivot)
                         (vec-push! to-sort less)
                         (recur comp-fn sorted to-sort)))))
-            sorted))
+            sorted)))
 
     (if (> (length comp) 1) (err "qsort takes one option compare lambda"))
-    (def 'comp-fn (if (= (length comp) 1) (first comp) <))
+    (var 'comp-fn (if (= (length comp) 1) (first comp) <))
     (if (not (or (lambda? comp-fn)(builtin? comp-fn))) (err "compare must be a callable"))
-    (def 'sorted (vec))
-    (def 'to-sort (vec))
+    (var 'sorted (vec))
+    (var 'to-sort (vec))
     (vec-push! to-sort lst)
     (quick-inner comp-fn sorted to-sort)
     sorted)

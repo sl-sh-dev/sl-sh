@@ -69,7 +69,7 @@ t
 (load "shell.lisp")
 (load "test.lisp"))))
 
-(if (= :error (car result)) (do (prim-print-error result)(recur)))
+(if (= :error (car result)) (prim-print-error result))
 
 ; Do not leave this stuff laying around the root scope.
 (undef 'result)

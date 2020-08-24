@@ -1,14 +1,13 @@
 ; Playing around with building a class (or really a struct with methods not full class).
 
 ; This is scratch code used to build the macros below.
-(def 'make-tst nil)
 ((fn () (progn
     (def 'field-one 1)
     (def 'field-two "two")
 
 	(defn meth-one (x) (+ x field-one))
 	(defn meth-two (y) (str field-two ": " y))
-	(setfn make-tst ()
+	(defn make-tst ()
 	       (fn (msg &rest args)
 	           (if (= msg :meth-one) (apply meth-one args)
 	             (if (= msg :meth-two) (apply meth-two args)

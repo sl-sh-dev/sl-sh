@@ -199,16 +199,12 @@ Example:
     (when (and (seq? seq-to-search ) (not (empty-seq? seq-to-search)))
         (if (= item-to-match (first seq-to-search)) #t (recur (rest seq-to-search) item-to-match))))
 
-(def 'append nil)
-(def 'append!
 "
 Modifies the first list by appending the other lists onto it.
 
 Section: sequence
 "
 nil)
-(def 'fn-append! nil)
-(def 'map nil)
 (let ((tseq))
     (defn copy-els (to l) (progn
         (def 'tcell nil)
@@ -225,7 +221,7 @@ nil)
                 (recur (cdr obj)))
             (err "Not a list")))
 
-    (setfn append
+    (defn append
 "
 Produces a new list (type will be same as first parameter) by appending the other lists onto the first.
 
@@ -258,7 +254,7 @@ Section: sequence
         (set 'tseq nil)
         ret))
 
-    (setfn fn-append! (ret &rest others) (progn
+    (defn fn-append! (ret &rest others) (progn
         (def 'tret ret)
         (if (vec? ret)
             (progn
@@ -312,7 +308,7 @@ Section: sequence
                     (progn (set 'tcell (join (fun i) nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
         new-items))
 
-    (setfn map
+    (defn map
 "
 Returns a new list made by applying the lambda to each item in the provided list.
 
