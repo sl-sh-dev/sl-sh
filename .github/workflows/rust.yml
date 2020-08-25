@@ -60,7 +60,12 @@ jobs:
             elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
             elog "docstrings printed as hashmap literals above and or errors. Run"
             elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
-            exit 1;
+            exit 1
+          fi
+
+          if [[ ! -f index.markdown ]];
+            elog "index.markdown file was not generated, docs failed to build."
+            exit 1
           fi
           log "Push docs"
           git config --global user.email "docs@sl-sh.example.com"
