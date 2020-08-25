@@ -335,37 +335,44 @@ fn builtin_prompt(
     ))
 }
 
-fn builtin_prompt_history_push(
+fn get_liner_id(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    form: &str,
+) -> Result<&'static str, LispError> {
+    let arg = param_eval(environment, args, form)?;
+    let arg_d = arg.get();
+    if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
+        Ok(s)
+    } else {
+        Err(LispError::new(format!(
+            "{}: context id must be a keyword.",
+            form
+        )))
+    }
+}
+
+fn builtin_history_push(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let liner_id = {
-        let arg = param_eval(environment, args, "prompt-history-push")?;
-        let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
-            s
-        } else {
-            return Err(LispError::new(
-                "prompt-history-push: context id must be a keyword.",
-            ));
-        }
-    };
+    let liner_id = get_liner_id(environment, args, "history-push")?;
     let item = {
-        let arg = param_eval(environment, args, "prompt-history-push")?;
+        let arg = param_eval(environment, args, "history-push")?;
         let arg_d = arg.get();
         if let ExpEnum::Atom(Atom::String(s, _)) = &arg_d.data {
             s.to_string()
         } else {
             return Err(LispError::new(
-                "prompt-history-push: history item must be a string.",
+                "history-push: history item must be a string.",
             ));
         }
     };
-    params_done(args, "prompt-history-push")?;
+    params_done(args, "history-push")?;
     let mut con = if environment.liners.contains_key(liner_id) {
         environment.liners.remove(liner_id).unwrap()
     } else {
-        return Err(LispError::new("prompt-history-push: context id not found."));
+        return Err(LispError::new("history-push: context id not found."));
     };
     let result = if let Err(err) = con.history.push(item) {
         eprintln!("Warning: failed to save history: {}", err);
@@ -377,38 +384,28 @@ fn builtin_prompt_history_push(
     result
 }
 
-fn builtin_prompt_history_push_throwaway(
+fn builtin_history_push_throwaway(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let liner_id = {
-        let arg = param_eval(environment, args, "prompt-history-push-throwaway")?;
-        let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
-            s
-        } else {
-            return Err(LispError::new(
-                "prompt-history-push-throwaway: context id must be a keyword.",
-            ));
-        }
-    };
+    let liner_id = get_liner_id(environment, args, "history-push-throwaway")?;
     let item = {
-        let arg = param_eval(environment, args, "prompt-history-push-throwaway")?;
+        let arg = param_eval(environment, args, "history-push-throwaway")?;
         let arg_d = arg.get();
         if let ExpEnum::Atom(Atom::String(s, _)) = &arg_d.data {
             s.to_string()
         } else {
             return Err(LispError::new(
-                "prompt-history-push-throwaway: history item must be a string.",
+                "history-push-throwaway: history item must be a string.",
             ));
         }
     };
-    params_done(args, "prompt-history-push-throwaway")?;
+    params_done(args, "history-push-throwaway")?;
     let mut con = if environment.liners.contains_key(liner_id) {
         environment.liners.remove(liner_id).unwrap()
     } else {
         return Err(LispError::new(
-            "prompt-history-push-throwaway: context id not found.",
+            "history-push-throwaway: context id not found.",
         ));
     };
     let result = if let Err(err) = con.history.push_throwaway(item) {
@@ -421,35 +418,25 @@ fn builtin_prompt_history_push_throwaway(
     result
 }
 
-fn builtin_prompt_history_context(
+fn builtin_history_context(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let liner_id = {
-        let arg = param_eval(environment, args, "prompt-history-context")?;
-        let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
-            s
-        } else {
-            return Err(LispError::new(
-                "prompt-history-context: context id must be a keyword.",
-            ));
-        }
-    };
+    let liner_id = get_liner_id(environment, args, "history-push-throwaway")?;
     let item = {
-        let arg = param_eval(environment, args, "prompt-history-context")?;
+        let arg = param_eval(environment, args, "history-context")?;
         let arg_d = arg.get();
         match &arg_d.data {
             ExpEnum::Atom(Atom::String(s, _)) => Some(s.to_string()),
             ExpEnum::Nil => None,
             _ => {
                 return Err(LispError::new(
-                    "prompt-history-context: history context item must be a string.",
+                    "history-context: history context item must be a string.",
                 ))
             }
         }
     };
-    params_done(args, "prompt-history-context")?;
+    params_done(args, "history-context")?;
     let mut con = if environment.liners.contains_key(liner_id) {
         environment.liners.remove(liner_id).unwrap()
     } else {
@@ -458,6 +445,77 @@ fn builtin_prompt_history_context(
     con.history.set_search_context(item);
     environment.liners.insert(liner_id, con);
     Ok(Expression::make_nil())
+}
+
+fn builtin_history_length(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let liner_id = get_liner_id(environment, args, "history-length")?;
+    params_done(args, "history-length")?;
+    let con = if environment.liners.contains_key(liner_id) {
+        environment.liners.remove(liner_id).unwrap()
+    } else {
+        return Err(LispError::new("history-length: context id not found."));
+    };
+    let result = Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
+        con.history.len() as i64,
+    ))));
+    environment.liners.insert(liner_id, con);
+    result
+}
+
+fn builtin_history_is_empty(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let liner_id = get_liner_id(environment, args, "history-length")?;
+    params_done(args, "history-length")?;
+    let con = if environment.liners.contains_key(liner_id) {
+        environment.liners.remove(liner_id).unwrap()
+    } else {
+        return Err(LispError::new("history-length: context id not found."));
+    };
+    let result = if con.history.is_empty() {
+        Ok(Expression::make_true())
+    } else {
+        Ok(Expression::make_nil())
+    };
+    environment.liners.insert(liner_id, con);
+    result
+}
+
+fn builtin_history_nth(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let liner_id = get_liner_id(environment, args, "history-nth")?;
+    let idx = {
+        let arg = param_eval(environment, args, "history-nth")?;
+        let arg_d = arg.get();
+        if let ExpEnum::Atom(Atom::Int(idx)) = &arg_d.data {
+            *idx
+        } else {
+            return Err(LispError::new("history-nth: history nth must be an int."));
+        }
+    };
+    params_done(args, "history-nth")?;
+    let con = if environment.liners.contains_key(liner_id) {
+        environment.liners.remove(liner_id).unwrap()
+    } else {
+        return Err(LispError::new("history-nth: context id not found."));
+    };
+    if idx < 0 || idx as usize >= con.history.len() {
+        environment.liners.insert(liner_id, con);
+        return Err(LispError::new("history-nth: index out of bounds."));
+    }
+    let idx: usize = con.history.len() - (idx as usize) - 1;
+    let result = Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        con.history[idx].to_string().into(),
+        None,
+    ))));
+    environment.liners.insert(liner_id, con);
+    result
 }
 
 pub fn add_edit_builtins<S: BuildHasher>(
@@ -484,10 +542,10 @@ t
         ),
     );
     data.insert(
-        interner.intern("prompt-history-push"),
+        interner.intern("history-push"),
         Expression::make_function(
-            builtin_prompt_history_push,
-            "Usage: (prompt-history-push :context_id string) -> nil/t
+            builtin_history_push,
+            "Usage: (history-push :context_id string) -> nil/t
 
 Pushes string onto the history for the prompt context :context_id.
 Returns true on success or nil on failure.
@@ -495,17 +553,17 @@ Returns true on success or nil on failure.
 Section: shell
 
 Example:
-;(prompt-history-push :repl \"Some command\")
+;(history-push :repl \"Some command\")
 t
 ",
             root,
         ),
     );
     data.insert(
-        interner.intern("prompt-history-push-throwaway"),
+        interner.intern("history-push-throwaway"),
         Expression::make_function(
-            builtin_prompt_history_push_throwaway,
-            "Usage: (prompt-history-push-throwaway :context_id string) -> nil/t
+            builtin_history_push_throwaway,
+            "Usage: (history-push-throwaway :context_id string) -> nil/t
 
 Pushes string onto the history for the prompt context :context_id.  A throwaway
 item will will only persist until the next command is read (use it to allow
@@ -515,17 +573,17 @@ Returns true on success or nil on failure.
 Section: shell
 
 Example:
-;(prompt-history-push-throwaway :repl \"Some broken command\")
+;(history-push-throwaway :repl \"Some broken command\")
 t
 ",
             root,
         ),
     );
     data.insert(
-        interner.intern("prompt-history-context"),
+        interner.intern("history-context"),
         Expression::make_function(
-            builtin_prompt_history_context,
-            "Usage: (prompt-history-context :context_id context-string) -> nil
+            builtin_history_context,
+            "Usage: (history-context :context_id context-string) -> nil
 
 Sets the history context for searches.  Usually the current path but can be any
 string.  Pass nil to set it to nothing.
@@ -533,7 +591,58 @@ string.  Pass nil to set it to nothing.
 Section: shell
 
 Example:
-;(prompt-history-context :repl \"/home\")
+;(history-context :repl \"/home\")
+t
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("history-length"),
+        Expression::make_function(
+            builtin_history_length,
+            "Usage: (history-length :context_id) -> int
+
+Returns the number of history items for the given context.
+
+Section: shell
+
+Example:
+;(history-length :repl)
+t
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("history-empty?"),
+        Expression::make_function(
+            builtin_history_is_empty,
+            "Usage: (history-empty? :context_id) -> t/nil
+
+Returns true if history for context_id is empty, nil otherwise.
+
+Section: shell
+
+Example:
+;(history-empty? :repl)
+t
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("history-nth"),
+        Expression::make_function(
+            builtin_history_nth,
+            "Usage: (history-nth :context_id nth) -> String
+
+Returns the history at index nth (the newest is 0).
+
+Section: shell
+
+Example:
+;(history-nth :repl 0)
 t
 ",
             root,

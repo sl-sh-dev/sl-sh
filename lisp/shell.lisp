@@ -672,11 +672,11 @@ Section: shell
             (if (> line-len 0)
               (do
                 ; Save history
-                (if (not (def? '*repl-std-only*)) (prompt-history-push :repl line))
+                (if (not (def? '*repl-std-only*)) (history-push :repl line))
                 (set '*last-command* line))))
           (do 
             ; Save temp history
-            (if (and (> line-len 0)(not (def? '*repl-std-only*))) (prompt-history-push-throwaway :repl line))
+            (if (and (> line-len 0)(not (def? '*repl-std-only*))) (history-push-throwaway :repl line))
             (print-error result)))))
 
 (defn repl ()
@@ -684,7 +684,7 @@ Section: shell
               (var 'ns-prompt (sym *active-ns* "::__prompt"))
               (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
       (var 'repl-inner (fn ()
-              (if (not (def? '*repl-std-only*)) (prompt-history-context :repl $PWD))
+              (if (not (def? '*repl-std-only*)) (history-context :repl $PWD))
               (reap-jobs)
               (var 'save-last-status *last-status*)
               (var 'line (if (def? '*repl-std-only*) 
