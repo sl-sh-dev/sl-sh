@@ -63,10 +63,11 @@ jobs:
             exit 1
           fi
 
-          if [[ ! -f index.markdown ]];
+          if [[ ! -f index.markdown ]]; then
             elog "index.markdown file was not generated, docs failed to build."
             exit 1
           fi
+
           log "Push docs"
           git config --global user.email "docs@sl-sh.example.com"
           git config --global user.name "Doc CI"
