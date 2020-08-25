@@ -2,10 +2,10 @@
 (ns-import 'iterator)
 (ns-import 'shell)
 
-(defn get-doc-section-if-exists (key idx docstring) (progn
-	(defq full-key (str key ":"))
+(defn get-doc-section-if-exists (key idx docstring)
+	(var 'full-key (str key ":"))
 	(when (str-contains full-key docstring)
-		(str-trim (vec-nth idx (str-split full-key docstring))))))
+		(str-trim (vec-nth idx (str-split full-key docstring)))))
 
 (defn cut-target-str
 	"Function is used to cut the appropriate piece of the doc string out of the
@@ -16,45 +16,45 @@
 	of the next predefined string."
 	(second-keys second-key-idx target-str)
 	(if (not (empty-seq? second-keys))
-		(progn
-			(defq text-slice (get-doc-section-if-exists (first second-keys) second-key-idx target-str))
+		(do
+			(var 'text-slice (get-doc-section-if-exists (first second-keys) second-key-idx target-str))
 			(if (not (nil? text-slice))
 					text-slice
 				(recur (rest second-keys) second-key-idx target-str)))
 		target-str))
 
-(defn get-mid-doc-section (sym key key-idx second-key-idx docstring required &rest second-keys) (progn
-	(defq type-doc (get-doc-section-if-exists key key-idx docstring))
+(defn get-mid-doc-section (sym key key-idx second-key-idx docstring required &rest second-keys)
+	(var 'type-doc (get-doc-section-if-exists key key-idx docstring))
 	(if (nil? type-doc)
 		(when required
 			(err (str "Every docstring must have: " key ", but " sym " does not.")))
-		(cut-target-str second-keys second-key-idx type-doc))))
+		(cut-target-str second-keys second-key-idx type-doc)))
 
 (defn get-example-doc-section (key docstring)
 	(get-doc-section-if-exists key 1 docstring))
 
 ;; TODO maybe write a function that verifies order is correct in the docstrings?
 ;; to prevent future headaches?
-(defn parse-doc (docstring) (progn
-	(defq sym (vec-nth 0 (str-split "\n" docstring)))
-	(defq doc-map (make-hash))
+(defn parse-doc (docstring)
+	(var 'sym (vec-nth 0 (str-split "\n" docstring)))
+	(var 'doc-map (make-hash))
 	(hash-set! doc-map :form
 		(if (= sym "|") (str '\ sym) sym))
 	(hash-set! doc-map :type
-		(progn
-		(defq ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))
+		(do
+		(var 'ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))
 		ms))
 	(hash-set! doc-map :namespace
 		(get-mid-doc-section sym "Namespace" 1 0 docstring #t "Usage" "Section" "Example"))
 	(hash-set! doc-map :usage
 		(get-mid-doc-section sym "Usage" 1 0 docstring #t "Section" "Example"))
 	(hash-set! doc-map :section
-		(progn
-		(defq sec (get-mid-doc-section sym "Section" 1 0 docstring nil "Example"))
+		(do
+		(var 'sec (get-mid-doc-section sym "Section" 1 0 docstring nil "Example"))
 		(if (or (nil? sec) (str-empty? (str-trim sec))) :uncategorized sec)))
 	(hash-set! doc-map :example
 		(get-example-doc-section "Example" docstring))
-	doc-map))
+	doc-map)
 
 (defn parse-docstrings-for-syms
 "Takes a list of slsh symbols and returns a hashmap. To build the hashmap this
@@ -66,19 +66,19 @@ docstrings. The string following \"Section:\" can be anything but using a
 coherent set of values for the section declaration allows for flexible
 organization of docstrings.
 "
-	(docstring-list) (progn
-	(defq docstring-sections (make-hash))
-	(defq section-builder (fn (docs)
+	(docstring-list)
+	(var 'docstring-sections (make-hash))
+	(var 'section-builder (fn (docs)
 		(when (not (empty-seq? docs))
-			(progn
-				(defq doc-map (parse-doc (first docs)))
-				(defq section-key (hash-get doc-map :section))
+			(do
+				(var 'doc-map (parse-doc (first docs)))
+				(var 'section-key (hash-get doc-map :section))
 				(if (hash-haskey docstring-sections section-key)
 					(append-to! (hash-get docstring-sections section-key) doc-map)
 					(hash-set! docstring-sections section-key (list doc-map)))
 				(recur (rest docs))))))
 	(section-builder docstring-list)
-	docstring-sections))
+	docstring-sections)
 
 (ns-export '(parse-docstrings-for-syms))
 

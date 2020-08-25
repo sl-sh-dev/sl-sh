@@ -40,17 +40,17 @@
 			(not (= x 'args))))
 		sym-list))
 
-(defn list-of-all-slsh-syms () (progn
-	(defq sym-list (ns-symbols 'root))
+(defn list-of-all-slsh-syms ()
+	(var 'sym-list (ns-symbols 'root))
 	(for a-ns in (filter (fn (x) (and
 						(not (= x "docmd"))
 						(not (= x "docparse"))
 						(not (= x "docify"))
 						(not (= x "root"))
 						(not (= x "test"))
-						(not (= x "user")))) (ns-list)) (progn
+						(not (= x "user")))) (ns-list)) (do
 		(append-to! sym-list (eval (to-symbol (str a-ns "::*ns-exports*"))))))
-	(filter-undocable-forms (qsort sym-list))))
+	(filter-undocable-forms (qsort sym-list)))
 
 (defn get-doc-list-for
 	(target-doc-form)
