@@ -679,6 +679,7 @@ Section: shell
                 (when (not (= "fc" (str-trim line)))
                   (handle-last-command line)))))
           (do
+            (set '*last-command* line)
             ; Save temp history
             (if (and (> line-len 0)(not (def? '*repl-std-only*))) (history-push-throwaway :repl line))
             (print-error result)))))
