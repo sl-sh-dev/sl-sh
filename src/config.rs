@@ -49,8 +49,10 @@ pub fn get_config() -> Result<Config, ()> {
     let mut command_args: Vec<String> = Vec::new();
 
     let mut args: Vec<OsString> = env::args_os().collect();
+
     args.reverse();
     let exe_name = get_arg("unknown", &mut args)?; // Pop off the executable name.
+
     while !args.is_empty() {
         if let Some(argument) = args.pop() {
             if let Ok(arg) = argument.into_string() {

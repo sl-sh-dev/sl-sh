@@ -702,7 +702,7 @@ Section: shell
               (if (not (repl-eof line)) (recur))))
       ((fn ()
            (var 'result (get-error (repl-inner)))
-           (if (= :error (car result)) (do (print-error result)(recur))))))
+           (if (= :error (car result)) (do (print-error result)(exit 1))))))
 
 (defn temp-dir ()
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".

@@ -18,7 +18,18 @@ use crate::gc::*;
 use crate::reader::*;
 use crate::types::*;
 
-fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool) {
+fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: bool) {
+    let uid = Uid::current();
+    let euid = Uid::effective();
+    env::set_var("UID", format!("{}", uid));
+    env::set_var("EUID", format!("{}", euid));
+    let mut interned_sym = environment.interner.intern("*uid*");
+    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)));
+    environment.insert_into_root_scope(interned_sym, data);
+    interned_sym = environment.interner.intern("*euid*");
+    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)));
+    environment.insert_into_root_scope(interned_sym, data);
+
     let mut load_path = Vec::new();
     load_path.push(
         Expression::alloc_data(ExpEnum::Atom(Atom::String(
@@ -50,6 +61,12 @@ t
         ),
     );
     if loadrc {
+        environment.root_scope.borrow_mut().insert_exp(
+            environment.interner.intern("*load-slshrc*"),
+            Expression::make_true(),
+        );
+    }
+    if repl {
         environment.root_scope.borrow_mut().insert_exp(
             environment.interner.intern("*interactive*"),
             Expression::make_true(),
@@ -99,17 +116,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
         );
     }
     let mut environment = build_default_environment(sig_int);
-    let uid = Uid::current();
-    let euid = Uid::effective();
-    env::set_var("UID", format!("{}", uid));
-    env::set_var("EUID", format!("{}", euid));
-    let mut interned_sym = environment.interner.intern("*uid*");
-    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)));
-    environment.insert_into_root_scope(interned_sym, data);
-    interned_sym = environment.interner.intern("*euid*");
-    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)));
-    environment.insert_into_root_scope(interned_sym, data);
-    load_user_env(&mut environment, &home, true);
+    load_user_env(&mut environment, &home, true, true);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
     } else {
@@ -135,7 +142,7 @@ pub fn read_stdin() -> i32 {
     let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
     environment.do_job_control = false;
     environment.is_tty = false;
-    load_user_env(&mut environment, &home, true);
+    load_user_env(&mut environment, &home, true, false);
 
     let mut input = String::new();
     loop {
@@ -293,7 +300,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         .root_scope
         .borrow_mut()
         .insert_exp(environment.interner.intern("args"), data);
-    load_user_env(&mut environment, &home, false);
+    load_user_env(&mut environment, &home, false, false);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
     } else {
