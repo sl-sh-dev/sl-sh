@@ -726,7 +726,7 @@ Section: shell"
                 (when (not (= "" (str-trim file-contents)))
                     (do
                         (handle-last-command file-contents)
-                        (eval (str (cat fc-file)))))))))
+                        (eval (read-all (str (cat fc-file))))))))))
 
 (ns-export '(
 	alias
