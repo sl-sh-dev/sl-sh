@@ -13,6 +13,8 @@
 		(and
 			(not (= x 'filter-undocable-forms))
 			(not (= x '*ns*))
+			(not (= x '*euid*))
+			(not (= x '*uid*))
 			(not (= x '*repl-settings*))
 			(not (= x '*ns-exports*))
 			(not (= x 'tok-slsh-form-color))
