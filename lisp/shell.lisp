@@ -652,6 +652,11 @@ Section: shell
 (defn __prompt ()
 	(str "\x1b[32m[" *active-ns* "]:" $HOST ":\x1b[34m" (str-trim (get_pwd)) (set_prompt_tail)))
 
+(defn handle-last-command (line)
+    ; Save history
+    (if (not (def? '*repl-std-only*)) (history-push :repl line))
+    ;; Set global var *last-command*
+    (set '*last-command* line))
 
 (defn repl-line (line line-len)
       (do
@@ -671,10 +676,9 @@ Section: shell
               (println (cdr result)))
             (if (> line-len 0)
               (do
-                ; Save history
-                (if (not (def? '*repl-std-only*)) (history-push :repl line))
-                (set '*last-command* line))))
-          (do 
+                (when (not (= "fc" (str-trim line)))
+                  (handle-last-command line)))))
+          (do
             ; Save temp history
             (if (and (> line-len 0)(not (def? '*repl-std-only*))) (history-push-throwaway :repl line))
             (print-error result)))))
@@ -698,6 +702,30 @@ Section: shell
       ((fn ()
            (var 'result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(recur))))))
+
+(defn temp-dir ()
+"Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
+Section: shell"
+    (if (def? '$TMPDIR) (str $TMPDIR) "/tmp"))
+
+(defn fc ()
+"Put the contents of the last command into a temporary file
+([temp-dir](shell::temp-dir)), and open the temporary file in the text editor,
+$EDITOR. If the editor returns with an error code of 0 the contents of the
+temporary file are executed. `fc` can be used in succession and the contents of
+the temporary file are saved to the sl-sh history.
+
+Section: shell"
+    (var 'fc-file (str (temp-dir) "/sl-sh-fc.txt"))
+    (do
+        (out> fc-file (print *last-command*))
+        (when (= 0 (wait (eval (str $EDITOR " " fc-file))))
+            (do
+                (var 'file-contents (str (cat fc-file)))
+                (when (not (= "" (str-trim file-contents)))
+                    (do
+                        (handle-last-command file-contents)
+                        (eval (str (cat fc-file)))))))))
 
 (ns-export '(
 	alias
@@ -733,6 +761,8 @@ Section: shell
 	tok-invalid-color
 	fg-color-rgb
 	bg-color-rgb
-	endfix-on))
+	endfix-on
+	fc
+	temp-dir))
 
 (ns-pop)
