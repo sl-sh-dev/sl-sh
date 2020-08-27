@@ -704,12 +704,13 @@ Section: shell
            (var 'result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(exit 1))))))
 
-(defn temp-dir ()
+(defn temp-dir
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
 Section: shell"
+    ()
     (if (def? '$TMPDIR) (str $TMPDIR) "/tmp"))
 
-(defn fc ()
+(defn fc
 "Put the contents of the last command into a temporary file
 ([temp-dir](shell::temp-dir)), and open the temporary file in the text editor,
 $EDITOR. If the editor returns with an error code of 0 the contents of the
@@ -717,6 +718,7 @@ temporary file are executed. `fc` can be used in succession and the contents of
 the temporary file are saved to the sl-sh history.
 
 Section: shell"
+    ()
     (var 'fc-file (str (temp-dir) "/sl-sh-fc.txt"))
     (do
         (out> fc-file (print *last-command*))
