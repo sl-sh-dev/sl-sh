@@ -443,7 +443,7 @@ Example:
         interner.intern("vec-push!"),
         Expression::make_function(
             builtin_vec_push,
-            "Usage: (vec-push! vector object)
+            "Usage: (vec-push! vector object) -> vector
 
 Pushes the provided object onto the end of the vector.  This is destructive!
 
@@ -465,7 +465,7 @@ Example:
         interner.intern("vec-pop!"),
         Expression::make_function(
             builtin_vec_pop,
-            "Usage: (vec-pop! vector object)
+            "Usage: (vec-pop! vector) -> object
 
 Pops the last object off of the end of the vector.  This is destructive!
 

@@ -300,7 +300,7 @@ pub fn add_bind_builtins<S: BuildHasher>(
 
 Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
 This is basically like wrapping in a fn call but without the fn call or like a let
-without the initial bindings (you can use def to bind symbols in the new scope instead).
+without the initial bindings (you can use var to bind symbols in the new scope instead).
 
 Section: core
 
@@ -322,6 +322,9 @@ Example:
             "Usage: (set symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
+
+Set will set the first binding it finds starting in the current scope and then
+trying enclosing scopes until exhausted.
 
 Section: core
 
@@ -348,7 +351,7 @@ Example:
             builtin_def,
             "Usage: (def symbol expression) -> expression
 
-Adds an expression to the current scope.  Return the expression that was defined.
+Adds an expression to the current namespace.  Return the expression that was defined.
 
 Section: core
 
