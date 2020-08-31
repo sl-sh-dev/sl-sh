@@ -11,14 +11,14 @@ Section: core
     (macro (op name &rest args)
            ((fn ()
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
-                (if (string? (vec-nth 0 args))
+                (if (string? (vec-nth args 0))
                   (do
-                    (var 'doc-str (vec-nth 0 args))
-                    (var 'ars (vec-nth 1 args))
+                    (var 'doc-str (vec-nth args 0))
+                    (var 'ars (vec-nth args 1))
                     (var 'body (vec-slice args 2))
                     `(do (,op ',name ,doc-str (macro ,ars ,@body)) nil))
                   (do
-                    (var 'ars (vec-nth 0 args))
+                    (var 'ars (vec-nth args 0))
                     (var 'body (vec-slice args 1))
                     `(do (,op ',name (macro ,ars ,@body)) nil)))))))
 
@@ -61,8 +61,8 @@ Section: namespace"
         (def 'import (vec defq 1 2))
         (iterator::for symbol in (eval (sym ,namespace "::*ns-exports*"))
                        (do
-                         (vec-setnth! 1 (sym "ns::" symbol) import)
-                         (vec-setnth! 2 (sym ,namespace "::" symbol) import)
+                         (vec-set! import 1 (sym "ns::" symbol))
+                         (vec-set! import 2 (sym ,namespace "::" symbol))
                          (eval import))))))
 
 (defmacro setq!
@@ -133,15 +133,15 @@ t
     (op name &rest args)
     ((fn ()
          (if (< (length args) 1) (err "defn: Wrong number of args."))
-         (if (string? (vec-nth 0 args))
+         (if (string? (vec-nth args 0))
            (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
-             (var 'doc-str (vec-nth 0 args))
-             (var 'ars (vec-nth 1 args))
+             (var 'doc-str (vec-nth args 0))
+             (var 'ars (vec-nth args 1))
              (var 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
              `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
            (do
-             (var 'ars (vec-nth 0 args)) 
+             (var 'ars (vec-nth args 0)) 
              (var 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
              `(,op ',name (fn ,ars (block ,name ,@body))))))))
 

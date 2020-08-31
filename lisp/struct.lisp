@@ -5,9 +5,9 @@
     (var 'second (cadr field))
     (if (string? second) (do
         (var 'doc-split (str-splitn 2 "Example:" second))
-        (str-push! doc "method: " tsym "\n\t" (vec-nth 0 doc-split) "\n")
+        (str-push! doc "method: " tsym "\n\t" (vec-nth doc-split 0) "\n")
         (if (= 2 (length doc-split))
-          (str-push! doc-exp "; " tsym " Example\n" (vec-nth 1 doc-split) "\n"))
+          (str-push! doc-exp "; " tsym " Example\n" (vec-nth doc-split 1) "\n"))
         (var 'm-params (caddr field))
         (var 'm-body (cadddr field)))
       (do
@@ -60,17 +60,17 @@ Example:
         (var 'doc "")
         (var 'doc-exp "")
         (var 'idx-start 0)
-        (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
+        (if (and (> fields-len 1)(string? (vec-nth fields 0)))
             (do
-              (var 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
-              (set! 'doc (vec-nth 0 doc-split))
+              (var 'doc-split (str-splitn 2 "Section:" (vec-nth fields 0)))
+              (set! 'doc (vec-nth doc-split 0))
               (set! 'idx-start 1)
-              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth 1 doc-split)))))
+              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth doc-split 1)))))
         (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         ((fn (idx)
             (if (< idx fields-len) (do
-                (var 'field (vec-nth idx fields))
+                (var 'field (vec-nth fields idx))
                 (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
                     (err "Traits only have :fn fields!"))
                 (recur (+ idx 1))
@@ -84,11 +84,11 @@ Example:
         `(def ',name ,doc-final (fn (target-dispatch-map target-tags)
             ((fn (idx)
                 (if (< idx ,tags-len) (do
-                    (vec-push! target-tags (vec-nth idx ',tags))
+                    (vec-push! target-tags (vec-nth ',tags idx))
                     (recur (+ idx 1)))))0)
             ((fn (idx)
                 (if (< idx ,keys-len) (do
-                    (var 'key (vec-nth idx ',keys))
+                    (var 'key (vec-nth ',keys idx))
                     (if (not (hash-haskey target-dispatch-map key)) (hash-set! target-dispatch-map key (hash-get ,dispatch-map key)))
                     (recur (+ idx 1)) )))0) )) )))
 
@@ -134,12 +134,12 @@ Example:
         (var 'doc "")
         (var 'doc-exp "")
         (var 'idx-start 0)
-        (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
+        (if (and (> fields-len 1)(string? (vec-nth fields 0)))
             (do
-              (var 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
-              (set! 'doc (vec-nth 0 doc-split))
+              (var 'doc-split (str-splitn 2 "Section:" (vec-nth fields 0)))
+              (set! 'doc (vec-nth doc-split 0))
               (set! 'idx-start 1)
-              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth 1 doc-split))(set! 'doc-exp ""))))
+              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth doc-split 1))(set! 'doc-exp ""))))
         (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         (defn attrib (field doc doc-exp)
@@ -148,8 +148,8 @@ Example:
             (if (string? second)
                 (do
                   (var 'doc-split (str-splitn 2 "Example:" second))
-                  (set! 'fdoc (str "\n\t" (vec-nth 0 doc-split)))
-                  (if (= 2 (length doc-split)) (str-push! doc-exp (vec-nth 1 doc-split)))
+                  (set! 'fdoc (str "\n\t" (vec-nth doc-split 0)))
+                  (if (= 2 (length doc-split)) (str-push! doc-exp (vec-nth doc-split 1)))
                   (xdr! field (cddr field))))
             (if (= 1 (length field))
                     (do
@@ -194,7 +194,7 @@ Example:
 
         ((fn (idx)
             (if (< idx fields-len) (do
-                (var 'field (vec-nth idx fields))
+                (var 'field (vec-nth fields idx))
                 (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
                     (= (car field) :impl) nil ; do impls last (struct methods take precident).
                     (attrib field doc doc-exp))
@@ -203,7 +203,7 @@ Example:
 
         ((fn (idx)
             (if (< idx fields-len) (do
-                (var 'field (vec-nth idx fields))
+                (var 'field (vec-nth fields idx))
                 (if (= (car field) :impl) (impl (cdr field) doc))
                 (recur (+ idx 1))
             )))idx-start)

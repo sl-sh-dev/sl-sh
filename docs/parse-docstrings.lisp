@@ -5,7 +5,7 @@
 (defn get-doc-section-if-exists (key idx docstring)
 	(var 'full-key (str key ":"))
 	(when (str-contains full-key docstring)
-		(str-trim (vec-nth idx (str-split full-key docstring)))))
+		(str-trim (vec-nth (str-split full-key docstring) idx))))
 
 (defn cut-target-str
 	"Function is used to cut the appropriate piece of the doc string out of the
@@ -36,7 +36,7 @@
 ;; TODO maybe write a function that verifies order is correct in the docstrings?
 ;; to prevent future headaches?
 (defn parse-doc (docstring)
-	(var 'sym (vec-nth 0 (str-split "\n" docstring)))
+	(var 'sym (vec-nth (str-split "\n" docstring) 0))
 	(var 'doc-map (make-hash))
 	(hash-set! doc-map :form
 		(if (= sym "|") (str '\ sym) sym))

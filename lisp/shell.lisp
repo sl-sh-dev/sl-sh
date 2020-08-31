@@ -18,12 +18,12 @@ Section: shell
 	(shell::register-alias name)
 	(match (length args)
 		(2 (do
-			(var 'docstring (vec-nth 0 args))
-			(var 'body (vec-nth 1 args))
+			(var 'docstring (vec-nth args 0))
+			(var 'body (vec-nth args 1))
 			`(defmacro ,name ,docstring (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(1 (do
-			(var 'body (vec-nth 0 args))
+			(var 'body (vec-nth args 0))
 			`(defmacro ,name (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
@@ -158,7 +158,7 @@ Section: shell
         (dir) (if (form (cd dir))
                 (do
                   (vec-push! dir_stack $OLDPWD)
-                  (if (> (length dir_stack) dir_stack_max) (vec-remove-nth! 0 dir_stack))
+                  (if (> (length dir_stack) dir_stack_max) (vec-remove! dir_stack 0))
                   t)
                 nil))
   (defn popd
@@ -295,16 +295,16 @@ Example:
 		(iterator::for-i idx el in vals
 			(if (= 1 (length el))
 				(do
-					(vec-insert-nth! idx (iterator::nth 0 el) params)
-					(vec-insert-nth! idx nil bindings)
-					(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
+					(vec-insert! params idx (iterator::nth 0 el))
+					(vec-insert! bindings idx nil)
+					(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
 				(if (= 2 (length el))
 					(do
 						(var 'binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set! 'binding (eval binding)))
-						(vec-insert-nth! idx (iterator::nth 0 el) params)
-						(vec-insert-nth! idx binding bindings)
-						(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
+						(vec-insert! params idx (iterator::nth 0 el))
+						(vec-insert! bindings idx binding)
+						(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
@@ -639,7 +639,7 @@ Section: shell
 (defn path_list_trunc (plist)
 	(if (> (length plist) 1)
 		(if (> (length (first plist)) 0) 
-			(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+			(vec-insert! (path_list_trunc (rest plist)) 0 (str-sub 0 1 (first plist)))
 			(path_list_trunc (rest plist)))
 		plist))
 

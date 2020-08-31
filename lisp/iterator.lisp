@@ -105,7 +105,7 @@ Example:
 
   (:fn slice
        (self start &rest end)
-           (if (= (length end) 1) ((slice-iter) :init self start (vec-nth 0 end))
+           (if (= (length end) 1) ((slice-iter) :init self start (vec-nth end 0))
                (> (length end) 1) (err "iter :slice Wrong number of arge (start end?)")
                ((slice-iter) :init self start)))
 
@@ -305,8 +305,8 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (do (var 'val (vec-nth start data))(set! 'start (+ 1 start)) val))
-  (:fn next-back! (self) (do (var 'val (vec-nth end data))(set! 'end (- end 1)) val))
+  (:fn next! (self) (do (var 'val (vec-nth data start))(set! 'start (+ 1 start)) val))
+  (:fn next-back! (self) (do (var 'val (vec-nth data end))(set! 'end (- end 1)) val))
   (:fn empty? (self) (> start end))
   (:fn nth! (self idx) (do (set! 'start (+ start idx))(self :next!)))
   (:fn nth-back! (self idx) (do (set! 'end (- end idx))(self :next-back!)))
@@ -499,7 +499,7 @@ Example:
                                  (set! 'data (iter d))
                                  (for _ in (range s) (data :next!))
                                  (set! 'start s)
-                                 (if (= (length e) 1) (set! 'total (- (vec-nth 0 e) start))
+                                 (if (= (length e) 1) (set! 'total (- (vec-nth e 0) start))
                                      (> (length e) 1) (err "slice-iter :init Wrong number of arge (iter start end?)"))
                                  self))
   (:impl iterator))
@@ -866,7 +866,7 @@ Example:
 (assert-true (test-slice-iter :empty?))
 "
     (items start &rest end)
-    (if (= (length end) 1) ((iter items) :slice start (vec-nth 0 end))
+    (if (= (length end) 1) ((iter items) :slice start (vec-nth end 0))
       (> (length end) 1) (err "slice: Wrong number of args (items start end?).")
       ((iter items) :slice start)))
 

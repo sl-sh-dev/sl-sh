@@ -75,7 +75,7 @@
   ((data nil)
    (start 0))
   ; methods
-  ((first (self) (vec-nth start data))
+  ((first (self) (vec-nth data start))
    (rest (self) ((make-seq-vec) :init data(+ 1 start)))
    (rest! (self) (progn (set 'start (+ 1 start)) self))
    (empty? (self) (= start (length data)))

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::iter::FromIterator;
 
+use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::Handle;
@@ -123,58 +124,52 @@ fn builtin_vec_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(idx) = args.next() {
-        if let Some(list) = args.next() {
-            if args.next().is_none() {
-                if let ExpEnum::Atom(Atom::Int(idx)) = &eval(environment, idx)?.get().data {
-                    if let ExpEnum::Vector(list) = &eval(environment, list)?.get().data {
-                        if *idx < 0 || *idx >= list.len() as i64 {
-                            let msg = format!("vec-nth index {} out of range {}", idx, list.len());
-                            return Err(LispError::new(msg));
-                        }
-                        return Ok(list[*idx as usize].clone().into());
-                    }
-                }
+    let vector = param_eval(environment, args, "vec-nth")?;
+    let idx = param_eval(environment, args, "vec-nth")?;
+    params_done(args, "vec-nth")?;
+    let idx_d = idx.get();
+    if let ExpEnum::Atom(Atom::Int(idx)) = &idx_d.data {
+        let vector_d = vector.get();
+        if let ExpEnum::Vector(list) = &vector_d.data {
+            if *idx < 0 || *idx >= list.len() as i64 {
+                let msg = format!("vec-nth: index {} out of range {}", idx, list.len());
+                Err(LispError::new(msg))
+            } else {
+                Ok(list[*idx as usize].clone().into())
             }
+        } else {
+            Err(LispError::new("vec-nth: first form must be a vector"))
         }
+    } else {
+        Err(LispError::new("vec-nth: second form must be an int"))
     }
-    Err(LispError::new("vec-nth takes two forms (int and vector)"))
 }
 
 // Destructive
-fn builtin_vec_setnth(
+fn builtin_vec_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(idx) = args.next() {
-        if let Some(new_element) = args.next() {
-            if let Some(list) = args.next() {
-                if args.next().is_none() {
-                    let idx =
-                        if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, idx)?.get().data {
-                            i
-                        } else {
-                            return Err(LispError::new("vec-setnth! first form must be an int"));
-                        };
-                    let new_element = eval(environment, new_element)?;
-                    let vec = eval(environment, list)?;
-                    return match &mut vec.get_mut().data {
-                        ExpEnum::Vector(list) => {
-                            if idx < 0 || idx >= list.len() as i64 {
-                                return Err(LispError::new("vec-setnth! index out of range"));
-                            }
-                            list[idx as usize] = new_element.handle_no_root();
-                            Ok(vec.clone())
-                        }
-                        _ => Err(LispError::new("vec-setnth! third form must be a vector")),
-                    };
-                }
+    let vector = param_eval(environment, args, "vec-set!")?;
+    let idx = param_eval(environment, args, "vec-set!")?;
+    let obj = param_eval(environment, args, "vec-set!")?;
+    params_done(args, "vec-set!")?;
+    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+        i
+    } else {
+        return Err(LispError::new("vec-set! second form must be an int"));
+    };
+    let mut vector_d = vector.get_mut();
+    match &mut vector_d.data {
+        ExpEnum::Vector(vec) => {
+            if idx < 0 || idx >= vec.len() as i64 {
+                return Err(LispError::new("vec-set! index out of range"));
             }
+            vec[idx as usize] = obj.handle_no_root();
+            Ok(vector.clone())
         }
+        _ => Err(LispError::new("vec-set! first form must be a vector")),
     }
-    Err(LispError::new(
-        "vec-setnth! takes three forms (index, new element and vector)",
-    ))
 }
 
 // Destructive
@@ -267,76 +262,57 @@ fn builtin_vec_vclear(
 }
 
 // Destructive
-fn builtin_vec_remove_nth(
+fn builtin_vec_remove(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(idx) = args.next() {
-        if let Some(list) = args.next() {
-            if args.next().is_none() {
-                let idx = eval(environment, idx)?;
-                let list = eval(environment, list)?;
-                let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
-                    i
-                } else {
-                    return Err(LispError::new("vec-remove-nth! first form must be an int"));
-                };
-                return match &mut list.get_mut().data {
-                    ExpEnum::Vector(inner_list) => {
-                        if idx < 0 || idx >= inner_list.len() as i64 {
-                            return Err(LispError::new("vec-remove-nth! index out of range"));
-                        }
-                        inner_list.remove(idx as usize);
-                        Ok(list.clone())
-                    }
-                    _ => Err(LispError::new(
-                        "vec-remove-nth! second form must be a vector",
-                    )),
-                };
+    let vector = param_eval(environment, args, "vec-remove!")?;
+    let idx = param_eval(environment, args, "vec-remove!")?;
+    params_done(args, "vec-remove!")?;
+    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+        i
+    } else {
+        return Err(LispError::new("vec-remove! second form must be an int"));
+    };
+    let mut vector_d = vector.get_mut();
+    match &mut vector_d.data {
+        ExpEnum::Vector(inner_list) => {
+            if idx < 0 || idx >= inner_list.len() as i64 {
+                return Err(LispError::new("vec-remove! index out of range"));
             }
+            inner_list.remove(idx as usize);
+            Ok(vector.clone())
         }
+        _ => Err(LispError::new("vec-remove! first form must be a vector")),
     }
-    Err(LispError::new(
-        "vec-remove-nth! takes two forms (index and vector)",
-    ))
 }
 
 // Destructive
-fn builtin_vec_insert_nth(
+fn builtin_vec_insert(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(idx) = args.next() {
-        if let Some(new_element) = args.next() {
-            if let Some(list) = args.next() {
-                if args.next().is_none() {
-                    let idx = eval(environment, idx)?;
-                    let new_element = eval(environment, new_element)?;
-                    let list = eval(environment, list)?;
-                    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
-                        i
-                    } else {
-                        return Err(LispError::new("vec-insert-nth! first form must be an int"));
-                    };
-                    return match &mut list.get_mut().data {
-                        ExpEnum::Vector(inner_list) => {
-                            if idx < 0 || idx > inner_list.len() as i64 {
-                                return Err(LispError::new("vec-insert-nth! index out of range"));
-                            }
-                            inner_list.insert(idx as usize, new_element.handle_no_root());
-                            Ok(list.clone())
-                        }
-                        _ => Err(LispError::new(
-                            "vec-insert-nth! third form must be a vector",
-                        )),
-                    };
+    let vector = param_eval(environment, args, "vec-insert!")?;
+    let idx = param_eval(environment, args, "vec-insert!")?;
+    let obj = param_eval(environment, args, "vec-insert!")?;
+    params_done(args, "vec-insert!")?;
+    let idx_d = idx.get();
+    if let ExpEnum::Atom(Atom::Int(idx)) = idx_d.data {
+        let mut vector_d = vector.get_mut();
+        match &mut vector_d.data {
+            ExpEnum::Vector(inner_list) => {
+                if idx < 0 || idx > inner_list.len() as i64 {
+                    Err(LispError::new("vec-insert!: index out of range"))
+                } else {
+                    inner_list.insert(idx as usize, obj.handle_no_root());
+                    Ok(vector.clone())
                 }
             }
+            _ => Err(LispError::new("vec-insert!: first form must be a vector")),
         }
+    } else {
+        Err(LispError::new("vec-insert!: second form must be an int"))
     }
-    Err(LispError::new(
-        "vec-insert-nth! takes three forms (index, new element and vector)",
-    ))
 }
 
 pub fn add_vec_builtins<S: BuildHasher>(
@@ -403,7 +379,7 @@ Example:
         interner.intern("vec-nth"),
         Expression::make_function(
             builtin_vec_nth,
-            "Usage: (vec-nth index vector)
+            "Usage: (vec-nth vector index) -> object
 
 Get the nth element (0 based) of a vector. If you need the equivalent operation
 on a list use [nth](root::nth).
@@ -411,19 +387,19 @@ on a list use [nth](root::nth).
 Section: vector
 
 Example:
-(test::assert-equal 5 (vec-nth 4 '#(1 2 3 4 5 6)))
-(test::assert-equal 1 (vec-nth 0 '#(1 2 3 4 5 6)))
-(test::assert-equal 3 (vec-nth 2 '#(1 2 3 4 5 6)))
-(test::assert-equal 6 (vec-nth 5 '#(1 2 3 4 5 6)))
+(test::assert-equal 5 (vec-nth '#(1 2 3 4 5 6) 4))
+(test::assert-equal 1 (vec-nth '#(1 2 3 4 5 6) 0))
+(test::assert-equal 3 (vec-nth '#(1 2 3 4 5 6) 2))
+(test::assert-equal 6 (vec-nth '#(1 2 3 4 5 6) 5))
 ",
             root,
         ),
     );
     data.insert(
-        interner.intern("vec-setnth!"),
+        interner.intern("vec-set!"),
         Expression::make_function(
-            builtin_vec_setnth,
-            "Usage: (vec-setnth! index value vector)
+            builtin_vec_set,
+            "Usage: (vec-set! vector index value) -> vector
 
 Set the nth index (0 based) of a vector to value. This is destructive! If you
 need the equivalent operation on a list use [setnth!](root::setnth!).
@@ -432,9 +408,9 @@ Section: vector
 
 Example:
 (def 'test-setnth-vec (vec 1 2 3))
-(test::assert-equal '(1 5 3) (vec-setnth! 1 5 test-setnth-vec))
-(test::assert-equal '(7 5 3) (vec-setnth! 0 7 test-setnth-vec))
-(test::assert-equal '(7 5 9) (vec-setnth! 2 9 test-setnth-vec))
+(test::assert-equal '(1 5 3) (vec-set! test-setnth-vec 1 5))
+(test::assert-equal '(7 5 3) (vec-set! test-setnth-vec 0 7))
+(test::assert-equal '(7 5 9) (vec-set! test-setnth-vec 2 9))
 ",
             root,
         ),
@@ -520,33 +496,34 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("vec-remove-nth!"),
+        interner.intern("vec-remove!"),
         Expression::make_function(
-            builtin_vec_remove_nth,
-            "Usage: (vec-remove-nth! index vector)
+            builtin_vec_remove,
+            "Usage: (vec-remove! vector index) -> vector
 
-Remove the element at index from vector.  This is destructive!
+Remove the element at index from vector, shifting all elements after it to the left.
+This is destructive!
 
 Section: vector
 
 Example:
 (def 'test-remove-nth-vec (vec 1 2 3))
 (test::assert-equal '(1 2 3) test-remove-nth-vec)
-(vec-remove-nth! 1 test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 1)
 (test::assert-equal '(1 3) test-remove-nth-vec)
-(vec-remove-nth! 1 test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 1)
 (test::assert-equal '(1) test-remove-nth-vec)
-(vec-remove-nth! 0 test-remove-nth-vec)
+(vec-remove! test-remove-nth-vec 0)
 (test::assert-equal '() test-remove-nth-vec)
 ",
             root,
         ),
     );
     data.insert(
-        interner.intern("vec-insert-nth!"),
+        interner.intern("vec-insert!"),
         Expression::make_function(
-            builtin_vec_insert_nth,
-            "Usage: (vec-insert-nth! index new-element vector)
+            builtin_vec_insert,
+            "Usage: (vec-insert! vector index new-element) -> vector
 
 Inserts new-element at index and moves following elements right in vector.  This is destructive!
 
@@ -555,11 +532,11 @@ Section: vector
 Example:
 (def 'test-insert-nth-vec (vec 1 2 3))
 (test::assert-equal '(1 2 3) test-insert-nth-vec)
-(vec-insert-nth! 1 5 test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 1 5)
 (test::assert-equal '(1 5 2 3) test-insert-nth-vec)
-(vec-insert-nth! 2 6 test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 2 6)
 (test::assert-equal '(1 5 6 2 3) test-insert-nth-vec)
-(vec-insert-nth! 0 4 test-insert-nth-vec)
+(vec-insert! test-insert-nth-vec 0 4)
 (test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
 ",
             root,

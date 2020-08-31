@@ -61,14 +61,14 @@
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
-    `(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth 1 (str-split "Example:" (doc ,sym))) "))")))
+    `(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))")))
 
 (defmacro run-example (sym)
     `(lex
         (var 'doc-list (str-split "Example:" (str (doc ,sym))))
         (if (> (length doc-list) 1)
             (do
-             (eval (str "(do " (println (vec-nth 1 doc-list)) (str (vec-nth 1 doc-list)) ")")))
+             (eval (str "(do " (println (vec-nth doc-list 1)) (str (vec-nth doc-list 1)) ")")))
             (do
              :no-test))))
 

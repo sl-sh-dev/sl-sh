@@ -22,7 +22,7 @@
 	(str-contains "Example:" docstring))
 
 (defn exec-str (docstring) (do
-	(var 'test (vec-nth 1 (str-split "Example:" docstring)))
+	(var 'test (vec-nth (str-split "Example:" docstring) 1))
 	(fn () (eval (str "(do " test ")")))))
 
 (defn all-items-by-whitespace (producer)

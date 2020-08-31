@@ -82,7 +82,7 @@ Example:
         (if (null (cdr obj)) (car obj)
             (recur (cdr obj)))))
 
-    (if (vec? obj) (if (> (length obj) 0) (vec-nth (- (length obj) 1) obj) nil)
+    (if (vec? obj) (if (> (length obj) 0) (vec-nth obj (- (length obj) 1)) nil)
         (list? obj) (last-list obj)
         (err "Not a vector or list")))
 
@@ -115,7 +115,7 @@ Example:
 "
 Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 This is destructive!  Because vectors support indexing and lists do not, this is
-a much faster operation for a vector (uses [builtin](root::builtin?) [vec-setnth!](root::vec-setnth!)
+a much faster operation for a vector (uses [builtin](root::builtin?) [vec-set!](root::vec-set!)
 on input of type vector).  Return the list or vector that was modified.
 
 Section: sequence
@@ -157,7 +157,7 @@ Example:
     (var 'setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))))
 
     (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
-    (if (vec? sequence) (vec-setnth! idx obj sequence)
+    (if (vec? sequence) (vec-set! sequence idx obj)
         (list? sequence) (do (setnth-list idx obj sequence) sequence)
         (err "setnth!: Not a vector or list")))
 
@@ -237,7 +237,7 @@ Example:
 (assert-equal nil (first '#()))
 "
     (obj)
-    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth 0 obj))
+    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
         (list? obj) (car obj)
         (err "Not a vector or list")))
 

@@ -405,7 +405,7 @@ Section: tmux"
 	(plist)
 		(if (> (length plist) 1)
 			(if (> (length (first plist)) 0)
-				(vec-insert-nth! 0 (str-sub 0 1 (first plist)) (path_list_trunc (rest plist)))
+				(vec-insert! (path_list_trunc (rest plist)) 0 (str-sub 0 1 (first plist)))
 				(path_list_trunc (rest plist)))
 			plist))
 

@@ -172,7 +172,7 @@
 	(if (>= idx (length cmd-ast))
 	  nil
 	  (do
-		(var 'nxt (vec-nth idx cmd-ast))
+		(var 'nxt (vec-nth cmd-ast idx))
 		(if (not nxt)
 			nil
 			(do
