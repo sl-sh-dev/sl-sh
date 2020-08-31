@@ -1701,9 +1701,9 @@ Section: core
 
 Example:
 (def 'test-eval-one nil)
-(eval \"(set 'test-eval-one \\\"ONE\\\")\")
+(eval \"(set! 'test-eval-one \\\"ONE\\\")\")
 (test::assert-equal \"ONE\" test-eval-one)
-(eval '(set 'test-eval-one \"TWO\"))
+(eval '(set! 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
             root,
@@ -1725,9 +1725,9 @@ Section: core
 
 Example:
 (def 'test-eval-one nil)
-(eval \"(set 'test-eval-one \\\"ONE\\\")\")
+(eval \"(set! 'test-eval-one \\\"ONE\\\")\")
 (test::assert-equal \"ONE\" test-eval-one)
-(eval '(set 'test-eval-one \"TWO\"))
+(eval '(set! 'test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
             root,
@@ -1745,7 +1745,7 @@ Section: core
 
 Example:
 (def 'test-apply-one nil)
-(apply set '(test-apply-one \"ONE\"))
+(apply set! '(test-apply-one \"ONE\"))
 (test::assert-equal \"ONE\" test-apply-one)
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
@@ -1765,7 +1765,7 @@ Section: core
 Example:
 (def 'test-unwind-one nil)
 (def 'test-unwind-err (get-error
-    (unwind-protect (err \"Some protected error\") (set 'test-unwind-one \"got it\"))))
+    (unwind-protect (err \"Some protected error\") (set! 'test-unwind-one \"got it\"))))
 (test::assert-equal :error (car test-unwind-err))
 (test::assert-equal \"Some protected error\" (cadr test-unwind-err))
 (test::assert-equal \"got it\" test-unwind-one)
@@ -1776,8 +1776,8 @@ Example:
 (def 'test-unwind-four nil)
 (def 'test-unwind-err (get-error
     (unwind-protect
-        (do (set 'test-unwind-one \"set one\")(err \"Some protected error two\")(set 'test-unwind-two \"set two\"))
-        (set 'test-unwind-three \"set three\")(set 'test-unwind-four \"set four\"))))
+        (do (set! 'test-unwind-one \"set one\")(err \"Some protected error two\")(set! 'test-unwind-two \"set two\"))
+        (set! 'test-unwind-three \"set three\")(set! 'test-unwind-four \"set four\"))))
 (test::assert-equal :error (car test-unwind-err))
 (test::assert-equal \"Some protected error two\" (cadr test-unwind-err))
 (test::assert-equal \"set one\" test-unwind-one)
@@ -1819,9 +1819,9 @@ Example:
 (def 'test-load-one nil)
 (def 'test-load-two nil)
 (def 'test-load-fn (open \"/tmp/slsh-test-load.testing\" :create :truncate))
-(write-line test-load-fn \"(set 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
+(write-line test-load-fn \"(set! 'test-load-one \\\"LOAD TEST\\\") '(1 2 3)\")
 (close test-load-fn)
-(set 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
+(set! 'test-load-two (load \"/tmp/slsh-test-load.testing\"))
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
 ",
@@ -2004,7 +2004,7 @@ Section: core
 Example:
 (def 'test-do-one nil)
 (def 'test-do-two nil)
-(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(def 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -2028,20 +2028,20 @@ Example:
 (def 'test-fn3 nil)
 (def 'test-fn-empty ((fn ())))
 (test::assert-false test-fn-empty)
-((fn () (set 'test-fn1 1)))
+((fn () (set! 'test-fn1 1)))
 (test::assert-equal 1 test-fn1)
-((fn () (set 'test-fn1 10)(set 'test-fn2 2)))
+((fn () (set! 'test-fn1 10)(set! 'test-fn2 2)))
 (test::assert-equal 10 test-fn1)
 (test::assert-equal 2 test-fn2)
-((fn () (set 'test-fn1 11)(set 'test-fn2 20)(set 'test-fn3 3)))
+((fn () (set! 'test-fn1 11)(set! 'test-fn2 20)(set! 'test-fn3 3)))
 (test::assert-equal 11 test-fn1)
 (test::assert-equal 20 test-fn2)
 (test::assert-equal 3 test-fn3)
-((fn (x y z) (set 'test-fn1 x)(set 'test-fn2 y)(set 'test-fn3 z)) 12 21 30)
+((fn (x y z) (set! 'test-fn1 x)(set! 'test-fn2 y)(set! 'test-fn3 z)) 12 21 30)
 (test::assert-equal 12 test-fn1)
 (test::assert-equal 21 test-fn2)
 (test::assert-equal 30 test-fn3)
-(test::assert-equal 63 ((fn (x y z) (set 'test-fn1 x)(set 'test-fn2 y)(set 'test-fn3 z)(+ x y z)) 12 21 30))
+(test::assert-equal 63 ((fn (x y z) (set! 'test-fn1 x)(set! 'test-fn2 y)(set! 'test-fn3 z)(+ x y z)) 12 21 30))
 ",
             root,
         ),
@@ -2214,20 +2214,20 @@ Example:
 (def 'test-macro3 nil)
 (def 'test-macro-empty ((macro ())))
 (test::assert-false test-macro-empty)
-((macro () '(set 'test-macro1 1)))
+((macro () '(set! 'test-macro1 1)))
 (test::assert-equal 1 test-macro1)
-((macro () (set 'test-macro1 10)'(set 'test-macro2 2)))
+((macro () (set! 'test-macro1 10)'(set! 'test-macro2 2)))
 (test::assert-equal 10 test-macro1)
 (test::assert-equal 2 test-macro2)
-((macro () (set 'test-macro1 11)(set 'test-macro2 20)'(set 'test-macro3 3)))
+((macro () (set! 'test-macro1 11)(set! 'test-macro2 20)'(set! 'test-macro3 3)))
 (test::assert-equal 11 test-macro1)
 (test::assert-equal 20 test-macro2)
 (test::assert-equal 3 test-macro3)
-((macro (x y z) (set 'test-macro1 x)(set 'test-macro2 y)`(set 'test-macro3 ,z)) 12 21 30)
+((macro (x y z) (set! 'test-macro1 x)(set! 'test-macro2 y)`(set! 'test-macro3 ,z)) 12 21 30)
 (test::assert-equal 12 test-macro1)
 (test::assert-equal 21 test-macro2)
 (test::assert-equal 30 test-macro3)
-(test::assert-equal 63 ((macro (x y z) (set 'test-macro1 x)(set 'test-macro2 y)(set 'test-macro3 z)`(+ ,x ,y ,z)) 12 21 30))
+(test::assert-equal 63 ((macro (x y z) (set! 'test-macro1 x)(set! 'test-macro2 y)(set! 'test-macro3 z)`(+ ,x ,y ,z)) 12 21 30))
 ",
             root,
         ),
@@ -2253,7 +2253,7 @@ Example:
     `((fn (,bind)
         (if (> (length ,in_list) 0)
             (root::loop (plist) (,in_list) (do
-                (set ',bind (root::first plist))
+                (set! ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
 
@@ -2266,7 +2266,7 @@ Example:
                 (plist)
                 ('(1 2 3))
                 (do
-                    (set 'i (root::first plist)) nil
+                    (set! 'i (root::first plist)) nil
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist))))))) nil)
@@ -2298,7 +2298,7 @@ Example:
     `((fn (,bind)
         (if (> (length ,in_list) 0)
             (root::loop (plist) (,in_list) (do
-                (set ',bind (root::first plist))
+                (set! ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
 
@@ -2310,7 +2310,7 @@ Example:
             (plist)
             ('(1 2 3))
             (do
-                (set 'i (root::first plist)) nil
+                (set! 'i (root::first plist)) nil
                 (if
                     (> (length plist) 1)
                     (recur (root::rest plist)))))))nil)
@@ -2342,7 +2342,7 @@ Example:
     `((fn (,bind)
         (if (> (length ,in_list) 0)
             (root::loop (plist) (,in_list) (do
-                (set ',bind (root::first plist))
+                (set! ',bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
 
@@ -2355,7 +2355,7 @@ Example:
                 (fn
                     (plist)
                     (do
-                        (set 'i (root::first plist)) nil
+                        (set! 'i (root::first plist)) nil
                         (if
                             (> (length plist) 1)
                             (recur (root::rest plist)))))
@@ -2389,12 +2389,12 @@ Section: core
 Example:
 (def 'tot 0)
 (loop (idx) (3) (do
-    (set 'tot (+ tot 1))
+    (set! 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
-(set 'tot 0)
+(set! 'tot 0)
 ((fn (idx) (do
-    (set 'tot (+ tot 1))
+    (set! 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))5)
 (assert-equal 5 tot)
 ",

@@ -307,7 +307,7 @@ Section: core
 Example:
 (def 'test-do-one \"One1\")
 (def 'test-do-two \"Two1\")
-(def 'test-do-three (lex (var 'test-do-one \"One\")(set 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(def 'test-do-three (lex (var 'test-do-one \"One\")(set! 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
 (test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -316,10 +316,10 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("set"),
+        interner.intern("set!"),
         Expression::make_function(
             builtin_set,
-            "Usage: (set symbol expression) -> expression
+            "Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
 
@@ -331,13 +331,13 @@ Section: core
 Example:
 (def 'test-do-one nil)
 (def 'test-do-two nil)
-(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(def 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; set the currently scoped value.
-    (test::assert-equal \"1111\" (set 'test-do-one \"1111\"))
+    (test::assert-equal \"1111\" (set! 'test-do-one \"1111\"))
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
@@ -358,7 +358,7 @@ Section: core
 Example:
 (def 'test-do-one nil)
 (def 'test-do-two nil)
-(def 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(def 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -366,8 +366,8 @@ Example:
     ; Add this to tthe let's scope (shadow the outer test-do-two).
     (test::assert-equal \"Default\" (def 'ns::test-do-four \"Default\"))
     ; set the currently scoped value.
-    (set 'test-do-one \"1111\")
-    (set 'test-do-two \"2222\")
+    (set! 'test-do-one \"1111\")
+    (set! 'test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two)
     (test::assert-equal \"Default\" test-do-four))
@@ -394,7 +394,7 @@ Example:
 (lex
 (var 'test-do-one nil)
 (var 'test-do-two nil)
-(var 'test-do-three (do (set 'test-do-one \"One\")(set 'test-do-two \"Two\")\"Three\"))
+(var 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -402,8 +402,8 @@ Example:
     ; Add this to tthe let's scope (shadow the outer test-do-two).
     (test::assert-equal \"Default\" (var 'test-do-two \"Default\"))
     ; set the currently scoped value.
-    (set 'test-do-one \"1111\")
-    (set 'test-do-two \"2222\")
+    (set! 'test-do-one \"1111\")
+    (set! 'test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.

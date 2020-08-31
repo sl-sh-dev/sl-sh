@@ -106,8 +106,8 @@ Example:
         (list? obj) (do
             (var 'new-link (join nil nil))
             (if (null (cdr obj))
-                (setq new-link nil)
-                (setq new-link (join (car obj) (butlast (cdr obj)))))
+                (setq! new-link nil)
+                (setq! new-link (join (car obj) (butlast (cdr obj)))))
             new-link)
         (err "Not a vector or list")))
 
@@ -216,8 +216,8 @@ Example:
                 (var 'head nil)
                 (iterator::for el in seq (do
                     (if (null head)
-                        (do (set 'tseq (set 'head (join el nil))))
-                        (do (set 'tcell (join el nil)) (xdr! tseq tcell) (set 'tseq tcell)))))
+                        (do (set! 'tseq (set! 'head (join el nil))))
+                        (do (set! 'tcell (join el nil)) (xdr! tseq tcell) (set! 'tseq tcell)))))
                 head)
             (err "Not a list or vector."))))
 

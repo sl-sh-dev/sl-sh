@@ -115,7 +115,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")))
 	(var 'is-first #t)
 	(for doc-map in docstrings (do
 		(if is-first
-			(setq is-first nil)
+			(setq! is-first nil)
 			(write-string file ", "))
 		(var 'doc-form (do
 			(var 'form (hash-get doc-map :form))

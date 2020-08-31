@@ -116,7 +116,7 @@
 		(var 'prefixified-ast
 			(build-cmd (vec (hash-get prefix-props :prefix-symbol) (make-vec))
 			cmd-toks))
-		(setq prefixified-ast (apply-ast-order prefixified-ast (hash-get prefix-props :ast-order)))
+		(setq! prefixified-ast (apply-ast-order prefixified-ast (hash-get prefix-props :ast-order)))
 		prefixified-ast)
 
 ;; return true if cmd satisfies preconditions for prefixification
@@ -196,7 +196,7 @@
 			cmd-ast
 			(do
 				(var 'props (car contains-infix))
-				(set 'idx (cdr contains-infix))
+				(set! 'idx (cdr contains-infix))
 				(var 'infix (hash-get props :infix-symbol))
 				(var 'no-match-yet (not previous))
 				(var 'infix-changed (and (not no-match-yet) (not (= infix previous))))

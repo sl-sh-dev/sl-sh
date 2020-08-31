@@ -830,7 +830,7 @@ Example:
 (test::assert-true (symbol? (sym \"to-symbol-test-new-symbol\")))
 (test::assert-true (symbol? (sym (str \"to-symbol-test-new-symbol-buf\"))))
 (test::assert-true (symbol? (sym 'test-to-symbol-sym)))
-(set 'test-to-symbol-sym \"testing-sym\")
+(set! 'test-to-symbol-sym \"testing-sym\")
 (test::assert-equal \"testing-sym\" (sym->str (sym test-to-symbol-sym)))
 (test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
 ",

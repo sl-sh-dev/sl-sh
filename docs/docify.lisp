@@ -26,7 +26,7 @@
 
 (for arg in args (do
 	(if (or (= arg ":lang") (= arg ":user") (= arg ":single"))
-		(setq target-doc-form (to-symbol arg))
-		(setq index-file arg))))
+		(setq! target-doc-form (to-symbol arg))
+		(setq! index-file arg))))
 
 (if (mkdocs::make-md-file index-file target-doc-form) (exit 0) (exit 1))

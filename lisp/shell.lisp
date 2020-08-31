@@ -274,7 +274,7 @@ Section: shell
         "
         (max)
         (if (and (= (type max) "Int")(> max 1))
-          (setq dir_stack_max max)
+          (setq! dir_stack_max max)
           (err "Error, max must be a positive Int greater then one"))))
 
 
@@ -301,7 +301,7 @@ Example:
 				(if (= 2 (length el))
 					(do
 						(var 'binding (iterator::nth 1 el))
-						(if (or (list? binding)(vec? binding)) (set 'binding (eval binding)))
+						(if (or (list? binding)(vec? binding)) (set! 'binding (eval binding)))
 						(vec-insert-nth! idx (iterator::nth 0 el) params)
 						(vec-insert-nth! idx binding bindings)
 						(vec-insert-nth! idx (eval (sym "\$" (iterator::nth 0 el))) olds))
@@ -386,10 +386,10 @@ Section: shell
 	(var 'ret nil)
 	(var 'val (shell::find-symbol ,com))
 	(if (def? val)
-		(set 'val (eval val)))
+		(set! 'val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(var 'expansion (expand-macro (val)))
-		(set 'ret (sys-command? (sym->str (first expansion))))))
+		(set! 'ret (sys-command? (sym->str (first expansion))))))
 	ret))
 
 (defn sys-command?
@@ -405,14 +405,14 @@ Example:
 	(com)
 	(var 'ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
-		(if (fs-exists? com) (set 'ret t))
+		(if (fs-exists? com) (set! 'ret t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
-			(set 'ret t)
+			(set! 'ret t)
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
-				(set 'ret t)
+				(set! 'ret t)
 				(for p in (str-split ":" $PATH) (do
 					(var 'path (str p "/" com))
-					(if (and (fs-exists? path)(not ret)) (set 'ret t)))))))
+					(if (and (fs-exists? path)(not ret)) (set! 'ret t)))))))
 	ret)
 
 (let ((alias (make-hash)))
@@ -470,9 +470,9 @@ Example:
 
      (varfn func? (com)
             ; Want the actual thing pointed to by the symbol in com for the test.
-            (set 'com (shell::find-symbol com))
+            (set! 'com (shell::find-symbol com))
             (if (def? com)
-              (do (set 'com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
+              (do (set! 'com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
               nil))
 
      (varfn paren-color (level)
@@ -485,10 +485,10 @@ Example:
      (varfn my-sys-command? (command)
             (var 'ret nil)
             (if (hash-haskey sys-syms command)
-              (set 'ret t)
+              (set! 'ret t)
               (if (not (hash-haskey bad-syms command))
                 (do
-                  (set 'ret (shell::sys-command? command))
+                  (set! 'ret (shell::sys-command? command))
                   (if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
             ret)
 
@@ -505,66 +505,66 @@ Example:
               (if (func? command)
                 (if (or (shell::alias? command)(shell::sys-alias? command))
                   (do
-                    (set 'in-sys-command t)
+                    (set! 'in-sys-command t)
                     (str shell::tok-sys-alias-color command shell::*fg-default*))
                   (str shell::tok-slsh-fcn-color command shell::*fg-default*))
                 (if (my-sys-command? command)
                   (do
-                    (set 'in-sys-command t)
+                    (set! 'in-sys-command t)
                     (str shell::tok-sys-command-color command shell::*fg-default*))
                   (str shell::tok-invalid-color command shell::*fg-default*)))))
 
      (varfn prrawtoken ()
             (var 'ttok token)
-            (set 'token (str ""))
+            (set! 'token (str ""))
             ttok)
      (varfn prtoken ()
             (var 'ttok token)
-            (set 'token (str ""))
+            (set! 'token (str ""))
             (command-color ttok))
      (varfn paren-open ()
             (var 'ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
-            (set 'plev (+ plev 1))
-            (set 'tok-command t)
+            (set! 'plev (+ plev 1))
+            (set! 'tok-command t)
             ret)
      (varfn paren-close ()
-            (set 'in-sys-command nil)
+            (set! 'in-sys-command nil)
             (if (> plev 0)
               (do
-                (set 'plev (- plev 1))
+                (set! 'plev (- plev 1))
                 (str (prtoken) (paren-color plev) #\) shell::*fg-default*))
               (str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
 
      (varfn whitespace (ch)
             (var 'ret (str (prtoken) ch))
-            (set 'token (str ""))
-            (set 'tok-command nil)
+            (set! 'token (str ""))
+            (set! 'tok-command nil)
             ret)
 
      (varfn line-handler (line)
             (var 'in-quote nil)
             (var 'last-ch #\ )
-            (set 'plev 0)
-            (set 'ch nil)
-            (set 'token (str ""))
-            (set 'tok-command t)
-            (set 'in-sys-command nil)
+            (set! 'plev 0)
+            (set! 'ch nil)
+            (set! 'token (str ""))
+            (set! 'tok-command t)
+            (set! 'in-sys-command nil)
             (if (<= (length line) 1)
               (do
                 (hash-clear! bad-syms)
                 (hash-clear! sys-syms)))
-            (set 'out (str-map (fn (ch)
+            (set! 'out (str-map (fn (ch)
                                    (var 'ret (if in-quote
                                                (do
                                                  (str-push! token ch)
                                                  (if (and (not (= last-ch #\\))(= ch #\"))
 												   (do
-												     (set 'in-quote nil)
+												     (set! 'in-quote nil)
 												     (str-push! token shell::*fg-default*)
 												     (prrawtoken))
 												   ""))
                                                (if (and (not (= last-ch #\\))(= ch #\"))
-                                                 (do (str-push! token (str shell::tok-string-color ch))(set 'in-quote t) "")
+                                                 (do (str-push! token (str shell::tok-string-color ch))(set! 'in-quote t) "")
                                                  (if (= ch #\()
 												   (paren-open)
 												   (if (= ch #\))
@@ -572,7 +572,7 @@ Example:
 												     (if (char-whitespace? ch)
 												       (whitespace ch)
 												       (do (str-push! token ch) "")))))))
-                                   (do (set 'last-ch ch) ret)) line))
+                                   (do (set! 'last-ch ch) ret)) line))
             (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
             (str out))
 
@@ -656,17 +656,17 @@ Section: shell
     ; Save history
     (if (not (def? '*repl-std-only*)) (history-push :repl line))
     ;; Set global var *last-command*
-    (set '*last-command* line))
+    (set! '*last-command* line))
 
 (defn repl-line (line line-len)
       (do
         (export 'LAST_STATUS "0")
-        (set '*last-status* 0)
+        (set! '*last-status* 0)
         (var 'exec-hook (sym *active-ns* "::__exec_hook"))
         (var 'ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (read-all line)))
-        (set 'ast (if (string? ast) (read-all ast) ast))
+        (set! 'ast (if (string? ast) (read-all ast) ast))
         (var 'result (loose-symbols (get-error (eval ast))))
         (if (= :ok (car result))
           (do
@@ -679,7 +679,7 @@ Section: shell
                 (when (not (= "fc" (str-trim line)))
                   (handle-last-command line)))))
           (do
-            (set '*last-command* line)
+            (set! '*last-command* line)
             ; Save temp history
             (if (and (> line-len 0)(not (def? '*repl-std-only*))) (history-push-throwaway :repl line))
             (print-error result)))))
@@ -696,7 +696,7 @@ Section: shell
                            (do (print (get-prompt))(read-line *stdin*))
                            (prompt :repl (get-prompt) "~/.local/share/sl-sh/history")))
               (export 'LAST_STATUS save-last-status)
-              (set '*last-status* save-last-status)
+              (set! '*last-status* save-last-status)
               (var 'line-len (length (str-trim line)))
               (if (and (> line-len 0)(not (values? line))) (repl-line line line-len))
               (if (not (repl-eof line)) (recur))))

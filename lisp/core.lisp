@@ -31,14 +31,14 @@ Section: core
 "
     (macro (name &rest args) `(internal-macro def ,name ,@args)))
 
-(def 'setmacro
-"Usage: (setmacro name doc_string? argument_list body)
+(def 'setmacro!
+"Usage: (setmacro! name doc_string? argument_list body)
 
 Set a macro to an existing symbol.
 
 Section: core
 "
-    (macro (name &rest args) `(internal-macro set ,name ,@args)))
+    (macro (name &rest args) `(internal-macro set! ,name ,@args)))
 
 (defmacro ns-export
 "Export a symbol or list of symbols to be imported into other namespaces.
@@ -65,30 +65,30 @@ Section: namespace"
                          (vec-setnth! 2 (sym ,namespace "::" symbol) import)
                          (eval import))))))
 
-(defmacro setq
-"Usage: (setq symbol doc-string? expression) -> expression
+(defmacro setq!
+"Usage: (setq! symbol doc-string? expression) -> expression
 
-Set an expession to a quoted symbol (ie set 'symbol bind)
+Set an expession to a quoted symbol (ie set! 'symbol bind)
 
 Section: core
 
 Example:
 (def 'test-do-one nil)
 (def 'test-do-two nil)
-(def 'test-do-three (do (setq test-do-one \"One\")(setq test-do-two \"Two\")\"Three\"))
-(test::assert-error (setq xyryx-dont-exist \"something\"))
+(def 'test-do-three (do (setq! test-do-one \"One\")(setq! test-do-two \"Two\")\"Three\"))
+(test::assert-error (setq! xyryx-dont-exist \"something\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; set the currently scoped value.
-    (test::assert-equal \"1111\" (setq test-do-one \"1111\"))
+    (test::assert-equal \"1111\" (setq! test-do-one \"1111\"))
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 "
     (symbol &rest args)
-    `(set ',symbol ,@args))
+    `(set! ',symbol ,@args))
 
 (defmacro defq
 "Usage: (defq symbol doc-string? expression) -> expression
@@ -108,8 +108,8 @@ Example:
     ; Add this to the let's scope (shadow the outer test-do-two).
     (test::assert-equal \"Default\" (defq ns::test-do-two \"Default\"))
     ; set the currently scoped value.
-    (set 'test-do-one \"1111\")
-    (set 'test-do-two \"2222\")
+    (set! 'test-do-one \"1111\")
+    (set! 'test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
@@ -154,7 +154,7 @@ Section: core
 Example:
 (defn defn-test (x y) (+ x y))
 (test::assert-equal 5 (defn-test 2 3))
-(defn defn-test (x y) (set 'x (* x 2))(+ x y))
+(defn defn-test (x y) (set! 'x (* x 2))(+ x y))
 (test::assert-equal 7 (defn-test 2 3))
 (defn defn-test (x y))
 (test::assert-false (defn-test 2 3))
@@ -173,7 +173,7 @@ Example:
 (lex
   (varfn varfn-test (x y) (+ x y))
   (test::assert-equal 5 (varfn-test 2 3))
-  (varfn varfn-test2 (x y) (set 'x (* x 2))(+ x y))
+  (varfn varfn-test2 (x y) (set! 'x (* x 2))(+ x y))
   (test::assert-equal 7 (varfn-test2 2 3))
   (test::assert-true (def? 'varfn-test))
   (test::assert-true (def? 'varfn-test2)))
@@ -207,7 +207,7 @@ Section: core
 Example:
 (def 'tot 0)
 (loop (idx) (3) (do
-    (set 'tot (+ tot 1))
+    (set! 'tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
 "
@@ -222,7 +222,7 @@ Section: core
 
 Example:
 (def 'i 0)
-(dotimes 11 (set 'i (+ 1 i)))
+(dotimes 11 (set! 'i (+ 1 i)))
 (assert-equal 11 i)
 "
     (times body)
@@ -242,7 +242,7 @@ Section: core
 Example:
 (def 'i 0)
 (def 'i-tot 0)
-(dotimes-i idx 11 (do (set 'i-tot (+ idx i-tot))(set 'i (+ 1 i))))
+(dotimes-i idx 11 (do (set! 'i-tot (+ idx i-tot))(set! 'i (+ 1 i))))
 (assert-equal 11 i)
 (assert-equal 55 i-tot)
 "
@@ -266,7 +266,7 @@ Example:
 
 (defn select-option (a)
     (match a (1 \"opt-one\")
-             (2 (set 'b 5) \"opt-two\")
+             (2 (set! 'b 5) \"opt-two\")
              (3 (str \"opt\" \"-three\"))))
 (defn select-option-def (a)
     (match a (1 \"opt-one\")
@@ -312,7 +312,7 @@ Example:
 
 (defn select-option (a)
     (cond ((= a 1) \"opt-one\")
-          ((= a 2) (set 'b 5) \"opt-two\")
+          ((= a 2) (set! 'b 5) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))))
 (defn select-option-def (a)
     (cond ((= a 1) \"opt-one\")
@@ -355,7 +355,7 @@ Section: core
 Example:
 (def 'test-do-one \"One1\")
 (def 'test-do-two \"Two1\")
-(def 'test-do-three (let ((test-do-one \"One\")) (set 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(def 'test-do-three (let ((test-do-one \"One\")) (set! 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
 (test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -428,8 +428,8 @@ Example:
                     (defq sexp nil)
                     (defq fcn (first forms))
                     (if (seq? fcn)
-                        (setq sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
-                        (setq sexp (list fcn curr-form)))
+                        (setq! sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
+                        (setq! sexp (list fcn curr-form)))
                     (recur (eval sexp) (rest forms))))))))
 
 (defmacro ->>
@@ -457,8 +457,8 @@ Example:
                       (defq sexp nil)
                       (defq fcn (first forms))
                       (if (seq? fcn)
-                        (setq sexp (collect (iterator::append fcn curr-form)))
-                        (setq sexp (list fcn curr-form)))
+                        (setq! sexp (collect (iterator::append fcn curr-form)))
+                        (setq! sexp (list fcn curr-form)))
                       (recur (eval sexp) (rest forms))))))))
 
 ; Reader macro for #.

@@ -48,12 +48,12 @@
 
 (defn assert-includes (value seq)
       (var 'found nil)
-      (for v in seq (if (= v value) (set 'found t)))
+      (for v in seq (if (= v value) (set! 'found t)))
       (if (not found) (do (println (str value " not found in " seq))(exit 3))))
 
 (defn assert-not-includes (value seq)
       (var 'found nil)
-      (for v in seq (if (= v value) (set 'found t)))
+      (for v in seq (if (= v value) (set! 'found t)))
       (if found (do (println (str value " found in " seq))(exit 3))))
 
 (defmacro assert-error (form)

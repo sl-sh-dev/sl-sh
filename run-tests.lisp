@@ -102,7 +102,7 @@
 	(dyn 'exit (fn (x) (do
 				(when (not (= x "0"))
 					(do
-						(setq exit-status :failed)
+						(setq! exit-status :failed)
 						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))
 					x)) (do
 	(var 'fst (first tests))
@@ -111,13 +111,13 @@
 		(if (= :no-test (hash-get fst :load-fcn))
 			(do
 				(hash-set! test-report :no-test (+ 1 (hash-get test-report :no-test)))
-				(setq exit-status :no-test))
+				(setq! exit-status :no-test))
 			(do
 				(var 'test-result
 					(get-error
 						((hash-get fst :load-fcn))))
 				(when (= (car test-result) :error) (do
-					(setq exit-status (cdr test-result))
+					(setq! exit-status (cdr test-result))
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
 		(recur (rest tests) test-report)))))))
@@ -140,14 +140,14 @@
 (for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (do
 	(printer (str "Tests from " a-ns))
 	(var 'sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
-	(set 'sym-list (make-test-list-from-symbols sym-list a-ns))
+	(set! 'sym-list (make-test-list-from-symbols sym-list a-ns))
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
 (lex
 (printer (str "Tests from root"))
 (var 'sym-list (qsort (ns-symbols 'root)))
-(set 'sym-list (make-test-list-from-symbols sym-list "root"))
+(set! 'sym-list (make-test-list-from-symbols sym-list "root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 
 ;; run tests for root namespace special namespace tests (ns cmd can not be run
@@ -250,10 +250,10 @@
 		(var 'notest (hash-get test :no-test))
 		(var 'passed (- total failed notest))
 
-		(setq global-notest (+ notest global-notest))
-		(setq *global-failed* (+ failed *global-failed*))
-		(setq global-total (+ total global-total))
-		(setq global-passed (+ passed global-passed))
+		(setq! global-notest (+ notest global-notest))
+		(setq! *global-failed* (+ failed *global-failed*))
+		(setq! global-total (+ total global-total))
+		(setq! global-passed (+ passed global-passed))
 
 		(println "-----------------------------")
 		(println (hash-get test :name))

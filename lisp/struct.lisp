@@ -63,9 +63,9 @@ Example:
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
             (do
               (var 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
-              (set 'doc (vec-nth 0 doc-split))
-              (set 'idx-start 1)
-              (if (= 2 (length doc-split)) (set 'doc-exp (vec-nth 1 doc-split)))))
+              (set! 'doc (vec-nth 0 doc-split))
+              (set! 'idx-start 1)
+              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth 1 doc-split)))))
         (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         ((fn (idx)
@@ -137,9 +137,9 @@ Example:
         (if (and (> fields-len 1)(string? (vec-nth 0 fields)))
             (do
               (var 'doc-split (str-splitn 2 "Section:" (vec-nth 0 fields)))
-              (set 'doc (vec-nth 0 doc-split))
-              (set 'idx-start 1)
-              (if (= 2 (length doc-split)) (set 'doc-exp (vec-nth 1 doc-split))(set 'doc-exp ""))))
+              (set! 'doc (vec-nth 0 doc-split))
+              (set! 'idx-start 1)
+              (if (= 2 (length doc-split)) (set! 'doc-exp (vec-nth 1 doc-split))(set! 'doc-exp ""))))
         (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
         (defn attrib (field doc doc-exp)
@@ -148,7 +148,7 @@ Example:
             (if (string? second)
                 (do
                   (var 'doc-split (str-splitn 2 "Example:" second))
-                  (set 'fdoc (str "\n\t" (vec-nth 0 doc-split)))
+                  (set! 'fdoc (str "\n\t" (vec-nth 0 doc-split)))
                   (if (= 2 (length doc-split)) (str-push! doc-exp (vec-nth 1 doc-split)))
                   (xdr! field (cddr field))))
             (if (= 1 (length field))
@@ -173,8 +173,8 @@ Example:
                               (var 'tsym (sym ":" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
                               (vec-push! tags (sym ":accessor:" param))
-                              (set 'tsym (sym ":set-" param))
-                              (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
+                              (set! 'tsym (sym ":set-" param))
+                              (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set! ',param args)))
                               (vec-push! tags (sym ":setter:" param)))
                           (= perm :ro) (do
                               (str-push! doc "attribute: " (car field) " read" fdoc "\n")
@@ -184,7 +184,7 @@ Example:
                           (= perm :wo) (do
                               (str-push! doc "attribute: " (car field) " write" fdoc "\n")
                               (var 'tsym (sym ":set-" param))
-                              (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set ',param args)))
+                              (hash-set! dispatch-map tsym `(fn (_ &rest args) (apply set! ',param args)))
                               (vec-push! tags (sym ":setter:" param)))
                           (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
                 (err "ERROR: invalid attribute bindings on defstruct")))
