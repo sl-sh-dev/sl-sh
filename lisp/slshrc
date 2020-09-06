@@ -19,8 +19,8 @@
 (syntax-on)
 
 (defn parse_git_branch () 
-    (var 'branch "")
-    (if (sys-command? "git") (err>null (setq! branch (str (git rev-parse --abbrev-ref HEAD)))))
+    (var branch "")
+    (if (sys-command? "git") (err>null (set! branch (str (git rev-parse --abbrev-ref HEAD)))))
     (if (= branch "")
         (format "")
         (format "(" (str-trim branch) ")")))
@@ -36,14 +36,14 @@
     (str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
 
 (defn set_prompt_tail (last-status)
-    (var 'debug (if (str-contains "debug" (version)) "[DEBUG]" ""))
-    (var 'status (if (= last-status 0) "" (str "\x1b[31m(" last-status ")\x1b[39m")))
+    (var debug (if (str-contains "debug" (version)) "[DEBUG]" ""))
+    (var status (if (= last-status 0) "" (str "\x1b[31m(" last-status ")\x1b[39m")))
     (if (= *euid* 0)
         (str "\x1b[31m" status "\n\x1b[31m" debug "λ #\x1b[39m ")
         (str "\x1b[32m" status "\n\x1b[32m" debug "λ >\x1b[39m ")))
 
 (defn __prompt ()
-    (var 'last-status *last-status*)  ; Save this so it is not overwritten by commands run as part of prompt.
+    (var last-status *last-status*)  ; Save this so it is not overwritten by commands run as part of prompt.
     (str "\x1b[32m" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail last-status)))
 
 ; How to set aliases.

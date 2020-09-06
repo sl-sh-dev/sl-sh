@@ -36,11 +36,11 @@ fn proc_set_vars<'a>(
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
-            let key = match eval(environment, key)?.get().data {
+            let key = match key.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(LispError::new(
-                        "first form (binding key) must evaluate to a symbol",
+                        "first form (binding key) must be a symbol",
                     ));
                 }
             };
@@ -60,7 +60,7 @@ fn proc_set_vars<'a>(
         }
     }
     Err(LispError::new(
-        "def/set requires a key, optional docstring and value",
+        "bindings requires a key, optional docstring and value",
     ))
 }
 
@@ -216,7 +216,6 @@ fn builtin_undef(
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = eval(environment, key)?;
             let key_d = &key.get().data;
             if let ExpEnum::Atom(Atom::Symbol(k)) = key_d {
                 return if let Some(rexp) = remove_expression_current(environment, &k) {
@@ -287,6 +286,32 @@ fn builtin_dyn(
     ))
 }
 
+fn builtin_is_def(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    fn get_ret(environment: &mut Environment, name: &str) -> Result<Expression, LispError> {
+        if is_expression(environment, name) {
+            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+        } else {
+            Ok(Expression::alloc_data(ExpEnum::Nil))
+        }
+    }
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match &arg0.get().data {
+                ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
+                ExpEnum::Atom(Atom::String(s, _)) => get_ret(environment, &s),
+                _ => Err(LispError::new(
+                    "def? takes a symbol or string (will be treated as a symbol) to lookup",
+                )),
+            };
+        }
+    }
+    Err(LispError::new("def? takes one form (symbol or string)"))
+}
+
 pub fn add_bind_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, Reference, S>,
@@ -305,9 +330,9 @@ without the initial bindings (you can use var to bind symbols in the new scope i
 Section: core
 
 Example:
-(def 'test-do-one \"One1\")
-(def 'test-do-two \"Two1\")
-(def 'test-do-three (lex (var 'test-do-one \"One\")(set! 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(def test-do-one \"One1\")
+(def test-do-two \"Two1\")
+(def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
 (test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
@@ -317,11 +342,12 @@ Example:
     );
     data.insert(
         interner.intern("set!"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_set,
             "Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
+Symbol is not evaluted.
 
 Set will set the first binding it finds starting in the current scope and then
 trying enclosing scopes until exhausted.
@@ -329,15 +355,15 @@ trying enclosing scopes until exhausted.
 Section: core
 
 Example:
-(def 'test-do-one nil)
-(def 'test-do-two nil)
-(def 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
+(def test-do-one nil)
+(def test-do-two nil)
+(def test-do-three (do (set! test-do-one \"One\")(set! test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; set the currently scoped value.
-    (test::assert-equal \"1111\" (set! 'test-do-one \"1111\"))
+    (test::assert-equal \"1111\" (set! test-do-one \"1111\"))
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
@@ -347,27 +373,28 @@ Example:
     );
     data.insert(
         interner.intern("def"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_def,
             "Usage: (def symbol expression) -> expression
 
 Adds an expression to the current namespace.  Return the expression that was defined.
+Symbol is not evaluted.
 
 Section: core
 
 Example:
-(def 'test-do-one nil)
-(def 'test-do-two nil)
-(def 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
+(def test-do-one nil)
+(def test-do-two nil)
+(def test-do-three (do (set! test-do-one \"One\")(set! test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; Add this to tthe let's scope (shadow the outer test-do-two).
-    (test::assert-equal \"Default\" (def 'ns::test-do-four \"Default\"))
+    (test::assert-equal \"Default\" (def ns::test-do-four \"Default\"))
     ; set the currently scoped value.
-    (set! 'test-do-one \"1111\")
-    (set! 'test-do-two \"2222\")
+    (set! test-do-one \"1111\")
+    (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two)
     (test::assert-equal \"Default\" test-do-four))
@@ -380,30 +407,31 @@ Example:
     );
     data.insert(
         interner.intern("var"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_var,
             "Usage: (var symbol expression) -> expression
 
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
 lex forms to create local bindings.
+Symbol is not evaluted.
 
 Section: core
 
 Example:
 (lex
-(var 'test-do-one nil)
-(var 'test-do-two nil)
-(var 'test-do-three (do (set! 'test-do-one \"One\")(set! 'test-do-two \"Two\")\"Three\"))
+(var test-do-one nil)
+(var test-do-two nil)
+(var test-do-three (do (set! test-do-one \"One\")(set! test-do-two \"Two\")\"Three\"))
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
     ; Add this to tthe let's scope (shadow the outer test-do-two).
-    (test::assert-equal \"Default\" (var 'test-do-two \"Default\"))
+    (test::assert-equal \"Default\" (var test-do-two \"Default\"))
     ; set the currently scoped value.
-    (set! 'test-do-one \"1111\")
-    (set! 'test-do-two \"2222\")
+    (set! test-do-one \"1111\")
+    (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
@@ -415,24 +443,25 @@ Example:
     );
     data.insert(
         interner.intern("undef"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_undef,
             "Usage: (undef symbol) -> expression
 
 Remove a symbol from the current scope (if it exists).  Returns the expression
 that was removed.  It is an error if symbol is not defined in the current scope.
+Symbol is not evaluted.
 
 Section: core
 
 Example:
-(def 'test-undef nil)
+(def test-undef nil)
 (test::assert-true (def? 'test-undef))
-(undef 'test-undef)
+(undef test-undef)
 (test::assert-false (def? 'test-undef))
-(def 'test-undef \"undef\")
-(test::assert-equal \"undef\" (undef 'test-undef))
+(def test-undef \"undef\")
+(test::assert-equal \"undef\" (undef test-undef))
 (test::assert-false (def? 'test-undef))
-(test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef 'test-undef))))
+(test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef test-undef))))
 ",
             root,
         ),
@@ -458,6 +487,30 @@ Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
 (dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (do (test-dyn-fn)))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("def?"),
+        Expression::make_function(
+            builtin_is_def,
+            "Usage: (def? expression) -> t|nil
+
+Return true if symbol is defined.
+
+Expression will be evaluated and if a symbol or string it will look up that
+name in the symbol table and return true if it exists.
+
+Section: core
+
+Example:
+(def test-is-def t)
+(test::assert-true (def? 'test-is-def))
+(test::assert-true (def? \"test-is-def\"))
+(test::assert-true (def? (sym->str 'test-is-def)))
+(test::assert-false (def? 'test-is-def-not-defined))
+(test::assert-false (def? \"test-is-def-not-defined\"))
 ",
             root,
         ),

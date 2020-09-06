@@ -78,7 +78,7 @@ Example:
 "
     (obj)
 
-    (var 'last-list (fn (obj)
+    (var last-list (fn (obj)
         (if (null (cdr obj)) (car obj)
             (recur (cdr obj)))))
 
@@ -104,10 +104,10 @@ Example:
     (obj)
     (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
         (list? obj) (do
-            (var 'new-link (join nil nil))
+            (var new-link (join nil nil))
             (if (null (cdr obj))
-                (setq! new-link nil)
-                (setq! new-link (join (car obj) (butlast (cdr obj)))))
+                (set! new-link nil)
+                (set! new-link (join (car obj) (butlast (cdr obj)))))
             new-link)
         (err "Not a vector or list")))
 
@@ -120,8 +120,8 @@ on input of type vector).  Return the list or vector that was modified.
 
 Section: sequence
 Example:
-(defq vctr (vec 0 1 2 3))
-(defq vec-copy (collect-copy vctr))
+(def vctr (vec 0 1 2 3))
+(def vec-copy (collect-copy vctr))
 (setnth! 0 -5 vctr)
 (setnth! 1 -400000 vctr)
 (setnth! 2 -402202 vctr)
@@ -136,8 +136,8 @@ Example:
 (assert-error (setnth! 0 1 '#()))
 (assert-error (setnth! 0 1 (vec)))
 
-(defq lst (list 0 1 2 3))
-(defq list-copy (collect-copy lst))
+(def lst (list 0 1 2 3))
+(def list-copy (collect-copy lst))
 (setnth! 0 -4 lst)
 (setnth! 1 -3 lst)
 (setnth! 2 -2 lst)
@@ -154,7 +154,7 @@ Example:
 "
     (idx obj sequence)
 
-    (var 'setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))))
+    (var setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))))
 
     (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
     (if (vec? sequence) (vec-set! sequence idx obj)
@@ -177,8 +177,8 @@ Example:
 "
   (seq-to-search item-to-match)
     (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (do
-        (var 'seq-iter (iterator::iter seq-to-search))
-        (var 'inner-in (fn (seq-iter item-to-match)
+        (var seq-iter (iterator::iter seq-to-search))
+        (var inner-in (fn (seq-iter item-to-match)
             (if (iterator::empty? seq-iter) nil
                 (if (= item-to-match (iterator::next! seq-iter)) t
                     (recur seq-iter item-to-match)))))
@@ -191,33 +191,33 @@ Produces a copy of the provided list (copy has same type as the parameter).
 Section: sequence
 
 Example:
-(def 'test-colcl '(1 2 3))
+(def test-colcl '(1 2 3))
 (assert-true (list? test-colcl))
-(def 'test-colcl2 (collect-copy test-colcl))
+(def test-colcl2 (collect-copy test-colcl))
 (assert-true (list? test-colcl2))
 (assert-equal test-colcl test-colcl2)
 
-(def 'test-colcv '#(1 2 3))
+(def test-colcv '#(1 2 3))
 (assert-true (vec? test-colcv))
-(def 'test-colcv2 (collect-copy test-colcv))
+(def test-colcv2 (collect-copy test-colcv))
 (assert-true (vec? test-colcv2))
 (assert-equal test-colcv test-colcv2)
 "
 (seq)
     (if (vec? seq)
         (do
-            (var 'tseq (make-vec (length seq)))
+            (var tseq (make-vec (length seq)))
             (iterator::for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
             (do
-                (var 'tseq nil)
-                (var 'tcell nil)
-                (var 'head nil)
+                (var tseq nil)
+                (var tcell nil)
+                (var head nil)
                 (iterator::for el in seq (do
                     (if (null head)
-                        (do (set! 'tseq (set! 'head (join el nil))))
-                        (do (set! 'tcell (join el nil)) (xdr! tseq tcell) (set! 'tseq tcell)))))
+                        (do (set! tseq (set! head (join el nil))))
+                        (do (set! tcell (join el nil)) (xdr! tseq tcell) (set! tseq tcell)))))
                 head)
             (err "Not a list or vector."))))
 
@@ -296,9 +296,9 @@ Example:
 (test::assert-equal '#() (qsort '#()))
 "
     (lst &rest comp)
-    (var 'quick-inner (fn (comp-fn sorted to-sort)
+    (var quick-inner (fn (comp-fn sorted to-sort)
         (if (> (length to-sort) 0) (do
-            (var 'lst (vec-pop! to-sort))
+            (var lst (vec-pop! to-sort))
             (if (not (seq? lst))
                 (do
                     (vec-push! sorted lst)
@@ -309,9 +309,9 @@ Example:
                             (vec-push! sorted (vec-pop! lst)))
                         (recur comp-fn sorted to-sort))
                     (do
-                        (var 'pivot (first lst))
-                        (var 'less (vec))
-                        (var 'greater (vec))
+                        (var pivot (first lst))
+                        (var less (vec))
+                        (var greater (vec))
                         (iterator::for i in (rest lst)
                             (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
                         (vec-push! to-sort greater)
@@ -321,10 +321,10 @@ Example:
             sorted)))
 
     (if (> (length comp) 1) (err "qsort takes one option compare lambda"))
-    (var 'comp-fn (if (= (length comp) 1) (first comp) <))
+    (var comp-fn (if (= (length comp) 1) (first comp) <))
     (if (not (or (lambda? comp-fn)(builtin? comp-fn))) (err "compare must be a callable"))
-    (var 'sorted (vec))
-    (var 'to-sort (vec))
+    (var sorted (vec))
+    (var to-sort (vec))
     (vec-push! to-sort lst)
     (quick-inner comp-fn sorted to-sort)
     sorted)

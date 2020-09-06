@@ -206,7 +206,7 @@ Section: namespace
 
 Example:
 (ns-create 'ns-create-test-namespace)
-(def 'test-symbol \"testing\")
+(def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
 (test::assert-false (def? 'test-symbol))
@@ -226,7 +226,7 @@ Section: namespace
 
 Example:
 (ns-create 'ns-enter-test-namespace)
-(def 'test-symbol \"testing\")
+(def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
 (test::assert-false (def? 'test-symbol))

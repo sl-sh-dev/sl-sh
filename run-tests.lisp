@@ -6,40 +6,40 @@
 
 ;;TODO sstanfield replace get-error with prog-error
 (defmacro prog-error (&rest args) `(do
-	(var 'ret (get-error ,@args))
+	(var ret (get-error ,@args))
 	(if (and (vec? ret) (= :error (first ret)))
 		(do
-			(var 'err-map (make-hash))
+			(var err-map (make-hash))
 			(hash-set! err-map :error (first (rest ret))))
 		ret)))
 
 ;;TODO gpwclark remove this error stack on call when "(error-stack-on)" becomes an environment variable
 (error-stack-on)
 
-(defq tests-dir "tests")
+(def tests-dir "tests")
 
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
 
 (defn exec-str (docstring) (do
-	(var 'test (vec-nth (str-split "Example:" docstring) 1))
+	(var test (vec-nth (str-split "Example:" docstring) 1))
 	(fn () (eval (str "(do " test ")")))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
 
 (defn make-test-list-from-symbols (symbols-list a-ns) (do
-	(var 'test-list (list))
+	(var test-list (list))
 	(for symbol in symbols-list (do
-	(var 'fully-qualified-symbol (sym a-ns "::" symbol))
+	(var fully-qualified-symbol (sym a-ns "::" symbol))
 	(when (and
 			(func? (eval fully-qualified-symbol))
 			(not (or
 				(str-starts-with "ns-" (str symbol))
 				(= "*ns*" (str symbol))))) (do
-		(var 'test-set-item (make-hash))
+		(var test-set-item (make-hash))
 		(hash-set! test-set-item :name (str symbol))
-		(var 'docstring (doc fully-qualified-symbol))
+		(var docstring (doc fully-qualified-symbol))
 		(if (has-example docstring)
 			(do
 				(hash-set! test-set-item :load-fcn (exec-str docstring))
@@ -49,12 +49,12 @@
 				(append-to! test-list test-set-item)))))))
 	test-list))
 
-(defq file-test-list
+(def file-test-list
 	(reduce
 		(fn (lst filename) (append-to! lst (do
-			(var 'name (str tests-dir "/" filename))
-			(var 'load-fcn (fn () (load name)))
-			(var 'test-set-item (make-hash))
+			(var name (str tests-dir "/" filename))
+			(var load-fcn (fn () (load name)))
+			(var test-set-item (make-hash))
 			(hash-set! test-set-item :name name)
 			(hash-set! test-set-item :load-fcn load-fcn)
 			test-set-item)))
@@ -98,34 +98,34 @@
 		(nil (err (str "Invalid test result status for test name " test-name "\n Error: " result)))))
 
 (defn report-test-results (tests test-report) (do
-	(var 'exit-status :passed)
+	(var exit-status :passed)
 	(dyn 'exit (fn (x) (do
 				(when (not (= x "0"))
 					(do
-						(setq! exit-status :failed)
+						(set! exit-status :failed)
 						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))
 					x)) (do
-	(var 'fst (first tests))
+	(var fst (first tests))
 	(when fst (do
 		(hash-set! test-report :total (+ 1 (hash-get test-report :total)))
 		(if (= :no-test (hash-get fst :load-fcn))
 			(do
 				(hash-set! test-report :no-test (+ 1 (hash-get test-report :no-test)))
-				(setq! exit-status :no-test))
+				(set! exit-status :no-test))
 			(do
-				(var 'test-result
+				(var test-result
 					(get-error
 						((hash-get fst :load-fcn))))
 				(when (= (car test-result) :error) (do
-					(setq! exit-status (cdr test-result))
+					(set! exit-status (cdr test-result))
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
 		(recur (rest tests) test-report)))))))
 
-(defq final-test-report '())
+(def final-test-report '())
 
 (defn run-tests-for (test-name test-list test-report) (do
-    (var 'test-data (make-hash))
+    (var test-data (make-hash))
     (hash-set! test-data :name test-name)
     (hash-set! test-data :total 0)
     (hash-set! test-data :failed 0)
@@ -139,21 +139,21 @@
 ;; run tests for non-root namespaces
 (for a-ns in (filter (fn (x) (and (not (= x "root")) (not (= x "test")) (not (= x "user")))) (ns-list)) (do
 	(printer (str "Tests from " a-ns))
-	(var 'sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
-	(set! 'sym-list (make-test-list-from-symbols sym-list a-ns))
+	(var sym-list (qsort (eval (sym a-ns "::*ns-exports*"))))
+	(set! sym-list (make-test-list-from-symbols sym-list a-ns))
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
 (lex
 (printer (str "Tests from root"))
-(var 'sym-list (qsort (ns-symbols 'root)))
-(set! 'sym-list (make-test-list-from-symbols sym-list "root"))
+(var sym-list (qsort (ns-symbols 'root)))
+(set! sym-list (make-test-list-from-symbols sym-list "root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 
 ;; run tests for root namespace special namespace tests (ns cmd can not be run
 ;; inside a fcn
 
-(defq ns-test-set-item (make-hash))
+(def ns-test-set-item (make-hash))
 (hash-set! ns-test-set-item :name "namespace unit tests")
 (hash-set! ns-test-set-item :total 0)
 (hash-set! ns-test-set-item :failed 0)
@@ -237,23 +237,23 @@
 (println)
 
 
-(defq *global-failed* 0)
+(def *global-failed* 0)
 (defn pprint-final-test-report (report-list) (do
 	(println (str shell::*fg-black* shell::*bg-white*))
-	(var 'global-total 0)
-	(var 'global-notest 0)
-	(var 'global-passed 0)
+	(var global-total 0)
+	(var global-notest 0)
+	(var global-passed 0)
 	(for test in report-list (do
-		(var 'total (hash-get test :total))
+		(var total (hash-get test :total))
 
-		(var 'failed (hash-get test :failed))
-		(var 'notest (hash-get test :no-test))
-		(var 'passed (- total failed notest))
+		(var failed (hash-get test :failed))
+		(var notest (hash-get test :no-test))
+		(var passed (- total failed notest))
 
-		(setq! global-notest (+ notest global-notest))
-		(setq! *global-failed* (+ failed *global-failed*))
-		(setq! global-total (+ total global-total))
-		(setq! global-passed (+ passed global-passed))
+		(set! global-notest (+ notest global-notest))
+		(set! *global-failed* (+ failed *global-failed*))
+		(set! global-total (+ total global-total))
+		(set! global-passed (+ passed global-passed))
 
 		(println "-----------------------------")
 		(println (hash-get test :name))

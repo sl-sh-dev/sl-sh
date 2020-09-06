@@ -366,7 +366,7 @@ Execute the provided system command with the supplied arguments.
 Section: core
 
 Example:
-(def 'test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
+(def test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
 (test::assert-equal \"syscall-test\" test-syscall-one)
 ",
             root,
@@ -509,7 +509,7 @@ Sleep for the provided milliseconds (must be a positive integer).
 Section: shell
 
 Example:
-(def 'test-sleep-var (time (sleep 1000)))
+(def test-sleep-var (time (sleep 1000)))
 (assert-true (> test-sleep-var 1.0))
 ",
             root,
@@ -526,7 +526,7 @@ Evalutes the provided form and returns the seconds it ran for (as float with fra
 Section: shell
 
 Example:
-(def 'test-sleep-var (time (sleep 1100)))
+(def test-sleep-var (time (sleep 1100)))
 (assert-true (> test-sleep-var 1.1))
 ",
             root,

@@ -1,8 +1,8 @@
 (if (ns-exists? 'iterator) (ns-enter 'iterator) (ns-create 'iterator))
 
 ; Due to bootstrapping order can not use ns-import yet (needs iterators...).
-(def 'defstruct struct::defstruct)
-(def 'deftrait struct::deftrait)
+(def defstruct struct::defstruct)
+(def deftrait struct::deftrait)
 
 (deftrait iterator
 "Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator))
@@ -19,10 +19,10 @@ Example:
   ; fields
   (current 0)
   ; methods
-  (:fn next! (self) (do (def 'val current)(set! 'current (+ 1 current)) val))
+  (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
   (:impl iterator))
-(def 'tmap (test-iter))
+(def tmap (test-iter))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
 (assert-equal 1 (tmap :next!))
@@ -36,18 +36,18 @@ Example:
 produce a new list.
 
 Example:
-(def 'collect-test ((iter '#(1 2 3)) :collect))
+(def collect-test ((iter '#(1 2 3)) :collect))
 (assert-true (list? collect-test))
 (assert-equal '(1 2 3) collect-test)
 "
     (self) (do
-    (var 'tseq nil)
-    (var 'tcell nil)
-    (var 'head nil)
+    (var tseq nil)
+    (var tcell nil)
+    (var head nil)
     (for v in self (do
         (if (null head)
-            (do (set! 'tseq (set! 'head (join v nil))))
-            (do (set! 'tcell (join v nil)) (xdr! tseq tcell) (set! 'tseq tcell)))))
+            (do (set! tseq (set! head (join v nil))))
+            (do (set! tcell (join v nil)) (xdr! tseq tcell) (set! tseq tcell)))))
     head))
 
   (:fn collect-vec
@@ -55,12 +55,12 @@ Example:
 produce a new list.
 
 Example:
-(def 'collect-vec-test ((iter '(1 2 3)) :collect-vec))
+(def collect-vec-test ((iter '(1 2 3)) :collect-vec))
 (assert-true (vec? collect-vec-test))
 (assert-equal '#(1 2 3) collect-vec-test)
 "
     (self) (do
-    (var 'tseq (vec))
+    (var tseq (vec))
     (for v in self (vec-push! tseq v))
     tseq))
 
@@ -69,12 +69,12 @@ Example:
 produce a new string.
 
 Example:
-(def 'collect-str-test (((iter \"λabc σ\") :map (fn (ch) (char-upper ch))) :collect-str))
+(def collect-str-test (((iter \"λabc σ\") :map (fn (ch) (char-upper ch))) :collect-str))
 (assert-true (string? collect-str-test))
 (assert-equal \"ΛABC Σ\" collect-str-test)
 "
     (self) (do
-    (var 'tseq "")
+    (var tseq "")
     (for v in self (str-push! tseq v))
     tseq))
 
@@ -82,7 +82,7 @@ Example:
 "Apply the provided function to each element of the iterator.  Map is lazy.
 
 Example:
-(def 'tmap ((test-iter) :map (fn (x) (+ 1 x))))
+(def tmap ((test-iter) :map (fn (x) (+ 1 x))))
 (assert-false (tmap :empty?))
 (assert-equal 1 (tmap :next!))
 (assert-equal 2 (tmap :next!))
@@ -95,7 +95,7 @@ Example:
 "Apply the provided predicate to the iterator producing only elements that are true.  Filter is lazy.
 
 Example:
-(def 'tmap ((test-iter) :filter (fn (x) (not (= x 1)))))
+(def tmap ((test-iter) :filter (fn (x) (not (= x 1)))))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
 (assert-equal 2 (tmap :next!))
@@ -113,19 +113,19 @@ Example:
 "Consume the iterator and return the number of items.
 
 Example:
-(def 'tmap (test-iter))
+(def tmap (test-iter))
 (assert-false (tmap :empty?))
 (assert-equal 3 (tmap :count))
 (assert-true (tmap :empty?))
 "
-       (self) (do (var 'count 0) (iterator::for _ in self (set! 'count (+ count 1))) count))
+       (self) (do (var count 0) (iterator::for _ in self (set! count (+ count 1))) count))
 
   (:fn nth!
 "Consume the iterator until the nth! element and return it (0 based).
 Note that repeated called to nth! will return new data since it consumes the iterator.
 
 Example:
-(def 'tmap ((list-iter) :init '(0 1 2 3 4)))
+(def tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :nth! 0))
 (assert-equal 1 (tmap :nth! 0))
@@ -133,12 +133,12 @@ Example:
 (assert-true (tmap :empty?))
 "
     (self idx) (do
-    (var 'ret nil)
-    (var 'i 0)
+    (var ret nil)
+    (var i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
-                                          (set! 'ret (plist :next!))
-                                          (do (set! 'i (+ i 1))(plist :next!)(recur plist)))))
+                                          (set! ret (plist :next!))
+                                          (do (set! i (+ i 1))(plist :next!)(recur plist)))))
       ret))
 
   (:fn double-ended?
@@ -152,8 +152,8 @@ Example:
   (current 0)
   (current-end 2)
   ; methods
-  (:fn next! (self) (do (def 'val current)(set! 'current (+ 1 current)) val))
-  (:fn next-back! (self) (do (def 'val current-end)(set! 'current-end (- current-end 1)) val))
+  (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
+  (:fn next-back! (self) (do (def val current-end)(set! current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
   (:impl iterator double-ended-iterator))
 (assert-false ((test-iter) :double-ended?))
@@ -178,23 +178,23 @@ Example:
   (current 0)
   (current-end 2)
   ; methods
-  (:fn next! (self) (do (def 'val current)(set! 'current (+ 1 current)) val))
-  (:fn next-back! (self) (do (def 'val current-end)(set! 'current-end (- current-end 1)) val))
+  (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
+  (:fn next-back! (self) (do (def val current-end)(set! current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
   (:impl iterator double-ended-iterator))
-(def 'tmap (test-double-iter))
+(def tmap (test-double-iter))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
 (assert-equal 1 (tmap :next!))
 (assert-equal 2 (tmap :next!))
 (assert-true (tmap :empty?))
-(def 'tmap (test-double-iter))
+(def tmap (test-double-iter))
 (assert-false (tmap :empty?))
 (assert-equal 2 (tmap :next-back!))
 (assert-equal 1 (tmap :next-back!))
 (assert-equal 0 (tmap :next-back!))
 (assert-true (tmap :empty?))
-(def 'tmap (test-double-iter))
+(def tmap (test-double-iter))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
 (assert-equal 2 (tmap :next-back!))
@@ -207,7 +207,7 @@ Example:
 Note that repeated called to nth-back! will return new data since it consumes the iterator.
 
 Example:
-(def 'tmap ((vec-iter) :init '#(0 1 2 3 4) 0))
+(def tmap ((vec-iter) :init '#(0 1 2 3 4) 0))
 (assert-false (tmap :empty?))
 (assert-equal 4 (tmap :nth-back! 0))
 (assert-equal 3 (tmap :nth-back! 0))
@@ -215,19 +215,19 @@ Example:
 (assert-true (tmap :empty?))
 "
     (self idx) (do
-    (var 'ret nil)
-    (var 'i 0)
+    (var ret nil)
+    (var i 0)
     (loop (plist) (self) (if (not (plist :empty?))
                                         (if (= i idx)
-                                          (set! 'ret (plist :next-back!))
-                                          (do (set! 'i (+ i 1))(plist :next-back!)(recur plist)))))
+                                          (set! ret (plist :next-back!))
+                                          (do (set! i (+ i 1))(plist :next-back!)(recur plist)))))
       ret))
 
   (:fn reverse
 "Produce an iterator that is the reverse of self.
 
 Example:
-(def 'tmap ((test-double-iter) :reverse))
+(def tmap ((test-double-iter) :reverse))
 (assert-false (tmap :empty?))
 (assert-equal 2 (tmap :next!))
 (assert-equal 1 (tmap :next!))
@@ -242,19 +242,19 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-list-iter ((list-iter) :init '(1 2 3)))
+(def test-list-iter ((list-iter) :init '(1 2 3)))
 (assert-false (test-list-iter :empty?))
 (assert-equal 1 (test-list-iter :next!))
 (assert-equal 2 (test-list-iter :next!))
 (assert-equal 3 (test-list-iter :next!))
 (assert-true (test-list-iter :empty?))
-(def 'test-list-iter ((list-iter) :init '(1 2 3)))
+(def test-list-iter ((list-iter) :init '(1 2 3)))
 (assert-false (test-list-iter :empty?))
 (assert-equal 1 (test-list-iter :next!))
 (assert-equal 3 (test-list-iter :next-back!))
 (assert-equal 2 (test-list-iter :next!))
 (assert-true (test-list-iter :empty?))
-(def 'test-list-iter ((list-iter) :init '(1 2 3)))
+(def test-list-iter ((list-iter) :init '(1 2 3)))
 (assert-false (test-list-iter :empty?))
 (assert-equal 3 (test-list-iter :next-back!))
 (assert-equal 2 (test-list-iter :next-back!))
@@ -267,21 +267,21 @@ Example:
   (elements nil)
   ; methods
   (:fn next! (self) (do
-    (var 'val (car data))
-    (set! 'data (cdr data))
-    (if elements (set! 'elements (- elements 1)))
+    (var val (car data))
+    (set! data (cdr data))
+    (if elements (set! elements (- elements 1)))
     val))
   (:fn next-back! (self) (do
-    (if (not rev-data) (do (set! 'elements (length data))(set! 'rev-data (self :make-rev))))
-    (var 'val (car rev-data))
-    (set! 'rev-data (cdr rev-data))
-    (if elements (set! 'elements (- elements 1)))
+    (if (not rev-data) (do (set! elements (length data))(set! rev-data (self :make-rev))))
+    (var val (car rev-data))
+    (set! rev-data (cdr rev-data))
+    (if elements (set! elements (- elements 1)))
     val))
   (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) t nil))
-  (:fn init (self l) (do (if (list? l) (set! 'data l) (err "list-iter requires a list")) self))
+  (:fn init (self l) (do (if (list? l) (set! data l) (err "list-iter requires a list")) self))
   (:fn make-rev (self) (do
-    (var 'node nil)
-    ((fn (data) (if data (do (set! 'node (join (car data) node)) (recur (cdr data)))))data)
+    (var node nil)
+    ((fn (data) (if data (do (set! node (join (car data) node)) (recur (cdr data)))))data)
     node))
   (:impl iterator double-ended-iterator))
 
@@ -291,13 +291,13 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-vec-iter ((vec-iter) :init '#(1 2 3) 0))
+(def test-vec-iter ((vec-iter) :init '#(1 2 3) 0))
 (assert-false (test-vec-iter :empty?))
 (assert-equal 1 (test-vec-iter :next!))
 (assert-equal 2 (test-vec-iter :next!))
 (assert-equal 3 (test-vec-iter :next!))
 (assert-true (test-vec-iter :empty?))
-(def 'test-vec-iter ((vec-iter) :init (vec) 0))
+(def test-vec-iter ((vec-iter) :init (vec) 0))
 (assert-true (test-vec-iter :empty?))
 "
   ; fields
@@ -305,13 +305,13 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (do (var 'val (vec-nth data start))(set! 'start (+ 1 start)) val))
-  (:fn next-back! (self) (do (var 'val (vec-nth data end))(set! 'end (- end 1)) val))
+  (:fn next! (self) (do (var val (vec-nth data start))(set! start (+ 1 start)) val))
+  (:fn next-back! (self) (do (var val (vec-nth data end))(set! end (- end 1)) val))
   (:fn empty? (self) (> start end))
-  (:fn nth! (self idx) (do (set! 'start (+ start idx))(self :next!)))
-  (:fn nth-back! (self idx) (do (set! 'end (- end idx))(self :next-back!)))
+  (:fn nth! (self idx) (do (set! start (+ start idx))(self :next!)))
+  (:fn nth-back! (self idx) (do (set! end (- end idx))(self :next-back!)))
   (:fn init (self v s) (do (if (vec? v)
-                                (do (set! 'data v) (set! 'start s) (set! 'end (- (length v) 1)))
+                                (do (set! data v) (set! start s) (set! end (- (length v) 1)))
                                 (err "seq-vec requires a vector")) self))
   (:impl iterator double-ended-iterator))
 
@@ -321,7 +321,7 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-string-iter ((string-iter) :init \"123\"))
+(def test-string-iter ((string-iter) :init \"123\"))
 (assert-false (test-string-iter :empty?))
 (assert-equal #\1 (test-string-iter :next!))
 (assert-equal #\2 (test-string-iter :next!))
@@ -334,7 +334,7 @@ Example:
   (:fn next! (self) (str-iter-next! data))
   (:fn empty? (self) (not (str-iter-peek data)))
   (:fn init (self l) (do (if (string? l)
-                       (set! 'data (if (str-iter-empty? l) (str-iter-start l) l))
+                       (set! data (if (str-iter-empty? l) (str-iter-start l) l))
                        (err "string-iter requires a string")) self))
   (:impl iterator))
 
@@ -345,13 +345,13 @@ trailing newline.
 Section: iterator
 
 Example:
-(def 'tst-file (open \"/tmp/file-iter-test.txt\" :create :truncate))
+(def tst-file (open \"/tmp/file-iter-test.txt\" :create :truncate))
 (write-line tst-file \"line 1\")
 (write-line tst-file \"line 2\")
 (write-line tst-file \"line 3\")
 (write-string tst-file \"line 4\")
 (close tst-file)
-(def 'test-iter ((iterator::file-iter) :init (open \"/tmp/file-iter-test.txt\")))
+(def test-iter ((iterator::file-iter) :init (open \"/tmp/file-iter-test.txt\")))
 (assert-false (test-iter :empty?))
 (assert-equal \"line 1\\n\" (test-iter :next!))
 (assert-equal \"line 2\\n\" (test-iter :next!))
@@ -363,10 +363,10 @@ Example:
   (file nil)
   (next-line nil)
   ; methods
-  (:fn next! (self) (do (var 'val next-line) (set! 'next-line (read-line file)) val))
+  (:fn next! (self) (do (var val next-line) (set! next-line (read-line file)) val))
   (:fn empty? (self) (not next-line))
   (:fn init (self f) (if (file? f)
-                       (do (set! 'file f) (set! 'next-line (read-line file))self)
+                       (do (set! file f) (set! next-line (read-line file))self)
                        (err "file-iter requires a file")))
   (:impl iterator))
 
@@ -376,7 +376,7 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-map-iter (((iterator::list-iter) :init '(1 2 3)) :map (fn (x) (* x 2))))
+(def test-map-iter (((iterator::list-iter) :init '(1 2 3)) :map (fn (x) (* x 2))))
 (assert-false (test-map-iter :empty?))
 (assert-equal 2 (test-map-iter :next!))
 (assert-equal 4 (test-map-iter :next!))
@@ -390,8 +390,8 @@ Example:
   (:fn next! (self) (map-fn (data :next!)))
   (:fn next-back! (self) (map-fn (data :next-back!)))
   (:fn empty? (self) (data :empty?))
-  (:fn init (self mfn d) (do (set! 'data (iter d))
-                                (set! 'map-fn mfn)
+  (:fn init (self mfn d) (do (set! data (iter d))
+                                (set! map-fn mfn)
                                 self))
   (:fn double-ended? (self) (data :double-ended?))
 
@@ -405,38 +405,38 @@ a singleton iterator (i.e. will work with loose object).
 Section: iterator
 
 Example:
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
-(def 'test-slice-iter (test-iter :slice 3 7))
+(def test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def test-slice-iter (test-iter :slice 3 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-equal 4 (test-slice-iter :next!))
 (assert-equal 5 (test-slice-iter :next!))
 (assert-equal 6 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) nil '#(3 4 5) nil '(6 7 8 9)))
-(def 'test-slice-iter (test-iter :slice 0 4))
+(def test-iter ((iterator::append-iter) :init '(0 1 2) nil '#(3 4 5) nil '(6 7 8 9)))
+(def test-slice-iter (test-iter :slice 0 4))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 0 (test-slice-iter :next!))
 (assert-equal 1 (test-slice-iter :next!))
 (assert-equal 2 (test-slice-iter :next!))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
-(def 'test-slice-iter (test-iter :slice 7))
+(def test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def test-slice-iter (test-iter :slice 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 7 (test-slice-iter :next!))
 (assert-equal 8 (test-slice-iter :next!))
 (assert-equal 9 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init '(0 1 2) '() '#(3 4 5) nil '(6 7 8 9)))
+(def test-iter ((iterator::append-iter) :init '(0 1 2) '() '#(3 4 5) nil '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((iterator::append-iter) :init nil '(0 1 2) (vec) '#(3 4 5) '(6 7 8 9) nil))
+(def test-iter ((iterator::append-iter) :init nil '(0 1 2) (vec) '#(3 4 5) '(6 7 8 9) nil))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
@@ -448,16 +448,16 @@ Example:
       (if (self :empty?) nil ((car iters) :next!)))
   (:fn empty? (self) (do
       (loop () ()
-          (if (and (not (null iters))((car iters) :empty?)) (do (set! 'iters (cdr iters))(recur))))
+          (if (and (not (null iters))((car iters) :empty?)) (do (set! iters (cdr iters))(recur))))
       (null iters)))
   (:fn init (self &rest rest-iters) (do
-    (var 'tcell nil)
-    (var 'tseq nil)
+    (var tcell nil)
+    (var tseq nil)
     (iterator::for v in rest-iters (do
         (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
-            (set! 'tcell (join (iterator::iter-or-single v) nil))
-            (if (null tseq) (set! 'iters tcell) (xdr! tseq tcell))
-            (set! 'tseq tcell)))))
+            (set! tcell (join (iterator::iter-or-single v) nil))
+            (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
+            (set! tseq tcell)))))
     self))
   (:impl iterator))
 
@@ -468,19 +468,19 @@ the iterator it is slicing.
 Section: iterator
 
 Example:
-(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 3 6))
+(def test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 3 6))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-equal 4 (test-slice-iter :next!))
 (assert-equal 5 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 0 3))
+(def test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 0 3))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 0 (test-slice-iter :next!))
 (assert-equal 1 (test-slice-iter :next!))
 (assert-equal 2 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 7))
+(def test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 7 (test-slice-iter :next!))
 (assert-equal 8 (test-slice-iter :next!))
@@ -493,13 +493,13 @@ Example:
   (total nil)
   (count 0)
   ; methods
-  (:fn next! (self) (do (set! 'count (+ count 1)) (if (or (null total)(<= count total)) (data :next!) nil)))
+  (:fn next! (self) (do (set! count (+ count 1)) (if (or (null total)(<= count total)) (data :next!) nil)))
   (:fn empty? (self) (or (data :empty?)(and (not (null total))(>= count total))))
   (:fn init (self d s &rest e) (do
-                                 (set! 'data (iter d))
+                                 (set! data (iter d))
                                  (for _ in (range s) (data :next!))
-                                 (set! 'start s)
-                                 (if (= (length e) 1) (set! 'total (- (vec-nth e 0) start))
+                                 (set! start s)
+                                 (if (= (length e) 1) (set! total (- (vec-nth e 0) start))
                                      (> (length e) 1) (err "slice-iter :init Wrong number of arge (iter start end?)"))
                                  self))
   (:impl iterator))
@@ -510,7 +510,7 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-iter (((iterator::list-iter) :init '(1 2 3)) :filter (fn (x) (not (= x 2)))))
+(def test-iter (((iterator::list-iter) :init '(1 2 3)) :filter (fn (x) (not (= x 2)))))
 (assert-false (test-iter :empty?))
 (assert-equal 1 (test-iter :next!))
 (assert-equal 3 (test-iter :next!))
@@ -522,19 +522,19 @@ Example:
   (next nil)
   (is-empty nil)
   ; methods
-  (:fn next! (self) (do (var 'val next)(self :advance-data!) val))
+  (:fn next! (self) (do (var val next)(self :advance-data!) val))
   (:fn empty? (self) is-empty)
   (:fn advance-data! (self) (do 
          (loop (plist) (data) (if (not (plist :empty?))
              (do
-               (set! 'next (plist :next!))
+               (set! next (plist :next!))
                (if (not (predicate next))
                  (recur plist)))
-             (set! 'is-empty t)))))
+             (set! is-empty t)))))
   (:fn init (self pred data-in) (do
-          (set! 'data (iter data-in))
-          (set! 'predicate pred)
-          (set! 'is-empty (data :empty?))
+          (set! data (iter data-in))
+          (set! predicate pred)
+          (set! is-empty (data :empty?))
           (self :advance-data!)
           self))
   (:impl iterator))
@@ -545,7 +545,7 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-iter (((vec-iter) :init '#(1 2 3) 0) :reverse))
+(def test-iter (((vec-iter) :init '#(1 2 3) 0) :reverse))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-equal 2 (test-iter :next!))
@@ -559,7 +559,7 @@ Example:
   (:fn next-back! (self) (wrapped :next!))
   (:fn empty? (self) (wrapped :empty?))
   (:fn init (self in-wrapped) (do
-                                    (set! 'wrapped in-wrapped)
+                                    (set! wrapped in-wrapped)
                                     self))
   (:impl iterator double-ended-iterator))
 
@@ -569,14 +569,14 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-iter ((range-iter) :init 3 6))
+(def test-iter ((range-iter) :init 3 6))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-equal 4 (test-iter :next!))
 (assert-equal 5 (test-iter :next!))
 (assert-equal 6 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((range-iter) :init 3 6))
+(def test-iter ((range-iter) :init 3 6))
 (assert-false (test-iter :empty?))
 (assert-equal 6 (test-iter :next-back!))
 (assert-equal 5 (test-iter :next-back!))
@@ -588,16 +588,16 @@ Example:
   (start 0)
   (end 0)
   ; methods
-  (:fn next! (self) (do (var 'val start)(set! 'start (+ start 1)) val))
-  (:fn next-back! (self) (do (var 'val end)(set! 'end (- end 1)) val))
+  (:fn next! (self) (do (var val start)(set! start (+ start 1)) val))
+  (:fn next-back! (self) (do (var val end)(set! end (- end 1)) val))
   (:fn empty? (self) (> start end))
   (:fn init (self in-start in-end) (do
-                                    (set! 'start in-start)
-                                    (set! 'end in-end)
+                                    (set! start in-start)
+                                    (set! end in-end)
                                     self))
   (:fn count (self total) (do
-                                    (set! 'start 0)
-                                    (set! 'end (- total 1))
+                                    (set! start 0)
+                                    (set! end (- total 1))
                                     self))
   (:impl iterator double-ended-iterator))
 
@@ -607,19 +607,19 @@ Example:
 Section: iterator
 
 Example:
-(def 'test-iter ((single-iter) :init 3))
+(def test-iter ((single-iter) :init 3))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((single-iter) :init \"iter\"))
+(def test-iter ((single-iter) :init \"iter\"))
 (assert-false (test-iter :empty?))
 (assert-equal \"iter\" (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((single-iter) :init 3))
+(def test-iter ((single-iter) :init 3))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next-back!))
 (assert-true (test-iter :empty?))
-(def 'test-iter ((single-iter) :init \"iter\"))
+(def test-iter ((single-iter) :init \"iter\"))
 (assert-false (test-iter :empty?))
 (assert-equal \"iter\" (test-iter :next-back!))
 (assert-true (test-iter :empty?))
@@ -628,10 +628,10 @@ Example:
   (value nil)
   (done nil)
   ; methods
-  (:fn next! (self) (do (var 'ret (if done nil value))(set! 'done t)ret))
-  (:fn next-back! (self) (do (var 'ret (if done nil value))(set! 'done t)ret))
+  (:fn next! (self) (do (var ret (if done nil value))(set! done t)ret))
+  (:fn next-back! (self) (do (var ret (if done nil value))(set! done t)ret))
   (:fn empty? (self) done)
-  (:fn init (self v) (do (set! 'value v)self))
+  (:fn init (self v) (do (set! value v)self))
   (:impl iterator double-ended-iterator))
 
 (defn iter?
@@ -656,7 +656,7 @@ Example:
   ; fields
   (current 0)
   ; methods
-  (:fn next! (self) (do (def 'val current)(set! 'current (+ 1 current)) val))
+  (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
   (:impl iterator))
 (assert-true (iterator::double-ended-iter? (iterator::iter '(1 2 3))))
@@ -725,7 +725,7 @@ Section: iterator
 Example:
 (assert-equal 1 (iterator::next! '(1 2 3)))
 (assert-equal 1 (iterator::next! '#(1 2 3)))
-(def 'next-test (iterator::iter '(4 5 6)))
+(def next-test (iterator::iter '(4 5 6)))
 (assert-equal 4 (iterator::next! next-test))
 (assert-equal 5 (iterator::next! next-test))
 (assert-equal 6 (iterator::next! next-test))
@@ -753,14 +753,14 @@ produce m..n.
 Section: iterator
 
 Example:
-(def 'test-iter (iterator::range 3 6))
+(def test-iter (iterator::range 3 6))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-equal 4 (test-iter :next!))
 (assert-equal 5 (test-iter :next!))
 (assert-equal 6 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter (iterator::range 3))
+(def test-iter (iterator::range 3))
 (assert-false (test-iter :empty?))
 (assert-equal 0 (test-iter :next!))
 (assert-equal 1 (test-iter :next!))
@@ -768,11 +768,11 @@ Example:
 (assert-true (test-iter :empty?))
 "
     (&rest i) (do
-    (var 'si (iter i))
+    (var si (iter i))
     (if (= (length i) 1)
           ((range-iter) :count (si :next!))
         (= (length i) 2)
-          (do (var 'first (si :next!)) ((range-iter) :init first (si :next!)))
+          (do (var first (si :next!)) ((range-iter) :init first (si :next!)))
         (err "range: requires one or two integers"))))
 
 (defn collect
@@ -782,7 +782,7 @@ produce a new list.  Will call iter on input to turn a collection into an iterat
 Section: iterator
 
 Example:
-(def 'collect-test (iterator::collect '#(1 2 3)))
+(def collect-test (iterator::collect '#(1 2 3)))
 (assert-true (list? collect-test))
 (assert-equal '(1 2 3) collect-test)
 "
@@ -796,7 +796,7 @@ produce a new vector.  Will call iter on input to turn a collection into an iter
 Section: iterator
 
 Example:
-(def 'collect-vec-test (iterator::collect-vec '(1 2 3)))
+(def collect-vec-test (iterator::collect-vec '(1 2 3)))
 (assert-true (vec? collect-vec-test))
 (assert-equal '#(1 2 3) collect-vec-test)
 "
@@ -810,7 +810,7 @@ produce a new string.  Will call iter on input to turn a collection into an iter
 Section: iterator
 
 Example:
-(def 'collect-str-test (iterator::collect-str (iterator::map (fn (ch) (char-upper ch)) \"λabc σ\")))
+(def collect-str-test (iterator::collect-str (iterator::map (fn (ch) (char-upper ch)) \"λabc σ\")))
 (assert-true (string? collect-str-test))
 (assert-equal \"ΛABC Σ\" collect-str-test)
 "
@@ -824,13 +824,13 @@ Apply the provided function to each element of the iterator.  Map is lazy.
 Section: iterator
 
 Example:
-(def 'tmap (iterator::map (fn (x) (+ 1 x)) '(0 1 2)))
+(def tmap (iterator::map (fn (x) (+ 1 x)) '(0 1 2)))
 (assert-false (tmap :empty?))
 (assert-equal 1 (tmap :next!))
 (assert-equal 2 (tmap :next!))
 (assert-equal 3 (tmap :next!))
 (assert-true (tmap :empty?))
-(def 'tmap (iterator::reverse (iterator::map (fn (x) (+ 1 x)) '(0 1 2))))
+(def tmap (iterator::reverse (iterator::map (fn (x) (+ 1 x)) '(0 1 2))))
 (assert-false (tmap :empty?))
 (assert-equal 3 (tmap :next!))
 (assert-equal 2 (tmap :next!))
@@ -846,19 +846,19 @@ the iterator it is slicing.
 Section: iterator
 
 Example:
-(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 3 6))
+(def test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 3 6))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-equal 4 (test-slice-iter :next!))
 (assert-equal 5 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 0 3))
+(def test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 0 3))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 0 (test-slice-iter :next!))
 (assert-equal 1 (test-slice-iter :next!))
 (assert-equal 2 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 7))
+(def test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 7 (test-slice-iter :next!))
 (assert-equal 8 (test-slice-iter :next!))
@@ -877,7 +877,7 @@ Iterator that applies a lambda to each element to determine if is returned- is l
 Section: iterator
 
 Example:
-(def 'test-iter (iterator::filter (fn (x) (not (= x 2))) '(1 2 3)))
+(def test-iter (iterator::filter (fn (x) (not (= x 2))) '(1 2 3)))
 (assert-false (test-iter :empty?))
 (assert-equal 1 (test-iter :next!))
 (assert-equal 3 (test-iter :next!))
@@ -892,7 +892,7 @@ requires a double ended iterator.
 Section: iterator
 
 Example:
-(def 'tmap (reverse ((vec-iter) :init '#(0 1 2) 0)))
+(def tmap (reverse ((vec-iter) :init '#(0 1 2) 0)))
 (assert-false (tmap :empty?))
 (assert-equal 2 (tmap :next!))
 (assert-equal 1 (tmap :next!))
@@ -901,7 +901,7 @@ Example:
 (assert-error (reverse \"string\"))
 "
     (items)
-    (var 'i (iter items))
+    (var i (iter items))
     (if (double-ended-iter? i) (i :reverse)
       (err "Not a double ended iterator or collection, can not reverse")))
 
@@ -912,7 +912,7 @@ Note that repeated called to nth will return new data since it consumes the iter
 Section: iterator
 
 Example:
-(def 'tmap ((list-iter) :init '(0 1 2 3 4)))
+(def tmap ((list-iter) :init '(0 1 2 3 4)))
 (assert-false (tmap :empty?))
 (assert-equal 0 (nth 0 tmap))
 (assert-equal 1 (nth 0 tmap))
@@ -944,7 +944,7 @@ Example:
 "
     (reducing-fcn init-val coll) (do
     ; Only call iter on coll once.
-    (var 'inner-reduce (fn (reducing-fcn init-val coll)
+    (var inner-reduce (fn (reducing-fcn init-val coll)
         (if (coll :empty?)
                 init-val
                 (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll))))
@@ -974,15 +974,15 @@ work with loose object).  Note that nil is an empty list not a \"loose item\".
 Section: iterator
 
 Example:
-(def 'test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))
+(def test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter (append '(0 1 2) 3 4 5 '(6 7 8 9)))
+(def test-iter (append '(0 1 2) 3 4 5 '(6 7 8 9)))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter (append 0 1 2 '(3 4)))
+(def test-iter (append 0 1 2 '(3 4)))
 (assert-false (test-iter :empty?))
 (assert-equal 0 (test-iter :next!))
 (assert-equal 1 (test-iter :next!))
@@ -990,13 +990,13 @@ Example:
 (assert-equal 3 (test-iter :next!))
 (assert-equal 4 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter (append 0 1 2 nil))
+(def test-iter (append 0 1 2 nil))
 (assert-false (test-iter :empty?))
 (assert-equal 0 (test-iter :next!))
 (assert-equal 1 (test-iter :next!))
 (assert-equal 2 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def 'test-iter (append 0 1 2 '(nil)))
+(def test-iter (append 0 1 2 '(nil)))
 (assert-false (test-iter :empty?))
 (assert-equal 0 (test-iter :next!))
 (assert-equal 1 (test-iter :next!))
@@ -1015,50 +1015,50 @@ work with loose object).  Note that nil is an empty list not a \"loose item\".
 Section: iterator
 
 Example:
-(def 'test-iter '(0 1 2))
+(def test-iter '(0 1 2))
 (append-to! test-iter '#(3 4 5) '(6 7 8 9))
-(set! 'test-iter (iter test-iter))
-(def 'test-slice-iter (test-iter :slice 3 7))
+(set! test-iter (iter test-iter))
+(def test-slice-iter (test-iter :slice 3 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-equal 4 (test-slice-iter :next!))
 (assert-equal 5 (test-slice-iter :next!))
 (assert-equal 6 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
+(def test-iter '(0 1 2))
 (append-to! test-iter '#(3 4 5) '(6 7 8 9))
-(set! 'test-iter (iter test-iter))
-(def 'test-slice-iter (test-iter :slice 0 4))
+(set! test-iter (iter test-iter))
+(def test-slice-iter (test-iter :slice 0 4))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 0 (test-slice-iter :next!))
 (assert-equal 1 (test-slice-iter :next!))
 (assert-equal 2 (test-slice-iter :next!))
 (assert-equal 3 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
+(def test-iter '(0 1 2))
 (append-to! test-iter '#(3 4 5) '(6 7 8 9))
-(set! 'test-iter (iter test-iter))
-(def 'test-slice-iter (test-iter :slice 7))
+(set! test-iter (iter test-iter))
+(def test-slice-iter (test-iter :slice 7))
 (assert-false (test-slice-iter :empty?))
 (assert-equal 7 (test-slice-iter :next!))
 (assert-equal 8 (test-slice-iter :next!))
 (assert-equal 9 (test-slice-iter :next!))
 (assert-true (test-slice-iter :empty?))
-(def 'test-iter '(0 1 2))
+(def test-iter '(0 1 2))
 (append-to! test-iter '#(3 4 5) '(6 7 8 9))
-(set! 'test-iter (iter test-iter))
+(set! test-iter (iter test-iter))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter nil)
+(def test-iter nil)
 (append-to! test-iter nil '(0 1 2) nil '#(3 4 5) '(6 7 8 9) nil)
-(set! 'test-iter (iter test-iter))
+(set! test-iter (iter test-iter))
 (assert-false (test-iter :empty?))
 (assert-equal 10 (test-iter :count))
 (assert-true (test-iter :empty?))
-(def 'test-iter (vec 0))
+(def test-iter (vec 0))
 (append-to! test-iter nil '#(1) '(2 3) nil)
-(set! 'test-iter (iter test-iter))
+(set! test-iter (iter test-iter))
 (assert-false (test-iter :empty?))
 (assert-equal 0 (test-iter :next!))
 (assert-equal 1 (test-iter :next!))
@@ -1068,23 +1068,23 @@ Example:
 "
     (ret &rest others) (do
 
-    (var 'last-cell (fn (obj)
+    (var last-cell (fn (obj)
         (if (null (cdr obj))
             obj
             (recur (cdr obj)))))
 
-    (set! 'others (apply append others))
+    (set! others (apply append others))
     (if (vec? ret) (for l in others (vec-push! ret l))
         (list? ret) (do
-                (var 'tseq (last-cell ret))
+                (var tseq (last-cell ret))
                 (for l in others
                         (do
                             (if (null tseq)
                                 (xar! tseq l)
                                 (do
-                                    (var 'tcell (join l nil))
+                                    (var tcell (join l nil))
                                     (xdr! tseq tcell)
-                                    (set! 'tseq tcell))))))
+                                    (set! tseq tcell))))))
         (err "append-to!: First element not a list or vector."))
     ret))
 
@@ -1098,15 +1098,15 @@ in in_list.
 Section: iterator
 
 Example:
-(def 'i 0)
-(iterator::for x in (iterator::range 11) (set! 'i (+ 1 i)))
+(def i 0)
+(iterator::for x in (iterator::range 11) (set! i (+ 1 i)))
 (assert-equal 11 i)
 "
     (bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
     `(loop (plist) ((iterator::iter ,items))
          (if (not (plist :empty?)) (do
-             (var ',bind (plist :next!))
+             (var ,bind (plist :next!))
              (,@body)
              (recur plist))))))
 
@@ -1121,19 +1121,19 @@ in in_list.
 Section: iterator
 
 Example:
-(def 'i 0)
-(def 'i-tot 0)
-(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (do (set! 'i-tot (+ idx i-tot))(set! 'i (+ 1 i))))
+(def i 0)
+(def i-tot 0)
+(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (do (set! i-tot (+ idx i-tot))(set! i (+ 1 i))))
 (assert-equal 11 i)
 (assert-equal 55 i-tot)
 "
     (idx-bind bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    (var 'loop-idx (gensym))
+    (var loop-idx (gensym))
     `(loop (plist ,loop-idx) ((iterator::iter ,items) 0)
          (if (not (plist :empty?)) (do
-             (var ',bind (plist :next!))
-             (var ',idx-bind ,loop-idx)
+             (var ,bind (plist :next!))
+             (var ,idx-bind ,loop-idx)
              (,@body)
              (recur plist (+ ,loop-idx 1)))))))
 

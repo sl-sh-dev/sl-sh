@@ -179,7 +179,7 @@ Can be used in place of a read file object in any form that takes one.
 Section: shell
 
 Example:
-(def 'stdin-test (open \"/tmp/sl-sh.stdin.test\" :create :truncate))
+(def stdin-test (open \"/tmp/sl-sh.stdin.test\" :create :truncate))
 (write-line stdin-test \"Test line\")
 (close stdin-test)
 ; Use a file for stdin for test.

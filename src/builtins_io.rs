@@ -497,7 +497,7 @@ Options are:
 Section: file
 
 Example:
-(def 'test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line test-open-f \"Test Line One\")
 (close test-open-f)
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
@@ -516,10 +516,10 @@ Close a file.
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Two\")
 (close tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal \"Test Line Two\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -537,10 +537,10 @@ Flush a file.
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Three\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -558,11 +558,11 @@ Read a line from a file.
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Read Line One\")
 (write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal \"Test Line Read Line One\n\" (read-line tst-file))
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
@@ -581,16 +581,16 @@ Read a file or string and return the next object (symbol, string, list, etc).
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 ;(write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal '(1 2 3) (read tst-file))
 (test::assert-equal '(x y z) (read tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
-(def 'test-str \"7 8 9\")
+(def test-str \"7 8 9\")
 (test::assert-equal 7 (read test-str))
 (test::assert-equal 8 (read test-str))
 (test::assert-equal 9 (read test-str))
@@ -615,10 +615,10 @@ enter things at the repl without the enclosing parens).
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal '#((1 2 3)(x y z)) (read-all tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read-all \"(4 5 6)\"))
@@ -639,10 +639,10 @@ Write a line to a file.
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-line tst-file \"Test Line Write Line\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -660,10 +660,10 @@ Write a string to a file.
 Section: file
 
 Example:
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
 (write-string tst-file \"Test Line Write String\")
 (flush tst-file)
-(def 'tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal \"Test Line Write String\" (read-line tst-file))
 (close tst-file)
 ",

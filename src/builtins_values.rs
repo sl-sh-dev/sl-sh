@@ -96,7 +96,7 @@ Example:
 (test::assert-equal 1 (values-nth 0 (values 1 \"str\" 5.5)))
 (test::assert-equal \"str\" (values-nth 1 (values 1 \"str\" 5.5)))
 (test::assert-equal 5.5 (values-nth 2 (values 1 \"str\" 5.5)))
-(def 'test-vals-nth (values 1 \"str\" 5.5))
+(def test-vals-nth (values 1 \"str\" 5.5))
 (test::assert-equal 1 (values-nth 0 test-vals-nth))
 (test::assert-equal \"str\" (values-nth 1 test-vals-nth))
 (test::assert-equal 5.5 (values-nth 2 test-vals-nth))
@@ -121,7 +121,7 @@ Example:
 (test::assert-equal 0 (values-length (values)))
 (test::assert-equal \"str\" (values-nth 1 (values 1 \"str\" 5.5)))
 (test::assert-equal 5.5 (values-nth 2 (values 1 \"str\" 5.5)))
-(def 'test-vals-len (values 1 \"str\" 5.5))
+(def test-vals-len (values 1 \"str\" 5.5))
 (test::assert-equal 3 (values-length test-vals-len))
 ",
             root,

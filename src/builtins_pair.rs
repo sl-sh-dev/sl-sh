@@ -167,7 +167,7 @@ Create a pair with the provided car and cdr.
 Section: pair
 
 Example:
-(def 'tst-pair-one (join 1 2))
+(def tst-pair-one (join 1 2))
 (test::assert-equal 1 (car tst-pair-one))
 (test::assert-equal 2 (cdr tst-pair-one))
 (test::assert-equal '(1 2 3) (join 1 (join 2 (join 3 nil))))
@@ -202,7 +202,7 @@ Return the car (first item) from a pair.  If used on a proper list this will be 
 Section: pair
 
 Example:
-(def 'tst-pairs-two (list 'x 'y 'z))
+(def tst-pairs-two (list 'x 'y 'z))
 (test::assert-equal 'x (car tst-pairs-two))
 (test::assert-equal 10 (car '(10)))
 (test::assert-equal 9 (car '(9 11 13)))
@@ -219,7 +219,7 @@ Return the cdr (second item) from a pair.  If used on a proper list this will be
 Section: pair
 
 Example:
-(def 'tst-pairs-three (list 'x 'y 'z))
+(def tst-pairs-three (list 'x 'y 'z))
 (test::assert-equal '(y z) (cdr tst-pairs-three))
 (test::assert-equal nil (cdr '(10)))
 (test::assert-equal '(13) (cdr '(9 13)))
@@ -240,11 +240,11 @@ create a pair (expression . nil).
 Section: pair
 
 Example:
-(def 'tst-pairs-three (list 'x 'y 'z))
+(def tst-pairs-three (list 'x 'y 'z))
 (test::assert-equal '(x y z) tst-pairs-three)
 (test::assert-equal '(s y z) (xar! tst-pairs-three 's))
 (test::assert-equal '(s y z) tst-pairs-three)
-(def 'tst-pairs-four nil)
+(def tst-pairs-four nil)
 (test::assert-equal '() tst-pairs-four)
 (test::assert-equal '(t) (xar! tst-pairs-four 't))
 (test::assert-equal '(t) tst-pairs-four)
@@ -266,11 +266,11 @@ Can be used on nil to create a pair (nil . expression).
 Section: pair
 
 Example:
-(def 'tst-pairs-five (list 'a 'b 'c))
+(def tst-pairs-five (list 'a 'b 'c))
 (test::assert-equal '(a b c) tst-pairs-five)
 (test::assert-equal '(a y z) (xdr! tst-pairs-five '(y z)))
 (test::assert-equal '(a y z) tst-pairs-five)
-(def 'tst-pairs-six nil)
+(def tst-pairs-six nil)
 (test::assert-equal '() tst-pairs-six)
 (test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
 (test::assert-equal '(nil . v) tst-pairs-six)

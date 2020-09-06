@@ -2,17 +2,17 @@
 
 (let ((count 0))
     (let ((count 0))
-        (defn inc_count2 () (setq! count (+ count 1)))
-        (defn dec_count2 () (setq! count (- count 1)))
+        (defn inc_count2 () (set! count (+ count 1)))
+        (defn dec_count2 () (set! count (- count 1)))
         (defn get_count2 () count)
         (defn get_count02 () (get_count0)))
 
-    (defn inc_count () (setq! count (+ count 1)))
-    (defn dec_count () (setq! count (- count 1)))
+    (defn inc_count () (set! count (+ count 1)))
+    (defn dec_count () (set! count (- count 1)))
     (defn get_count () count)
     (defn print_count () (println count)))
 
-(defq count 0)
+(def count 0)
 
 (defn o_count () (println count))
 (defn get_count0 () count)
@@ -35,7 +35,7 @@
 (dec_count)
 (assert-equal (get_count) 3 (str ". line number: " (meta-line-no)))
 (assert-equal count 0 (str ". line number: " (meta-line-no)))
-(setq! count 10)
+(set! count 10)
 (assert-equal (get_count) 3 (str ". line number: " (meta-line-no)))
 (assert-equal count 10 (str ". line number: " (meta-line-no)))
 
@@ -58,7 +58,7 @@
 (assert-equal (get_count2) 5 (str ". line number: " (meta-line-no)))
 (dec_count2)
 (inc_count)
-(setq! count 11)
+(set! count 11)
 (assert-equal (get_count) 4 (str ". line number: " (meta-line-no)))
 (assert-equal (get_count0) 11 (str ". line number: " (meta-line-no)))
 (assert-equal (get_count02) 11 (str ". line number: " (meta-line-no)))

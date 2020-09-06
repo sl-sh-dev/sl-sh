@@ -418,7 +418,7 @@ Example:
 (test::assert-equal \"Float\" (type 1.1))
 (test::assert-equal \"Int\" (type 1))
 (test::assert-equal \"Symbol\" (type 'symbol))
-(def 'type-sym 'symbol)
+(def type-sym 'symbol)
 (test::assert-equal \"Symbol\" (type type-sym))
 (test::assert-equal \"String\" (type \"string\"))
 (test::assert-equal \"Char\" (type #\\a))
@@ -428,7 +428,7 @@ Example:
 (test::assert-equal \"SpecialForm\" (type if))
 (test::assert-equal \"Function\" (type type))
 (test::assert-equal \"Vector\" (type '#(1 2 3)))
-(def 'type-vec '#(4 5 6))
+(def type-vec '#(4 5 6))
 (test::assert-equal \"Vector\" (type type-vec))
 (test::assert-equal \"Pair\" (type '(1 . 2)))
 (test::assert-equal \"Pair\" (type '(1 2 3)))
@@ -459,7 +459,7 @@ Example:
 (test::assert-true (int? (values 1 \"str\" 5.5)))
 (test::assert-false (string? (values 1 \"str\" 5.5)))
 (test::assert-false (float? (values 1 \"str\" 5.5)))
-(def 'test-is-values (values 1 2 3 \"string\" 1.5))
+(def test-is-values (values 1 2 3 \"string\" 1.5))
 (test::assert-true (values? test-is-values))
 (test::assert-true (int? test-is-values))
 (test::assert-false (string? test-is-values))
@@ -824,13 +824,13 @@ a symbol with that name.
 Section: type
 
 Example:
-(def 'test-to-symbol-sym nil)
+(def test-to-symbol-sym nil)
 (test::assert-true (symbol? (sym 55)))
 (test::assert-true (symbol? (sym 55.0)))
 (test::assert-true (symbol? (sym \"to-symbol-test-new-symbol\")))
 (test::assert-true (symbol? (sym (str \"to-symbol-test-new-symbol-buf\"))))
 (test::assert-true (symbol? (sym 'test-to-symbol-sym)))
-(set! 'test-to-symbol-sym \"testing-sym\")
+(set! test-to-symbol-sym \"testing-sym\")
 (test::assert-equal \"testing-sym\" (sym->str (sym test-to-symbol-sym)))
 (test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
 ",
@@ -850,7 +850,7 @@ The string will be the symbol name as a string.
 Section: type
 
 Example:
-(def 'test-sym->str-sym nil)
+(def test-sym->str-sym nil)
 (test::assert-true (string? (sym->str 'test-sym->str-sym)))
 (test::assert-equal \"test-sym->str-sym\" (sym->str 'test-sym->str-sym))
 ",

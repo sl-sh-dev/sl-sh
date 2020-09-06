@@ -139,42 +139,42 @@ input as a command.
 
 Default colors are as follows:
 ```
-	(defq tok-slsh-form-color shell::*fg-blue*)
-	(defq tok-slsh-fcn-color shell::*fg-cyan*)
-	(defq tok-default-color shell::*fg-default*)
-	(defq tok-sys-command-color shell::*fg-white*)
-	(defq tok-sys-alias-color shell::*fg-default*)
-	(defq tok-string-color shell::*fg-magenta*)
-	(defq tok-invalid-color shell::*fg-red*)
+	(def tok-slsh-form-color shell::*fg-blue*)
+	(def tok-slsh-fcn-color shell::*fg-cyan*)
+	(def tok-default-color shell::*fg-default*)
+	(def tok-sys-command-color shell::*fg-white*)
+	(def tok-sys-alias-color shell::*fg-default*)
+	(def tok-string-color shell::*fg-magenta*)
+	(def tok-invalid-color shell::*fg-red*)
 ```
 
 These symbols are exported from the shell namespace and can be set.  Example:
-(setq tok-sys-alias-color shell::*fg-green*)
+(set tok-sys-alias-color shell::*fg-green*)
 
 #### Color
 
 The following
 colors are defined in the shell namespace:
 ```
-	(def '*fg-default* "\x1b[39m")
-	(def '*fg-black* "\x1b[30m")
-	(def '*fg-red* "\x1b[31m")
-	(def '*fg-green* "\x1b[32m")
-	(def '*fg-yellow* "\x1b[33m")
-	(def '*fg-blue* "\x1b[34m")
-	(def '*fg-magenta* "\x1b[35m")
-	(def '*fg-cyan* "\x1b[36m")
-	(def '*fg-white* "\x1b[37m")
+	(def *fg-default* "\x1b[39m")
+	(def *fg-black* "\x1b[30m")
+	(def *fg-red* "\x1b[31m")
+	(def *fg-green* "\x1b[32m")
+	(def *fg-yellow* "\x1b[33m")
+	(def *fg-blue* "\x1b[34m")
+	(def *fg-magenta* "\x1b[35m")
+	(def *fg-cyan* "\x1b[36m")
+	(def *fg-white* "\x1b[37m")
 
-	(def '*bg-default* "\x1b[49m")
-	(def '*bg-black* "\x1b[40m")
-	(def '*bg-red* "\x1b[41m")
-	(def '*bg-green* "\x1b[42m")
-	(def '*bg-yellow* "\x1b[43m")
-	(def '*bg-blue* "\x1b[44m")
-	(def '*bg-magenta* "\x1b[45m")
-	(def '*bg-cyan* "\x1b[46m")
-	(def '*bg-white* "\x1b[47m")
+	(def *bg-default* "\x1b[49m")
+	(def *bg-black* "\x1b[40m")
+	(def *bg-red* "\x1b[41m")
+	(def *bg-green* "\x1b[42m")
+	(def *bg-yellow* "\x1b[43m")
+	(def *bg-blue* "\x1b[44m")
+	(def *bg-magenta* "\x1b[45m")
+	(def *bg-cyan* "\x1b[46m")
+	(def *bg-white* "\x1b[47m")
 ```
 Functions that take rgb values are also defined `(fg-color-rgb)` and
 `(bg-color-rgb)`. For example:

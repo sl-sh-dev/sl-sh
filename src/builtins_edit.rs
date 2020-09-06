@@ -535,7 +535,7 @@ returns the input string.
 Section: shell
 
 Example:
-;(def 'input-string (prompt \"prompt> \"))
+;(def input-string (prompt \"prompt> \"))
 t
 ",
             root,

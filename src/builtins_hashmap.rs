@@ -321,18 +321,18 @@ pairs (key . value) that populate the intial map.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash))
+(def tst-hash (make-hash))
 (test::assert-equal 0 (length (hash-keys tst-hash)))
-(def 'tst-hash (make-hash ()))
+(def tst-hash (make-hash ()))
 (test::assert-equal 0 (length (hash-keys tst-hash)))
-(def 'tst-hash (make-hash nil))
+(def tst-hash (make-hash nil))
 (test::assert-equal 0 (length (hash-keys tst-hash)))
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(def 'tst-hash (make-hash '#((:keyv1 . \"val one\")(keyv2 . \"val two\")(\"keyv3\" . \"val three\"))))
+(def tst-hash (make-hash '#((:keyv1 . \"val one\")(keyv2 . \"val two\")(\"keyv3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
@@ -351,12 +351,12 @@ Add or update a hashmap key's value.  This is a destructive form!
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash))
+(def tst-hash (make-hash))
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 (hash-set! tst-hash :new-key '(1 2 3))
 (test::assert-equal 1 (length (hash-keys tst-hash)))
 (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\"))))
 (test::assert-equal 3 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
@@ -390,7 +390,7 @@ Remove a key from a hashmap.  This is a destructive form!
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
 (test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
@@ -427,7 +427,7 @@ NOTE: default will only be evaluted if it is used.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
 (test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-equal \"val one\" (hash-get tst-hash :key1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
@@ -450,7 +450,7 @@ Checks if a key is in a hashmap.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
 (test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-true (hash-haskey tst-hash :key1))
 (test::assert-true (hash-haskey tst-hash 'key2))
@@ -478,7 +478,7 @@ Returns a vector of all the hashmaps keys.  The keys will be unordered.
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
 (test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-true (in? (hash-keys tst-hash) :key1) \" Test :key1\")
 (test::assert-true (in? (hash-keys tst-hash) 'key2) \" Test key2\")
@@ -501,7 +501,7 @@ Clears a hashmap.  This is a destructive form!
 Section: hashmap
 
 Example:
-(def 'tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
 (test::assert-equal 4 (length (hash-keys tst-hash)))
 (test::assert-true (hash-haskey tst-hash :key1))
 (test::assert-true (hash-haskey tst-hash 'key2))

@@ -1233,7 +1233,7 @@ Section: string
 
 Example:
 (test::assert-equal \"stringsome\" (str-push! (str \"string\") \"some\"))
-(def 'test-str-push (str \"def-string\"))
+(def test-str-push (str \"def-string\"))
 (test::assert-equal \"def-stringsome\" (str-push! test-str-push \"some\"))
 (test::assert-equal \"def-stringsome\" test-str-push)
 ",
@@ -1254,7 +1254,7 @@ Section: string
 
 Example:
 (test::assert-equal \"\" (str-clear! (str \"string\")))
-(def 'test-str-clear (str \"def-string\"))
+(def test-str-clear (str \"def-string\"))
 (test::assert-equal \"\" (str-clear! test-str-clear))
 (test::assert-equal \"\" test-str-clear)
 ",
@@ -1273,10 +1273,10 @@ Section: string
 
 Example:
 (test::assert-equal \"XstringXstrX\" (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) \"xstringxstrx\"))
-(def 'test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) \"xstringxstrx\"))
+(def test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) \"xstringxstrx\"))
 (test::assert-equal \"XstringXstrX\" test-str-map)
 (test::assert-true (string? test-str-map))
-(def 'test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) (str \"xstringxstrx\")))
+(def test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) (str \"xstringxstrx\")))
 (test::assert-equal \"XstringXstrX\" test-str-map)
 (test::assert-true (string? test-str-map))
 ",
@@ -1297,7 +1297,7 @@ a fixed size so direct indexing is very inefficient).
 Section: string
 
 Example:
-(def 'test-iter-start \"test\")
+(def test-iter-start \"test\")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
@@ -1333,10 +1333,10 @@ is done.
 Section: string
 
 Example:
-(def 'test-iter-start \"y̆ΛλΣσ\")
+(def test-iter-start \"y̆ΛλΣσ\")
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(def 'test-iter-one (str-iter-next! test-iter-start))
+(def test-iter-one (str-iter-next! test-iter-start))
 (test::assert-equal #\\y̆ test-iter-one)
 (test::assert-true (= #\\y̆ test-iter-one))
 (test::assert-false (= #\\y test-iter-one))
@@ -1361,10 +1361,10 @@ is done.  Does not advance the iterator.
 Section: string
 
 Example:
-(def 'test-iter-start \"y̆ΛλΣσ\")
+(def test-iter-start \"y̆ΛλΣσ\")
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(def 'test-iter-one (str-iter-next! test-iter-start))
+(def test-iter-one (str-iter-next! test-iter-start))
 (test::assert-equal #\\y̆ test-iter-one)
 (test::assert-true (= #\\y̆ test-iter-one))
 (test::assert-false (= #\\y test-iter-one))
@@ -1392,7 +1392,7 @@ Returns true if the iterator for the string is empty or finished.
 Section: string
 
 Example:
-(def 'test-iter-start \"test\")
+(def test-iter-start \"test\")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
@@ -1402,7 +1402,7 @@ Example:
 (test::assert-equal #\\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
 
-(def 'test-iter-start \"test\")
+(def test-iter-start \"test\")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))

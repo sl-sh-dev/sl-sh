@@ -1,7 +1,7 @@
 ;;; These are core forms that are installed in the root namespace so they
 ;;; are always available.
 
-(def 'internal-macro
+(def internal-macro
 "
 Template for macros the define macros, can pass an 'op' like def or set.
 Intended for use by other core macros.
@@ -13,16 +13,16 @@ Section: core
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
                 (if (string? (vec-nth args 0))
                   (do
-                    (var 'doc-str (vec-nth args 0))
-                    (var 'ars (vec-nth args 1))
-                    (var 'body (vec-slice args 2))
-                    `(do (,op ',name ,doc-str (macro ,ars ,@body)) nil))
+                    (var doc-str (vec-nth args 0))
+                    (var ars (vec-nth args 1))
+                    (var body (vec-slice args 2))
+                    `(do (,op ,name ,doc-str (macro ,ars ,@body)) nil))
                   (do
-                    (var 'ars (vec-nth args 0))
-                    (var 'body (vec-slice args 1))
-                    `(do (,op ',name (macro ,ars ,@body)) nil)))))))
+                    (var ars (vec-nth args 0))
+                    (var body (vec-slice args 1))
+                    `(do (,op ,name (macro ,ars ,@body)) nil)))))))
 
-(def 'defmacro
+(def defmacro
 "Usage: (defmacro name doc_string? argument_list body)
 
 Create a macro and bind it to a symbol in the current scope.
@@ -31,7 +31,7 @@ Section: core
 "
     (macro (name &rest args) `(internal-macro def ,name ,@args)))
 
-(def 'setmacro!
+(def setmacro!
 "Usage: (setmacro! name doc_string? argument_list body)
 
 Set a macro to an existing symbol.
@@ -45,7 +45,7 @@ Section: core
 
 Section: namespace"
     (symbol_or_sequence) `(do
-    (if (not (def? '*ns-exports*)) (def '*ns-exports* (vec)))
+    (if (not (def? '*ns-exports*)) (def *ns-exports* (vec)))
     (if (symbol? ,symbol_or_sequence)
         (vec-push! *ns-exports* (quote ,symbol_or_sequence))
         (if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
@@ -58,66 +58,12 @@ Section: namespace"
 Section: namespace"
     (namespace)
     `((fn ()
-        (def 'import (vec defq 1 2))
+        (def import (vec def 1 2))
         (iterator::for symbol in (eval (sym ,namespace "::*ns-exports*"))
                        (do
                          (vec-set! import 1 (sym "ns::" symbol))
                          (vec-set! import 2 (sym ,namespace "::" symbol))
                          (eval import))))))
-
-(defmacro setq!
-"Usage: (setq! symbol doc-string? expression) -> expression
-
-Set an expession to a quoted symbol (ie set! 'symbol bind)
-
-Section: core
-
-Example:
-(def 'test-do-one nil)
-(def 'test-do-two nil)
-(def 'test-do-three (do (setq! test-do-one \"One\")(setq! test-do-two \"Two\")\"Three\"))
-(test::assert-error (setq! xyryx-dont-exist \"something\"))
-(test::assert-equal \"One\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-(let ((test-do-one nil))
-    ; set the currently scoped value.
-    (test::assert-equal \"1111\" (setq! test-do-one \"1111\"))
-    (test::assert-equal \"1111\" test-do-one))
-; Original outer scope not changed.
-(test::assert-equal \"One\" test-do-one)
-"
-    (symbol &rest args)
-    `(set! ',symbol ,@args))
-
-(defmacro defq
-"Usage: (defq symbol doc-string? expression) -> expression
-
-Binds an expession to a quoted symbol (ie def 'symbol bind)
-
-Section: core
-
-Example:
-(defq test-do-one \"One\")
-(defq test-do-two \"Two\")
-(defq test-do-three \"Three\")
-(test::assert-equal \"One\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-(let ((test-do-one nil))
-    ; Add this to the let's scope (shadow the outer test-do-two).
-    (test::assert-equal \"Default\" (defq ns::test-do-two \"Default\"))
-    ; set the currently scoped value.
-    (set! 'test-do-one \"1111\")
-    (set! 'test-do-two \"2222\")
-    (test::assert-equal \"1111\" test-do-one)
-    (test::assert-equal \"2222\" test-do-two))
-; Original outer scope not changed.
-(test::assert-equal \"One\" test-do-one)
-(test::assert-equal \"2222\" test-do-two)
-"
-    (symbol &rest args)
-    `(def ',symbol ,@args))
 
 (defmacro internal-fn
 "
@@ -136,14 +82,14 @@ t
          (if (string? (vec-nth args 0))
            (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
-             (var 'doc-str (vec-nth args 0))
-             (var 'ars (vec-nth args 1))
-             (var 'body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
-             `(,op ',name ,doc-str (fn ,ars (block ,name ,@body))))
+             (var doc-str (vec-nth args 0))
+             (var ars (vec-nth args 1))
+             (var body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
+             `(,op ,name ,doc-str (fn ,ars (block ,name ,@body))))
            (do
-             (var 'ars (vec-nth args 0)) 
-             (var 'body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
-             `(,op ',name (fn ,ars (block ,name ,@body))))))))
+             (var ars (vec-nth args 0)) 
+             (var body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
+             `(,op ,name (fn ,ars (block ,name ,@body))))))))
 
 (defmacro defn
 "
@@ -154,7 +100,7 @@ Section: core
 Example:
 (defn defn-test (x y) (+ x y))
 (test::assert-equal 5 (defn-test 2 3))
-(defn defn-test (x y) (set! 'x (* x 2))(+ x y))
+(defn defn-test (x y) (set! x (* x 2))(+ x y))
 (test::assert-equal 7 (defn-test 2 3))
 (defn defn-test (x y))
 (test::assert-false (defn-test 2 3))
@@ -173,7 +119,7 @@ Example:
 (lex
   (varfn varfn-test (x y) (+ x y))
   (test::assert-equal 5 (varfn-test 2 3))
-  (varfn varfn-test2 (x y) (set! 'x (* x 2))(+ x y))
+  (varfn varfn-test2 (x y) (set! x (* x 2))(+ x y))
   (test::assert-equal 7 (varfn-test2 2 3))
   (test::assert-true (def? 'varfn-test))
   (test::assert-true (def? 'varfn-test2)))
@@ -205,9 +151,9 @@ subsequent iteration.
 Section: core
 
 Example:
-(def 'tot 0)
+(def tot 0)
 (loop (idx) (3) (do
-    (set! 'tot (+ tot 1))
+    (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
 "
@@ -221,8 +167,8 @@ Evaluate body a number of times equal to times' numerical value.
 Section: core
 
 Example:
-(def 'i 0)
-(dotimes 11 (set! 'i (+ 1 i)))
+(def i 0)
+(dotimes 11 (set! i (+ 1 i)))
 (assert-equal 11 i)
 "
     (times body)
@@ -240,9 +186,9 @@ incrementing reference binding, idx-bind, accesible in body.
 Section: core
 
 Example:
-(def 'i 0)
-(def 'i-tot 0)
-(dotimes-i idx 11 (do (set! 'i-tot (+ idx i-tot))(set! 'i (+ 1 i))))
+(def i 0)
+(def i-tot 0)
+(dotimes-i idx 11 (do (set! i-tot (+ idx i-tot))(set! i (+ 1 i))))
 (assert-equal 11 i)
 (assert-equal 55 i-tot)
 "
@@ -266,14 +212,14 @@ Example:
 
 (defn select-option (a)
     (match a (1 \"opt-one\")
-             (2 (set! 'b 5) \"opt-two\")
+             (2 (set! b 5) \"opt-two\")
              (3 (str \"opt\" \"-three\"))))
 (defn select-option-def (a)
     (match a (1 \"opt-one\")
              (2 \"opt-two\")
              (3 (str \"opt\" \"-three\"))
              (nil \"default\")))
-(def 'b 0)
+(def b 0)
 (assert-equal b 0)
 (assert-equal \"opt-one\" (select-option 1))
 (assert-equal \"opt-two\" (select-option 2))
@@ -287,16 +233,16 @@ Example:
 "
     (condition &rest branches)
     ((fn ()
-        (var 'out_list (list))
-        (var 'make-action (fn (action)
+        (var out_list (list))
+        (var make-action (fn (action)
             (if (seq? action)
                 `(do ,@action)
                 `action)))
-        (var 'make-cond (fn (condition val action others)
+        (var make-cond (fn (condition val action others)
             (if (null val) (make-action action)
                 (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
                     `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (root::first (root::first others)) (root::rest (root::first others)) (root::rest others)))))))
-        (var 'cond-name condition)
+        (var cond-name condition)
         `(if ,@(make-cond cond-name (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
 
 (defmacro cond
@@ -312,14 +258,14 @@ Example:
 
 (defn select-option (a)
     (cond ((= a 1) \"opt-one\")
-          ((= a 2) (set! 'b 5) \"opt-two\")
+          ((= a 2) (set! b 5) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))))
 (defn select-option-def (a)
     (cond ((= a 1) \"opt-one\")
           ((= a 2) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))
           (t \"default\")))
-(def 'b 0)
+(def b 0)
 (assert-equal \"opt-one\" (select-option 1))
 (assert-equal b 0)
 (assert-equal \"opt-two\" (select-option 2))
@@ -333,12 +279,12 @@ Example:
 "
     (&rest branches)
     ((fn ()
-        (var 'out_list (list))
-        (var 'make-action (fn (action)
+        (var out_list (list))
+        (var make-action (fn (action)
             (if (seq? action)
                 `(do ,@action)
                 `action)))
-        (var 'make-cond (fn (condition action others)
+        (var make-cond (fn (condition action others)
             (if (empty-seq? others)
                 `(,condition ,(make-action action) nil)
                 `(,condition ,(make-action action) ,@(make-cond (root::first (root::first others)) (root::rest (root::first others)) (root::rest others))))))
@@ -353,21 +299,21 @@ sexp.
 Section: core
 
 Example:
-(def 'test-do-one \"One1\")
-(def 'test-do-two \"Two1\")
-(def 'test-do-three (let ((test-do-one \"One\")) (set! 'test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(def test-do-one \"One1\")
+(def test-do-two \"Two1\")
+(def test-do-three (let ((test-do-one \"One\")) (set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
 (test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 "
     (vals &rest let-body)
     (lex
-      (var 'vars (make-vec (length vals)))
+      (var vars (make-vec (length vals)))
         (iterator::for-i idx el in vals
             (if (= 1 (length el))
-                (vec-push! vars `(var ',(iterator::nth 0 el) nil))
+                (vec-push! vars `(var ,(iterator::nth 0 el) nil))
                 (if (= 2 (length el))
-                  (vec-push! vars `(var ',(iterator::nth 0 el) ,(iterator::nth 1 el)))
+                  (vec-push! vars `(var ,(iterator::nth 0 el) ,(iterator::nth 1 el)))
                   (err "ERROR: invalid bindings on let"))))
         `(lex ,@vars ,@let-body)))
 
@@ -378,7 +324,7 @@ True if the expression is a [builtin?](#root::builtin?), a [lambda?](#root::lamb
 Section: type
 
 Example:
-(def 'func?-test 1)
+(def func?-test 1)
 (test::assert-false (func? func?-test))
 (test::assert-true (func? car))
 (test::assert-true (func? first))
@@ -420,16 +366,16 @@ Example:
     `(if (< (length (quote ,args)) 2)
         (err "-> (thush operator) requires at least two arguments")
         (do
-            (defq fst (first (quote ,args)))
+            (def fst (first (quote ,args)))
             (loop (curr-form forms) (fst (rest (quote ,args)))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                    (defq sexp nil)
-                    (defq fcn (first forms))
+                    (def sexp nil)
+                    (def fcn (first forms))
                     (if (seq? fcn)
-                        (setq! sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
-                        (setq! sexp (list fcn curr-form)))
+                        (set! sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
+                        (set! sexp (list fcn curr-form)))
                     (recur (eval sexp) (rest forms))))))))
 
 (defmacro ->>
@@ -449,16 +395,16 @@ Example:
     `(if (< (length (quote ,args)) 2)
         (err "->> (thush operator) requires at least two arguments")
         (do
-            (defq fst (first (quote ,args)))
+            (def fst (first (quote ,args)))
             (loop (curr-form forms) (fst (rest (quote ,args)))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                      (defq sexp nil)
-                      (defq fcn (first forms))
+                      (def sexp nil)
+                      (def fcn (first forms))
                       (if (seq? fcn)
-                        (setq! sexp (collect (iterator::append fcn curr-form)))
-                        (setq! sexp (list fcn curr-form)))
+                        (set! sexp (collect (iterator::append fcn curr-form)))
+                        (set! sexp (list fcn curr-form)))
                       (recur (eval sexp) (rest forms))))))))
 
 ; Reader macro for #.

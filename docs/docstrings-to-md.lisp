@@ -6,7 +6,7 @@
 (ns-import 'docparse)
 
 (defn create-header (index-file)
-	(var 'new-file (open index-file :create :truncate))
+	(var new-file (open index-file :create :truncate))
 	(write-string new-file "---
 layout: default
 title: Sl-sh form documentation
@@ -19,7 +19,7 @@ title: Sl-sh form documentation
 
 (defn section-metadata (key attr)
 	;; TODO why does this need to be stringified?
-	(var 'idx (match attr
+	(var idx (match attr
 			(:name 0)
 			(:description 1)
 			(nil (err "Unknown attribute of table heading."))))
@@ -82,7 +82,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(str "[" link-display-text "](" link ")"))
 
 (defn write-heading (heading file-name)
-	(var 'file (open file-name :append))
+	(var file (open file-name :append))
 	(write-line file "")
 	(write-line file (str "## " heading))
 	(write-line file "")
@@ -90,7 +90,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	file-name)
 
 (defn write-version (file-name)
-	(var 'file (open file-name :append))
+	(var file (open file-name :append))
 	(write-line file "")
 	(write-line file (str "version: " (version)))
 	(write-line file "")
@@ -98,29 +98,29 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	file-name)
 
 (defn get-anchor-link-id (doc-map)
-	(var 'doc-form (do
-		(var 'form (hash-get doc-map :form))
+	(var doc-form (do
+		(var form (hash-get doc-map :form))
 		(if (= "\|" form) "pipe-shorthand" form)))
-	(var 'doc-namespace (hash-get doc-map :namespace))
+	(var doc-namespace (hash-get doc-map :namespace))
 	(str doc-namespace "::" doc-form))
 
 (defn table-of-contents (key docstrings file-name)
-	(var 'file (open file-name :append))
-	(var 'name (section-metadata key :name))
+	(var file (open file-name :append))
+	(var name (section-metadata key :name))
 	(write-line file (str "### "
 		(create-anchor (str name "-contents" ))
 		(make-md-link-able name (str "#" name "-body"))))
 	(write-line file "")
 	(write-line file "")
-	(var 'is-first #t)
+	(var is-first #t)
 	(for doc-map in docstrings (do
 		(if is-first
-			(setq! is-first nil)
+			(set! is-first nil)
 			(write-string file ", "))
-		(var 'doc-form (do
-			(var 'form (hash-get doc-map :form))
+		(var doc-form (do
+			(var form (hash-get doc-map :form))
 			(if (= "\|" form) "|" form)))
-		(var 'doc-namespace (hash-get doc-map :namespace))
+		(var doc-namespace (hash-get doc-map :namespace))
 		(write-string file
 			(str
 				(create-anchor (str (get-anchor-link-id doc-map) "-contents"))
@@ -130,7 +130,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	file-name)
 
 (defn doc-structure (file-name)
-	(var 'file (open file-name :append))
+	(var file (open file-name :append))
 	(write-line file "")
 	(write-line file "")
 	(write-line file
@@ -152,34 +152,34 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(if (or (nil? text-slice) (str-empty? (str-trim text-slice)))
 	text-slice
 	(do
-	(var 'arr (str-split delim text-slice))
+	(var arr (str-split delim text-slice))
 	;; if first char in str is delim, 0th elem is "" when we don't need to
 	;; bracket with backticks
-	(var 'trim-arr (if (= "" (first arr)) (rest arr) arr))
+	(var trim-arr (if (= "" (first arr)) (rest arr) arr))
 	(str-cat-list delim (collect-vec (append (list (str "``" (check-if-pipe-shorthand (first trim-arr)) "``")) (rest trim-arr)))))))
 
 (defn sanitize-for-md-row (to-sanitize)
 		(str-replace to-sanitize "|" "\|"))
 
 (defn write-md-table (key docstrings file-name)
-	(var 'file (open file-name :append))
-	(var 'name (section-metadata key :name))
+	(var file (open file-name :append))
+	(var name (section-metadata key :name))
 	(write-line file (str "### "
 				(create-anchor (str name "-body"))
 				(make-md-link-able name (str "#" name "-contents"))))
 	(write-line file (do
-		 (var 'data (section-metadata key :description))
+		 (var data (section-metadata key :description))
 		 (if (nil? data)
 			""
 			data)))
 	(for doc-map in docstrings (do
-		(var 'doc-form (do
-			(var 'form (hash-get doc-map :form))
+		(var doc-form (do
+			(var form (hash-get doc-map :form))
 			(if (= "\|" form) "|" (sanitize-for-md-row form))))
-		(var 'doc-namespace (sanitize-for-md-row (hash-get doc-map :namespace)))
-		(var 'doc-type (sanitize-for-md-row (hash-get doc-map :type)))
-		(var 'doc-usage (str-replace (sanitize-for-md-row (hash-get doc-map :usage)) "\n" "<br>"))
-		(var 'doc-example (hash-get doc-map :example))
+		(var doc-namespace (sanitize-for-md-row (hash-get doc-map :namespace)))
+		(var doc-type (sanitize-for-md-row (hash-get doc-map :type)))
+		(var doc-usage (str-replace (sanitize-for-md-row (hash-get doc-map :usage)) "\n" "<br>"))
+		(var doc-example (hash-get doc-map :example))
 		(write-line file "")
 		(write-line file "")
 		(write-line file
@@ -204,7 +204,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 (defn make-md-file
 	  ;; TODO should be using get-error instead of do
 	(index-file sym-list) (do
-	(var 'docstrings-map (parse-docstrings-for-syms sym-list))
+	(var docstrings-map (parse-docstrings-for-syms sym-list))
 	(create-header index-file)
 	;; explain format
 	(write-heading "Documentation structure for each form" index-file)
@@ -212,16 +212,16 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	;; generate table of contents
 	(write-heading "Table of Contents" index-file)
 	(for key in (qsort (hash-keys docstrings-map)) (do
-		(var 'docstrings (hash-get docstrings-map key))
+		(var docstrings (hash-get docstrings-map key))
 		(table-of-contents key docstrings index-file)))
 	;; generate markdown body
 	(write-heading "Documentation" index-file)
 	(for key in (qsort (hash-keys docstrings-map)) (do
-		(var 'docstrings (hash-get docstrings-map key))
+		(var docstrings (hash-get docstrings-map key))
 		(write-md-table key docstrings index-file)))
 	(write-version index-file)
 	(do
-		(var 'uncat-syms (hash-get docstrings-map :uncategorized))
+		(var uncat-syms (hash-get docstrings-map :uncategorized))
 		(when (not (empty-seq? uncat-syms)) (do
 			(println "Found :uncategorized symbols: ")
 			(for symbol in uncat-syms (println "symbol: " symbol))

@@ -407,7 +407,7 @@ need the equivalent operation on a list use [setnth!](root::setnth!).
 Section: vector
 
 Example:
-(def 'test-setnth-vec (vec 1 2 3))
+(def test-setnth-vec (vec 1 2 3))
 (test::assert-equal '(1 5 3) (vec-set! test-setnth-vec 1 5))
 (test::assert-equal '(7 5 3) (vec-set! test-setnth-vec 0 7))
 (test::assert-equal '(7 5 9) (vec-set! test-setnth-vec 2 9))
@@ -426,7 +426,7 @@ Pushes the provided object onto the end of the vector.  This is destructive!
 Section: vector
 
 Example:
-(def 'test-push-vec (vec))
+(def test-push-vec (vec))
 (test::assert-equal '(1) (vec-push! test-push-vec 1))
 (test::assert-equal '(1) test-push-vec)
 (test::assert-equal '(1 2) (vec-push! test-push-vec 2))
@@ -448,7 +448,7 @@ Pops the last object off of the end of the vector.  This is destructive!
 Section: vector
 
 Example:
-(def 'test-pop-vec (vec 1 2 3))
+(def test-pop-vec (vec 1 2 3))
 (test::assert-equal 3 (vec-pop! test-pop-vec))
 (test::assert-equal '(1 2) test-pop-vec)
 (test::assert-equal 2 (vec-pop! test-pop-vec))
@@ -487,7 +487,7 @@ Clears a vector.  This is destructive!
 Section: vector
 
 Example:
-(def 'test-clear-vec (vec 1 2 3))
+(def test-clear-vec (vec 1 2 3))
 (test::assert-false (vec-empty? test-clear-vec))
 (vec-clear! test-clear-vec)
 (test::assert-true (vec-empty? test-clear-vec))
@@ -507,7 +507,7 @@ This is destructive!
 Section: vector
 
 Example:
-(def 'test-remove-nth-vec (vec 1 2 3))
+(def test-remove-nth-vec (vec 1 2 3))
 (test::assert-equal '(1 2 3) test-remove-nth-vec)
 (vec-remove! test-remove-nth-vec 1)
 (test::assert-equal '(1 3) test-remove-nth-vec)
@@ -530,7 +530,7 @@ Inserts new-element at index and moves following elements right in vector.  This
 Section: vector
 
 Example:
-(def 'test-insert-nth-vec (vec 1 2 3))
+(def test-insert-nth-vec (vec 1 2 3))
 (test::assert-equal '(1 2 3) test-insert-nth-vec)
 (vec-insert! test-insert-nth-vec 1 5)
 (test::assert-equal '(1 5 2 3) test-insert-nth-vec)

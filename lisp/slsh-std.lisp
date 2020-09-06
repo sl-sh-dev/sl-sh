@@ -1,21 +1,21 @@
 ; core should be loaded into the root namespace (ie it does not set a namespace).
-(def 'prim-print-backtrace (fn (backtrace) 
+(def prim-print-backtrace (fn (backtrace) 
     (if (not (vec-empty? backtrace))
         (do
-          (def 'b (first backtrace))
-          (print (if (def 'file (meta-file-name b)) file "??????") ":\t"
-               "line " (if (def 'line (meta-line-no b)) line "??") ":\t"
-               "column " (if (def 'col (meta-column-no b)) col "??") "\n")
+          (def b (first backtrace))
+          (print (if (def file (meta-file-name b)) file "??????") ":\t"
+               "line " (if (def line (meta-line-no b)) line "??") ":\t"
+               "column " (if (def col (meta-column-no b)) col "??") "\n")
           (recur (rest backtrace))))))
 
-(def 'prim-print-error (fn (error)
+(def prim-print-error (fn (error)
     (if (= :error (car error))
         (do
             (println (cadr error))
             (prim-print-backtrace (caddr error)))
         (err "Not an error!"))))
 
-(def 'result (get-error (do
+(def result (get-error (do
 
 (load "core.lisp")
 
@@ -57,10 +57,10 @@ t
 "
   (arg) `(sym ,arg))
 
-(def '*last-status* 0)
-(def '*last-command* "")
+(def *last-status* 0)
+(def *last-command* "")
 
-(def '*repl-settings* (make-hash))
+(def *repl-settings* (make-hash))
 (hash-set! *repl-settings* :keybindings :emacs)
 
 (load "seq.lisp")
@@ -72,26 +72,26 @@ t
 (if (= :error (car result)) (prim-print-error result))
 
 ; Do not leave this stuff laying around the root scope.
-(undef 'result)
-(undef 'prim-print-backtrace)
-(undef 'prim-print-error)
+(undef result)
+(undef prim-print-backtrace)
+(undef prim-print-error)
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? '*load-slshrc*)
   (do
-    (def 'config-file "$HOME$/.config/sl-sh/slshrc")
+    (def config-file "$HOME$/.config/sl-sh/slshrc")
     (if (not (fs-exists? config-file)) (write-string (open config-file :create) *slshrc-src*))
     (load "slshrc")))
 
 (if (def? '*interactive*)
   (do
-    (if (not (def? 'repl))(def 'repl shell::repl))
+    (if (not (def? 'repl))(def repl shell::repl))
     (repl)))
 
 (if (def? '*run-script*)
   (do
-    (def 'result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
+    (def result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
     (if (= :error (car result))
       (shell::print-error result))))
 

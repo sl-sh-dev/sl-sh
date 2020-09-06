@@ -47,7 +47,7 @@ Some stuff
     (assert-true (and (assert-equal (vec-set! l1 1 'x) '(1 x 3)) (assert-equal l1 '(1 x 3))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (collect (append l1 l2)) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (vec-push! l1 4) '(1 x 3 4)) (assert-equal l1 '(1 x 3 4))) (str ". line number: " (meta-line-no)))
-    (setq! l4 (vec-nth l3 2))
+    (set! l4 (vec-nth l3 2))
     (vec-push! l4 'd)
     (assert-true (and (assert-equal (vec-nth l3 2) '(a b c d)) (assert-equal l4 (vec-nth l3 2))) (str ". line number: " (meta-line-no)))
     (assert-true (and (= (vec-pop! l1) 4) (assert-equal l1 '(1 x 3))) (str ". line number: " (meta-line-no)))
@@ -69,7 +69,7 @@ Some stuff
     (assert-true (and (= (car (cdr l1)) 2) (assert-equal l1 '(1 2 3))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (join (car l1) (xar! (cdr l1) 'x)) '(1 x 3)) (assert-equal l1 '(1 x 3))) (str ". line number: " (meta-line-no)))
     (assert-true (and (assert-equal (join (car l1) (join (car (cdr l1)) (join (car (cdr (cdr l1))) l2))) '(1 x 3 a b c)) (assert-equal l1 '(1 x 3)) (assert-equal l2 '(a b c))) (str ". line number: " (meta-line-no)))
-    (setq! l4 (car (cdr (cdr l3))))
+    (set! l4 (car (cdr (cdr l3))))
     (assert-equal l4 '(a b c)) (str ". line number: " (meta-line-no)))
 
 ;; ensure mechanism for list creation doesn't affect how lists are updated
