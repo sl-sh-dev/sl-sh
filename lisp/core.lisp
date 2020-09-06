@@ -45,7 +45,7 @@ Section: core
 
 Section: namespace"
     (symbol_or_sequence) `(do
-    (if (not (def? '*ns-exports*)) (def *ns-exports* (vec)))
+    (if (not (def? *ns-exports*)) (def *ns-exports* (vec)))
     (if (symbol? ,symbol_or_sequence)
         (vec-push! *ns-exports* (quote ,symbol_or_sequence))
         (if (or (list? ,symbol_or_sequence) (vec? ,symbol_or_sequence))
@@ -121,10 +121,10 @@ Example:
   (test::assert-equal 5 (varfn-test 2 3))
   (varfn varfn-test2 (x y) (set! x (* x 2))(+ x y))
   (test::assert-equal 7 (varfn-test2 2 3))
-  (test::assert-true (def? 'varfn-test))
-  (test::assert-true (def? 'varfn-test2)))
-(test::assert-false (def? 'varfn-test))
-(test::assert-false (def? 'varfn-test2))
+  (test::assert-true (def? varfn-test))
+  (test::assert-true (def? varfn-test2)))
+(test::assert-false (def? varfn-test))
+(test::assert-false (def? varfn-test2))
 "
     (name &rest args) `(internal-fn var ,name ,@args)) 
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
+use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
@@ -39,9 +40,7 @@ fn proc_set_vars<'a>(
             let key = match key.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
-                    return Err(LispError::new(
-                        "first form (binding key) must be a symbol",
-                    ));
+                    return Err(LispError::new("first form (binding key) must be a symbol"));
                 }
             };
             if let Some(arg2) = args.next() {
@@ -297,19 +296,49 @@ fn builtin_is_def(
             Ok(Expression::alloc_data(ExpEnum::Nil))
         }
     }
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            return match &arg0.get().data {
-                ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
-                ExpEnum::Atom(Atom::String(s, _)) => get_ret(environment, &s),
-                _ => Err(LispError::new(
-                    "def? takes a symbol or string (will be treated as a symbol) to lookup",
-                )),
-            };
+    fn do_list(environment: &mut Environment, key: Expression) -> Result<Expression, LispError> {
+        let new_key = eval(environment, key)?;
+        let new_key_d = new_key.get();
+        if let ExpEnum::Atom(Atom::Symbol(s)) = &new_key_d.data {
+            get_ret(environment, s)
+        } else {
+            Err(LispError::new("def?: takes a symbol to lookup (list must eval to symbol)"))
         }
     }
-    Err(LispError::new("def? takes one form (symbol or string)"))
+    if let Some(key) = args.next() {
+        params_done(args, "def?")?;
+        match &key.get().data {
+            ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
+            ExpEnum::Pair(_, _) => do_list(environment, key.clone()),
+            ExpEnum::Vector(_) => do_list(environment, key.clone()),
+            _ => Err(LispError::new("def?: takes a symbol to lookup")),
+        }
+    } else {
+        Err(LispError::new("def? takes one form (symbol)"))
+    }
+}
+
+fn builtin_ref(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(key) = args.next() {
+        //let idx = param_eval(environment, args, "values-nth")?;
+        //let vals = param_eval(environment, args, "values-nth")?;
+        params_done(args, "ref")?;
+        match &key.get().data {
+            ExpEnum::Atom(Atom::Symbol(s)) => {
+                if let Some(form) = get_expression(environment, s) {
+                    Ok(form.exp)
+                } else {
+                    Err(LispError::new(format!("ref: symbol {} not bound", s)))
+                }
+            }
+            _ => Err(LispError::new("ref: takes a bound symbol")),
+        }
+    } else {
+        Err(LispError::new("ref: takes one form (symbol)"))
+    }
 }
 
 pub fn add_bind_builtins<S: BuildHasher>(
@@ -455,12 +484,12 @@ Section: core
 
 Example:
 (def test-undef nil)
-(test::assert-true (def? 'test-undef))
+(test::assert-true (def? test-undef))
 (undef test-undef)
-(test::assert-false (def? 'test-undef))
+(test::assert-false (def? test-undef))
 (def test-undef \"undef\")
 (test::assert-equal \"undef\" (undef test-undef))
-(test::assert-false (def? 'test-undef))
+(test::assert-false (def? test-undef))
 (test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef test-undef))))
 ",
             root,
@@ -493,24 +522,45 @@ Example:
     );
     data.insert(
         interner.intern("def?"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_is_def,
             "Usage: (def? expression) -> t|nil
 
-Return true if symbol is defined.
-
-Expression will be evaluated and if a symbol or string it will look up that
-name in the symbol table and return true if it exists.
+Return true if is a defined symbol (bound within the current scope). If expression
+is a symbol it is not evaluted and if a list it is evaluted to produce a symbol.
 
 Section: core
 
 Example:
 (def test-is-def t)
-(test::assert-true (def? 'test-is-def))
-(test::assert-true (def? \"test-is-def\"))
-(test::assert-true (def? (sym->str 'test-is-def)))
-(test::assert-false (def? 'test-is-def-not-defined))
-(test::assert-false (def? \"test-is-def-not-defined\"))
+(def test-is-def2 'test-is-def)
+(test::assert-true (def? test-is-def))
+(test::assert-true (def? (sym \"test-is-def\")))
+(test::assert-true (def? (ref test-is-def2)))
+(test::assert-false (def? test-is-def-not-defined))
+(test::assert-false (def? (sym \"test-is-def-not-defined\")))
+(test::assert-error (def? (ref test-is-def)))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("ref"),
+        Expression::make_function(
+            builtin_ref,
+            "Usage: (ref? symbol) -> expression
+
+Return the expression that is referenced by symbol.
+Symbol is not evaluated and must be bound in the current scope or an error is raised.
+
+Section: core
+
+Example:
+(def test-is-def t)
+(test::assert-true (ref test-is-def))
+(set! test-is-def '(1 2 3))
+(test::assert-equal '(1 2 3) (ref test-is-def))
+(test::assert-error (ref test-is-def-no-exist))
 ",
             root,
         ),

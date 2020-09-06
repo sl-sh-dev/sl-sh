@@ -209,7 +209,7 @@ Example:
 (def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
-(test::assert-false (def? 'test-symbol))
+(test::assert-false (def? test-symbol))
 ",
             root,
         ),
@@ -229,9 +229,9 @@ Example:
 (def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
-(test::assert-false (def? 'test-symbol))
+(test::assert-false (def? test-symbol))
 (ns-enter 'ns-enter-test-namespace)
-(test::assert-true (def? 'test-symbol))
+(test::assert-true (def? test-symbol))
 (test::assert-equal \"testing\" test-symbol)
 (ns-pop)
 t

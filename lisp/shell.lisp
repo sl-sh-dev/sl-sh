@@ -374,7 +374,7 @@ Section: shell
 
 (defn find-symbol (com)
 	(var val (sym *active-ns* "::" com))
-	(if (def? val) val (sym "root::" com)))
+	(if (def? (ref val)) val (sym "root::" com)))
 
 (defmacro sys-alias?
 "
@@ -385,7 +385,7 @@ Section: shell
 	(com) `(do
 	(var ret nil)
 	(var val (shell::find-symbol ,com))
-	(if (def? val)
+	(if (def? (ref val))
 		(set! val (eval val)))
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(var expansion (expand-macro (val)))
@@ -471,7 +471,7 @@ Example:
      (varfn func? (com)
             ; Want the actual thing pointed to by the symbol in com for the test.
             (set! com (shell::find-symbol com))
-            (if (def? com)
+            (if (def? (ref com))
               (do (set! com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
               nil))
 
@@ -495,7 +495,7 @@ Example:
      (varfn command-color (command)
             (var ns-command (shell::find-symbol command))
             (if (not tok-command)
-              (if (def? ns-command)
+              (if (def? (ref ns-command))
                 (if (func? command)
                   (if in-sys-command
                     (str shell::tok-default-color command shell::*fg-default*)
@@ -654,7 +654,7 @@ Section: shell
 
 (defn handle-last-command (line)
     ; Save history
-    (if (not (def? '*repl-std-only*)) (history-push :repl line))
+    (if (not (def? *repl-std-only*)) (history-push :repl line))
     ;; Set global var *last-command*
     (set! *last-command* line))
 
@@ -663,7 +663,7 @@ Section: shell
         (export 'LAST_STATUS "0")
         (set! *last-status* 0)
         (var exec-hook (sym *active-ns* "::__exec_hook"))
-        (var ast (if (and (def? exec-hook)(lambda? (eval exec-hook)))
+        (var ast (if (and (def? (ref exec-hook))(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (read-all line)))
         (set! ast (if (string? ast) (read-all ast) ast))
@@ -681,18 +681,18 @@ Section: shell
           (do
             (set! *last-command* line)
             ; Save temp history
-            (if (and (> line-len 0)(not (def? '*repl-std-only*))) (history-push-throwaway :repl line))
+            (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
             (print-error result)))))
 
 (defn repl ()
       (var get-prompt (fn ()
               (var ns-prompt (sym *active-ns* "::__prompt"))
-              (if (def? ns-prompt) (apply ns-prompt nil) (__prompt))))
+              (if (def? (ref ns-prompt)) (apply ns-prompt nil) (__prompt))))
       (var repl-inner (fn ()
-              (if (not (def? '*repl-std-only*)) (history-context :repl $PWD))
+              (if (not (def? *repl-std-only*)) (history-context :repl $PWD))
               (reap-jobs)
               (var save-last-status *last-status*)
-              (var line (if (def? '*repl-std-only*) 
+              (var line (if (def? *repl-std-only*) 
                            (do (print (get-prompt))(read-line *stdin*))
                            (prompt :repl (get-prompt) "~/.local/share/sl-sh/history")))
               (export 'LAST_STATUS save-last-status)
@@ -708,7 +708,7 @@ Section: shell
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
 Section: shell"
     ()
-    (if (def? '$TMPDIR) (str $TMPDIR) "/tmp"))
+    (if (def? $TMPDIR) (str $TMPDIR) "/tmp"))
 
 (defn fc
 "Put the contents of the last command into a temporary file
