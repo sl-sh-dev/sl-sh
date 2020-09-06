@@ -335,10 +335,15 @@ fn builtin_ref(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
-        //let idx = param_eval(environment, args, "values-nth")?;
-        //let vals = param_eval(environment, args, "values-nth")?;
         params_done(args, "ref")?;
-        match &key.get().data {
+        let key = match &key.get().data {
+            ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
+            ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
+            ExpEnum::Vector(_) => eval(environment, key.clone())?,
+            _ => return Err(LispError::new("ref: takes a symbol")),
+        };
+        let key_d = key.get();
+        match &key_d.data {
             ExpEnum::Atom(Atom::Symbol(s)) => {
                 if let Some(form) = get_expression(environment, s) {
                     Ok(form.exp)
@@ -583,16 +588,20 @@ Example:
             "Usage: (ref? symbol) -> expression
 
 Return the expression that is referenced by symbol.
-Symbol is not evaluated and must be bound in the current scope or an error is raised.
+Symbol is only evaluated if a list (that produces a symbol) and must be bound
+in the current scope or an error is raised.
 
 Section: core
 
 Example:
 (def test-is-def t)
+(def test-is-def2 'test-is-def)
 (test::assert-true (ref test-is-def))
 (set! test-is-def '(1 2 3))
 (test::assert-equal '(1 2 3) (ref test-is-def))
 (test::assert-error (ref test-is-def-no-exist))
+(test::assert-error (ref (ref test-is-def)))
+(test::assert-equal '(1 2 3) (ref (ref test-is-def2)))
 ",
             root,
         ),

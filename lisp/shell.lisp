@@ -660,18 +660,20 @@ Section: shell
 
 (defn repl-line (line line-len)
       (do
+        (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
+        (var my-read (if strict? read read-all))
         (export 'LAST_STATUS "0")
         (set! *last-status* 0)
         (var exec-hook (sym *active-ns* "::__exec_hook"))
-        (var ast (if (and (def? (ref exec-hook))(lambda? (eval exec-hook)))
+        (var ast (if (and (not strict?)(def? (ref exec-hook))(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
-                    (read-all line)))
-        (set! ast (if (string? ast) (read-all ast) ast))
-        (var result (loose-symbols (get-error (eval ast))))
+                    (my-read line)))
+        (set! ast (if (string? ast) (my-read ast) ast))
+        (var result (if strict? (get-error (eval ast))(loose-symbols (get-error (eval ast)))))
         (if (= :ok (car result))
           (do
             (if (process? (cdr result)) nil
-              (nil? (cdr result)) nil
+              (and (not strict?)(nil? (cdr result))) nil
               (file? (cdr result)) nil
               (println (cdr result)))
             (if (> line-len 0)
@@ -703,6 +705,9 @@ Section: shell
       ((fn ()
            (var result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(exit 1))))))
+
+(defn repl-lisp () (def repl-strict t))
+(defn repl-shell () (def repl-strict nil))
 
 (defn temp-dir
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
