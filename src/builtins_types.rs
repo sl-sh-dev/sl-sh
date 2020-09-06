@@ -347,6 +347,34 @@ fn builtin_str_to_float(
     Err(LispError::new("str->float: requires a string"))
 }
 
+fn builtin_int_to_float(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            if let ExpEnum::Atom(Atom::Int(i)) = &eval(environment, arg)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(*i as f64))));
+            }
+        }
+    }
+    Err(LispError::new("int->float: requires an int"))
+}
+
+fn builtin_float_to_int(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            if let ExpEnum::Atom(Atom::Float(f)) = &eval(environment, arg)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(*f as i64))));
+            }
+        }
+    }
+    Err(LispError::new("float->int: requires a float"))
+}
+
 fn builtin_to_symbol(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -808,6 +836,47 @@ Example:
 (test::assert-equal -101.95 (str->float \"-101.95\"))
 (test::assert-error (str->float \"not int\"))
 (test::assert-error (str->float \"--10\"))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("int->float"),
+        Expression::make_function(
+            builtin_int_to_float,
+            "Usage: (int->float int) -> float
+
+Cast an int as a float.
+
+Section: type
+
+Example:
+(test::assert-equal 0 (int->float 0))
+(test::assert-equal 10 (int->float 10))
+(test::assert-equal -101 (int->float -101))
+(test::assert-error (int->float \"not int\"))
+",
+            root,
+        ),
+    );
+    data.insert(
+        interner.intern("float->int"),
+        Expression::make_function(
+            builtin_float_to_int,
+            "Usage: (float->int float) -> int
+
+Cast a float as an int.  Truncates.
+
+Section: type
+
+Example:
+(test::assert-equal 0 (float->int 0.0))
+(test::assert-equal 10 (float->int 10.0))
+(test::assert-equal 10 (float->int 10.1))
+(test::assert-equal 10 (float->int 10.5))
+(test::assert-equal 10 (float->int 10.9))
+(test::assert-equal -101 (float->int -101.99))
+(test::assert-error (float->int \"not int\"))
 ",
             root,
         ),
