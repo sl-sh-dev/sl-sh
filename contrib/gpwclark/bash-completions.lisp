@@ -81,8 +81,8 @@
 	Section: bash-completions"
 	(args)
 	(let ((arg-str (str-cat-list " " args)))
-		(progn
-			(defq raw-list-of-completions (get-bash-completion arg-str))
+		(do
+			(def raw-list-of-completions (get-bash-completion arg-str))
 			(if (and
 					(= 1 (length raw-list-of-completions))
 					(str-empty? (first raw-list-of-completions)))
@@ -95,8 +95,8 @@
 		("cd" :path)
 		("ls" :default)
 		(nil
-			(progn
-				(defq possible-completions (check-bash-completion args))
+			(do
+				(def possible-completions (check-bash-completion args))
 				(if (= nil possible-completions) :default possible-completions)))))
 
 ;; }}}

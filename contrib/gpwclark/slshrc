@@ -3,7 +3,7 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
-(defq default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
+(def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
 ;; - getopts!
@@ -73,9 +73,9 @@
 
 		Section: user-shell"
 		(str-to-tail-f) (progn
-		(defq matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
+		(def matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
 		(println "list match: " matching-list)
-		(defq tail-target (first matching-list))
+		(def tail-target (first matching-list))
 		(println "tail -f " tail-target)
 		(tail -f tail-target)))
 
@@ -85,7 +85,7 @@
 	"
 		()
 		(progn
-			(defq most-recent-dir
+			(def most-recent-dir
 				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir))))
 
@@ -112,7 +112,7 @@
 	"
 	()
 	(progn
-		(defq raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+		(def raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
 		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
 
 (defn stripcolor
@@ -161,12 +161,12 @@
 	(let ((log-out-file "last_build.log"))
 	(progn
 		(|
-			(defq gradle-proc (eval (append-to! '(./gradlew) args)))
+			(def gradle-proc (eval (append-to! '(./gradlew) args)))
 			(tee log-out-file)
 		)
-		(defq gradle-ret-code (wait gradle-proc))
-		(defq log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
-		(defq proj-name (str (basename $PWD)))
+		(def gradle-ret-code (wait gradle-proc))
+		(def log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+		(def proj-name (str (basename $PWD)))
 		(if (= 0 gradle-ret-code)
 			(nss-pass (str "PASS! - " proj-name) log-out-txt)
 			(nss-fail (str "FAIL! - " proj-name) log-out-txt))
@@ -195,9 +195,9 @@
 	(syntax-on)
 
 ;; tweak token colors
-	(setq tok-default-color shell::*fg-magenta*)
-	(setq tok-sys-command-color shell::*fg-green*)
-	(setq tok-string-color (fg-color-rgb 255 128 0))
+	(set! tok-default-color shell::*fg-magenta*)
+	(set! tok-sys-command-color shell::*fg-green*)
+	(set! tok-string-color (fg-color-rgb 255 128 0))
 
 ;; you deserve all the information
 	(error-stack-on)
@@ -290,7 +290,7 @@
 	Section: notify"
 	()
 	(progn
-		(defq last-ret-val *last-status*)
+		(def last-ret-val *last-status*)
 		(pnss (str "Last program exit status: " last-ret-val  "."))
 		last-ret-val))
 
@@ -351,7 +351,7 @@ Section: tmux"
 	(&rest args)
 		(if (= (length args) 1)
 			(progn
-				(defq tmux-ret-code (tmux a -t (first args)))
+				(def tmux-ret-code (tmux a -t (first args)))
 				(if (= 0 tmux-ret-code)
 					0
 					(tmuxnew (first args))))
@@ -426,13 +426,13 @@ Section: tmux"
 	"if in git repo, get the name of the branch
 	Section: git"
 	() (let ((branch))
-	(err>null (setq branch (str (git rev-parse --abbrev-ref HEAD))))
+	(err>null (set! branch (str (git rev-parse --abbrev-ref HEAD))))
 	(if (= branch "")
 		(str "")
 		(str "(" (str-trim branch) ")"))))
 
 (defn get-build-type () (progn
-	(defq build-type (nth 3 (str-split " " (version))))
+	(def build-type (nth 3 (str-split " " (version))))
 	(if (= build-type "debug")
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
 		"")))
@@ -445,9 +445,9 @@ Section: tmux"
 ;;	5. cursor on near empty line
 (defn __prompt ()
     (progn
-        (def 'token-str (str-trim *last-command*))
+        (def token-str (str-trim *last-command*))
         (when (> (length token-str) 0)
-            (set 'token-str (collect (reverse (read-all token-str)))))
+            (set! token-str (collect (reverse (read-all token-str)))))
         (when (and
                 (> (length token-str) 0)
                 (not (empty-seq? token-str)))
@@ -463,7 +463,7 @@ Section: tmux"
                   (if (= (nth 2 token-str) '$3la)
                     (export '3la $3la)
                     (export '3la (str (nth 2 token-str)))))))
-        (def 'last-status *last-status*)
+        (def last-status *last-status*)
         (str
             "\n"
             (if (> (length (get-dirs)) 0)
@@ -487,7 +487,7 @@ Section: tmux"
 
 ;; machine specific {{{
 
-(defq custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
+(def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
 (if (fs-exists? custom-lisp-config)
 	(load custom-lisp-config)
 	(println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
@@ -504,8 +504,8 @@ Section: tmux"
             (if (empty-seq? namespaces)
                 sym-list
                 (progn
-                (defq the-ns (first namespaces))
-                (setq sym-list (filter (fn (x) (not (in? (ns-symbols (to-symbol the-ns)) x))) sym-list))
+                (def the-ns (first namespaces))
+                (set! sym-list (filter (fn (x) (not (in? (ns-symbols (to-symbol the-ns)) x))) sym-list))
                 (recur sym-list (rest namespaces))))))
 
     (defn filter-user-undocable-forms (sym-list)
@@ -525,22 +525,22 @@ Section: tmux"
     ;; TODO ideally this would live in mk-docs.lisp
     ;; and :user would be an option as param fo mkdocs::get-doc-list-for
     (defn list-of-user-slsh-syms () (progn
-        (defq user-syms (list))
-        (defq all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
+        (def user-syms (list))
+        (def all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
         (for a-ns in (filter
                     (fn (x) (not (in? all-non-user-namespaces x)))
                     (ns-list))
             (append-to! user-syms (ns-symbols (to-symbol a-ns))))
-        (defq user-forms (mkdocs::filter-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
-        (setq user-forms (filter-user-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
+        (def user-forms (mkdocs::filter-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
+        (set! user-forms (filter-user-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
         (println "user forms: " user-forms)
         user-forms))
 
-    (defq all-user-slsh-syms (list-of-user-slsh-syms))
+    (def all-user-slsh-syms (list-of-user-slsh-syms))
 
     (println "all my slsh-syms : " all-user-slsh-syms)
 
-    (defq all-docstrings
+    (def all-docstrings
         (map (fn (x) (doc (to-symbol x))) all-user-slsh-syms))
 
     ;; check the last modified time of index.markdown and only do this if
