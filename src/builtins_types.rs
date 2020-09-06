@@ -354,7 +354,9 @@ fn builtin_int_to_float(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             if let ExpEnum::Atom(Atom::Int(i)) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(*i as f64))));
+                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
+                    *i as f64,
+                ))));
             }
         }
     }
