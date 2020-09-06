@@ -1880,7 +1880,7 @@ Section: core
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (do (print \"Print test out\")(print \" two\") (close *stdout*)))
+(dyn *stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (do (print \"Print test out\")(print \" two\") (close *stdout*)))
 (test::assert-equal \"Print test out two\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
             root,
@@ -1898,7 +1898,7 @@ Section: core
 
 Example:
 ; Use a file for stdout for test.
-(dyn '*stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (do (println \"Println test out\")(println \"line two\") (close *stdout*)))
+(dyn *stdout* (open \"/tmp/sl-sh.println.test\" :create :truncate) (do (println \"Println test out\")(println \"line two\") (close *stdout*)))
 (def topen (open \"/tmp/sl-sh.println.test\" :read))
 (test::assert-equal \"Println test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
@@ -1918,7 +1918,7 @@ Section: core
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (do (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
+(dyn *stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (do (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
 (test::assert-equal \"eprint test out two\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
             root,
@@ -1936,7 +1936,7 @@ Section: core
 
 Example:
 ; Use a file for stderr for test.
-(dyn '*stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (do (eprintln \"eprintln test out\")(eprintln \"line two\") (close *stderr*)))
+(dyn *stderr* (open \"/tmp/sl-sh.eprintln.test\" :create :truncate) (do (eprintln \"eprintln test out\")(eprintln \"line two\") (close *stderr*)))
 (def topen (open \"/tmp/sl-sh.eprintln.test\" :read))
 (test::assert-equal \"eprintln test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))

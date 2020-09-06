@@ -99,7 +99,7 @@
 
 (defn report-test-results (tests test-report) (do
 	(var exit-status :passed)
-	(dyn 'exit (fn (x) (do
+	(dyn exit (fn (x) (do
 				(when (not (= x "0"))
 					(do
 						(set! exit-status :failed)

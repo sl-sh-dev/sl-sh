@@ -61,7 +61,7 @@
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
-    `(eval (str "(dyn 'exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))")))
+    `(eval (str "(dyn exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))")))
 
 (defmacro run-example (sym)
     `(lex

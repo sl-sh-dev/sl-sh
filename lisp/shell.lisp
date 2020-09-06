@@ -42,8 +42,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stdout* ,file ,body)
-		(dyn '*stdout* (open ,file :create :append) ,body)))
+		(dyn *stdout* ,file ,body)
+		(dyn *stdout* (open ,file :create :append) ,body)))
 
 (defmacro out>
 "
@@ -53,8 +53,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stdout* ,file ,body)
-		(dyn '*stdout* (open ,file :create :truncate) ,body)))
+		(dyn *stdout* ,file ,body)
+		(dyn *stdout* (open ,file :create :truncate) ,body)))
 
 (defmacro err>>
 "
@@ -64,8 +64,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stderr* ,file ,body)
-		(dyn '*stderr* (open ,file :create :append) ,body)))
+		(dyn *stderr* ,file ,body)
+		(dyn *stderr* (open ,file :create :append) ,body)))
 
 (defmacro err>
 "
@@ -75,8 +75,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stderr* ,file ,body)
-		(dyn '*stderr* (open ,file :create :truncate) ,body)))
+		(dyn *stderr* ,file ,body)
+		(dyn *stderr* (open ,file :create :truncate) ,body)))
 
 (defmacro out-err>>
 "
@@ -86,8 +86,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
-		(dyn '*stdout* (open ,file :create :append) (dyn '*stderr* *stdout* ,body))))
+		(dyn *stdout* ,file (dyn *stderr* ,file ,body))
+		(dyn *stdout* (open ,file :create :append) (dyn *stderr* *stdout* ,body))))
 
 (defmacro out-err>
 "
@@ -97,8 +97,8 @@ Section: shell
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn '*stdout* ,file (dyn '*stderr* ,file ,body))
-		(dyn '*stdout* (open ,file :create :truncate) (dyn '*stderr* *stdout* ,body))))
+		(dyn *stdout* ,file (dyn *stderr* ,file ,body))
+		(dyn *stdout* (open ,file :create :truncate) (dyn *stderr* *stdout* ,body))))
 
 (defmacro out>null
 "
@@ -107,7 +107,7 @@ Redirect stdout to null (/dev/null equivelent).
 Section: shell
 "
 	(body)
-	`(dyn '*stdout* (open "/dev/null" :write) ,body))
+	`(dyn *stdout* (open "/dev/null" :write) ,body))
 
 (defmacro err>null
 "
@@ -116,7 +116,7 @@ Redirect stderr to null (/dev/null equivelent).
 Section: shell
 "
 (body)
-	`(dyn '*stderr* (open "/dev/null" :write) ,body))
+	`(dyn *stderr* (open "/dev/null" :write) ,body))
 
 (defmacro out-err>null
 "
@@ -125,7 +125,7 @@ Redirect both stdout and stderr to null (/dev/null equivelent).
 Section: shell
 "
 	(body)
-	`(dyn '*stdout* (open "/dev/null" :write) (dyn '*stderr* *stdout* ,body)))
+	`(dyn *stdout* (open "/dev/null" :write) (dyn *stderr* *stdout* ,body)))
 
 (defmacro |
 "
@@ -187,23 +187,23 @@ Section: shell
         Example:
         (clear-dirs)
         (def cur-test-path (str (pwd)))
-        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd \"/tmp\")
         (def cur-test-path2 (str (pwd)))
-        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd (str-trim cur-test-path))
-        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (def test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
         (test::assert-equal cur-test-path (read-line test-dirs-file))
         (test::assert-equal cur-test-path2 (read-line test-dirs-file))
         (close test-dirs-file)
         (popd)
-        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (popd)
-        (dyn '*stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
+        (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         "
         ()

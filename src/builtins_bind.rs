@@ -37,6 +37,12 @@ fn proc_set_vars<'a>(
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
+            let key = match &key.get().data {
+                ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
+                ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
+                ExpEnum::Vector(_) => eval(environment, key.clone())?,
+                _ => return Err(LispError::new("first form (binding key) must be a symbol")),
+            };
             let key = match key.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
@@ -120,7 +126,7 @@ fn builtin_set(
         Ok(val)
     } else {
         Err(LispError::new(
-            "set's first form must evaluate to an existing symbol",
+            "set!: first form must evaluate to an existing symbol",
         ))
     }
 }
@@ -168,7 +174,6 @@ fn builtin_def(
         let ns = current_namespace(environment);
         let (reference, val) = val_to_reference(environment, ns, doc_string, val)?;
         set_expression_current_namespace(environment, key, reference);
-        //set_expression_current_ref(environment, key, reference);
         Ok(val)
     }
 }
@@ -236,23 +241,28 @@ fn builtin_dyn(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let (key, val) = if let Some(key) = args.next() {
-        let key = eval(environment, key)?;
+        let key = match &key.get().data {
+            ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
+            ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
+            ExpEnum::Vector(_) => eval(environment, key.clone())?,
+            _ => return Err(LispError::new("dyn: takes a symbol")),
+        };
         if let Some(val) = args.next() {
             let key = match key.get().data {
                 ExpEnum::Atom(Atom::Symbol(s)) => s,
                 _ => {
                     return Err(LispError::new(
-                        "first form (binding key) must evaluate to a symbol",
+                        "dyn: first form (binding key) must be a symbol",
                     ));
                 }
             };
             let val = eval(environment, val)?;
             (key, val)
         } else {
-            return Err(LispError::new("dyn requires a key and value"));
+            return Err(LispError::new("dyn: requires a key and value"));
         }
     } else {
-        return Err(LispError::new("dyn requires a key and value"));
+        return Err(LispError::new("dyn: requires a key and value"));
     };
     let old_val = if environment.dynamic_scope.contains_key(key) {
         Some(environment.dynamic_scope.remove(key).unwrap())
@@ -281,7 +291,7 @@ fn builtin_dyn(
         }
     }
     Err(LispError::new(
-        "dyn requires three expressions (symbol, value, form to evaluate)",
+        "dyn: requires three expressions (symbol, value, form to evaluate)",
     ))
 }
 
@@ -302,7 +312,9 @@ fn builtin_is_def(
         if let ExpEnum::Atom(Atom::Symbol(s)) = &new_key_d.data {
             get_ret(environment, s)
         } else {
-            Err(LispError::new("def?: takes a symbol to lookup (list must eval to symbol)"))
+            Err(LispError::new(
+                "def?: takes a symbol to lookup (list must eval to symbol)",
+            ))
         }
     }
     if let Some(key) = args.next() {
@@ -376,7 +388,7 @@ Example:
             "Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
-Symbol is not evaluted.
+Symbol is not evaluted unless it is a list which must produce a symbol.
 
 Set will set the first binding it finds starting in the current scope and then
 trying enclosing scopes until exhausted.
@@ -396,6 +408,9 @@ Example:
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
+(set! (sym \"test-do-one\") \"do one\")
+(test::assert-equal \"do one\" test-do-one)
+(test::assert-error (set! (sym->str test-do-one) \"do one 2\"))
 ",
             root,
         ),
@@ -407,7 +422,7 @@ Example:
             "Usage: (def symbol expression) -> expression
 
 Adds an expression to the current namespace.  Return the expression that was defined.
-Symbol is not evaluted.
+Symbol is not evaluted unless it is a list which must produce a symbol.
 
 Section: core
 
@@ -430,6 +445,9 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Default\" test-do-four)
+(def (sym \"test-do-one\") \"do one\")
+(test::assert-equal \"do one\" test-do-one)
+(test::assert-error (def (sym->str test-do-one) \"do one 2\"))
 ",
             root,
         ),
@@ -443,7 +461,7 @@ Example:
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
 lex forms to create local bindings.
-Symbol is not evaluted.
+Symbol is not evaluted unless it is a list which must produce a symbol.
 
 Section: core
 
@@ -462,7 +480,10 @@ Example:
     (set! test-do-one \"1111\")
     (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
-    (test::assert-equal \"2222\" test-do-two))
+    (test::assert-equal \"2222\" test-do-two)
+    (var (sym \"test-do-one2\") \"do one\")
+    (test::assert-equal \"do one\" test-do-one2)
+    (test::assert-error (var (sym->str test-do-one) \"do one 2 3\")))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two))
@@ -497,25 +518,36 @@ Example:
     );
     data.insert(
         interner.intern("dyn"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_dyn,
             "Usage: (dyn key value expression) -> result_of_expression
 
 Creates a dynamic binding for key, assigns value to it and evals expression under it.
+Note that if key is a symbol it is not evaluted and if a list it will be evaluted
+to provide a symbol (anything else is an error).
 
 The binding is gone once the dyn form ends. The binding will take precedence over
-any other binding in any scope with that name for any form that evaluates as a
+ANY other binding in any scope with that name for any form that evaluates as a
 result of the dynamic binding (for instance creating a dynamic binding for
 *stdout* will cause all output to stdout to use the new binding in any print's
 used indirectly).  Calls to dyn can be nested and previous dynamic values will
 be restored as interior dyn's exit.
 
+NOTE: dyn currenty will override any binding not just \"global\" or \"special\"
+bindings, use with care.
+
 Section: core
 
 Example:
 (defn test-dyn-fn () (print \"Print dyn out\"))
-(dyn '*stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (do (test-dyn-fn)))
+(defn test-dyn-fn2 () (print \"Print dyn out TWO\"))
+(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
 (test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+(def test-dyn-indirect '*stdout*)
+(dyn (ref test-dyn-indirect) (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn2))
+(test::assert-equal \"Print dyn out TWO\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+(def test-dyn-true t)
+(test::assert-error (dyn (ref test-dyn-true) (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn2)))
 ",
             root,
         ),
@@ -546,7 +578,7 @@ Example:
     );
     data.insert(
         interner.intern("ref"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_ref,
             "Usage: (ref? symbol) -> expression
 
