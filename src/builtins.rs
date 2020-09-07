@@ -316,21 +316,22 @@ fn builtin_if(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
+    let mut args = args.peekable();
     let mut next_arg = args.next();
     while let Some(arg) = next_arg {
-        let cond = eval(environment, arg)?;
-        if cond.is_nil() {
-            args.next();
-        } else {
-            return if let Some(result) = args.next() {
-                eval_nr(environment, result)
+        if args.peek().is_some() {
+            let cond = eval(environment, arg)?;
+            if cond.is_nil() {
+                args.next();
             } else {
-                Ok(cond)
-            };
+                return eval_nr(environment, args.next().unwrap());
+            }
+        } else {
+            return eval_nr(environment, arg);
         }
         next_arg = args.next();
         if next_arg.is_none() {
-            return Ok(cond);
+            return Ok(Expression::make_nil());
         }
     }
     Err(LispError::new("if: requires expressions"))
@@ -1864,6 +1865,8 @@ Example:
 (test::assert-equal \"ONE TRUE\" test-if-one2)
 (test::assert-equal \"TWO TRUE2\" test-if-two2)
 (test::assert-equal \"THREE DEFAULT\" test-if-three2)
+(test::assert-false (if nil))
+(test::assert-false (if nil t nil t nil t))
 ",
             root,
         ),
