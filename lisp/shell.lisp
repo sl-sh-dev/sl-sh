@@ -732,7 +732,7 @@ Section: shell"
                 (var file-contents (str (cat fc-file)))
                 (when (not (= "" (str-trim file-contents)))
                     (do
-                        (handle-last-command file-contents)
+                        (handle-last-command (str-trim file-contents))
                         (eval (read-all (str (cat fc-file))))))))))
 
 (ns-export '(

@@ -8,11 +8,8 @@
 ;; gpwclark TODOs
 ;; - getopts!
 ;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
-;; - range? fcn
 ;; - rewrite bash so we don't have gpl in here?
-;; - CI on github? possible?
 ;; - track bkrd processes in PS1? could be helpful?
-;; - address exec-hook.lisp stuff
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 (load "~/.config/sl-sh/bash-completions.lisp")
@@ -494,6 +491,7 @@ Section: tmux"
 
 ;; }}}
 
+#|
 ;; user ns docs {{{
 
 (pushd "~/development/slsh/docs/")
@@ -553,5 +551,6 @@ Section: tmux"
 
 (popd)
 ;; }}}
+|#
 
 (ns-enter 'user)
