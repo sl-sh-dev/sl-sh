@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "redox_liner"
 version = "0.5.1"
-source = "git+https://github.com/sstanfield/liner.git#59813d95fa38433ecc2b3a3be98e6e152cd0b3bb"
+source = "git+https://github.com/sstanfield/liner.git#e2fb17c5f00ace6b1bbe45bca192da70656741eb"
 dependencies = [
  "bytecount",
  "libc",
@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.8.99"
+version = "0.8.100"
 dependencies = [
  "chrono",
  "criterion",
