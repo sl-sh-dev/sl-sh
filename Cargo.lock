@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "redox_liner"
 version = "0.5.1"
-source = "git+https://github.com/sstanfield/liner.git#87e8709cd81726d270def1e71b4215c7bc33bbbb"
+source = "git+https://github.com/sstanfield/liner.git#59813d95fa38433ecc2b3a3be98e6e152cd0b3bb"
 dependencies = [
  "bytecount",
  "libc",
