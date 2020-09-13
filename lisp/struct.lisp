@@ -1,4 +1,4 @@
-(if (ns-exists? 'struct) (ns-enter 'struct) (ns-create 'struct))
+(ns-push 'struct)
 
 (defn method (field dispatch-map tags doc doc-exp)
     (var tsym (sym ":" (car field)))
@@ -26,6 +26,7 @@ Use (:fn name doc-str? body) to add a method.
 Section: struct
 
 Example:
+(ns-push 'test-deftrait)
 (struct::deftrait test-trait
   ; Require what-a and what-d in the structures that implement this trait.
   (:fn aaa (self) (self :what-a))
@@ -39,17 +40,18 @@ Example:
   ; methods
   (:fn what-d (self) d)
   (:fn what-a (self) a)
-  (:impl test-trait))
+  (:impl test-deftrait::test-trait))
 
 (def ts (test-struct))
-(assert-equal nil (ts :aaa))
-(assert-equal \"dee\" (ts :ddd))
+(test::assert-equal nil (ts :aaa))
+(test::assert-equal \"dee\" (ts :ddd))
 (ts :set-d \"something else\")
-(assert-equal \"something else\" (ts :ddd))
-(assert-equal \"bee\" (ts :b))
-(assert-equal \"see\" (ts :c))
+(test::assert-equal \"something else\" (ts :ddd))
+(test::assert-equal \"bee\" (ts :b))
+(test::assert-equal \"see\" (ts :c))
 (ts :set-b \"queen\")
-(assert-equal \"queen\" (ts :b))
+(test::assert-equal \"queen\" (ts :b))
+(ns-pop)
 "
     (name &rest fields)
     ((fn ()
@@ -233,4 +235,4 @@ Example:
 ; Due to the bootstrap order of std lib files can not use the ns-export macro at this point.
 (def *ns-exports* (vec 'deftrait 'defstruct))
 
-(ns-enter *last-ns*)
+(ns-pop)

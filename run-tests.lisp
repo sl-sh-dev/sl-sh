@@ -224,6 +224,16 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(if (test::run-ns-example 'ns-push)
+		(do
+			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
+			(report-pretty-printer :passed "ns-push"))
+		(do
+			(hash-set! ns-test-set-item :failed (+ 1 (hash-get ns-test-set-item :failed)))
+			(report-pretty-printer :failed "ns-push"))))
+
+(do
+	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
 	(if (test::run-ns-example 'ns-symbols)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))

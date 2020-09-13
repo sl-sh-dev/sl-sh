@@ -753,7 +753,7 @@ fn builtin_not(
 }
 
 fn builtin_macro(
-    _environment: &mut Environment,
+    environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(params) = args.next() {
@@ -776,9 +776,10 @@ fn builtin_macro(
         };
         let params = params.handle_no_root();
         let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Macro {
+        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Lambda {
             params,
             body,
+            capture: get_current_scope(environment),
         }))));
     }
     Err(LispError::new("macro: need at least a bindings form"))
@@ -794,7 +795,7 @@ fn do_expansion(
             if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
                 let params: Expression = sh_macro.params.clone().into();
                 let body: Expression = sh_macro.body.clone().into();
-                let new_scope = build_new_scope(Some(get_current_scope(environment)));
+                let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
                 environment.scopes.push(new_scope);
                 if let Err(err) = setup_args(environment, None, &params, parts, false) {
                     environment.scopes.pop();
@@ -2180,6 +2181,14 @@ Example:
 (test::assert-equal 21 test-macro2)
 (test::assert-equal 30 test-macro3)
 (test::assert-equal 63 ((macro (x y z) (set! test-macro1 x)(set! test-macro2 y)(set! test-macro3 z)`(+ ,x ,y ,z)) 12 21 30))
+(def test-mac nil)
+(def mac-var 2)
+(lex
+  (var mac-var 3)
+  (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
+(set! test-macro1 (test-mac 10))
+(test::assert-equal 30 test-macro1)
+(test::assert-equal 100 test-macro2)
 ",
             root,
         ),

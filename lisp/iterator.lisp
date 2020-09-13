@@ -1,11 +1,11 @@
-(if (ns-exists? 'iterator) (ns-enter 'iterator) (ns-create 'iterator))
+(ns-push 'iterator)
 
 ; Due to bootstrapping order can not use ns-import yet (needs iterators...).
 (def defstruct struct::defstruct)
 (def deftrait struct::deftrait)
 
 (deftrait iterator
-"Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator))
+"Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))
 
 Trait that provides iterator methods.
 Requires a struct to define methods next! and empty?
@@ -21,7 +21,7 @@ Example:
   ; methods
   (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
-  (:impl iterator))
+  (:impl iterator::iterator))
 (def tmap (test-iter))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
@@ -155,14 +155,14 @@ Example:
   (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn next-back! (self) (do (def val current-end)(set! current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 (assert-false ((test-iter) :double-ended?))
 (assert-true ((test-double-iter) :double-ended?))
 "
     (self) (meta-tag? self :trait-double-ended-iterator)))
 
 (deftrait double-ended-iterator
-"Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator double-ended-iterator))
+"Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator::iterator iterator::double-ended-iterator))
 
 Trait that makes an iterator double ended (can get items from front and back.
 Requires a struct to define methods next-back! and implement iterator.
@@ -181,7 +181,7 @@ Example:
   (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn next-back! (self) (do (def val current-end)(set! current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 (def tmap (test-double-iter))
 (assert-false (tmap :empty?))
 (assert-equal 0 (tmap :next!))
@@ -283,7 +283,7 @@ Example:
     (var node nil)
     ((fn (data) (if data (do (set! node (join (car data) node)) (recur (cdr data)))))data)
     node))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct vec-iter
 "Iterator that wraps a vector.
@@ -313,7 +313,7 @@ Example:
   (:fn init (self v s) (do (if (vec? v)
                                 (do (set! data v) (set! start s) (set! end (- (length v) 1)))
                                 (err "seq-vec requires a vector")) self))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct string-iter
 "Iterator that wraps a string.
@@ -336,7 +336,7 @@ Example:
   (:fn init (self l) (do (if (string? l)
                        (set! data (if (str-iter-empty? l) (str-iter-start l) l))
                        (err "string-iter requires a string")) self))
-  (:impl iterator))
+  (:impl iterator::iterator))
 
 (defstruct file-iter
 "Iterator that wraps a file.  Each call to next! returns the next line (with 
@@ -368,7 +368,7 @@ Example:
   (:fn init (self f) (if (file? f)
                        (do (set! file f) (set! next-line (read-line file))self)
                        (err "file-iter requires a file")))
-  (:impl iterator))
+  (:impl iterator::iterator))
 
 (defstruct map-iter 
 "Iterator that applies a lambda to each element of another iterator- is lazy.
@@ -395,7 +395,7 @@ Example:
                                 self))
   (:fn double-ended? (self) (data :double-ended?))
 
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct append-iter 
 "Iterator that appends multiple iterators.  Append iter will consume
@@ -459,7 +459,7 @@ Example:
             (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
             (set! tseq tcell)))))
     self))
-  (:impl iterator))
+  (:impl iterator::iterator))
 
 (defstruct slice-iter 
 "Iterator that provides a slice of the underlying iter.  Slice iter will consume
@@ -502,7 +502,7 @@ Example:
                                  (if (= (length e) 1) (set! total (- (vec-nth e 0) start))
                                      (> (length e) 1) (err "slice-iter :init Wrong number of arge (iter start end?)"))
                                  self))
-  (:impl iterator))
+  (:impl iterator::iterator))
 
 (defstruct filter-iter
 "Iterator that applies a lambda to each element to determine if is returned- is lazy.
@@ -537,7 +537,7 @@ Example:
           (set! is-empty (data :empty?))
           (self :advance-data!)
           self))
-  (:impl iterator))
+  (:impl iterator::iterator))
 
 (defstruct reverse-iter
 "Iterator that reverses another iterators direction.  Requires a double ended iterator.
@@ -561,7 +561,7 @@ Example:
   (:fn init (self in-wrapped) (do
                                     (set! wrapped in-wrapped)
                                     self))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct range-iter
 "Iterator that generates numbers within a range.
@@ -599,7 +599,7 @@ Example:
                                     (set! start 0)
                                     (set! end (- total 1))
                                     self))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct single-iter
 "Iterator that wraps and returns a single object.
@@ -632,7 +632,7 @@ Example:
   (:fn next-back! (self) (do (var ret (if done nil value))(set! done t)ret))
   (:fn empty? (self) done)
   (:fn init (self v) (do (set! value v)self))
-  (:impl iterator double-ended-iterator))
+  (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defn iter?
 "Return true if thing is an iterator, nil otherwise.
@@ -658,7 +658,7 @@ Example:
   ; methods
   (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
   (:fn empty? (self) (>= current 3))
-  (:impl iterator))
+  (:impl iterator::iterator))
 (assert-true (iterator::double-ended-iter? (iterator::iter '(1 2 3))))
 (assert-false (iterator::double-ended-iter? '(1 2 3)))
 (assert-false (iterator::double-ended-iter? (test-iter)))

@@ -1,7 +1,5 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -10,24 +8,12 @@ use crate::types::*;
 
 fn set_active_namespace(
     environment: &mut Environment,
-    scope: Rc<RefCell<Scope>>,
     ns: &'static str,
-    prev_ns: &'static str,
 ) {
     environment.root_scope.borrow_mut().data.insert(
         environment.interner.intern("*active-ns*"),
         Reference::new(
             ExpEnum::Atom(Atom::String(ns.into(), None)),
-            RefMetaData {
-                namespace: Some("root"),
-                doc_string: None,
-            },
-        ),
-    );
-    scope.borrow_mut().data.insert(
-        environment.interner.intern("*last-ns*"),
-        Reference::new(
-            ExpEnum::Atom(Atom::String(prev_ns.into(), None)),
             RefMetaData {
                 namespace: Some("root"),
                 doc_string: None,
@@ -40,11 +26,6 @@ fn builtin_ns_create(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if !environment.scopes.is_empty() {
-        return Err(LispError::new(
-            "ns-create can only create a namespace when not in a lexical scope",
-        ));
-    }
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
@@ -60,8 +41,7 @@ fn builtin_ns_create(
                 Ok(scope) => scope,
                 Err(msg) => return Err(LispError::new(msg)),
             };
-            let last_ns = environment.namespace.borrow().name.unwrap_or("root");
-            set_active_namespace(environment, scope.clone(), key, last_ns);
+            set_active_namespace(environment, key);
             environment.namespace = scope;
             return Ok(Expression::make_nil());
         }
@@ -75,15 +55,6 @@ fn builtin_ns_enter(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    /*if !environment.scopes.is_empty() {
-        println!("Bad scopes: {:?}", environment.scopes);
-        for arg in args {
-        println!("ARG: {:?}", arg);
-        }
-        return Err(LispError::new(
-            "ns-enter can only enter a namespace when not in a lexical scope",
-        ));
-    }*/
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
@@ -102,8 +73,7 @@ fn builtin_ns_enter(
                     return Err(LispError::new(msg));
                 }
             };
-            let last_ns = environment.namespace.borrow().name.unwrap_or("root");
-            set_active_namespace(environment, scope.clone(), key, last_ns);
+            set_active_namespace(environment, key);
             environment.namespace = scope;
             return Ok(Expression::make_nil());
         }
@@ -205,11 +175,15 @@ Creates and enters a new a namespace (must evaluate to a string or symbol).
 Section: namespace
 
 Example:
+(ns-push 'test-ns-create)
+(def test-ns-enter *ns*)
 (ns-create 'ns-create-test-namespace)
 (def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
-(ns-pop)
+(ns-enter test-ns-create::test-ns-enter)
 (test::assert-false (def? test-symbol))
+(ns-pop)
+t
 ",
             root,
         ),
@@ -225,14 +199,17 @@ Enters an existing namespace (must evaluate to a string or symbol).
 Section: namespace
 
 Example:
+(ns-push 'test-ns-enter)
+(def test-ns-enter *ns*)
 (ns-create 'ns-enter-test-namespace)
 (def test-symbol \"testing\")
 (test::assert-equal \"testing\" test-symbol)
-(ns-pop)
+(ns-enter test-ns-enter::test-ns-enter)
 (test::assert-false (def? test-symbol))
 (ns-enter 'ns-enter-test-namespace)
 (test::assert-true (def? test-symbol))
 (test::assert-equal \"testing\" test-symbol)
+(ns-enter test-ns-enter::test-ns-enter)
 (ns-pop)
 t
 ",
@@ -251,7 +228,7 @@ Section: namespace
 
 Example:
 (test::assert-false (ns-exists? 'ns-exists-test-namespace))
-(ns-create 'ns-exists-test-namespace)
+(ns-push 'ns-exists-test-namespace)
 (ns-pop)
 (test::assert-true (ns-exists? 'ns-exists-test-namespace))
 ",
@@ -270,7 +247,7 @@ Section: namespace
 
 Example:
 (test::assert-not-includes \"ns-list-test-namespace\" (ns-list))
-(ns-create 'ns-list-test-namespace)
+(ns-push 'ns-list-test-namespace)
 (ns-pop)
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
 t

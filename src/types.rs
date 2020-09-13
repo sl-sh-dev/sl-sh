@@ -67,12 +67,6 @@ pub struct Lambda {
     pub capture: Rc<RefCell<Scope>>,
 }
 
-#[derive(Clone, Debug)]
-pub struct Macro {
-    pub params: Handle,
-    pub body: Handle,
-}
-
 pub enum Atom {
     True,
     Float(f64),
@@ -84,7 +78,7 @@ pub enum Atom {
     Char(Cow<'static, str>),
     CodePoint(char),
     Lambda(Lambda),
-    Macro(Macro),
+    Macro(Lambda),
 }
 
 impl Clone for Atom {

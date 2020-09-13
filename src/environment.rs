@@ -248,7 +248,7 @@ Symbol that contains the name of the current namespace.
 Can be used anywhere a symbol pointing to a string is valid.
 
 Example:
-(ns-enter 'root)
+(ns-push 'root)
 (test::assert-equal \"root\" *ns*)
 (ns-pop)
 t
@@ -406,16 +406,6 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
-    root_scope.borrow_mut().data.insert(
-        interner.intern("*last-ns*"),
-        Reference::new(
-            ExpEnum::Atom(Atom::String("root".into(), None)),
-            RefMetaData {
-                namespace: None,
-                doc_string: None,
-            },
-        ),
-    );
     let namespace = root_scope.clone();
     let scopes = Vec::new();
     let mut namespaces = HashMap::new();

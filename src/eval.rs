@@ -114,7 +114,7 @@ pub fn call_lambda(
 
 fn exec_macro(
     environment: &mut Environment,
-    sh_macro: &Macro,
+    sh_macro: &Lambda,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
@@ -123,7 +123,7 @@ fn exec_macro(
     let params: Expression = sh_macro.params.clone().into();
     let mut new_scope = Scope {
         data: HashMap::new(),
-        outer: None,
+        outer: Some(sh_macro.capture.clone()),
         name: None,
     };
     match setup_args(environment, Some(&mut new_scope), &params, args, false) {
@@ -132,7 +132,6 @@ fn exec_macro(
             return Err(err);
         }
     };
-    new_scope.outer = Some(get_current_scope(environment));
 
     environment.scopes.push(Rc::new(RefCell::new(new_scope)));
     let lazy = environment.allow_lazy_fn;

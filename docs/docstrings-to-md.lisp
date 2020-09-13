@@ -1,5 +1,5 @@
 (load "parse-docstrings.lisp")
-(if (ns-exists? 'docmd) (ns-enter 'docmd) (ns-create 'docmd))
+(ns-push 'docmd)
 
 (ns-import 'iterator)
 (ns-import 'shell)

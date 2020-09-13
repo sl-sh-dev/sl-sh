@@ -1,4 +1,4 @@
-(if (ns-exists? 'test) (ns-enter 'test) (ns-create 'test))
+(ns-push 'test)
 
 (ns-import 'iterator)
 

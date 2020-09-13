@@ -2,7 +2,7 @@
 
 (load "docstrings-to-md.lisp")
 
-(if (ns-exists? 'mkdocs) (ns-enter 'mkdocs) (ns-create 'mkdocs))
+(ns-push 'mkdocs)
 (ns-import 'iterator)
 (ns-import 'shell)
 (ns-import 'struct)
@@ -29,7 +29,6 @@
 			(not (= x '*last-command*))
 			(not (= x '*run-script*))
 			(not (= x '*active-ns*))
-			(not (= x '*last-ns*))
 			(not (= x 'internal-fn))
 			(not (= x 'internal-macro))
 			(not (= x 'get-doc-list-for))

@@ -128,20 +128,50 @@ Example:
 "
     (name &rest args) `(internal-fn var ,name ,@args)) 
 
-(defmacro ns-pop
-"Usage: (ns-pop)
+;; Scope to contain ns-push/ns-pop.
+(lex
+  (var ns-stack (list))
 
-Returns to the previous namespace.
+  (defn ns-push
+"Usage: (ns-push 'namespace)
+
+Pushes the current namespace on a stack for ns-pop and enters or creates namespace.
 
 Section: namespace
 
 Example:
-(ns-create 'ns-pop-test-namespace)
+(def test-ns-push *ns*)
+(ns-push 'ns-pop-test-namespace)
+(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+(ns-push 'ns-pop-test-namespace2)
+(test::assert-equal \"ns-pop-test-namespace2\" *ns*)
+(ns-pop)
 (test::assert-equal \"ns-pop-test-namespace\" *ns*)
 (ns-pop)
-(test::assert-not-equal \"ns-pop-test-namespace\" *ns*)
+(test::assert-equal test-ns-push *ns*)
 "
-    () `(ns-enter ,*last-ns*))
+    (namespace)
+    (set! ns-stack (join (if (def? *active-ns*) *active-ns* 'root) ns-stack))
+    (if (ns-exists? namespace) (ns-enter namespace) (ns-create namespace)))
+
+  (defn ns-pop
+"Usage: (ns-pop)
+
+Returns to the previous namespace saved in the last ns-push.
+
+Section: namespace
+
+Example:
+(def test-ns-pop *ns*)
+(ns-push 'ns-pop-test-namespace)
+(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+(ns-pop)
+(test::assert-equal test-ns-pop *ns*)
+"
+    ()
+    (var last-ns (car ns-stack))
+    (set! ns-stack (cdr ns-stack))
+    (ns-enter last-ns)))
 
 (defmacro loop
 "

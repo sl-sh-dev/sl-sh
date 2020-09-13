@@ -2,10 +2,10 @@
 (def prim-print-backtrace (fn (backtrace) 
     (if (not (vec-empty? backtrace))
         (do
-          (def b (first backtrace))
-          (print (if (def file (meta-file-name b)) file "??????") ":\t"
-               "line " (if (def line (meta-line-no b)) line "??") ":\t"
-               "column " (if (def col (meta-column-no b)) col "??") "\n")
+          (var b (first backtrace))
+          (print (if (var file (meta-file-name b)) file "??????") ":\t"
+               "line " (if (var line (meta-line-no b)) line "??") ":\t"
+               "column " (if (var col (meta-column-no b)) col "??") "\n")
           (recur (rest backtrace))))))
 
 (def prim-print-error (fn (error)

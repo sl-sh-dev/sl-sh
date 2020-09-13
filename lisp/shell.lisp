@@ -1,4 +1,4 @@
-(if (ns-exists? 'shell) (ns-enter 'shell) (ns-create 'shell))
+(ns-push 'shell)
 
 (ns-import 'iterator)
 

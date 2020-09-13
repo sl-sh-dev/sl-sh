@@ -1,4 +1,4 @@
-(if (ns-exists? 'docparse) (ns-enter 'docparse) (ns-create 'docparse))
+(ns-push 'docparse)
 (ns-import 'iterator)
 (ns-import 'shell)
 
