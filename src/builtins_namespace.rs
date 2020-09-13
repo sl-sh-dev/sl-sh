@@ -6,10 +6,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
-fn set_active_namespace(
-    environment: &mut Environment,
-    ns: &'static str,
-) {
+fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
     environment.root_scope.borrow_mut().data.insert(
         environment.interner.intern("*active-ns*"),
         Reference::new(
