@@ -506,36 +506,60 @@ pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Refere
 }
 
 pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference> {
-    if key.starts_with('$') || key.starts_with(':') {
-        // Can not lookup env vars or keywords...
+    let mut loop_scope = if !environment.scopes.is_empty() {
+        Some(environment.scopes.last().unwrap().clone())
+    } else {
         None
-    } else if let Some(reference) = environment.dynamic_scope.get(key) {
+    };
+    let mut namespace = None;
+    // First check any "local" lexical scopes.
+    while let Some(scope_outer) = loop_scope {
+        let scope = scope_outer.borrow_mut();
+        if scope.name.is_some() {
+            namespace = Some(scope_outer.clone());
+            break;
+        }
+        if let Some(reference) = scope.data.get(key) {
+            return Some(reference.clone());
+        }
+        loop_scope = scope.outer.clone();
+    }
+    // Then check dynamic scope.
+    if let Some(reference) = environment.dynamic_scope.get(key) {
         Some(reference.clone())
+    // Check for namespaced symbols.
     } else if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
         if let Some(namespace) = key_i.next() {
             if let Some(scope) = environment.namespaces.get(namespace) {
                 if let Some(key) = key_i.next() {
-                    if let Some(exp) = scope.borrow().data.get(key) {
-                        return Some(exp.clone());
+                    // Do not let it sneak past a dynamic binding!
+                    if let Some(reference) = environment.dynamic_scope.get(key) {
+                        return Some(reference.clone());
+                    } else if let Some(reference) = scope.borrow().data.get(key) {
+                        return Some(reference.clone());
                     }
                 }
             }
         }
         None
-    } else {
-        let mut loop_scope = if !environment.scopes.is_empty() {
-            Some(environment.scopes.last().unwrap().clone())
+    // Then check the namespace. Note, use the namespace from lexical scope if available.
+    } else if let Some(namespace) = namespace {
+        if let Some(reference) = namespace.borrow().data.get(key) {
+            Some(reference.clone())
+        } else if let Some(reference) = environment.root_scope.borrow().data.get(key) {
+            Some(reference.clone())
         } else {
-            Some(environment.namespace.clone())
-        };
-        while let Some(scope) = loop_scope {
-            if let Some(exp) = scope.borrow().data.get(key) {
-                return Some(exp.clone());
-            }
-            loop_scope = scope.borrow().outer.clone();
+            None
         }
+    // If no namespace from lexical scope use the default.
+    } else if let Some(reference) = environment.namespace.borrow().data.get(key) {
+        Some(reference.clone())
+    // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
+    } else if let Some(reference) = environment.root_scope.borrow().data.get(key) {
+        Some(reference.clone())
+    } else {
         None
     }
 }
@@ -621,20 +645,18 @@ pub fn is_expression(environment: &Environment, key: &str) -> bool {
 
 pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefCell<Scope>>> {
     // DO NOT return a namespace for a namespace key otherwise set will work to
-    // set symbols in other namespaces.
-    if !key.contains("::") {
-        let mut loop_scope = if !environment.scopes.is_empty() {
-            Some(environment.scopes.last().unwrap().clone())
-        } else {
-            Some(environment.namespace.clone())
-        };
-        while loop_scope.is_some() {
-            let scope = loop_scope.unwrap();
-            if let Some(_exp) = scope.borrow().data.get(key) {
-                return Some(scope.clone());
-            }
-            loop_scope = scope.borrow().outer.clone();
+    // set symbols in other namespaces.  This won't happen because of the lookup.
+    let mut loop_scope = if !environment.scopes.is_empty() {
+        Some(environment.scopes.last().unwrap().clone())
+    } else {
+        Some(environment.namespace.clone())
+    };
+    while let Some(scope) = loop_scope {
+        let scopeb = scope.borrow();
+        if scopeb.data.contains_key(key) {
+            return Some(scope.clone());
         }
+        loop_scope = scopeb.outer.clone();
     }
     None
 }

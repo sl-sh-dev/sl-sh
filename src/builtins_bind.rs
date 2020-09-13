@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+use std::collections::hash_map::OccupiedEntry;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -35,19 +37,22 @@ fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
+    fn eval_key(
+        environment: &mut Environment,
+        key_exp: Expression,
+    ) -> Result<&'static str, LispError> {
+        match eval(environment, key_exp)?.get().data {
+            ExpEnum::Atom(Atom::Symbol(s)) => Ok(s),
+            _ => Err(LispError::new("first form (binding key) must be a symbol")),
+        }
+    }
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key = match &key.get().data {
-                ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
-                ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
-                ExpEnum::Vector(_) => eval(environment, key.clone())?,
+                ExpEnum::Atom(Atom::Symbol(s)) => *s,
+                ExpEnum::Pair(_, _) => eval_key(environment, key.clone())?,
+                ExpEnum::Vector(_) => eval_key(environment, key.clone())?,
                 _ => return Err(LispError::new("first form (binding key) must be a symbol")),
-            };
-            let key = match key.get().data {
-                ExpEnum::Atom(Atom::Symbol(s)) => s,
-                _ => {
-                    return Err(LispError::new("first form (binding key) must be a symbol"));
-                }
             };
             if let Some(arg2) = args.next() {
                 if args.next().is_none() {
@@ -114,16 +119,58 @@ fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
+    fn update_entry(
+        mut entry: OccupiedEntry<&'static str, Reference>,
+        val: Expression,
+        doc_str: Option<String>,
+    ) -> Result<Expression, LispError> {
+        let entry = entry.get_mut();
+        entry.exp = val;
+        if doc_str.is_some() {
+            entry.meta.doc_string = doc_str;
+        }
+        Ok(entry.exp.clone())
+    }
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
-    if environment.dynamic_scope.contains_key(key) {
-        let (reference, val) = val_to_reference(environment, None, doc_str, val)?;
-        environment.dynamic_scope.insert(key, reference);
-        Ok(val)
-    } else if let Some(scope) = get_symbols_scope(environment, &key) {
-        let name = scope.borrow().name;
-        let (reference, val) = val_to_reference(environment, name, doc_str, val)?;
-        scope.borrow_mut().data.insert(key, reference);
-        Ok(val)
+    let val = eval(environment, val)?;
+    let mut loop_scope = if !environment.scopes.is_empty() {
+        Some(environment.scopes.last().unwrap().clone())
+    } else {
+        None
+    };
+    let mut namespace = None;
+    // First check any "local" lexical scopes.
+    while let Some(scope_out) = loop_scope {
+        let mut scope = scope_out.borrow_mut();
+        if scope.name.is_some() {
+            namespace = Some(scope_out.clone());
+            break;
+        }
+        if let Entry::Occupied(entry) = scope.data.entry(key) {
+            return update_entry(entry, val, doc_str);
+        }
+        loop_scope = scope.outer.clone();
+    }
+    // If not there, check the dynamic scope.
+    if let Entry::Occupied(entry) = environment.dynamic_scope.entry(key) {
+        update_entry(entry, val, doc_str)
+    // Then check the namespace. Note, use the namespace from lexical scope if available.
+    } else if let Some(namespace) = namespace {
+        if let Entry::Occupied(entry) = namespace.borrow_mut().data.entry(key) {
+            update_entry(entry, val, doc_str)
+        } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
+            update_entry(entry, val, doc_str)
+        } else {
+            Err(LispError::new(
+                "set!: first form must evaluate to an existing symbol",
+            ))
+        }
+    // If not then check the default namespace.
+    } else if let Entry::Occupied(entry) = environment.namespace.borrow_mut().data.entry(key) {
+        update_entry(entry, val, doc_str)
+    // Finally check root (this might be a duplicate is in root but in that case about to error out anyway).
+    } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
+        update_entry(entry, val, doc_str)
     } else {
         Err(LispError::new(
             "set!: first form must evaluate to an existing symbol",
@@ -532,14 +579,14 @@ Note that if key is a symbol it is not evaluted and if a list it will be evalute
 to provide a symbol (anything else is an error).
 
 The binding is gone once the dyn form ends. The binding will take precedence over
-ANY other binding in any scope with that name for any form that evaluates as a
+any binding in any namespace with that name for any form that evaluates as a
 result of the dynamic binding (for instance creating a dynamic binding for
 *stdout* will cause all output to stdout to use the new binding in any print's
 used indirectly).  Calls to dyn can be nested and previous dynamic values will
 be restored as interior dyn's exit.
 
-NOTE: dyn currenty will override any binding not just \"global\" or \"special\"
-bindings, use with care.
+In common lisp terms any symbol in a namespace is \"special\".
+
 
 Section: core
 
