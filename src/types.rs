@@ -62,7 +62,7 @@ pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
 #[derive(Clone, Debug)]
 pub struct Lambda {
-    pub params: Handle,
+    pub params: Vec<&'static str>,
     pub body: Handle,
     pub capture: Rc<RefCell<Scope>>,
 }
@@ -79,6 +79,21 @@ pub enum Atom {
     CodePoint(char),
     Lambda(Lambda),
     Macro(Lambda),
+}
+
+fn params_to_string(params: &[&'static str]) -> String {
+    let mut pstr = "(".to_string();
+    let mut first = true;
+    for p in params {
+        if first {
+            first = false;
+        } else {
+            pstr.push(' ');
+        }
+        pstr.push_str(p);
+    }
+    pstr.push(')');
+    pstr
 }
 
 impl Clone for Atom {
@@ -108,14 +123,22 @@ impl fmt::Debug for Atom {
             Atom::Char(c) => write!(f, "#\\{}", c),
             Atom::CodePoint(c) => write!(f, "#\\{}", c),
             Atom::Lambda(l) => {
-                let params: Expression = l.params.clone().into();
                 let body: Expression = l.body.clone().into();
-                write!(f, "(fn {} {})", params.to_string(), body.to_string())
+                write!(
+                    f,
+                    "(fn {} {})",
+                    params_to_string(&l.params),
+                    body.to_string()
+                )
             }
             Atom::Macro(m) => {
-                let params: Expression = m.params.clone().into();
                 let body: Expression = m.body.clone().into();
-                write!(f, "(macro {} {})", params.to_string(), body.to_string())
+                write!(
+                    f,
+                    "(macro {} {})",
+                    params_to_string(&m.params),
+                    body.to_string()
+                )
             }
         }
     }
@@ -132,14 +155,22 @@ impl fmt::Display for Atom {
             Atom::Char(c) => write!(f, "#\\{}", c),
             Atom::CodePoint(c) => write!(f, "#\\{}", c),
             Atom::Lambda(l) => {
-                let params: Expression = l.params.clone().into();
                 let body: Expression = l.body.clone().into();
-                write!(f, "(fn {} {})", params.to_string(), body.to_string())
+                write!(
+                    f,
+                    "(fn {} {})",
+                    params_to_string(&l.params),
+                    body.to_string()
+                )
             }
             Atom::Macro(m) => {
-                let params: Expression = m.params.clone().into();
                 let body: Expression = m.body.clone().into();
-                write!(f, "(macro {} {})", params.to_string(), body.to_string())
+                write!(
+                    f,
+                    "(macro {} {})",
+                    params_to_string(&m.params),
+                    body.to_string()
+                )
             }
         }
     }
@@ -374,11 +405,9 @@ impl Trace for ExpEnum {
                 exp.trace(tracer);
             }
             Self::Atom(Atom::Lambda(lambda)) => {
-                lambda.params.trace(tracer);
                 lambda.body.trace(tracer);
             }
             Self::Atom(Atom::Macro(mac)) => {
-                mac.params.trace(tracer);
                 mac.body.trace(tracer);
             }
             _ => {}
@@ -716,15 +745,13 @@ impl Expression {
             }
             ExpEnum::Atom(Atom::Lambda(l)) => {
                 let body: Expression = l.body.clone().into();
-                let params: Expression = l.params.clone().into();
-                write!(writer, "(fn {}", params.to_string())?;
+                write!(writer, "(fn {}", params_to_string(&l.params))?;
                 body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
             ExpEnum::Atom(Atom::Macro(m)) => {
                 let body: Expression = m.body.clone().into();
-                let params: Expression = m.params.clone().into();
-                write!(writer, "(macro {}", params.to_string())?;
+                write!(writer, "(macro {}", params_to_string(&m.params))?;
                 body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }

@@ -205,138 +205,85 @@ fn set_arg(
     Ok(())
 }
 
-fn setup_args_final(
+pub fn setup_args(
     environment: &mut Environment,
-    scope: &mut Option<&mut Scope>,
-    var_names: &mut Vec<&'static str>,
+    mut scope: Option<&mut Scope>,
+    var_names: &[&'static str],
     vars: &mut dyn Iterator<Item = Expression>,
-    min_params: usize,
-    use_rest: bool,
     do_eval: bool,
 ) -> Result<(), LispError> {
-    if use_rest {
-        let rest_name = var_names.pop().unwrap();
-        let mut names_iter = var_names.iter();
-        let mut params = 0;
-        loop {
-            let k = names_iter.next();
-            if k.is_none() {
-                break;
-            }
-            let v = vars.next();
-            if v.is_none() {
-                let msg = format!(
-                    "wrong number of parameters, expected {} got {}",
-                    min_params, params
-                );
-                return Err(LispError::new(msg));
-            }
-            set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
-            params += 1;
-        }
-        let mut rest_data: Vec<Handle> = Vec::new();
-        for v in vars {
-            let v2 = if do_eval { eval(environment, v)? } else { v };
-            rest_data.push(v2.into());
-        }
-        if rest_data.is_empty() {
-            if let Some(scope) = scope {
-                scope.insert_exp_data(rest_name, ExpEnum::Nil);
+    let mut names_iter = var_names.iter();
+    let mut params = 0;
+    loop {
+        let k = names_iter.next();
+        let v = vars.next();
+        if k.is_none() && v.is_none() {
+            break;
+        } else if k.is_some() && *k.unwrap() == "&rest" {
+            let rest_name = if let Some(k) = names_iter.next() {
+                k
             } else {
-                set_expression_current_data(environment, rest_name, None, ExpEnum::Nil);
+                return Err(LispError::new("&rest requires a parameter to follow"));
+            };
+            if *rest_name == "&rest" {
+                return Err(LispError::new("&rest can only appear once"));
             }
-        } else if let Some(scope) = scope {
-            let data = Expression::with_list(rest_data);
-            scope.insert_exp(rest_name, data);
-        } else {
-            let data = Expression::with_list(rest_data);
-            set_expression_current(environment, rest_name, None, data);
-        }
-    } else {
-        let mut names_iter = var_names.iter();
-        let mut params = 0;
-        loop {
-            let k = names_iter.next();
-            let v = vars.next();
-            if k.is_none() && v.is_none() {
-                break;
-            } else if k.is_none() || v.is_none() {
-                if v.is_some() {
-                    params += 1;
+            if names_iter.next().is_some() {
+                return Err(LispError::new("&rest must be before the last parameter"));
+            }
+            let mut rest_data: Vec<Handle> = Vec::new();
+            if let Some(v) = v {
+                let v2 = if do_eval { eval(environment, v)? } else { v };
+                rest_data.push(v2.into());
+            }
+            for v in vars {
+                let v2 = if do_eval { eval(environment, v)? } else { v };
+                rest_data.push(v2.into());
+            }
+            if rest_data.is_empty() {
+                if let Some(scope) = scope {
+                    scope.insert_exp_data(rest_name, ExpEnum::Nil);
+                } else {
+                    set_expression_current_data(environment, rest_name, None, ExpEnum::Nil);
                 }
-                let msg = format!(
+            } else if let Some(scope) = scope {
+                let data = Expression::with_list(rest_data);
+                scope.insert_exp(rest_name, data);
+            } else {
+                let data = Expression::with_list(rest_data);
+                set_expression_current(environment, rest_name, None, data);
+            }
+            return Ok(());
+        } else if k.is_none() || v.is_none() {
+            let mut min_params = params;
+            if v.is_some() {
+                params += 1;
+            }
+            let mut has_rest = false;
+            for k in names_iter {
+                if *k == "&rest" {
+                    has_rest = true;
+                } else {
+                    min_params += 1;
+                }
+            }
+            let msg = if has_rest {
+                format!(
+                    "wrong number of parameters, expected at least {} got {}",
+                    min_params,
+                    (params + vars.count())
+                )
+            } else {
+                format!(
                     "wrong number of parameters, expected {} got {}",
                     min_params,
                     (params + vars.count())
-                );
-                return Err(LispError::new(msg));
-            }
-            set_arg(environment, scope, k.unwrap(), v.unwrap(), do_eval)?;
-            params += 1;
-        }
-    }
-    Ok(())
-}
-
-pub fn setup_args(
-    environment: &mut Environment,
-    mut new_scope: Option<&mut Scope>,
-    params: impl AsRef<Expression>,
-    args: &mut dyn Iterator<Item = Expression>,
-    eval_args: bool,
-) -> Result<(), LispError> {
-    let params = params.as_ref();
-    let p_d = params.get();
-    let p_iter = if let ExpEnum::Vector(list) = &p_d.data {
-        Box::new(ListIter::new_list(&list))
-    } else {
-        params.iter()
-    };
-    let mut var_names: Vec<&'static str> = Vec::new(); //with_capacity(l.len());
-    let mut use_rest = false;
-    let mut post_rest_cnt = 0;
-    let mut min_params = 0;
-    for arg in p_iter {
-        if let ExpEnum::Atom(Atom::Symbol(s)) = &arg.get().data {
-            match *s {
-                "&rest" => {
-                    if use_rest {
-                        return Err(LispError::new("&rest can only appear once"));
-                    }
-                    use_rest = true;
-                }
-                _ => {
-                    if post_rest_cnt > 1 {
-                        return Err(LispError::new("&rest can only have one symbol after"));
-                    }
-                    if use_rest {
-                        post_rest_cnt += 1;
-                    } else {
-                        min_params += 1;
-                    }
-                    var_names.push(s);
-                }
-            }
-        } else {
-            let msg = format!(
-                "parameter {} must be a symbol got type {}",
-                arg,
-                arg.display_type()
-            );
+                )
+            };
             return Err(LispError::new(msg));
         }
+        set_arg(environment, &mut scope, k.unwrap(), v.unwrap(), do_eval)?;
+        params += 1;
     }
-    if use_rest && post_rest_cnt != 1 {
-        return Err(LispError::new("&rest must have one symbol after"));
-    }
-    setup_args_final(
-        environment,
-        &mut new_scope,
-        &mut var_names,
-        args,
-        min_params,
-        use_rest,
-        eval_args,
-    )?;
     Ok(())
 }

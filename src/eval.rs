@@ -27,13 +27,13 @@ pub fn call_lambda(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let mut body: Expression = lambda.body.clone_root().into();
-    let mut params: Expression = lambda.params.clone_root().into();
+    //let mut params = Box::new(lambda.params.iter());
     let mut looping = true;
     let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
         environment,
         Some(&mut new_scope.borrow_mut()),
-        &params,
+        &lambda.params,
         args,
         eval_args,
     ) {
@@ -43,8 +43,8 @@ pub fn call_lambda(
     set_expression_current(environment, "this-fn", None, lambda_exp.clone());
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
-    let mut lambda; // = lambda;
-    let mut lambda_int;
+    let mut lambda_int = lambda.clone();
+    let mut lambda: &mut Lambda = &mut lambda_int;
     let mut llast_eval: Option<Expression> = None;
     while looping {
         if environment.sig_int.load(Ordering::Relaxed) {
@@ -72,7 +72,7 @@ pub fn call_lambda(
                     environment.scopes.last().unwrap().borrow_mut().data.clear();
                 }
                 let mut ib = ListIter::new_list(&new_args);
-                if let Err(err) = setup_args(environment, None, &params, &mut ib, false) {
+                if let Err(err) = setup_args(environment, None, &lambda.params, &mut ib, false) {
                     environment.scopes.pop();
                     return Err(err);
                 }
@@ -85,7 +85,7 @@ pub fn call_lambda(
                     lambda_int = lam.clone();
                     lambda = &mut lambda_int;
                     body = lambda.body.clone_root().into();
-                    params = lambda.params.clone_root().into();
+                    //params = lambda.params.clone_root().into();
                     looping = true;
                     environment.scopes.pop();
                     // scope is popped so can use ? now.
@@ -94,7 +94,7 @@ pub fn call_lambda(
                     setup_args(
                         environment,
                         Some(&mut new_scope.borrow_mut()),
-                        &params,
+                        &lambda.params,
                         &mut ib,
                         false,
                     )?;
@@ -120,13 +120,19 @@ fn exec_macro(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let body: Expression = sh_macro.body.clone().into();
-    let params: Expression = sh_macro.params.clone().into();
+    //let params: Expression = sh_macro.params.clone().into();
     let mut new_scope = Scope {
         data: HashMap::new(),
         outer: Some(sh_macro.capture.clone()),
         name: None,
     };
-    match setup_args(environment, Some(&mut new_scope), &params, args, false) {
+    match setup_args(
+        environment,
+        Some(&mut new_scope),
+        &sh_macro.params,
+        args,
+        false,
+    ) {
         Ok(_) => {}
         Err(err) => {
             return Err(err);

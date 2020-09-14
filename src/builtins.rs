@@ -540,7 +540,20 @@ fn builtin_fn(
         } else {
             Expression::make_nil()
         };
-        let params = params.handle_no_root();
+        let params_d = params.get();
+        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
+            Box::new(ListIter::new_list(&vec))
+        } else {
+            params.iter()
+        };
+        let mut params = Vec::new();
+        for p in p_iter {
+            if let ExpEnum::Atom(Atom::Symbol(s)) = p.get().data {
+                params.push(s);
+            } else {
+                return Err(LispError::new("fn: parameters must be symbols"));
+            }
+        }
         let body = body.handle_no_root();
         return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
             Lambda {
@@ -774,7 +787,20 @@ fn builtin_macro(
         } else {
             Expression::make_nil()
         };
-        let params = params.handle_no_root();
+        let params_d = params.get();
+        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
+            Box::new(ListIter::new_list(&vec))
+        } else {
+            params.iter()
+        };
+        let mut params = Vec::new();
+        for p in p_iter {
+            if let ExpEnum::Atom(Atom::Symbol(s)) = p.get().data {
+                params.push(s);
+            } else {
+                return Err(LispError::new("macro: parameters must be symbols"));
+            }
+        }
         let body = body.handle_no_root();
         return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Lambda {
             params,
@@ -793,11 +819,10 @@ fn do_expansion(
     if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
         if let Some(exp) = get_expression(environment, &command) {
             if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
-                let params: Expression = sh_macro.params.clone().into();
                 let body: Expression = sh_macro.body.clone().into();
                 let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
                 environment.scopes.push(new_scope);
-                if let Err(err) = setup_args(environment, None, &params, parts, false) {
+                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
                     environment.scopes.pop();
                     return Err(err);
                 }
@@ -1140,37 +1165,15 @@ fn builtin_get_error(
 
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     let exp_d = exp.get();
-    let params: Expression;
-    let f_d;
-    let m_d;
     let p_iter = match &exp_d.data {
-        ExpEnum::Atom(Atom::Lambda(f)) => {
-            params = f.params.clone_no_root().into();
-            f_d = params.get();
-            if let ExpEnum::Vector(list) = &f_d.data {
-                Box::new(ListIter::new_list(&list))
-            } else {
-                params.iter()
-            }
-        }
-        ExpEnum::Atom(Atom::Macro(m)) => {
-            params = m.params.clone_no_root().into();
-            m_d = params.get();
-            if let ExpEnum::Vector(list) = &m_d.data {
-                Box::new(ListIter::new_list(&list))
-            } else {
-                params.iter()
-            }
-        }
+        ExpEnum::Atom(Atom::Lambda(f)) => f.params.iter(),
+        ExpEnum::Atom(Atom::Macro(m)) => m.params.iter(),
         _ => return,
     };
     doc_str.push_str("\n\nUsage: (");
     doc_str.push_str(sym);
     for arg in p_iter {
-        if let ExpEnum::Atom(Atom::Symbol(s)) = &arg.get().data {
-            doc_str.push(' ');
-            doc_str.push_str(s);
-        }
+        doc_str.push_str(arg);
     }
     doc_str.push(')');
 }
