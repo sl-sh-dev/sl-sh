@@ -317,6 +317,7 @@ pub enum ExpEnum {
     Process(ProcessState),
     File(Rc<RefCell<FileState>>),
     LazyFn(Handle, Vec<Handle>),
+    Wrapper(Handle),
     Nil,
 }
 
@@ -378,6 +379,7 @@ impl fmt::Debug for ExpEnum {
             ),
             ExpEnum::File(_) => write!(f, "ExpEnum::File(_)"),
             ExpEnum::LazyFn(_, exp) => write!(f, "ExpEnum::LazyFn({:?})", exp),
+            ExpEnum::Wrapper(exp) => write!(f, "ExpEnum::Wrapper({:?})", exp),
             ExpEnum::Nil => write!(f, "ExpEnum::Nil"),
         }
     }
@@ -410,6 +412,7 @@ impl Trace for ExpEnum {
             Self::Atom(Atom::Macro(mac)) => {
                 mac.body.trace(tracer);
             }
+            Self::Wrapper(exp) => exp.trace(tracer),
             _ => {}
         }
     }
@@ -618,6 +621,10 @@ impl Expression {
             ExpEnum::HashMap(_) => "HashMap".to_string(),
             ExpEnum::File(_) => "File".to_string(),
             ExpEnum::LazyFn(_, _) => "Lambda".to_string(),
+            ExpEnum::Wrapper(exp) => {
+                let exp: Expression = exp.into();
+                exp.display_type()
+            }
             ExpEnum::Nil => "Nil".to_string(),
         }
     }
@@ -755,6 +762,10 @@ impl Expression {
                 body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
+            ExpEnum::Wrapper(exp) => {
+                let exp: Expression = exp.into();
+                exp.pretty_print_int(environment, indent, writer)?;
+            }
             _ => self.writef(environment, writer)?,
         }
         Ok(())
@@ -820,6 +831,10 @@ impl Expression {
                 }
             }
             ExpEnum::LazyFn(_, _) => Ok(self.to_string()),
+            ExpEnum::Wrapper(exp) => {
+                let exp: Expression = exp.into();
+                exp.make_string(environment)
+            }
         }
     }
 
@@ -863,6 +878,7 @@ impl Expression {
             ExpEnum::HashMap(_) => Err(LispError::new("Not a number")),
             ExpEnum::File(_) => Err(LispError::new("Not a number")),
             ExpEnum::LazyFn(_, _) => Err(LispError::new("Not a number")),
+            ExpEnum::Wrapper(_) => Err(LispError::new("Not a number")),
         }
     }
 
@@ -896,6 +912,7 @@ impl Expression {
             ExpEnum::HashMap(_) => Err(LispError::new("Not an integer")),
             ExpEnum::File(_) => Err(LispError::new("Not an integer")),
             ExpEnum::LazyFn(_, _) => Err(LispError::new("Not an integer")),
+            ExpEnum::Wrapper(_) => Err(LispError::new("Not an integer")),
         }
     }
 
@@ -980,6 +997,10 @@ impl Expression {
                 _ => write!(writer, "{}", self.to_string())?,
             },
             ExpEnum::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Wrapper(exp) => {
+                let exp: Expression = exp.into();
+                exp.writef(environment, writer)?;
+            }
         }
         writer.flush()?;
         Ok(())
@@ -1173,6 +1194,10 @@ impl fmt::Display for Expression {
                 list_out(&mut res, &mut Box::new(ListIter::new_list(args)));
                 res.push_str(">>");
                 write!(f, "{}", res)
+            }
+            ExpEnum::Wrapper(exp) => {
+                let exp: Expression = exp.into();
+                exp.fmt(f)
             }
         }
     }

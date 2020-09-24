@@ -465,6 +465,11 @@ pub fn do_command(
                 "Invalid expression state before command (lazyfn- this should be impossible...).",
             ));
             }
+            ExpEnum::Wrapper(_) => {
+                return Err(LispError::new(
+                    "Invalid expression state before command (wrapper).",
+                ));
+            }
         }
     } else if foreground {
         Stdio::inherit()

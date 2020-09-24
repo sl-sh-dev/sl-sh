@@ -231,6 +231,38 @@ pub fn box_slice_it<'a>(v: &'a [Handle]) -> Box<dyn Iterator<Item = Expression> 
     Box::new(ListIter::new_slice(v))
 }
 
+fn eval_command(
+    environment: &mut Environment,
+    com_exp: &Expression,
+    parts: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let allow_sys_com =
+        environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
+    let com_exp_d = com_exp.get();
+    match &com_exp_d.data {
+        ExpEnum::Atom(Atom::Lambda(_)) => {
+            if environment.allow_lazy_fn {
+                make_lazy(environment, com_exp.clone(), parts)
+            } else {
+                call_lambda(environment, com_exp.clone(), parts, true)
+            }
+        }
+        ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, parts),
+        ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
+        ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
+            do_command(environment, s.trim(), parts)
+        }
+        _ => {
+            let msg = format!(
+                "Not a valid command {}, type {}.",
+                com_exp,
+                com_exp.display_type()
+            );
+            Err(LispError::new(msg))
+        }
+    }
+}
+
 fn fn_eval_lazy(
     environment: &mut Environment,
     expression: &Expression,
@@ -327,59 +359,13 @@ fn fn_eval_lazy(
         }
         ExpEnum::Vector(_) => {
             drop(command_d); // Drop the lock on command.
-            let allow_sys_com = environment.form_type == FormType::ExternalOnly
-                || environment.form_type == FormType::Any;
             let com_exp = eval(environment, &command)?;
-            let com_exp_d = com_exp.get();
-            match &com_exp_d.data {
-                ExpEnum::Atom(Atom::Lambda(_)) => {
-                    if environment.allow_lazy_fn {
-                        make_lazy(environment, com_exp.clone(), &mut parts)
-                    } else {
-                        call_lambda(environment, com_exp.clone(), &mut parts, true)
-                    }
-                }
-                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
-                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-                ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
-                    do_command(environment, s.trim(), &mut parts)
-                }
-                _ => {
-                    let msg = format!(
-                        "Not a valid command {}, type {}.",
-                        com_exp,
-                        com_exp.display_type()
-                    );
-                    Err(LispError::new(msg))
-                }
-            }
+            eval_command(environment, &com_exp, &mut parts)
         }
         ExpEnum::Pair(_, _) => {
             drop(command_d); // Drop the lock on command.
             let com_exp = eval(environment, &command)?;
-            let com_exp_d = com_exp.get();
-            match &com_exp_d.data {
-                ExpEnum::Atom(Atom::Lambda(_)) => {
-                    if environment.allow_lazy_fn {
-                        make_lazy(environment, com_exp.clone(), &mut parts)
-                    } else {
-                        call_lambda(environment, com_exp.clone(), &mut parts, true)
-                    }
-                }
-                ExpEnum::Atom(Atom::Macro(m)) => exec_macro(environment, &m, &mut parts),
-                ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
-                ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
-                    do_command(environment, s.trim(), &mut parts)
-                }
-                _ => {
-                    let msg = format!(
-                        "Not a valid command {}, type {}.",
-                        com_exp,
-                        com_exp.display_type()
-                    );
-                    Err(LispError::new(msg))
-                }
-            }
+            eval_command(environment, &com_exp, &mut parts)
         }
         ExpEnum::Atom(Atom::Lambda(_)) => {
             if environment.allow_lazy_fn {
@@ -392,6 +378,24 @@ fn fn_eval_lazy(
         ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
         ExpEnum::Atom(Atom::String(s, _)) if allow_sys_com => {
             do_command(environment, s.trim(), &mut parts)
+        }
+        ExpEnum::Wrapper(h) => {
+            let exp: Expression = h.into();
+            let mut exp_d = exp.get_mut();
+            let exp2 = if let ExpEnum::Atom(Atom::Lambda(l)) = &mut exp_d.data {
+                let p = l.params.clone();
+                Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
+                    Lambda {
+                        params: p,
+                        body: l.body.clone(),
+                        capture: get_current_scope(environment),
+                    },
+                )))
+            } else {
+            drop(exp_d);
+                exp
+            };
+            eval_command(environment, &exp2, &mut parts)
         }
         _ => {
             let msg = format!(
@@ -589,7 +593,20 @@ fn internal_eval(
         ExpEnum::Vector(_) => {
             drop(exp_a);
             environment.last_meta = expression.meta();
-            fn_eval_lazy(environment, &expression)
+            //fn_eval_lazy(environment, &expression)
+            let ret = fn_eval_lazy(environment, &expression)?;
+            /*match &ret.get().data {
+                ExpEnum::Atom(Atom::Lambda(_)) => expression
+                    .get_mut()
+                    .data
+                    .replace(ExpEnum::Wrapper(ret.clone().into())),
+                ExpEnum::Atom(Atom::Macro(_)) => expression
+                    .get_mut()
+                    .data
+                    .replace(ExpEnum::Wrapper(ret.clone().into())),
+                _ => {}
+            }*/
+            Ok(ret)
         }
         ExpEnum::Values(v) => {
             if v.is_empty() {
@@ -599,10 +616,37 @@ fn internal_eval(
                 internal_eval(environment, &v)
             }
         }
-        ExpEnum::Pair(_, _) => {
+        ExpEnum::Pair(car, _) => {
+            let is_lambda = if let ExpEnum::Atom(Atom::Symbol(s)) = &car.get().data {
+                if *s == "fn" {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
             drop(exp_a);
             environment.last_meta = expression.meta();
-            fn_eval_lazy(environment, &expression)
+            let ret = fn_eval_lazy(environment, &expression)?;
+            if is_lambda {
+                match &ret.get().data {
+                    ExpEnum::Atom(Atom::Lambda(_)) => {
+                        //println!("XXXXX replacing {} with {}", expression, ret);
+                        expression
+                            .get_mut()
+                            .data
+                            .replace(ExpEnum::Wrapper(ret.clone().into()));
+                        //.replace(ret.clone().into());
+                    }
+                    /*ExpEnum::Atom(Atom::Macro(_)) => expression
+                    .get_mut()
+                    .data
+                    .replace(ExpEnum::Wrapper(ret.clone().into())),*/
+                    _ => {}
+                }
+            }
+            Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
         ExpEnum::Atom(Atom::Symbol(s)) => {
@@ -639,6 +683,23 @@ fn internal_eval(
         ExpEnum::LazyFn(_, _) => {
             let int_exp = expression.clone().resolve(environment)?;
             eval(environment, int_exp)
+        }
+        ExpEnum::Wrapper(exp) => {
+            let exp: Expression = exp.into();
+            let mut exp_d = exp.get_mut();
+            if let ExpEnum::Atom(Atom::Lambda(l)) = &mut exp_d.data {
+                let p = l.params.clone();
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
+                    Lambda {
+                        params: p,
+                        body: l.body.clone(),
+                        capture: get_current_scope(environment),
+                    },
+                ))))
+            } else {
+            drop(exp_d);
+                Ok(exp)
+            }
         }
     };
     match ret {

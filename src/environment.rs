@@ -515,6 +515,7 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference>
     // First check any "local" lexical scopes.
     while let Some(scope_outer) = loop_scope {
         let scope = scope_outer.borrow_mut();
+        // Stop when we get to the underlying namespace- handle those afer dynamics.
         if scope.name.is_some() {
             namespace = Some(scope_outer.clone());
             break;
