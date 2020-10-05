@@ -4,6 +4,7 @@ use std::env;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
+use crate::builtins::builtin_fn;
 use crate::builtins::expand_macro;
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -384,15 +385,13 @@ fn fn_eval_lazy(
             let mut exp_d = exp.get_mut();
             let exp2 = if let ExpEnum::Atom(Atom::Lambda(l)) = &mut exp_d.data {
                 let p = l.params.clone();
-                Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
-                    Lambda {
-                        params: p,
-                        body: l.body.clone(),
-                        capture: get_current_scope(environment),
-                    },
-                )))
+                Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(Lambda {
+                    params: p,
+                    body: l.body.clone(),
+                    capture: get_current_scope(environment),
+                })))
             } else {
-            drop(exp_d);
+                drop(exp_d);
                 exp
             };
             eval_command(environment, &exp2, &mut parts)
@@ -533,24 +532,11 @@ fn str_process(
     }
 }
 
-fn internal_eval(
+fn analyze(
     environment: &mut Environment,
     expression_in: &Expression,
 ) -> Result<Expression, LispError> {
     let mut expression = expression_in.clone_root();
-    if environment.sig_int.load(Ordering::Relaxed) {
-        environment.sig_int.store(false, Ordering::Relaxed);
-        return Err(LispError::new("Script interupted by SIGINT."));
-    }
-    // exit was called so just return nil to unwind.
-    if environment.exit_code.is_some() {
-        return Ok(Expression::alloc_data(ExpEnum::Nil));
-    }
-    let in_recur = environment.state.recur_num_args.is_some();
-    if in_recur {
-        environment.state.recur_num_args = None;
-        return Err(LispError::new("Called recur in a non-tail position."));
-    }
     // If we have a macro expand it and replace the expression with the expansion.
     if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
         let mut nv: Vec<Handle> = Vec::new();
@@ -590,22 +576,213 @@ fn internal_eval(
     let exp_a = expression.get();
     let exp_d = &exp_a.data;
     let ret = match exp_d {
+        ExpEnum::Vector(v) => {
+            //for exp in v {
+            //    let exp: Expression = exp.into();
+            //    analyze(environment, &exp)?;
+            //}
+            if let Some((car, cdr)) = v.split_first() {
+                let car: Expression = car.into();
+                let car_d = car.get();
+                if let ExpEnum::Atom(Atom::Symbol(s)) = &car_d.data {
+                    let form = get_expression(environment, &s);
+                    if let Some(exp) = form {
+                        if let ExpEnum::DeclareFn = &exp.exp.get().data {
+                            //println!("XXXX making fn from sym- list");
+                            let lambda = {
+                                let mut ib = box_slice_it(cdr);
+                                builtin_fn(environment, &mut ib)?
+                            };
+                            drop(exp_d);
+                            drop(exp_a);
+                            expression
+                                .get_mut()
+                                .data
+                                .replace(ExpEnum::Wrapper(lambda.into()));
+                        } else if let ExpEnum::Atom(Atom::Macro(_)) = &exp.exp.get().data {
+                            panic!("Macros should have been expanded at this point!");
+                        }
+                    }
+                } else if let ExpEnum::DeclareFn = &car_d.data {
+                    //println!("XXXX making fn raw- list");
+                    let lambda = {
+                        let mut ib = box_slice_it(cdr);
+                        builtin_fn(environment, &mut ib)?
+                    };
+                    drop(exp_d);
+                    drop(exp_a);
+                    expression
+                        .get_mut()
+                        .data
+                        .replace(ExpEnum::Wrapper(lambda.into()));
+                } else if let ExpEnum::Atom(Atom::Macro(_)) = &car_d.data {
+                    panic!("Macros should have been expanded at this point!");
+                }
+            }
+            Ok(expression.clone())
+        }
+        ExpEnum::Pair(car, cdr) => {
+            //for exp in expression.iter() {
+            //   analyze(environment, &exp)?;
+            //}
+            let car: Expression = car.into();
+            if let ExpEnum::Atom(Atom::Symbol(s)) = &car.get().data {
+                let form = get_expression(environment, &s);
+                if let Some(exp) = form {
+                    if let ExpEnum::DeclareFn = &exp.exp.get().data {
+                        //println!("XXXX making fn from sym");
+                        let cdr: Expression = cdr.into();
+                        let lambda = builtin_fn(environment, &mut cdr.iter())?;
+                        drop(exp_d);
+                        drop(exp_a);
+                        expression
+                            .get_mut()
+                            .data
+                            .replace(ExpEnum::Wrapper(lambda.into()));
+                    }
+                }
+            } else if let ExpEnum::DeclareFn = &car.get().data {
+                //println!("XXXX making fn raw");
+                let cdr: Expression = cdr.into();
+                let lambda = builtin_fn(environment, &mut cdr.iter())?;
+                drop(exp_d);
+                drop(exp_a);
+                expression
+                    .get_mut()
+                    .data
+                    .replace(ExpEnum::Wrapper(lambda.into()));
+            }
+            Ok(expression.clone())
+        }
+        ExpEnum::Values(_v) => Ok(expression.clone()),
+        ExpEnum::Nil => Ok(expression.clone()),
+        ExpEnum::Atom(Atom::Symbol(_s)) => {
+            Ok(expression.clone())
+            /*if s.starts_with('$') {
+                match env::var(&s[1..]) {
+                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        environment.interner.intern(&val).into(),
+                        None,
+                    )))),
+                    Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
+                }
+            } else if s.starts_with(':') {
+                // Got a keyword, so just be you...
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(s))))
+            } else if let Some(exp) = get_expression(environment, s) {
+                let exp = &exp.exp;
+                Ok(exp.clone())
+            } else if environment.loose_symbols {
+                str_process(environment, s, false)
+            } else {
+                let msg = format!("Symbol {} not found.", s);
+                Err(LispError::new(msg))
+            }*/
+        }
+        ExpEnum::HashMap(_) => Ok(expression.clone()),
+        // If we have an iterator on the string then assume it is already processed and being used.
+        // XXX TODO- verify this assumption is correct, maybe change when to process strings.
+        //ExpEnum::Atom(Atom::String(_, Some(_))) => Ok(expression.clone()),
+        ExpEnum::Atom(Atom::String(_, _)) => Ok(expression.clone()),
+        //ExpEnum::Atom(Atom::String(string, _)) => str_process(environment, &string, true),
+        ExpEnum::Atom(_) => Ok(expression.clone()),
+        ExpEnum::Function(_) => Ok(expression.clone()), //Ok(Expression::alloc_data(ExpEnum::Nil)),
+        ExpEnum::Process(_) => Ok(expression.clone()),
+        ExpEnum::File(_) => Ok(expression.clone()), //Ok(Expression::alloc_data(ExpEnum::Nil)),
+        ExpEnum::LazyFn(_, _) => {
+            Ok(expression.clone())
+            //let int_exp = expression.clone().resolve(environment)?;
+            //eval(environment, int_exp)
+        }
+        ExpEnum::Wrapper(_exp) => {
+            Ok(expression.clone())
+            /*let exp: Expression = exp.into();
+            let mut exp_d = exp.get_mut();
+            if let ExpEnum::Atom(Atom::Lambda(l)) = &mut exp_d.data {
+                let p = l.params.clone();
+                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
+                    Lambda {
+                        params: p,
+                        body: l.body.clone(),
+                        capture: get_current_scope(environment),
+                    },
+                ))))
+            } else {
+            drop(exp_d);
+                Ok(exp)
+            }*/
+        }
+        ExpEnum::DeclareDef => Ok(expression.clone()),
+        ExpEnum::DeclareVar => Ok(expression.clone()),
+        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),//Ok(expression.clone()),
+    };
+    match ret {
+        Ok(ret) => Ok(ret.clone_root()),
+        Err(err) => Err(err),
+    }
+}
+
+fn internal_eval(
+    environment: &mut Environment,
+    expression_in: &Expression,
+) -> Result<Expression, LispError> {
+    let expression = expression_in.clone_root();
+    if environment.sig_int.load(Ordering::Relaxed) {
+        environment.sig_int.store(false, Ordering::Relaxed);
+        return Err(LispError::new("Script interupted by SIGINT."));
+    }
+    // exit was called so just return nil to unwind.
+    if environment.exit_code.is_some() {
+        return Ok(Expression::alloc_data(ExpEnum::Nil));
+    }
+    let in_recur = environment.state.recur_num_args.is_some();
+    if in_recur {
+        environment.state.recur_num_args = None;
+        return Err(LispError::new("Called recur in a non-tail position."));
+    }
+    // If we have a macro expand it and replace the expression with the expansion.
+    /*if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
+        let mut nv: Vec<Handle> = Vec::new();
+        let mut macro_replace = true;
+        if let ExpEnum::Vector(list) = &exp.get().data {
+            for item in list {
+                let item: Expression = item.into();
+                let item = item.resolve(environment)?;
+                nv.push(item.into());
+            }
+        } else if let ExpEnum::Pair(_, _) = &exp.get().data {
+            for item in exp.iter() {
+                let item = item.resolve(environment)?;
+                nv.push(item.into());
+            }
+        } else {
+            expression = exp.clone();
+            macro_replace = false;
+        }
+        if macro_replace {
+            let mut exp_mut = expression.get_mut();
+            match exp_mut.data {
+                ExpEnum::Vector(_) => {
+                    exp_mut.data.replace(ExpEnum::Vector(nv));
+                    drop(exp_mut);
+                    gc_mut().down_root(&expression);
+                }
+                ExpEnum::Pair(_, _) => {
+                    exp_mut.data.replace(ExpEnum::cons_from_vec(&mut nv));
+                    drop(exp_mut);
+                    gc_mut().down_root(&expression);
+                }
+                _ => {}
+            }
+        }
+    }*/
+    let exp_a = expression.get();
+    let exp_d = &exp_a.data;
+    let ret = match exp_d {
         ExpEnum::Vector(_) => {
             drop(exp_a);
             environment.last_meta = expression.meta();
-            //fn_eval_lazy(environment, &expression)
             let ret = fn_eval_lazy(environment, &expression)?;
-            /*match &ret.get().data {
-                ExpEnum::Atom(Atom::Lambda(_)) => expression
-                    .get_mut()
-                    .data
-                    .replace(ExpEnum::Wrapper(ret.clone().into())),
-                ExpEnum::Atom(Atom::Macro(_)) => expression
-                    .get_mut()
-                    .data
-                    .replace(ExpEnum::Wrapper(ret.clone().into())),
-                _ => {}
-            }*/
             Ok(ret)
         }
         ExpEnum::Values(v) => {
@@ -616,36 +793,10 @@ fn internal_eval(
                 internal_eval(environment, &v)
             }
         }
-        ExpEnum::Pair(car, _) => {
-            let is_lambda = if let ExpEnum::Atom(Atom::Symbol(s)) = &car.get().data {
-                if *s == "fn" {
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
+        ExpEnum::Pair(_, _) => {
             drop(exp_a);
             environment.last_meta = expression.meta();
             let ret = fn_eval_lazy(environment, &expression)?;
-            if is_lambda {
-                match &ret.get().data {
-                    ExpEnum::Atom(Atom::Lambda(_)) => {
-                        //println!("XXXXX replacing {} with {}", expression, ret);
-                        expression
-                            .get_mut()
-                            .data
-                            .replace(ExpEnum::Wrapper(ret.clone().into()));
-                        //.replace(ret.clone().into());
-                    }
-                    /*ExpEnum::Atom(Atom::Macro(_)) => expression
-                    .get_mut()
-                    .data
-                    .replace(ExpEnum::Wrapper(ret.clone().into())),*/
-                    _ => {}
-                }
-            }
             Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
@@ -697,10 +848,13 @@ fn internal_eval(
                     },
                 ))))
             } else {
-            drop(exp_d);
+                drop(exp_d);
                 Ok(exp)
             }
         }
+        ExpEnum::DeclareDef => panic!("Illegal def state in eval, was analyze skipped?"),// Ok(expression.clone()),
+        ExpEnum::DeclareVar => panic!("Illegal var state in eval, was analyze skipped?"),// Ok(expression.clone()),
+        ExpEnum::DeclareFn => panic!("Illegal fn state in eval, was analyze skipped?"),//Ok(expression.clone()),
     };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),
@@ -712,7 +866,7 @@ pub fn eval_nr(
     environment: &mut Environment,
     expression: impl AsRef<Expression>,
 ) -> Result<Expression, LispError> {
-    let expression = expression.as_ref();
+    //let expression = expression.as_ref();
     if environment.return_val.is_some() {
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
@@ -720,7 +874,8 @@ pub fn eval_nr(
         return Err(LispError::new("Eval calls to deep."));
     }
     environment.state.eval_level += 1;
-    let tres = internal_eval(environment, expression);
+    let expression = analyze(environment, expression.as_ref())?;
+    let tres = internal_eval(environment, &expression);
     let mut result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
         Err(LispError::new("Return without matching block."))

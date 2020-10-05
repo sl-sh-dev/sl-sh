@@ -222,15 +222,18 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                 ExpEnum::Vector(list) => {
                     for l in list {
                         let l: Expression = l.into();
+                        //println!("XXXX evaling (vec): {}", l);
                         res = Some(eval(environment, &l)?);
                     }
                 }
                 ExpEnum::Pair(_, _) => {
                     for l in ast.iter() {
+                        //println!("XXXX evaling (pair): {}", l);
                         res = Some(eval(environment, l)?);
                     }
                 }
                 _ => {
+                    //println!("XXXX evaling (na): {}", ast);
                     res = Some(eval(environment, &ast)?);
                 }
             }
@@ -518,7 +521,7 @@ pub fn builtin_do(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-fn builtin_fn(
+pub fn builtin_fn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -1994,7 +1997,7 @@ Example:
     );
     data.insert(
         interner.intern("fn"),
-        Expression::make_special(
+        Expression::make_special_fn(
             builtin_fn,
             "Usage: (fn (param*) expr*) -> exprN
 

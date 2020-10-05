@@ -470,6 +470,21 @@ pub fn do_command(
                     "Invalid expression state before command (wrapper).",
                 ));
             }
+            ExpEnum::DeclareDef => {
+                return Err(LispError::new(
+                    "Invalid expression state before command (function).",
+                ))
+            }
+            ExpEnum::DeclareVar => {
+                return Err(LispError::new(
+                    "Invalid expression state before command (function).",
+                ))
+            }
+            ExpEnum::DeclareFn => {
+                return Err(LispError::new(
+                    "Invalid expression state before command (function).",
+                ))
+            }
         }
     } else if foreground {
         Stdio::inherit()

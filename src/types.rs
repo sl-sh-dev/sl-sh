@@ -319,6 +319,10 @@ pub enum ExpEnum {
     LazyFn(Handle, Vec<Handle>),
     Wrapper(Handle),
     Nil,
+
+    DeclareDef,
+    DeclareVar,
+    DeclareFn,
 }
 
 impl ExpEnum {
@@ -381,6 +385,9 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::LazyFn(_, exp) => write!(f, "ExpEnum::LazyFn({:?})", exp),
             ExpEnum::Wrapper(exp) => write!(f, "ExpEnum::Wrapper({:?})", exp),
             ExpEnum::Nil => write!(f, "ExpEnum::Nil"),
+            ExpEnum::DeclareDef => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::DeclareVar => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::DeclareFn => write!(f, "ExpEnum::Function(_)"),
         }
     }
 }
@@ -557,6 +564,16 @@ impl Expression {
         )
     }
 
+    pub fn make_special_fn(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+        Reference::new(
+            ExpEnum::DeclareFn,
+            RefMetaData {
+                namespace: Some(namespace),
+                doc_string: Some(doc_str.to_string()),
+            },
+        )
+    }
+
     pub fn with_list(list: Vec<Handle>) -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
@@ -626,6 +643,9 @@ impl Expression {
                 exp.display_type()
             }
             ExpEnum::Nil => "Nil".to_string(),
+            ExpEnum::DeclareDef => "SpecialForm".to_string(),
+            ExpEnum::DeclareVar => "SpecialForm".to_string(),
+            ExpEnum::DeclareFn => "SpecialForm".to_string(),
         }
     }
 
@@ -835,6 +855,9 @@ impl Expression {
                 let exp: Expression = exp.into();
                 exp.make_string(environment)
             }
+            ExpEnum::DeclareDef => Ok(self.to_string()),
+            ExpEnum::DeclareVar => Ok(self.to_string()),
+            ExpEnum::DeclareFn => Ok(self.to_string()),
         }
     }
 
@@ -879,6 +902,9 @@ impl Expression {
             ExpEnum::File(_) => Err(LispError::new("Not a number")),
             ExpEnum::LazyFn(_, _) => Err(LispError::new("Not a number")),
             ExpEnum::Wrapper(_) => Err(LispError::new("Not a number")),
+            ExpEnum::DeclareDef => Err(LispError::new("Not a number")),
+            ExpEnum::DeclareVar => Err(LispError::new("Not a number")),
+            ExpEnum::DeclareFn => Err(LispError::new("Not a number")),
         }
     }
 
@@ -913,6 +939,9 @@ impl Expression {
             ExpEnum::File(_) => Err(LispError::new("Not an integer")),
             ExpEnum::LazyFn(_, _) => Err(LispError::new("Not an integer")),
             ExpEnum::Wrapper(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::DeclareDef => Err(LispError::new("Not an integer")),
+            ExpEnum::DeclareVar => Err(LispError::new("Not an integer")),
+            ExpEnum::DeclareFn => Err(LispError::new("Not an integer")),
         }
     }
 
@@ -1001,6 +1030,9 @@ impl Expression {
                 let exp: Expression = exp.into();
                 exp.writef(environment, writer)?;
             }
+            ExpEnum::DeclareDef => write!(writer, "{}", self.to_string())?,
+            ExpEnum::DeclareVar => write!(writer, "{}", self.to_string())?,
+            ExpEnum::DeclareFn => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;
         Ok(())
@@ -1199,6 +1231,9 @@ impl fmt::Display for Expression {
                 let exp: Expression = exp.into();
                 exp.fmt(f)
             }
+            ExpEnum::DeclareDef => write!(f, "#<Function>"),
+            ExpEnum::DeclareVar => write!(f, "#<Function>"),
+            ExpEnum::DeclareFn => write!(f, "#<Function>"),
         }
     }
 }

@@ -1,5 +1,16 @@
 ; core should be loaded into the root namespace (ie it does not set a namespace).
 (def prim-print-backtrace (fn (backtrace) 
+(def first (fn
+    (obj)
+    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
+        (list? obj) (car obj)
+        (err "Not a vector or list"))))
+(def rest (fn
+    (obj)
+    (if (vec? obj) (vec-slice obj 1)  ; XXX deal with empty vector (don't make it nil).
+        (list? obj) (cdr obj)
+        (err "Not a vector or list"))))
+
     (if (not (vec-empty? backtrace))
         (do
           (var b (first backtrace))
@@ -11,8 +22,8 @@
 (def prim-print-error (fn (error)
     (if (= :error (car error))
         (do
-            (println (cadr error))
-            (prim-print-backtrace (caddr error)))
+            (println (car (cdr error)))
+            (prim-print-backtrace (car (cdr (cdr error)))))
         (err "Not an error!"))))
 
 (def result (get-error (do

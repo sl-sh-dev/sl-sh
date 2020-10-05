@@ -29,7 +29,8 @@ Create a macro and bind it to a symbol in the current scope.
 
 Section: core
 "
-    (macro (name &rest args) `(internal-macro def ,name ,@args)))
+    (macro (name &rest args) 
+           `(internal-macro def ,name ,@args)))
 
 (def setmacro!
 "Usage: (setmacro! name doc_string? argument_list body)
