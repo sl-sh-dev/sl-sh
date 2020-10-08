@@ -1176,6 +1176,7 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     doc_str.push_str("\n\nUsage: (");
     doc_str.push_str(sym);
     for arg in p_iter {
+        doc_str.push(' ');
         doc_str.push_str(arg);
     }
     doc_str.push(')');
