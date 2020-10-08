@@ -61,7 +61,7 @@ up until the next token delimeted option, -c.
 (defn illegal-option (key)
     (str "Illegal option " key ", not in allowable arguments provided to getopts."))
 
-(defn verify-arity (idx given-args options-map)
+(defn verify-arity (idx given-args options-map bindings-map)
     (var 'option (vec-nth idx given-args))
     (var 'key (to-symbol (str ":" option)))
     (var 'arity-map (hash-get options-map key))
@@ -78,17 +78,18 @@ up until the next token delimeted option, -c.
     ;; to get a vector representing all args to current option
     (var 'potential-args (get-next-params idx given-args))
     (when (not (= (length potential-args) arity))
-      (err (bad-option-arity option arity))))
+      (err (bad-option-arity option arity)))
+    (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
 
-(defn verify-all-options-valid (cmd-line-args options-map)
+(defn verify-all-options-valid (cmd-line-args options-map bindings-map)
     (var 'vec-args (collect-vec cmd-line-args))
     (debugln "vec-args: " vec-args)
     (for-i idx cmd in vec-args
          (do
            (debugln "cmd: " (vec-nth idx vec-args) ", idx: " idx)
            (cond
-             ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map))
-             ((is-single-char-arg cmd) (verify-arity idx vec-args options-map))
+             ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
+             ((is-single-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-multi-single-char-args cmd)
                  (progn
                  ;; if the command in question looked like "-ab", de-multi-single-arged-str
@@ -99,7 +100,7 @@ up until the next token delimeted option, -c.
                            (str-cat-list (str " " token-delim)
                            (collect-vec (str-replace (vec-nth idx vec-args) token-delim ""))))))
                  (var 'sub-vec (map str (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args)))))
-                   (verify-all-options-valid sub-vec options-map)
+                   (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
 (defn build-getopts-param (arity)
@@ -116,16 +117,16 @@ up until the next token delimeted option, -c.
 (defn make-hash-with-keys (hmap)
     (make-hash (collect (map (fn (x) (join (to-symbol x) nil)) (hash-keys hmap)))))
 
-;; TODO arity map this needs ability to set default values
+;; TODO options-map this needs ability to set default values
+;; TODO eliminate debugln or make it programmatically switchable and print
+;;      useful info.
 (defn getopts (options-map &rest args)
-    ;; TODO verify arg-config is a hash map and that each map the right shape...
-    ;; maybe use structs?
     (when (not (> (length args) 0))
         (err no-args))
     (valid-first-arg? args)
-    (verify-all-options-valid args options-map)
     (var 'bindings-map (make-hash-with-keys options-map))
-    (debugln bindings-map)
+    (verify-all-options-valid args options-map bindings-map)
+    (debugln "bindings-map: " bindings-map)
     (err nyi))
 
 (def 'test-options-map
