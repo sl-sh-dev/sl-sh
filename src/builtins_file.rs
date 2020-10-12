@@ -51,7 +51,8 @@ fn builtin_cd(
     };
     let new_dir = if let Some(arg) = args.next() {
         if args.next().is_none() {
-            let new_arg = match &arg.get().data {
+            let arg_d = arg.get();
+            let new_arg = match &arg_d.data {
                 ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => eval(
@@ -66,11 +67,20 @@ fn builtin_cd(
                             environment,
                             Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
                         )?,
-                        _ => eval(environment, &arg)?,
+                        _ => {
+                            drop(arg_d);
+                            eval(environment, &arg)?
+                        }
                     },
-                    _ => eval(environment, &arg)?,
+                    _ => {
+                        drop(arg_d);
+                        eval(environment, &arg)?
+                    }
                 },
-                _ => eval(environment, &arg)?,
+                _ => {
+                    drop(arg_d);
+                    eval(environment, &arg)?
+                }
             }
             .as_string(environment)?;
             if let Some(h) = expand_tilde(&new_arg) {

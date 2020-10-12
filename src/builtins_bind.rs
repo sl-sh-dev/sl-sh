@@ -48,10 +48,17 @@ fn proc_set_vars<'a>(
     }
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
-            let key = match &key.get().data {
+            let key_d = key.get();
+            let key = match &key_d.data {
                 ExpEnum::Atom(Atom::Symbol(s)) => *s,
-                ExpEnum::Pair(_, _) => eval_key(environment, key.clone())?,
-                ExpEnum::Vector(_) => eval_key(environment, key.clone())?,
+                ExpEnum::Pair(_, _) => {
+                    drop(key_d);
+                    eval_key(environment, key.clone())?
+                }
+                ExpEnum::Vector(_) => {
+                    drop(key_d);
+                    eval_key(environment, key.clone())?
+                }
                 _ => return Err(LispError::new("first form (binding key) must be a symbol")),
             };
             if let Some(arg2) = args.next() {
@@ -288,10 +295,17 @@ fn builtin_dyn(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let (key, val) = if let Some(key) = args.next() {
-        let key = match &key.get().data {
+        let key_d = key.get();
+        let key = match &key_d.data {
             ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
-            ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
-            ExpEnum::Vector(_) => eval(environment, key.clone())?,
+            ExpEnum::Pair(_, _) => {
+                drop(key_d);
+                eval(environment, key.clone())?
+            }
+            ExpEnum::Vector(_) => {
+                drop(key_d);
+                eval(environment, key.clone())?
+            }
             _ => return Err(LispError::new("dyn: takes a symbol")),
         };
         if let Some(val) = args.next() {
@@ -366,10 +380,17 @@ fn builtin_is_def(
     }
     if let Some(key) = args.next() {
         params_done(args, "def?")?;
-        match &key.get().data {
+        let key_d = key.get();
+        match &key_d.data {
             ExpEnum::Atom(Atom::Symbol(s)) => get_ret(environment, s),
-            ExpEnum::Pair(_, _) => do_list(environment, key.clone()),
-            ExpEnum::Vector(_) => do_list(environment, key.clone()),
+            ExpEnum::Pair(_, _) => {
+                drop(key_d);
+                do_list(environment, key.clone())
+            }
+            ExpEnum::Vector(_) => {
+                drop(key_d);
+                do_list(environment, key.clone())
+            }
             _ => Err(LispError::new("def?: takes a symbol to lookup")),
         }
     } else {
@@ -383,10 +404,17 @@ fn builtin_ref(
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         params_done(args, "ref")?;
-        let key = match &key.get().data {
+        let key_d = key.get();
+        let key = match &key_d.data {
             ExpEnum::Atom(Atom::Symbol(_)) => key.clone(),
-            ExpEnum::Pair(_, _) => eval(environment, key.clone())?,
-            ExpEnum::Vector(_) => eval(environment, key.clone())?,
+            ExpEnum::Pair(_, _) => {
+                drop(key_d);
+                eval(environment, key.clone())?
+            }
+            ExpEnum::Vector(_) => {
+                drop(key_d);
+                eval(environment, key.clone())?
+            }
             _ => return Err(LispError::new("ref: takes a symbol")),
         };
         let key_d = key.get();

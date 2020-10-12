@@ -95,6 +95,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Re
                                     data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                     meta: exp_meta,
                                     meta_tags: None,
+                                    analyzed: false,
                                 })
                                 .into(),
                             );

@@ -125,6 +125,7 @@ impl Reference {
             data: exp,
             meta: None,
             meta_tags: None,
+            analyzed: true, // XXX verify this but is making a ref should have been analyzed.
         });
         Reference {
             exp: Expression::new(root),

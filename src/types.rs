@@ -342,6 +342,7 @@ impl ExpEnum {
                             data: last_pair.clone(),
                             meta: None,
                             meta_tags: None,
+                            analyzed: false,
                         })
                         .into(),
                     );
@@ -353,6 +354,7 @@ impl ExpEnum {
                             data: last_pair.clone(),
                             meta: None,
                             meta_tags: None,
+                            analyzed: false,
                         })
                         .into(),
                     );
@@ -397,6 +399,7 @@ pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
     pub meta_tags: Option<HashSet<&'static str>>,
+    pub analyzed: bool, // XXX check where these are inited and see if can be true.
 }
 
 impl Trace for ExpEnum {
@@ -450,6 +453,7 @@ impl Expression {
             data,
             meta: None,
             meta_tags: None,
+            analyzed: false,
         })
     }
 
@@ -466,6 +470,7 @@ impl Expression {
             data: ExpEnum::Nil,
             meta: None,
             meta_tags: None,
+            analyzed: false,
         })
     }
 
@@ -474,6 +479,7 @@ impl Expression {
             data: ExpEnum::Atom(Atom::True),
             meta: None,
             meta_tags: None,
+            analyzed: false,
         })
     }
 
@@ -579,6 +585,7 @@ impl Expression {
             data: ExpEnum::Vector(list),
             meta: None,
             meta_tags: None,
+            analyzed: false,
         })
     }
 
@@ -587,6 +594,7 @@ impl Expression {
             data: ExpEnum::Vector(list),
             meta,
             meta_tags: None,
+            analyzed: false,
         })
     }
 
@@ -601,6 +609,7 @@ impl Expression {
                         data: last_pair.clone(),
                         meta: None,
                         meta_tags: None,
+                        analyzed: false,
                     })
                     .into(),
                 );
@@ -611,6 +620,7 @@ impl Expression {
             data: last_pair,
             meta,
             meta_tags: None,
+            analyzed: false,
         })
     }
 

@@ -225,6 +225,7 @@ fn make_lazy(
         data: ExpEnum::LazyFn(lambda.into(), parms),
         meta: None,
         meta_tags: None,
+        analyzed: true,
     }))
 }
 
@@ -577,10 +578,6 @@ fn analyze(
     let exp_d = &exp_a.data;
     let ret = match exp_d {
         ExpEnum::Vector(v) => {
-            //for exp in v {
-            //    let exp: Expression = exp.into();
-            //    analyze(environment, &exp)?;
-            //}
             if let Some((car, cdr)) = v.split_first() {
                 let car: Expression = car.into();
                 let car_d = car.get();
@@ -622,9 +619,6 @@ fn analyze(
             Ok(expression.clone())
         }
         ExpEnum::Pair(car, cdr) => {
-            //for exp in expression.iter() {
-            //   analyze(environment, &exp)?;
-            //}
             let car: Expression = car.into();
             if let ExpEnum::Atom(Atom::Symbol(s)) = &car.get().data {
                 let form = get_expression(environment, &s);
@@ -714,7 +708,7 @@ fn analyze(
         }
         ExpEnum::DeclareDef => Ok(expression.clone()),
         ExpEnum::DeclareVar => Ok(expression.clone()),
-        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),//Ok(expression.clone()),
+        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"), //Ok(expression.clone()),
     };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),
@@ -852,9 +846,9 @@ fn internal_eval(
                 Ok(exp)
             }
         }
-        ExpEnum::DeclareDef => panic!("Illegal def state in eval, was analyze skipped?"),// Ok(expression.clone()),
-        ExpEnum::DeclareVar => panic!("Illegal var state in eval, was analyze skipped?"),// Ok(expression.clone()),
-        ExpEnum::DeclareFn => panic!("Illegal fn state in eval, was analyze skipped?"),//Ok(expression.clone()),
+        ExpEnum::DeclareDef => panic!("Illegal def state in eval, was analyze skipped?"), // Ok(expression.clone()),
+        ExpEnum::DeclareVar => panic!("Illegal var state in eval, was analyze skipped?"), // Ok(expression.clone()),
+        ExpEnum::DeclareFn => panic!("Illegal fn state in eval, was analyze skipped?"), //Ok(expression.clone()),
     };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),
@@ -866,6 +860,7 @@ pub fn eval_nr(
     environment: &mut Environment,
     expression: impl AsRef<Expression>,
 ) -> Result<Expression, LispError> {
+    let expression = expression.as_ref();
     //let expression = expression.as_ref();
     if environment.return_val.is_some() {
         return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -874,7 +869,15 @@ pub fn eval_nr(
         return Err(LispError::new("Eval calls to deep."));
     }
     environment.state.eval_level += 1;
-    let expression = analyze(environment, expression.as_ref())?;
+    let tmp_exp;
+    let analyzed = { expression.get().analyzed };
+    let expression = if !analyzed {
+        tmp_exp = analyze(environment, expression.as_ref())?;
+        tmp_exp.get_mut().analyzed = true;
+        &tmp_exp
+    } else {
+        expression
+    };
     let tres = internal_eval(environment, &expression);
     let mut result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;

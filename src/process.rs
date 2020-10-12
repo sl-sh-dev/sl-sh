@@ -503,6 +503,7 @@ pub fn do_command(
         let a_exp2 = a_exp.clone();
         let a_exp_a = a_exp.get();
         if let ExpEnum::Atom(Atom::String(_, _)) = a_exp_a.data {
+            drop(a_exp_a);
             let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
         } else {
