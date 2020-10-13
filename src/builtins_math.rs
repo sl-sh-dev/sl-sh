@@ -32,10 +32,10 @@ pub fn add_math_builtins<S: BuildHasher>(
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let sum: i64 = ints.iter().sum();
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(sum))))
+                    Ok(Expression::alloc_data(ExpEnum::Int(sum)))
                 } else {
                     let sum: f64 = parse_list_of_floats(environment, &mut args)?.iter().sum();
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(sum))))
+                    Ok(Expression::alloc_data(ExpEnum::Float(sum)))
                 }
             },
             "Usage: (+ number+)
@@ -64,12 +64,12 @@ Example:
                 let mut args = make_args(environment, args)?;
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     let prod: i64 = ints.iter().product();
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(prod))))
+                    Ok(Expression::alloc_data(ExpEnum::Int(prod)))
                 } else {
                     let prod: f64 = parse_list_of_floats(environment, &mut args)?
                         .iter()
                         .product();
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(prod))))
+                    Ok(Expression::alloc_data(ExpEnum::Float(prod)))
                 }
             },
             "Usage: (* number+)
@@ -104,9 +104,7 @@ Example:
                 if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
                     if let Some(first) = ints.first() {
                         let sum_of_rest: i64 = ints[1..].iter().sum();
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                            first - sum_of_rest,
-                        ))))
+                        Ok(Expression::alloc_data(ExpEnum::Int(first - sum_of_rest)))
                     } else {
                         Err(LispError::new("expected at least one number"))
                     }
@@ -114,9 +112,7 @@ Example:
                     let floats = parse_list_of_floats(environment, &mut args)?;
                     if let Some(first) = floats.first() {
                         let sum_of_rest: f64 = floats[1..].iter().sum();
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
-                            first - sum_of_rest,
-                        ))))
+                        Ok(Expression::alloc_data(ExpEnum::Float(first - sum_of_rest)))
                     } else {
                         Err(LispError::new("expected at least one number"))
                     }
@@ -154,7 +150,7 @@ Example:
                         let div: i64 = ints[1..]
                             .iter()
                             .fold(*ints.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(div))))
+                        Ok(Expression::alloc_data(ExpEnum::Int(div)))
                     } else {
                         Err(LispError::new("expected at least two numbers"))
                     }
@@ -166,7 +162,7 @@ Example:
                         let div: f64 = floats[1..]
                             .iter()
                             .fold(*floats.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(div))))
+                        Ok(Expression::alloc_data(ExpEnum::Float(div)))
                     } else {
                         Err(LispError::new("expected at least two numbers"))
                     }
@@ -208,9 +204,7 @@ Example:
                     if *arg2 == 0 {
                         Err(LispError::new("expected two ints, second can not be 0"))
                     } else {
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                            arg1 % arg2,
-                        ))))
+                        Ok(Expression::alloc_data(ExpEnum::Int(arg1 % arg2)))
                     }
                 }
             },

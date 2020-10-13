@@ -24,21 +24,21 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: 
     env::set_var("UID", format!("{}", uid));
     env::set_var("EUID", format!("{}", euid));
     let mut interned_sym = environment.interner.intern("*uid*");
-    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(uid) as i64)));
+    let data = Expression::alloc_data(ExpEnum::Int(uid_t::from(uid) as i64));
     environment.insert_into_root_scope(interned_sym, data);
     interned_sym = environment.interner.intern("*euid*");
-    let data = Expression::alloc_data(ExpEnum::Atom(Atom::Int(uid_t::from(euid) as i64)));
+    let data = Expression::alloc_data(ExpEnum::Int(uid_t::from(euid) as i64));
     environment.insert_into_root_scope(interned_sym, data);
 
     let mut load_path = Vec::new();
     load_path.push(
-        Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        Expression::alloc_data(ExpEnum::String(
             environment
                 .interner
                 .intern(&format!("{}/.config/sl-sh", home))
                 .into(),
             None,
-        )))
+        ))
         .handle_no_root(),
     );
     let data = Expression::with_list(load_path);
@@ -279,20 +279,17 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     }
     environment.root_scope.borrow_mut().insert_exp(
         environment.interner.intern("*run-script*"),
-        Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(command).into(),
             None,
-        ))),
+        )),
     );
 
     let mut exp_args: Vec<Handle> = Vec::with_capacity(args.len());
     for a in args {
         exp_args.push(
-            Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                environment.interner.intern(a).into(),
-                None,
-            )))
-            .handle_no_root(),
+            Expression::alloc_data(ExpEnum::String(environment.interner.intern(a).into(), None))
+                .handle_no_root(),
         );
     }
     let data = Expression::with_list(exp_args);

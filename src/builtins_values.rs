@@ -26,7 +26,7 @@ fn builtin_values_nth(
     let idx = param_eval(environment, args, "values-nth")?;
     let vals = param_eval(environment, args, "values-nth")?;
     params_done(args, "values-nth")?;
-    if let ExpEnum::Atom(Atom::Int(idx)) = &idx.get().data {
+    if let ExpEnum::Int(idx) = &idx.get().data {
         if let ExpEnum::Values(vals) = &vals.get().data {
             if *idx < 0 || *idx >= vals.len() as i64 {
                 let msg = format!("values-nth: index {} out of range {}", idx, vals.len());
@@ -47,9 +47,7 @@ fn builtin_values_length(
     let vals = param_eval(environment, args, "values-length")?;
     params_done(args, "values-length")?;
     if let ExpEnum::Values(vals) = &vals.get().data {
-        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-            vals.len() as i64
-        ))));
+        return Ok(Expression::alloc_data(ExpEnum::Int(vals.len() as i64)));
     }
     Err(LispError::new(
         "values-length: Requires a muti values object, see (doc 'values-length) for usage.",

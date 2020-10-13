@@ -53,19 +53,19 @@ fn builtin_cd(
         if args.next().is_none() {
             let arg_d = arg.get();
             let new_arg = match &arg_d.data {
-                ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                ExpEnum::Symbol(s) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
+                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
                         )?,
-                        ExpEnum::Atom(Atom::Lambda(_)) => eval(
+                        ExpEnum::Lambda(_) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
+                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
                         )?,
-                        ExpEnum::Atom(Atom::Macro(_)) => eval(
+                        ExpEnum::Macro(_) => eval(
                             environment,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String((*s).into(), None))),
+                            Expression::alloc_data(ExpEnum::String((*s).into(), None)),
                         )?,
                         _ => {
                             drop(arg_d);
@@ -116,7 +116,7 @@ fn file_test(
     if let Some(p) = args.next() {
         if args.next().is_none() {
             let p = match &eval(environment, p)?.get().data {
-                ExpEnum::Atom(Atom::String(p, _)) => {
+                ExpEnum::String(p, _) => {
                     match expand_tilde(&p) {
                         Some(p) => p,
                         None => p.to_string(), // XXX not great.
@@ -164,9 +164,13 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Res
     let mut do_write = false;
     if let Some(data_in) = environment.data_in.clone() {
         match &data_in.get().data {
-            ExpEnum::Atom(_) => {
-                do_write = true;
-            }
+            ExpEnum::True => do_write = true,
+            ExpEnum::String(_, _) => do_write = true,
+            ExpEnum::Symbol(_) => do_write = true,
+            ExpEnum::Float(_) => do_write = true,
+            ExpEnum::Int(_) => do_write = true,
+            ExpEnum::Char(_) => do_write = true,
+            ExpEnum::CodePoint(_) => do_write = true,
             ExpEnum::Process(ProcessState::Running(_)) => {
                 do_write = true;
             }
@@ -315,19 +319,19 @@ fn builtin_wait(
             return match &arg0.get().data {
                 ExpEnum::Process(ProcessState::Running(pid)) => {
                     match wait_pid(environment, *pid, None) {
-                        Some(exit_status) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                            i64::from(exit_status),
-                        )))),
+                        Some(exit_status) => {
+                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                        }
                         None => Ok(Expression::make_nil()),
                     }
                 }
                 ExpEnum::Process(ProcessState::Over(_pid, exit_status)) => Ok(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(*exit_status)))),
+                    Expression::alloc_data(ExpEnum::Int(i64::from(*exit_status))),
                 ),
-                ExpEnum::Atom(Atom::Int(pid)) => match wait_pid(environment, *pid as u32, None) {
-                    Some(exit_status) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                        i64::from(exit_status),
-                    )))),
+                ExpEnum::Int(pid) => match wait_pid(environment, *pid as u32, None) {
+                    Some(exit_status) => {
+                        Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                    }
                     None => Ok(Expression::make_nil()),
                 },
                 _ => Err(LispError::new("wait error: not a pid")),
@@ -345,12 +349,12 @@ fn builtin_pid(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match arg0.get().data {
-                ExpEnum::Process(ProcessState::Running(pid)) => Ok(Expression::alloc_data(
-                    ExpEnum::Atom(Atom::Int(i64::from(pid))),
-                )),
-                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => Ok(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(pid)))),
-                ),
+                ExpEnum::Process(ProcessState::Running(pid)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
+                }
+                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
+                }
                 _ => Err(LispError::new("pid error: not a process")),
             };
         }
@@ -365,7 +369,7 @@ fn builtin_glob(
     let mut files = Vec::new();
     for pat in args {
         let pat = match &eval(environment, pat)?.get().data {
-            ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
+            ExpEnum::String(s, _) => s.to_string(),
             _ => return Err(LispError::new("globs need to be strings")),
         };
         let pat = match expand_tilde(&pat) {
@@ -378,10 +382,10 @@ fn builtin_glob(
                     match p {
                         Ok(p) => {
                             if let Some(p) = p.to_str() {
-                                files.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+                                files.push(Expression::alloc_data_h(ExpEnum::String(
                                     p.to_string().into(),
                                     None,
-                                ))));
+                                )));
                             }
                         }
                         Err(err) => {

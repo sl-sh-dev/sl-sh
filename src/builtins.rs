@@ -38,7 +38,7 @@ fn builtin_eval(
             let arg_d = arg.get();
             let old_scopes = std::mem::replace(&mut environment.scopes, Vec::new());
             let ret = match &arg_d.data {
-                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
+                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(LispError::new(err.reason)),
                 },
@@ -63,7 +63,7 @@ fn builtin_eval_in_scope(
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
             return match &arg_d.data {
-                ExpEnum::Atom(Atom::String(s, _)) => match read(environment, &s, None, false) {
+                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
                     Err(err) => Err(LispError::new(err.reason)),
                 },
@@ -101,9 +101,7 @@ fn builtin_apply(
         };
         for a in itr {
             let b = ExpEnum::Pair(
-                Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-                    environment.interner.intern("quote"),
-                ))),
+                Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern("quote"))),
                 Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
             );
             call_list.push(Expression::alloc_data_h(b));
@@ -165,8 +163,8 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         let mut path_out = file_name.clone();
         for l in p_itr {
             let path_name = match &l.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => Some((*sym).to_string()),
-                ExpEnum::Atom(Atom::String(s, _)) => Some(s.to_string()),
+                ExpEnum::Symbol(sym) => Some((*sym).to_string()),
+                ExpEnum::String(s, _) => Some(s.to_string()),
                 _ => None,
             };
             if let Some(path_name) = path_name {
@@ -266,20 +264,22 @@ fn builtin_length(
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
             return match &arg.get().data {
-                ExpEnum::Atom(Atom::String(s, _)) => {
+                ExpEnum::String(s, _) => {
                     let mut i = 0;
                     // Need to walk the chars to get the length in utf8 chars not bytes.
                     for _ in UnicodeSegmentation::graphemes(s.as_ref(), true) {
                         i += 1;
                     }
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(i64::from(
-                        i,
-                    )))))
+                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
                 }
-                ExpEnum::Atom(_) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(1)))),
-                ExpEnum::Vector(list) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    list.len() as i64,
-                )))),
+                /*ExpEnum::Float(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
+                ExpEnum::Int(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
+                ExpEnum::Symbol(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
+                ExpEnum::Char(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
+                ExpEnum::CodePoint(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),*/
+                ExpEnum::Vector(list) => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64)))
+                }
                 ExpEnum::Pair(_, e2) => {
                     let e2: Expression = e2.into();
                     let mut len = 0;
@@ -302,13 +302,15 @@ fn builtin_length(
                             }
                         }
                     }
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(len))))
+                    Ok(Expression::alloc_data(ExpEnum::Int(len)))
                 }
-                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(0)))),
-                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    map.len() as i64,
-                )))),
-                _ => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(0)))),
+                ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::Int(0))),
+                ExpEnum::HashMap(map) => Ok(Expression::alloc_data(ExpEnum::Int(map.len() as i64))),
+                _ => Err(LispError::new(format!(
+                    "expression of type {} has no length",
+                    arg.display_type()
+                ))),
+                //Ok(Expression::alloc_data(ExpEnum::Int(0))),
             };
         }
     }
@@ -351,7 +353,7 @@ fn args_out(
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
         let pretty = match &aa.get().data {
-            ExpEnum::Atom(Atom::String(_, _)) => false,
+            ExpEnum::String(_, _) => false,
             _ => pretty,
         };
         if pretty {
@@ -398,7 +400,7 @@ fn print_to_oe(
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
                             let pretty = match &aa.get().data {
-                                ExpEnum::Atom(Atom::String(_, _)) => false,
+                                ExpEnum::String(_, _) => false,
                                 _ => pretty,
                             };
                             if pretty {
@@ -501,10 +503,7 @@ fn builtin_format(
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-        res.into(),
-        None,
-    ))))
+    Ok(Expression::alloc_data(ExpEnum::String(res.into(), None)))
 }
 
 pub fn builtin_do(
@@ -530,7 +529,7 @@ pub fn builtin_fn(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol("do"))));
+                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -551,20 +550,18 @@ pub fn builtin_fn(
         };
         let mut params = Vec::new();
         for p in p_iter {
-            if let ExpEnum::Atom(Atom::Symbol(s)) = p.get().data {
+            if let ExpEnum::Symbol(s) = p.get().data {
                 params.push(s);
             } else {
                 return Err(LispError::new("fn: parameters must be symbols"));
             }
         }
         let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(
-            Lambda {
-                params,
-                body,
-                capture: get_current_scope(environment),
-            },
-        ))));
+        return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
+            params,
+            body,
+            capture: get_current_scope(environment),
+        })));
     }
     Err(LispError::new("fn: needs at least one form"))
 }
@@ -601,7 +598,7 @@ fn replace_commas(
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             _ => exp.clone(),
         };
-        if let ExpEnum::Atom(Atom::Symbol(symbol)) = &exp_d.data {
+        if let ExpEnum::Symbol(symbol) = &exp_d.data {
             if symbol == &"," {
                 comma_next = true;
             } else if symbol == &",@" {
@@ -675,7 +672,7 @@ fn builtin_bquote(
     let ret = if let Some(arg) = args.next() {
         let meta = arg.meta();
         match &arg.get().data {
-            ExpEnum::Atom(Atom::Symbol(s)) if s == &"," => {
+            ExpEnum::Symbol(s) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
@@ -759,7 +756,7 @@ fn builtin_not(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return if arg0.is_nil() {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+                Ok(Expression::alloc_data(ExpEnum::True))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             };
@@ -777,7 +774,7 @@ fn builtin_macro(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol("do"))));
+                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -798,18 +795,18 @@ fn builtin_macro(
         };
         let mut params = Vec::new();
         for p in p_iter {
-            if let ExpEnum::Atom(Atom::Symbol(s)) = p.get().data {
+            if let ExpEnum::Symbol(s) = p.get().data {
                 params.push(s);
             } else {
                 return Err(LispError::new("macro: parameters must be symbols"));
             }
         }
         let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Macro(Lambda {
+        return Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
             params,
             body,
             capture: get_current_scope(environment),
-        }))));
+        })));
     }
     Err(LispError::new("macro: need at least a bindings form"))
 }
@@ -819,9 +816,9 @@ fn do_expansion(
     command: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
-    if let ExpEnum::Atom(Atom::Symbol(command)) = &command.get().data {
+    if let ExpEnum::Symbol(command) = &command.get().data {
         if let Some(exp) = get_expression(environment, &command) {
-            if let ExpEnum::Atom(Atom::Macro(sh_macro)) = &exp.exp.get().data {
+            if let ExpEnum::Macro(sh_macro) = &exp.exp.get().data {
                 let body: Expression = sh_macro.body.clone().into();
                 let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
                 environment.scopes.push(new_scope);
@@ -1056,11 +1053,11 @@ fn builtin_gensym(
     } else {
         let gensym_count = &mut environment.state.gensym_count;
         *gensym_count += 1;
-        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+        Ok(Expression::alloc_data(ExpEnum::Symbol(
             environment
                 .interner
                 .intern(&format!("gs@@{}", *gensym_count)),
-        ))))
+        )))
     }
 }
 
@@ -1071,10 +1068,10 @@ fn builtin_version(
     if args.next().is_some() {
         Err(LispError::new("version takes no arguments"))
     } else {
-        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+        Ok(Expression::alloc_data(ExpEnum::String(
             VERSION_STRING.into(),
             None,
-        ))))
+        )))
     }
 }
 
@@ -1141,12 +1138,11 @@ fn builtin_get_error(
         match eval(environment, arg) {
             Ok(exp) => ret = Some(exp),
             Err(err) => {
-                let err_sym = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                let err_sym = Expression::alloc_data_h(ExpEnum::Symbol(
                     environment.interner.intern(":error"),
-                )));
+                ));
                 let msg = format!("{}", err);
-                let err_msg =
-                    Expression::alloc_data_h(ExpEnum::Atom(Atom::String(msg.into(), None)));
+                let err_msg = Expression::alloc_data_h(ExpEnum::String(msg.into(), None));
                 let res = if let Some(backtrace) = err.backtrace {
                     vec![err_sym, err_msg, Expression::with_list(backtrace).into()]
                 } else {
@@ -1156,9 +1152,7 @@ fn builtin_get_error(
             }
         }
     }
-    let ok = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-        environment.interner.intern(":ok"),
-    )));
+    let ok = Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern(":ok")));
     Ok(Expression::alloc_data_h(ExpEnum::Pair(
         ok,
         ret.unwrap_or_else(Expression::make_nil).into(),
@@ -1169,8 +1163,8 @@ fn builtin_get_error(
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
     let exp_d = exp.get();
     let p_iter = match &exp_d.data {
-        ExpEnum::Atom(Atom::Lambda(f)) => f.params.iter(),
-        ExpEnum::Atom(Atom::Macro(m)) => m.params.iter(),
+        ExpEnum::Lambda(f) => f.params.iter(),
+        ExpEnum::Macro(m) => m.params.iter(),
         _ => return,
     };
     doc_str.push_str("\n\nUsage: (");
@@ -1205,10 +1199,10 @@ fn make_doc(
         add_usage(&mut new_docs, key, &exp.exp);
     }
     new_docs.push('\n');
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+    Ok(Expression::alloc_data(ExpEnum::String(
         new_docs.into(),
         None,
-    ))))
+    )))
 }
 
 fn get_doc(
@@ -1221,7 +1215,7 @@ fn get_doc(
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
             let key = match key_d {
-                ExpEnum::Atom(Atom::Symbol(s)) => s,
+                ExpEnum::Symbol(s) => s,
                 _ => {
                     return Err(LispError::new("doc: first form must evaluate to a symbol"));
                 }
@@ -1234,7 +1228,7 @@ fn get_doc(
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = get_expression(environment, "*ns*") {
                                 match &exp.exp.get().data {
-                                    ExpEnum::Atom(Atom::String(s, _)) => s.to_string(),
+                                    ExpEnum::String(s, _) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
                             } else {
@@ -1247,8 +1241,9 @@ fn get_doc(
                             if is_raw {
                                 if let Some(exp) = scope.borrow().data.get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
-                                        return Ok(Expression::alloc_data(ExpEnum::Atom(
-                                            Atom::String(doc_string.to_string().into(), None),
+                                        return Ok(Expression::alloc_data(ExpEnum::String(
+                                            doc_string.to_string().into(),
+                                            None,
                                         )));
                                     } else {
                                         return Ok(Expression::alloc_data(ExpEnum::Nil));
@@ -1266,10 +1261,10 @@ fn get_doc(
                 if is_raw {
                     if let Some(exp) = scope.borrow().data.get(key) {
                         if let Some(doc_string) = &exp.meta.doc_string {
-                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                            return Ok(Expression::alloc_data(ExpEnum::String(
                                 doc_string.to_string().into(),
                                 None,
-                            ))));
+                            )));
                         } else {
                             return Ok(Expression::alloc_data(ExpEnum::Nil));
                         }
@@ -1309,7 +1304,7 @@ pub fn builtin_block(
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
         let name_d = &name.get().data;
-        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = name_d {
+        let name = if let ExpEnum::Symbol(n) = name_d {
             n
         } else {
             return Err(LispError::new(
@@ -1356,7 +1351,7 @@ pub fn builtin_return_from(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(name) = args.next() {
-        let name = if let ExpEnum::Atom(Atom::Symbol(n)) = &name.get().data {
+        let name = if let ExpEnum::Symbol(n) = &name.get().data {
             Some(*n)
         } else if name.is_nil() {
             None
@@ -1405,9 +1400,7 @@ pub fn builtin_meta_line_no(
     match &args.next() {
         None => {
             if let Some(meta) = &environment.last_meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    meta.line as i64,
-                ))))
+                Ok(Expression::alloc_data(ExpEnum::Int(meta.line as i64)))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1421,9 +1414,7 @@ pub fn builtin_meta_line_no(
             }
             let exp_d = exp.get();
             if let Some(meta) = &exp_d.meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    meta.line as i64,
-                ))))
+                Ok(Expression::alloc_data(ExpEnum::Int(meta.line as i64)))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1438,9 +1429,7 @@ pub fn builtin_meta_column_no(
     match &args.next() {
         None => {
             if let Some(meta) = &environment.last_meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    meta.col as i64,
-                ))))
+                Ok(Expression::alloc_data(ExpEnum::Int(meta.col as i64)))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1454,9 +1443,7 @@ pub fn builtin_meta_column_no(
             }
             let exp_d = exp.get();
             if let Some(meta) = &exp_d.meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    meta.col as i64,
-                ))))
+                Ok(Expression::alloc_data(ExpEnum::Int(meta.col as i64)))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1471,10 +1458,10 @@ pub fn builtin_meta_file_name(
     match &args.next() {
         None => {
             if let Some(meta) = &environment.last_meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                Ok(Expression::alloc_data(ExpEnum::String(
                     meta.file.into(),
                     None,
-                ))))
+                )))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1488,10 +1475,10 @@ pub fn builtin_meta_file_name(
             }
             let exp_d = exp.get();
             if let Some(meta) = &exp_d.meta {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                Ok(Expression::alloc_data(ExpEnum::String(
                     meta.file.into(),
                     None,
-                ))))
+                )))
             } else {
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             }
@@ -1504,7 +1491,7 @@ pub fn builtin_meta_add_tags(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     fn put_tag(exp: &Expression, tag: Expression) -> Result<(), LispError> {
-        if let ExpEnum::Atom(Atom::Symbol(s)) = &tag.get().data {
+        if let ExpEnum::Symbol(s) = &tag.get().data {
             let mut exp_d = exp.get_mut();
             if let Some(tags) = &mut exp_d.meta_tags {
                 tags.insert(s);
@@ -1534,7 +1521,7 @@ pub fn builtin_meta_add_tags(
                         put_tag(&exp, tag.into())?;
                     }
                 }
-                ExpEnum::Atom(Atom::Symbol(_)) => {
+                ExpEnum::Symbol(_) => {
                     put_tag(&exp, arg.clone())?;
                 }
                 _ => {
@@ -1558,7 +1545,7 @@ pub fn builtin_meta_tag_set(
             if args.next().is_none() {
                 let tag = eval(environment, tag)?;
                 let tag_d = tag.get();
-                if let ExpEnum::Atom(Atom::Symbol(s)) = &tag_d.data {
+                if let ExpEnum::Symbol(s) = &tag_d.data {
                     let exp_d = exp.get();
                     if let Some(tags) = &exp_d.meta_tags {
                         if tags.contains(s) {
@@ -1593,7 +1580,7 @@ macro_rules! ensure_tonicity {
             }
         };
         if f(first, rest) {
-            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+            Ok(Expression::alloc_data(ExpEnum::True))
         } else {
             Ok(Expression::alloc_data(ExpEnum::Nil))
         }
@@ -1829,9 +1816,9 @@ Example:
 (test::assert-equal 3 (length '#(1 2 3)))
 (test::assert-equal 3 (length (list 1 2 3)))
 (test::assert-equal 3 (length (vec 1 2 3)))
-(test::assert-equal 1 (length 100))
-(test::assert-equal 1 (length 100.0))
-(test::assert-equal 1 (length #\\x))
+(test::assert-error (length 100))
+(test::assert-error (length 100.0))
+(test::assert-error (length #\\x))
 ",
             root,
         ),
@@ -2851,7 +2838,7 @@ Example:
     data.insert(
         interner.intern("*core-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(CORE_LISP), None)),
+            ExpEnum::String(to_cow(CORE_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2873,7 +2860,7 @@ t
     data.insert(
         interner.intern("*struct-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(STRUCT_LISP), None)),
+            ExpEnum::String(to_cow(STRUCT_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2895,7 +2882,7 @@ t
     data.insert(
         interner.intern("*iterator-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(ITERATOR_LISP), None)),
+            ExpEnum::String(to_cow(ITERATOR_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2917,7 +2904,7 @@ t
     data.insert(
         interner.intern("*collection-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(COLLECTION_LISP), None)),
+            ExpEnum::String(to_cow(COLLECTION_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2939,7 +2926,7 @@ t
     data.insert(
         interner.intern("*seq-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(SEQ_LISP), None)),
+            ExpEnum::String(to_cow(SEQ_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2961,7 +2948,7 @@ t
     data.insert(
         interner.intern("*shell-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(SHELL_LISP), None)),
+            ExpEnum::String(to_cow(SHELL_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -2983,7 +2970,7 @@ t
     data.insert(
         interner.intern("*endfix-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(ENDFIX_LISP), None)),
+            ExpEnum::String(to_cow(ENDFIX_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -3005,7 +2992,7 @@ t
     data.insert(
         interner.intern("*test-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(TEST_LISP), None)),
+            ExpEnum::String(to_cow(TEST_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -3027,7 +3014,7 @@ t
     data.insert(
         interner.intern("*slsh-std-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(SLSH_STD_LISP), None)),
+            ExpEnum::String(to_cow(SLSH_STD_LISP), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(
@@ -3049,7 +3036,7 @@ t
     data.insert(
         interner.intern("*slshrc-src*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(to_cow(SLSHRC), None)),
+            ExpEnum::String(to_cow(SLSHRC), None),
             RefMetaData {
                 namespace: Some(root),
                 doc_string: Some(

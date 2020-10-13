@@ -83,7 +83,7 @@ pub fn wait_pid(
                     env::set_var("LAST_STATUS".to_string(), format!("{}", status));
                     environment.root_scope.borrow_mut().insert_exp_data(
                         environment.interner.intern("*last-status*"),
-                        ExpEnum::Atom(Atom::Int(i64::from(status))),
+                        ExpEnum::Int(i64::from(status)),
                     );
                 }
             }
@@ -116,7 +116,7 @@ fn run_command(
     stdin: Stdio,
     stdout: Stdio,
     stderr: Stdio,
-    data_in: Option<Atom>,
+    data_in: Option<Expression>,
 ) -> Result<Expression, LispError> {
     let mut command = command;
     let ncommand;
@@ -392,8 +392,40 @@ pub fn do_command(
     }
     let stdin = if let Some(data_in) = &environment.data_in {
         match &data_in.get().data {
-            ExpEnum::Atom(atom) => {
-                data = Some(atom.clone());
+            ExpEnum::True => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Float(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Int(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Symbol(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::String(_, _) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Char(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::CodePoint(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Lambda(_) => {
+                data = Some(data_in.clone());
+                Stdio::piped()
+            }
+            ExpEnum::Macro(_) => {
+                data = Some(data_in.clone());
                 Stdio::piped()
             }
             ExpEnum::Process(ProcessState::Running(pid)) => {
@@ -502,7 +534,7 @@ pub fn do_command(
     for a_exp in parts {
         let a_exp2 = a_exp.clone();
         let a_exp_a = a_exp.get();
-        if let ExpEnum::Atom(Atom::String(_, _)) = a_exp_a.data {
+        if let ExpEnum::String(_, _) = a_exp_a.data {
             drop(a_exp_a);
             let new_a = eval(environment, a_exp2)?;
             args.push(new_a.as_string(environment)?);
@@ -510,19 +542,19 @@ pub fn do_command(
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
             let new_a = match a_exp_a.data {
-                ExpEnum::Atom(Atom::Symbol(s)) => match get_expression(environment, s) {
+                ExpEnum::Symbol(s) => match get_expression(environment, s) {
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
+                            eval_data(environment, ExpEnum::String(s.into(), None))?
                         }
-                        ExpEnum::Atom(Atom::Lambda(_)) => {
+                        ExpEnum::Lambda(_) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
+                            eval_data(environment, ExpEnum::String(s.into(), None))?
                         }
-                        ExpEnum::Atom(Atom::Macro(_)) => {
+                        ExpEnum::Macro(_) => {
                             drop(a_exp_a);
-                            eval_data(environment, ExpEnum::Atom(Atom::String(s.into(), None)))?
+                            eval_data(environment, ExpEnum::String(s.into(), None))?
                         }
                         _ => {
                             drop(a_exp_a);
@@ -540,7 +572,7 @@ pub fn do_command(
                 }
             };
             let new_a_a = new_a.get();
-            if let ExpEnum::Atom(Atom::String(s, _)) = &new_a_a.data {
+            if let ExpEnum::String(s, _) = &new_a_a.data {
                 prep_string_arg(environment, &s, &mut args)?;
             } else {
                 args.push(new_a.as_string(environment)?);

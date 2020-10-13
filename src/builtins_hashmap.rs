@@ -25,13 +25,9 @@ fn build_map(
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
             match &key.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => map.insert(sym, val.clone()),
-                ExpEnum::Atom(Atom::String(s, _)) => {
-                    map.insert(cow_to_ref(environment, &s), val.clone())
-                }
-                ExpEnum::Atom(Atom::Char(ch)) => {
-                    map.insert(cow_to_ref(environment, &ch), val.clone())
-                }
+                ExpEnum::Symbol(sym) => map.insert(sym, val.clone()),
+                ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
+                ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, &ch), val.clone()),
                 _ => {
                     return Err(LispError::new(
                         "make-hash key can only be a symbol or string",
@@ -87,15 +83,15 @@ fn builtin_hash_set(
                     if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
                         let val: Handle = val.into();
                         match &key.get().data {
-                            ExpEnum::Atom(Atom::Symbol(sym)) => {
+                            ExpEnum::Symbol(sym) => {
                                 map.insert(*sym, val);
                                 return Ok(exp_map.clone());
                             }
-                            ExpEnum::Atom(Atom::String(s, _)) => {
+                            ExpEnum::String(s, _) => {
                                 map.insert(cow_to_ref(environment, &s), val);
                                 return Ok(exp_map.clone());
                             }
-                            ExpEnum::Atom(Atom::Char(ch)) => {
+                            ExpEnum::Char(ch) => {
                                 map.insert(cow_to_ref(environment, &ch), val);
                                 return Ok(exp_map.clone());
                             }
@@ -134,13 +130,13 @@ fn builtin_hash_remove(
                 let mut map_d = map.get_mut();
                 if let ExpEnum::HashMap(map) = &mut map_d.data {
                     match &key.get().data {
-                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                        ExpEnum::Symbol(sym) => {
                             return do_rem(map, sym);
                         }
-                        ExpEnum::Atom(Atom::String(s, _)) => {
+                        ExpEnum::String(s, _) => {
                             return do_rem(map, &s);
                         }
-                        ExpEnum::Atom(Atom::Char(ch)) => {
+                        ExpEnum::Char(ch) => {
                             return do_rem(map, &ch);
                         }
                         _ => {
@@ -191,13 +187,13 @@ fn builtin_hash_get(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                        ExpEnum::Symbol(sym) => {
                             return do_get(environment, map, sym, default);
                         }
-                        ExpEnum::Atom(Atom::String(s, _)) => {
+                        ExpEnum::String(s, _) => {
                             return do_get(environment, map, &s, default);
                         }
-                        ExpEnum::Atom(Atom::Char(ch)) => {
+                        ExpEnum::Char(ch) => {
                             return do_get(environment, map, &ch, default);
                         }
                         _ => {
@@ -234,13 +230,13 @@ fn builtin_hash_haskey(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Atom(Atom::Symbol(sym)) => {
+                        ExpEnum::Symbol(sym) => {
                             return do_has(map, sym);
                         }
-                        ExpEnum::Atom(Atom::String(s, _)) => {
+                        ExpEnum::String(s, _) => {
                             return do_has(map, &s);
                         }
-                        ExpEnum::Atom(Atom::Char(ch)) => {
+                        ExpEnum::Char(ch) => {
                             return do_has(map, &ch);
                         }
                         _ => {
@@ -272,9 +268,9 @@ fn builtin_hash_keys(
             if let ExpEnum::HashMap(map) = &map_d.data {
                 let mut key_list = Vec::with_capacity(map.len());
                 for key in map.keys() {
-                    key_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
+                    key_list.push(Expression::alloc_data_h(ExpEnum::Symbol(
                         environment.interner.intern(key),
-                    ))));
+                    )));
                 }
                 return Ok(Expression::with_list(key_list));
             }

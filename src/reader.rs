@@ -185,37 +185,13 @@ fn do_char(
     column: usize,
 ) -> Result<Expression, ReadError> {
     match &symbol.to_lowercase()[..] {
-        "space" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                " ".into(),
-            ))))
-        }
-        "tab" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                "\t".into(),
-            ))))
-        }
+        "space" => return Ok(Expression::alloc_data(ExpEnum::Char(" ".into()))),
+        "tab" => return Ok(Expression::alloc_data(ExpEnum::Char("\t".into()))),
         // newline should be the platform line end.
-        "newline" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                "\n".into(),
-            ))))
-        }
-        "linefeed" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                "\n".into(),
-            ))))
-        }
-        "return" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                "\r".into(),
-            ))))
-        }
-        "backspace" => {
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                "\u{0008}".into(),
-            ))))
-        }
+        "newline" => return Ok(Expression::alloc_data(ExpEnum::Char("\n".into()))),
+        "linefeed" => return Ok(Expression::alloc_data(ExpEnum::Char("\n".into()))),
+        "return" => return Ok(Expression::alloc_data(ExpEnum::Char("\r".into()))),
+        "backspace" => return Ok(Expression::alloc_data(ExpEnum::Char("\u{0008}".into()))),
         _ => {}
     }
     let mut chars = UnicodeSegmentation::graphemes(symbol, true);
@@ -227,9 +203,9 @@ fn do_char(
             );
             return Err(ReadError { reason });
         }
-        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+        Ok(Expression::alloc_data(ExpEnum::Char(
             environment.interner.intern(ch).into(),
-        ))))
+        )))
     } else {
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",
@@ -298,10 +274,10 @@ fn read_string(
             ch
         }
     }
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+    Ok(Expression::alloc_data(ExpEnum::String(
         symbol.clone().into(),
         None,
-    ))))
+    )))
 }
 
 fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
@@ -309,20 +285,20 @@ fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
         return Expression::alloc_data(ExpEnum::Nil);
     }
     if symbol == "t" {
-        Expression::alloc_data(ExpEnum::Atom(Atom::True))
+        Expression::alloc_data(ExpEnum::True)
     } else if symbol == "nil" {
         Expression::alloc_data(ExpEnum::Nil)
     } else {
         let potential_int: Result<i64, ParseIntError> = symbol.parse();
         match potential_int {
-            Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Int(v))),
+            Ok(v) => Expression::alloc_data(ExpEnum::Int(v)),
             Err(_) => {
                 let potential_float: Result<f64, ParseFloatError> = symbol.parse();
                 match potential_float {
-                    Ok(v) => Expression::alloc_data(ExpEnum::Atom(Atom::Float(v))),
-                    Err(_) => Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                        environment.interner.intern(symbol),
-                    ))),
+                    Ok(v) => Expression::alloc_data(ExpEnum::Float(v)),
+                    Err(_) => {
+                        Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(symbol)))
+                    }
                 }
             }
         }
@@ -418,18 +394,15 @@ fn call_reader_macro(
 ) -> Result<Expression, ReadError> {
     if let Some(exp) = get_expression(environment, name) {
         let exp = match &exp.exp.get().data {
-            ExpEnum::Atom(Atom::Lambda(_)) => {
+            ExpEnum::Lambda(_) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                        environment.interner.intern(name),
-                    )))
-                    .handle_no_root(),
+                    Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(name)))
+                        .handle_no_root(),
                 );
                 v.push(stream.handle_no_root());
                 v.push(
-                    Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch.to_string().into())))
-                        .handle_no_root(),
+                    Expression::alloc_data(ExpEnum::Char(ch.to_string().into())).handle_no_root(),
                 );
                 Expression::with_list(v)
             }
@@ -499,13 +472,13 @@ fn prep_reader_macro(
 ) -> Result<CharIter, (ReadError, CharIter)> {
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
-        if let ExpEnum::Atom(Atom::String(_, chars_iter)) = &mut exp_d.data {
+        if let ExpEnum::String(_, chars_iter) = &mut exp_d.data {
             chars_iter.take().unwrap()
         } else {
             panic!("read: something happened to char iterator in reader macro!");
         }
     }
-    let stream_exp = Expression::alloc_data(ExpEnum::Atom(Atom::String("".into(), Some(chars))));
+    let stream_exp = Expression::alloc_data(ExpEnum::String("".into(), Some(chars)));
     {
         let mut exp_d = stream_exp.get_mut();
         if let Some(tags) = &mut exp_d.meta_tags {
@@ -612,7 +585,7 @@ fn read_inner(
             if let Some(read_table_end_char) = &read_table_end_char {
                 if let ExpEnum::HashMap(map) = &read_table_end_char.exp.get().data {
                     if map.contains_key(&*ch) {
-                        if let ExpEnum::Atom(Atom::Char(ch)) = &map.get(&*ch).unwrap().get().data {
+                        if let ExpEnum::Char(ch) = &map.get(&*ch).unwrap().get().data {
                             end_ch = Some(cow_to_ref(environment, &ch));
                         }
                     }
@@ -621,7 +594,7 @@ fn read_inner(
             if let Some(read_table) = &read_table {
                 if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
                     if map.contains_key(&*ch) {
-                        if let ExpEnum::Atom(Atom::Symbol(s)) = map.get(&*ch).unwrap().get().data {
+                        if let ExpEnum::Symbol(s) = map.get(&*ch).unwrap().get().data {
                             chars = prep_reader_macro(environment, chars, stack, s, &ch, end_ch)?;
                             do_match = false;
                         }
@@ -652,9 +625,9 @@ fn read_inner(
                 "'" => {
                     let mut quoted = Vec::<Handle>::new();
                     quoted.push(
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                        Expression::alloc_data(ExpEnum::Symbol(
                             environment.interner.intern("quote"),
-                        )))
+                        ))
                         .handle_no_root(),
                     );
                     stack.push(List {
@@ -680,16 +653,16 @@ fn read_inner(
                     let mut quoted = Vec::<Handle>::new();
                     if in_back_quote {
                         quoted.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern("quote"),
-                            )))
+                            ))
                             .handle_no_root(),
                         );
                     } else {
                         quoted.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern("back-quote"),
-                            )))
+                            ))
                             .handle_no_root(),
                         );
                     }
@@ -718,9 +691,9 @@ fn read_inner(
                         chars.next();
                         if let Err(e) = push_stack(
                             stack,
-                            Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+                            Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern(",@"),
-                            ))),
+                            )),
                             environment.reader_state.as_ref().unwrap().line,
                             environment.reader_state.as_ref().unwrap().column,
                         ) {
@@ -728,9 +701,7 @@ fn read_inner(
                         }
                     } else if let Err(e) = push_stack(
                         stack,
-                        Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
-                            environment.interner.intern(","),
-                        ))),
+                        Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(","))),
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
                     ) {
@@ -789,7 +760,7 @@ fn read_inner(
                         "t" => {
                             if let Err(e) = push_stack(
                                 stack,
-                                Expression::alloc_data(ExpEnum::Atom(Atom::True)),
+                                Expression::alloc_data(ExpEnum::True),
                                 environment.reader_state.as_ref().unwrap().line,
                                 environment.reader_state.as_ref().unwrap().column,
                             ) {

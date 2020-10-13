@@ -101,13 +101,13 @@ impl<'env> ShellCompleter<'env> {
         let comp_exp = get_expression(&self.environment, hook_name);
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.exp.get().data {
-                ExpEnum::Atom(Atom::Lambda(_)) => {
+                ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    let data = ExpEnum::Atom(Atom::Symbol(hook_name));
+                    let data = ExpEnum::Symbol(hook_name);
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(a.into(), None)))
+                            Expression::alloc_data(ExpEnum::String(a.into(), None))
                                 .handle_no_root(),
                         );
                     }
@@ -122,7 +122,7 @@ impl<'env> ShellCompleter<'env> {
             match eval(self.environment, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Atom(Atom::Symbol(s)) => match *s {
+                        ExpEnum::Symbol(s) => match *s {
                             ":path" => HookResult::Path,
                             ":default" => HookResult::Default,
                             _ => {
@@ -398,12 +398,12 @@ fn find_lisp_things(
 ) {
     fn save_val(comps: &mut Vec<String>, data: &Expression, val: String, symbols: bool) {
         match &data.get().data {
-            ExpEnum::Atom(Atom::Lambda(_)) => {
+            ExpEnum::Lambda(_) => {
                 if !symbols {
                     comps.push(val);
                 }
             }
-            ExpEnum::Atom(Atom::Macro(_)) => {
+            ExpEnum::Macro(_) => {
                 if !symbols {
                     comps.push(val);
                 }

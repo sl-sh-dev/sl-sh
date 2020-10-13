@@ -25,7 +25,7 @@ fn builtin_syscall(
         let command = eval(environment, command)?;
         let command_d = command.get();
         match &command_d.data {
-            ExpEnum::Atom(Atom::String(s, _)) => do_command(environment, s, args),
+            ExpEnum::String(s, _) => do_command(environment, s, args),
             _ => {
                 let msg = format!(
                     "syscall: first argument {} not a string, type {}",
@@ -51,7 +51,7 @@ fn builtin_export(
                 let val = eval(environment, val)?;
                 let key_d = &key.get().data;
                 let key = match key_d {
-                    ExpEnum::Atom(Atom::Symbol(s)) => s,
+                    ExpEnum::Symbol(s) => s,
                     _ => {
                         return Err(LispError::new(
                             "export: first form must evaluate to a symbol",
@@ -59,51 +59,41 @@ fn builtin_export(
                     }
                 };
                 let val = match &val.get().data {
-                    ExpEnum::Atom(Atom::Symbol(s)) => {
-                        ExpEnum::Atom(Atom::String((*s).into(), None))
-                    }
-                    ExpEnum::Atom(Atom::String(s, _)) => {
-                        ExpEnum::Atom(Atom::String(s.to_string().into(), None))
-                    }
-                    ExpEnum::Atom(Atom::Int(i)) => {
-                        ExpEnum::Atom(Atom::String(format!("{}", i).into(), None))
-                    }
-                    ExpEnum::Atom(Atom::Float(f)) => {
-                        ExpEnum::Atom(Atom::String(format!("{}", f).into(), None))
-                    }
-                    ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::Atom(Atom::String(
+                    ExpEnum::Symbol(s) => ExpEnum::String((*s).into(), None),
+                    ExpEnum::String(s, _) => ExpEnum::String(s.to_string().into(), None),
+                    ExpEnum::Int(i) => ExpEnum::String(format!("{}", i).into(), None),
+                    ExpEnum::Float(f) => ExpEnum::String(format!("{}", f).into(), None),
+                    ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::String(
                         val.as_string(environment)
                             .unwrap_or_else(|_| "PROCESS FAILED".to_string())
                             .into(),
                         None,
-                    )),
-                    ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
-                        ExpEnum::Atom(Atom::String(
-                            val.as_string(environment)
-                                .unwrap_or_else(|_| "PROCESS FAILED".to_string())
-                                .into(),
-                            None,
-                        ))
-                    }
+                    ),
+                    ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => ExpEnum::String(
+                        val.as_string(environment)
+                            .unwrap_or_else(|_| "PROCESS FAILED".to_string())
+                            .into(),
+                        None,
+                    ),
                     ExpEnum::File(file) => match &*file.borrow() {
-                        FileState::Stdin => ExpEnum::Atom(Atom::String(
+                        FileState::Stdin => ExpEnum::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "STDIN FAILED".to_string())
                                 .into(),
                             None,
-                        )),
-                        FileState::Read(_, _) => ExpEnum::Atom(Atom::String(
+                        ),
+                        FileState::Read(_, _) => ExpEnum::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "FILE READ FAILED".to_string())
                                 .into(),
                             None,
-                        )),
-                        FileState::ReadBinary(_) => ExpEnum::Atom(Atom::String(
+                        ),
+                        FileState::ReadBinary(_) => ExpEnum::String(
                             val.as_string(environment)
                                 .unwrap_or_else(|_| "FILE READ FAILED".to_string())
                                 .into(),
                             None,
-                        )),
+                        ),
                         _ => return Err(LispError::new("export: value not valid")),
                     },
                     _ => {
@@ -120,10 +110,7 @@ fn builtin_export(
                 } else {
                     env::remove_var(key);
                 }
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                    val.into(),
-                    None,
-                ))));
+                return Ok(Expression::alloc_data(ExpEnum::String(val.into(), None)));
             }
         }
     }
@@ -138,7 +125,7 @@ fn builtin_unexport(
         if args.next().is_none() {
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
-            if let ExpEnum::Atom(Atom::Symbol(k)) = key_d {
+            if let ExpEnum::Symbol(k) = key_d {
                 env::remove_var(k);
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
@@ -171,7 +158,7 @@ fn builtin_jobs(
 
 fn get_stopped_pid(environment: &mut Environment, arg: Option<Expression>) -> Option<u32> {
     if let Some(arg) = arg {
-        if let ExpEnum::Atom(Atom::Int(ji)) = &arg.get().data {
+        if let ExpEnum::Int(ji) = &arg.get().data {
             let ji = *ji as usize;
             let jobs = &*environment.jobs.borrow();
             if ji < jobs.len() {
@@ -281,7 +268,7 @@ fn builtin_sleep(
 ) -> Result<Expression, LispError> {
     if let Some(millis) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Int(millis)) = eval(environment, millis)?.get().data {
+            if let ExpEnum::Int(millis) = eval(environment, millis)?.get().data {
                 if millis > 0 {
                     let millis = time::Duration::from_millis(millis as u64);
                     thread::sleep(millis);
@@ -306,9 +293,9 @@ fn builtin_time(
         if args.next().is_none() {
             let now = time::Instant::now();
             eval(environment, form)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
+            return Ok(Expression::alloc_data(ExpEnum::Float(
                 now.elapsed().as_secs_f64(),
-            ))));
+            )));
         }
     }
     Err(LispError::new(
@@ -323,7 +310,7 @@ fn builtin_exit(
     if let Some(exit_code) = args.next() {
         if args.next().is_none() {
             let exit_code = eval(environment, exit_code)?;
-            return if let ExpEnum::Atom(Atom::Int(exit_code)) = &exit_code.get().data {
+            return if let ExpEnum::Int(exit_code) = &exit_code.get().data {
                 environment.exit_code = Some(*exit_code as i32);
                 Ok(Expression::alloc_data(ExpEnum::Nil))
             } else {

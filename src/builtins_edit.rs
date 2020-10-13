@@ -17,7 +17,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
             let keybindings: Expression = keybindings.into();
-            if let ExpEnum::Atom(Atom::Symbol(keybindings)) = &keybindings.get().data {
+            if let ExpEnum::Symbol(keybindings) = &keybindings.get().data {
                 match &keybindings[..] {
                     ":vi" => ret.key_bindings = Keys::Vi,
                     ":emacs" => ret.key_bindings = Keys::Emacs,
@@ -27,7 +27,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
         }
         if let Some(max) = repl_settings.get(":max-history") {
             let max: Expression = max.into();
-            if let ExpEnum::Atom(Atom::Int(max)) = &max.get().data {
+            if let ExpEnum::Int(max) = &max.get().data {
                 if *max >= 0 {
                     ret.max_history = *max as usize;
                 } else {
@@ -41,9 +41,9 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             let vi_esc: Expression = vi_esc.into();
             let mut i = vi_esc.iter();
             if let Some(arg0) = i.next() {
-                if let ExpEnum::Atom(Atom::String(keys, _)) = &arg0.get().data {
+                if let ExpEnum::String(keys, _) = &arg0.get().data {
                     if let Some(arg1) = i.next() {
-                        if let ExpEnum::Atom(Atom::Int(ms)) = &arg1.get().data {
+                        if let ExpEnum::Int(ms) = &arg1.get().data {
                             if keys.len() == 2 {
                                 let mut chars = keys.chars();
                                 ret.vi_esc_sequence = Some((
@@ -73,25 +73,25 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
         }
         if let Some(prefix) = repl_settings.get(":vi-normal-prompt-prefix") {
             let prefix: Expression = prefix.into();
-            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
+            if let ExpEnum::String(prefix, _) = &prefix.get().data {
                 ret.vi_normal_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-normal-prompt-suffix") {
             let suffix: Expression = suffix.into();
-            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
+            if let ExpEnum::String(suffix, _) = &suffix.get().data {
                 ret.vi_normal_prompt_suffix = Some(suffix.to_string());
             };
         }
         if let Some(prefix) = repl_settings.get(":vi-insert-prompt-prefix") {
             let prefix: Expression = prefix.into();
-            if let ExpEnum::Atom(Atom::String(prefix, _)) = &prefix.get().data {
+            if let ExpEnum::String(prefix, _) = &prefix.get().data {
                 ret.vi_insert_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-insert-prompt-suffix") {
             let suffix: Expression = suffix.into();
-            if let ExpEnum::Atom(Atom::String(suffix, _)) = &suffix.get().data {
+            if let ExpEnum::String(suffix, _) = &suffix.get().data {
                 ret.vi_insert_prompt_suffix = Some(suffix.to_string());
             };
         }
@@ -191,15 +191,12 @@ fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
         let environment = unsafe { &mut *(environment as *mut Environment) };
         Some(Box::new(move |input: &str| -> String {
             let exp = match &fn_exp.get().data {
-                ExpEnum::Atom(Atom::Lambda(_)) => {
+                ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1);
                     v.push(fn_exp.clone().into());
                     v.push(
-                        Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                            input.to_string().into(),
-                            None,
-                        )))
-                        .handle_no_root(),
+                        Expression::alloc_data(ExpEnum::String(input.to_string().into(), None))
+                            .handle_no_root(),
                     );
                     Expression::with_list(v)
                 }
@@ -211,10 +208,7 @@ fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
             environment.str_ignore_expand = false;
             environment.save_exit_status = true;
             res.unwrap_or_else(|e| {
-                Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                    format!("ERROR: {}", e).into(),
-                    None,
-                )))
+                Expression::alloc_data(ExpEnum::String(format!("ERROR: {}", e).into(), None))
             })
             .as_string(environment)
             .unwrap_or_else(|_| "ERROR".to_string())
@@ -275,7 +269,7 @@ fn builtin_prompt(
     let (liner_id, prompt) = {
         let arg1 = param_eval(environment, args, "prompt")?;
         let arg_d = arg1.get();
-        if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
+        if let ExpEnum::Symbol(s) = arg_d.data {
             (s, param_eval(environment, args, "prompt")?)
         } else {
             drop(arg_d);
@@ -286,7 +280,7 @@ fn builtin_prompt(
     let history_file = if let Some(h) = args.next() {
         let hist = eval(environment, h)?;
         let hist_d = hist.get();
-        if let ExpEnum::Atom(Atom::String(s, _)) = &hist_d.data {
+        if let ExpEnum::String(s, _) = &hist_d.data {
             h_str = match expand_tilde(s) {
                 Some(p) => p,
                 None => s.to_string(),
@@ -302,25 +296,18 @@ fn builtin_prompt(
     };
     params_done(args, "prompt")?;
     let prompt_d = prompt.get();
-    if let ExpEnum::Atom(Atom::String(s, _)) = &prompt_d.data {
+    if let ExpEnum::String(s, _) = &prompt_d.data {
         return match read_prompt(environment, s, history_file, liner_id) {
-            Ok(input) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                input.into(),
-                None,
-            )))),
+            Ok(input) => Ok(Expression::alloc_data(ExpEnum::String(input.into(), None))),
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
-                    let input =
-                        Expression::alloc_data_h(ExpEnum::Atom(Atom::String("".into(), None)));
-                    let error =
-                        Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(":unexpected-eof")));
+                    let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                    let error = Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 ErrorKind::Interrupted => {
-                    let input =
-                        Expression::alloc_data_h(ExpEnum::Atom(Atom::String("".into(), None)));
-                    let error =
-                        Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(":interrupted")));
+                    let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                    let error = Expression::alloc_data_h(ExpEnum::Symbol(":interrupted"));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 _ => {
@@ -342,7 +329,7 @@ fn get_liner_id(
 ) -> Result<&'static str, LispError> {
     let arg = param_eval(environment, args, form)?;
     let arg_d = arg.get();
-    if let ExpEnum::Atom(Atom::Symbol(s)) = arg_d.data {
+    if let ExpEnum::Symbol(s) = arg_d.data {
         Ok(s)
     } else {
         Err(LispError::new(format!(
@@ -360,7 +347,7 @@ fn builtin_history_push(
     let item = {
         let arg = param_eval(environment, args, "history-push")?;
         let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::String(s, _)) = &arg_d.data {
+        if let ExpEnum::String(s, _) = &arg_d.data {
             s.to_string()
         } else {
             return Err(LispError::new(
@@ -392,7 +379,7 @@ fn builtin_history_push_throwaway(
     let item = {
         let arg = param_eval(environment, args, "history-push-throwaway")?;
         let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::String(s, _)) = &arg_d.data {
+        if let ExpEnum::String(s, _) = &arg_d.data {
             s.to_string()
         } else {
             return Err(LispError::new(
@@ -427,7 +414,7 @@ fn builtin_history_context(
         let arg = param_eval(environment, args, "history-context")?;
         let arg_d = arg.get();
         match &arg_d.data {
-            ExpEnum::Atom(Atom::String(s, _)) => Some(s.to_string()),
+            ExpEnum::String(s, _) => Some(s.to_string()),
             ExpEnum::Nil => None,
             _ => {
                 return Err(LispError::new(
@@ -458,9 +445,9 @@ fn builtin_history_length(
     } else {
         return Err(LispError::new("history-length: context id not found."));
     };
-    let result = Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-        con.history.len() as i64,
-    ))));
+    let result = Ok(Expression::alloc_data(ExpEnum::Int(
+        con.history.len() as i64
+    )));
     environment.liners.insert(liner_id, con);
     result
 }
@@ -493,7 +480,7 @@ fn builtin_history_nth(
     let idx = {
         let arg = param_eval(environment, args, "history-nth")?;
         let arg_d = arg.get();
-        if let ExpEnum::Atom(Atom::Int(idx)) = &arg_d.data {
+        if let ExpEnum::Int(idx) = &arg_d.data {
             *idx
         } else {
             return Err(LispError::new("history-nth: history nth must be an int."));
@@ -510,10 +497,10 @@ fn builtin_history_nth(
         return Err(LispError::new("history-nth: index out of bounds."));
     }
     let idx: usize = con.history.len() - (idx as usize) - 1;
-    let result = Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+    let result = Ok(Expression::alloc_data(ExpEnum::String(
         con.history[idx].to_string().into(),
         None,
-    ))));
+    )));
     environment.liners.insert(liner_id, con);
     result
 }

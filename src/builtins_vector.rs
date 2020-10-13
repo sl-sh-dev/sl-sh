@@ -26,7 +26,7 @@ fn builtin_make_vec(
 ) -> Result<Expression, LispError> {
     let list = if let Some(cap) = args.next() {
         let cap = eval(environment, cap)?;
-        let cap = if let ExpEnum::Atom(Atom::Int(c)) = cap.get().data {
+        let cap = if let ExpEnum::Int(c) = cap.get().data {
             c
         } else {
             let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
@@ -56,7 +56,7 @@ fn builtin_vec_slice(
 ) -> Result<Expression, LispError> {
     let (vec, start, end, has_end) = if let Some(vec) = args.next() {
         if let Some(start) = args.next() {
-            let start = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, start)?.get().data {
+            let start = if let ExpEnum::Int(i) = eval(environment, start)?.get().data {
                 if i < 0 {
                     return Err(LispError::new(
                         "vec-slice second arg (start) must be a positive integer",
@@ -69,7 +69,7 @@ fn builtin_vec_slice(
                 ));
             };
             if let Some(end) = args.next() {
-                let end = if let ExpEnum::Atom(Atom::Int(i)) = eval(environment, end)?.get().data {
+                let end = if let ExpEnum::Int(i) = eval(environment, end)?.get().data {
                     if i < 0 {
                         return Err(LispError::new(
                             "vec-slice third arg (end) must be a positive integer",
@@ -96,8 +96,9 @@ fn builtin_vec_slice(
         ExpEnum::Vector(list) => {
             if !list.is_empty() {
                 let len = list.len();
-                if start == len {
-                    return Ok(Expression::make_nil());
+                if start == len && end <= len {
+                    //return Ok(Expression::make_nil());
+                    return Ok(Expression::with_list(Vec::new()));
                 }
                 if start > (len - 1) || end > len {
                     let msg = format!(
@@ -113,6 +114,7 @@ fn builtin_vec_slice(
                 };
                 Ok(Expression::with_list(slice))
             } else {
+                // XXX this probably is no right, empty list is better?
                 Ok(Expression::make_nil())
             }
         }
@@ -128,7 +130,7 @@ fn builtin_vec_nth(
     let idx = param_eval(environment, args, "vec-nth")?;
     params_done(args, "vec-nth")?;
     let idx_d = idx.get();
-    if let ExpEnum::Atom(Atom::Int(idx)) = &idx_d.data {
+    if let ExpEnum::Int(idx) = &idx_d.data {
         let vector_d = vector.get();
         if let ExpEnum::Vector(list) = &vector_d.data {
             if *idx < 0 || *idx >= list.len() as i64 {
@@ -154,7 +156,7 @@ fn builtin_vec_set(
     let idx = param_eval(environment, args, "vec-set!")?;
     let obj = param_eval(environment, args, "vec-set!")?;
     params_done(args, "vec-set!")?;
-    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+    let idx = if let ExpEnum::Int(i) = idx.get().data {
         i
     } else {
         return Err(LispError::new("vec-set! second form must be an int"));
@@ -234,7 +236,10 @@ fn builtin_vec_is_empty(
                         Ok(Expression::make_nil())
                     }
                 }
-                _ => Err(LispError::new("vec-empty?'s first form must be a vector")),
+                _ => Err(LispError::new(format!(
+                    "vec-empty?'s first form must be a vector, got {}",
+                    list.display_type()
+                ))),
             };
         }
     }
@@ -269,7 +274,7 @@ fn builtin_vec_remove(
     let vector = param_eval(environment, args, "vec-remove!")?;
     let idx = param_eval(environment, args, "vec-remove!")?;
     params_done(args, "vec-remove!")?;
-    let idx = if let ExpEnum::Atom(Atom::Int(i)) = idx.get().data {
+    let idx = if let ExpEnum::Int(i) = idx.get().data {
         i
     } else {
         return Err(LispError::new("vec-remove! second form must be an int"));
@@ -297,7 +302,7 @@ fn builtin_vec_insert(
     let obj = param_eval(environment, args, "vec-insert!")?;
     params_done(args, "vec-insert!")?;
     let idx_d = idx.get();
-    if let ExpEnum::Atom(Atom::Int(idx)) = idx_d.data {
+    if let ExpEnum::Int(idx) = idx_d.data {
         let mut vector_d = vector.get_mut();
         match &mut vector_d.data {
             ExpEnum::Vector(inner_list) => {

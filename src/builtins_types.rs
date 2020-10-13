@@ -15,10 +15,10 @@ fn builtin_type(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            return Ok(Expression::alloc_data(ExpEnum::String(
                 environment.interner.intern(&arg.display_type()).into(),
                 None,
-            ))));
+            )));
         }
     }
     Err(LispError::new("type takes one form"))
@@ -65,7 +65,7 @@ fn builtin_is_true(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::True) = arg.get().data {
+            return if let ExpEnum::True = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -82,7 +82,7 @@ fn builtin_is_float(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Float(_)) = arg.get().data {
+            return if let ExpEnum::Float(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -99,7 +99,7 @@ fn builtin_is_int(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Int(_)) = arg.get().data {
+            return if let ExpEnum::Int(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -116,7 +116,7 @@ fn builtin_is_symbol(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Symbol(_)) = arg.get().data {
+            return if let ExpEnum::Symbol(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -133,7 +133,7 @@ fn builtin_is_string(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::String(_, _)) = arg.get().data {
+            return if let ExpEnum::String(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -150,7 +150,7 @@ fn builtin_is_char(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Char(_)) = arg.get().data {
+            return if let ExpEnum::Char(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -167,7 +167,7 @@ fn builtin_is_lambda(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Lambda(_)) = arg.get().data {
+            return if let ExpEnum::Lambda(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -184,7 +184,7 @@ fn builtin_is_macro(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Atom(Atom::Macro(_)) = arg.get().data {
+            return if let ExpEnum::Macro(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -317,10 +317,10 @@ fn builtin_str_to_int(
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::String(istr, _)) = &eval(environment, arg)?.get().data {
+            if let ExpEnum::String(istr, _) = &eval(environment, arg)?.get().data {
                 let potential_int: Result<i64, ParseIntError> = istr.parse();
                 return match potential_int {
-                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(v)))),
+                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Int(v))),
                     Err(_) => Err(LispError::new("str->int: string is not a valid integer")),
                 };
             }
@@ -335,10 +335,10 @@ fn builtin_str_to_float(
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::String(istr, _)) = &eval(environment, arg)?.get().data {
+            if let ExpEnum::String(istr, _) = &eval(environment, arg)?.get().data {
                 let potential_float: Result<f64, ParseFloatError> = istr.parse();
                 return match potential_float {
-                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(v)))),
+                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Float(v))),
                     Err(_) => Err(LispError::new("str->float: string is not a valid float")),
                 };
             }
@@ -353,10 +353,8 @@ fn builtin_int_to_float(
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Int(i)) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Float(
-                    *i as f64,
-                ))));
+            if let ExpEnum::Int(i) = &eval(environment, arg)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Float(*i as f64)));
             }
         }
     }
@@ -369,8 +367,8 @@ fn builtin_float_to_int(
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Float(f)) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(*f as i64))));
+            if let ExpEnum::Float(f) = &eval(environment, arg)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Int(*f as i64)));
             }
         }
     }
@@ -385,9 +383,9 @@ fn builtin_to_symbol(
     for a in args {
         res.push_str(&eval(environment, a)?.as_string(environment)?);
     }
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Symbol(
+    Ok(Expression::alloc_data(ExpEnum::Symbol(
         environment.interner.intern(&res),
-    ))))
+    )))
 }
 
 fn builtin_symbol_to_str(
@@ -398,9 +396,9 @@ fn builtin_symbol_to_str(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
-                ExpEnum::Atom(Atom::Symbol(s)) => Ok(Expression::alloc_data(ExpEnum::Atom(
-                    Atom::String((*s).into(), None),
-                ))),
+                ExpEnum::Symbol(s) => {
+                    Ok(Expression::alloc_data(ExpEnum::String((*s).into(), None)))
+                }
                 _ => Err(LispError::new(
                     "sym->str: can only convert a symbol to a string",
                 )),

@@ -22,10 +22,10 @@ fn builtin_str_trim(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            return Ok(Expression::alloc_data(ExpEnum::String(
                 arg.trim().to_string().into(),
                 None,
-            ))));
+            )));
         }
     }
     Err(LispError::new("str-trim takes one form"))
@@ -39,10 +39,10 @@ fn builtin_str_ltrim(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            return Ok(Expression::alloc_data(ExpEnum::String(
                 arg.trim_start().to_string().into(),
                 None,
-            ))));
+            )));
         }
     }
     Err(LispError::new("str-ltrim takes one form"))
@@ -56,10 +56,10 @@ fn builtin_str_rtrim(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg = arg.as_string(environment)?;
-            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            return Ok(Expression::alloc_data(ExpEnum::String(
                 arg.trim_end().to_string().into(),
                 None,
-            ))));
+            )));
         }
     }
     Err(LispError::new("str-rtrim takes one form"))
@@ -80,10 +80,10 @@ fn builtin_str_replace(
                     let arg2 = &eval(environment, arg2)?;
                     let arg2 = arg2.as_string(environment)?;
                     let new_str = arg0.replace(&arg1, &arg2);
-                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                    return Ok(Expression::alloc_data(ExpEnum::String(
                         new_str.into(),
                         None,
-                    ))));
+                    )));
                 }
             }
         }
@@ -106,21 +106,15 @@ fn builtin_str_split(
                 if pat == ":whitespace" {
                     for s in text.split_whitespace() {
                         split_list.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                s.to_string().into(),
-                                None,
-                            )))
-                            .handle_no_root(),
+                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
+                                .handle_no_root(),
                         );
                     }
                 } else {
                     for s in text.split(&pat) {
                         split_list.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                s.to_string().into(),
-                                None,
-                            )))
-                            .handle_no_root(),
+                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
+                                .handle_no_root(),
                         );
                     }
                 }
@@ -145,11 +139,8 @@ fn builtin_str_rsplit(
                 let mut split_list: Vec<Handle> = Vec::new();
                 for s in text.rsplit(&pat) {
                     split_list.push(
-                        Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                            s.to_string().into(),
-                            None,
-                        )))
-                        .handle_no_root(),
+                        Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
+                            .handle_no_root(),
                     );
                 }
                 return Ok(Expression::with_list(split_list));
@@ -167,7 +158,7 @@ fn builtin_str_splitn(
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
-                    let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
+                    let n = if let ExpEnum::Int(n) = eval(environment, n)?.get().data {
                         if n < 0 {
                             return Err(LispError::new(
                                 "str-splitn first form must be a positive integer",
@@ -184,11 +175,8 @@ fn builtin_str_splitn(
                     let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.splitn(n as usize, &pat) {
                         split_list.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                s.to_string().into(),
-                                None,
-                            )))
-                            .handle_no_root(),
+                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
+                                .handle_no_root(),
                         );
                     }
                     return Ok(Expression::with_list(split_list));
@@ -207,7 +195,7 @@ fn builtin_str_rsplitn(
         if let Some(pat) = args.next() {
             if let Some(text) = args.next() {
                 if args.next().is_none() {
-                    let n = if let ExpEnum::Atom(Atom::Int(n)) = eval(environment, n)?.get().data {
+                    let n = if let ExpEnum::Int(n) = eval(environment, n)?.get().data {
                         if n < 0 {
                             return Err(LispError::new(
                                 "str-splitn first form must be a positive integer",
@@ -224,11 +212,8 @@ fn builtin_str_rsplitn(
                     let mut split_list: Vec<Handle> = Vec::new();
                     for s in text.rsplitn(n as usize, &pat) {
                         split_list.push(
-                            Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                s.to_string().into(),
-                                None,
-                            )))
-                            .handle_no_root(),
+                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
+                                .handle_no_root(),
                         );
                     }
                     return Ok(Expression::with_list(split_list));
@@ -278,10 +263,10 @@ fn builtin_str_cat_list(
                         return Err(LispError::new("str-cat-list second form must be a list"));
                     }
                 }
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                return Ok(Expression::alloc_data(ExpEnum::String(
                     new_str.into(),
                     None,
-                ))));
+                )));
             }
         }
     }
@@ -299,23 +284,23 @@ fn builtin_str_sub(
                     let arg0 = eval(environment, arg0)?;
                     let arg1 = eval(environment, arg1)?;
                     let arg2 = eval(environment, arg2)?;
-                    let start = if let ExpEnum::Atom(Atom::Int(i)) = arg0.get().data {
+                    let start = if let ExpEnum::Int(i) = arg0.get().data {
                         i as usize
                     } else {
                         return Err(LispError::new("str-sub first form must be an int"));
                     };
-                    let len = if let ExpEnum::Atom(Atom::Int(i)) = arg1.get().data {
+                    let len = if let ExpEnum::Int(i) = arg1.get().data {
                         i as usize
                     } else {
                         return Err(LispError::new("str-sub second form must be an int"));
                     };
                     let arg2_d = arg2.get();
-                    if let ExpEnum::Atom(Atom::String(s, _)) = &arg2_d.data {
+                    if let ExpEnum::String(s, _) = &arg2_d.data {
                         if (start + len) <= s.len() {
-                            return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                            return Ok(Expression::alloc_data(ExpEnum::String(
                                 s[start..(start + len)].to_string().into(),
                                 None,
-                            ))));
+                            )));
                         } else {
                             return Err(LispError::new("str-sub index out of range"));
                         }
@@ -341,15 +326,15 @@ fn builtin_str_append(
                 let start = eval(environment, start)?;
                 let end = eval(environment, end)?;
                 let end_d = end.get();
-                if let ExpEnum::Atom(Atom::String(end, _)) = &end_d.data {
-                    if let ExpEnum::Atom(Atom::String(start, _)) = &start.get().data {
+                if let ExpEnum::String(end, _) = &end_d.data {
+                    if let ExpEnum::String(start, _) = &start.get().data {
                         let mut new_string = String::with_capacity(start.len() + end.len());
                         new_string.push_str(&start);
                         new_string.push_str(&end);
-                        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                        return Ok(Expression::alloc_data(ExpEnum::String(
                             new_string.into(),
                             None,
-                        ))));
+                        )));
                     } else {
                         return Err(LispError::new("str-append forms must both be strings"));
                     }
@@ -405,10 +390,7 @@ fn builtin_str(
     environment.data_in = data_in;
     environment.in_pipe = in_pipe;
     environment.state.pipe_pgid = pipe_pgid;
-    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-        res.into(),
-        None,
-    ))))
+    Ok(Expression::alloc_data(ExpEnum::String(res.into(), None)))
 }
 
 fn builtin_str_empty(
@@ -418,11 +400,11 @@ fn builtin_str_empty(
     if let Some(string) = args.next() {
         if args.next().is_none() {
             let empty = match &eval(environment, string)?.get().data {
-                ExpEnum::Atom(Atom::String(string, _)) => string.is_empty(),
+                ExpEnum::String(string, _) => string.is_empty(),
                 _ => true,
             };
             return if empty {
-                Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+                Ok(Expression::alloc_data(ExpEnum::True))
             } else {
                 Ok(Expression::make_nil())
             };
@@ -438,18 +420,16 @@ fn builtin_str_nth(
     if let Some(idx) = args.next() {
         if let Some(string) = args.next() {
             if args.next().is_none() {
-                if let ExpEnum::Atom(Atom::Int(idx)) = eval(environment, idx)?.get().data {
-                    if let ExpEnum::Atom(Atom::String(string, _)) =
-                        &eval(environment, string)?.get().data
-                    {
+                if let ExpEnum::Int(idx) = eval(environment, idx)?.get().data {
+                    if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
                         //for (i, ch) in string.chars().enumerate() {
                         for (i, ch) in
                             UnicodeSegmentation::graphemes(string.as_ref(), true).enumerate()
                         {
                             if i as i64 == idx {
-                                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+                                return Ok(Expression::alloc_data(ExpEnum::Char(
                                     ch.to_string().into(),
-                                ))));
+                                )));
                             }
                         }
                     } else {
@@ -469,11 +449,11 @@ fn builtin_str_lower(
 ) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, string)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::String(
                     string.to_ascii_lowercase().into(),
                     None,
-                ))));
+                )));
             }
         }
     }
@@ -486,11 +466,11 @@ fn builtin_str_upper(
 ) -> Result<Expression, LispError> {
     if let Some(string) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, string)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+            if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::String(
                     string.to_ascii_uppercase().into(),
                     None,
-                ))));
+                )));
             }
         }
     }
@@ -503,10 +483,8 @@ fn builtin_str_bytes(
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::String(string, _)) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Int(
-                    string.len() as i64,
-                ))));
+            if let ExpEnum::String(string, _) = &eval(environment, arg)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Int(string.len() as i64)));
             };
         }
     }
@@ -525,7 +503,7 @@ fn builtin_str_starts_with(
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
                 return if text.starts_with(&pat) {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+                    Ok(Expression::alloc_data(ExpEnum::True))
                 } else {
                     Ok(Expression::make_nil())
                 };
@@ -549,7 +527,7 @@ fn builtin_str_contains(
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
                 return if text.contains(&pat) {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+                    Ok(Expression::alloc_data(ExpEnum::True))
                 } else {
                     Ok(Expression::make_nil())
                 };
@@ -568,14 +546,14 @@ fn builtin_str_push(
     if let Some(arg0) = args.next() {
         let s = eval(environment, arg0)?;
         let mut evalled_args = Vec::new();
-        if let ExpEnum::Atom(Atom::String(_, _)) = &s.get().data {
+        if let ExpEnum::String(_, _) = &s.get().data {
             // Do this otherwise the get_mut on s can lead to hard to track panics in some code.
             for a in args {
                 evalled_args.push(eval(environment, a)?);
             }
         }
         let mut s_d = s.get_mut();
-        if let ExpEnum::Atom(Atom::String(res, chars)) = &mut s_d.data {
+        if let ExpEnum::String(res, chars) = &mut s_d.data {
             for a in evalled_args {
                 res.to_mut().push_str(&as_string(environment, &a)?);
             }
@@ -600,7 +578,7 @@ fn builtin_str_clear(
         if args.next().is_none() {
             let s = eval(environment, arg0)?;
             let mut s_d = s.get_mut();
-            if let ExpEnum::Atom(Atom::String(res, chars)) = &mut s_d.data {
+            if let ExpEnum::String(res, chars) = &mut s_d.data {
                 *chars = None; // maintian the iterator invariant.
                 res.to_mut().clear();
                 drop(s_d);
@@ -626,13 +604,8 @@ fn str_map_inner(
     let mut res = String::new();
     for ch in UnicodeSegmentation::graphemes(string, true) {
         let mut list = Vec::with_capacity(2);
-        list.push(
-            Expression::alloc_data(ExpEnum::Atom(Atom::Lambda(func.clone()))).handle_no_root(),
-        );
-        list.push(
-            Expression::alloc_data(ExpEnum::Atom(Atom::Char(ch.to_string().into())))
-                .handle_no_root(),
-        );
+        list.push(Expression::alloc_data(ExpEnum::Lambda(func.clone())).handle_no_root());
+        list.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())).handle_no_root());
         let a = eval(environment, Expression::with_list(list))?;
         res.push_str(&as_string(environment, &a)?);
     }
@@ -649,12 +622,12 @@ fn builtin_str_map(
                 let func = eval(environment, func)?;
                 let string = eval(environment, string)?;
                 let func_d = func.get();
-                if let ExpEnum::Atom(Atom::Lambda(func)) = &func_d.data {
-                    if let ExpEnum::Atom(Atom::String(string, _)) = &string.get().data {
-                        return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
+                if let ExpEnum::Lambda(func) = &func_d.data {
+                    if let ExpEnum::String(string, _) = &string.get().data {
+                        return Ok(Expression::alloc_data(ExpEnum::String(
                             str_map_inner(environment, func, &string)?.into(),
                             None,
-                        ))));
+                        )));
                     }
                 }
             }
@@ -671,7 +644,7 @@ fn builtin_str_iter_start(
         if args.next().is_none() {
             let string_outer = eval(environment, string)?;
             let mut string_d = string_outer.get_mut();
-            if let ExpEnum::Atom(Atom::String(string, chars)) = &mut string_d.data {
+            if let ExpEnum::String(string, chars) = &mut string_d.data {
                 // This unsafe should be fine as long as the iterator is invalidated (set to None)
                 // on ANY change to string.
                 let nstr = unsafe { &*(string.as_ref() as *const str) };
@@ -696,10 +669,10 @@ fn builtin_str_iter_next(
         if args.next().is_none() {
             let string = eval(environment, string)?;
             let mut string_d = string.get_mut();
-            if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
+            if let ExpEnum::String(_, None) = &string_d.data {
                 return Err(LispError::new("str-iter-next: not an iterator"));
             }
-            if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
+            if let ExpEnum::String(_string, Some(ch_iter)) = &mut string_d.data {
                 if let Some(ch) = ch_iter.next() {
                     // If this is the reader text stream then advance line/column.
                     if let Some(tags) = &mut string_d.meta_tags {
@@ -714,9 +687,7 @@ fn builtin_str_iter_next(
                             }
                         }
                     }
-                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                        ch.to_string().into(),
-                    ))));
+                    return Ok(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
                 } else {
                     return Ok(Expression::make_nil());
                 }
@@ -734,14 +705,12 @@ fn builtin_str_iter_peek(
         if args.next().is_none() {
             let string = eval(environment, string)?;
             let mut string_d = string.get_mut();
-            if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
+            if let ExpEnum::String(_, None) = &string_d.data {
                 return Err(LispError::new("str-iter-peek: not an iterator"));
             }
-            if let ExpEnum::Atom(Atom::String(_string, Some(ch_iter))) = &mut string_d.data {
+            if let ExpEnum::String(_string, Some(ch_iter)) = &mut string_d.data {
                 if let Some(ch) = ch_iter.peek() {
-                    return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
-                        ch.to_string().into(),
-                    ))));
+                    return Ok(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
                 } else {
                     return Ok(Expression::make_nil());
                 }
@@ -759,10 +728,10 @@ fn builtin_str_iter_empty(
         if args.next().is_none() {
             let string = eval(environment, string)?;
             let mut string_d = string.get_mut();
-            if let ExpEnum::Atom(Atom::String(_, None)) = &string_d.data {
+            if let ExpEnum::String(_, None) = &string_d.data {
                 return Ok(Expression::make_true());
             }
-            if let ExpEnum::Atom(Atom::String(_, Some(ch_iter))) = &mut string_d.data {
+            if let ExpEnum::String(_, Some(ch_iter)) = &mut string_d.data {
                 return if ch_iter.peek().is_none() {
                     Ok(Expression::make_true())
                 } else {
@@ -797,10 +766,10 @@ fn builtin_char_lower(
 ) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Char(
                     ch.to_lowercase().into(),
-                ))));
+                )));
             }
         }
     }
@@ -815,10 +784,10 @@ fn builtin_char_upper(
 ) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Atom(Atom::Char(
+            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
+                return Ok(Expression::alloc_data(ExpEnum::Char(
                     ch.to_uppercase().into(),
-                ))));
+                )));
             }
         }
     }
@@ -833,9 +802,9 @@ fn builtin_char_is_whitespace(
 ) -> Result<Expression, LispError> {
     if let Some(ch) = args.next() {
         if args.next().is_none() {
-            if let ExpEnum::Atom(Atom::Char(ch)) = &eval(environment, ch)?.get().data {
+            if let ExpEnum::Char(ch) = &eval(environment, ch)?.get().data {
                 return if ch.len() == 1 && ch.chars().next().unwrap().is_whitespace() {
-                    Ok(Expression::alloc_data(ExpEnum::Atom(Atom::True)))
+                    Ok(Expression::alloc_data(ExpEnum::True))
                 } else {
                     Ok(Expression::make_nil())
                 };

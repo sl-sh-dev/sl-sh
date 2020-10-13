@@ -25,7 +25,7 @@ fn builtin_open(
 ) -> Result<Expression, LispError> {
     if let Some(a) = args.next() {
         let a = eval(environment, a)?;
-        if let ExpEnum::Atom(Atom::Symbol(sym)) = &a.get().data {
+        if let ExpEnum::Symbol(sym) = &a.get().data {
             let ret = match &sym[..] {
                 ":stdin" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin)))),
                 ":stdout" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout)))),
@@ -42,7 +42,7 @@ fn builtin_open(
             }
         }
         let file_name = match &a.get().data {
-            ExpEnum::Atom(Atom::String(name, _)) => name.to_string(),
+            ExpEnum::String(name, _) => name.to_string(),
             _ => {
                 return Err(LispError::new(
                 "open: first form must evaluate to a string (filename) or :stdin, :stdout, :stderr",
@@ -60,7 +60,7 @@ fn builtin_open(
         for a in args {
             let a = eval(environment, a)?;
             let a_d = a.get();
-            if let ExpEnum::Atom(Atom::Symbol(sym)) = &a_d.data {
+            if let ExpEnum::Symbol(sym) = &a_d.data {
                 match &sym[..] {
                     ":read" => {
                         is_read = true;
@@ -217,46 +217,29 @@ fn builtin_read_line(
                         } else {
                             return Ok(Expression::make_nil());
                         }
-                        Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                            line.into(),
-                            None,
-                        ))))
+                        Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
                     }
                     FileState::ReadBinary(f) => {
                         // XXX TODO- something better if/when support binary.
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
-                            let input = Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
-                                "".into(),
-                                None,
-                            )));
-                            let error = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-                                ":unexpected-eof",
-                            )));
+                            let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                            let error =
+                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
-                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                line.into(),
-                                None,
-                            ))))
+                            Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
                         }
                     }
                     FileState::Stdin => {
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
-                            let input = Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
-                                "".into(),
-                                None,
-                            )));
-                            let error = Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(
-                                ":unexpected-eof",
-                            )));
+                            let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                            let error =
+                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
-                            Ok(Expression::alloc_data(ExpEnum::Atom(Atom::String(
-                                line.into(),
-                                None,
-                            ))))
+                            Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
                         }
                     }
                     _ => Err(LispError::new(
@@ -312,7 +295,7 @@ fn builtin_read(
                         "read: requires a character file opened for reading or string",
                     )),
                 },
-                ExpEnum::Atom(Atom::String(input, char_iter)) => {
+                ExpEnum::String(input, char_iter) => {
                     if char_iter.is_none() {
                         // This unsafe should be fine as long as the iterator is invalidated (set to None)
                         // on ANY change to string.  See builtin_str_iter_start.
@@ -386,7 +369,7 @@ fn builtin_read_all(
                         "read-all: requires a file opened for reading or string",
                     )),
                 },
-                ExpEnum::Atom(Atom::String(input, _char_iter)) => do_read(environment, input),
+                ExpEnum::String(input, _char_iter) => do_read(environment, input),
                 _ => Err(LispError::new(
                     "read-all: requires a file opened for reading or string",
                 )),

@@ -63,13 +63,16 @@ fn builtin_car(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
+    if let Some(arg1) = args.next() {
         if args.next().is_none() {
-            let arg = eval(environment, arg)?;
+            let arg = eval(environment, arg1)?;
             return match &arg.get().data {
                 ExpEnum::Pair(e1, _) => Ok(e1.into()),
                 ExpEnum::Nil => Ok(arg.clone()),
-                _ => Err(LispError::new("car requires a pair")),
+                _ => Err(LispError::new(format!(
+                    "car requires a pair, got {}",
+                    arg.display_type()
+                ))),
             };
         }
     }
@@ -86,7 +89,10 @@ fn builtin_cdr(
             return match &arg.get().data {
                 ExpEnum::Pair(_, e2) => Ok(e2.into()),
                 ExpEnum::Nil => Ok(arg.clone()),
-                _ => Err(LispError::new("cdr requires a pair")),
+                _ => Err(LispError::new(format!(
+                    "cdr requires a pair, got a {}",
+                    arg.display_type()
+                ))),
             };
         }
     }

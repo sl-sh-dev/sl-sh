@@ -10,7 +10,7 @@ fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
     environment.root_scope.borrow_mut().data.insert(
         environment.interner.intern("*active-ns*"),
         Reference::new(
-            ExpEnum::Atom(Atom::String(ns.into(), None)),
+            ExpEnum::String(ns.into(), None),
             RefMetaData {
                 namespace: Some("root"),
                 doc_string: None,
@@ -26,8 +26,8 @@ fn builtin_ns_create(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
+                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
                         "ns-create: namespace must be a symbol or string",
@@ -55,8 +55,8 @@ fn builtin_ns_enter(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
+                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
                         "ns-enter: namespace must be a symbol or string",
@@ -87,8 +87,8 @@ fn builtin_ns_exists(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
+                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
                         "ns-exists?: namespace must be a symbol or string",
@@ -114,10 +114,10 @@ fn builtin_ns_list(
     if args.next().is_none() {
         let mut ns_list = Vec::with_capacity(environment.namespaces.len());
         for ns in environment.namespaces.keys() {
-            ns_list.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::String(
+            ns_list.push(Expression::alloc_data_h(ExpEnum::String(
                 (*ns).into(),
                 None,
-            ))));
+            )));
         }
         return Ok(Expression::with_list(ns_list));
     }
@@ -131,8 +131,8 @@ fn builtin_ns_symbols(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Atom(Atom::Symbol(sym)) => sym,
-                ExpEnum::Atom(Atom::String(s, _)) => environment.interner.intern(&s),
+                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
                         "ns-symbols: namespace must be a symbol or string",
@@ -143,7 +143,7 @@ fn builtin_ns_symbols(
                 if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::alloc_data_h(ExpEnum::Atom(Atom::Symbol(sym))));
+                        ns_symbols.push(Expression::alloc_data_h(ExpEnum::Symbol(sym)));
                     }
                     return Ok(Expression::with_list(ns_symbols));
                 }

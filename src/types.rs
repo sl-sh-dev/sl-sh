@@ -67,20 +67,6 @@ pub struct Lambda {
     pub capture: Rc<RefCell<Scope>>,
 }
 
-pub enum Atom {
-    True,
-    Float(f64),
-    Int(i64),
-    Symbol(&'static str),
-    // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
-    // to None if it is Some.
-    String(Cow<'static, str>, Option<CharIter>),
-    Char(Cow<'static, str>),
-    CodePoint(char),
-    Lambda(Lambda),
-    Macro(Lambda),
-}
-
 fn params_to_string(params: &[&'static str]) -> String {
     let mut pstr = "(".to_string();
     let mut first = true;
@@ -94,115 +80,6 @@ fn params_to_string(params: &[&'static str]) -> String {
     }
     pstr.push(')');
     pstr
-}
-
-impl Clone for Atom {
-    fn clone(&self) -> Atom {
-        match self {
-            Atom::True => Atom::True,
-            Atom::Float(n) => Atom::Float(*n),
-            Atom::Int(i) => Atom::Int(*i),
-            Atom::Symbol(s) => Atom::Symbol(s),
-            Atom::String(s, _) => Atom::String(s.clone(), None),
-            Atom::Char(c) => Atom::Char(c.clone()),
-            Atom::CodePoint(c) => Atom::CodePoint(*c),
-            Atom::Lambda(l) => Atom::Lambda(l.clone()),
-            Atom::Macro(m) => Atom::Macro(m.clone()),
-        }
-    }
-}
-
-impl fmt::Debug for Atom {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Atom::True => write!(f, "true"),
-            Atom::Float(n) => write!(f, "{}", n),
-            Atom::Int(i) => write!(f, "{}", i),
-            Atom::Symbol(s) => write!(f, "{}", s),
-            Atom::String(s, _) => write!(f, "\"{}\"", s),
-            Atom::Char(c) => write!(f, "#\\{}", c),
-            Atom::CodePoint(c) => write!(f, "#\\{}", c),
-            Atom::Lambda(l) => {
-                let body: Expression = l.body.clone().into();
-                write!(
-                    f,
-                    "(fn {} {})",
-                    params_to_string(&l.params),
-                    body.to_string()
-                )
-            }
-            Atom::Macro(m) => {
-                let body: Expression = m.body.clone().into();
-                write!(
-                    f,
-                    "(macro {} {})",
-                    params_to_string(&m.params),
-                    body.to_string()
-                )
-            }
-        }
-    }
-}
-
-impl fmt::Display for Atom {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Atom::True => write!(f, "true"),
-            Atom::Float(n) => write!(f, "{}", n),
-            Atom::Int(i) => write!(f, "{}", i),
-            Atom::Symbol(s) => write!(f, "{}", s),
-            Atom::String(s, _) => write!(f, "\"{}\"", s),
-            Atom::Char(c) => write!(f, "#\\{}", c),
-            Atom::CodePoint(c) => write!(f, "#\\{}", c),
-            Atom::Lambda(l) => {
-                let body: Expression = l.body.clone().into();
-                write!(
-                    f,
-                    "(fn {} {})",
-                    params_to_string(&l.params),
-                    body.to_string()
-                )
-            }
-            Atom::Macro(m) => {
-                let body: Expression = m.body.clone().into();
-                write!(
-                    f,
-                    "(macro {} {})",
-                    params_to_string(&m.params),
-                    body.to_string()
-                )
-            }
-        }
-    }
-}
-
-impl Atom {
-    // Like to_string but don't put quotes around strings or #\ in front of chars.
-    pub fn as_string(&self) -> String {
-        if let Atom::String(s, _) = self {
-            (*s).to_string()
-        } else if let Atom::Char(c) = self {
-            (*c).to_string()
-        } else if let Atom::CodePoint(c) = self {
-            c.to_string()
-        } else {
-            self.to_string()
-        }
-    }
-
-    pub fn display_type(&self) -> String {
-        match self {
-            Atom::True => "True".to_string(),
-            Atom::Float(_) => "Float".to_string(),
-            Atom::Int(_) => "Int".to_string(),
-            Atom::Symbol(_) => "Symbol".to_string(),
-            Atom::String(_, _) => "String".to_string(),
-            Atom::Char(_) => "Char".to_string(),
-            Atom::CodePoint(_) => "CodePoint".to_string(),
-            Atom::Lambda(_) => "Lambda".to_string(),
-            Atom::Macro(_) => "Macro".to_string(),
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -306,20 +183,43 @@ pub struct ExpMeta {
     pub col: usize,
 }
 
-#[derive(Clone)]
 pub enum ExpEnum {
-    Atom(Atom),
+    // Primatives
+    True,
+    Nil,
+    Float(f64),
+    Int(i64),
+    Symbol(&'static str),
+    // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
+    // to None if it is Some.
+    String(Cow<'static, str>, Option<CharIter>),
+    Char(Cow<'static, str>),
+    CodePoint(char),
+
+    // Lambda and macros and builtings
+    Lambda(Lambda),
+    Macro(Lambda),
+    Function(Callable),
+    LazyFn(Handle, Vec<Handle>), // Lambda ready to call- used for tail call optimization
+
+    // Buildin data structures
     Vector(Vec<Handle>),
-    Values(Vec<Handle>),
+    Values(Vec<Handle>), // Used for multi value returns
     Pair(Handle, Handle),
     HashMap(HashMap<&'static str, Handle>),
-    Function(Callable),
-    Process(ProcessState),
-    File(Rc<RefCell<FileState>>),
-    LazyFn(Handle, Vec<Handle>),
-    Wrapper(Handle),
-    Nil,
 
+    // Represents a running or completed system process
+    Process(ProcessState),
+
+    // A file
+    File(Rc<RefCell<FileState>>),
+
+    // Used as part of analyzer (a wrapped thing has already been 'prepped' so
+    // when evaluated just unwrap it).
+    Wrapper(Handle),
+
+    // Used to help the analyzer reconize things it cares about without
+    // doing a lot of extra work.
     DeclareDef,
     DeclareVar,
     DeclareFn,
@@ -366,10 +266,63 @@ impl ExpEnum {
     }
 }
 
+impl Clone for ExpEnum {
+    fn clone(&self) -> ExpEnum {
+        match self {
+            ExpEnum::True => ExpEnum::True,
+            ExpEnum::Nil => ExpEnum::Nil,
+            ExpEnum::Float(n) => ExpEnum::Float(*n),
+            ExpEnum::Int(i) => ExpEnum::Int(*i),
+            ExpEnum::Symbol(s) => ExpEnum::Symbol(s),
+            ExpEnum::String(s, _) => ExpEnum::String(s.clone(), None),
+            ExpEnum::Char(c) => ExpEnum::Char(c.clone()),
+            ExpEnum::CodePoint(c) => ExpEnum::CodePoint(*c),
+            ExpEnum::Lambda(l) => ExpEnum::Lambda(l.clone()),
+            ExpEnum::Macro(m) => ExpEnum::Macro(m.clone()),
+            ExpEnum::Function(c) => ExpEnum::Function(c.clone()),
+            ExpEnum::LazyFn(h, v) => ExpEnum::LazyFn(h.clone(), v.clone()),
+            ExpEnum::Vector(v) => ExpEnum::Vector(v.clone()),
+            ExpEnum::Values(v) => ExpEnum::Values(v.clone()),
+            ExpEnum::Pair(car, cdr) => ExpEnum::Pair(car.clone(), cdr.clone()),
+            ExpEnum::HashMap(map) => ExpEnum::HashMap(map.clone()),
+            ExpEnum::Process(p) => ExpEnum::Process(*p),
+            ExpEnum::File(f) => ExpEnum::File(f.clone()),
+            ExpEnum::Wrapper(h) => ExpEnum::Wrapper(h.clone()),
+            ExpEnum::DeclareDef => ExpEnum::DeclareDef,
+            ExpEnum::DeclareVar => ExpEnum::DeclareVar,
+            ExpEnum::DeclareFn => ExpEnum::DeclareFn,
+        }
+    }
+}
+
 impl fmt::Debug for ExpEnum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            ExpEnum::Atom(a) => write!(f, "ExpEnum::Atom({:?})", a),
+            ExpEnum::True => write!(f, "ExpEnum::True"),
+            ExpEnum::Float(n) => write!(f, "ExpEnum::Float({})", n),
+            ExpEnum::Int(i) => write!(f, "ExpEnum::Int({})", i),
+            ExpEnum::Symbol(s) => write!(f, "ExpEnum::Symbol({})", s),
+            ExpEnum::String(s, _) => write!(f, "ExpEnum::String(\"{}\")", s),
+            ExpEnum::Char(c) => write!(f, "ExpEnum::Char(#\\{})", c),
+            ExpEnum::CodePoint(c) => write!(f, "ExpEnum::CodePoint(#\\{})", c),
+            ExpEnum::Lambda(l) => {
+                let body: Expression = l.body.clone().into();
+                write!(
+                    f,
+                    "ExpEnum::Lambda((fn {} {}))",
+                    params_to_string(&l.params),
+                    body.to_string()
+                )
+            }
+            ExpEnum::Macro(m) => {
+                let body: Expression = m.body.clone().into();
+                write!(
+                    f,
+                    "ExpEnum::Macro((macro {} {}))",
+                    params_to_string(&m.params),
+                    body.to_string()
+                )
+            }
             ExpEnum::Vector(l) => write!(f, "ExpEnum::Vector({:?})", l),
             ExpEnum::Values(v) => write!(f, "ExpEnum::Vector({:?})", v),
             ExpEnum::Pair(e1, e2) => write!(f, "ExpEnum::Pair({:?} . {:?})", e1, e2),
@@ -416,10 +369,10 @@ impl Trace for ExpEnum {
                 lambda.trace(tracer);
                 exp.trace(tracer);
             }
-            Self::Atom(Atom::Lambda(lambda)) => {
+            Self::Lambda(lambda) => {
                 lambda.body.trace(tracer);
             }
-            Self::Atom(Atom::Macro(mac)) => {
+            Self::Macro(mac) => {
                 mac.body.trace(tracer);
             }
             Self::Wrapper(exp) => exp.trace(tracer),
@@ -476,7 +429,7 @@ impl Expression {
 
     pub fn make_true_h() -> Handle {
         gc_mut().insert(ExpObj {
-            data: ExpEnum::Atom(Atom::True),
+            data: ExpEnum::True,
             meta: None,
             meta_tags: None,
             analyzed: false,
@@ -626,7 +579,15 @@ impl Expression {
 
     pub fn display_type(&self) -> String {
         match &self.get().data {
-            ExpEnum::Atom(a) => a.display_type(),
+            ExpEnum::True => "True".to_string(),
+            ExpEnum::Float(_) => "Float".to_string(),
+            ExpEnum::Int(_) => "Int".to_string(),
+            ExpEnum::Symbol(_) => "Symbol".to_string(),
+            ExpEnum::String(_, _) => "String".to_string(),
+            ExpEnum::Char(_) => "Char".to_string(),
+            ExpEnum::CodePoint(_) => "CodePoint".to_string(),
+            ExpEnum::Lambda(_) => "Lambda".to_string(),
+            ExpEnum::Macro(_) => "Macro".to_string(),
             ExpEnum::Process(_) => "Process".to_string(),
             ExpEnum::Function(f) => {
                 if f.is_special_form {
@@ -735,7 +696,7 @@ impl Expression {
                     let mut last_p: Expression = Expression::make_nil();
                     for p in self.iter() {
                         if !first {
-                            if let ExpEnum::Atom(Atom::Symbol(sym)) = &last_p.get().data {
+                            if let ExpEnum::Symbol(sym) = &last_p.get().data {
                                 if sym != &"," && sym != &",@" {
                                     writer.write_all(b" ")?;
                                 }
@@ -771,22 +732,22 @@ impl Expression {
                     write!(writer, "))")?;
                 }
             }
-            ExpEnum::Atom(Atom::String(_, _)) => {
+            ExpEnum::String(_, _) => {
                 write!(writer, "{}", self.to_string())?;
             }
-            ExpEnum::Atom(Atom::Char(_c)) => {
+            ExpEnum::Char(_c) => {
                 write!(writer, "{}", self.to_string())?;
             }
-            ExpEnum::Atom(Atom::CodePoint(_c)) => {
+            ExpEnum::CodePoint(_c) => {
                 write!(writer, "{}", self.to_string())?;
             }
-            ExpEnum::Atom(Atom::Lambda(l)) => {
+            ExpEnum::Lambda(l) => {
                 let body: Expression = l.body.clone().into();
                 write!(writer, "(fn {}", params_to_string(&l.params))?;
                 body.pretty_print_int(environment, indent + 1, writer)?;
                 writer.write_all(b")")?;
             }
-            ExpEnum::Atom(Atom::Macro(m)) => {
+            ExpEnum::Macro(m) => {
                 let body: Expression = m.body.clone().into();
                 write!(writer, "(macro {}", params_to_string(&m.params))?;
                 body.pretty_print_int(environment, indent + 1, writer)?;
@@ -817,13 +778,9 @@ impl Expression {
 
     pub fn make_string(&self, environment: &Environment) -> Result<String, LispError> {
         match &self.get().data {
-            ExpEnum::Atom(a) => Ok(a.to_string()),
-            ExpEnum::Process(ProcessState::Running(_pid)) => Ok(self.to_string()),
             ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
-            ExpEnum::Function(_) => Ok(self.to_string()),
-            ExpEnum::Vector(_) => Ok(self.to_string()),
             ExpEnum::Values(v) => {
                 if v.is_empty() {
                     Ok(self.to_string())
@@ -832,9 +789,6 @@ impl Expression {
                     v.make_string(environment)
                 }
             }
-            ExpEnum::Pair(_, _) => Ok(self.to_string()),
-            ExpEnum::Nil => Ok(self.to_string()),
-            ExpEnum::HashMap(_map) => Ok(self.to_string()),
             ExpEnum::File(file) => {
                 let mut file_mut = file.borrow_mut();
                 match &mut *file_mut {
@@ -860,31 +814,28 @@ impl Expression {
                     }
                 }
             }
-            ExpEnum::LazyFn(_, _) => Ok(self.to_string()),
             ExpEnum::Wrapper(exp) => {
                 let exp: Expression = exp.into();
                 exp.make_string(environment)
             }
-            ExpEnum::DeclareDef => Ok(self.to_string()),
-            ExpEnum::DeclareVar => Ok(self.to_string()),
-            ExpEnum::DeclareFn => Ok(self.to_string()),
+            _ => Ok(self.to_string()),
         }
     }
 
     // Like make_string but don't put quotes around strings.
     pub fn as_string(&self, environment: &Environment) -> Result<String, LispError> {
-        if let ExpEnum::Atom(a) = &self.get().data {
-            Ok(a.as_string())
-        } else {
-            self.make_string(environment)
+        match &self.get().data {
+            ExpEnum::String(s, _) => Ok((*s).to_string()),
+            ExpEnum::Char(c) => Ok((*c).to_string()),
+            ExpEnum::CodePoint(c) => Ok(c.to_string()),
+            _ => self.make_string(environment),
         }
     }
 
     pub fn make_float(&self, environment: &Environment) -> Result<f64, LispError> {
         match &self.get().data {
-            ExpEnum::Atom(Atom::Float(f)) => Ok(*f),
-            ExpEnum::Atom(Atom::Int(i)) => Ok(*i as f64),
-            ExpEnum::Atom(_) => Err(LispError::new("Not a number")),
+            ExpEnum::Float(f) => Ok(*f),
+            ExpEnum::Int(i) => Ok(*i as f64),
             ExpEnum::Process(ProcessState::Running(_pid)) => {
                 Err(LispError::new("Not a number (process still running!)"))
             }
@@ -893,35 +844,35 @@ impl Expression {
                 let potential_float: Result<f64, ParseFloatError> = buffer.parse();
                 match potential_float {
                     Ok(v) => Ok(v),
-                    Err(_) => Err(LispError::new("Not a number")),
+                    Err(_) => Err(LispError::new("Process result not a number")),
                 }
             }
-            ExpEnum::Function(_) => Err(LispError::new("Not a number")),
-            ExpEnum::Vector(_) => Err(LispError::new("Not a number")),
+            ExpEnum::Function(_) => Err(LispError::new("Function not a number")),
+            ExpEnum::Vector(_) => Err(LispError::new("Vector not a number")),
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    Err(LispError::new("Not a number"))
+                    Err(LispError::new("Empty values not a number"))
                 } else {
                     let v: Expression = (&v[0]).into();
                     v.make_float(environment)
                 }
             }
-            ExpEnum::Pair(_, _) => Err(LispError::new("Not a number")),
-            ExpEnum::Nil => Err(LispError::new("Not a number")),
-            ExpEnum::HashMap(_) => Err(LispError::new("Not a number")),
-            ExpEnum::File(_) => Err(LispError::new("Not a number")),
-            ExpEnum::LazyFn(_, _) => Err(LispError::new("Not a number")),
+            ExpEnum::Pair(_, _) => Err(LispError::new("Pair not a number")),
+            ExpEnum::Nil => Err(LispError::new("Nil not a number")),
+            ExpEnum::HashMap(_) => Err(LispError::new("Map not a number")),
+            ExpEnum::File(_) => Err(LispError::new("File not a number")),
+            ExpEnum::LazyFn(_, _) => Err(LispError::new("Fn call not a number")),
             ExpEnum::Wrapper(_) => Err(LispError::new("Not a number")),
-            ExpEnum::DeclareDef => Err(LispError::new("Not a number")),
-            ExpEnum::DeclareVar => Err(LispError::new("Not a number")),
-            ExpEnum::DeclareFn => Err(LispError::new("Not a number")),
+            ExpEnum::DeclareDef => Err(LispError::new("Def not a number")),
+            ExpEnum::DeclareVar => Err(LispError::new("Var not a number")),
+            ExpEnum::DeclareFn => Err(LispError::new("Fn not a number")),
+            _ => Err(LispError::new("Not a number")),
         }
     }
 
     pub fn make_int(&self, environment: &Environment) -> Result<i64, LispError> {
         match &self.get().data {
-            ExpEnum::Atom(Atom::Int(i)) => Ok(*i),
-            ExpEnum::Atom(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::Int(i) => Ok(*i),
             ExpEnum::Process(ProcessState::Running(_pid)) => {
                 Err(LispError::new("Not an integer (process still running!)"))
             }
@@ -930,28 +881,29 @@ impl Expression {
                 let potential_int: Result<i64, ParseIntError> = buffer.parse();
                 match potential_int {
                     Ok(v) => Ok(v),
-                    Err(_) => Err(LispError::new("Not an integer")),
+                    Err(_) => Err(LispError::new("Process result not an integer")),
                 }
             }
-            ExpEnum::Function(_) => Err(LispError::new("Not an integer")),
-            ExpEnum::Vector(_) => Err(LispError::new("Not an integer")),
+            ExpEnum::Function(_) => Err(LispError::new("Function not an integer")),
+            ExpEnum::Vector(_) => Err(LispError::new("Vector not an integer")),
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    Err(LispError::new("Not an integer"))
+                    Err(LispError::new("Empty values not an integer"))
                 } else {
                     let v: Expression = (&v[0]).into();
                     v.make_int(environment)
                 }
             }
-            ExpEnum::Pair(_, _) => Err(LispError::new("Not an integer")),
-            ExpEnum::Nil => Err(LispError::new("Not an integer")),
-            ExpEnum::HashMap(_) => Err(LispError::new("Not an integer")),
-            ExpEnum::File(_) => Err(LispError::new("Not an integer")),
-            ExpEnum::LazyFn(_, _) => Err(LispError::new("Not an integer")),
+            ExpEnum::Pair(_, _) => Err(LispError::new("Pair not an integer")),
+            ExpEnum::Nil => Err(LispError::new("Nil not an integer")),
+            ExpEnum::HashMap(_) => Err(LispError::new("Map not an integer")),
+            ExpEnum::File(_) => Err(LispError::new("File not an integer")),
+            ExpEnum::LazyFn(_, _) => Err(LispError::new("Fn call not an integer")),
             ExpEnum::Wrapper(_) => Err(LispError::new("Not an integer")),
-            ExpEnum::DeclareDef => Err(LispError::new("Not an integer")),
-            ExpEnum::DeclareVar => Err(LispError::new("Not an integer")),
-            ExpEnum::DeclareFn => Err(LispError::new("Not an integer")),
+            ExpEnum::DeclareDef => Err(LispError::new("Def not an integer")),
+            ExpEnum::DeclareVar => Err(LispError::new("Var not an integer")),
+            ExpEnum::DeclareFn => Err(LispError::new("Fn not an integer")),
+            _ => Err(LispError::new("Not an integer")),
         }
     }
 
@@ -961,7 +913,6 @@ impl Expression {
         writer: &mut dyn Write,
     ) -> Result<(), LispError> {
         match &self.get().data {
-            ExpEnum::Atom(a) => write!(writer, "{}", a.as_string())?,
             ExpEnum::Process(ps) => {
                 let pid = match ps {
                     ProcessState::Running(pid) => pid,
@@ -1040,9 +991,8 @@ impl Expression {
                 let exp: Expression = exp.into();
                 exp.writef(environment, writer)?;
             }
-            ExpEnum::DeclareDef => write!(writer, "{}", self.to_string())?,
-            ExpEnum::DeclareVar => write!(writer, "{}", self.to_string())?,
-            ExpEnum::DeclareFn => write!(writer, "{}", self.to_string())?,
+            ExpEnum::String(s, _) => write!(writer, "{}", s)?, // Do not quote strings.
+            _ => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;
         Ok(())
@@ -1131,7 +1081,7 @@ impl fmt::Display for Expression {
             let mut last_exp: Expression = Expression::make_nil();
             for p in itr {
                 if !first {
-                    if let ExpEnum::Atom(Atom::Symbol(sym)) = &last_exp.get().data {
+                    if let ExpEnum::Symbol(sym) = &last_exp.get().data {
                         if sym != &"," && sym != &",@" {
                             res.push_str(" ");
                         }
@@ -1147,7 +1097,31 @@ impl fmt::Display for Expression {
         }
 
         match &self.get().data {
-            ExpEnum::Atom(a) => write!(f, "{}", a),
+            ExpEnum::True => write!(f, "true"),
+            ExpEnum::Float(n) => write!(f, "{}", n),
+            ExpEnum::Int(i) => write!(f, "{}", i),
+            ExpEnum::Symbol(s) => write!(f, "{}", s),
+            ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
+            ExpEnum::Char(c) => write!(f, "#\\{}", c),
+            ExpEnum::CodePoint(c) => write!(f, "#\\{}", c),
+            ExpEnum::Lambda(l) => {
+                let body: Expression = l.body.clone().into();
+                write!(
+                    f,
+                    "(fn {} {})",
+                    params_to_string(&l.params),
+                    body.to_string()
+                )
+            }
+            ExpEnum::Macro(m) => {
+                let body: Expression = m.body.clone().into();
+                write!(
+                    f,
+                    "(macro {} {})",
+                    params_to_string(&m.params),
+                    body.to_string()
+                )
+            }
             ExpEnum::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
             ExpEnum::Process(ProcessState::Over(pid, exit_status)) => write!(
                 f,
@@ -1176,7 +1150,7 @@ impl fmt::Display for Expression {
                 let e2: Expression = e2.into();
                 if is_proper_list(&self) {
                     match &e1.get().data {
-                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"quote" => {
+                        ExpEnum::Symbol(sym) if sym == &"quote" => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -1186,7 +1160,7 @@ impl fmt::Display for Expression {
                                 f.write_str(&e2.to_string())
                             }
                         }
-                        ExpEnum::Atom(Atom::Symbol(sym)) if sym == &"bquote" => {
+                        ExpEnum::Symbol(sym) if sym == &"bquote" => {
                             f.write_str("`")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -1255,7 +1229,7 @@ mod tests {
     #[test]
     fn test_one() {
         init_gc();
-        let s1 = Expression::alloc_data_h(ExpEnum::Atom(Atom::String("sls".into(), None)));
+        let s1 = Expression::alloc_data_h(ExpEnum::String("sls".into(), None));
         let n1 = Expression::make_nil_h();
         let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
         let nlist = vec![
