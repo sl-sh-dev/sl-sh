@@ -127,7 +127,7 @@ up until the next token delimeted option, -c.
     (var 'bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
     (debugln "bindings-map: " bindings-map)
-    (err nyi))
+    bindings-map)
 
 (def 'test-options-map
     (make-hash
@@ -163,17 +163,117 @@ up until the next token delimeted option, -c.
 (assert-error-msg (getopts test-options-map "-ab" "an-argument") (bad-option-arity "-a" 1))
 (assert-error-msg (getopts test-options-map "-lb" "an-argument") (bad-option-arity "-b" 3))
 
-(assert-error-msg (getopts test-options-map "-lmb" "1" "2" "3") nyi)
-(assert-error-msg (getopts test-options-map "-lmb" "1" "2" "3") nyi)
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "-lm") nyi)
-(assert-error-msg (getopts test-options-map "-a" "1") nyi)
-(assert-error-msg (getopts test-options-map "-l" "-a" "one-arg") nyi)
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3") nyi)
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "-a" "1") nyi)
-(assert-error-msg (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1") nyi)
-(assert-error-msg (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "--d-arg" "1" "2") nyi)
+(defn map= (m n)
+    (var 'keys-in-map (fn (m n) (loop (keys m n last-ret) ((hash-keys m) m n #t)
+                       (if (nil? last-ret)
+                         nil
+                         (if (empty-seq? keys)
+                           #t
+                           (recur
+                             (rest keys)
+                             m
+                             n
+                             (and (hash-haskey n (first keys)) (= (hash-get m (first keys)) (hash-get n (first keys))))))))))
+    (and (hash? m) (hash? n) (= (length (hash-keys m)) (length (hash-keys n)))
+      (keys-in-map m n)
+      (keys-in-map n m)))
 
-;; (assert-error-msg (getopts test-options-map "-b" "an-argument") (bad-option-arity "-a" 1))
+(assert-true
+    (map=
+        (getopts test-options-map "-lmb" "1" "2" "3")
+        (make-hash
+          (list
+            (join :-l #t)
+            (join :-m #t)
+            (join :-a nil)
+            (join :--c-arg nil)
+            (join :--d-arg nil)
+            (join :-b '#("1" "2" "3"))))))
+
+(assert-true
+    (map=
+        (getopts test-options-map "-b" "1" "2" "3" "-lm")
+        (make-hash
+          (list
+            (join :-l #t)
+            (join :-m #t)
+            (join :-a nil)
+            (join :--c-arg nil)
+            (join :--d-arg nil)
+            (join :-b '#("1" "2" "3"))))))
+
+(assert-true
+  (map=
+    (getopts test-options-map "-a" "1")
+    (make-hash
+      (list
+        (join :-l nil)
+        (join :-m nil)
+        (join :-a '#("1"))
+        (join :--c-arg nil)
+        (join :--d-arg nil)
+        (join :-b nil)))))
+
+(assert-true
+    (map=
+        (getopts test-options-map "-l" "-a" "one-arg")
+        (make-hash
+          (list
+            (join :-l #t)
+            (join :-m nil)
+            (join :-a '#("one-arg"))
+            (join :--c-arg nil)
+            (join :--d-arg nil)
+            (join :-b nil)))))
+
+(assert-true
+    (map=
+        (getopts test-options-map "-b" "1" "2" "3")
+        (make-hash
+          (list
+            (join :-l nil)
+            (join :-m nil)
+            (join :-a nil)
+            (join :--c-arg nil)
+            (join :--d-arg nil)
+            (join :-b '#("1" "2" "3"))))))
+
+(assert-true
+    (map=
+        (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1")
+        (make-hash
+          (list
+            (join :-l #t)
+            (join :-m #t)
+            (join :-a '#("aaa"))
+            (join :--c-arg '#("1"))
+            (join :--d-arg nil)
+            (join :-b '#("1" "2" "3"))))))
+
+(assert-true
+    (map=
+        (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "--d-arg" "1" "2")
+        (make-hash
+          (list
+            (join :-l #t)
+            (join :-m #t)
+            (join :-a '#("aaa"))
+            (join :--c-arg '#("1"))
+            (join :--d-arg '#("1" "2"))
+            (join :-b '#("1" "2" "3"))))))
+
+
+(assert-true
+    (map=
+    (getopts test-options-map "-lb" "1" "2" "3" "-a" "1")
+    (make-hash
+      (list
+        (join :-l #t)
+        (join :-m nil)
+        (join :-a '#("1"))
+        (join :--c-arg nil)
+        (join :--d-arg nil)
+        (join :-b '#("1" "2" "3"))))))
 
 (def 'myit ((iterator::list-iter) :init '(1 2 3 4 5 6 7 8 9 10 11)))
 (println (myit  :next!))
