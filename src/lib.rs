@@ -69,6 +69,9 @@ pub use crate::builtins_edit::*;
 pub mod builtins_bind;
 pub use crate::builtins_bind::*;
 
+pub mod pretty_print;
+pub use crate::pretty_print::*;
+
 pub mod process;
 pub use crate::process::*;
 

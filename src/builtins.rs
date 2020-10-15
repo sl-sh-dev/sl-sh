@@ -14,6 +14,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::gc::*;
 use crate::interner::*;
+use crate::pretty_print::*;
 use crate::reader::*;
 use crate::types::*;
 
@@ -348,7 +349,7 @@ fn args_out(
             _ => pretty,
         };
         if pretty {
-            aa.pretty_printf(environment, writer)?;
+            pretty_printf(&aa, environment, writer)?;
         } else {
             aa.writef(environment, writer)?;
         }
@@ -395,7 +396,7 @@ fn print_to_oe(
                                 _ => pretty,
                             };
                             if pretty {
-                                aa.pretty_printf(environment, f)?;
+                                pretty_printf(&aa, environment, f)?;
                             } else {
                                 aa.writef(environment, f)?;
                             }
