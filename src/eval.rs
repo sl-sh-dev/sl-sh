@@ -28,7 +28,6 @@ pub fn call_lambda(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let mut body: Expression = lambda.body.clone_root().into();
-    //let mut params = Box::new(lambda.params.iter());
     let mut looping = true;
     let new_scope = build_new_scope(Some(lambda.capture.clone()));
     if let Err(err) = setup_args(
@@ -86,7 +85,6 @@ pub fn call_lambda(
                     lambda_int = lam.clone();
                     lambda = &mut lambda_int;
                     body = lambda.body.clone_root().into();
-                    //params = lambda.params.clone_root().into();
                     looping = true;
                     environment.scopes.pop();
                     // scope is popped so can use ? now.
@@ -121,7 +119,6 @@ fn exec_macro(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let body: Expression = sh_macro.body.clone().into();
-    //let params: Expression = sh_macro.params.clone().into();
     let mut new_scope = Scope {
         data: HashMap::new(),
         outer: Some(sh_macro.capture.clone()),
@@ -636,35 +633,9 @@ fn analyze(
         }
         ExpEnum::Values(_v) => Ok(expression.clone()),
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(_s) => {
-            Ok(expression.clone())
-            /*if s.starts_with('$') {
-                match env::var(&s[1..]) {
-                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
-                        environment.interner.intern(&val).into(),
-                        None,
-                    )))),
-                    Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
-                }
-            } else if s.starts_with(':') {
-                // Got a keyword, so just be you...
-                Ok(Expression::alloc_data(ExpEnum::Symbol(s)))
-            } else if let Some(exp) = get_expression(environment, s) {
-                let exp = &exp.exp;
-                Ok(exp.clone())
-            } else if environment.loose_symbols {
-                str_process(environment, s, false)
-            } else {
-                let msg = format!("Symbol {} not found.", s);
-                Err(LispError::new(msg))
-            }*/
-        }
+        ExpEnum::Symbol(_s) => Ok(expression.clone()),
         ExpEnum::HashMap(_) => Ok(expression.clone()),
-        // If we have an iterator on the string then assume it is already processed and being used.
-        // XXX TODO- verify this assumption is correct, maybe change when to process strings.
-        //ExpEnum::String(_, Some(_))) => Ok(expression.clone()),
         ExpEnum::String(_, _) => Ok(expression.clone()),
-        //ExpEnum::String(string, _)) => str_process(environment, &string, true),
         ExpEnum::True => Ok(expression.clone()),
         ExpEnum::Float(_) => Ok(expression.clone()),
         ExpEnum::Int(_) => Ok(expression.clone()),
@@ -672,35 +643,14 @@ fn analyze(
         ExpEnum::CodePoint(_) => Ok(expression.clone()),
         ExpEnum::Lambda(_) => Ok(expression.clone()),
         ExpEnum::Macro(_) => Ok(expression.clone()),
-        ExpEnum::Function(_) => Ok(expression.clone()), //Ok(Expression::alloc_data(ExpEnum::Nil)),
+        ExpEnum::Function(_) => Ok(expression.clone()),
         ExpEnum::Process(_) => Ok(expression.clone()),
-        ExpEnum::File(_) => Ok(expression.clone()), //Ok(Expression::alloc_data(ExpEnum::Nil)),
-        ExpEnum::LazyFn(_, _) => {
-            Ok(expression.clone())
-            //let int_exp = expression.clone().resolve(environment)?;
-            //eval(environment, int_exp)
-        }
-        ExpEnum::Wrapper(_exp) => {
-            Ok(expression.clone())
-            /*let exp: Expression = exp.into();
-            let mut exp_d = exp.get_mut();
-            if let ExpEnum::Lambda(l) = &mut exp_d.data {
-                let p = l.params.clone();
-                Ok(Expression::alloc_data(ExpEnum::Lambda(
-                    Lambda {
-                        params: p,
-                        body: l.body.clone(),
-                        capture: get_current_scope(environment),
-                    },
-                ))))
-            } else {
-            drop(exp_d);
-                Ok(exp)
-            }*/
-        }
+        ExpEnum::File(_) => Ok(expression.clone()),
+        ExpEnum::LazyFn(_, _) => Ok(expression.clone()),
+        ExpEnum::Wrapper(_exp) => Ok(expression.clone()),
         ExpEnum::DeclareDef => Ok(expression.clone()),
         ExpEnum::DeclareVar => Ok(expression.clone()),
-        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"), //Ok(expression.clone()),
+        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),
     };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),
@@ -806,9 +756,9 @@ fn internal_eval(
                 Ok(exp)
             }
         }
-        ExpEnum::DeclareDef => panic!("Illegal def state in eval, was analyze skipped?"), // Ok(expression.clone()),
-        ExpEnum::DeclareVar => panic!("Illegal var state in eval, was analyze skipped?"), // Ok(expression.clone()),
-        ExpEnum::DeclareFn => panic!("Illegal fn state in eval, was analyze skipped?"), //Ok(expression.clone()),
+        ExpEnum::DeclareDef => panic!("Illegal def state in eval, was analyze skipped?"),
+        ExpEnum::DeclareVar => panic!("Illegal var state in eval, was analyze skipped?"),
+        ExpEnum::DeclareFn => panic!("Illegal fn state in eval, was analyze skipped?"),
     };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),

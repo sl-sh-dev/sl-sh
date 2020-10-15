@@ -220,18 +220,15 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                 ExpEnum::Vector(list) => {
                     for l in list {
                         let l: Expression = l.into();
-                        //println!("XXXX evaling (vec): {}", l);
                         res = Some(eval(environment, &l)?);
                     }
                 }
                 ExpEnum::Pair(_, _) => {
                     for l in ast.iter() {
-                        //println!("XXXX evaling (pair): {}", l);
                         res = Some(eval(environment, l)?);
                     }
                 }
                 _ => {
-                    //println!("XXXX evaling (na): {}", ast);
                     res = Some(eval(environment, &ast)?);
                 }
             }
@@ -272,11 +269,6 @@ fn builtin_length(
                     }
                     Ok(Expression::alloc_data(ExpEnum::Int(i64::from(i))))
                 }
-                /*ExpEnum::Float(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
-                ExpEnum::Int(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
-                ExpEnum::Symbol(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
-                ExpEnum::Char(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),
-                ExpEnum::CodePoint(_) => Ok(Expression::alloc_data(ExpEnum::Int(1))),*/
                 ExpEnum::Vector(list) => {
                     Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64)))
                 }
@@ -310,7 +302,6 @@ fn builtin_length(
                     "expression of type {} has no length",
                     arg.display_type()
                 ))),
-                //Ok(Expression::alloc_data(ExpEnum::Int(0))),
             };
         }
     }
