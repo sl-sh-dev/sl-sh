@@ -4,6 +4,7 @@
 (ns-import 'test)
 (ns-import 'iterator)
 
+;; TODO make debugln use env var?
 (defmacro debugln (&rest args)
     (if (nil? nil)
         `(println "=> " ,@args)))
@@ -103,10 +104,11 @@ up until the next token delimeted option, -c.
                    (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
-(defn build-getopts-param (arity)
+(defn build-getopts-param (arity default)
     (make-hash
         (list
-        (join :arity arity))))
+        (join :arity arity)
+        (join :default default))))
 
 (defn valid-first-arg? (args)
     (when (not (is-getopts-option-string (first args)))
@@ -116,6 +118,16 @@ up until the next token delimeted option, -c.
 
 (defn make-hash-with-keys (hmap)
     (make-hash (collect (map (fn (x) (join (to-symbol x) nil)) (hash-keys hmap)))))
+
+(defn apply-defaults (options-map bindings-map)
+    (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
+        (when (not (empty-seq? keys))
+            (progn
+             (var 'key (first keys))
+             (var 'opt-config (hash-get options-map key))
+             (when (and (hash-haskey opt-config :default) (nil? (hash-get bindings-map key)))
+               (hash-set! bindings-map key (hash-get opt-config :default)))
+             (recur (rest keys) bindings-map)))))
 
 ;; TODO options-map this needs ability to set default values
 ;; TODO eliminate debugln or make it programmatically switchable and print
@@ -127,20 +139,18 @@ up until the next token delimeted option, -c.
     (var 'bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
     (debugln "bindings-map: " bindings-map)
+    (apply-defaults options-map bindings-map)
     bindings-map)
 
 (def 'test-options-map
     (make-hash
       (list
-        (join :-l (build-getopts-param 0))
-        (join :-m (build-getopts-param 0))
-        (join :-a (build-getopts-param 1))
-        (join :--c-arg (build-getopts-param 1))
-        (join :--d-arg (build-getopts-param 2))
-        (join :-b (build-getopts-param 3)))))
-
-;;(println (expand-macro (with-keys (hash-keys test-options-map))))
-;;(println (make-hash-with-keys test-options-map))
+        (join :-l (build-getopts-param 0 #t))
+        (join :-m (build-getopts-param 0 nil))
+        (join :-a (build-getopts-param 1 "foo"))
+        (join :--c-arg (build-getopts-param 1 nil))
+        (join :--d-arg (build-getopts-param 2 nil))
+        (join :-b (build-getopts-param 3 nil)))))
 
 (assert-error-msg (getopts test-options-map) no-args)
 (assert-error-msg (getopts test-options-map "a") bad-first-arg)
@@ -185,7 +195,7 @@ up until the next token delimeted option, -c.
           (list
             (join :-l #t)
             (join :-m #t)
-            (join :-a nil)
+            (join :-a "foo")
             (join :--c-arg nil)
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
@@ -197,7 +207,7 @@ up until the next token delimeted option, -c.
           (list
             (join :-l #t)
             (join :-m #t)
-            (join :-a nil)
+            (join :-a "foo")
             (join :--c-arg nil)
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
@@ -207,7 +217,7 @@ up until the next token delimeted option, -c.
     (getopts test-options-map "-a" "1")
     (make-hash
       (list
-        (join :-l nil)
+        (join :-l #t)
         (join :-m nil)
         (join :-a '#("1"))
         (join :--c-arg nil)
@@ -231,9 +241,9 @@ up until the next token delimeted option, -c.
         (getopts test-options-map "-b" "1" "2" "3")
         (make-hash
           (list
-            (join :-l nil)
+            (join :-l #t)
             (join :-m nil)
-            (join :-a nil)
+            (join :-a "foo")
             (join :--c-arg nil)
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
@@ -274,10 +284,5 @@ up until the next token delimeted option, -c.
         (join :--c-arg nil)
         (join :--d-arg nil)
         (join :-b '#("1" "2" "3"))))))
-
-(def 'myit ((iterator::list-iter) :init '(1 2 3 4 5 6 7 8 9 10 11)))
-(println (myit  :next!))
-(def 'myslice  (myit  :slice 8))
-(println (myslice  :next!))
 
 (ns-pop) ;; must be last line
