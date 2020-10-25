@@ -506,7 +506,7 @@ pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Refere
     None
 }
 
-pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference> {
+pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Reference> {
     let mut loop_scope = if !environment.scopes.is_empty() {
         Some(environment.scopes.last().unwrap().clone())
     } else {
@@ -563,6 +563,17 @@ pub fn get_expression(environment: &Environment, key: &str) -> Option<Reference>
         Some(reference.clone())
     } else {
         None
+    }
+}
+
+pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Reference> {
+    match &expression.get().data {
+        ExpEnum::Symbol(sym, location) => match location {
+            SymLoc::None => lookup_expression(environment, sym),
+            SymLoc::Scope(_scope, _idx) => None,
+            SymLoc::Stack(_idx) => None,
+        },
+        _ => None, // XXX Maybe this should be an error?
     }
 }
 
@@ -638,10 +649,11 @@ pub fn remove_expression_current(environment: &mut Environment, key: &str) -> Op
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
+    // XXX TODO- check where this is called, making key an Expression is probably better.
     if key.starts_with('$') {
         env::var(&key[1..]).is_ok()
     } else {
-        get_expression(environment, key).is_some()
+        lookup_expression(environment, key).is_some()
     }
 }
 

@@ -182,13 +182,20 @@ pub struct ExpMeta {
     pub col: usize,
 }
 
+#[derive(Clone, Debug)]
+pub enum SymLoc {
+    None,
+    Scope(Rc<RefCell<Scope>>, usize),
+    Stack(usize),
+}
+
 pub enum ExpEnum {
     // Primatives
     True,
     Nil,
     Float(f64),
     Int(i64),
-    Symbol(&'static str),
+    Symbol(&'static str, SymLoc),
     // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
     // to None if it is Some.
     String(Cow<'static, str>, Option<CharIter>),
@@ -272,7 +279,7 @@ impl Clone for ExpEnum {
             ExpEnum::Nil => ExpEnum::Nil,
             ExpEnum::Float(n) => ExpEnum::Float(*n),
             ExpEnum::Int(i) => ExpEnum::Int(*i),
-            ExpEnum::Symbol(s) => ExpEnum::Symbol(s),
+            ExpEnum::Symbol(s, l) => ExpEnum::Symbol(s, l.clone()),
             ExpEnum::String(s, _) => ExpEnum::String(s.clone(), None),
             ExpEnum::Char(c) => ExpEnum::Char(c.clone()),
             ExpEnum::CodePoint(c) => ExpEnum::CodePoint(*c),
@@ -300,7 +307,7 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::True => write!(f, "ExpEnum::True"),
             ExpEnum::Float(n) => write!(f, "ExpEnum::Float({})", n),
             ExpEnum::Int(i) => write!(f, "ExpEnum::Int({})", i),
-            ExpEnum::Symbol(s) => write!(f, "ExpEnum::Symbol({})", s),
+            ExpEnum::Symbol(s, _) => write!(f, "ExpEnum::Symbol({})", s),
             ExpEnum::String(s, _) => write!(f, "ExpEnum::String(\"{}\")", s),
             ExpEnum::Char(c) => write!(f, "ExpEnum::Char(#\\{})", c),
             ExpEnum::CodePoint(c) => write!(f, "ExpEnum::CodePoint(#\\{})", c),
@@ -581,7 +588,7 @@ impl Expression {
             ExpEnum::True => "True".to_string(),
             ExpEnum::Float(_) => "Float".to_string(),
             ExpEnum::Int(_) => "Int".to_string(),
-            ExpEnum::Symbol(_) => "Symbol".to_string(),
+            ExpEnum::Symbol(_, _) => "Symbol".to_string(),
             ExpEnum::String(_, _) => "String".to_string(),
             ExpEnum::Char(_) => "Char".to_string(),
             ExpEnum::CodePoint(_) => "CodePoint".to_string(),

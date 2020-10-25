@@ -162,8 +162,8 @@ pub fn fn_call(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     match command.get().data.clone() {
-        ExpEnum::Symbol(command) => {
-            if let Some(exp) = get_expression(environment, command) {
+        ExpEnum::Symbol(command_sym, _) => {
+            if let Some(exp) = get_expression(environment, command.clone()) {
                 match exp.exp.get().data.clone() {
                     ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
                     ExpEnum::Lambda(_) => {
@@ -176,7 +176,7 @@ pub fn fn_call(
                     _ => {
                         let msg = format!(
                             "Symbol {} is not callable (or is macro or special form).",
-                            command
+                            command_sym
                         );
                         Err(LispError::new(msg))
                     }
@@ -184,7 +184,7 @@ pub fn fn_call(
             } else {
                 let msg = format!(
                     "Symbol {} is not callable (or is macro or special form).",
-                    command
+                    command_sym
                 );
                 Err(LispError::new(msg))
             }
@@ -300,11 +300,11 @@ fn fn_eval_lazy(
     let allow_form =
         environment.form_type == FormType::FormOnly || environment.form_type == FormType::Any;
     match &command_d.data {
-        ExpEnum::Symbol(command) => {
-            if command.is_empty() {
+        ExpEnum::Symbol(command_sym, _) => {
+            if command_sym.is_empty() {
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
-            let form = get_expression(environment, &command);
+            let form = get_expression(environment, command.clone());
             if let Some(exp) = form {
                 match &exp.exp.get().data {
                     ExpEnum::Function(c) if allow_form => (c.func)(environment, &mut parts),
@@ -320,32 +320,32 @@ fn fn_eval_lazy(
                         do_command(environment, s.trim(), &mut parts)
                     }
                     _ => {
-                        if command.starts_with('$') {
-                            if let ExpEnum::String(command, _) =
-                                &str_process(environment, command, true)?.get().data
+                        if command_sym.starts_with('$') {
+                            if let ExpEnum::String(command_sym, _) =
+                                &str_process(environment, command_sym, true)?.get().data
                             {
-                                do_command(environment, &command, &mut parts)
+                                do_command(environment, &command_sym, &mut parts)
                             } else {
-                                let msg = format!("Not a valid form {}, not found.", command);
+                                let msg = format!("Not a valid form {}, not found.", command_sym);
                                 Err(LispError::new(msg))
                             }
                         } else {
-                            do_command(environment, command, &mut parts)
+                            do_command(environment, command_sym, &mut parts)
                         }
                     }
                 }
             } else if allow_sys_com {
-                if command.starts_with('$') {
-                    if let ExpEnum::String(command, _) =
-                        &str_process(environment, command, true)?.get().data
+                if command_sym.starts_with('$') {
+                    if let ExpEnum::String(command_sym, _) =
+                        &str_process(environment, command_sym, true)?.get().data
                     {
-                        do_command(environment, &command, &mut parts)
+                        do_command(environment, &command_sym, &mut parts)
                     } else {
-                        let msg = format!("Not a valid form {}, not found.", command);
+                        let msg = format!("Not a valid form {}, not found.", command_sym);
                         Err(LispError::new(msg))
                     }
                 } else {
-                    do_command(environment, command, &mut parts)
+                    do_command(environment, command_sym, &mut parts)
                 }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command);
@@ -572,8 +572,8 @@ fn analyze(
             if let Some((car, cdr)) = v.split_first() {
                 let car: Expression = car.into();
                 let car_d = car.get();
-                if let ExpEnum::Symbol(s) = &car_d.data {
-                    let form = get_expression(environment, &s);
+                if let ExpEnum::Symbol(_, _) = &car_d.data {
+                    let form = get_expression(environment, car.clone());
                     if let Some(exp) = form {
                         if let ExpEnum::DeclareFn = &exp.exp.get().data {
                             let lambda = {
@@ -607,8 +607,8 @@ fn analyze(
         }
         ExpEnum::Pair(car, cdr) => {
             let car: Expression = car.into();
-            if let ExpEnum::Symbol(s) = &car.get().data {
-                let form = get_expression(environment, &s);
+            if let ExpEnum::Symbol(_, _) = &car.get().data {
+                let form = get_expression(environment, car.clone());
                 if let Some(exp) = form {
                     if let ExpEnum::DeclareFn = &exp.exp.get().data {
                         let cdr: Expression = cdr.into();
@@ -633,7 +633,7 @@ fn analyze(
         }
         ExpEnum::Values(_v) => Ok(expression.clone()),
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(_s) => Ok(expression.clone()),
+        ExpEnum::Symbol(_s, _) => Ok(expression.clone()),
         ExpEnum::HashMap(_) => Ok(expression.clone()),
         ExpEnum::String(_, _) => Ok(expression.clone()),
         ExpEnum::True => Ok(expression.clone()),
@@ -700,7 +700,7 @@ fn internal_eval(
             Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(s) => {
+        ExpEnum::Symbol(s, _) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
                     Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
@@ -711,8 +711,8 @@ fn internal_eval(
                 }
             } else if s.starts_with(':') {
                 // Got a keyword, so just be you...
-                Ok(Expression::alloc_data(ExpEnum::Symbol(s)))
-            } else if let Some(exp) = get_expression(environment, s) {
+                Ok(Expression::alloc_data(ExpEnum::Symbol(s, SymLoc::None)))
+            } else if let Some(exp) = get_expression(environment, expression.clone()) {
                 let exp = &exp.exp;
                 Ok(exp.clone())
             } else if environment.loose_symbols {

@@ -51,7 +51,7 @@ fn builtin_export(
                 let val = eval(environment, val)?;
                 let key_d = &key.get().data;
                 let key = match key_d {
-                    ExpEnum::Symbol(s) => s,
+                    ExpEnum::Symbol(s, _) => s,
                     _ => {
                         return Err(LispError::new(
                             "export: first form must evaluate to a symbol",
@@ -59,7 +59,7 @@ fn builtin_export(
                     }
                 };
                 let val = match &val.get().data {
-                    ExpEnum::Symbol(s) => ExpEnum::String((*s).into(), None),
+                    ExpEnum::Symbol(s, _) => ExpEnum::String((*s).into(), None),
                     ExpEnum::String(s, _) => ExpEnum::String(s.to_string().into(), None),
                     ExpEnum::Int(i) => ExpEnum::String(format!("{}", i).into(), None),
                     ExpEnum::Float(f) => ExpEnum::String(format!("{}", f).into(), None),
@@ -125,7 +125,7 @@ fn builtin_unexport(
         if args.next().is_none() {
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
-            if let ExpEnum::Symbol(k) = key_d {
+            if let ExpEnum::Symbol(k, _) = key_d {
                 env::remove_var(k);
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
             }

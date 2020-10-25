@@ -26,7 +26,7 @@ fn builtin_ns_create(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -55,7 +55,7 @@ fn builtin_ns_enter(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -87,7 +87,7 @@ fn builtin_ns_exists(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -131,7 +131,7 @@ fn builtin_ns_symbols(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -143,7 +143,8 @@ fn builtin_ns_symbols(
                 if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
                     for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::alloc_data_h(ExpEnum::Symbol(sym)));
+                        ns_symbols
+                            .push(Expression::alloc_data_h(ExpEnum::Symbol(sym, SymLoc::None)));
                     }
                     return Ok(Expression::with_list(ns_symbols));
                 }

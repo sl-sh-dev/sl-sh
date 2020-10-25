@@ -274,7 +274,7 @@ fn run_command(
 
 fn get_std_io(environment: &Environment, is_out: bool) -> Result<Stdio, LispError> {
     let key = if is_out { "*stdout*" } else { "*stderr*" };
-    let out = get_expression(environment, key);
+    let out = lookup_expression(environment, key);
     match out {
         Some(out) => {
             if let ExpEnum::File(f) = &out.exp.get().data {
@@ -404,7 +404,7 @@ pub fn do_command(
                 data = Some(data_in.clone());
                 Stdio::piped()
             }
-            ExpEnum::Symbol(_) => {
+            ExpEnum::Symbol(_, _) => {
                 data = Some(data_in.clone());
                 Stdio::piped()
             }
@@ -542,7 +542,7 @@ pub fn do_command(
             // Free standing callables in a process call do not make sense so filter them out...
             // Eval the strings below to make sure any expansions happen.
             let new_a = match a_exp_a.data {
-                ExpEnum::Symbol(s) => match get_expression(environment, s) {
+                ExpEnum::Symbol(s, _) => match get_expression(environment, a_exp.clone()) {
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => {
                             drop(a_exp_a);

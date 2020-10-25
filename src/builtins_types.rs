@@ -116,7 +116,7 @@ fn builtin_is_symbol(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval_no_values(environment, arg)?;
-            return if let ExpEnum::Symbol(_) = arg.get().data {
+            return if let ExpEnum::Symbol(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
@@ -385,6 +385,7 @@ fn builtin_to_symbol(
     }
     Ok(Expression::alloc_data(ExpEnum::Symbol(
         environment.interner.intern(&res),
+        SymLoc::None,
     )))
 }
 
@@ -396,7 +397,7 @@ fn builtin_symbol_to_str(
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
             return match &arg0.get().data {
-                ExpEnum::Symbol(s) => {
+                ExpEnum::Symbol(s, _) => {
                     Ok(Expression::alloc_data(ExpEnum::String((*s).into(), None)))
                 }
                 _ => Err(LispError::new(

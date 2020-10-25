@@ -25,7 +25,7 @@ fn builtin_open(
 ) -> Result<Expression, LispError> {
     if let Some(a) = args.next() {
         let a = eval(environment, a)?;
-        if let ExpEnum::Symbol(sym) = &a.get().data {
+        if let ExpEnum::Symbol(sym, _) = &a.get().data {
             let ret = match &sym[..] {
                 ":stdin" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin)))),
                 ":stdout" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout)))),
@@ -60,7 +60,7 @@ fn builtin_open(
         for a in args {
             let a = eval(environment, a)?;
             let a_d = a.get();
-            if let ExpEnum::Symbol(sym) = &a_d.data {
+            if let ExpEnum::Symbol(sym, _) = &a_d.data {
                 match &sym[..] {
                     ":read" => {
                         is_read = true;
@@ -224,8 +224,10 @@ fn builtin_read_line(
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
                             let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error =
-                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
+                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                                ":unexpected-eof",
+                                SymLoc::None,
+                            ));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
@@ -235,8 +237,10 @@ fn builtin_read_line(
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
                             let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error =
-                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
+                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                                ":unexpected-eof",
+                                SymLoc::None,
+                            ));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))

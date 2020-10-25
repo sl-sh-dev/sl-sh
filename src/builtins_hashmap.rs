@@ -25,7 +25,7 @@ fn build_map(
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
             match &key.get().data {
-                ExpEnum::Symbol(sym) => map.insert(sym, val.clone()),
+                ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
                 ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
                 ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, &ch), val.clone()),
                 _ => {
@@ -83,7 +83,7 @@ fn builtin_hash_set(
                     if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
                         let val: Handle = val.into();
                         match &key.get().data {
-                            ExpEnum::Symbol(sym) => {
+                            ExpEnum::Symbol(sym, _) => {
                                 map.insert(*sym, val);
                                 return Ok(exp_map.clone());
                             }
@@ -130,7 +130,7 @@ fn builtin_hash_remove(
                 let mut map_d = map.get_mut();
                 if let ExpEnum::HashMap(map) = &mut map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_rem(map, sym);
                         }
                         ExpEnum::String(s, _) => {
@@ -187,7 +187,7 @@ fn builtin_hash_get(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_get(environment, map, sym, default);
                         }
                         ExpEnum::String(s, _) => {
@@ -230,7 +230,7 @@ fn builtin_hash_haskey(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_has(map, sym);
                         }
                         ExpEnum::String(s, _) => {
@@ -270,6 +270,7 @@ fn builtin_hash_keys(
                 for key in map.keys() {
                     key_list.push(Expression::alloc_data_h(ExpEnum::Symbol(
                         environment.interner.intern(key),
+                        SymLoc::None,
                     )));
                 }
                 return Ok(Expression::with_list(key_list));

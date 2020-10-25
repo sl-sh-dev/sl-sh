@@ -98,12 +98,12 @@ impl<'env> ShellCompleter<'env> {
         } else {
             self.environment.interner.intern("__completion_hook")
         };
-        let comp_exp = get_expression(&self.environment, hook_name);
+        let comp_exp = lookup_expression(&self.environment, hook_name);
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.exp.get().data {
                 ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    let data = ExpEnum::Symbol(hook_name);
+                    let data = ExpEnum::Symbol(hook_name, SymLoc::None);
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
@@ -122,7 +122,7 @@ impl<'env> ShellCompleter<'env> {
             match eval(self.environment, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Symbol(s) => match *s {
+                        ExpEnum::Symbol(s, _) => match *s {
                             ":path" => HookResult::Path,
                             ":default" => HookResult::Default,
                             _ => {

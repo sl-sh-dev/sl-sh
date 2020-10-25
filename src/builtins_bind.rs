@@ -42,7 +42,7 @@ fn proc_set_vars<'a>(
         key_exp: Expression,
     ) -> Result<&'static str, LispError> {
         match eval(environment, key_exp)?.get().data {
-            ExpEnum::Symbol(s) => Ok(s),
+            ExpEnum::Symbol(s, _) => Ok(s),
             _ => Err(LispError::new("first form (binding key) must be a symbol")),
         }
     }
@@ -50,7 +50,7 @@ fn proc_set_vars<'a>(
         if let Some(arg1) = args.next() {
             let key_d = key.get();
             let key = match &key_d.data {
-                ExpEnum::Symbol(s) => *s,
+                ExpEnum::Symbol(s, _) => *s,
                 ExpEnum::Pair(_, _) => {
                     drop(key_d);
                     eval_key(environment, key.clone())?
@@ -88,8 +88,8 @@ fn val_to_reference(
     val_in: Expression,
 ) -> Result<(Reference, Expression), LispError> {
     let val_in_d = val_in.get();
-    if let ExpEnum::Symbol(s) = &val_in_d.data {
-        if let Some(reference) = get_expression(environment, s) {
+    if let ExpEnum::Symbol(_, _) = &val_in_d.data {
+        if let Some(reference) = get_expression(environment, val_in.clone()) {
             drop(val_in_d); // Free read lock on val_in.
             Ok((reference, eval(environment, val_in)?))
         } else {
@@ -275,7 +275,7 @@ fn builtin_undef(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key_d = &key.get().data;
-            if let ExpEnum::Symbol(k) = key_d {
+            if let ExpEnum::Symbol(k, _) = key_d {
                 return if let Some(rexp) = remove_expression_current(environment, &k) {
                     Ok(rexp.exp)
                 } else {
@@ -297,7 +297,7 @@ fn builtin_dyn(
     let (key, val) = if let Some(key) = args.next() {
         let key_d = key.get();
         let key = match &key_d.data {
-            ExpEnum::Symbol(_) => key.clone(),
+            ExpEnum::Symbol(_, _) => key.clone(),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 eval(environment, key.clone())?
@@ -310,7 +310,7 @@ fn builtin_dyn(
         };
         if let Some(val) = args.next() {
             let key = match key.get().data {
-                ExpEnum::Symbol(s) => s,
+                ExpEnum::Symbol(s, _) => s,
                 _ => {
                     return Err(LispError::new(
                         "dyn: first form (binding key) must be a symbol",
@@ -370,7 +370,7 @@ fn builtin_is_def(
     fn do_list(environment: &mut Environment, key: Expression) -> Result<Expression, LispError> {
         let new_key = eval(environment, key)?;
         let new_key_d = new_key.get();
-        if let ExpEnum::Symbol(s) = &new_key_d.data {
+        if let ExpEnum::Symbol(s, _) = &new_key_d.data {
             get_ret(environment, s)
         } else {
             Err(LispError::new(
@@ -382,7 +382,7 @@ fn builtin_is_def(
         params_done(args, "def?")?;
         let key_d = key.get();
         match &key_d.data {
-            ExpEnum::Symbol(s) => get_ret(environment, s),
+            ExpEnum::Symbol(s, _) => get_ret(environment, s),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 do_list(environment, key.clone())
@@ -406,7 +406,7 @@ fn builtin_ref(
         params_done(args, "ref")?;
         let key_d = key.get();
         let key = match &key_d.data {
-            ExpEnum::Symbol(_) => key.clone(),
+            ExpEnum::Symbol(_, _) => key.clone(),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 eval(environment, key.clone())?
@@ -419,8 +419,8 @@ fn builtin_ref(
         };
         let key_d = key.get();
         match &key_d.data {
-            ExpEnum::Symbol(s) => {
-                if let Some(form) = get_expression(environment, s) {
+            ExpEnum::Symbol(s, _) => {
+                if let Some(form) = get_expression(environment, key.clone()) {
                     Ok(form.exp)
                 } else {
                     Err(LispError::new(format!("ref: symbol {} not bound", s)))

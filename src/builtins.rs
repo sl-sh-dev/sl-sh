@@ -102,7 +102,10 @@ fn builtin_apply(
         };
         for a in itr {
             let b = ExpEnum::Pair(
-                Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern("quote"))),
+                Expression::alloc_data_h(ExpEnum::Symbol(
+                    environment.interner.intern("quote"),
+                    SymLoc::None,
+                )),
                 Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
             );
             call_list.push(Expression::alloc_data_h(b));
@@ -155,7 +158,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         Some(f) => f,
         None => file_name.to_string(),
     };
-    let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
+    let file_path = if let Some(lp) = lookup_expression(environment, "*load-path*") {
         let lp_d = lp.exp.get();
         let p_itr = match &lp_d.data {
             ExpEnum::Vector(vec) => Box::new(ListIter::new_list(&vec)),
@@ -164,7 +167,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         let mut path_out = file_name.clone();
         for l in p_itr {
             let path_name = match &l.get().data {
-                ExpEnum::Symbol(sym) => Some((*sym).to_string()),
+                ExpEnum::Symbol(sym, _) => Some((*sym).to_string()),
                 ExpEnum::String(s, _) => Some(s.to_string()),
                 _ => None,
             };
@@ -368,7 +371,7 @@ fn print_to_oe(
     default_error: bool,
     key: &str,
 ) -> Result<(), LispError> {
-    let out = get_expression(environment, key);
+    let out = lookup_expression(environment, key);
     match out {
         Some(out) => {
             if let ExpEnum::File(f) = &out.exp.get().data {
@@ -521,7 +524,10 @@ pub fn builtin_fn(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
+                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
+                    "do",
+                    SymLoc::None,
+                )));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -542,7 +548,7 @@ pub fn builtin_fn(
         };
         let mut params = Vec::new();
         for p in p_iter {
-            if let ExpEnum::Symbol(s) = p.get().data {
+            if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
             } else {
                 return Err(LispError::new("fn: parameters must be symbols"));
@@ -590,7 +596,7 @@ fn replace_commas(
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             _ => exp.clone(),
         };
-        if let ExpEnum::Symbol(symbol) = &exp_d.data {
+        if let ExpEnum::Symbol(symbol, _) = &exp_d.data {
             if symbol == &"," {
                 comma_next = true;
             } else if symbol == &",@" {
@@ -664,7 +670,7 @@ fn builtin_bquote(
     let ret = if let Some(arg) = args.next() {
         let meta = arg.meta();
         match &arg.get().data {
-            ExpEnum::Symbol(s) if s == &"," => {
+            ExpEnum::Symbol(s, _) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
@@ -766,7 +772,10 @@ fn builtin_macro(
         let body = if let Some(first) = first {
             if let Some(second) = second {
                 let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
+                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
+                    "do",
+                    SymLoc::None,
+                )));
                 body.push(first.into());
                 body.push(second.into());
                 for a in args {
@@ -787,7 +796,7 @@ fn builtin_macro(
         };
         let mut params = Vec::new();
         for p in p_iter {
-            if let ExpEnum::Symbol(s) = p.get().data {
+            if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
             } else {
                 return Err(LispError::new("macro: parameters must be symbols"));
@@ -805,11 +814,11 @@ fn builtin_macro(
 
 fn do_expansion(
     environment: &mut Environment,
-    command: &Expression,
+    command_in: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
-    if let ExpEnum::Symbol(command) = &command.get().data {
-        if let Some(exp) = get_expression(environment, &command) {
+    if let ExpEnum::Symbol(_, _) = &command_in.get().data {
+        if let Some(exp) = get_expression(environment, command_in.clone()) {
             if let ExpEnum::Macro(sh_macro) = &exp.exp.get().data {
                 let body: Expression = sh_macro.body.clone().into();
                 let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
@@ -1049,6 +1058,7 @@ fn builtin_gensym(
             environment
                 .interner
                 .intern(&format!("gs@@{}", *gensym_count)),
+            SymLoc::None,
         )))
     }
 }
@@ -1132,6 +1142,7 @@ fn builtin_get_error(
             Err(err) => {
                 let err_sym = Expression::alloc_data_h(ExpEnum::Symbol(
                     environment.interner.intern(":error"),
+                    SymLoc::None,
                 ));
                 let msg = format!("{}", err);
                 let err_msg = Expression::alloc_data_h(ExpEnum::String(msg.into(), None));
@@ -1144,7 +1155,10 @@ fn builtin_get_error(
             }
         }
     }
-    let ok = Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern(":ok")));
+    let ok = Expression::alloc_data_h(ExpEnum::Symbol(
+        environment.interner.intern(":ok"),
+        SymLoc::None,
+    ));
     Ok(Expression::alloc_data_h(ExpEnum::Pair(
         ok,
         ret.unwrap_or_else(Expression::make_nil).into(),
@@ -1207,7 +1221,7 @@ fn get_doc(
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
             let key = match key_d {
-                ExpEnum::Symbol(s) => s,
+                ExpEnum::Symbol(s, _) => s,
                 _ => {
                     return Err(LispError::new("doc: first form must evaluate to a symbol"));
                 }
@@ -1218,7 +1232,7 @@ fn get_doc(
                 if let Some(namespace) = key_i.next() {
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
-                            if let Some(exp) = get_expression(environment, "*ns*") {
+                            if let Some(exp) = lookup_expression(environment, "*ns*") {
                                 match &exp.exp.get().data {
                                     ExpEnum::String(s, _) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
@@ -1296,7 +1310,7 @@ pub fn builtin_block(
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
         let name_d = &name.get().data;
-        let name = if let ExpEnum::Symbol(n) = name_d {
+        let name = if let ExpEnum::Symbol(n, _) = name_d {
             n
         } else {
             return Err(LispError::new(
@@ -1343,7 +1357,7 @@ pub fn builtin_return_from(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(name) = args.next() {
-        let name = if let ExpEnum::Symbol(n) = &name.get().data {
+        let name = if let ExpEnum::Symbol(n, _) = &name.get().data {
             Some(*n)
         } else if name.is_nil() {
             None
@@ -1483,7 +1497,7 @@ pub fn builtin_meta_add_tags(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     fn put_tag(exp: &Expression, tag: Expression) -> Result<(), LispError> {
-        if let ExpEnum::Symbol(s) = &tag.get().data {
+        if let ExpEnum::Symbol(s, _) = &tag.get().data {
             let mut exp_d = exp.get_mut();
             if let Some(tags) = &mut exp_d.meta_tags {
                 tags.insert(s);
@@ -1513,7 +1527,7 @@ pub fn builtin_meta_add_tags(
                         put_tag(&exp, tag.into())?;
                     }
                 }
-                ExpEnum::Symbol(_) => {
+                ExpEnum::Symbol(_, _) => {
                     put_tag(&exp, arg.clone())?;
                 }
                 _ => {
@@ -1537,7 +1551,7 @@ pub fn builtin_meta_tag_set(
             if args.next().is_none() {
                 let tag = eval(environment, tag)?;
                 let tag_d = tag.get();
-                if let ExpEnum::Symbol(s) = &tag_d.data {
+                if let ExpEnum::Symbol(s, _) = &tag_d.data {
                     let exp_d = exp.get();
                     if let Some(tags) = &exp_d.meta_tags {
                         if tags.contains(s) {

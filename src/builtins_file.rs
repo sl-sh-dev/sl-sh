@@ -53,7 +53,7 @@ fn builtin_cd(
         if args.next().is_none() {
             let arg_d = arg.get();
             let new_arg = match &arg_d.data {
-                ExpEnum::Symbol(s) => match get_expression(environment, s) {
+                ExpEnum::Symbol(s, _) => match get_expression(environment, arg.clone()) {
                     Some(exp) => match &exp.exp.get().data {
                         ExpEnum::Function(_) => eval(
                             environment,
@@ -166,7 +166,7 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Res
         match &data_in.get().data {
             ExpEnum::True => do_write = true,
             ExpEnum::String(_, _) => do_write = true,
-            ExpEnum::Symbol(_) => do_write = true,
+            ExpEnum::Symbol(_, _) => do_write = true,
             ExpEnum::Float(_) => do_write = true,
             ExpEnum::Int(_) => do_write = true,
             ExpEnum::Char(_) => do_write = true,

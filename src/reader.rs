@@ -296,9 +296,10 @@ fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
                 let potential_float: Result<f64, ParseFloatError> = symbol.parse();
                 match potential_float {
                     Ok(v) => Expression::alloc_data(ExpEnum::Float(v)),
-                    Err(_) => {
-                        Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(symbol)))
-                    }
+                    Err(_) => Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern(symbol),
+                        SymLoc::None,
+                    )),
                 }
             }
         }
@@ -392,13 +393,16 @@ fn call_reader_macro(
     ch: &str,
     end_ch: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
-    if let Some(exp) = get_expression(environment, name) {
+    if let Some(exp) = lookup_expression(environment, name) {
         let exp = match &exp.exp.get().data {
             ExpEnum::Lambda(_) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(
-                    Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(name)))
-                        .handle_no_root(),
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern(name),
+                        SymLoc::None,
+                    ))
+                    .handle_no_root(),
                 );
                 v.push(stream.handle_no_root());
                 v.push(
@@ -544,7 +548,7 @@ fn read_inner(
     let mut line_stack: Vec<(usize, usize)> = Vec::new();
     let mut next_chars = next2(&mut chars);
     let mut read_next = false;
-    let read_table = get_expression(&environment, "*read-table*");
+    let read_table = lookup_expression(&environment, "*read-table*");
     let mut read_table_chars: HashSet<&'static str> = HashSet::new();
     if let Some(read_table) = &read_table {
         if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
@@ -553,7 +557,7 @@ fn read_inner(
             }
         }
     }
-    let read_table_end_char = get_expression(&environment, "*read-table-end-char*");
+    let read_table_end_char = lookup_expression(&environment, "*read-table-end-char*");
     while next_chars.is_some() {
         let (mut ch, mut peek_ch) = next_chars.unwrap();
 
@@ -594,7 +598,7 @@ fn read_inner(
             if let Some(read_table) = &read_table {
                 if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
                     if map.contains_key(&*ch) {
-                        if let ExpEnum::Symbol(s) = map.get(&*ch).unwrap().get().data {
+                        if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
                             chars = prep_reader_macro(environment, chars, stack, s, &ch, end_ch)?;
                             do_match = false;
                         }
@@ -627,6 +631,7 @@ fn read_inner(
                     quoted.push(
                         Expression::alloc_data(ExpEnum::Symbol(
                             environment.interner.intern("quote"),
+                            SymLoc::None,
                         ))
                         .handle_no_root(),
                     );
@@ -655,6 +660,7 @@ fn read_inner(
                         quoted.push(
                             Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern("quote"),
+                                SymLoc::None,
                             ))
                             .handle_no_root(),
                         );
@@ -662,6 +668,7 @@ fn read_inner(
                         quoted.push(
                             Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern("back-quote"),
+                                SymLoc::None,
                             ))
                             .handle_no_root(),
                         );
@@ -693,6 +700,7 @@ fn read_inner(
                             stack,
                             Expression::alloc_data(ExpEnum::Symbol(
                                 environment.interner.intern(",@"),
+                                SymLoc::None,
                             )),
                             environment.reader_state.as_ref().unwrap().line,
                             environment.reader_state.as_ref().unwrap().column,
@@ -701,7 +709,10 @@ fn read_inner(
                         }
                     } else if let Err(e) = push_stack(
                         stack,
-                        Expression::alloc_data(ExpEnum::Symbol(environment.interner.intern(","))),
+                        Expression::alloc_data(ExpEnum::Symbol(
+                            environment.interner.intern(","),
+                            SymLoc::None,
+                        )),
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
                     ) {

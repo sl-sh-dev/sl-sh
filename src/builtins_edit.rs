@@ -17,7 +17,7 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
             let keybindings: Expression = keybindings.into();
-            if let ExpEnum::Symbol(keybindings) = &keybindings.get().data {
+            if let ExpEnum::Symbol(keybindings, _) = &keybindings.get().data {
                 match &keybindings[..] {
                     ":vi" => ret.key_bindings = Keys::Vi,
                     ":emacs" => ret.key_bindings = Keys::Emacs,
@@ -224,7 +224,7 @@ pub fn read_prompt(
     history: Option<&str>,
     liner_id: &'static str,
 ) -> io::Result<String> {
-    let repl_settings = get_expression(environment, "*repl-settings*").unwrap();
+    let repl_settings = lookup_expression(environment, "*repl-settings*").unwrap();
     let new_repl_settings = load_repl_settings(&repl_settings.exp);
     let mut load_settings = if environment.repl_settings != new_repl_settings {
         environment.repl_settings = new_repl_settings.clone();
@@ -269,7 +269,7 @@ fn builtin_prompt(
     let (liner_id, prompt) = {
         let arg1 = param_eval(environment, args, "prompt")?;
         let arg_d = arg1.get();
-        if let ExpEnum::Symbol(s) = arg_d.data {
+        if let ExpEnum::Symbol(s, _) = arg_d.data {
             (s, param_eval(environment, args, "prompt")?)
         } else {
             drop(arg_d);
@@ -302,12 +302,14 @@ fn builtin_prompt(
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
                     let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                    let error = Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
+                    let error =
+                        Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof", SymLoc::None));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 ErrorKind::Interrupted => {
                     let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                    let error = Expression::alloc_data_h(ExpEnum::Symbol(":interrupted"));
+                    let error =
+                        Expression::alloc_data_h(ExpEnum::Symbol(":interrupted", SymLoc::None));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 _ => {
@@ -329,7 +331,7 @@ fn get_liner_id(
 ) -> Result<&'static str, LispError> {
     let arg = param_eval(environment, args, form)?;
     let arg_d = arg.get();
-    if let ExpEnum::Symbol(s) = arg_d.data {
+    if let ExpEnum::Symbol(s, _) = arg_d.data {
         Ok(s)
     } else {
         Err(LispError::new(format!(

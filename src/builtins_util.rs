@@ -163,8 +163,8 @@ fn set_arg(
     let var = var.resolve(environment)?;
     let v2 = if do_eval {
         let var_d = var.get();
-        if let ExpEnum::Symbol(s) = &var_d.data {
-            if let Some(reference) = get_expression(environment, s) {
+        if let ExpEnum::Symbol(_, _) = &var_d.data {
+            if let Some(reference) = get_expression(environment, var.clone()) {
                 reference
             } else {
                 drop(var_d); // Release the read lock on var.
