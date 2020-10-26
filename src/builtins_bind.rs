@@ -149,35 +149,44 @@ fn builtin_set(
     // First check any "local" lexical scopes.
     while let Some(scope_out) = loop_scope {
         let mut scope = scope_out.borrow_mut();
-        if scope.name.is_some() {
+        if scope.is_namespace() {
             namespace = Some(scope_out.clone());
             break;
         }
-        if let Entry::Occupied(entry) = scope.data.entry(key) {
-            return update_entry(entry, val, doc_str);
+        if scope.contains_key(key) {
+            return scope.update_entry(key, val, doc_str);
         }
-        loop_scope = scope.outer.clone();
+        loop_scope = scope.outer();
     }
     // If not there, check the dynamic scope.
     if let Entry::Occupied(entry) = environment.dynamic_scope.entry(key) {
         update_entry(entry, val, doc_str)
     // Then check the namespace. Note, use the namespace from lexical scope if available.
     } else if let Some(namespace) = namespace {
-        if let Entry::Occupied(entry) = namespace.borrow_mut().data.entry(key) {
-            update_entry(entry, val, doc_str)
-        } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
-            update_entry(entry, val, doc_str)
+        if namespace.borrow().contains_key(key) {
+            namespace.borrow_mut().update_entry(key, val, doc_str)
+        } else if environment.root_scope.borrow().contains_key(key) {
+            environment
+                .root_scope
+                .borrow_mut()
+                .update_entry(key, val, doc_str)
         } else {
             Err(LispError::new(
                 "set!: first form must evaluate to an existing symbol",
             ))
         }
     // If not then check the default namespace.
-    } else if let Entry::Occupied(entry) = environment.namespace.borrow_mut().data.entry(key) {
-        update_entry(entry, val, doc_str)
+    } else if environment.namespace.borrow().contains_key(key) {
+        environment
+            .namespace
+            .borrow_mut()
+            .update_entry(key, val, doc_str)
     // Finally check root (this might be a duplicate is in root but in that case about to error out anyway).
-    } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
-        update_entry(entry, val, doc_str)
+    } else if environment.root_scope.borrow().contains_key(key) {
+        environment
+            .root_scope
+            .borrow_mut()
+            .update_entry(key, val, doc_str)
     } else {
         Err(LispError::new(
             "set!: first form must evaluate to an existing symbol",
@@ -190,7 +199,7 @@ fn builtin_def(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
-        environment.namespace.borrow().name
+        environment.namespace.borrow().name()
     }
     let (key, doc_string, val) = proc_set_vars(environment, args)?;
     if key.contains("::") {
@@ -206,16 +215,16 @@ fn builtin_def(
                 };
                 let mut scope = Some(get_current_scope(environment));
                 while let Some(in_scope) = scope {
-                    let name = in_scope.borrow().name;
+                    let name = in_scope.borrow().name();
                     if let Some(name) = name {
                         if name == namespace {
                             let (reference, val) =
                                 val_to_reference(environment, Some(name), doc_string, val)?;
-                            in_scope.borrow_mut().data.insert(key, reference);
+                            in_scope.borrow_mut().insert(key, reference);
                             return Ok(val);
                         }
                     }
-                    scope = in_scope.borrow().outer.clone();
+                    scope = in_scope.borrow().outer();
                 }
             }
         }
@@ -243,7 +252,6 @@ fn builtin_var(
             .last()
             .unwrap()
             .borrow()
-            .data
             .contains_key(key)
         {
             Err(LispError::new(format!(
@@ -257,7 +265,6 @@ fn builtin_var(
                 .last()
                 .unwrap()
                 .borrow_mut()
-                .data
                 .insert(key, reference);
             Ok(val)
         }

@@ -198,7 +198,7 @@ fn set_arg(
         )
     };
     if let Some(scope) = scope {
-        scope.data.insert(key, v2);
+        scope.insert(key, v2);
     } else {
         set_expression_current_ref(environment, key, v2);
     }

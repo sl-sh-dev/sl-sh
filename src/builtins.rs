@@ -1245,7 +1245,7 @@ fn get_doc(
                         };
                         if let Some(scope) = get_namespace(environment, &namespace) {
                             if is_raw {
-                                if let Some(exp) = scope.borrow().data.get(key) {
+                                if let Some(exp) = scope.borrow().get(key) {
                                     if let Some(doc_string) = &exp.meta.doc_string {
                                         return Ok(Expression::alloc_data(ExpEnum::String(
                                             doc_string.to_string().into(),
@@ -1256,7 +1256,7 @@ fn get_doc(
                                     }
                                 }
                                 return Ok(Expression::alloc_data(ExpEnum::Nil));
-                            } else if let Some(exp) = scope.borrow().data.get(key) {
+                            } else if let Some(exp) = scope.borrow().get(key) {
                                 return make_doc(environment, &exp, key);
                             }
                         }
@@ -1265,7 +1265,7 @@ fn get_doc(
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
             } else if let Some(scope) = get_symbols_scope(environment, &key) {
                 if is_raw {
-                    if let Some(exp) = scope.borrow().data.get(key) {
+                    if let Some(exp) = scope.borrow().get(key) {
                         if let Some(doc_string) = &exp.meta.doc_string {
                             return Ok(Expression::alloc_data(ExpEnum::String(
                                 doc_string.to_string().into(),
@@ -1276,7 +1276,7 @@ fn get_doc(
                         }
                     }
                     return Ok(Expression::alloc_data(ExpEnum::Nil));
-                } else if let Some(exp) = scope.borrow().data.get(key) {
+                } else if let Some(exp) = scope.borrow().get(key) {
                     return make_doc(environment, &exp, &key);
                 }
             } else {

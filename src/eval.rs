@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
@@ -69,7 +68,7 @@ pub fn call_lambda(
                 }
                 if !environment.scopes.is_empty() {
                     // Clear the old variables so no cruft is left on the recur.
-                    environment.scopes.last().unwrap().borrow_mut().data.clear();
+                    environment.scopes.last().unwrap().borrow_mut().clear();
                 }
                 let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, None, &lambda.params, &mut ib, false) {
@@ -119,11 +118,7 @@ fn exec_macro(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let body: Expression = sh_macro.body.clone().into();
-    let mut new_scope = Scope {
-        data: HashMap::new(),
-        outer: Some(sh_macro.capture.clone()),
-        name: None,
-    };
+    let mut new_scope = Scope::new_with_outer(Some(sh_macro.capture.clone()));
     match setup_args(
         environment,
         Some(&mut new_scope),

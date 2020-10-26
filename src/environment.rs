@@ -141,13 +141,25 @@ impl Reference {
 
 #[derive(Clone, Debug)]
 pub struct Scope {
-    pub data: HashMap<&'static str, Reference>,
-    pub outer: Option<Rc<RefCell<Scope>>>,
+    map: HashMap<&'static str, usize>,
+    data: Vec<Reference>,
+    outer: Option<Rc<RefCell<Scope>>>,
     // If this scope is a namespace it will have a name otherwise it will be None.
-    pub name: Option<&'static str>,
+    name: Option<&'static str>,
+    free_list: Vec<usize>,
 }
 
 impl Scope {
+    pub fn new_with_outer(outer: Option<Rc<RefCell<Scope>>>) -> Scope {
+        Scope {
+            map: HashMap::new(),
+            data: Vec::new(),
+            outer,
+            name: None,
+            free_list: Vec::new(),
+        }
+    }
+
     fn new_root(interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, Reference> = HashMap::new();
         add_builtins(interner, &mut data);
@@ -259,10 +271,18 @@ t
                 },
             ),
         );
+        let mut vdata = Vec::with_capacity(data.len());
+        let mut map = HashMap::new();
+        for (k, v) in data.drain() {
+            vdata.push(v);
+            map.insert(k, vdata.len() - 1);
+        }
         Scope {
-            data,
+            map,
+            data: vdata,
             outer: None,
             name: Some(interner.intern("root")),
+            free_list: Vec::new(),
         }
     }
 
@@ -283,10 +303,100 @@ t
         } else {
             None
         };
+        let mut vdata = Vec::with_capacity(data.len());
+        let mut map = HashMap::new();
+        for (k, v) in data.drain() {
+            vdata.push(v);
+            map.insert(k, vdata.len() - 1);
+        }
         Scope {
-            data,
+            map,
+            data: vdata,
             outer,
             name: None,
+            free_list: Vec::new(),
+        }
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+
+    pub fn keys(&self) -> std::collections::hash_map::Keys<'_, &'static str, usize> {
+        self.map.keys()
+    }
+
+    pub fn name(&self) -> Option<&'static str> {
+        self.name
+    }
+
+    pub fn is_namespace(&self) -> bool {
+        self.name.is_some()
+    }
+
+    pub fn outer(&self) -> Option<Rc<RefCell<Scope>>> {
+        self.outer.clone()
+    }
+
+    pub fn get(&self, key: &str) -> Option<&Reference> {
+        if let Some(idx) = self.map.get(key) {
+            if let Some(reference) = self.data.get(*idx) {
+                Some(reference)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+        self.data.clear();
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<Reference> {
+        if let Some(idx) = self.map.remove(key) {
+            let new_reference = Reference::new_rooted(
+                Expression::make_nil(),
+                RefMetaData {
+                    namespace: self.name,
+                    doc_string: None,
+                },
+            );
+            self.free_list.push(idx);
+            self.data.push(new_reference);
+            return Some(self.data.swap_remove(idx));
+        }
+        None
+    }
+
+    pub fn update_entry(
+        &mut self,
+        key: &str,
+        val: Expression,
+        doc_str: Option<String>,
+    ) -> Result<Expression, LispError> {
+        if let Some(idx) = self.map.get(key) {
+            if let Some(entry) = self.data.get_mut(*idx) {
+                entry.exp = val;
+                if doc_str.is_some() {
+                    entry.meta.doc_string = doc_str;
+                }
+                return Ok(entry.exp.clone());
+            }
+        }
+        Err(LispError::new(format!("update, key not found {}", key)))
+    }
+
+    pub fn insert(&mut self, key: &'static str, reference: Reference) {
+        if let Some(idx) = self.free_list.pop() {
+            self.data.push(reference);
+            self.data.swap_remove(idx);
+            self.map.insert(key, idx);
+        } else {
+            self.data.push(reference);
+            self.map.insert(key, self.data.len() - 1);
         }
     }
 
@@ -298,7 +408,7 @@ t
                 doc_string: None,
             },
         );
-        self.data.insert(key, reference);
+        self.insert(key, reference);
     }
 
     pub fn insert_exp_data(&mut self, key: &'static str, data: ExpEnum) {
@@ -309,7 +419,7 @@ t
                 doc_string: None,
             },
         );
-        self.data.insert(key, reference);
+        self.insert(key, reference);
     }
 
     pub fn insert_exp_with_doc(
@@ -325,7 +435,7 @@ t
                 doc_string,
             },
         );
-        self.data.insert(key, reference);
+        self.insert(key, reference);
     }
 }
 
@@ -443,11 +553,14 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
 }
 
 pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
-    let data: HashMap<&'static str, Reference> = HashMap::new();
+    let map = HashMap::new();
+    let data = Vec::new();
     Rc::new(RefCell::new(Scope {
+        map,
         data,
         outer,
         name: None,
+        free_list: Vec::new(),
     }))
 }
 
@@ -460,21 +573,22 @@ pub fn build_new_namespace(
         Err(msg)
     } else {
         let name = environment.interner.intern(name);
-        let mut data: HashMap<&'static str, Reference> = HashMap::new();
-        data.insert(
-            environment.interner.intern("*ns*"),
-            Reference::new(
-                ExpEnum::String(name.into(), None),
-                RefMetaData {
-                    namespace: Some(name),
-                    doc_string: None,
-                },
-            ),
-        );
+        let mut map = HashMap::new();
+        let mut data = Vec::new();
+        data.push(Reference::new(
+            ExpEnum::String(name.into(), None),
+            RefMetaData {
+                namespace: Some(name),
+                doc_string: None,
+            },
+        ));
+        map.insert(environment.interner.intern("*ns*"), 0);
         let scope = Scope {
+            map,
             data,
             outer: Some(environment.root_scope.clone()),
             name: Some(name),
+            free_list: Vec::new(),
         };
         let scope = Rc::new(RefCell::new(scope));
         environment.namespaces.insert(name, scope.clone());
@@ -486,9 +600,10 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
     scope: &Scope,
     data_in: &mut HashMap<&'static str, Reference, S>,
 ) {
-    for (k, v) in &scope.data {
-        //let v = &**v;
-        data_in.insert(k, v.clone());
+    for (k, v) in &scope.map {
+        if let Some(val) = scope.data.get(*v) {
+            data_in.insert(k, val.clone());
+        }
     }
     if let Some(outer) = &scope.outer {
         clone_symbols(&outer.borrow(), data_in);
@@ -498,7 +613,7 @@ pub fn clone_symbols<S: ::std::hash::BuildHasher>(
 pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Reference> {
     let mut loop_scope = Some(environment.namespace.clone());
     while let Some(scope) = loop_scope {
-        if let Some(exp) = scope.borrow().data.get(key) {
+        if let Some(exp) = scope.borrow().get(key) {
             return Some(exp.clone());
         }
         loop_scope = scope.borrow().outer.clone();
@@ -521,7 +636,7 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
             namespace = Some(scope_outer.clone());
             break;
         }
-        if let Some(reference) = scope.data.get(key) {
+        if let Some(reference) = scope.get(key) {
             return Some(reference.clone());
         }
         loop_scope = scope.outer.clone();
@@ -539,7 +654,7 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
                     // Do not let it sneak past a dynamic binding!
                     if let Some(reference) = environment.dynamic_scope.get(key) {
                         return Some(reference.clone());
-                    } else if let Some(reference) = scope.borrow().data.get(key) {
+                    } else if let Some(reference) = scope.borrow().get(key) {
                         return Some(reference.clone());
                     }
                 }
@@ -548,18 +663,18 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
         None
     // Then check the namespace. Note, use the namespace from lexical scope if available.
     } else if let Some(namespace) = namespace {
-        if let Some(reference) = namespace.borrow().data.get(key) {
+        if let Some(reference) = namespace.borrow().get(key) {
             Some(reference.clone())
-        } else if let Some(reference) = environment.root_scope.borrow().data.get(key) {
+        } else if let Some(reference) = environment.root_scope.borrow().get(key) {
             Some(reference.clone())
         } else {
             None
         }
     // If no namespace from lexical scope use the default.
-    } else if let Some(reference) = environment.namespace.borrow().data.get(key) {
+    } else if let Some(reference) = environment.namespace.borrow().get(key) {
         Some(reference.clone())
     // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
-    } else if let Some(reference) = environment.root_scope.borrow().data.get(key) {
+    } else if let Some(reference) = environment.root_scope.borrow().get(key) {
         Some(reference.clone())
     } else {
         None
@@ -600,7 +715,7 @@ pub fn set_expression_current(
             doc_string: doc_str,
         },
     );
-    current_scope.data.insert(key, reference);
+    current_scope.insert(key, reference);
 }
 
 pub fn set_expression_current_data(
@@ -618,7 +733,7 @@ pub fn set_expression_current_data(
             doc_string: doc_str,
         },
     );
-    current_scope.data.insert(key, reference);
+    current_scope.insert(key, reference);
 }
 
 pub fn set_expression_current_namespace(
@@ -626,11 +741,7 @@ pub fn set_expression_current_namespace(
     key: &'static str,
     reference: Reference,
 ) {
-    environment
-        .namespace
-        .borrow_mut()
-        .data
-        .insert(key, reference);
+    environment.namespace.borrow_mut().insert(key, reference);
 }
 
 pub fn set_expression_current_ref(
@@ -640,12 +751,11 @@ pub fn set_expression_current_ref(
 ) {
     get_current_scope(environment)
         .borrow_mut()
-        .data
         .insert(key, reference);
 }
 
 pub fn remove_expression_current(environment: &mut Environment, key: &str) -> Option<Reference> {
-    get_current_scope(environment).borrow_mut().data.remove(key)
+    get_current_scope(environment).borrow_mut().remove(key)
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
@@ -667,7 +777,7 @@ pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefC
     };
     while let Some(scope) = loop_scope {
         let scopeb = scope.borrow();
-        if scopeb.data.contains_key(key) {
+        if scopeb.map.contains_key(key) {
             return Some(scope.clone());
         }
         loop_scope = scopeb.outer.clone();

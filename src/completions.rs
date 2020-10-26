@@ -91,7 +91,7 @@ impl<'env> ShellCompleter<'env> {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let hook_name = if let Some(ns) = self.environment.namespace.borrow().name {
+        let hook_name = if let Some(ns) = self.environment.namespace.borrow().name() {
             self.environment
                 .interner
                 .intern(&format!("{}::__completion_hook", ns))
@@ -427,15 +427,16 @@ fn find_lisp_things(
         if let Some(namespace) = key_i.next() {
             if let Some(scope) = environment.namespaces.get(namespace) {
                 if let Some(start) = key_i.next() {
-                    let data = &scope.borrow().data;
-                    for key in data.keys() {
+                    let scope = scope.borrow();
+                    //let map = &scope.map;
+                    for key in scope.keys() {
                         if key.starts_with(start) {
                             let val = if need_quote {
                                 format!("'{}::{}", namespace, key)
                             } else {
                                 format!("{}::{}", namespace, key)
                             };
-                            save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                            save_val(comps, &scope.get(key).unwrap().exp, val, symbols);
                         }
                     }
                 }
@@ -448,18 +449,18 @@ fn find_lisp_things(
             Some(environment.namespace.clone())
         };
         while let Some(scope) = loop_scope {
-            let data = &scope.borrow().data;
-            for key in data.keys() {
+            let scope = scope.borrow();
+            for key in scope.keys() {
                 if key.starts_with(start) {
                     let val = if need_quote {
                         format!("'{}", key)
                     } else {
                         (*key).to_string()
                     };
-                    save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                    save_val(comps, &scope.get(key).unwrap().exp, val, symbols);
                 }
             }
-            loop_scope = scope.borrow().outer.clone();
+            loop_scope = scope.outer();
         }
     }
 }
