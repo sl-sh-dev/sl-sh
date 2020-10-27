@@ -5,6 +5,8 @@
 (ns-import 'iterator)
 
 ;; TODO make debugln use env var?
+;; TODO do keys have to start with :-?
+;; TODO TYPES
 (defmacro debugln (&rest args)
     (if (nil? nil)
         `(println "=> " ,@args)))
@@ -129,17 +131,33 @@ up until the next token delimeted option, -c.
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
 
-;; TODO options-map this needs ability to set default values
-;; TODO eliminate debugln or make it programmatically switchable and print
-;;      useful info.
+(defn fix-one-arg-bindings
+"Ensure binding with arity of 1 is bound to actual value passed in, not
+a vector whose only element is the desired binding."
+      (options-map bindings-map)
+    (loop (keys bindings-map) ((hash-keys bindings-map) bindings-map)
+        (when (not (empty-seq? keys))
+            (progn
+             (var 'key (first keys))
+             (var 'opt-config (hash-get options-map key))
+             (debugln "optconfig: " opt-config ", type: " (type opt-config))
+             (var 'opt-arity (hash-get opt-config :arity))
+             (var 'binding (hash-get bindings-map key))
+             (when (and (= 1 opt-arity) (seq? binding) (= 1 (length binding)))
+               (hash-set! bindings-map key (first binding)))
+             (recur (rest keys) bindings-map)))))
+
 (defn getopts (options-map &rest args)
     (when (not (> (length args) 0))
         (err no-args))
     (valid-first-arg? args)
     (var 'bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
-    (debugln "bindings-map: " bindings-map)
+    ;; perform after setting defaults, in case user desires binding with
+    ;; (= arity 1) to be a sequence.
+    (fix-one-arg-bindings options-map bindings-map)
     (apply-defaults options-map bindings-map)
+    (debugln "bindings-map: " bindings-map)
     bindings-map)
 
 (def 'test-options-map
@@ -148,7 +166,7 @@ up until the next token delimeted option, -c.
         (join :-l (build-getopts-param 0 #t))
         (join :-m (build-getopts-param 0 nil))
         (join :-a (build-getopts-param 1 "foo"))
-        (join :--c-arg (build-getopts-param 1 nil))
+        (join :--c-arg (build-getopts-param 1 '#("bar")))
         (join :--d-arg (build-getopts-param 2 nil))
         (join :-b (build-getopts-param 3 nil)))))
 
@@ -196,7 +214,7 @@ up until the next token delimeted option, -c.
             (join :-l #t)
             (join :-m #t)
             (join :-a "foo")
-            (join :--c-arg nil)
+            (join :--c-arg '#("bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -208,7 +226,7 @@ up until the next token delimeted option, -c.
             (join :-l #t)
             (join :-m #t)
             (join :-a "foo")
-            (join :--c-arg nil)
+            (join :--c-arg '#("bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -219,8 +237,8 @@ up until the next token delimeted option, -c.
       (list
         (join :-l #t)
         (join :-m nil)
-        (join :-a '#("1"))
-        (join :--c-arg nil)
+        (join :-a "1")
+        (join :--c-arg '#("bar"))
         (join :--d-arg nil)
         (join :-b nil)))))
 
@@ -231,8 +249,8 @@ up until the next token delimeted option, -c.
           (list
             (join :-l #t)
             (join :-m nil)
-            (join :-a '#("one-arg"))
-            (join :--c-arg nil)
+            (join :-a "one-arg")
+            (join :--c-arg '#("bar"))
             (join :--d-arg nil)
             (join :-b nil)))))
 
@@ -244,7 +262,7 @@ up until the next token delimeted option, -c.
             (join :-l #t)
             (join :-m nil)
             (join :-a "foo")
-            (join :--c-arg nil)
+            (join :--c-arg '#("bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -255,8 +273,8 @@ up until the next token delimeted option, -c.
           (list
             (join :-l #t)
             (join :-m #t)
-            (join :-a '#("aaa"))
-            (join :--c-arg '#("1"))
+            (join :-a "aaa")
+            (join :--c-arg "1")
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -267,8 +285,8 @@ up until the next token delimeted option, -c.
           (list
             (join :-l #t)
             (join :-m #t)
-            (join :-a '#("aaa"))
-            (join :--c-arg '#("1"))
+            (join :-a "aaa")
+            (join :--c-arg "1")
             (join :--d-arg '#("1" "2"))
             (join :-b '#("1" "2" "3"))))))
 
@@ -280,8 +298,8 @@ up until the next token delimeted option, -c.
       (list
         (join :-l #t)
         (join :-m nil)
-        (join :-a '#("1"))
-        (join :--c-arg nil)
+        (join :-a "1")
+        (join :--c-arg '#("bar"))
         (join :--d-arg nil)
         (join :-b '#("1" "2" "3"))))))
 
