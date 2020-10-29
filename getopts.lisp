@@ -163,23 +163,23 @@ a vector whose only element is the desired binding."
 (def 'supported-types-map
     (make-hash
       (list
-        (join 'int? (fn (x) (str->int x)))
-        (join 'float? (fn (x) (str->float x)))
-        (join 'file? (fn (x) (file? x)))
-        (join 'symbol? (fn (x) (to-symbol x)))
-        (join 'string? (fn (x) x))
-        (join 'char? (read-then-check-self char?))
-        (join 'func? (read-then-check-self func?))
-        (join 'builtin? (read-then-check-self builtin?))
-        (join 'macro? (read-then-check-self macro?))
-        (join 'hash? (read-then-check-self hash?))
-        (join 'nil? (read-then-check-self nil?))
-        (join 'pair? (read-then-check-self pair?))
-        (join 'lambda? (read-then-check-self lambda?))
-        (join 'list? (read-then-check-self list?))
-        (join 'vec? (read-then-check-self vec?))
-        (join 'non-empty-seq? (read-then-check-self non-empty-seq?))
-        (join 'empty-seq? (read-then-check-self empty-seq?)))))
+        (join :int? (fn (x) (str->int x)))
+        (join :float? (fn (x) (str->float x)))
+        (join :file? (fn (x) (file? x)))
+        (join :symbol? (fn (x) (to-symbol x)))
+        (join :string? (fn (x) x))
+        (join :char? (read-then-check-self char?))
+        (join :func? (read-then-check-self func?))
+        (join :builtin? (read-then-check-self builtin?))
+        (join :macro? (read-then-check-self macro?))
+        (join :hash? (read-then-check-self hash?))
+        (join :nil? (read-then-check-self nil?))
+        (join :pair? (read-then-check-self pair?))
+        (join :lambda? (read-then-check-self lambda?))
+        (join :list? (read-then-check-self list?))
+        (join :vec? (read-then-check-self vec?))
+        (join :non-empty-seq? (read-then-check-self non-empty-seq?))
+        (join :empty-seq? (read-then-check-self empty-seq?)))))
 
 (def 'invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
 
@@ -242,6 +242,7 @@ $(str (hash-keys supported-types-map))
     ;; (= arity 1) to be a sequence.
     (fix-one-arg-bindings options-map bindings-map)
     (apply-defaults options-map bindings-map)
+    ;; after apply-defaults, bindings with (= arity 1) will not be in a seqeunce.
     (debugln "options " options-map)
     (enforce-types options-map bindings-map)
     (debugln "bindings-map: " bindings-map)
@@ -430,7 +431,7 @@ $(str (hash-keys supported-types-map))
   (getopts
     (make-hash
       (list
-        (join :-l (build-getopts-param 0 #t 'true?))))
+        (join :-l (build-getopts-param 0 #t :true?))))
     "-l") 
   invalid-type-function)
 
@@ -438,23 +439,23 @@ $(str (hash-keys supported-types-map))
   (getopts
     (make-hash
       (list
-        (join :-l (build-getopts-param 0 #t 'true?))))
+        (join :-l (build-getopts-param 0 #t :true?))))
     "-l")
   invalid-type-function)
 
-(assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil 'float?)))) "-c" "#\a") "str->float: string is not a valid float")
+(assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :float?)))) "-c" "#\a") "str->float: string is not a valid float")
 
 (lex
-    (var 'f-float-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 1 nil 'float?)))) "-f" "1.3") :-f))
+    (var 'f-float-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 1 nil :float?)))) "-f" "1.3") :-f))
     (assert-true (float? f-float-bindings) ". Return value should be of type float.")
 
-    (var 'f-float-vec-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 2 nil 'float?)))) "-f" "1.3" "0.12") :-f))
+    (var 'f-float-vec-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :float?)))) "-f" "1.3" "0.12") :-f))
     (for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type float."))
 
-    (var 'c-char-bindings (hash-get (getopts (make-hash (list (join :-c (build-getopts-param 1 nil 'char?)))) "-c" "#\a") :-c))
+    (var 'c-char-bindings (hash-get (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) "-c" "#\a") :-c))
     (assert-true (char? c-char-bindings) ". Return value should be of type char.")
 
-    (assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil 'char?)))) "-c" "'#(\"a\")") "Bad types")
+    (assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) "-c" "'#(\"a\")") "Bad types")
 )
 
 (ns-pop) ;; must be last line
