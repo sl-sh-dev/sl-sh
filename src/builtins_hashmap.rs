@@ -24,6 +24,8 @@ fn build_map(
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
+            let val: Expression = val.into();
+            let val: Handle = eval(environment, val)?.into();
             match &key.get().data {
                 ExpEnum::Symbol(sym) => map.insert(sym, val.clone()),
                 ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
