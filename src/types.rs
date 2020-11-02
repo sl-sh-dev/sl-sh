@@ -489,11 +489,7 @@ impl Expression {
 
     pub fn is_nil(&self) -> bool {
         let data = &self.get().data;
-        if let ExpEnum::Nil = data {
-            true
-        } else {
-            false
-        }
+        matches!(data, ExpEnum::Nil)
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
