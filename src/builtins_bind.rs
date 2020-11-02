@@ -194,7 +194,7 @@ fn builtin_set(
     }
 }
 
-fn builtin_def(
+pub(crate) fn builtin_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -241,7 +241,7 @@ fn builtin_def(
     }
 }
 
-fn builtin_var(
+pub(crate) fn builtin_var(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -504,7 +504,7 @@ Example:
     );
     data.insert(
         interner.intern("def"),
-        Expression::make_special(
+        Expression::make_special_def(
             builtin_def,
             "Usage: (def symbol expression) -> expression
 
@@ -541,7 +541,7 @@ Example:
     );
     data.insert(
         interner.intern("var"),
-        Expression::make_special(
+        Expression::make_special_var(
             builtin_var,
             "Usage: (var symbol expression) -> expression
 

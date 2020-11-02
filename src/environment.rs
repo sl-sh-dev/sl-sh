@@ -693,6 +693,7 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
     match &expression.get().data {
         ExpEnum::Symbol(sym, location) => match location {
             SymLoc::None => lookup_expression(environment, sym),
+            SymLoc::Ref(r) => Some(r.clone()),
             SymLoc::Scope(scope, idx) => scope.borrow().get_idx(*idx),
             SymLoc::Stack(_idx) => None,
         },

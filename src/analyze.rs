@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::builtins::builtin_fn;
 use crate::builtins::expand_macro;
+use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::*;
@@ -106,91 +107,120 @@ pub fn analyze(
     }
     let exp_a = expression.get();
     let exp_d = &exp_a.data;
-    let ret = match exp_d {
-        ExpEnum::Vector(v) => {
-            if let Some((car, cdr)) = v.split_first() {
-                let car: Expression = car.into();
-                let car_d = car.get();
-                if let ExpEnum::Symbol(_, _) = &car_d.data {
-                    let form = get_expression(environment, car.clone());
-                    if let Some(exp) = form {
-                        if let ExpEnum::DeclareFn = &exp.exp.get().data {
-                            let lambda = {
-                                let mut ib = box_slice_it(cdr);
-                                builtin_fn(environment, &mut ib)?
-                            };
-                            drop(exp_a);
-                            expression
-                                .get_mut()
-                                .data
-                                .replace(ExpEnum::Wrapper(lambda.into()));
-                        } else if let ExpEnum::Macro(_) = &exp.exp.get().data {
-                            panic!("Macros should have been expanded at this point!");
+    let ret =
+        match exp_d {
+            ExpEnum::Vector(v) => {
+                if let Some((car, cdr)) = v.split_first() {
+                    let car: Expression = car.into();
+                    let car_d = car.get();
+                    if let ExpEnum::Symbol(_, _) = &car_d.data {
+                        let form = get_expression(environment, car.clone());
+                        if let Some(exp) = form {
+                            match &exp.exp.get().data {
+                                ExpEnum::DeclareFn => {
+                                    let lambda = {
+                                        let mut ib = box_slice_it(cdr);
+                                        builtin_fn(environment, &mut ib)?
+                                    };
+                                    drop(exp_a);
+                                    expression
+                                        .get_mut()
+                                        .data
+                                        .replace(ExpEnum::Wrapper(lambda.into()));
+                                }
+                                ExpEnum::DeclareDef => {
+                                    drop(exp_a);
+                                    expression.get_mut().data.replace(ExpEnum::Function(
+                                        Callable::new(builtin_def, true),
+                                    ));
+                                }
+                                ExpEnum::DeclareVar => {
+                                    drop(exp_a);
+                                    expression.get_mut().data.replace(ExpEnum::Function(
+                                        Callable::new(builtin_var, true),
+                                    ));
+                                }
+                                ExpEnum::Macro(_) => {
+                                    panic!("Macros should have been expanded at this point!");
+                                }
+                                _ => {}
+                            }
                         }
                     }
-                } else if let ExpEnum::DeclareFn = &car_d.data {
-                    let lambda = {
-                        let mut ib = box_slice_it(cdr);
-                        builtin_fn(environment, &mut ib)?
-                    };
-                    drop(exp_a);
-                    expression
-                        .get_mut()
-                        .data
-                        .replace(ExpEnum::Wrapper(lambda.into()));
-                } else if let ExpEnum::Macro(_) = &car_d.data {
-                    panic!("Macros should have been expanded at this point!");
                 }
+                Ok(expression.clone())
             }
-            Ok(expression.clone())
-        }
-        ExpEnum::Pair(car, cdr) => {
-            let car: Expression = car.into();
-            if let ExpEnum::Symbol(_, _) = &car.get().data {
-                let form = get_expression(environment, car.clone());
-                if let Some(exp) = form {
-                    if let ExpEnum::DeclareFn = &exp.exp.get().data {
-                        let cdr: Expression = cdr.into();
-                        let lambda = builtin_fn(environment, &mut cdr.iter())?;
-                        drop(exp_a);
-                        expression
-                            .get_mut()
-                            .data
-                            .replace(ExpEnum::Wrapper(lambda.into()));
+            ExpEnum::Pair(car, cdr) => {
+                let car: Expression = car.into();
+                if let ExpEnum::Symbol(_, _) = &car.get().data {
+                    let form = get_expression(environment, car.clone());
+                    if let Some(form_exp) = form {
+                        let exp_d = form_exp.exp.get();
+                        match &exp_d.data {
+                            ExpEnum::DeclareFn => {
+                                let cdr: Expression = cdr.into();
+                                let lambda = builtin_fn(environment, &mut cdr.iter())?;
+                                drop(exp_a);
+                                expression
+                                    .get_mut()
+                                    .data
+                                    .replace(ExpEnum::Wrapper(lambda.into()));
+                            }
+                            ExpEnum::DeclareDef => {
+                                drop(exp_d);
+                                form_exp
+                                    .exp
+                                    .get_mut()
+                                    .data
+                                    .replace(ExpEnum::Function(Callable::new(builtin_def, true)));
+                            }
+                            ExpEnum::DeclareVar => {
+                                drop(exp_d);
+                                form_exp
+                                    .exp
+                                    .get_mut()
+                                    .data
+                                    .replace(ExpEnum::Function(Callable::new(builtin_var, true)));
+                            }
+                            ExpEnum::Macro(_) => {
+                                panic!("Macros should have been expanded at this point!");
+                            }
+                            _ => {}
+                        }
                     }
                 }
-            } else if let ExpEnum::DeclareFn = &car.get().data {
-                let cdr: Expression = cdr.into();
-                let lambda = builtin_fn(environment, &mut cdr.iter())?;
-                drop(exp_a);
-                expression
-                    .get_mut()
-                    .data
-                    .replace(ExpEnum::Wrapper(lambda.into()));
+                Ok(expression.clone())
             }
-            Ok(expression.clone())
-        }
-        ExpEnum::Values(_v) => Ok(expression.clone()),
-        ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(_s, _) => Ok(expression.clone()),
-        ExpEnum::HashMap(_) => Ok(expression.clone()),
-        ExpEnum::String(_, _) => Ok(expression.clone()),
-        ExpEnum::True => Ok(expression.clone()),
-        ExpEnum::Float(_) => Ok(expression.clone()),
-        ExpEnum::Int(_) => Ok(expression.clone()),
-        ExpEnum::Char(_) => Ok(expression.clone()),
-        ExpEnum::CodePoint(_) => Ok(expression.clone()),
-        ExpEnum::Lambda(_) => Ok(expression.clone()),
-        ExpEnum::Macro(_) => Ok(expression.clone()),
-        ExpEnum::Function(_) => Ok(expression.clone()),
-        ExpEnum::Process(_) => Ok(expression.clone()),
-        ExpEnum::File(_) => Ok(expression.clone()),
-        ExpEnum::LazyFn(_, _) => Ok(expression.clone()),
-        ExpEnum::Wrapper(_exp) => Ok(expression.clone()),
-        ExpEnum::DeclareDef => Ok(expression.clone()),
-        ExpEnum::DeclareVar => Ok(expression.clone()),
-        ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),
-    };
+            ExpEnum::Values(_v) => Ok(expression.clone()),
+            ExpEnum::Nil => Ok(expression.clone()),
+            /*ExpEnum::Symbol(s, _) => {//SymLoc::None) => {
+                if let Some(r) = lookup_expression(environment, s) {
+                    let new_exp = ExpEnum::Symbol(s, SymLoc::Ref(r));
+                    drop(exp_d);
+                    drop(exp_a);
+                    expression.get_mut().data.replace(new_exp);
+                }
+                Ok(expression.clone())
+            }*/
+            ExpEnum::Symbol(_, _) => Ok(expression.clone()),
+            ExpEnum::HashMap(_) => Ok(expression.clone()),
+            ExpEnum::String(_, _) => Ok(expression.clone()),
+            ExpEnum::True => Ok(expression.clone()),
+            ExpEnum::Float(_) => Ok(expression.clone()),
+            ExpEnum::Int(_) => Ok(expression.clone()),
+            ExpEnum::Char(_) => Ok(expression.clone()),
+            ExpEnum::CodePoint(_) => Ok(expression.clone()),
+            ExpEnum::Lambda(_) => Ok(expression.clone()),
+            ExpEnum::Macro(_) => panic!("Invalid macro in analyze!"),
+            ExpEnum::Function(_) => Ok(expression.clone()),
+            ExpEnum::Process(_) => Ok(expression.clone()),
+            ExpEnum::File(_) => Ok(expression.clone()),
+            ExpEnum::LazyFn(_, _) => Ok(expression.clone()),
+            ExpEnum::Wrapper(_exp) => Ok(expression.clone()),
+            ExpEnum::DeclareDef => panic!("Invalid def in analyze!"),
+            ExpEnum::DeclareVar => panic!("Invalid var in analyze!"),
+            ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),
+        };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),
         Err(err) => Err(err),

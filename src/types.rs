@@ -185,6 +185,7 @@ pub struct ExpMeta {
 #[derive(Clone, Debug)]
 pub enum SymLoc {
     None,
+    Ref(Reference),
     Scope(Rc<RefCell<Scope>>, usize),
     Stack(usize),
 }
@@ -532,6 +533,26 @@ impl Expression {
     pub fn make_special_fn(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
         Reference::new(
             ExpEnum::DeclareFn,
+            RefMetaData {
+                namespace: Some(namespace),
+                doc_string: Some(doc_str.to_string()),
+            },
+        )
+    }
+
+    pub fn make_special_def(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+        Reference::new(
+            ExpEnum::DeclareDef,
+            RefMetaData {
+                namespace: Some(namespace),
+                doc_string: Some(doc_str.to_string()),
+            },
+        )
+    }
+
+    pub fn make_special_var(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+        Reference::new(
+            ExpEnum::DeclareVar,
             RefMetaData {
                 namespace: Some(namespace),
                 doc_string: Some(doc_str.to_string()),
