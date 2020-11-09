@@ -374,6 +374,7 @@ fn fn_eval_lazy(
                 Expression::alloc_data(ExpEnum::Lambda(Lambda {
                     params: p,
                     body: l.body.clone(),
+                    syms: l.syms.clone(),
                     capture: get_current_scope(environment),
                 }))
             } else {
@@ -609,6 +610,7 @@ fn internal_eval(
                 Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
                     params: p,
                     body: l.body.clone(),
+                    syms: l.syms.clone(),
                     capture: get_current_scope(environment),
                 })))
             } else {

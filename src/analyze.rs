@@ -11,43 +11,25 @@ use crate::gc::*;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
-struct Symbols {
-    syms: HashMap<&'static str, usize>,
+pub struct Symbols {
+    syms: Rc<RefCell<HashMap<&'static str, usize>>>,
     count: usize,
-    outer: Option<Rc<RefCell<Scope>>>,
 }
 
 impl Symbols {
     pub fn new() -> Symbols {
         Symbols {
-            syms: HashMap::new(),
+            syms: Rc::new(RefCell::new(HashMap::new())),
             count: 0,
-            outer: None,
-        }
-    }
-
-    pub fn new_with_outer(outer: Option<Rc<RefCell<Scope>>>) -> Symbols {
-        Symbols {
-            syms: HashMap::new(),
-            count: 0,
-            outer,
         }
     }
 
     pub fn contains_symbol(&self, key: &str) -> bool {
-        self.syms.contains_key(key)
-    }
-
-    pub fn symbols(&self) -> std::collections::hash_map::Keys<'_, &'static str, usize> {
-        self.syms.keys()
-    }
-
-    pub fn outer(&self) -> Option<Rc<RefCell<Scope>>> {
-        self.outer.clone()
+        self.syms.borrow().contains_key(key)
     }
 
     pub fn get(&self, key: &str) -> Option<usize> {
-        if let Some(idx) = self.syms.get(key) {
+        if let Some(idx) = self.syms.borrow().get(key) {
             Some(*idx)
         } else {
             None
@@ -55,12 +37,18 @@ impl Symbols {
     }
 
     pub fn clear(&mut self) {
-        self.syms.clear();
+        self.syms.borrow_mut().clear();
     }
 
     pub fn insert(&mut self, key: &'static str) {
-        self.syms.insert(key, self.count);
+        self.syms.borrow_mut().insert(key, self.count);
         self.count += 1;
+    }
+}
+
+impl Default for Symbols {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

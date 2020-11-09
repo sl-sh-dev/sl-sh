@@ -474,6 +474,7 @@ pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
+    pub stack: Vec<Reference>,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
@@ -532,6 +533,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     Environment {
         sig_int,
         state: EnvState::default(),
+        stack: Vec::with_capacity(1024),
         reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
@@ -695,7 +697,13 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
             SymLoc::None => lookup_expression(environment, sym),
             SymLoc::Ref(r) => Some(r.clone()),
             SymLoc::Scope(scope, idx) => scope.borrow().get_idx(*idx),
-            SymLoc::Stack(_idx) => None,
+            SymLoc::Stack(idx) => {
+                if let Some(r) = environment.stack.get(*idx) {
+                    Some(r.clone())
+                } else {
+                    None
+                }
+            }
         },
         _ => None, // XXX Maybe this should be an error?
     }

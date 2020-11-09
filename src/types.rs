@@ -10,6 +10,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::process::Child;
 use std::rc::Rc;
 
+use crate::analyze::Symbols;
 use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::gc::*;
@@ -63,6 +64,7 @@ pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 pub struct Lambda {
     pub params: Vec<&'static str>,
     pub body: Handle,
+    pub syms: Symbols,
     pub capture: Rc<RefCell<Scope>>,
 }
 

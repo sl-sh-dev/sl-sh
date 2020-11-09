@@ -8,6 +8,7 @@ use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::analyze::Symbols;
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
@@ -547,9 +548,11 @@ pub fn builtin_fn(
             params.iter()
         };
         let mut params = Vec::new();
+        let mut syms = Symbols::new();
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
+                syms.insert(s);
             } else {
                 return Err(LispError::new("fn: parameters must be symbols"));
             }
@@ -558,6 +561,7 @@ pub fn builtin_fn(
         return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
             params,
             body,
+            syms,
             capture: get_current_scope(environment),
         })));
     }
@@ -795,9 +799,11 @@ fn builtin_macro(
             params.iter()
         };
         let mut params = Vec::new();
+        let mut syms = Symbols::new();
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
+                syms.insert(s);
             } else {
                 return Err(LispError::new("macro: parameters must be symbols"));
             }
@@ -806,6 +812,7 @@ fn builtin_macro(
         return Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
             params,
             body,
+            syms,
             capture: get_current_scope(environment),
         })));
     }
