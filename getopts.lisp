@@ -8,8 +8,9 @@
 ;; TODO do keys have to start with :-?
 ;; TODO need some FAILING test cases for TYPES
 ;; TODO TYPES
+;; TODO need to validate keys in the options-map :(
 (defmacro debugln (&rest args)
-    (if (nil? #t)
+    (if (nil? nil)
         `(println "=> " ,@args)))
 
 (def 'sample "-la -c -b")
@@ -25,6 +26,9 @@
 (defn bad-option-arity (option expected)
     (str "Wrong number of arguments passed to " option ". Expected " expected
          " arguments."))
+
+(defn type-error-message (key binding opt-type-fun)
+    (str "Input types did not match :type specified in options-map. At argument " key ", failed to read in provided " binding " as type " opt-type-fun ". Binding, " binding ", was of type " (type binding) "."))
 
 (defn is-single-char-arg (token)
     (and (= 2 (length token)) (str-starts-with token-delim token)))
@@ -49,17 +53,15 @@ up until the next token delimeted option, -c.
     (var 'possible-params (vec-slice vec-args (+ idx 1) (length vec-args)))
     ;; possible params is nil if at the end of a list, return an empty vec 
     ;; indicating no paramaters
-    (when (nil? possible-params)
-      (return-from get-next-params '#()))
-    (var 'no-token-delim
-         (str-split
-           (str " " token-delim)
-           (str-cat-list " " possible-params)))
-    (var 'with-token-delim (str-split :whitespace (first no-token-delim)))
-    ;; special case if this is no argument to a variable. with-token-delim
-    ;; variable will be the rest of the string, must manually return an empty
-    ;; vec indicating no parameters
-    (if (str-starts-with token-delim (str-cat-list "" with-token-delim)) '#() with-token-delim))
+    (var 'potential-params (make-vec))
+    (if (nil? possible-params)
+      potential-params
+      (loop (params) (possible-params)
+          (if (or (empty-seq? params) (str-starts-with token-delim (first params)))
+            potential-params
+            (progn
+                (vec-push! potential-params (first params))
+                (recur (rest params)))))))
 
 (defn is-getopts-option-string (arg)
     (and (string? arg) (str-starts-with token-delim arg)))
@@ -83,8 +85,13 @@ up until the next token delimeted option, -c.
     ;; since all options start with a " -" use a str-split/str-cat trick
     ;; to get a vector representing all args to current option
     (var 'potential-args (get-next-params idx given-args))
-    (when (not (= (length potential-args) arity))
-      (err (bad-option-arity option arity)))
+    (debugln "potential-args: " potential-args ", type: " (type potential-args))
+;;    (if (seq? potential-args)
+;;      (when (empty-seq? potential-args)
+;;        (err (bad-option-arity option arity)))
+      (when (not (= (length potential-args) arity))
+          (err (bad-option-arity option arity)))
+;;      )
     (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
@@ -150,32 +157,75 @@ a vector whose only element is the desired binding."
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
 
-(defn read-then-check-self (func)
-  (fn (x)
-    (var 'read-x (read x))
-    (var 'func-ret (func read-x))
-    ;; TOOD if we pass the test, then return the value? otherwise, throw a
-    ;; crappy error? we can throw a better error?
-    (if func-ret
-      read-x
-      (err "Bad types"))))
+(defn eval-then-check-self
+"accept a predicate, return a function that takes a string and a custom
+error message. If the given (predicate (eval string)) is true the string is
+returned, otherwise the error message is thrown."
+(predicate)
+  (fn (string custom-message)
+    (var 'test (eval string))
+    (if (predicate test)
+      test
+      (err custom-message))))
+
+(defn read-then-check-self
+"accept a predicate, return a function that takes a string and a custom
+error message. If the given (predicate (read string)) is true the string is
+returned, otherwise the error message is thrown."
+(predicate)
+  (fn (string custom-message)
+    (var 'test (read string))
+    (if (predicate test)
+      test
+      (err custom-message))))
+
+(defn check
+"accept a predicate, return a function that takes a string and a custom
+error message. If the given (predicate string) is true the string is returned,
+otherwise the error message is thrown."
+  (predicate)
+  (fn (string custom-message)
+    (if (predicate string)
+      string
+      (err custom-message))))
+
+(defn check-custom
+"accept a predicate and a custom error message, return a function that takes a
+string and an unused argument. If the given (predicate string) is true the string is returned,
+otherwise the error message is thrown."
+  (predicate custom-message)
+  (fn (string unused)
+    (if (predicate string)
+      string
+      (err (custom-message string)))))
+
+(defn fn-to-predicate
+"accept a fn and a predicate, return a function that takes a string and a custom
+error message. If the given (applier (predicate string)) is true the string is returned,
+otherwise the error message is thrown."
+  (applier predicate)
+  (fn (string custom-message)
+    (var 'res (applier string))
+    (if (predicate res)
+      res
+      (err custom-message))))
 
 (def 'supported-types-map
     (make-hash
       (list
-        (join :int? (fn (x) (str->int x)))
-        (join :float? (fn (x) (str->float x)))
-        (join :file? (fn (x) (file? x)))
-        (join :symbol? (fn (x) (to-symbol x)))
-        (join :string? (fn (x) x))
+        (join :int? (fn (x unused) (str->int x)))
+        (join :float? (fn (x unused) (str->float x)))
+        (join :fs-file? (check-custom fs-file? (fn (x) (str "Argument, " x ", should pass test fs-file?"))))
+        (join :fs-dir? (check-custom fs-dir? (fn (x) (str "Argument, " x ", should pass test fs-dir?"))))
+        (join :fs-exists? (check-custom fs-exists? (fn (x) (str "Argument, " x ", should pass test fs-exists?"))))
+        (join :symbol? (fn-to-predicate to-symbol symbol?))
+        (join :string? (fn (x y) x)) ;; we all come into this world as strings
+;;        (join :lambda? (read-then-check-self lambda?))
+;;        (join :macro? (read-then-check-self macro?))
         (join :char? (read-then-check-self char?))
-        (join :func? (read-then-check-self func?))
-        (join :builtin? (read-then-check-self builtin?))
-        (join :macro? (read-then-check-self macro?))
-        (join :hash? (read-then-check-self hash?))
-        (join :nil? (read-then-check-self nil?))
+        (join :hash? (eval-then-check-self hash?))
+        (join :nil? (eval-then-check-self nil?))
         (join :pair? (read-then-check-self pair?))
-        (join :lambda? (read-then-check-self lambda?))
         (join :list? (read-then-check-self list?))
         (join :vec? (read-then-check-self vec?))
         (join :non-empty-seq? (read-then-check-self non-empty-seq?))
@@ -201,12 +251,21 @@ a vector whose only element is the desired binding."
                      (when (not (= 0 opt-type-arity))
                        (progn
                          (debugln "look our binding is: " binding ", of type: " (type binding))
+                         (var 'err-str (type-error-message key binding opt-type-fun))
                          (if (= 1 opt-type-arity)
-                             (hash-set! bindings-map key ((hash-get supported-types-map opt-type-fun) binding))
-                             (hash-set! bindings-map key (collect-vec (map (hash-get supported-types-map opt-type-fun) binding))))
+                             (hash-set!
+                               bindings-map
+                               key
+                               ((hash-get supported-types-map opt-type-fun) binding err-str))
+                             (hash-set!
+                               bindings-map
+                               key
+                               (collect-vec
+                                 (map
+                                   (fn (x) ((hash-get supported-types-map opt-type-fun) x err-str))
+                                   binding))))
                          (debugln "look our binding is now: " (hash-get bindings-map key) ", of type: " (type (hash-get bindings-map key)))
-                         ))
-                     ))))
+                         ))))))
              (recur (rest keys) bindings-map)))))
 
 (def 'test-options-map
@@ -230,7 +289,7 @@ Supported type arguments: DO THE RELATIVE LINK THING
 
 $(str (hash-keys supported-types-map))
 "
-(options-map &rest args)
+(options-map args)
     (when (not (hash? options-map))
         (err options-map-is-map))
     (when (not (> (length args) 0))
@@ -248,27 +307,27 @@ $(str (hash-keys supported-types-map))
     (debugln "bindings-map: " bindings-map)
     bindings-map)
 
-(assert-error-msg (getopts "a") options-map-is-map)
-(assert-error-msg (getopts test-options-map) no-args)
-(assert-error-msg (getopts test-options-map "a") bad-first-arg)
-(assert-error-msg (getopts test-options-map "abc") bad-first-arg)
+(assert-error-msg (getopts "foo" '("a")) options-map-is-map)
+(assert-error-msg (getopts test-options-map '()) no-args)
+(assert-error-msg (getopts test-options-map '("a")) bad-first-arg)
+(assert-error-msg (getopts test-options-map '("abc")) bad-first-arg)
 
-(assert-error-msg (getopts test-options-map "-a") (bad-option-arity "-a" 1))
-(assert-error-msg (getopts test-options-map "--c-arg") (bad-option-arity "--c-arg" 1))
-(assert-error-msg (getopts test-options-map "-a" "one-arg" "2-arg" "3") (bad-option-arity "-a" 1))
-(assert-error-msg (getopts test-options-map "-l" "-a" "one-arg" "2-arg" "3") (bad-option-arity "-a" 1))
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "-a") (bad-option-arity "-a" 1))
-(assert-error-msg (getopts test-options-map "-b" "1" "3" "-a") (bad-option-arity "-b" 3))
-(assert-error-msg (getopts test-options-map "-b" "1" "a" "-a" "2") (bad-option-arity "-b" 3))
-(assert-error-msg (getopts test-options-map "-b" "1" "b") (bad-option-arity "-b" 3))
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "4") (bad-option-arity "-b" 3))
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "4" "--c-arg") (bad-option-arity "-b" 3))
-(assert-error-msg (getopts test-options-map "-b" "1" "2" "3" "--c-arg") (bad-option-arity "--c-arg" 1))
-(assert-error-msg (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "-d" "0") (illegal-option "-d"))
-(assert-error-msg (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "-e") (illegal-option "-e"))
+(assert-error-msg (getopts test-options-map '("-a")) (bad-option-arity "-a" 1))
+(assert-error-msg (getopts test-options-map '("--c-arg")) (bad-option-arity "--c-arg" 1))
+(assert-error-msg (getopts test-options-map '("-a" "one-arg" "2-arg" "3")) (bad-option-arity "-a" 1))
+(assert-error-msg (getopts test-options-map '("-l" "-a" "one-arg" "2-arg" "3")) (bad-option-arity "-a" 1))
+(assert-error-msg (getopts test-options-map '("-b" "1" "2" "3" "-a")) (bad-option-arity "-a" 1))
+(assert-error-msg (getopts test-options-map '("-b" "1" "3" "-a")) (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-b" "1" "a" "-a" "2")) (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-b" "1" "b")) (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-b" "1" "2" "3" "4")) (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-b" "1" "2" "3" "4" "--c-arg")) (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-b" "1" "2" "3" "--c-arg")) (bad-option-arity "--c-arg" 1))
+(assert-error-msg (getopts test-options-map '("-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "-d" "0")) (illegal-option "-d"))
+(assert-error-msg (getopts test-options-map '("-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "-e")) (illegal-option "-e"))
 
-(assert-error-msg (getopts test-options-map "-ab" "an-argument") (bad-option-arity "-a" 1))
-(assert-error-msg (getopts test-options-map "-lb" "an-argument") (bad-option-arity "-b" 3))
+(assert-error-msg (getopts test-options-map '("-ab" "an-argument")) (bad-option-arity "-a" 1))
+(assert-error-msg (getopts test-options-map '("-lb" "an-argument")) (bad-option-arity "-b" 3))
 
 (defn map= (m n)
     (var 'keys-in-map (fn (m n) (loop (keys m n last-ret) ((hash-keys m) m n #t)
@@ -280,14 +339,16 @@ $(str (hash-keys supported-types-map))
                              (rest keys)
                              m
                              n
-                             (and (hash-haskey n (first keys)) (= (hash-get m (first keys)) (hash-get n (first keys))))))))))
+                             (and
+                               (hash-haskey n (first keys))
+                               (= (hash-get m (first keys)) (hash-get n (first keys))))))))))
     (and (hash? m) (hash? n) (= (length (hash-keys m)) (length (hash-keys n)))
       (keys-in-map m n)
       (keys-in-map n m)))
 
 (assert-true
     (map=
-        (getopts test-options-map "-lmb" "1" "2" "3")
+        (getopts test-options-map '("-lmb" "1" "2" "3"))
         (make-hash
           (list
             (join :-l #t)
@@ -299,7 +360,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-b" "1" "2" "3" "-lm" "--c-arg" "bar")
+        (getopts test-options-map '("-b" "1" "2" "3" "-lm" "--c-arg" "bar"))
         (make-hash
           (list
             (join :-l #t)
@@ -311,7 +372,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-false
     (map=
-        (getopts test-options-map "-b" "1" "2" "3" "-lm")
+        (getopts test-options-map '("-b" "1" "2" "3" "-lm"))
         (make-hash
           (list
             (join :-l #t)
@@ -323,7 +384,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-b" "1" "2" "3" "-lm")
+        (getopts test-options-map '("-b" "1" "2" "3" "-lm"))
         (make-hash
           (list
             (join :-l #t)
@@ -335,7 +396,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
   (map=
-    (getopts test-options-map "-a" "1")
+    (getopts test-options-map '("-a" "1"))
     (make-hash
       (list
         (join :-l #t)
@@ -347,7 +408,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-l" "-a" "one-arg")
+        (getopts test-options-map '("-l" "-a" "one-arg"))
         (make-hash
           (list
             (join :-l #t)
@@ -359,7 +420,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-b" "1" "2" "3")
+        (getopts test-options-map '("-b" "1" "2" "3"))
         (make-hash
           (list
             (join :-l #t)
@@ -371,7 +432,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1")
+        (getopts test-options-map '("-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1"))
         (make-hash
           (list
             (join :-l #t)
@@ -383,7 +444,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-        (getopts test-options-map "-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "--d-arg" "1" "2")
+        (getopts test-options-map '("-lma" "aaa" "-b" "1" "2" "3" "--c-arg" "1" "--d-arg" "1" "2"))
         (make-hash
           (list
             (join :-l #t)
@@ -395,7 +456,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-    (getopts test-options-map "-l")
+    (getopts test-options-map '("-l"))
     (make-hash
       (list
         (join :-l #t)
@@ -407,7 +468,7 @@ $(str (hash-keys supported-types-map))
 
 (assert-true
     (map=
-    (getopts test-options-map "-lb" "1" "2" "3" "-a" "1")
+    (getopts test-options-map '("-lb" "1" "2" "3" "-a" "1"))
     (make-hash
       (list
         (join :-l #t)
@@ -417,22 +478,12 @@ $(str (hash-keys supported-types-map))
         (join :--d-arg nil)
         (join :-b '#("1" "2" "3"))))))
 
-(def 'test-options-map-types
-    (make-hash
-      (list
-        (join :-l (build-getopts-param 0 #t nil))
-        (join :-m (build-getopts-param 0 nil nil))
-        (join :-a (build-getopts-param 1 "foo" nil))
-        (join :--c-arg (build-getopts-param 1 '#("bar") nil))
-        (join :--d-arg (build-getopts-param 2 nil nil))
-        (join :-b (build-getopts-param 3 nil nil)))))
-
 (assert-error-msg
   (getopts
     (make-hash
       (list
         (join :-l (build-getopts-param 0 #t :true?))))
-    "-l") 
+    '("-l"))
   invalid-type-function)
 
 (assert-error-msg
@@ -440,22 +491,123 @@ $(str (hash-keys supported-types-map))
     (make-hash
       (list
         (join :-l (build-getopts-param 0 #t :true?))))
-    "-l")
+    '("-l"))
   invalid-type-function)
 
-(assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :float?)))) "-c" "#\a") "str->float: string is not a valid float")
+(assert-error-msg
+  (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :float?)))) '("-c" "#\a"))
+  "str->float: string is not a valid float")
 
 (lex
-    (var 'f-float-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 1 nil :float?)))) "-f" "1.3") :-f))
-    (assert-true (float? f-float-bindings) ". Return value should be of type float.")
 
-    (var 'f-float-vec-bindings (hash-get (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :float?)))) "-f" "1.3" "0.12") :-f))
-    (for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type float."))
+(assert-error-msg
+  (getopts (make-hash (list (join :-i (build-getopts-param 1 nil :int?)))) '("-i" "1.23"))
+  "str->int: string is not a valid integer")
 
-    (var 'c-char-bindings (hash-get (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) "-c" "#\a") :-c))
-    (assert-true (char? c-char-bindings) ". Return value should be of type char.")
+(var 'i-int-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-i (build-getopts-param 1 nil :int?)))) '("-i" "1"))
+   :-i))
+(assert-true (int? i-int-bindings) ". Return value should be of type int.")
 
-    (assert-error-msg (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) "-c" "'#(\"a\")") "Bad types")
+(var 'f-float-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-f (build-getopts-param 1 nil :float?)))) '("-f" "1.3"))
+   :-f))
+(assert-true (float? f-float-bindings) ". Return value should be of type float.")
+
+(var 'f-float-vec-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :float?)))) '("-f" "1.3" "0.12"))
+   :-f))
+(for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type float."))
+
+(var 'fs-file-vec-bindings
+(hash-get
+(getopts (make-hash (list (join :-f (build-getopts-param 2 nil :fs-file?))))
+         '("-f" "/etc/fstab" "/etc/passwd"))
+           :-f))
+(for f in fs-file-vec-bindings (assert-true (fs-file? f) ". Return value should pass test fs-file?."))
+
+(var 'fs-dir-bindings
+     (hash-get
+       (getopts (make-hash (list (join :--fs-dir (build-getopts-param 1 nil :fs-dir?))))
+                '("--fs-dir" "/tmp"))
+       :--fs-dir))
+(assert-true (fs-dir? fs-dir-bindings) ". Return value should pass test fs-dir?.")
+
+(var 'fs-exists-bindings
+    (hash-get
+      (getopts (make-hash (list (join :--exists (build-getopts-param 1 nil :fs-exists?))))
+               '("--exists" "/etc/fstab"))
+      :--exists))
+(assert-true (fs-exists? fs-exists-bindings) ". Return value should pass test fs-exists?.")
+
+(assert-error-msg
+  (getopts (make-hash (list (join :--not-exists (build-getopts-param 1 nil :fs-exists?))))
+           '("--not-exists" "/tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj"))
+  "Argument, /tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj, should pass test fs-exists?")
+
+(var 'symbol-bindings
+    (hash-get
+      (getopts (make-hash (list (join :-s (build-getopts-param 1 nil :symbol?))))
+               '("-s" ":a-keyword-symbol"))
+      :-s))
+(assert-true (symbol? symbol-bindings) ". Return value should be of type symbol?.")
+
+(var 'c-char-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) '("-c" "#\a"))
+   :-c))
+(assert-true (char? c-char-bindings) ". Return value should be of type char.")
+
+(assert-error-msg
+  (getopts
+    (make-hash (list (join :-c (build-getopts-param 1 nil :char?))))
+       '("-c" "'#(\"a\")"))
+  (type-error-message ":-c" "'#(\"a\")" ":char?"))
+
+(var 'hash-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :hash?)))) '("-h" "(make-hash (list (join :-h \"meow\")))"))
+   :-h))
+(assert-true (hash? hash-bindings) ". Return value should be of type hash.")
+
+#|
+TODO macros and lambda
+problem is
+
+$> ((read-all "(fn (x) x)") "NINE")
+Not a valid command (fn (x) x), type Pair.
+#(#(read-all "(fn (x) x)") "NINE")
+NO FILE:        line XX:        column XX
+shell.lisp:     line 670:       column 48
+
+
+    (type (read-all "(fn (s) s)")))
+and
+    (type (read-all "(macro (s) s)")))
+
+can resolve to types that are not pairs.
+
+(var 'macro-bindings
+     (hash-get
+         (getopts
+           (make-hash
+             (list (join :--macro-getopts-param 1 nil :macro?))))
+           '("--macro" "(macro (x) x)"))
+         :--macro))
+(assert-true (macro? macro-bindings) ". Return value should be of type macro.")
+(var 'lambda-bindings
+     (hash-get
+         (getopts
+           (make-hash
+             (list (join :--lambda (build-getopts-param 1 nil :lambda?))))
+           '("--lambda" "(fn (x) x)"))
+         :--lambda))
+(assert-true (lambda? lambda-bindings) ". Return value should be of type lambda.")
+|#
 )
 
+(println (doc 'getopts))
 (ns-pop) ;; must be last line

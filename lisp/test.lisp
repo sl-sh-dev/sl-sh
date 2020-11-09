@@ -63,7 +63,7 @@
     `(do
        (def 'ret (get-error ,form))
        (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
-       ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (cadr ret) "\"")))
+       ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\"")))
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
