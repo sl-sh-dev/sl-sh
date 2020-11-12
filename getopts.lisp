@@ -6,9 +6,9 @@
 
 ;; TODO make debugln use env var?
 ;; TODO do keys have to start with :-?
-;; TODO need some FAILING test cases for TYPES
-;; TODO TYPES
+;; TODO need some more FAILING test cases for TYPES
 ;; TODO need to validate keys in the options-map :(
+;; TODO put docstrings in type map... to explain their usage
 (defmacro debugln (&rest args)
     (if (nil? nil)
         `(println "=> " ,@args)))
@@ -157,24 +157,13 @@ a vector whose only element is the desired binding."
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
 
-(defn eval-then-check-self
+(defn read-all-then-check-self
 "accept a predicate, return a function that takes a string and a custom
-error message. If the given (predicate (eval string)) is true the string is
+error message. If the given (predicate (read-all string)) is true the string is
 returned, otherwise the error message is thrown."
 (predicate)
   (fn (string custom-message)
-    (var 'test (eval string))
-    (if (predicate test)
-      test
-      (err custom-message))))
-
-(defn read-then-check-self
-"accept a predicate, return a function that takes a string and a custom
-error message. If the given (predicate (read string)) is true the string is
-returned, otherwise the error message is thrown."
-(predicate)
-  (fn (string custom-message)
-    (var 'test (read string))
+    (var 'test (collect (read-all string)))
     (if (predicate test)
       test
       (err custom-message))))
@@ -220,16 +209,14 @@ otherwise the error message is thrown."
         (join :fs-exists? (check-custom fs-exists? (fn (x) (str "Argument, " x ", should pass test fs-exists?"))))
         (join :symbol? (fn-to-predicate to-symbol symbol?))
         (join :string? (fn (x y) x)) ;; we all come into this world as strings
-;;        (join :lambda? (read-then-check-self lambda?))
-;;        (join :macro? (read-then-check-self macro?))
-        (join :char? (read-then-check-self char?))
-        (join :hash? (eval-then-check-self hash?))
-        (join :nil? (eval-then-check-self nil?))
-        (join :pair? (read-then-check-self pair?))
-        (join :list? (read-then-check-self list?))
-        (join :vec? (read-then-check-self vec?))
-        (join :non-empty-seq? (read-then-check-self non-empty-seq?))
-        (join :empty-seq? (read-then-check-self empty-seq?)))))
+        (join :char? (check char?))
+        (join :hash? (check hash?))
+        (join :nil? (check nil?))
+        (join :list? (check list?))
+        (join :vec? (check vec?))
+        (join :lambda? (check lambda?))
+        (join :macro? (check macro?))
+        )))
 
 (def 'invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
 
@@ -288,6 +275,14 @@ followed by an optstring client passed in from the command line.
 Supported type arguments: DO THE RELATIVE LINK THING
 
 $(str (hash-keys supported-types-map))
+
+
+TODO make documentation for each supported type
+ make note of fact that list type can be optionally wrapped in parens
+ b/c o fuse of read-all.
+
+NOTE: When trying to make a list of vector, make sure to use the list/vector
+literal syntax, or use the (list ...) or (vec ...) functions.
 "
 (options-map args)
     (when (not (hash? options-map))
@@ -508,19 +503,19 @@ $(str (hash-keys supported-types-map))
  (hash-get
    (getopts (make-hash (list (join :-i (build-getopts-param 1 nil :int?)))) '("-i" "1"))
    :-i))
-(assert-true (int? i-int-bindings) ". Return value should be of type int.")
+(assert-true (int? i-int-bindings) ". Return value should be of type Int.")
 
 (var 'f-float-bindings
  (hash-get
    (getopts (make-hash (list (join :-f (build-getopts-param 1 nil :float?)))) '("-f" "1.3"))
    :-f))
-(assert-true (float? f-float-bindings) ". Return value should be of type float.")
+(assert-true (float? f-float-bindings) ". Return value should be of type Float.")
 
 (var 'f-float-vec-bindings
  (hash-get
    (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :float?)))) '("-f" "1.3" "0.12"))
    :-f))
-(for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type float."))
+(for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type Float."))
 
 (var 'fs-file-vec-bindings
 (hash-get
@@ -553,60 +548,96 @@ $(str (hash-keys supported-types-map))
       (getopts (make-hash (list (join :-s (build-getopts-param 1 nil :symbol?))))
                '("-s" ":a-keyword-symbol"))
       :-s))
-(assert-true (symbol? symbol-bindings) ". Return value should be of type symbol?.")
+(assert-true (symbol? symbol-bindings) ". Return value should be of type Symbol?.")
 
 (var 'c-char-bindings
  (hash-get
-   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) '("-c" "#\a"))
+   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) '("-c" #\a))
    :-c))
-(assert-true (char? c-char-bindings) ". Return value should be of type char.")
+(assert-true (char? c-char-bindings) ". Return value should be of type Char.")
 
 (assert-error-msg
   (getopts
     (make-hash (list (join :-c (build-getopts-param 1 nil :char?))))
-       '("-c" "'#(\"a\")"))
-  (type-error-message ":-c" "'#(\"a\")" ":char?"))
+       (list "-c" (list #\a)))
+  (type-error-message ":-c" (list #\a) ":char?"))
 
 (var 'hash-bindings
  (hash-get
-   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :hash?)))) '("-h" "(make-hash (list (join :-h \"meow\")))"))
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :hash?)))) (list "-h" (make-hash (list (join :-h "meow")))))
    :-h))
-(assert-true (hash? hash-bindings) ". Return value should be of type hash.")
+(assert-true (hash? hash-bindings) ". Return value should be of type HashMap.")
 
-#|
-TODO macros and lambda
-problem is
+(var 'nil-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :nil?)))) '("-h" nil))
+   :-h))
+(assert-true (nil? nil-bindings) ". Return value should be of type Nil.")
 
-$> ((read-all "(fn (x) x)") "NINE")
-Not a valid command (fn (x) x), type Pair.
-#(#(read-all "(fn (x) x)") "NINE")
-NO FILE:        line XX:        column XX
-shell.lisp:     line 670:       column 48
+(assert-error-msg
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :nil?)))) '("-h" "nickel"))
+   (type-error-message ":-h" "nickel" ":nil?"))
 
+(var 'list-bindings
+ (hash-get
+;;   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) '("-h" (arg1 arg2)))
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) (list "-h" (list 'arg1 'arg2)))
+   :-h))
+(assert-true (= 'arg1 (car list-bindings)) ". First arg not correct symbol.")
+(assert-true (= 'arg2 (cadr list-bindings)) ". Second arg not correct symbol.")
 
-    (type (read-all "(fn (s) s)")))
-and
-    (type (read-all "(macro (s) s)")))
+(var 'list-bindings2
+ (hash-get
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) (list "-h" (list "arg1" "arg2")))
+   :-h))
+(assert-true (= "arg1" (car list-bindings2)) ". First arg not correct string.")
+(assert-true (= "arg2" (cadr list-bindings2)) ". Second arg not correct string.")
 
-can resolve to types that are not pairs.
+(assert-error-msg
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) '("-h" "(list nxx nxx)"))
+   (type-error-message  ":-h" "(list nxx nxx)" ":list?"))
+
+(var 'vec-bindings
+ (hash-get
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" '#(1 2 3 4)))
+   :-h))
+(assert-true (vec? vec-bindings) ". Return value should be of type Vector.")
+(assert-true (= (vec-nth 0 vec-bindings) '1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth 1 vec-bindings) '2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth 2 vec-bindings) '3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth 3 vec-bindings) '4) ". Idx 3 is wrong.")
+
+(var 'vec-bindings2
+ (hash-get
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (vec 1 2 3 4)))
+   :-h))
+(assert-true (vec? vec-bindings2) ". Return value should be of type Vector.")
+(assert-true (= (vec-nth 0 vec-bindings2) 1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth 1 vec-bindings2) 2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth 2 vec-bindings2) 3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth 3 vec-bindings2) 4) ". Idx 3 is wrong.")
+
+(assert-error-msg
+   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (list 'nxx 'nxx)))
+   (type-error-message  ":-h" (list 'nxx 'nxx) ":vec?"))
 
 (var 'macro-bindings
      (hash-get
          (getopts
            (make-hash
-             (list (join :--macro-getopts-param 1 nil :macro?))))
-           '("--macro" "(macro (x) x)"))
+             (list (join :--macro (build-getopts-param 1 nil :macro?))))
+           (list "--macro" (macro (x) x)))
          :--macro))
+
 (assert-true (macro? macro-bindings) ". Return value should be of type macro.")
 (var 'lambda-bindings
      (hash-get
          (getopts
            (make-hash
              (list (join :--lambda (build-getopts-param 1 nil :lambda?))))
-           '("--lambda" "(fn (x) x)"))
+           (list "--lambda" (fn (x) x)))
          :--lambda))
 (assert-true (lambda? lambda-bindings) ". Return value should be of type lambda.")
-|#
 )
 
 (println (doc 'getopts))
