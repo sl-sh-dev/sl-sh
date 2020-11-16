@@ -4,11 +4,8 @@
 (ns-import 'test)
 (ns-import 'iterator)
 
-;; TODO make debugln use env var?
 ;; TODO do keys have to start with :-?
-;; TODO need some more FAILING test cases for TYPES
 ;; TODO need to validate keys in the options-map :(
-;; TODO put docstrings in type map... to explain their usage
 (defmacro debugln (&rest args)
     (if (nil? nil)
         `(println "=> " ,@args)))
@@ -16,8 +13,6 @@
 (def 'sample "-la -c -b")
 
 (def 'token-delim "-")
-
-(def 'no-args "Getopts requires arguments.")
 
 (def 'options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
 
@@ -86,12 +81,8 @@ up until the next token delimeted option, -c.
     ;; to get a vector representing all args to current option
     (var 'potential-args (get-next-params idx given-args))
     (debugln "potential-args: " potential-args ", type: " (type potential-args))
-;;    (if (seq? potential-args)
-;;      (when (empty-seq? potential-args)
-;;        (err (bad-option-arity option arity)))
       (when (not (= (length potential-args) arity))
           (err (bad-option-arity option arity)))
-;;      )
     (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
@@ -157,17 +148,6 @@ a vector whose only element is the desired binding."
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
 
-(defn read-all-then-check-self
-"accept a predicate, return a function that takes a string and a custom
-error message. If the given (predicate (read-all string)) is true the string is
-returned, otherwise the error message is thrown."
-(predicate)
-  (fn (string custom-message)
-    (var 'test (collect (read-all string)))
-    (if (predicate test)
-      test
-      (err custom-message))))
-
 (defn check
 "accept a predicate, return a function that takes a string and a custom
 error message. If the given (predicate string) is true the string is returned,
@@ -208,15 +188,14 @@ otherwise the error message is thrown."
         (join :fs-dir? (check-custom fs-dir? (fn (x) (str "Argument, " x ", should pass test fs-dir?"))))
         (join :fs-exists? (check-custom fs-exists? (fn (x) (str "Argument, " x ", should pass test fs-exists?"))))
         (join :symbol? (fn-to-predicate to-symbol symbol?))
-        (join :string? (fn (x y) x)) ;; we all come into this world as strings
+        (join :string? (fn (x unused) (str x)))
         (join :char? (check char?))
         (join :hash? (check hash?))
         (join :nil? (check nil?))
         (join :list? (check list?))
         (join :vec? (check vec?))
         (join :lambda? (check lambda?))
-        (join :macro? (check macro?))
-        )))
+        (join :macro? (check macro?)))))
 
 (def 'invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
 
@@ -228,6 +207,7 @@ otherwise the error message is thrown."
              (var 'opt-config (hash-get options-map key))
              (var 'opt-type-arity (hash-get opt-config :arity))
              (var 'opt-type-fun (hash-get opt-config :type))
+             (var 'default (hash-get opt-config :default))
              (var 'binding (hash-get bindings-map key))
              (when (and (not (nil? opt-type-arity))
                         (not (nil? opt-type-fun)))
@@ -235,7 +215,7 @@ otherwise the error message is thrown."
                  (if (not (in? (hash-keys supported-types-map) opt-type-fun))
                    (err invalid-type-function)
                    (progn
-                     (when (not (= 0 opt-type-arity))
+                     (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
                        (progn
                          (debugln "look our binding is: " binding ", of type: " (type binding))
                          (var 'err-str (type-error-message key binding opt-type-fun))
@@ -255,41 +235,76 @@ otherwise the error message is thrown."
                          ))))))
              (recur (rest keys) bindings-map)))))
 
-(def 'test-options-map
-    (make-hash
-      (list
-        (join :-l (build-getopts-param 0 #t nil))
-        (join :-m (build-getopts-param 0 nil nil))
-        (join :-a (build-getopts-param 1 "foo" nil))
-        (join :--c-arg (build-getopts-param 1 '#("bar") nil))
-        (join :--d-arg (build-getopts-param 2 nil nil))
-        (join :-b (build-getopts-param 3 nil nil)))))
-
 (defn getopts
-"Pass in option-map of the form:
+"Getopts takes a hash map and a vector of args and returns a hash map with all
+the values extracted from the args and bound to the corresponding keys in the
+provided hash map.
 
-$(str test-options-map)
+Take this example script:
+sample-getopts.lisp
+----------------
+#!/usr/bin/env sl-sh
 
-followed by an optstring client passed in from the command line.
+(println \"Passing: \" args \" to getopts\")
+;; getopts is given a hash map with one key, :-m, that corresponds to the flag,
+;; -m, that it configures.
+(var 'bindings
+     (getopts
+       (make-hash
+         (list (join
+                 :-m
+                 (make-hash (list
+                              (join :arity 1)
+                              (:default 0)
+                              (:type :int?))))))
+        args))
+(println \"The binding for -m is: \" (hash-get bindings :-m) \"of type \" (type (hash-get bindings :-m)))
+----------------
 
-Supported type arguments: DO THE RELATIVE LINK THING
+Running the script with one argument to the -m flag yields:
+$> ./sample-getopts.lisp -m 7
+=> Passing: #(\"-m\" \"7\") to getopts
+=> The binding for -m is 7 of type Int
 
-$(str (hash-keys supported-types-map))
+The hash map for the key :-m showcases the configuration keys that exist for
+each flag: arity, :default, and :type. :arity specifies that the -m flag will
+take one argument. :default specifies the bindng for :-m should be 0 if the
+-m flag is not seen in args. :type :int? specifies that the binding should
+conform to that type, in this case int?. Running the script again with no -m
+flag yields:
+$> ./sample-getopts.lisp
+=> Passing: #() to getopts
+=> The binding for -m is 0 of type Int
+
+Demonstrating the :default binding of 0 for the symbol :-m since the -m flag
+was not provided as an argument to the script.
 
 
-TODO make documentation for each supported type
- make note of fact that list type can be optionally wrapped in parens
- b/c o fuse of read-all.
+Configuration keys for flags:
+- :arity (optional)
+    Defaults to 0. If the arity is 0 the returned binding will be #t or nil.
+Can be any integer. The integer value for the :arity corresponds to the
+number of arguments getopts will enforce for this flag, if the number of
+arguments provided to the flag is not equal to the specified arity an error
+is thrown.
+- :default (optional)
+    Use this as a default if the given flag is not provided at execution time.
+- :type (optional)
+    Specify a type for every provided argument for the given flag. Types can be
+any of: $(str (collect (map (fn (x) (var 'func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map))))
 
-NOTE: When trying to make a list of vector, make sure to use the list/vector
-literal syntax, or use the (list ...) or (vec ...) functions.
+
+Rules for flags:
+- Flags can be single character: -m -n -c etc.
+- Flags of a single single character with arity 0 can be adjacent without the
+need for additional dashes: -mnc
+- Multiple flags of a single character with arity 0 can precede a flag of a
+single character with arity N as long as said character appears last: -mne \"foo\"
+- Flags can be multi-character as long as they are preceded by two dashes: --multi-char-arg
 "
 (options-map args)
-    (when (not (hash? options-map))
-        (err options-map-is-map))
-    (when (not (> (length args) 0))
-        (err no-args))
-    (valid-first-arg? args)
+    (when (not (hash? options-map)) (err options-map-is-map))
+    (when (> (length args) 0) (valid-first-arg? args))
     (var 'bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
     ;; perform after setting defaults, in case user desires binding with
@@ -302,8 +317,26 @@ literal syntax, or use the (list ...) or (vec ...) functions.
     (debugln "bindings-map: " bindings-map)
     bindings-map)
 
+(def 'sparse-options-map
+    (make-hash
+      (list
+        (join :-b (make-hash (list))))))
+
+(assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
+(assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
+(assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
+
+(def 'test-options-map
+    (make-hash
+      (list
+        (join :-l (build-getopts-param 0 #t nil))
+        (join :-m (build-getopts-param 0 nil nil))
+        (join :-a (build-getopts-param 1 "foo" nil))
+        (join :--c-arg (build-getopts-param 1 '#("bar") nil))
+        (join :--d-arg (build-getopts-param 2 nil nil))
+        (join :-b (build-getopts-param 3 nil nil)))))
+
 (assert-error-msg (getopts "foo" '("a")) options-map-is-map)
-(assert-error-msg (getopts test-options-map '()) no-args)
 (assert-error-msg (getopts test-options-map '("a")) bad-first-arg)
 (assert-error-msg (getopts test-options-map '("abc")) bad-first-arg)
 
@@ -637,8 +670,12 @@ literal syntax, or use the (list ...) or (vec ...) functions.
              (list (join :--lambda (build-getopts-param 1 nil :lambda?))))
            (list "--lambda" (fn (x) x)))
          :--lambda))
-(assert-true (lambda? lambda-bindings) ". Return value should be of type lambda.")
-)
+(assert-true (lambda? lambda-bindings) ". Return value should be of type lambda."))
 
 (println (doc 'getopts))
+
+(println "Passing: " args " to getopts.")
+(def 'bindings (getopts (make-hash (list (join :-m (make-hash (list (join :arity 1) (join :default 0) (join :type :int?))))))  args))
+(println "My Bindings: " bindings)
+(println "Binding for -m is " (hash-get bindings :-m))
 (ns-pop) ;; must be last line
