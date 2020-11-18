@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use liner::Context;
 
+use crate::analyze::*;
 use crate::builtins::add_builtins;
 use crate::builtins_bind::add_bind_builtins;
 use crate::builtins_edit::add_edit_builtins;
@@ -469,12 +470,19 @@ pub struct Job {
     pub status: JobStatus,
 }
 
+#[derive(Clone, Debug)]
+pub struct StackFrame {
+    index: usize,
+    symbols: Symbols,
+}
+
 //#[derive(Clone, Debug)]
 pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
     pub stack: Vec<Reference>,
+    pub stack_frames: Vec<StackFrame>,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
@@ -514,6 +522,7 @@ pub struct Environment {
     pub last_meta: Option<ExpMeta>,
     pub repl_settings: ReplSettings,
     pub liners: HashMap<&'static str, Context>,
+    pub syms: Option<Symbols>,
 }
 
 impl Environment {
@@ -534,6 +543,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         sig_int,
         state: EnvState::default(),
         stack: Vec::with_capacity(1024),
+        stack_frames: Vec::with_capacity(500),
         reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
@@ -559,6 +569,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         last_meta: None,
         repl_settings: ReplSettings::default(),
         liners: HashMap::new(),
+        syms: None,
     }
 }
 

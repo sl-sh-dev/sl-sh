@@ -517,6 +517,11 @@ pub fn do_command(
                     "Invalid expression state before command (function).",
                 ))
             }
+            ExpEnum::Undefined => {
+                return Err(LispError::new(
+                    "Invalid expression state before command (function).",
+                ))
+            }
         }
     } else if foreground {
         Stdio::inherit()

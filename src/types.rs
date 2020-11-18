@@ -232,6 +232,9 @@ pub enum ExpEnum {
     DeclareDef,
     DeclareVar,
     DeclareFn,
+
+    // This is a placeholder for an unset variable- error to evaluate.
+    Undefined,
 }
 
 impl ExpEnum {
@@ -300,6 +303,7 @@ impl Clone for ExpEnum {
             ExpEnum::DeclareDef => ExpEnum::DeclareDef,
             ExpEnum::DeclareVar => ExpEnum::DeclareVar,
             ExpEnum::DeclareFn => ExpEnum::DeclareFn,
+            ExpEnum::Undefined => ExpEnum::Undefined,
         }
     }
 }
@@ -352,6 +356,7 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::DeclareDef => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::DeclareVar => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::DeclareFn => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::Undefined => write!(f, "ExpEnum::Undefined"),
         }
     }
 }
@@ -642,6 +647,7 @@ impl Expression {
             ExpEnum::DeclareDef => "SpecialForm".to_string(),
             ExpEnum::DeclareVar => "SpecialForm".to_string(),
             ExpEnum::DeclareFn => "SpecialForm".to_string(),
+            ExpEnum::Undefined => panic!("Tried to get type for undefined!"),
         }
     }
 

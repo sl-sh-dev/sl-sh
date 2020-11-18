@@ -164,6 +164,7 @@ impl fmt::Display for Expression {
             ExpEnum::DeclareDef => write!(f, "#<Function>"),
             ExpEnum::DeclareVar => write!(f, "#<Function>"),
             ExpEnum::DeclareFn => write!(f, "#<Function>"),
+            ExpEnum::Undefined => write!(f, "#<Undefined>"), // XXX maybe panic here instead?
         }
     }
 }
@@ -297,6 +298,7 @@ fn pretty_print_int(
         ExpEnum::DeclareDef => expression.writef(environment, writer)?,
         ExpEnum::DeclareVar => expression.writef(environment, writer)?,
         ExpEnum::DeclareFn => expression.writef(environment, writer)?,
+        ExpEnum::Undefined => expression.writef(environment, writer)?,
     }
     Ok(())
 }

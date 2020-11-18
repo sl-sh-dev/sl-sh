@@ -9,13 +9,14 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
-fn builtin_lex(
+fn _builtin_lex(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let outer = Some(get_current_scope(environment));
     // Make sure not to return without popping this off the scope stack.
     environment.scopes.push(build_new_scope(outer));
+    //let mut syms = Symbols::new();
     let mut ret: Option<Expression> = None;
     for arg in args {
         if let Some(ret) = ret {
@@ -24,7 +25,12 @@ fn builtin_lex(
                 e
             })?;
         }
+        //let aexp = analyze(environment, &arg, Some(&mut syms)).map_err(|e| {
+        //    environment.scopes.pop();
+        //    e
+        //})?;
         ret = Some(eval_nr(environment, arg.clone_root()).map_err(|e| {
+            //ret = Some(eval_nr(environment, aexp).map_err(|e| {
             environment.scopes.pop();
             e
         })?);
@@ -33,32 +39,15 @@ fn builtin_lex(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-fn proc_set_vars<'a>(
+pub fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
-    fn eval_key(
-        environment: &mut Environment,
-        key_exp: Expression,
-    ) -> Result<&'static str, LispError> {
-        match eval(environment, key_exp)?.get().data {
-            ExpEnum::Symbol(s, _) => Ok(s),
-            _ => Err(LispError::new("first form (binding key) must be a symbol")),
-        }
-    }
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key_d = key.get();
             let key = match &key_d.data {
                 ExpEnum::Symbol(s, _) => *s,
-                ExpEnum::Pair(_, _) => {
-                    drop(key_d);
-                    eval_key(environment, key.clone())?
-                }
-                ExpEnum::Vector(_) => {
-                    drop(key_d);
-                    eval_key(environment, key.clone())?
-                }
                 _ => return Err(LispError::new("first form (binding key) must be a symbol")),
             };
             if let Some(arg2) = args.next() {
@@ -445,29 +434,29 @@ pub fn add_bind_builtins<S: BuildHasher>(
     data: &mut HashMap<&'static str, Reference, S>,
 ) {
     let root = interner.intern("root");
-    data.insert(
-        interner.intern("lex"),
-        Expression::make_special(
-            builtin_lex,
-            "Usage: (lex exp0 ... expN) -> expN
+    /*data.insert(
+            interner.intern("lex"),
+            Expression::make_special(
+                builtin_lex,
+                "Usage: (lex exp0 ... expN) -> expN
 
-Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
-This is basically like wrapping in a fn call but without the fn call or like a let
-without the initial bindings (you can use var to bind symbols in the new scope instead).
+    Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
+    This is basically like wrapping in a fn call but without the fn call or like a let
+    without the initial bindings (you can use var to bind symbols in the new scope instead).
 
-Section: core
+    Section: core
 
-Example:
-(def test-do-one \"One1\")
-(def test-do-two \"Two1\")
-(def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
-(test::assert-equal \"One1\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-",
-            root,
-        ),
-    );
+    Example:
+    (def test-do-one \"One1\")
+    (def test-do-two \"Two1\")
+    (def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+    (test::assert-equal \"One1\" test-do-one)
+    (test::assert-equal \"Two\" test-do-two)
+    (test::assert-equal \"Three\" test-do-three)
+    ",
+                root,
+            ),
+        );*/
     data.insert(
         interner.intern("set!"),
         Expression::make_special(
@@ -495,8 +484,8 @@ Example:
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
-(set! (sym \"test-do-one\") \"do one\")
-(test::assert-equal \"do one\" test-do-one)
+;(set! (sym \"test-do-one\") \"do one\")
+;(test::assert-equal \"do one\" test-do-one)
 (test::assert-error (set! (sym->str test-do-one) \"do one 2\"))
 ",
             root,
@@ -532,8 +521,9 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Default\" test-do-four)
-(def (sym \"test-do-one\") \"do one\")
-(test::assert-equal \"do one\" test-do-one)
+;(def (sym \"test-do-one\") \"do one\")
+(test::assert-error (def (sym \"test-do-one\") \"do one\"))
+;(test::assert-equal \"do one\" test-do-one)
 (test::assert-error (def (sym->str test-do-one) \"do one 2\"))
 ",
             root,
@@ -561,15 +551,15 @@ Example:
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
-    ; Add this to tthe let's scope (shadow the outer test-do-two).
+    ; Add this to the let's scope (shadow the outer test-do-two).
     (test::assert-equal \"Default\" (var test-do-two \"Default\"))
     ; set the currently scoped value.
     (set! test-do-one \"1111\")
     (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
     (test::assert-equal \"2222\" test-do-two)
-    (var (sym \"test-do-one2\") \"do one\")
-    (test::assert-equal \"do one\" test-do-one2)
+    ;(var (sym \"test-do-one2\") \"do one\")
+    ;(test::assert-equal \"do one\" test-do-one2)
     (test::assert-error (var (sym->str test-do-one) \"do one 2 3\")))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)

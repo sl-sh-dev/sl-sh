@@ -11,25 +11,31 @@ use crate::gc::*;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
-pub struct Symbols {
-    syms: Rc<RefCell<HashMap<&'static str, usize>>>,
+struct SymbolsInt {
+    syms: HashMap<&'static str, usize>,
     count: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Symbols {
+    data: Rc<RefCell<SymbolsInt>>,
 }
 
 impl Symbols {
     pub fn new() -> Symbols {
-        Symbols {
-            syms: Rc::new(RefCell::new(HashMap::new())),
+        let data = Rc::new(RefCell::new(SymbolsInt {
+            syms: HashMap::new(),
             count: 0,
-        }
+        }));
+        Symbols { data }
     }
 
     pub fn contains_symbol(&self, key: &str) -> bool {
-        self.syms.borrow().contains_key(key)
+        self.data.borrow().syms.contains_key(key)
     }
 
     pub fn get(&self, key: &str) -> Option<usize> {
-        if let Some(idx) = self.syms.borrow().get(key) {
+        if let Some(idx) = self.data.borrow().syms.get(key) {
             Some(*idx)
         } else {
             None
@@ -37,12 +43,14 @@ impl Symbols {
     }
 
     pub fn clear(&mut self) {
-        self.syms.borrow_mut().clear();
+        self.data.borrow_mut().syms.clear();
     }
 
     pub fn insert(&mut self, key: &'static str) {
-        self.syms.borrow_mut().insert(key, self.count);
-        self.count += 1;
+        let mut data = self.data.borrow_mut();
+        let count = data.count;
+        data.syms.insert(key, count);
+        data.count += 1;
     }
 }
 
@@ -123,10 +131,30 @@ pub fn analyze(
                                     ));
                                 }
                                 ExpEnum::DeclareVar => {
-                                    drop(exp_a);
-                                    expression.get_mut().data.replace(ExpEnum::Function(
-                                        Callable::new(builtin_var, true),
-                                    ));
+                                    if let Some(syms) = &mut environment.syms {
+                                        let mut ib = Box::new(ListIter::new_list(&v));
+                                        ib.next();
+                                        if let Some(key) = ib.next() {
+                                            let key_d = key.get();
+                                            let symbol = match &key_d.data {
+                                            ExpEnum::Symbol(s, _) => *s,
+                                            _ => return Err(LispError::new(
+                                                "var: first form (binding key) must be a symbol",
+                                            )),
+                                        };
+                                            syms.insert(symbol);
+                                            drop(exp_a);
+                                            expression.get_mut().data.replace(ExpEnum::Function(
+                                                Callable::new(builtin_var, true),
+                                            ));
+                                        } else {
+                                            return Err(LispError::new("var: requires a symbol."));
+                                        }
+                                    } else {
+                                        return Err(LispError::new(
+                                            "Using var outside a lambda or lex not allowed.",
+                                        ));
+                                    }
                                 }
                                 ExpEnum::Macro(_) => {
                                     panic!("Macros should have been expanded at this point!");
@@ -164,11 +192,32 @@ pub fn analyze(
                             }
                             ExpEnum::DeclareVar => {
                                 drop(exp_d);
-                                form_exp
-                                    .exp
-                                    .get_mut()
-                                    .data
-                                    .replace(ExpEnum::Function(Callable::new(builtin_var, true)));
+                                if let Some(syms) = &mut environment.syms {
+                                    let mut ib = expression.iter();
+                                    ib.next();
+                                    if let Some(key) = ib.next() {
+                                        let key_d = key.get();
+                                        let symbol = match &key_d.data {
+                                            ExpEnum::Symbol(s, _) => *s,
+                                            _ => return Err(LispError::new(
+                                                "var: first form (binding key) must be a symbol",
+                                            )),
+                                        };
+                                        syms.insert(symbol);
+                                        //let (symbol, _doc_str, _exp) =
+                                        //    proc_set_vars(environment, &mut ib)?;
+                                        //if syms.contains_symbol(
+                                        form_exp.exp.get_mut().data.replace(ExpEnum::Function(
+                                            Callable::new(builtin_var, true),
+                                        ));
+                                    } else {
+                                        return Err(LispError::new("var: requires a symbol."));
+                                    }
+                                } else {
+                                    return Err(LispError::new(
+                                        "Using var outside a lambda or lex not allowed.",
+                                    ));
+                                }
                             }
                             ExpEnum::Macro(_) => {
                                 panic!("Macros should have been expanded at this point!");
@@ -208,6 +257,7 @@ pub fn analyze(
             ExpEnum::DeclareDef => panic!("Invalid def in analyze!"),
             ExpEnum::DeclareVar => panic!("Invalid var in analyze!"),
             ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),
+            ExpEnum::Undefined => panic!("Invalid undefined in analyze!"),
         };
     match ret {
         Ok(ret) => Ok(ret.clone_root()),

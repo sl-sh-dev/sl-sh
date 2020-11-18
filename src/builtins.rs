@@ -8,7 +8,7 @@ use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::analyze::Symbols;
+use crate::analyze::*;
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
@@ -834,12 +834,17 @@ fn do_expansion(
                     environment.scopes.pop();
                     return Err(err);
                 }
-                let expansion = eval(environment, &body);
+                let old_syms = environment.syms.clone();
+                environment.syms = Some(sh_macro.syms.clone());
+                let tmp_exp = analyze(environment, &body)?;
+                let expansion = eval(environment, &tmp_exp); //&body);
                 if let Err(err) = expansion {
+                    environment.syms = old_syms;
                     environment.scopes.pop();
                     return Err(err);
                 }
                 let expansion = expansion.unwrap();
+                environment.syms = old_syms;
                 environment.scopes.pop();
                 Ok(Some(expansion))
             } else {

@@ -41,6 +41,25 @@ Section: core
 "
     (macro (name &rest args) `(internal-macro set! ,name ,@args)))
 
+(defmacro lex 
+            "Usage: (lex exp0 ... expN) -> expN
+
+Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
+This is basically like wrapping in a fn call but without the fn call or like a let
+without the initial bindings (you can use var to bind symbols in the new scope instead).
+
+Section: core
+
+Example:
+(def test-do-one \"One1\")
+(def test-do-two \"Two1\")
+(def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(test::assert-equal \"One1\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+"
+  (&rest lex-body) `((fn () ,@lex-body)))
+
 (defmacro ns-export
 "Export a symbol or list of symbols to be imported into other namespaces.
 
