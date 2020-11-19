@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::builtins::builtin_fn;
 use crate::builtins::expand_macro;
 use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
@@ -60,6 +59,91 @@ impl Default for Symbols {
     }
 }
 
+fn make_fn(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(params) = args.next() {
+        let (first, second) = (args.next(), args.next());
+        let body = if let Some(first) = first {
+            if let Some(second) = second {
+                let mut body: Vec<Handle> = Vec::new();
+                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
+                    "do",
+                    SymLoc::None,
+                )));
+                body.push(first.into());
+                body.push(second.into());
+                for a in args {
+                    body.push(a.into());
+                }
+                Expression::with_list(body)
+            } else {
+                first
+            }
+        } else {
+            Expression::make_nil()
+        };
+        let params_d = params.get();
+        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
+            Box::new(ListIter::new_list(&vec))
+        } else {
+            params.iter()
+        };
+        let mut params = Vec::new();
+        let mut syms = Symbols::new();
+        for p in p_iter {
+            if let ExpEnum::Symbol(s, _) = p.get().data {
+                params.push(s);
+                syms.insert(s);
+            } else {
+                return Err(LispError::new("fn: parameters must be symbols"));
+            }
+        }
+        let body = body.handle_no_root();
+        return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
+            params,
+            body,
+            syms,
+            capture: get_current_scope(environment),
+        })));
+    }
+    Err(LispError::new("fn: needs at least one form"))
+}
+
+fn declare_var(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<(), LispError> {
+    if let Some(syms) = &mut environment.syms {
+        if let Some(key) = args.next() {
+            let key_d = key.get();
+            match &key_d.data {
+                ExpEnum::Symbol(s, _) => {
+                    if syms.contains_symbol(s) {
+                        Err(LispError::new(format!(
+                            "var: Symbol {} already defined in scope.",
+                            s
+                        )))
+                    } else {
+                        syms.insert(*s);
+                        Ok(())
+                    }
+                }
+                _ => Err(LispError::new(
+                    "var: First form (binding key) must be a symbol",
+                )),
+            }
+        } else {
+            Err(LispError::new("var: Requires a symbol."))
+        }
+    } else {
+        Err(LispError::new(
+            "var: Using var outside a lambda not allowed.",
+        ))
+    }
+}
+
 pub fn analyze(
     environment: &mut Environment,
     expression_in: &Expression,
@@ -111,12 +195,13 @@ pub fn analyze(
                     let car_d = car.get();
                     if let ExpEnum::Symbol(_, _) = &car_d.data {
                         let form = get_expression(environment, car.clone());
-                        if let Some(exp) = form {
-                            match &exp.exp.get().data {
+                        if let Some(form_exp) = form {
+                            let exp_d = form_exp.exp.get();
+                            match &exp_d.data {
                                 ExpEnum::DeclareFn => {
                                     let lambda = {
                                         let mut ib = box_slice_it(cdr);
-                                        builtin_fn(environment, &mut ib)?
+                                        make_fn(environment, &mut ib)?
                                     };
                                     drop(exp_a);
                                     expression
@@ -125,36 +210,20 @@ pub fn analyze(
                                         .replace(ExpEnum::Wrapper(lambda.into()));
                                 }
                                 ExpEnum::DeclareDef => {
-                                    drop(exp_a);
-                                    expression.get_mut().data.replace(ExpEnum::Function(
+                                    drop(exp_d);
+                                    form_exp.exp.get_mut().data.replace(ExpEnum::Function(
                                         Callable::new(builtin_def, true),
                                     ));
                                 }
                                 ExpEnum::DeclareVar => {
-                                    if let Some(syms) = &mut environment.syms {
-                                        let mut ib = Box::new(ListIter::new_list(&v));
-                                        ib.next();
-                                        if let Some(key) = ib.next() {
-                                            let key_d = key.get();
-                                            let symbol = match &key_d.data {
-                                            ExpEnum::Symbol(s, _) => *s,
-                                            _ => return Err(LispError::new(
-                                                "var: first form (binding key) must be a symbol",
-                                            )),
-                                        };
-                                            syms.insert(symbol);
-                                            drop(exp_a);
-                                            expression.get_mut().data.replace(ExpEnum::Function(
-                                                Callable::new(builtin_var, true),
-                                            ));
-                                        } else {
-                                            return Err(LispError::new("var: requires a symbol."));
-                                        }
-                                    } else {
-                                        return Err(LispError::new(
-                                            "Using var outside a lambda or lex not allowed.",
-                                        ));
+                                    {
+                                        let mut ib = box_slice_it(cdr);
+                                        declare_var(environment, &mut ib)?;
                                     }
+                                    drop(exp_d);
+                                    form_exp.exp.get_mut().data.replace(ExpEnum::Function(
+                                        Callable::new(builtin_var, true),
+                                    ));
                                 }
                                 ExpEnum::Macro(_) => {
                                     panic!("Macros should have been expanded at this point!");
@@ -175,7 +244,7 @@ pub fn analyze(
                         match &exp_d.data {
                             ExpEnum::DeclareFn => {
                                 let cdr: Expression = cdr.into();
-                                let lambda = builtin_fn(environment, &mut cdr.iter())?;
+                                let lambda = make_fn(environment, &mut cdr.iter())?;
                                 drop(exp_a);
                                 expression
                                     .get_mut()
@@ -191,33 +260,16 @@ pub fn analyze(
                                     .replace(ExpEnum::Function(Callable::new(builtin_def, true)));
                             }
                             ExpEnum::DeclareVar => {
-                                drop(exp_d);
-                                if let Some(syms) = &mut environment.syms {
-                                    let mut ib = expression.iter();
-                                    ib.next();
-                                    if let Some(key) = ib.next() {
-                                        let key_d = key.get();
-                                        let symbol = match &key_d.data {
-                                            ExpEnum::Symbol(s, _) => *s,
-                                            _ => return Err(LispError::new(
-                                                "var: first form (binding key) must be a symbol",
-                                            )),
-                                        };
-                                        syms.insert(symbol);
-                                        //let (symbol, _doc_str, _exp) =
-                                        //    proc_set_vars(environment, &mut ib)?;
-                                        //if syms.contains_symbol(
-                                        form_exp.exp.get_mut().data.replace(ExpEnum::Function(
-                                            Callable::new(builtin_var, true),
-                                        ));
-                                    } else {
-                                        return Err(LispError::new("var: requires a symbol."));
-                                    }
-                                } else {
-                                    return Err(LispError::new(
-                                        "Using var outside a lambda or lex not allowed.",
-                                    ));
+                                {
+                                    let cdr: Expression = cdr.into();
+                                    declare_var(environment, &mut cdr.iter())?;
                                 }
+                                drop(exp_d);
+                                form_exp
+                                    .exp
+                                    .get_mut()
+                                    .data
+                                    .replace(ExpEnum::Function(Callable::new(builtin_var, true)));
                             }
                             ExpEnum::Macro(_) => {
                                 panic!("Macros should have been expanded at this point!");

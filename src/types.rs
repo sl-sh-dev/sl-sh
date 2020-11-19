@@ -533,7 +533,7 @@ impl Expression {
         )
     }
 
-    pub fn make_special_fn(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+    pub fn make_special_fn(doc_str: &str, namespace: &'static str) -> Reference {
         Reference::new(
             ExpEnum::DeclareFn,
             RefMetaData {
@@ -543,7 +543,7 @@ impl Expression {
         )
     }
 
-    pub fn make_special_def(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+    pub fn make_special_def(doc_str: &str, namespace: &'static str) -> Reference {
         Reference::new(
             ExpEnum::DeclareDef,
             RefMetaData {
@@ -553,7 +553,7 @@ impl Expression {
         )
     }
 
-    pub fn make_special_var(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
+    pub fn make_special_var(doc_str: &str, namespace: &'static str) -> Reference {
         Reference::new(
             ExpEnum::DeclareVar,
             RefMetaData {

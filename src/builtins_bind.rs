@@ -494,7 +494,6 @@ Example:
     data.insert(
         interner.intern("def"),
         Expression::make_special_def(
-            builtin_def,
             "Usage: (def symbol expression) -> expression
 
 Adds an expression to the current namespace.  Return the expression that was defined.
@@ -532,7 +531,6 @@ Example:
     data.insert(
         interner.intern("var"),
         Expression::make_special_var(
-            builtin_var,
             "Usage: (var symbol expression) -> expression
 
 Adds an expression to the current lexical scope.  Return the expression that was defined.

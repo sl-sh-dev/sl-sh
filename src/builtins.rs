@@ -516,58 +516,6 @@ pub fn builtin_do(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-pub fn builtin_fn(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(params) = args.next() {
-        let (first, second) = (args.next(), args.next());
-        let body = if let Some(first) = first {
-            if let Some(second) = second {
-                let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
-                    "do",
-                    SymLoc::None,
-                )));
-                body.push(first.into());
-                body.push(second.into());
-                for a in args {
-                    body.push(a.into());
-                }
-                Expression::with_list(body)
-            } else {
-                first
-            }
-        } else {
-            Expression::make_nil()
-        };
-        let params_d = params.get();
-        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
-            Box::new(ListIter::new_list(&vec))
-        } else {
-            params.iter()
-        };
-        let mut params = Vec::new();
-        let mut syms = Symbols::new();
-        for p in p_iter {
-            if let ExpEnum::Symbol(s, _) = p.get().data {
-                params.push(s);
-                syms.insert(s);
-            } else {
-                return Err(LispError::new("fn: parameters must be symbols"));
-            }
-        }
-        let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
-            params,
-            body,
-            syms,
-            capture: get_current_scope(environment),
-        })));
-    }
-    Err(LispError::new("fn: needs at least one form"))
-}
-
 fn builtin_quote(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -2004,7 +1952,6 @@ Example:
     data.insert(
         interner.intern("fn"),
         Expression::make_special_fn(
-            builtin_fn,
             "Usage: (fn (param*) expr*) -> exprN
 
 Create a function (lambda).
