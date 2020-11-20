@@ -153,13 +153,7 @@ pub fn compress_tilde(path: &str) -> Option<String> {
     }
 }
 
-fn set_arg(
-    environment: &mut Environment,
-    scope: &mut Option<&mut Scope>,
-    key: &'static str,
-    var: Expression,
-    do_eval: bool,
-) -> Result<(), LispError> {
+fn set_arg(environment: &mut Environment, var: Expression, do_eval: bool) -> Result<(), LispError> {
     let var = var.resolve(environment)?;
     let v2 = if do_eval {
         let var_d = var.get();
@@ -197,17 +191,12 @@ fn set_arg(
             },
         )
     };
-    if let Some(scope) = scope {
-        scope.insert(key, v2);
-    } else {
-        set_expression_current_ref(environment, key, v2);
-    }
+    environment.stack.push(v2);
     Ok(())
 }
 
 pub fn setup_args(
     environment: &mut Environment,
-    mut scope: Option<&mut Scope>,
     var_names: &[&'static str],
     vars: &mut dyn Iterator<Item = Expression>,
     do_eval: bool,
@@ -241,17 +230,10 @@ pub fn setup_args(
                 rest_data.push(v2.into());
             }
             if rest_data.is_empty() {
-                if let Some(scope) = scope {
-                    scope.insert_exp_data(rest_name, ExpEnum::Nil);
-                } else {
-                    set_expression_current_data(environment, rest_name, None, ExpEnum::Nil);
-                }
-            } else if let Some(scope) = scope {
-                let data = Expression::with_list(rest_data);
-                scope.insert_exp(rest_name, data);
+                stack_push_data(environment, ExpEnum::Nil);
             } else {
                 let data = Expression::with_list(rest_data);
-                set_expression_current(environment, rest_name, None, data);
+                stack_push_exp(environment, data);
             }
             return Ok(());
         } else if k.is_none() || v.is_none() {
@@ -282,7 +264,7 @@ pub fn setup_args(
             };
             return Err(LispError::new(msg));
         }
-        set_arg(environment, &mut scope, k.unwrap(), v.unwrap(), do_eval)?;
+        set_arg(environment, v.unwrap(), do_eval)?;
         params += 1;
     }
     Ok(())

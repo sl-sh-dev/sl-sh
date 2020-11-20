@@ -748,6 +748,7 @@ fn builtin_macro(
         };
         let mut params = Vec::new();
         let mut syms = Symbols::new();
+        syms.set_lex(environment);
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
@@ -761,7 +762,7 @@ fn builtin_macro(
             params,
             body,
             syms,
-            capture: get_current_scope(environment),
+            namespace: environment.namespace.clone(),
         })));
     }
     Err(LispError::new("macro: need at least a bindings form"))
@@ -776,9 +777,9 @@ fn do_expansion(
         if let Some(exp) = get_expression(environment, command_in.clone()) {
             if let ExpEnum::Macro(sh_macro) = &exp.exp.get().data {
                 let body: Expression = sh_macro.body.clone().into();
-                let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
+                let new_scope = build_new_scope(Some(sh_macro.namespace.clone()));
                 environment.scopes.push(new_scope);
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
+                if let Err(err) = setup_args(environment, &sh_macro.params, parts, false) {
                     environment.scopes.pop();
                     return Err(err);
                 }

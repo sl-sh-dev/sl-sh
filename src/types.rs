@@ -65,7 +65,7 @@ pub struct Lambda {
     pub params: Vec<&'static str>,
     pub body: Handle,
     pub syms: Symbols,
-    pub capture: Rc<RefCell<Scope>>,
+    pub namespace: Rc<RefCell<Scope>>,
 }
 
 fn params_to_string(params: &[&'static str]) -> String {
@@ -190,6 +190,12 @@ pub enum SymLoc {
     Ref(Reference),
     Scope(Rc<RefCell<Scope>>, usize),
     Stack(usize),
+}
+
+impl SymLoc {
+    pub fn replace(&mut self, new_data: SymLoc) {
+        *self = new_data;
+    }
 }
 
 pub enum ExpEnum {
@@ -964,6 +970,12 @@ impl From<Handle> for Expression {
 
 impl From<&Handle> for Expression {
     fn from(item: &Handle) -> Self {
+        Expression::new(item.clone())
+    }
+}
+
+impl From<&mut Handle> for Expression {
+    fn from(item: &mut Handle) -> Self {
         Expression::new(item.clone())
     }
 }

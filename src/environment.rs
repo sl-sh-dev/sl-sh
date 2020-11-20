@@ -523,6 +523,7 @@ pub struct Environment {
     pub repl_settings: ReplSettings,
     pub liners: HashMap<&'static str, Context>,
     pub syms: Option<Symbols>,
+    pub next_lex_id: usize,
 }
 
 impl Environment {
@@ -570,6 +571,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         repl_settings: ReplSettings::default(),
         liners: HashMap::new(),
         syms: None,
+        next_lex_id: 1,
     }
 }
 
@@ -583,6 +585,28 @@ pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> 
         name: None,
         free_list: Vec::new(),
     }))
+}
+
+pub fn stack_push_data(environment: &mut Environment, data: ExpEnum) {
+    let reference = Reference::new(
+        data,
+        RefMetaData {
+            namespace: None,
+            doc_string: None,
+        },
+    );
+    environment.stack.push(reference);
+}
+
+pub fn stack_push_exp(environment: &mut Environment, exp: Expression) {
+    let reference = Reference::new_rooted(
+        exp,
+        RefMetaData {
+            namespace: None,
+            doc_string: None,
+        },
+    );
+    environment.stack.push(reference);
 }
 
 pub fn build_new_namespace(
@@ -643,7 +667,33 @@ pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Refere
 }
 
 pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Reference> {
-    let mut loop_scope = if !environment.scopes.is_empty() {
+    // First check any "local" lexical scopes.
+    if let Some(current_frame) = environment.stack_frames.last() {
+        let lex_id = current_frame.symbols.lex_id();
+        let lex_depth = current_frame.symbols.lex_depth();
+        if let Some(idx) = environment
+            .stack_frames
+            .iter()
+            .rev()
+            .map(|syms| {
+                (
+                    syms.symbols.get(key),
+                    syms.index,
+                    syms.symbols.lex_id(),
+                    syms.symbols.lex_depth(),
+                )
+            })
+            .find(|(v, _i, my_lex_id, my_lex_depth)| {
+                v.is_some() && *my_lex_id == lex_id && *my_lex_depth <= lex_depth
+            })
+            .map(|(v, i, _, _)| v.unwrap() + i)
+        {
+            if let Some(r) = environment.stack.get(idx) {
+                return Some(r.clone());
+            }
+        }
+    }
+    /*let mut loop_scope = if !environment.scopes.is_empty() {
         Some(environment.scopes.last().unwrap().clone())
     } else {
         None
@@ -661,7 +711,7 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
             return Some(reference.clone());
         }
         loop_scope = scope.outer.clone();
-    }
+    }*/
     // Then check dynamic scope.
     if let Some(reference) = environment.dynamic_scope.get(key) {
         Some(reference.clone())
@@ -683,14 +733,14 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
         }
         None
     // Then check the namespace. Note, use the namespace from lexical scope if available.
-    } else if let Some(namespace) = namespace {
-        if let Some(reference) = namespace.borrow().get(key) {
-            Some(reference.clone())
-        } else if let Some(reference) = environment.root_scope.borrow().get(key) {
-            Some(reference.clone())
-        } else {
-            None
-        }
+    /*    } else if let Some(namespace) = namespace {
+    if let Some(reference) = namespace.borrow().get(key) {
+        Some(reference.clone())
+    } else if let Some(reference) = environment.root_scope.borrow().get(key) {
+        Some(reference.clone())
+    } else {
+        None
+    }*/
     // If no namespace from lexical scope use the default.
     } else if let Some(reference) = environment.namespace.borrow().get(key) {
         Some(reference.clone())

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::expand_macro;
-use crate::builtins_bind::{builtin_def, builtin_var};
+use crate::builtins_bind::{builtin_def, builtin_set};
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::*;
@@ -13,6 +13,8 @@ use crate::types::*;
 struct SymbolsInt {
     syms: HashMap<&'static str, usize>,
     count: usize,
+    lex_id: usize,
+    lex_depth: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -25,8 +27,18 @@ impl Symbols {
         let data = Rc::new(RefCell::new(SymbolsInt {
             syms: HashMap::new(),
             count: 0,
+            lex_id: 0,
+            lex_depth: 0,
         }));
         Symbols { data }
+    }
+
+    pub fn lex_id(&self) -> usize {
+        self.data.borrow().lex_id
+    }
+
+    pub fn lex_depth(&self) -> u16 {
+        self.data.borrow().lex_depth
     }
 
     pub fn contains_symbol(&self, key: &str) -> bool {
@@ -45,11 +57,24 @@ impl Symbols {
         self.data.borrow_mut().syms.clear();
     }
 
-    pub fn insert(&mut self, key: &'static str) {
+    pub fn insert(&mut self, key: &'static str) -> usize {
         let mut data = self.data.borrow_mut();
         let count = data.count;
         data.syms.insert(key, count);
         data.count += 1;
+        count
+    }
+
+    pub fn set_lex(&mut self, environment: &mut Environment) {
+        let mut data = self.data.borrow_mut();
+        if let Some(lex_syms) = &environment.syms {
+            data.lex_id = lex_syms.data.borrow().lex_id;
+            data.lex_depth = lex_syms.data.borrow().lex_depth + 1;
+        } else {
+            data.lex_id = environment.next_lex_id;
+            environment.next_lex_id += 1;
+            data.lex_depth = 0;
+        }
     }
 }
 
@@ -92,6 +117,7 @@ fn make_fn(
         };
         let mut params = Vec::new();
         let mut syms = Symbols::new();
+        syms.set_lex(environment);
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
@@ -105,7 +131,7 @@ fn make_fn(
             params,
             body,
             syms,
-            capture: get_current_scope(environment),
+            namespace: environment.namespace.clone(),
         })));
     }
     Err(LispError::new("fn: needs at least one form"))
@@ -117,16 +143,17 @@ fn declare_var(
 ) -> Result<(), LispError> {
     if let Some(syms) = &mut environment.syms {
         if let Some(key) = args.next() {
-            let key_d = key.get();
-            match &key_d.data {
-                ExpEnum::Symbol(s, _) => {
+            let mut key_d = key.get_mut();
+            match &mut key_d.data {
+                ExpEnum::Symbol(s, location) => {
                     if syms.contains_symbol(s) {
                         Err(LispError::new(format!(
                             "var: Symbol {} already defined in scope.",
                             s
                         )))
                     } else {
-                        syms.insert(*s);
+                        let idx = syms.insert(*s);
+                        location.replace(SymLoc::Stack(idx));
                         Ok(())
                     }
                 }
@@ -185,10 +212,9 @@ pub fn analyze(
             }
         }
     }
-    let exp_a = expression.get();
-    let exp_d = &exp_a.data;
+    let mut exp_a = expression.get_mut();
     let ret =
-        match exp_d {
+        match &mut exp_a.data {
             ExpEnum::Vector(v) => {
                 if let Some((car, cdr)) = v.split_first() {
                     let car: Expression = car.into();
@@ -222,7 +248,7 @@ pub fn analyze(
                                     }
                                     drop(exp_d);
                                     form_exp.exp.get_mut().data.replace(ExpEnum::Function(
-                                        Callable::new(builtin_var, true),
+                                        Callable::new(builtin_set, true),
                                     ));
                                 }
                                 ExpEnum::Macro(_) => {
@@ -269,7 +295,7 @@ pub fn analyze(
                                     .exp
                                     .get_mut()
                                     .data
-                                    .replace(ExpEnum::Function(Callable::new(builtin_var, true)));
+                                    .replace(ExpEnum::Function(Callable::new(builtin_set, true)));
                             }
                             ExpEnum::Macro(_) => {
                                 panic!("Macros should have been expanded at this point!");
@@ -282,16 +308,30 @@ pub fn analyze(
             }
             ExpEnum::Values(_v) => Ok(expression.clone()),
             ExpEnum::Nil => Ok(expression.clone()),
-            /*ExpEnum::Symbol(s, _) => {//SymLoc::None) => {
-                if let Some(r) = lookup_expression(environment, s) {
+            ExpEnum::Symbol(s, location) => {
+                if let SymLoc::None = location {
+                    if let Some(syms) = &mut environment.syms {
+                        if let Some(idx) = syms.get(s) {
+                            location.replace(SymLoc::Stack(idx));
+                        } else if let Some(r) = lookup_expression(environment, s) {
+                            location.replace(SymLoc::Ref(r));
+                        }
+                    } else {
+                        if let Some(r) = lookup_expression(environment, s) {
+                            location.replace(SymLoc::Ref(r));
+                        }
+                    }
+                }
+                //SymLoc::None) => {
+                /*if let Some(r) = lookup_expression(environment, s) {
                     let new_exp = ExpEnum::Symbol(s, SymLoc::Ref(r));
                     drop(exp_d);
                     drop(exp_a);
                     expression.get_mut().data.replace(new_exp);
-                }
+                }*/
                 Ok(expression.clone())
-            }*/
-            ExpEnum::Symbol(_, _) => Ok(expression.clone()),
+            }
+            //ExpEnum::Symbol(_, _) => Ok(expression.clone()),
             ExpEnum::HashMap(_) => Ok(expression.clone()),
             ExpEnum::String(_, _) => Ok(expression.clone()),
             ExpEnum::True => Ok(expression.clone()),

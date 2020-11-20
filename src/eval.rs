@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::env;
-use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
 use crate::analyze::*;
@@ -28,18 +26,10 @@ pub fn call_lambda(
     let mut body: Expression = lambda.body.clone_root().into();
     let mut syms = lambda.syms.clone();
     let mut looping = true;
-    let new_scope = build_new_scope(Some(lambda.capture.clone()));
-    if let Err(err) = setup_args(
-        environment,
-        Some(&mut new_scope.borrow_mut()),
-        &lambda.params,
-        args,
-        eval_args,
-    ) {
+    if let Err(err) = setup_args(environment, &lambda.params, args, eval_args) {
         return Err(err);
     }
     let old_syms = environment.syms.clone();
-    environment.scopes.push(new_scope);
     set_expression_current(environment, "this-fn", None, lambda_exp.clone());
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
@@ -77,7 +67,7 @@ pub fn call_lambda(
                     environment.scopes.last().unwrap().borrow_mut().clear();
                 }
                 let mut ib = ListIter::new_list(&new_args);
-                if let Err(err) = setup_args(environment, None, &lambda.params, &mut ib, false) {
+                if let Err(err) = setup_args(environment, &lambda.params, &mut ib, false) {
                     environment.syms = old_syms;
                     environment.scopes.pop();
                     return Err(err);
@@ -96,16 +86,8 @@ pub fn call_lambda(
                     environment.syms = old_syms.clone();
                     environment.scopes.pop();
                     // scope is popped so can use ? now.
-                    let new_scope = build_new_scope(Some(lambda.capture.clone()));
                     let mut ib = ListIter::new_list(&parts);
-                    setup_args(
-                        environment,
-                        Some(&mut new_scope.borrow_mut()),
-                        &lambda.params,
-                        &mut ib,
-                        false,
-                    )?;
-                    environment.scopes.push(new_scope);
+                    setup_args(environment, &lambda.params, &mut ib, false)?;
                     set_expression_current(environment, "this-fn", None, lam_han.clone());
                 }
             }
@@ -128,21 +110,13 @@ fn exec_macro(
     // DO NOT use ? in here, need to make sure the new_scope is popped off the
     // current_scope list before ending.
     let body: Expression = sh_macro.body.clone().into();
-    let mut new_scope = Scope::new_with_outer(Some(sh_macro.capture.clone()));
-    match setup_args(
-        environment,
-        Some(&mut new_scope),
-        &sh_macro.params,
-        args,
-        false,
-    ) {
+    match setup_args(environment, &sh_macro.params, args, false) {
         Ok(_) => {}
         Err(err) => {
             return Err(err);
         }
     };
 
-    environment.scopes.push(Rc::new(RefCell::new(new_scope)));
     let lazy = environment.allow_lazy_fn;
     environment.allow_lazy_fn = false;
     match eval(environment, &body) {
@@ -386,7 +360,7 @@ fn fn_eval_lazy(
                     params: p,
                     body: l.body.clone(),
                     syms: l.syms.clone(),
-                    capture: get_current_scope(environment),
+                    namespace: environment.namespace.clone(),
                 }))
             } else {
                 drop(exp_d);
@@ -622,7 +596,7 @@ fn internal_eval(
                     params: p,
                     body: l.body.clone(),
                     syms: l.syms.clone(),
-                    capture: get_current_scope(environment),
+                    namespace: environment.namespace.clone(),
                 })))
             } else {
                 drop(exp_d);

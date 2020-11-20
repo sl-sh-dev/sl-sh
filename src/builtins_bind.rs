@@ -17,6 +17,7 @@ fn _builtin_lex(
     // Make sure not to return without popping this off the scope stack.
     environment.scopes.push(build_new_scope(outer));
     //let mut syms = Symbols::new();
+    //syms.set_lex(environment);
     let mut ret: Option<Expression> = None;
     for arg in args {
         if let Some(ret) = ret {
@@ -111,7 +112,7 @@ fn val_to_reference(
     }
 }
 
-fn builtin_set(
+pub(crate) fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -127,6 +128,7 @@ fn builtin_set(
         }
         Ok(entry.exp.clone())
     }
+    // XXX TODO- work with stack
     let (key, doc_str, val) = proc_set_vars(environment, args)?;
     let val = eval(environment, val)?;
     let mut loop_scope = if !environment.scopes.is_empty() {
@@ -170,7 +172,7 @@ fn builtin_set(
             .namespace
             .borrow_mut()
             .update_entry(key, val, doc_str)
-    // Finally check root (this might be a duplicate is in root but in that case about to error out anyway).
+    // Finally check root (this might be a duplicate if in root but in that case about to error out anyway).
     } else if environment.root_scope.borrow().contains_key(key) {
         environment
             .root_scope
@@ -227,40 +229,6 @@ pub(crate) fn builtin_def(
         let (reference, val) = val_to_reference(environment, ns, doc_string, val)?;
         set_expression_current_namespace(environment, key, reference);
         Ok(val)
-    }
-}
-
-pub(crate) fn builtin_var(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let (key, doc_string, val) = proc_set_vars(environment, args)?;
-    if !environment.scopes.is_empty() {
-        if environment
-            .scopes
-            .last()
-            .unwrap()
-            .borrow()
-            .contains_key(key)
-        {
-            Err(LispError::new(format!(
-                "var: Symbol {} already exists in local scope, use set! to change it",
-                key
-            )))
-        } else {
-            let (reference, val) = val_to_reference(environment, None, doc_string, val)?;
-            environment
-                .scopes
-                .last()
-                .unwrap()
-                .borrow_mut()
-                .insert(key, reference);
-            Ok(val)
-        }
-    } else {
-        Err(LispError::new(
-            "var: Can only be used in a local lexical scope (not a namespace- use def for that)",
-        ))
     }
 }
 
