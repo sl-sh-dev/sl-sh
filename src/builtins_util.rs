@@ -162,34 +162,14 @@ fn set_arg(environment: &mut Environment, var: Expression, do_eval: bool) -> Res
                 reference
             } else {
                 drop(var_d); // Release the read lock on var.
-                let exp = eval(environment, var)?;
-                Reference::new_rooted(
-                    exp,
-                    RefMetaData {
-                        namespace: None,
-                        doc_string: None,
-                    },
-                )
+                eval(environment, var)?
             }
         } else {
             drop(var_d); // Release the read lock on var.
-            let exp = eval(environment, var)?;
-            Reference::new_rooted(
-                exp,
-                RefMetaData {
-                    namespace: None,
-                    doc_string: None,
-                },
-            )
+            eval(environment, var)?
         }
     } else {
-        Reference::new_rooted(
-            var,
-            RefMetaData {
-                namespace: None,
-                doc_string: None,
-            },
-        )
+        var
     };
     environment.stack.push(v2);
     Ok(())

@@ -184,8 +184,7 @@ fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
 
 fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
     let line_exp = get_from_namespace(environment, "__line_handler");
-    if let Some(exp) = line_exp {
-        let fn_exp = exp.exp;
+    if let Some(fn_exp) = line_exp {
         // This unsafe should be OK because the returned object is used in a call to read_line and
         // dropped after.
         let environment = unsafe { &mut *(environment as *mut Environment) };
@@ -225,7 +224,7 @@ pub fn read_prompt(
     liner_id: &'static str,
 ) -> io::Result<String> {
     let repl_settings = lookup_expression(environment, "*repl-settings*").unwrap();
-    let new_repl_settings = load_repl_settings(&repl_settings.exp);
+    let new_repl_settings = load_repl_settings(&repl_settings);
     let mut load_settings = if environment.repl_settings != new_repl_settings {
         environment.repl_settings = new_repl_settings.clone();
         true
@@ -509,9 +508,8 @@ fn builtin_history_nth(
 
 pub fn add_edit_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("prompt"),
         Expression::make_function(
@@ -527,7 +525,6 @@ Example:
 ;(def input-string (prompt \"prompt> \"))
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -545,7 +542,6 @@ Example:
 ;(history-push :repl \"Some command\")
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -565,7 +561,6 @@ Example:
 ;(history-push-throwaway :repl \"Some broken command\")
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -583,7 +578,6 @@ Example:
 ;(history-context :repl \"/home\")
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -600,7 +594,6 @@ Example:
 ;(history-length :repl)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -617,7 +610,6 @@ Example:
 ;(history-empty? :repl)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -634,7 +626,6 @@ Example:
 ;(history-nth :repl 0)
 t
 ",
-            root,
         ),
     );
 }

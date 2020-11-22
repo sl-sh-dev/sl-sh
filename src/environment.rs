@@ -25,7 +25,6 @@ use crate::builtins_system::add_system_builtins;
 use crate::builtins_types::add_type_builtins;
 use crate::builtins_values::add_values_builtins;
 use crate::builtins_vector::add_vec_builtins;
-use crate::gc::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
@@ -109,60 +108,29 @@ pub enum FormType {
 }
 
 #[derive(Clone, Debug)]
-pub struct RefMetaData {
-    pub namespace: Option<&'static str>,
-    pub doc_string: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Reference {
-    pub exp: Expression,
-    pub meta: RefMetaData,
-}
-
-impl Reference {
-    pub fn new(exp: ExpEnum, meta: RefMetaData) -> Reference {
-        let root = gc_mut().insert(ExpObj {
-            data: exp,
-            meta: None,
-            meta_tags: None,
-            analyzed: true, // XXX verify this but is making a ref should have been analyzed.
-        });
-        Reference {
-            exp: Expression::new(root),
-            meta,
-        }
-    }
-
-    pub fn new_rooted(exp: Expression, meta: RefMetaData) -> Reference {
-        let exp = exp.clone_root();
-        Reference { exp, meta }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Scope {
+pub struct Namespace {
     map: HashMap<&'static str, usize>,
-    data: Vec<Reference>,
-    outer: Option<Rc<RefCell<Scope>>>,
-    // If this scope is a namespace it will have a name otherwise it will be None.
-    name: Option<&'static str>,
+    data: Vec<Expression>,
+    doc_strings: Vec<Option<String>>,
+    outer: Option<Rc<RefCell<Namespace>>>,
+    name: &'static str,
     free_list: Vec<usize>,
 }
 
-impl Scope {
-    pub fn new_with_outer(outer: Option<Rc<RefCell<Scope>>>) -> Scope {
-        Scope {
+impl Namespace {
+    pub fn new_with_outer(name: &'static str, outer: Option<Rc<RefCell<Namespace>>>) -> Namespace {
+        Namespace {
             map: HashMap::new(),
             data: Vec::new(),
+            doc_strings: Vec::new(),
             outer,
-            name: None,
+            name,
             free_list: Vec::new(),
         }
     }
 
     fn new_root(interner: &mut Interner) -> Self {
-        let mut data: HashMap<&'static str, Reference> = HashMap::new();
+        let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         add_builtins(interner, &mut data);
         add_system_builtins(interner, &mut data);
         add_math_builtins(interner, &mut data);
@@ -177,14 +145,11 @@ impl Scope {
         add_type_builtins(interner, &mut data);
         add_namespace_builtins(interner, &mut data);
         add_bind_builtins(interner, &mut data);
-        let root = interner.intern("root");
         data.insert(
             interner.intern("*stdin*"),
-            Reference::new(
-                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))),
-                RefMetaData {
-                    namespace: Some(root),
-                    doc_string: Some("Usage: (read-line *stdin*)
+            (
+                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
+                    "Usage: (read-line *stdin*)
 
 File that connects to standard in by default.
 
@@ -199,16 +164,12 @@ Example:
 ; Use a file for stdin for test.
 (dyn *stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (do (test::assert-equal \"Test line\n\" (read-line *stdin*)) (close *stdin*)))
 ".to_string()),
-                },
-            ),
         );
         data.insert(
             interner.intern("*stdout*"),
-            Reference::new(
-                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))),
-                RefMetaData {
-                    namespace: Some(root),
-                    doc_string: Some("Usage: (write-line *stdout*)
+            (
+                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
+                    "Usage: (write-line *stdout*)
 
 File that connects to standard out by default.
 
@@ -222,16 +183,11 @@ Example:
 (dyn *stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (do (write-line *stdout* \"Test out\") (close *stdout*)))
 (test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
 ".to_string()),
-                },
-            ),
         );
         data.insert(
             interner.intern("*stderr*"),
-            Reference::new(
-                ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr))),
-                RefMetaData {
-                    namespace: Some(root),
-                    doc_string: Some("Usage: (write-line *stderr*)
+                (ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr))).into(),
+                    "Usage: (write-line *stderr*)
 
 File that connects to standard error by default.
 
@@ -245,17 +201,12 @@ Example:
 (dyn *stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (do (write-line *stderr* \"Test Error\") (close *stderr*)))
 (test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
 ".to_string()),
-                },
-            ),
         );
         data.insert(
             interner.intern("*ns*"),
-            Reference::new(
-                ExpEnum::String(interner.intern("root").into(), None),
-                RefMetaData {
-                    namespace: Some(root),
-                    doc_string: Some(
-                        "Usage: (print *ns*)
+            (
+                ExpEnum::String(interner.intern("root").into(), None).into(),
+                "Usage: (print *ns*)
 
 Symbol that contains the name of the current namespace.
 
@@ -267,54 +218,27 @@ Example:
 (ns-pop)
 t
 "
-                        .to_string(),
-                    ),
-                },
+                .to_string(),
             ),
         );
         let mut vdata = Vec::with_capacity(data.len());
+        let mut vdocs = Vec::with_capacity(data.len());
         let mut map = HashMap::new();
-        for (k, v) in data.drain() {
-            vdata.push(v);
-            map.insert(k, vdata.len() - 1);
-        }
-        Scope {
-            map,
-            data: vdata,
-            outer: None,
-            name: Some(interner.intern("root")),
-            free_list: Vec::new(),
-        }
-    }
-
-    pub fn with_data<S: ::std::hash::BuildHasher>(
-        environment: Option<&Environment>,
-        mut data_in: HashMap<&'static str, Reference, S>,
-    ) -> Scope {
-        let mut data: HashMap<&'static str, Reference> = HashMap::with_capacity(data_in.len());
-        for (k, v) in data_in.drain() {
-            data.insert(k, v);
-        }
-        let outer = if let Some(environment) = environment {
-            if let Some(scope) = environment.scopes.last() {
-                Some(scope.clone())
+        for (k, (exp, doc_str)) in data.drain() {
+            vdata.push(exp);
+            if doc_str.is_empty() {
+                vdocs.push(None);
             } else {
-                Some(environment.namespace.clone())
+                vdocs.push(Some(doc_str));
             }
-        } else {
-            None
-        };
-        let mut vdata = Vec::with_capacity(data.len());
-        let mut map = HashMap::new();
-        for (k, v) in data.drain() {
-            vdata.push(v);
             map.insert(k, vdata.len() - 1);
         }
-        Scope {
+        Namespace {
             map,
             data: vdata,
-            outer,
-            name: None,
+            doc_strings: vdocs,
+            outer: None,
+            name: interner.intern("root"),
             free_list: Vec::new(),
         }
     }
@@ -327,19 +251,15 @@ t
         self.map.keys()
     }
 
-    pub fn name(&self) -> Option<&'static str> {
+    pub fn name(&self) -> &'static str {
         self.name
     }
 
-    pub fn is_namespace(&self) -> bool {
-        self.name.is_some()
-    }
-
-    pub fn outer(&self) -> Option<Rc<RefCell<Scope>>> {
+    pub fn outer(&self) -> Option<Rc<RefCell<Namespace>>> {
         self.outer.clone()
     }
 
-    pub fn get(&self, key: &str) -> Option<&Reference> {
+    pub fn get(&self, key: &str) -> Option<&Expression> {
         if let Some(idx) = self.map.get(key) {
             if let Some(reference) = self.data.get(*idx) {
                 Some(reference)
@@ -351,7 +271,23 @@ t
         }
     }
 
-    pub fn get_idx(&self, idx: usize) -> Option<Reference> {
+    pub fn get_docs(&self, key: &str) -> Option<&str> {
+        if let Some(idx) = self.map.get(key) {
+            if let Some(docs) = self.doc_strings.get(*idx) {
+                if let Some(docs) = docs {
+                    Some(docs)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_idx(&self, idx: usize) -> Option<Expression> {
         if let Some(reference) = self.data.get(idx) {
             Some(reference.clone())
         } else {
@@ -364,17 +300,12 @@ t
         self.data.clear();
     }
 
-    pub fn remove(&mut self, key: &str) -> Option<Reference> {
+    pub fn remove(&mut self, key: &str) -> Option<Expression> {
         if let Some(idx) = self.map.remove(key) {
-            let new_reference = Reference::new_rooted(
-                Expression::make_nil(),
-                RefMetaData {
-                    namespace: self.name,
-                    doc_string: None,
-                },
-            );
             self.free_list.push(idx);
-            self.data.push(new_reference);
+            self.data.push(Expression::make_nil());
+            self.doc_strings.push(None);
+            self.doc_strings.swap_remove(idx);
             return Some(self.data.swap_remove(idx));
         }
         None
@@ -387,64 +318,47 @@ t
         doc_str: Option<String>,
     ) -> Result<Expression, LispError> {
         if let Some(idx) = self.map.get(key) {
-            if let Some(entry) = self.data.get_mut(*idx) {
-                entry.exp = val;
+            if let Some(docs) = self.doc_strings.get_mut(*idx) {
                 if doc_str.is_some() {
-                    entry.meta.doc_string = doc_str;
+                    *docs = doc_str;
                 }
-                return Ok(entry.exp.clone());
+            }
+            if let Some(entry) = self.data.get_mut(*idx) {
+                *entry = val;
+                return Ok(entry.clone());
             }
         }
         Err(LispError::new(format!("update, key not found {}", key)))
     }
 
-    pub fn insert(&mut self, key: &'static str, reference: Reference) {
-        if let Some(idx) = self.free_list.pop() {
-            self.data.push(reference);
-            self.data.swap_remove(idx);
-            self.map.insert(key, idx);
-        } else {
-            self.data.push(reference);
-            self.map.insert(key, self.data.len() - 1);
-        }
-    }
-
-    pub fn insert_exp(&mut self, key: &'static str, exp: Expression) {
-        let reference = Reference::new_rooted(
-            exp,
-            RefMetaData {
-                namespace: self.name,
-                doc_string: None,
-            },
-        );
-        self.insert(key, reference);
+    pub fn insert(&mut self, key: &'static str, exp: Expression) {
+        self.insert_with_doc(key, exp, None)
     }
 
     pub fn insert_exp_data(&mut self, key: &'static str, data: ExpEnum) {
-        let reference = Reference::new(
-            data,
-            RefMetaData {
-                namespace: self.name,
-                doc_string: None,
-            },
-        );
-        self.insert(key, reference);
+        let exp: Expression = data.into();
+        // XXX verify this but is making a ref should have been analyzed.
+        exp.get_mut().analyzed = true;
+        self.insert(key, exp);
     }
 
-    pub fn insert_exp_with_doc(
+    pub fn insert_with_doc(
         &mut self,
         key: &'static str,
         exp: Expression,
         doc_string: Option<String>,
     ) {
-        let reference = Reference::new_rooted(
-            exp,
-            RefMetaData {
-                namespace: self.name,
-                doc_string,
-            },
-        );
-        self.insert(key, reference);
+        if let Some(idx) = self.free_list.pop() {
+            self.data.push(exp);
+            self.data.swap_remove(idx);
+            self.doc_strings.push(doc_string);
+            self.doc_strings.swap_remove(idx);
+            self.map.insert(key, idx);
+        } else {
+            self.data.push(exp);
+            self.doc_strings.push(doc_string);
+            self.map.insert(key, self.data.len() - 1);
+        }
     }
 }
 
@@ -481,7 +395,7 @@ pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
-    pub stack: Vec<Reference>,
+    pub stack: Vec<Expression>,
     pub stack_frames: Vec<StackFrame>,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
@@ -500,18 +414,15 @@ pub struct Environment {
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
     // bindings.
-    pub dynamic_scope: HashMap<&'static str, Reference>,
-    // This is the environment's root (global scope), it will also be part of
-    // higher level scopes and in the current_scope vector (the first item).
+    pub dynamic_scope: HashMap<&'static str, Expression>,
+    // This is the environment's root (global namespace), it will also be part of
+    // higher level namespaces.
     // It's special so keep a reference here as well for handy access.
-    pub root_scope: Rc<RefCell<Scope>>,
-    // This is the current namespace's scope.  Namespace scopes are NOT pushed onto scopes.
-    pub namespace: Rc<RefCell<Scope>>,
-    // Use as a stack of scopes, entering a new pushes and it gets popped on exit
-    // The actual lookups are done using the scope and it's outer chain NOT this stack.
-    pub scopes: Vec<Rc<RefCell<Scope>>>,
+    pub root_scope: Rc<RefCell<Namespace>>,
+    // This is the current namespace.
+    pub namespace: Rc<RefCell<Namespace>>,
     // Map of all the created namespaces.
-    pub namespaces: HashMap<&'static str, Rc<RefCell<Scope>>>,
+    pub namespaces: HashMap<&'static str, Rc<RefCell<Namespace>>>,
     // Allow lazy functions (i.e. enable TCO).
     pub allow_lazy_fn: bool,
     // Used for block/return-from
@@ -528,16 +439,15 @@ pub struct Environment {
 
 impl Environment {
     pub fn insert_into_root_scope(&mut self, symbol: &'static str, data: Expression) {
-        self.root_scope.borrow_mut().insert_exp(symbol, data);
+        self.root_scope.borrow_mut().insert(symbol, data);
     }
 }
 
 pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
-    let root_scope = Rc::new(RefCell::new(Scope::new_root(&mut interner)));
+    let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let namespace = root_scope.clone();
-    let scopes = Vec::new();
     let mut namespaces = HashMap::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
@@ -562,7 +472,6 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         dynamic_scope: HashMap::new(),
         root_scope,
         namespace,
-        scopes,
         namespaces,
         allow_lazy_fn: true,
         return_val: None,
@@ -575,44 +484,35 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     }
 }
 
-pub fn build_new_scope(outer: Option<Rc<RefCell<Scope>>>) -> Rc<RefCell<Scope>> {
+pub fn build_new_scope(
+    name: &'static str,
+    outer: Option<Rc<RefCell<Namespace>>>,
+) -> Rc<RefCell<Namespace>> {
     let map = HashMap::new();
     let data = Vec::new();
-    Rc::new(RefCell::new(Scope {
+    let doc_strings = Vec::new();
+    Rc::new(RefCell::new(Namespace {
         map,
         data,
+        doc_strings,
         outer,
-        name: None,
+        name,
         free_list: Vec::new(),
     }))
 }
 
 pub fn stack_push_data(environment: &mut Environment, data: ExpEnum) {
-    let reference = Reference::new(
-        data,
-        RefMetaData {
-            namespace: None,
-            doc_string: None,
-        },
-    );
-    environment.stack.push(reference);
+    environment.stack.push(data.into());
 }
 
 pub fn stack_push_exp(environment: &mut Environment, exp: Expression) {
-    let reference = Reference::new_rooted(
-        exp,
-        RefMetaData {
-            namespace: None,
-            doc_string: None,
-        },
-    );
-    environment.stack.push(reference);
+    environment.stack.push(exp);
 }
 
 pub fn build_new_namespace(
     environment: &mut Environment,
     name: &str,
-) -> Result<Rc<RefCell<Scope>>, String> {
+) -> Result<Rc<RefCell<Namespace>>, String> {
     if environment.namespaces.contains_key(name) {
         let msg = format!("Namespace {} already exists!", name);
         Err(msg)
@@ -620,19 +520,16 @@ pub fn build_new_namespace(
         let name = environment.interner.intern(name);
         let mut map = HashMap::new();
         let mut data = Vec::new();
-        data.push(Reference::new(
-            ExpEnum::String(name.into(), None),
-            RefMetaData {
-                namespace: Some(name),
-                doc_string: None,
-            },
-        ));
+        let mut doc_strings = Vec::new();
+        data.push(ExpEnum::String(name.into(), None).into());
+        doc_strings.push(None);
         map.insert(environment.interner.intern("*ns*"), 0);
-        let scope = Scope {
+        let scope = Namespace {
             map,
             data,
+            doc_strings,
             outer: Some(environment.root_scope.clone()),
-            name: Some(name),
+            name,
             free_list: Vec::new(),
         };
         let scope = Rc::new(RefCell::new(scope));
@@ -641,21 +538,7 @@ pub fn build_new_namespace(
     }
 }
 
-pub fn clone_symbols<S: ::std::hash::BuildHasher>(
-    scope: &Scope,
-    data_in: &mut HashMap<&'static str, Reference, S>,
-) {
-    for (k, v) in &scope.map {
-        if let Some(val) = scope.data.get(*v) {
-            data_in.insert(k, val.clone());
-        }
-    }
-    if let Some(outer) = &scope.outer {
-        clone_symbols(&outer.borrow(), data_in);
-    }
-}
-
-pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Reference> {
+pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Expression> {
     let mut loop_scope = Some(environment.namespace.clone());
     while let Some(scope) = loop_scope {
         if let Some(exp) = scope.borrow().get(key) {
@@ -666,7 +549,7 @@ pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Refere
     None
 }
 
-pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Reference> {
+pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Expression> {
     // First check any "local" lexical scopes.
     if let Some(current_frame) = environment.stack_frames.last() {
         let lex_id = current_frame.symbols.lex_id();
@@ -752,12 +635,12 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Referen
     }
 }
 
-pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Reference> {
+pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Expression> {
     match &expression.get().data {
         ExpEnum::Symbol(sym, location) => match location {
             SymLoc::None => lookup_expression(environment, sym),
             SymLoc::Ref(r) => Some(r.clone()),
-            SymLoc::Scope(scope, idx) => scope.borrow().get_idx(*idx),
+            SymLoc::Namespace(scope, idx) => scope.borrow().get_idx(*idx),
             SymLoc::Stack(idx) => {
                 if let Some(r) = environment.stack.get(*idx) {
                     Some(r.clone())
@@ -770,72 +653,6 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
     }
 }
 
-pub fn get_current_scope(environment: &mut Environment) -> Rc<RefCell<Scope>> {
-    if !environment.scopes.is_empty() {
-        environment.scopes.last().unwrap().clone()
-    } else {
-        environment.namespace.clone()
-    }
-}
-
-pub fn set_expression_current(
-    environment: &mut Environment,
-    key: &'static str,
-    doc_str: Option<String>,
-    expression: Expression,
-) {
-    let current_scope = get_current_scope(environment);
-    let mut current_scope = current_scope.borrow_mut();
-    let reference = Reference::new_rooted(
-        expression,
-        RefMetaData {
-            namespace: current_scope.name,
-            doc_string: doc_str,
-        },
-    );
-    current_scope.insert(key, reference);
-}
-
-pub fn set_expression_current_data(
-    environment: &mut Environment,
-    key: &'static str,
-    doc_str: Option<String>,
-    data: ExpEnum,
-) {
-    let current_scope = get_current_scope(environment);
-    let mut current_scope = current_scope.borrow_mut();
-    let reference = Reference::new(
-        data,
-        RefMetaData {
-            namespace: current_scope.name,
-            doc_string: doc_str,
-        },
-    );
-    current_scope.insert(key, reference);
-}
-
-pub fn set_expression_current_namespace(
-    environment: &mut Environment,
-    key: &'static str,
-    reference: Reference,
-) {
-    environment.namespace.borrow_mut().insert(key, reference);
-}
-
-pub fn set_expression_current_ref(
-    environment: &mut Environment,
-    key: &'static str,
-    reference: Reference,
-) {
-    get_current_scope(environment)
-        .borrow_mut()
-        .insert(key, reference);
-}
-
-pub fn remove_expression_current(environment: &mut Environment, key: &str) -> Option<Reference> {
-    get_current_scope(environment).borrow_mut().remove(key)
-}
-
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
     // XXX TODO- check where this is called, making key an Expression is probably better.
     if key.starts_with('$') {
@@ -845,25 +662,17 @@ pub fn is_expression(environment: &Environment, key: &str) -> bool {
     }
 }
 
-pub fn get_symbols_scope(environment: &Environment, key: &str) -> Option<Rc<RefCell<Scope>>> {
-    // DO NOT return a namespace for a namespace key otherwise set will work to
-    // set symbols in other namespaces.  This won't happen because of the lookup.
-    let mut loop_scope = if !environment.scopes.is_empty() {
-        Some(environment.scopes.last().unwrap().clone())
-    } else {
-        Some(environment.namespace.clone())
-    };
-    while let Some(scope) = loop_scope {
-        let scopeb = scope.borrow();
-        if scopeb.map.contains_key(key) {
-            return Some(scope.clone());
+pub fn get_symbol_namespaces(environment: &Environment, key: &str) -> Vec<Rc<RefCell<Namespace>>> {
+    let mut ret: Vec<Rc<RefCell<Namespace>>> = Vec::new();
+    for namespace in environment.namespaces.values() {
+        if namespace.borrow().map.contains_key(key) {
+            ret.push(namespace.clone());
         }
-        loop_scope = scopeb.outer.clone();
     }
-    None
+    ret
 }
 
-pub fn get_namespace(environment: &Environment, name: &str) -> Option<Rc<RefCell<Scope>>> {
+pub fn get_namespace(environment: &Environment, name: &str) -> Option<Rc<RefCell<Namespace>>> {
     if environment.namespaces.contains_key(name) {
         Some(environment.namespaces.get(name).unwrap().clone())
     } else {

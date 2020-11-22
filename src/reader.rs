@@ -394,7 +394,7 @@ fn call_reader_macro(
     end_ch: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
     if let Some(exp) = lookup_expression(environment, name) {
-        let exp = match &exp.exp.get().data {
+        let exp = match &exp.get().data {
             ExpEnum::Lambda(_) => {
                 let mut v = Vec::with_capacity(1);
                 v.push(
@@ -551,7 +551,7 @@ fn read_inner(
     let read_table = lookup_expression(&environment, "*read-table*");
     let mut read_table_chars: HashSet<&'static str> = HashSet::new();
     if let Some(read_table) = &read_table {
-        if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
+        if let ExpEnum::HashMap(map) = &read_table.get().data {
             for key in map.keys() {
                 read_table_chars.insert(key);
             }
@@ -587,7 +587,7 @@ fn read_inner(
         if read_table_chars.contains(&*ch) {
             let mut end_ch = None;
             if let Some(read_table_end_char) = &read_table_end_char {
-                if let ExpEnum::HashMap(map) = &read_table_end_char.exp.get().data {
+                if let ExpEnum::HashMap(map) = &read_table_end_char.get().data {
                     if map.contains_key(&*ch) {
                         if let ExpEnum::Char(ch) = &map.get(&*ch).unwrap().get().data {
                             end_ch = Some(cow_to_ref(environment, &ch));
@@ -596,7 +596,7 @@ fn read_inner(
                 }
             }
             if let Some(read_table) = &read_table {
-                if let ExpEnum::HashMap(map) = &read_table.exp.get().data {
+                if let ExpEnum::HashMap(map) = &read_table.get().data {
                     if map.contains_key(&*ch) {
                         if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
                             chars = prep_reader_macro(environment, chars, stack, s, &ch, end_ch)?;

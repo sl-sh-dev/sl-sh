@@ -277,7 +277,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> Result<Stdio, LispErro
     let out = lookup_expression(environment, key);
     match out {
         Some(out) => {
-            if let ExpEnum::File(f) = &out.exp.get().data {
+            if let ExpEnum::File(f) = &out.get().data {
                 match &*f.borrow() {
                     FileState::Stdout => {
                         if is_out {
@@ -548,7 +548,7 @@ pub fn do_command(
             // Eval the strings below to make sure any expansions happen.
             let new_a = match a_exp_a.data {
                 ExpEnum::Symbol(s, _) => match get_expression(environment, a_exp.clone()) {
-                    Some(exp) => match &exp.exp.get().data {
+                    Some(exp) => match &exp.get().data {
                         ExpEnum::Function(_) => {
                             drop(a_exp_a);
                             eval_data(environment, ExpEnum::String(s.into(), None))?

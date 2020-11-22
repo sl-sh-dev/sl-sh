@@ -65,7 +65,7 @@ pub struct Lambda {
     pub params: Vec<&'static str>,
     pub body: Handle,
     pub syms: Symbols,
-    pub namespace: Rc<RefCell<Scope>>,
+    pub namespace: Rc<RefCell<Namespace>>,
 }
 
 fn params_to_string(params: &[&'static str]) -> String {
@@ -187,8 +187,8 @@ pub struct ExpMeta {
 #[derive(Clone, Debug)]
 pub enum SymLoc {
     None,
-    Ref(Reference),
-    Scope(Rc<RefCell<Scope>>, usize),
+    Ref(Expression),
+    Namespace(Rc<RefCell<Namespace>>, usize),
     Stack(usize),
 }
 
@@ -519,54 +519,30 @@ impl Expression {
         }
     }
 
-    pub fn make_function(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::Function(Callable::new(func, false)),
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
+    pub fn make_function(func: CallFunc, doc_str: &str) -> (Expression, String) {
+        (
+            ExpEnum::Function(Callable::new(func, false)).into(),
+            doc_str.to_string(),
         )
     }
 
-    pub fn make_special(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::Function(Callable::new(func, true)),
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
+    pub fn make_special(func: CallFunc, doc_str: &str) -> (Expression, String) {
+        (
+            ExpEnum::Function(Callable::new(func, true)).into(),
+            doc_str.to_string(),
         )
     }
 
-    pub fn make_special_fn(doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::DeclareFn,
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        )
+    pub fn make_special_fn(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareFn.into(), doc_str.to_string())
     }
 
-    pub fn make_special_def(doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::DeclareDef,
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        )
+    pub fn make_special_def(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareDef.into(), doc_str.to_string())
     }
 
-    pub fn make_special_var(doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::DeclareVar,
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        )
+    pub fn make_special_var(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareVar.into(), doc_str.to_string())
     }
 
     pub fn with_list(list: Vec<Handle>) -> Expression {
@@ -977,6 +953,42 @@ impl From<&Handle> for Expression {
 impl From<&mut Handle> for Expression {
     fn from(item: &mut Handle) -> Self {
         Expression::new(item.clone())
+    }
+}
+
+impl From<ExpEnum> for Expression {
+    fn from(data: ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data,
+            meta: None,
+            meta_tags: None,
+            analyzed: false,
+        });
+        Expression::new(root)
+    }
+}
+
+impl From<&ExpEnum> for Expression {
+    fn from(data: &ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data: data.clone(),
+            meta: None,
+            meta_tags: None,
+            analyzed: false,
+        });
+        Expression::new(root)
+    }
+}
+
+impl From<&mut ExpEnum> for Expression {
+    fn from(data: &mut ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data: data.clone(),
+            meta: None,
+            meta_tags: None,
+            analyzed: false,
+        });
+        Expression::new(root)
     }
 }
 

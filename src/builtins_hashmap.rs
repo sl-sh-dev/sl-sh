@@ -303,9 +303,8 @@ fn builtin_hash_clear(
 
 pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("make-hash"),
         Expression::make_function(
@@ -336,7 +335,7 @@ Example:
 (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
-", root
+"
         ),
     );
     data.insert(
@@ -375,7 +374,6 @@ Example:
 (test::assert-equal \"val three b\" (hash-get tst-hash \"key3\"))
 (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
 ",
-            root,
         ),
     );
     data.insert(
@@ -410,7 +408,6 @@ Example:
 (hash-remove! tst-hash #\\S)
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -435,7 +432,6 @@ Example:
 (test::assert-equal \"default\" (hash-get tst-hash :not-here \"default\"))
 (test::assert-equal \"string default\" (hash-get tst-hash :not-here (str \"string \" \"default\")))
 ",
-            root,
         ),
     );
     data.insert(
@@ -463,7 +459,6 @@ Example:
 (hash-set! tst-hash :key1 \"val one b\")
 (test::assert-true (hash-haskey tst-hash :key1))
 ",
-            root,
         ),
     );
     data.insert(
@@ -486,7 +481,6 @@ Example:
 (test::assert-true (in? (hash-keys tst-hash) 'key3) \" Test key3\")
 (test::assert-false (in? (hash-keys tst-hash) :key4))
 ",
-            root,
         ),
     );
     data.insert(
@@ -513,7 +507,6 @@ Example:
 (test::assert-false (hash-haskey tst-hash \"key3\"))
 (test::assert-false (hash-haskey tst-hash #\\S))
 ",
-            root,
         ),
     );
 }

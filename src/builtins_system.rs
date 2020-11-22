@@ -339,9 +339,8 @@ fn builtin_reap_jobs(
 
 pub fn add_system_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("syscall"),
         Expression::make_function(
@@ -356,7 +355,6 @@ Example:
 (def test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
 (test::assert-equal \"syscall-test\" test-syscall-one)
 ",
-            root,
         ),
     );
     data.insert(
@@ -373,7 +371,6 @@ Example:
 (test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
 (test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
 ",
-            root,
         ),
     );
     data.insert(
@@ -392,7 +389,6 @@ Example:
 (unexport 'TEST_EXPORT_ONE)
 (test::assert-false $TEST_EXPORT_ONE)
 ",
-            root,
         ),
     );
     data.insert(
@@ -409,7 +405,6 @@ Example:
 ;(jobs)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -428,7 +423,6 @@ Example:
 ;(bg)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -447,7 +441,6 @@ Example:
 ;(fg)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -464,7 +457,6 @@ Example:
 ;(run-bg gitk)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -482,7 +474,6 @@ Example:
 ;(exit 0)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -499,7 +490,6 @@ Example:
 (def test-sleep-var (time (sleep 1000)))
 (assert-true (> test-sleep-var 1.0))
 ",
-            root,
         ),
     );
     data.insert(
@@ -516,7 +506,6 @@ Example:
 (def test-sleep-var (time (sleep 1100)))
 (assert-true (> test-sleep-var 1.1))
 ",
-            root,
         ),
     );
     data.insert(
@@ -534,7 +523,6 @@ Example:
 ;(reap-jobs)
 t
 ",
-            root,
         ),
     );
 }

@@ -42,7 +42,7 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: 
         .handle_no_root(),
     );
     let data = Expression::with_list(load_path);
-    environment.root_scope.borrow_mut().insert_exp_with_doc(
+    environment.root_scope.borrow_mut().insert_with_doc(
         environment.interner.intern("*load-path*"),
         data,
         Some(
@@ -61,13 +61,13 @@ t
         ),
     );
     if loadrc {
-        environment.root_scope.borrow_mut().insert_exp(
+        environment.root_scope.borrow_mut().insert(
             environment.interner.intern("*load-slshrc*"),
             Expression::make_true(),
         );
     }
     if repl {
-        environment.root_scope.borrow_mut().insert_exp(
+        environment.root_scope.borrow_mut().insert(
             environment.interner.intern("*interactive*"),
             Expression::make_true(),
         );
@@ -277,7 +277,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     if home.ends_with('/') {
         home = home[..home.len() - 1].to_string();
     }
-    environment.root_scope.borrow_mut().insert_exp(
+    environment.root_scope.borrow_mut().insert(
         environment.interner.intern("*run-script*"),
         Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(command).into(),
@@ -296,7 +296,7 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     environment
         .root_scope
         .borrow_mut()
-        .insert_exp(environment.interner.intern("args"), data);
+        .insert(environment.interner.intern("args"), data);
     load_user_env(&mut environment, &home, false, false);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()

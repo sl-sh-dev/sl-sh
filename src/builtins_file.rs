@@ -54,7 +54,7 @@ fn builtin_cd(
             let arg_d = arg.get();
             let new_arg = match &arg_d.data {
                 ExpEnum::Symbol(s, _) => match get_expression(environment, arg.clone()) {
-                    Some(exp) => match &exp.exp.get().data {
+                    Some(exp) => match &exp.get().data {
                         ExpEnum::Function(_) => eval(
                             environment,
                             Expression::alloc_data(ExpEnum::String((*s).into(), None)),
@@ -406,9 +406,8 @@ fn builtin_glob(
 
 pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("cd"),
         Expression::make_function(
@@ -419,7 +418,6 @@ Change directory.
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -432,7 +430,6 @@ Does the given path exist?
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -445,7 +442,6 @@ Is the given path a file?
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -458,7 +454,6 @@ Is the given path a directory?
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -471,7 +466,6 @@ Setup a pipe between processes.
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -484,7 +478,6 @@ Wait for a process to end and return it's exit status.
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -497,7 +490,6 @@ Return the pid of a process.
 
 Section: shell
 ",
-            root,
         ),
     );
     data.insert(
@@ -510,7 +502,6 @@ Takes a list/varargs of globs and return the list of them expanded.
 
 Section: shell
 ",
-            root,
         ),
     );
 }

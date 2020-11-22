@@ -30,7 +30,8 @@ pub fn call_lambda(
         return Err(err);
     }
     let old_syms = environment.syms.clone();
-    set_expression_current(environment, "this-fn", None, lambda_exp.clone());
+    //set_expression_current(environment, "this-fn", None, lambda_exp.clone());
+    // XXX TODO- push this-fn onto the stack.
     let old_loose = environment.loose_symbols;
     environment.loose_symbols = false;
     let mut lambda_int = lambda.clone();
@@ -48,7 +49,7 @@ pub fn call_lambda(
             Ok(e) => e,
             Err(err) => {
                 environment.syms = old_syms;
-                environment.scopes.pop();
+                //environment.scopes.pop();
                 return Err(err);
             }
         };
@@ -59,17 +60,17 @@ pub fn call_lambda(
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
                     environment.syms = old_syms;
-                    environment.scopes.pop();
+                    //environment.scopes.pop();
                     return Err(LispError::new("Called recur in a non-tail position."));
                 }
-                if !environment.scopes.is_empty() {
-                    // Clear the old variables so no cruft is left on the recur.
-                    environment.scopes.last().unwrap().borrow_mut().clear();
-                }
+                //if !environment.scopes.is_empty() {
+                // Clear the old variables so no cruft is left on the recur.
+                //    environment.scopes.last().unwrap().borrow_mut().clear();
+                //}
                 let mut ib = ListIter::new_list(&new_args);
                 if let Err(err) = setup_args(environment, &lambda.params, &mut ib, false) {
                     environment.syms = old_syms;
-                    environment.scopes.pop();
+                    //environment.scopes.pop();
                     return Err(err);
                 }
             }
@@ -84,11 +85,12 @@ pub fn call_lambda(
                     syms = lambda.syms.clone();
                     looping = true;
                     environment.syms = old_syms.clone();
-                    environment.scopes.pop();
+                    //environment.scopes.pop();
                     // scope is popped so can use ? now.
                     let mut ib = ListIter::new_list(&parts);
                     setup_args(environment, &lambda.params, &mut ib, false)?;
-                    set_expression_current(environment, "this-fn", None, lam_han.clone());
+                    //set_expression_current(environment, "this-fn", None, lam_han.clone());
+                    // XXX TODO- push this-fn onto the stack.
                 }
             }
         }
@@ -96,7 +98,7 @@ pub fn call_lambda(
     }
     environment.loose_symbols = old_loose;
     environment.syms = old_syms;
-    environment.scopes.pop();
+    //environment.scopes.pop();
     Ok(llast_eval
         .unwrap_or_else(Expression::make_nil)
         .resolve(environment)?)
@@ -122,14 +124,14 @@ fn exec_macro(
     match eval(environment, &body) {
         Ok(expansion) => {
             let expansion = expansion.resolve(environment)?;
-            environment.scopes.pop();
+            //environment.scopes.pop();
             let res = eval(environment, expansion);
             environment.allow_lazy_fn = lazy;
             res
         }
         Err(err) => {
             environment.allow_lazy_fn = lazy;
-            environment.scopes.pop();
+            //environment.scopes.pop();
             Err(err)
         }
     }
@@ -143,13 +145,13 @@ pub fn fn_call(
     match command.get().data.clone() {
         ExpEnum::Symbol(command_sym, _) => {
             if let Some(exp) = get_expression(environment, command.clone()) {
-                match exp.exp.get().data.clone() {
+                match exp.get().data.clone() {
                     ExpEnum::Function(c) if !c.is_special_form => (c.func)(environment, &mut *args),
                     ExpEnum::Lambda(_) => {
                         if environment.allow_lazy_fn {
-                            make_lazy(environment, exp.exp.clone(), args)
+                            make_lazy(environment, exp.clone(), args)
                         } else {
-                            call_lambda(environment, exp.exp.clone(), args, true)
+                            call_lambda(environment, exp.clone(), args, true)
                         }
                     }
                     _ => {
@@ -285,13 +287,13 @@ fn fn_eval_lazy(
             }
             let form = get_expression(environment, command.clone());
             if let Some(exp) = form {
-                match &exp.exp.get().data {
+                match &exp.get().data {
                     ExpEnum::Function(c) if allow_form => (c.func)(environment, &mut parts),
                     ExpEnum::Lambda(_) if allow_form => {
                         if environment.allow_lazy_fn {
-                            make_lazy(environment, exp.exp.clone(), &mut parts)
+                            make_lazy(environment, exp.clone(), &mut parts)
                         } else {
-                            call_lambda(environment, exp.exp.clone(), &mut parts, true)
+                            call_lambda(environment, exp.clone(), &mut parts, true)
                         }
                     }
                     ExpEnum::Macro(m) if allow_form => exec_macro(environment, &m, &mut parts),
@@ -559,7 +561,7 @@ fn internal_eval(
                 // Got a keyword, so just be you...
                 Ok(Expression::alloc_data(ExpEnum::Symbol(s, SymLoc::None)))
             } else if let Some(exp) = get_expression(environment, expression.clone()) {
-                let exp = &exp.exp;
+                let exp = &exp;
                 Ok(exp.clone())
             } else if environment.loose_symbols {
                 str_process(environment, s, false)

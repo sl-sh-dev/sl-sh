@@ -13,13 +13,13 @@ use crate::types::*;
 struct SymbolsInt {
     syms: HashMap<&'static str, usize>,
     count: usize,
-    lex_id: usize,
-    lex_depth: u16,
 }
 
 #[derive(Clone, Debug)]
 pub struct Symbols {
     data: Rc<RefCell<SymbolsInt>>,
+    lex_id: usize,
+    lex_depth: u16,
 }
 
 impl Symbols {
@@ -27,18 +27,20 @@ impl Symbols {
         let data = Rc::new(RefCell::new(SymbolsInt {
             syms: HashMap::new(),
             count: 0,
+        }));
+        Symbols {
+            data,
             lex_id: 0,
             lex_depth: 0,
-        }));
-        Symbols { data }
+        }
     }
 
     pub fn lex_id(&self) -> usize {
-        self.data.borrow().lex_id
+        self.lex_id
     }
 
     pub fn lex_depth(&self) -> u16 {
-        self.data.borrow().lex_depth
+        self.lex_depth
     }
 
     pub fn contains_symbol(&self, key: &str) -> bool {
@@ -66,14 +68,13 @@ impl Symbols {
     }
 
     pub fn set_lex(&mut self, environment: &mut Environment) {
-        let mut data = self.data.borrow_mut();
         if let Some(lex_syms) = &environment.syms {
-            data.lex_id = lex_syms.data.borrow().lex_id;
-            data.lex_depth = lex_syms.data.borrow().lex_depth + 1;
+            self.lex_id = lex_syms.lex_id;
+            self.lex_depth = lex_syms.lex_depth + 1;
         } else {
-            data.lex_id = environment.next_lex_id;
+            self.lex_id = environment.next_lex_id;
             environment.next_lex_id += 1;
-            data.lex_depth = 0;
+            self.lex_depth = 0;
         }
     }
 }
@@ -222,7 +223,7 @@ pub fn analyze(
                     if let ExpEnum::Symbol(_, _) = &car_d.data {
                         let form = get_expression(environment, car.clone());
                         if let Some(form_exp) = form {
-                            let exp_d = form_exp.exp.get();
+                            let exp_d = form_exp.get();
                             match &exp_d.data {
                                 ExpEnum::DeclareFn => {
                                     let lambda = {
@@ -237,7 +238,7 @@ pub fn analyze(
                                 }
                                 ExpEnum::DeclareDef => {
                                     drop(exp_d);
-                                    form_exp.exp.get_mut().data.replace(ExpEnum::Function(
+                                    form_exp.get_mut().data.replace(ExpEnum::Function(
                                         Callable::new(builtin_def, true),
                                     ));
                                 }
@@ -247,7 +248,7 @@ pub fn analyze(
                                         declare_var(environment, &mut ib)?;
                                     }
                                     drop(exp_d);
-                                    form_exp.exp.get_mut().data.replace(ExpEnum::Function(
+                                    form_exp.get_mut().data.replace(ExpEnum::Function(
                                         Callable::new(builtin_set, true),
                                     ));
                                 }
@@ -266,7 +267,7 @@ pub fn analyze(
                 if let ExpEnum::Symbol(_, _) = &car.get().data {
                     let form = get_expression(environment, car.clone());
                     if let Some(form_exp) = form {
-                        let exp_d = form_exp.exp.get();
+                        let exp_d = form_exp.get();
                         match &exp_d.data {
                             ExpEnum::DeclareFn => {
                                 let cdr: Expression = cdr.into();
@@ -280,7 +281,6 @@ pub fn analyze(
                             ExpEnum::DeclareDef => {
                                 drop(exp_d);
                                 form_exp
-                                    .exp
                                     .get_mut()
                                     .data
                                     .replace(ExpEnum::Function(Callable::new(builtin_def, true)));
@@ -292,7 +292,6 @@ pub fn analyze(
                                 }
                                 drop(exp_d);
                                 form_exp
-                                    .exp
                                     .get_mut()
                                     .data
                                     .replace(ExpEnum::Function(Callable::new(builtin_set, true)));
@@ -316,10 +315,8 @@ pub fn analyze(
                         } else if let Some(r) = lookup_expression(environment, s) {
                             location.replace(SymLoc::Ref(r));
                         }
-                    } else {
-                        if let Some(r) = lookup_expression(environment, s) {
-                            location.replace(SymLoc::Ref(r));
-                        }
+                    } else if let Some(r) = lookup_expression(environment, s) {
+                        location.replace(SymLoc::Ref(r));
                     }
                 }
                 //SymLoc::None) => {

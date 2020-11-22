@@ -1,9 +1,11 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -38,7 +40,8 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
-            let old_scopes = std::mem::replace(&mut environment.scopes, Vec::new());
+            // XXX TODO- do not do anything special with strings, the calling code should use read
+            // on them itself...
             let ret = match &arg_d.data {
                 ExpEnum::String(s, _) => match read(environment, &s, None, false) {
                     Ok(ast) => eval(environment, ast),
@@ -49,7 +52,6 @@ fn builtin_eval(
                     eval(environment, &arg)
                 }
             };
-            let _ = std::mem::replace(&mut environment.scopes, old_scopes);
             return ret;
         }
     }
@@ -160,10 +162,10 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         None => file_name.to_string(),
     };
     let file_path = if let Some(lp) = lookup_expression(environment, "*load-path*") {
-        let lp_d = lp.exp.get();
+        let lp_d = lp.get();
         let p_itr = match &lp_d.data {
             ExpEnum::Vector(vec) => Box::new(ListIter::new_list(&vec)),
-            _ => lp.exp.iter(),
+            _ => lp.iter(),
         };
         let mut path_out = file_name.clone();
         for l in p_itr {
@@ -375,7 +377,7 @@ fn print_to_oe(
     let out = lookup_expression(environment, key);
     match out {
         Some(out) => {
-            if let ExpEnum::File(f) = &out.exp.get().data {
+            if let ExpEnum::File(f) = &out.get().data {
                 let mut f_borrow = f.borrow_mut();
                 match &mut *f_borrow {
                     FileState::Stdout => {
@@ -648,27 +650,6 @@ fn builtin_bquote(
     }
 }
 
-/*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> Result<Expression, LispError> {
-    let mut new_args: Vec<Expression> = Vec::with_capacity(args.len());
-    for a in args {
-        new_args.push(a.clone());
-    }
-    let mut data: HashMap<String, Expression> = HashMap::new();
-    clone_symbols(
-        &environment.current_scope.last().unwrap().borrow(),
-        &mut data,
-    );
-    let _child = std::thread::spawn(move || {
-        let mut enviro = build_new_spawn_scope(data, environment.sig_int);
-        let _args = to_args(&mut enviro, &new_args).unwrap();
-        if let Err(err) = reap_procs(&enviro) {
-            eprintln!("Error waiting on spawned processes: {}", err);
-        }
-    });
-    //let res = child.join()
-    Ok(Expression::alloc_data(ExpEnum::Nil))
-}*/
-
 fn builtin_and(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -773,14 +754,16 @@ fn do_expansion(
     command_in: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
+    // XXX TODO, rewrite.
     if let ExpEnum::Symbol(_, _) = &command_in.get().data {
         if let Some(exp) = get_expression(environment, command_in.clone()) {
-            if let ExpEnum::Macro(sh_macro) = &exp.exp.get().data {
+            if let ExpEnum::Macro(sh_macro) = &exp.get().data {
                 let body: Expression = sh_macro.body.clone().into();
-                let new_scope = build_new_scope(Some(sh_macro.namespace.clone()));
-                environment.scopes.push(new_scope);
+                // XXX TODO- fix this up to use the stack...
+                //let new_scope = build_new_scope("NA", Some(sh_macro.namespace.clone()));
+                //environment.scopes.push(new_scope);
                 if let Err(err) = setup_args(environment, &sh_macro.params, parts, false) {
-                    environment.scopes.pop();
+                    //environment.scopes.pop();
                     return Err(err);
                 }
                 let old_syms = environment.syms.clone();
@@ -789,12 +772,12 @@ fn do_expansion(
                 let expansion = eval(environment, &tmp_exp); //&body);
                 if let Err(err) = expansion {
                     environment.syms = old_syms;
-                    environment.scopes.pop();
+                    //environment.scopes.pop();
                     return Err(err);
                 }
                 let expansion = expansion.unwrap();
                 environment.syms = old_syms;
-                environment.scopes.pop();
+                //environment.scopes.pop();
                 Ok(Some(expansion))
             } else {
                 Ok(None)
@@ -1145,31 +1128,27 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
 
 fn make_doc(
     _environment: &mut Environment,
-    exp: &Reference,
+    exp: &Expression,
     key: &str,
-) -> Result<Expression, LispError> {
+    namespace: Rc<RefCell<Namespace>>,
+) -> Result<String, LispError> {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
-    new_docs.push_str(&exp.exp.display_type());
-    if let Some(ns) = &exp.meta.namespace {
-        new_docs.push_str("\nNamespace: ");
-        new_docs.push_str(&ns);
-    }
-    if let Some(doc_str) = &exp.meta.doc_string {
+    new_docs.push_str(&exp.display_type());
+    new_docs.push_str("\nNamespace: ");
+    new_docs.push_str(namespace.borrow().name());
+    if let Some(doc_str) = namespace.borrow().get_docs(key) {
         if !doc_str.contains("Usage:") {
-            add_usage(&mut new_docs, key, &exp.exp);
+            add_usage(&mut new_docs, key, &exp);
         }
         new_docs.push_str("\n\n");
         new_docs.push_str(&doc_str);
     } else {
-        add_usage(&mut new_docs, key, &exp.exp);
+        add_usage(&mut new_docs, key, &exp);
     }
     new_docs.push('\n');
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_docs.into(),
-        None,
-    )))
+    Ok(new_docs)
 }
 
 fn get_doc(
@@ -1194,7 +1173,7 @@ fn get_doc(
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
                             if let Some(exp) = lookup_expression(environment, "*ns*") {
-                                match &exp.exp.get().data {
+                                match &exp.get().data {
                                     ExpEnum::String(s, _) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
@@ -1204,46 +1183,65 @@ fn get_doc(
                         } else {
                             namespace.to_string()
                         };
-                        if let Some(scope) = get_namespace(environment, &namespace) {
+                        if let Some(namespace) = get_namespace(environment, &namespace) {
                             if is_raw {
-                                if let Some(exp) = scope.borrow().get(key) {
-                                    if let Some(doc_string) = &exp.meta.doc_string {
-                                        return Ok(Expression::alloc_data(ExpEnum::String(
-                                            doc_string.to_string().into(),
-                                            None,
-                                        )));
-                                    } else {
-                                        return Ok(Expression::alloc_data(ExpEnum::Nil));
-                                    }
+                                if let Some(doc_string) = namespace.borrow().get_docs(key) {
+                                    return Ok(Expression::alloc_data(ExpEnum::String(
+                                        doc_string.to_string().into(),
+                                        None,
+                                    )));
+                                } else {
+                                    return Ok(Expression::alloc_data(ExpEnum::String(
+                                        "".into(),
+                                        None,
+                                    )));
                                 }
-                                return Ok(Expression::alloc_data(ExpEnum::Nil));
-                            } else if let Some(exp) = scope.borrow().get(key) {
-                                return make_doc(environment, &exp, key);
+                            } else if let Some(exp) = namespace.borrow().get(key) {
+                                return Ok(Expression::alloc_data(ExpEnum::String(
+                                    make_doc(environment, &exp, key, namespace.clone())?.into(),
+                                    None,
+                                )));
                             }
                         }
                     }
                 }
-                return Ok(Expression::alloc_data(ExpEnum::Nil));
-            } else if let Some(scope) = get_symbols_scope(environment, &key) {
-                if is_raw {
-                    if let Some(exp) = scope.borrow().get(key) {
-                        if let Some(doc_string) = &exp.meta.doc_string {
-                            return Ok(Expression::alloc_data(ExpEnum::String(
-                                doc_string.to_string().into(),
-                                None,
-                            )));
-                        } else {
-                            return Ok(Expression::alloc_data(ExpEnum::Nil));
+                return Ok(Expression::alloc_data(ExpEnum::String("".into(), None)));
+            } else {
+                let namespaces = get_symbol_namespaces(environment, &key);
+                if namespaces.is_empty() {
+                    return Err(LispError::new(
+                        "doc: first form must evaluate to an existing global symbol",
+                    ));
+                } else if is_raw {
+                    let mut doc_final = String::new();
+                    for namespace in namespaces {
+                        if let Some(doc_string) = namespace.borrow().get_docs(key) {
+                            doc_final.push_str(doc_string);
+                            doc_final.push('\n');
                         }
                     }
-                    return Ok(Expression::alloc_data(ExpEnum::Nil));
-                } else if let Some(exp) = scope.borrow().get(key) {
-                    return make_doc(environment, &exp, &key);
+                    return Ok(Expression::alloc_data(ExpEnum::String(
+                        doc_final.into(),
+                        None,
+                    )));
+                } else {
+                    let mut doc_final = String::new();
+                    for namespace in namespaces {
+                        if let Some(exp) = namespace.borrow().get(key) {
+                            doc_final.push_str(&make_doc(
+                                environment,
+                                &exp,
+                                key,
+                                namespace.clone(),
+                            )?);
+                            doc_final.push('\n');
+                        }
+                    }
+                    return Ok(Expression::alloc_data(ExpEnum::String(
+                        doc_final.into(),
+                        None,
+                    )));
                 }
-            } else {
-                return Err(LispError::new(
-                    "doc: first form must evaluate to an existing symbol",
-                ));
             }
         }
     }
@@ -1619,9 +1617,8 @@ pub fn builtin_greater_than_equal(
 
 pub fn add_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("eval"),
         Expression::make_function(
@@ -1643,7 +1640,6 @@ Example:
 (eval '(set! test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
-            root,
         ),
     );
     data.insert(
@@ -1667,7 +1663,6 @@ Example:
 (eval '(set! test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
-            root,
         ),
     );
     data.insert(
@@ -1685,7 +1680,6 @@ Example:
 (test::assert-equal \"ONE\" test-apply-one)
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1720,7 +1714,7 @@ Example:
 (test::assert-equal nil test-unwind-two)
 (test::assert-equal \"set three\" test-unwind-three)
 (test::assert-equal \"set four\" test-unwind-four)
-", root
+",
         ),
     );
     data.insert(
@@ -1738,7 +1732,6 @@ Example:
 (test::assert-equal :error (car test-err-err))
 (test::assert-equal \"Test Error\" (cadr test-err-err))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1761,7 +1754,6 @@ Example:
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
 ",
-            root,
         ),
     );
     data.insert(
@@ -1787,7 +1779,6 @@ Example:
 (test::assert-error (length 100.0))
 (test::assert-error (length #\\x))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1830,7 +1821,6 @@ Example:
 (test::assert-false (if nil))
 (test::assert-false (if nil t nil t nil t))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1848,7 +1838,6 @@ Example:
 (dyn *stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (do (print \"Print test out\")(print \" two\") (close *stdout*)))
 (test::assert-equal \"Print test out two\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1868,7 +1857,6 @@ Example:
 (test::assert-equal \"Println test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1886,7 +1874,6 @@ Example:
 (dyn *stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (do (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
 (test::assert-equal \"eprint test out two\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1905,7 +1892,7 @@ Example:
 (def topen (open \"/tmp/sl-sh.eprintln.test\" :read))
 (test::assert-equal \"eprintln test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
-", root
+"
         ),
     );
     data.insert(
@@ -1926,7 +1913,6 @@ Example:
 (test::assert-equal \"string 50\" (format \"string\" \" \" 50))
 (test::assert-equal \"string 50 100.5\" (format \"string\" \" \" 50 \" \" 100.5))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1947,7 +1933,6 @@ Example:
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 ",
-            root,
         ),
     );
     data.insert(
@@ -1980,7 +1965,6 @@ Example:
 (test::assert-equal 30 test-fn3)
 (test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1999,7 +1983,6 @@ Example:
 (test::assert-equal (list 1 2 3) '(1 2 3))
 (test::assert-equal '(1 2 3) (quote (1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2024,7 +2007,6 @@ Example:
 (test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
 (test::assert-equal (list 1 2 3) `(,@test-bquote-list))
 ",
-            root,
         ),
     );
     /*data.insert(
@@ -2048,7 +2030,7 @@ Example:
 (test::assert-equal \"and- done\" (and t t \"and- done\"))
 (test::assert-equal 6 (and t t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
-", root),
+"),
     );
     data.insert(
         interner.intern("or"),
@@ -2070,7 +2052,6 @@ Example:
 (test::assert-equal 6 (or nil nil (+ 1 2 3)))
 (test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2089,7 +2070,6 @@ Example:
 (test::assert-false (not t))
 (test::assert-false (not (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2108,7 +2088,6 @@ Example:
 (test::assert-false (null t))
 (test::assert-false (null (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2150,7 +2129,6 @@ Example:
 (test::assert-equal 30 test-macro1)
 (test::assert-equal 100 test-macro2)
 ",
-            root,
         ),
     );
     data.insert(
@@ -2195,7 +2173,6 @@ Example:
 
 (test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2239,7 +2216,6 @@ Example:
 
 (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2285,7 +2261,6 @@ Example:
 
 (test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2319,7 +2294,6 @@ Example:
     (if (> idx 1) (recur (- idx 1)))))5)
 (assert-equal 5 tot)
 ",
-            root,
         ),
     );
     data.insert(
@@ -2347,7 +2321,6 @@ Example:
 (test::assert-true (symbol? test-gensym-two))
 (test::assert-true (symbol? test-gensym-three))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2363,7 +2336,6 @@ Section: shell
 Example:
 (test::assert-true (string? (version)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2379,7 +2351,7 @@ Section: shell
 Example:
 (test::assert-equal \"Failed to execute [str string]: No such file or directory (os error 2)\" (cadr (get-error (command (str \"string\")))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
-", root
+"
         ),
     );
     data.insert(
@@ -2396,7 +2368,6 @@ Example:
 (test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2413,7 +2384,6 @@ Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 (test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2437,7 +2407,7 @@ Example:
 (test::assert-true (vec? (caddr get-error-t1)))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
-", root
+"
         ),
     );
     data.insert(
@@ -2454,7 +2424,6 @@ Example:
 ;(doc 'car)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -2471,7 +2440,6 @@ Example:
 ;(doc-raw 'car)
 t
 ",
-            root,
         ),
     );
 
@@ -2492,7 +2460,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-", root
+"
         ),
     );
 
@@ -2512,7 +2480,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-", root
+"
         ),
     );
 
@@ -2530,7 +2498,6 @@ Example:
 ;(intern-stats)
 t
 ",
-            root,
         ),
     );
 
@@ -2548,7 +2515,6 @@ Example:
 ;(meta-line-no)
 t
 ",
-            root,
         ),
     );
 
@@ -2566,7 +2532,6 @@ Example:
 ;(meta-column-no)
 t
 ",
-            root,
         ),
     );
 
@@ -2584,7 +2549,6 @@ Example:
 ;(meta-file-name)
 t
 ",
-            root,
         ),
     );
 
@@ -2614,7 +2578,6 @@ Example:
 (test::assert-true (meta-tag? meta-add-tags-var :tag6))
 (test::assert-true (meta-tag? meta-add-tags-var :tag7))
 ",
-            root,
         ),
     );
 
@@ -2635,7 +2598,6 @@ Example:
 (test::assert-true (meta-tag? meta-add-tag-var :tag1))
 (test::assert-false (meta-tag? meta-add-tag-var :tag2))
 ",
-            root,
         ),
     );
 
@@ -2671,7 +2633,6 @@ Example:
 (test::assert-false (= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (= \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2703,7 +2664,6 @@ Example:
 (test::assert-true (> \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (> \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2734,7 +2694,6 @@ Example:
 (test::assert-true (>= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (>= \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2765,7 +2724,6 @@ Example:
 (test::assert-true (< \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (< \"baa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2795,7 +2753,6 @@ Example:
 (test::assert-true (<= \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (<= \"baa\" \"aab\"))
 ",
-            root,
         ),
     );
     fn to_cow(input: &'static [u8]) -> Cow<'static, str> {
@@ -2803,12 +2760,9 @@ Example:
     }
     data.insert(
         interner.intern("*core-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(CORE_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *core-src*)
+        (
+            ExpEnum::String(to_cow(CORE_LISP), None).into(),
+            "Usage: (print *core-src*)
 
 The builtin source code for core.lisp.
 
@@ -2818,19 +2772,14 @@ Example:
 ;(print *core-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*struct-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(STRUCT_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *struct-src*)
+        (
+            ExpEnum::String(to_cow(STRUCT_LISP), None).into(),
+            "Usage: (print *struct-src*)
 
 The builtin source code for struct.lisp.
 
@@ -2840,19 +2789,14 @@ Example:
 ;(print *struct-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*iterator-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(ITERATOR_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *iterator-src*)
+        (
+            ExpEnum::String(to_cow(ITERATOR_LISP), None).into(),
+            "Usage: (print *iterator-src*)
 
 The builtin source code for iterator.lisp.
 
@@ -2862,19 +2806,14 @@ Example:
 ;(print *iterator-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*collection-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(COLLECTION_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *collection-src*)
+        (
+            ExpEnum::String(to_cow(COLLECTION_LISP), None).into(),
+            "Usage: (print *collection-src*)
 
 The builtin source code for collection.lisp.
 
@@ -2884,19 +2823,14 @@ Example:
 ;(print *collection-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*seq-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SEQ_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *seq-src*)
+        (
+            ExpEnum::String(to_cow(SEQ_LISP), None).into(),
+            "Usage: (print *seq-src*)
 
 The builtin source code for seq.lisp.
 
@@ -2906,19 +2840,14 @@ Example:
 ;(print *seq-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*shell-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SHELL_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *shell-src*)
+        (
+            ExpEnum::String(to_cow(SHELL_LISP), None).into(),
+            "Usage: (print *shell-src*)
 
 The builtin source code for shell.lisp.
 
@@ -2928,19 +2857,14 @@ Example:
 ;(print *shell-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*endfix-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(ENDFIX_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *endfix-src*)
+        (
+            ExpEnum::String(to_cow(ENDFIX_LISP), None).into(),
+            "Usage: (print *endfix-src*)
 
 The builtin source code for endfix.lisp.
 
@@ -2950,19 +2874,14 @@ Example:
 ;(print *endfix-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*test-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(TEST_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *test-src*)
+        (
+            ExpEnum::String(to_cow(TEST_LISP), None).into(),
+            "Usage: (print *test-src*)
 
 The builtin source code for test.lisp.
 
@@ -2972,19 +2891,14 @@ Example:
 ;(print *test-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*slsh-std-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SLSH_STD_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *slsh-std-src*)
+        (
+            ExpEnum::String(to_cow(SLSH_STD_LISP), None).into(),
+            "Usage: (print *slsh-std-src*)
 
 The builtin source code for slsh-std.lisp.
 
@@ -2994,19 +2908,14 @@ Example:
 ;(print *slsh-std-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*slshrc-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SLSHRC), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *slshrc-src*)
+        (
+            ExpEnum::String(to_cow(SLSHRC), None).into(),
+            "Usage: (print *slshrc-src*)
 
 The builtin source code for slshrc.
 
@@ -3016,9 +2925,7 @@ Example:
 ;(print *slshrc-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
 }

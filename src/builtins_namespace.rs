@@ -9,13 +9,7 @@ use crate::types::*;
 fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
     environment.root_scope.borrow_mut().insert(
         environment.interner.intern("*active-ns*"),
-        Reference::new(
-            ExpEnum::String(ns.into(), None),
-            RefMetaData {
-                namespace: Some("root"),
-                doc_string: None,
-            },
-        ),
+        ExpEnum::String(ns.into(), None).into(),
     );
 }
 
@@ -159,9 +153,8 @@ fn builtin_ns_symbols(
 
 pub fn add_namespace_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("ns-create"),
         Expression::make_function(
@@ -183,7 +176,6 @@ Example:
 (ns-pop)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -211,7 +203,6 @@ Example:
 (ns-pop)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -230,7 +221,6 @@ Example:
 (ns-pop)
 (test::assert-true (ns-exists? 'ns-exists-test-namespace))
 ",
-            root,
         ),
     );
     data.insert(
@@ -250,7 +240,6 @@ Example:
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -269,7 +258,6 @@ Example:
 (test::assert-includes 'car (ns-symbols 'root))
 t
 ",
-            root,
         ),
     );
 }
