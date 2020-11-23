@@ -81,13 +81,12 @@
 	Section: bash-completions"
 	(args)
 	(let ((arg-str (str-cat-list " " args)))
-		(do
-			(def raw-list-of-completions (get-bash-completion arg-str))
+		((fn (completions)
 			(if (and
-					(= 1 (length raw-list-of-completions))
-					(str-empty? (first raw-list-of-completions)))
+					(= 1 (length completions))
+					(str-empty? (first completions)))
 				nil
-				raw-list-of-completions))))
+				completions)) (get-bash-completion arg-str))))
 
 ;; Completion hooks, the match is for the command and then custom completions can be returned.
 (defn __completion_hook (&rest args)

@@ -3,6 +3,7 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
+
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
@@ -483,19 +484,32 @@ Section: tmux"
 ;; }}}
 
 ;; machine specific {{{
-
-(def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
-(if (fs-exists? custom-lisp-config)
-	(load custom-lisp-config)
-	(println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
-
+    (def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
+    (if (fs-exists? custom-lisp-config)
+        ((fn (result)
+            (if (= :ok (car result))
+                (cdr result)
+                (println (car result) " loading custom lisp config (" custom-lisp-config ")\n" (cdr result))))
+             (get-error (load custom-lisp-config)))
+        (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 ;; }}}
 
-#|
-;; user ns docs {{{
+(defn handle-get-error (on-success on-failure result)
+      (var 'response (cdr result))
+      (if (= :ok (car result))
+        (progn (println "good job.") (on-success response) response)
+        (progn (println "bad job." ) (on-failure response) nil)))
 
+;; user ns docs {{{
 (pushd "~/development/slsh/docs/")
-(when (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))) (progn
+(when (or
+        (not (fs-exists? "index.markdown"))
+        (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))))
+  ;;j(handle-get-error
+   ;; (fn (x) (println "Generated docs."))
+   ;; (fn (x) (println "Error generating docs.\n" x))
+    ;;(get-error
+    (progn
     (load "mk-docs.lisp")
 
     (defn filter-non-user-forms (sym-list namespaces) (progn
@@ -507,23 +521,13 @@ Section: tmux"
                 (recur sym-list (rest namespaces))))))
 
     (defn filter-user-undocable-forms (sym-list)
-        (filter (fn (x)
-            (and (not (= x 'custom-lisp-config))
-                (not (= x 'filter-non-user-forms))
-                (not (= x 'filter-user-undocable-forms))
-                (not (= x 'list-of-user-slsh-syms))
-                (not (= x '*repl-settings*))
-                (not (= x '__completion_hook))
-                (not (= x 'default-namespaces))
-                (not (= x '__line_handler))
-                (not (= x '__exec_hook))
-                (not (= x '__prompt))))
-            sym-list))
+        (var 'to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms all-docstrings))
+          (filter (fn (x) (not (in? to-filter x))) sym-list))
 
     ;; TODO ideally this would live in mk-docs.lisp
-    ;; and :user would be an option as param fo mkdocs::get-doc-list-for
+    ;; and :user would be an option as param of mkdocs::get-doc-list-for
     (defn list-of-user-slsh-syms () (progn
-        (def user-syms (list))
+        (var 'user-syms (list))
         (def all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
         (for a-ns in (filter
                     (fn (x) (not (in? all-non-user-namespaces x)))
@@ -531,26 +535,19 @@ Section: tmux"
             (append-to! user-syms (ns-symbols (to-symbol a-ns))))
         (def user-forms (mkdocs::filter-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
         (set! user-forms (filter-user-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
-        (println "user forms: " user-forms)
-        user-forms))
+        (collect-vec user-forms)))
 
     (def all-user-slsh-syms (list-of-user-slsh-syms))
-
-    (println "all my slsh-syms : " all-user-slsh-syms)
-
     (def all-docstrings
-        (map (fn (x) (doc (to-symbol x))) all-user-slsh-syms))
-
+        (map (fn (x) (doc (to-symbol x))) (filter (fn (x) (= :ok (car (get-error (doc (to-symbol x)))))) all-user-slsh-syms)))
     ;; check the last modified time of index.markdown and only do this if
     ; has not been done in some amount of time.
     (mkdocs::make-md-file-with-docstrings
         "index.markdown"
         (collect-vec all-docstrings))
-
-    (println "Built docs!"))) ;; (println "not building docs")
+    (println "Built docs!"))
+      ;;))
+)
 
 (popd)
 ;; }}}
-|#
-
-(ns-enter 'user)

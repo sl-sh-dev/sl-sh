@@ -42,7 +42,7 @@
 		sym-list))
 
 (defn list-of-all-slsh-syms ()
-	(var sym-list (ns-symbols 'root))
+	(var 'sym-list (ns-symbols 'root))
 	(for a-ns in (filter (fn (x) (and
 						(not (= x "docmd"))
 						(not (= x "docparse"))
