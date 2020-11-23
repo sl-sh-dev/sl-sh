@@ -9,7 +9,28 @@ use crate::process::*;
 use crate::reader::read;
 use crate::types::*;
 
-pub fn call_lambda(
+fn prep_stack(
+    environment: &mut Environment,
+    var_names: &[&'static str],
+    vars: &mut dyn Iterator<Item = Expression>,
+    do_eval: bool,
+    lambda: Lambda,
+) -> Result<(), LispError> {
+    let index = environment.stack.len();
+    setup_args(environment, var_names, vars, do_eval)?;
+    let symbols = lambda.syms.clone();
+    environment.stack.push(ExpEnum::Lambda(lambda).into()); // Push the 'this-fn' value.
+    let mut i = 0;
+    let extras = symbols.len() - (var_names.len() + 1);
+    while i < extras {
+        environment.stack.push(ExpEnum::Undefined.into());
+        i += 1;
+    }
+    environment.stack_frames.push(StackFrame { index, symbols });
+    Ok(())
+}
+
+fn call_lambda_int(
     environment: &mut Environment,
     lambda_exp: Expression,
     args: &mut dyn Iterator<Item = Expression>,
@@ -21,60 +42,38 @@ pub fn call_lambda(
     } else {
         return Err(LispError::new("Lambda required."));
     };
-    // DO NOT use ? in here, need to make sure the new_scope is popped off the
-    // current_scope list before ending.
     let mut body: Expression = lambda.body.clone_root().into();
-    let mut syms = lambda.syms.clone();
-    let mut looping = true;
-    if let Err(err) = setup_args(environment, &lambda.params, args, eval_args) {
-        return Err(err);
-    }
-    let old_syms = environment.syms.clone();
-    //set_expression_current(environment, "this-fn", None, lambda_exp.clone());
-    // XXX TODO- push this-fn onto the stack.
-    let old_loose = environment.loose_symbols;
-    environment.loose_symbols = false;
+    let stack_len = environment.stack.len();
+    let stack_frames_len = environment.stack_frames.len();
+    analyze(environment, &body)?;
+    prep_stack(environment, &lambda.params, args, eval_args, lambda.clone())?;
     let mut lambda_int = lambda.clone();
     let mut lambda: &mut Lambda = &mut lambda_int;
     let mut llast_eval: Option<Expression> = None;
+    let mut looping = true;
     while looping {
         if environment.sig_int.load(Ordering::Relaxed) {
             environment.sig_int.store(false, Ordering::Relaxed);
             return Err(LispError::new("Lambda interupted by SIGINT."));
         }
-        environment.syms = Some(syms.clone());
-        let tmp_exp = analyze(environment, &body)?;
-        let last_eval = match eval_nr(environment, &tmp_exp) {
-            //body) {
-            Ok(e) => e,
-            Err(err) => {
-                environment.syms = old_syms;
-                //environment.scopes.pop();
-                return Err(err);
-            }
-        };
+        environment.syms = Some(lambda.syms.clone());
+        let last_eval = eval_nr(environment, &body)?;
         looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
+            // This is a recur call, must be a tail call.
             let recur_args = environment.state.recur_num_args.unwrap();
             environment.state.recur_num_args = None;
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
-                    environment.syms = old_syms;
-                    //environment.scopes.pop();
                     return Err(LispError::new("Called recur in a non-tail position."));
                 }
-                //if !environment.scopes.is_empty() {
-                // Clear the old variables so no cruft is left on the recur.
-                //    environment.scopes.last().unwrap().borrow_mut().clear();
-                //}
-                let mut ib = ListIter::new_list(&new_args);
-                if let Err(err) = setup_args(environment, &lambda.params, &mut ib, false) {
-                    environment.syms = old_syms;
-                    //environment.scopes.pop();
-                    return Err(err);
-                }
+                let ib = &mut ListIter::new_list(&new_args);
+                environment.stack.truncate(stack_len);
+                environment.stack_frames.truncate(stack_frames_len);
+                prep_stack(environment, &lambda.params, ib, eval_args, lambda.clone())?;
             }
         } else if environment.exit_code.is_none() {
+            // This will detect a normal tail call and optimize it.
             if let ExpEnum::LazyFn(lam, parts) = &last_eval.get().data {
                 let lam_han: Expression = lam.into();
                 let lam_d = lam_han.get();
@@ -82,26 +81,39 @@ pub fn call_lambda(
                     lambda_int = lam.clone();
                     lambda = &mut lambda_int;
                     body = lambda.body.clone_root().into();
-                    syms = lambda.syms.clone();
                     looping = true;
-                    environment.syms = old_syms.clone();
-                    //environment.scopes.pop();
-                    // scope is popped so can use ? now.
-                    let mut ib = ListIter::new_list(&parts);
-                    setup_args(environment, &lambda.params, &mut ib, false)?;
-                    //set_expression_current(environment, "this-fn", None, lam_han.clone());
-                    // XXX TODO- push this-fn onto the stack.
+                    let ib = &mut ListIter::new_list(&parts);
+                    environment.stack.truncate(stack_len);
+                    environment.stack_frames.truncate(stack_frames_len);
+                    analyze(environment, &body)?;
+                    prep_stack(environment, &lambda.params, ib, eval_args, lambda.clone())?;
                 }
             }
         }
         llast_eval = Some(last_eval);
     }
-    environment.loose_symbols = old_loose;
-    environment.syms = old_syms;
-    //environment.scopes.pop();
     Ok(llast_eval
         .unwrap_or_else(Expression::make_nil)
         .resolve(environment)?)
+}
+
+pub fn call_lambda(
+    environment: &mut Environment,
+    lambda_exp: Expression,
+    args: &mut dyn Iterator<Item = Expression>,
+    eval_args: bool,
+) -> Result<Expression, LispError> {
+    let old_loose = environment.loose_symbols;
+    let old_syms = environment.syms.clone();
+    let stack_len = environment.stack.len();
+    let stack_frames_len = environment.stack_frames.len();
+    environment.loose_symbols = false;
+    let ret = call_lambda_int(environment, lambda_exp, args, eval_args);
+    environment.syms = old_syms;
+    environment.loose_symbols = old_loose;
+    environment.stack.truncate(stack_len);
+    environment.stack_frames.truncate(stack_frames_len);
+    ret
 }
 
 fn exec_macro(
@@ -109,32 +121,14 @@ fn exec_macro(
     sh_macro: &Lambda,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    // DO NOT use ? in here, need to make sure the new_scope is popped off the
-    // current_scope list before ending.
-    let body: Expression = sh_macro.body.clone().into();
-    match setup_args(environment, &sh_macro.params, args, false) {
-        Ok(_) => {}
-        Err(err) => {
-            return Err(err);
-        }
-    };
-
-    let lazy = environment.allow_lazy_fn;
-    environment.allow_lazy_fn = false;
-    match eval(environment, &body) {
-        Ok(expansion) => {
-            let expansion = expansion.resolve(environment)?;
-            //environment.scopes.pop();
-            let res = eval(environment, expansion);
-            environment.allow_lazy_fn = lazy;
-            res
-        }
-        Err(err) => {
-            environment.allow_lazy_fn = lazy;
-            //environment.scopes.pop();
-            Err(err)
-        }
-    }
+    let expansion = call_lambda(
+        environment,
+        ExpEnum::Lambda(sh_macro.clone()).into(),
+        args,
+        false,
+    )?
+    .resolve(environment)?;
+    eval(environment, &expansion)
 }
 
 pub fn fn_call(

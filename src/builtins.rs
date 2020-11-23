@@ -738,6 +738,7 @@ fn builtin_macro(
                 return Err(LispError::new("macro: parameters must be symbols"));
             }
         }
+        syms.insert("this-fn");
         let body = body.handle_no_root();
         return Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
             params,
@@ -754,11 +755,17 @@ fn do_expansion(
     command_in: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
-    // XXX TODO, rewrite.
     if let ExpEnum::Symbol(_, _) = &command_in.get().data {
         if let Some(exp) = get_expression(environment, command_in.clone()) {
             if let ExpEnum::Macro(sh_macro) = &exp.get().data {
-                let body: Expression = sh_macro.body.clone().into();
+                let expansion = call_lambda(
+                    environment,
+                    ExpEnum::Lambda(sh_macro.clone()).into(),
+                    parts,
+                    false,
+                )?
+                .resolve(environment)?;
+                /*let body: Expression = sh_macro.body.clone().into();
                 // XXX TODO- fix this up to use the stack...
                 //let new_scope = build_new_scope("NA", Some(sh_macro.namespace.clone()));
                 //environment.scopes.push(new_scope);
@@ -768,8 +775,8 @@ fn do_expansion(
                 }
                 let old_syms = environment.syms.clone();
                 environment.syms = Some(sh_macro.syms.clone());
-                let tmp_exp = analyze(environment, &body)?;
-                let expansion = eval(environment, &tmp_exp); //&body);
+                analyze(environment, &body)?;
+                let expansion = eval(environment, &body);
                 if let Err(err) = expansion {
                     environment.syms = old_syms;
                     //environment.scopes.pop();
@@ -777,7 +784,7 @@ fn do_expansion(
                 }
                 let expansion = expansion.unwrap();
                 environment.syms = old_syms;
-                //environment.scopes.pop();
+                //environment.scopes.pop();*/
                 Ok(Some(expansion))
             } else {
                 Ok(None)
