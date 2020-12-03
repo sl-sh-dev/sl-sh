@@ -3,7 +3,6 @@ use std::iter::FromIterator;
 
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::Handle;
 use crate::types::*;
 
 pub fn param_eval(
@@ -151,101 +150,4 @@ pub fn compress_tilde(path: &str) -> Option<String> {
     } else {
         None
     }
-}
-
-fn set_arg(environment: &mut Environment, var: Expression, do_eval: bool) -> Result<(), LispError> {
-    let var = var.resolve(environment)?;
-    let v2 = if do_eval {
-        let var_d = var.get();
-        if let ExpEnum::Symbol(_, _) = &var_d.data {
-            if let Some(reference) = get_expression(environment, var.clone()) {
-                reference
-            } else {
-                drop(var_d); // Release the read lock on var.
-                eval(environment, var)?
-            }
-        } else {
-            drop(var_d); // Release the read lock on var.
-            eval(environment, var)?
-        }
-    } else {
-        var
-    };
-    environment.stack.push(v2);
-    Ok(())
-}
-
-pub fn setup_args(
-    environment: &mut Environment,
-    var_names: &[&'static str],
-    vars: &mut dyn Iterator<Item = Expression>,
-    do_eval: bool,
-) -> Result<(), LispError> {
-    let mut names_iter = var_names.iter();
-    let mut params = 0;
-    loop {
-        let k = names_iter.next();
-        let v = vars.next();
-        if k.is_none() && v.is_none() {
-            break;
-        } else if k.is_some() && *k.unwrap() == "&rest" {
-            let rest_name = if let Some(k) = names_iter.next() {
-                k
-            } else {
-                return Err(LispError::new("&rest requires a parameter to follow"));
-            };
-            if *rest_name == "&rest" {
-                return Err(LispError::new("&rest can only appear once"));
-            }
-            if names_iter.next().is_some() {
-                return Err(LispError::new("&rest must be before the last parameter"));
-            }
-            let mut rest_data: Vec<Handle> = Vec::new();
-            if let Some(v) = v {
-                let v2 = if do_eval { eval(environment, v)? } else { v };
-                rest_data.push(v2.into());
-            }
-            for v in vars {
-                let v2 = if do_eval { eval(environment, v)? } else { v };
-                rest_data.push(v2.into());
-            }
-            if rest_data.is_empty() {
-                stack_push_data(environment, ExpEnum::Nil);
-            } else {
-                let data = Expression::with_list(rest_data);
-                stack_push_exp(environment, data);
-            }
-            return Ok(());
-        } else if k.is_none() || v.is_none() {
-            let mut min_params = params;
-            if v.is_some() {
-                params += 1;
-            }
-            let mut has_rest = false;
-            for k in names_iter {
-                if *k == "&rest" {
-                    has_rest = true;
-                } else {
-                    min_params += 1;
-                }
-            }
-            let msg = if has_rest {
-                format!(
-                    "wrong number of parameters, expected at least {} got {}",
-                    min_params,
-                    (params + vars.count())
-                )
-            } else {
-                format!(
-                    "wrong number of parameters, expected {} got {}",
-                    min_params,
-                    (params + vars.count())
-                )
-            };
-            return Err(LispError::new(msg));
-        }
-        set_arg(environment, v.unwrap(), do_eval)?;
-        params += 1;
-    }
-    Ok(())
 }

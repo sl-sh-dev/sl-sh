@@ -1,94 +1,15 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-
 use crate::builtins::expand_macro;
-use crate::builtins_bind::{builtin_def, builtin_set};
 use crate::environment::*;
 use crate::eval::*;
 use crate::gc::*;
+use crate::symbols::*;
 use crate::types::*;
 
-#[derive(Clone, Debug)]
-struct SymbolsInt {
-    syms: HashMap<&'static str, usize>,
-    count: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct Symbols {
-    data: Rc<RefCell<SymbolsInt>>,
-    lex_id: usize,
-    lex_depth: u16,
-}
-
-impl Symbols {
-    pub fn new() -> Symbols {
-        let data = Rc::new(RefCell::new(SymbolsInt {
-            syms: HashMap::new(),
-            count: 0,
-        }));
-        Symbols {
-            data,
-            lex_id: 0,
-            lex_depth: 0,
-        }
-    }
-
-    pub fn lex_id(&self) -> usize {
-        self.lex_id
-    }
-
-    pub fn lex_depth(&self) -> u16 {
-        self.lex_depth
-    }
-
-    pub fn contains_symbol(&self, key: &str) -> bool {
-        self.data.borrow().syms.contains_key(key)
-    }
-
-    pub fn get(&self, key: &str) -> Option<usize> {
-        if let Some(idx) = self.data.borrow().syms.get(key) {
-            Some(*idx)
-        } else {
-            None
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.data.borrow_mut().syms.clear();
-    }
-
-    pub fn insert(&mut self, key: &'static str) -> usize {
-        let mut data = self.data.borrow_mut();
-        let count = data.count;
-        data.syms.insert(key, count);
-        data.count += 1;
-        count
-    }
-
-    pub fn set_lex(&mut self, environment: &mut Environment) {
-        if let Some(lex_syms) = &environment.syms {
-            self.lex_id = lex_syms.lex_id;
-            self.lex_depth = lex_syms.lex_depth + 1;
-        } else {
-            self.lex_id = environment.next_lex_id;
-            environment.next_lex_id += 1;
-            self.lex_depth = 0;
-        }
-    }
-}
-
-impl Default for Symbols {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-fn make_fn(
+pub fn make_fn(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+    outer_syms: &Option<Symbols>,
+) -> Result<Lambda, LispError> {
     if let Some(params) = args.next() {
         let (first, second) = (args.next(), args.next());
         let body = if let Some(first) = first {
@@ -117,32 +38,35 @@ fn make_fn(
             params.iter()
         };
         let mut params = Vec::new();
-        let mut syms = Symbols::new();
-        syms.set_lex(environment);
+        let mut syms = Symbols::with_frame(environment, outer_syms);
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
-                syms.insert(s);
+                if s != "&rest" {
+                    syms.insert(s);
+                }
             } else {
                 return Err(LispError::new("fn: parameters must be symbols"));
             }
         }
+        syms.insert("this-fn");
+        analyze(environment, &body, &mut Some(syms.clone()))?;
         let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
+        return Ok(Lambda {
             params,
             body,
             syms,
             namespace: environment.namespace.clone(),
-        })));
+        });
     }
     Err(LispError::new("fn: needs at least one form"))
 }
 
 fn declare_var(
-    environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
+    syms: &mut Option<Symbols>,
 ) -> Result<(), LispError> {
-    if let Some(syms) = &mut environment.syms {
+    if let Some(syms) = syms {
         if let Some(key) = args.next() {
             let mut key_d = key.get_mut();
             match &mut key_d.data {
@@ -172,184 +96,189 @@ fn declare_var(
     }
 }
 
-pub fn analyze(
+fn patch_symbol(
     environment: &mut Environment,
-    expression_in: &Expression,
-) -> Result<Expression, LispError> {
-    let mut expression = expression_in.clone_root();
-    // If we have a macro expand it and replace the expression with the expansion.
-    if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
-        let mut nv: Vec<Handle> = Vec::new();
-        let mut macro_replace = true;
-        if let ExpEnum::Vector(list) = &exp.get().data {
-            for item in list {
-                let item: Expression = item.into();
-                let item = item.resolve(environment)?;
-                nv.push(item.into());
+    syms: &mut Option<Symbols>,
+    name: &'static str,
+    location: &mut SymLoc,
+) {
+    if let SymLoc::None = location {
+        if let Some(syms) = syms {
+            if let Some(idx) = syms.get(name) {
+                location.replace(SymLoc::Stack(idx));
+            } else if syms.can_capture(name) {
+                let idx = syms.insert_capture(name);
+                location.replace(SymLoc::Stack(idx));
+            } else if let Some(exp) = syms.namespace().borrow().get_with_outer(name) {
+                location.replace(SymLoc::Ref(exp));
             }
-        } else if let ExpEnum::Pair(_, _) = &exp.get().data {
-            for item in exp.iter() {
-                let item = item.resolve(environment)?;
-                nv.push(item.into());
-            }
-        } else {
-            expression = exp.clone();
-            macro_replace = false;
-        }
-        if macro_replace {
-            let mut exp_mut = expression.get_mut();
-            match exp_mut.data {
-                ExpEnum::Vector(_) => {
-                    exp_mut.data.replace(ExpEnum::Vector(nv));
-                    drop(exp_mut);
-                    gc_mut().down_root(&expression);
-                }
-                ExpEnum::Pair(_, _) => {
-                    exp_mut.data.replace(ExpEnum::cons_from_vec(&mut nv));
-                    drop(exp_mut);
-                    gc_mut().down_root(&expression);
-                }
-                _ => {}
-            }
+        } else if let Some(r) = environment.namespace.borrow().get_with_outer(name) {
+            location.replace(SymLoc::Ref(r));
         }
     }
-    let mut exp_a = expression.get_mut();
-    let ret =
-        match &mut exp_a.data {
+}
+
+fn backquote_syms(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    syms: &mut Option<Symbols>,
+) {
+    let mut last_unquote = false;
+    for exp in args {
+        let mut arg_d = exp.get_mut();
+        match &mut arg_d.data {
+            ExpEnum::Symbol(s, loc) => {
+                if last_unquote {
+                    last_unquote = false;
+                    patch_symbol(environment, syms, s, loc);
+                } else if s == &"," || s == &",@" {
+                    last_unquote = true;
+                }
+            }
             ExpEnum::Vector(v) => {
-                if let Some((car, cdr)) = v.split_first() {
-                    let car: Expression = car.into();
-                    let car_d = car.get();
-                    if let ExpEnum::Symbol(_, _) = &car_d.data {
-                        let form = get_expression(environment, car.clone());
-                        if let Some(form_exp) = form {
-                            let exp_d = form_exp.get();
-                            match &exp_d.data {
-                                ExpEnum::DeclareFn => {
-                                    let lambda = {
-                                        let mut ib = box_slice_it(cdr);
-                                        make_fn(environment, &mut ib)?
-                                    };
-                                    drop(exp_a);
-                                    expression
-                                        .get_mut()
-                                        .data
-                                        .replace(ExpEnum::Wrapper(lambda.into()));
-                                }
-                                ExpEnum::DeclareDef => {
-                                    drop(exp_d);
-                                    form_exp.get_mut().data.replace(ExpEnum::Function(
-                                        Callable::new(builtin_def, true),
-                                    ));
-                                }
-                                ExpEnum::DeclareVar => {
-                                    {
-                                        let mut ib = box_slice_it(cdr);
-                                        declare_var(environment, &mut ib)?;
+                let mut ib = box_slice_it(v);
+                backquote_syms(environment, &mut ib, syms);
+            }
+            ExpEnum::Pair(_, _) => {
+                drop(arg_d);
+                backquote_syms(environment, &mut exp.iter(), syms);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn analyze_seq(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    syms: &mut Option<Symbols>,
+) -> Result<(Option<ExpEnum>, bool), LispError> {
+    if let Some(car) = args.next() {
+        let car_d = car.get();
+        if let ExpEnum::Symbol(_s, _location) = &car_d.data {
+            drop(car_d);
+            let form = get_expression_look(environment, car.clone(), true);
+            if let Some(form_exp) = form {
+                let exp_d = form_exp.get();
+                match &exp_d.data {
+                    ExpEnum::DeclareFn => {
+                        let lambda = make_fn(environment, args, syms)?;
+                        let lambda: Expression = ExpEnum::Lambda(lambda).into();
+                        return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
+                    }
+                    ExpEnum::DeclareMacro => {
+                        let lambda = make_fn(environment, args, syms)?;
+                        let lambda: Expression = ExpEnum::Macro(lambda).into();
+                        return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
+                    }
+                    ExpEnum::DeclareDef => {}
+                    ExpEnum::DeclareVar => {
+                        declare_var(args, syms)?;
+                    }
+                    ExpEnum::Quote => {
+                        if let ExpEnum::Symbol(name, loc) = &mut car.get_mut().data {
+                            // Patch the 'quote' symbol so eval will work.
+                            patch_symbol(environment, syms, name, loc);
+                        }
+                        if let Some(exp) = args.next() {
+                            if args.next().is_none() {
+                                // Don't need to analyze something quoted.
+                                *exp.get().analyzed.borrow_mut() = true;
+                                return Ok((None, false));
+                            }
+                        }
+                        return Err(LispError::new("quote: Takes one form."));
+                    }
+                    ExpEnum::BackQuote => {
+                        if let ExpEnum::Symbol(name, loc) = &mut car.get_mut().data {
+                            patch_symbol(environment, syms, name, loc);
+                        }
+                        if let Some(arg) = args.next() {
+                            match &arg.get().data {
+                                ExpEnum::Symbol(s, _) if s == &"," => {
+                                    if let Some(exp) = args.next() {
+                                        if let ExpEnum::Symbol(s, loc) = &mut exp.get_mut().data {
+                                            patch_symbol(environment, syms, s, loc);
+                                        }
+                                    } else {
+                                        return Err(LispError::new(
+                                            "back-quote: unquote with no form",
+                                        ));
                                     }
-                                    drop(exp_d);
-                                    form_exp.get_mut().data.replace(ExpEnum::Function(
-                                        Callable::new(builtin_set, true),
-                                    ));
                                 }
-                                ExpEnum::Macro(_) => {
-                                    panic!("Macros should have been expanded at this point!");
+                                ExpEnum::Vector(v) => {
+                                    let mut ib = box_slice_it(v);
+                                    backquote_syms(environment, &mut ib, syms);
+                                }
+                                ExpEnum::Pair(_, _) => {
+                                    backquote_syms(environment, &mut arg.iter(), syms);
                                 }
                                 _ => {}
                             }
+                        } else {
+                            return Err(LispError::new("back-quote: takes one form"));
+                        };
+                        if args.next().is_some() {
+                            return Err(LispError::new("back-quote: takes one form"));
                         }
+                        return Ok((None, false));
                     }
+                    _ => {}
                 }
-                Ok(expression.clone())
             }
-            ExpEnum::Pair(car, cdr) => {
-                let car: Expression = car.into();
-                if let ExpEnum::Symbol(_, _) = &car.get().data {
-                    let form = get_expression(environment, car.clone());
-                    if let Some(form_exp) = form {
-                        let exp_d = form_exp.get();
-                        match &exp_d.data {
-                            ExpEnum::DeclareFn => {
-                                let cdr: Expression = cdr.into();
-                                let lambda = make_fn(environment, &mut cdr.iter())?;
-                                drop(exp_a);
-                                expression
-                                    .get_mut()
-                                    .data
-                                    .replace(ExpEnum::Wrapper(lambda.into()));
-                            }
-                            ExpEnum::DeclareDef => {
-                                drop(exp_d);
-                                form_exp
-                                    .get_mut()
-                                    .data
-                                    .replace(ExpEnum::Function(Callable::new(builtin_def, true)));
-                            }
-                            ExpEnum::DeclareVar => {
-                                {
-                                    let cdr: Expression = cdr.into();
-                                    declare_var(environment, &mut cdr.iter())?;
-                                }
-                                drop(exp_d);
-                                form_exp
-                                    .get_mut()
-                                    .data
-                                    .replace(ExpEnum::Function(Callable::new(builtin_set, true)));
-                            }
-                            ExpEnum::Macro(_) => {
-                                panic!("Macros should have been expanded at this point!");
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                Ok(expression.clone())
-            }
-            ExpEnum::Values(_v) => Ok(expression.clone()),
-            ExpEnum::Nil => Ok(expression.clone()),
-            ExpEnum::Symbol(s, location) => {
-                if let SymLoc::None = location {
-                    if let Some(syms) = &mut environment.syms {
-                        if let Some(idx) = syms.get(s) {
-                            location.replace(SymLoc::Stack(idx));
-                        } else if let Some(r) = lookup_expression(environment, s) {
-                            location.replace(SymLoc::Ref(r));
-                        }
-                    } else if let Some(r) = lookup_expression(environment, s) {
-                        location.replace(SymLoc::Ref(r));
-                    }
-                }
-                //SymLoc::None) => {
-                /*if let Some(r) = lookup_expression(environment, s) {
-                    let new_exp = ExpEnum::Symbol(s, SymLoc::Ref(r));
-                    drop(exp_d);
-                    drop(exp_a);
-                    expression.get_mut().data.replace(new_exp);
-                }*/
-                Ok(expression.clone())
-            }
-            //ExpEnum::Symbol(_, _) => Ok(expression.clone()),
-            ExpEnum::HashMap(_) => Ok(expression.clone()),
-            ExpEnum::String(_, _) => Ok(expression.clone()),
-            ExpEnum::True => Ok(expression.clone()),
-            ExpEnum::Float(_) => Ok(expression.clone()),
-            ExpEnum::Int(_) => Ok(expression.clone()),
-            ExpEnum::Char(_) => Ok(expression.clone()),
-            ExpEnum::CodePoint(_) => Ok(expression.clone()),
-            ExpEnum::Lambda(_) => Ok(expression.clone()),
-            ExpEnum::Macro(_) => panic!("Invalid macro in analyze!"),
-            ExpEnum::Function(_) => Ok(expression.clone()),
-            ExpEnum::Process(_) => Ok(expression.clone()),
-            ExpEnum::File(_) => Ok(expression.clone()),
-            ExpEnum::LazyFn(_, _) => Ok(expression.clone()),
-            ExpEnum::Wrapper(_exp) => Ok(expression.clone()),
-            ExpEnum::DeclareDef => panic!("Invalid def in analyze!"),
-            ExpEnum::DeclareVar => panic!("Invalid var in analyze!"),
-            ExpEnum::DeclareFn => panic!("Invalid fn in analyze!"),
-            ExpEnum::Undefined => panic!("Invalid undefined in analyze!"),
-        };
-    match ret {
-        Ok(ret) => Ok(ret.clone_root()),
-        Err(err) => Err(err),
+        }
     }
+    Ok((None, true))
+}
+
+pub fn analyze(
+    environment: &mut Environment,
+    expression_in: &Expression,
+    syms: &mut Option<Symbols>,
+) -> Result<(), LispError> {
+    if *expression_in.get().analyzed.borrow() {
+        return Ok(());
+    }
+    let expression = expression_in.clone_root();
+    if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
+        let mut exp_d = expression.get_mut();
+        exp_d.meta = exp.get().meta;
+        exp_d.meta_tags = exp.get().meta_tags.clone();
+        exp_d.data.replace(exp.into());
+    }
+    {
+        let exp_d = expression.get();
+        if let ExpEnum::Vector(v) = &exp_d.data {
+            let (exp_enum, do_list) = {
+                let mut ib = box_slice_it(v);
+                analyze_seq(environment, &mut ib, syms)?
+            };
+            if let Some(exp_enum) = exp_enum {
+                drop(exp_d);
+                expression.get_mut().data.replace(exp_enum);
+            } else if do_list {
+                for exp in v {
+                    analyze(environment, &exp.into(), syms)?;
+                }
+            }
+        } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
+            drop(exp_d);
+            let (exp_enum, do_list) = analyze_seq(environment, &mut expression.iter(), syms)?;
+            if let Some(exp_enum) = exp_enum {
+                expression.get_mut().data.replace(exp_enum);
+            } else if do_list {
+                for exp in expression.iter() {
+                    analyze(environment, &exp, syms)?;
+                }
+            }
+        } else if let ExpEnum::Symbol(_, _) = &exp_d.data {
+            drop(exp_d);
+            if let ExpEnum::Symbol(s, location) = &mut expression.get_mut().data {
+                patch_symbol(environment, syms, s, location);
+            }
+        }
+    }
+
+    *expression.get().analyzed.borrow_mut() = true;
+    Ok(())
 }

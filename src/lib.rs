@@ -81,5 +81,8 @@ pub use crate::interner::*;
 pub mod analyze;
 pub use crate::analyze::*;
 
+pub mod symbols;
+pub use crate::symbols::*;
+
 pub mod gc;
 pub use crate::gc::*;

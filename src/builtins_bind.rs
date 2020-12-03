@@ -5,6 +5,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
+use crate::symbols::*;
 use crate::types::*;
 
 pub fn proc_set_vars<'a>(
@@ -38,33 +39,62 @@ pub fn proc_set_vars<'a>(
     ))
 }
 
-pub(crate) fn builtin_set(
+fn do_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
+    name: &str,
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
-        let key_str = match &key.get().data {
-            ExpEnum::Symbol(s, _) => *s,
-            _ => return Err(LispError::new("set: first form must be a symbol")),
-        };
         if let Some(val) = args.next() {
             if args.next().is_none() {
-                if let Some(exp) = get_expression(environment, key) {
-                    exp.get_mut()
-                        .data
-                        .replace(eval(environment, val)?.get().data.clone());
-                    return Ok(exp);
-                } else {
-                    return Err(LispError::new(format!(
-                        "set!: symbol {} not found)",
-                        key_str
-                    )));
+                let val = eval(environment, val)?;
+                match &mut key.get_mut().data {
+                    ExpEnum::Symbol(key_str, location) => match location {
+                        SymLoc::None => {
+                            return Err(LispError::new(format!(
+                                "{}: symbol {} not found",
+                                name, key_str
+                            )));
+                        }
+                        SymLoc::Ref(_r) => location.replace(SymLoc::Ref(val.clone())),
+                        SymLoc::Namespace(_scope, _idx) => {
+                            // XXX TODO- code this or get rid of this case...
+                        }
+                        SymLoc::Stack(idx) => {
+                            if let Some(frame) = environment.stack_frames.last() {
+                                if let Some(binding) = environment.stack.get(frame.index + *idx) {
+                                    binding.replace(val.clone());
+                                }
+                            }
+                        }
+                    },
+                    _ => {
+                        return Err(LispError::new(format!(
+                            "{}: first form must be a symbol",
+                            name
+                        )))
+                    }
                 }
+                return Ok(val);
             }
         }
     }
 
     Err(LispError::new("set!: requires a symbol and value"))
+}
+
+pub(crate) fn builtin_set(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    do_set(environment, args, "set!")
+}
+
+pub(crate) fn builtin_var(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    do_set(environment, args, "var")
 }
 
 pub(crate) fn builtin_def(
@@ -178,7 +208,9 @@ fn builtin_dyn(
     };
     if let Some(exp) = args.next() {
         if args.next().is_none() {
-            environment.dynamic_scope.insert(key, val);
+            environment
+                .dynamic_scope
+                .insert(key, Binding::with_expression(val));
             let res = eval(environment, exp);
             if let Some(old_val) = old_val {
                 environment.dynamic_scope.insert(key, old_val);

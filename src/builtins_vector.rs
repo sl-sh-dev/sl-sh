@@ -140,7 +140,11 @@ fn builtin_vec_nth(
                 Ok(list[*idx as usize].clone().into())
             }
         } else {
-            Err(LispError::new("vec-nth: first form must be a vector"))
+            Err(LispError::new(format!(
+                "vec-nth: first form must be a vector, got {} {}",
+                vector.display_type(),
+                vector
+            )))
         }
     } else {
         Err(LispError::new("vec-nth: second form must be an int"))
@@ -184,12 +188,20 @@ fn builtin_vec_push(
             if args.next().is_none() {
                 let new_item = eval(environment, new_item)?;
                 let vec = eval(environment, list)?;
-                return match &mut vec.get_mut().data {
+                let mut vec_d = vec.get_mut();
+                return match &mut vec_d.data {
                     ExpEnum::Vector(list) => {
                         list.push(new_item.handle_no_root());
                         Ok(vec.clone())
                     }
-                    _ => Err(LispError::new("vec-push!'s first form must be a vector")),
+                    _ => {
+                        drop(vec_d);
+                        Err(LispError::new(format!(
+                            "vec-push!'s first form must be a vector, got {} {}",
+                            vec.display_type(),
+                            vec
+                        )))
+                    }
                 };
             }
         }

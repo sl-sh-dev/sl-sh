@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::error::Error;
@@ -95,7 +96,7 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Re
                                     data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
                                     meta: exp_meta,
                                     meta_tags: None,
-                                    analyzed: false,
+                                    analyzed: RefCell::new(false),
                                 })
                                 .into(),
                             );

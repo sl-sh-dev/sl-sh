@@ -10,16 +10,18 @@ Section: core
 "
     (macro (op name &rest args)
            ((fn ()
+                (var ars nil)
+                (var body nil)
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
                 (if (string? (vec-nth args 0))
                   (do
                     (var doc-str (vec-nth args 0))
-                    (var ars (vec-nth args 1))
-                    (var body (vec-slice args 2))
+                    (set! ars (vec-nth args 1))
+                    (set! body (vec-slice args 2))
                     `(do (,op ,name ,doc-str (macro ,ars ,@body)) nil))
                   (do
-                    (var ars (vec-nth args 0))
-                    (var body (vec-slice args 1))
+                    (set! ars (vec-nth args 0))
+                    (set! body (vec-slice args 1))
                     `(do (,op ,name (macro ,ars ,@body)) nil)))))))
 
 (def defmacro
@@ -99,16 +101,18 @@ t
     (op name &rest args)
     ((fn ()
          (if (< (length args) 1) (err "defn: Wrong number of args."))
+         (var ars nil)
+         (var body nil)
          (if (string? (vec-nth args 0))
            (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
              (var doc-str (vec-nth args 0))
-             (var ars (vec-nth args 1))
-             (var body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
+             (set! ars (vec-nth args 1))
+             (set! body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
              `(,op ,name ,doc-str (fn ,ars (block ,name ,@body))))
            (do
-             (var ars (vec-nth args 0)) 
-             (var body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
+             (set! ars (vec-nth args 0)) 
+             (set! body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
              `(,op ,name (fn ,ars (block ,name ,@body))))))))
 
 (defmacro defn
@@ -359,12 +363,12 @@ Example:
     (vals &rest let-body)
     (lex
       (var vars (make-vec (length vals)))
-        (iterator::for-i idx el in vals
+        (iterator::for el in vals (do
             (if (= 1 (length el))
                 (vec-push! vars `(var ,(iterator::nth 0 el) nil))
                 (if (= 2 (length el))
-                  (vec-push! vars `(var ,(iterator::nth 0 el) ,(iterator::nth 1 el)))
-                  (err "ERROR: invalid bindings on let"))))
+                  (do (var el0 `(var ,(iterator::next! el)))(vec-push! vars `(var ,el0 ,(iterator::next! el))))
+                  (err "ERROR: invalid bindings on let")))))
         `(lex ,@vars ,@let-body)))
 
 (defmacro func?

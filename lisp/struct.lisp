@@ -3,17 +3,19 @@
 (defn method (field dispatch-map tags doc doc-exp)
     (var tsym (sym ":" (car field)))
     (var second (cadr field))
+    (var m-params nil)
+    (var m-body nil)
     (if (string? second) (do
         (var doc-split (str-splitn 2 "Example:" second))
         (str-push! doc "method: " tsym "\n\t" (vec-nth doc-split 0) "\n")
         (if (= 2 (length doc-split))
           (str-push! doc-exp "; " tsym " Example\n" (vec-nth doc-split 1) "\n"))
-        (var m-params (caddr field))
-        (var m-body (cadddr field)))
+        (set! m-params (caddr field))
+        (set! m-body (cadddr field)))
       (do
         (str-push! doc "method: " tsym "\n")
-        (var m-params (cadr field))
-        (var m-body (caddr field))))
+        (set! m-params (cadr field))
+        (set! m-body (caddr field))))
     (hash-set! dispatch-map tsym `(fn ,m-params ,m-body))
     (vec-push! tags (sym ":method" tsym)))
 
@@ -168,11 +170,12 @@ Example:
                       (var param (car field))
                       (var binding (cadr field))
                       (var perm (caddr field))
+                      (var tsym nil)
                       (vec-push! params param)
                       (vec-push! bindings binding)
                       (if (= perm :rw) (do
                               (str-push! doc "attribute: " (car field) " read/write" fdoc "\n")
-                              (var tsym (sym ":" param))
+                              (set! tsym (sym ":" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
                               (vec-push! tags (sym ":accessor:" param))
                               (set! tsym (sym ":set-" param))
@@ -180,19 +183,23 @@ Example:
                               (vec-push! tags (sym ":setter:" param)))
                           (= perm :ro) (do
                               (str-push! doc "attribute: " (car field) " read" fdoc "\n")
-                              (var tsym (sym ":" param))
+                              (set! tsym (sym ":" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
                               (vec-push! tags (sym ":accessor:" param)))
                           (= perm :wo) (do
                               (str-push! doc "attribute: " (car field) " write" fdoc "\n")
-                              (var tsym (sym ":set-" param))
+                              (set! tsym (sym ":set-" param))
                               (hash-set! dispatch-map tsym `(fn (_ arg) (set! ,param arg)))
                               (vec-push! tags (sym ":setter:" param)))
                           (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
                 (err "ERROR: invalid attribute bindings on defstruct")))
 
         (varfn impl (field doc)
-            (if (not (not field)) (do (str-push! doc "impl " (car field) "\n")(apply (car field) dispatch-map tags nil) (recur (cdr field) doc))))
+            (if (not (not field))
+              (do
+                (str-push! doc "impl " (car field) "\n")
+                (apply (car field) dispatch-map tags nil)
+                (recur (cdr field) doc))))
 
         ((fn (idx)
             (if (< idx fields-len) (do
@@ -208,7 +215,8 @@ Example:
                 (var field (vec-nth fields idx))
                 (if (= (car field) :impl) (impl (cdr field) doc))
                 (recur (+ idx 1))
-            )))idx-start)
+            ))
+            )idx-start)
 
         (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
         (var doc-final "")
@@ -228,7 +236,7 @@ Example:
                   (recur (+ i 1)))))0)
             (var self (fn (msg &rest args) (apply (hash-get my-dispatch msg (err (str "Invalid message (" msg ") to struct: " ',name))) this-fn args)))
             (meta-add-tags self ',tags)
-            (undef self)),dispatch-map ,@bindings))) ) ; bindings for params
+            #| XXX TODO- test memory (undef self)|#self),dispatch-map ,@bindings))) ) ; bindings for params
      (make-vec (length fields)) ; params
      (make-vec (length fields)))) ; bindings
 

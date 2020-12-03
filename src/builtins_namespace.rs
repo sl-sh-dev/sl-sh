@@ -28,10 +28,7 @@ fn builtin_ns_create(
                     ))
                 }
             };
-            let scope = match build_new_namespace(environment, key) {
-                Ok(scope) => scope,
-                Err(msg) => return Err(LispError::new(msg)),
-            };
+            let scope = build_new_namespace(environment, key)?;
             set_active_namespace(environment, key);
             environment.namespace = scope;
             return Ok(Expression::make_nil());
@@ -48,13 +45,16 @@ fn builtin_ns_enter(
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match &eval(environment, key)?.get().data {
+            let key_exp = eval(environment, key)?;
+            let key = match &key_exp.get().data {
                 ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
-                    return Err(LispError::new(
-                        "ns-enter: namespace must be a symbol or string",
-                    ))
+                    return Err(LispError::new(format!(
+                        "ns-enter: namespace must be a symbol or string, got {} {}",
+                        key_exp.display_type(),
+                        key_exp
+                    )))
                 }
             };
             let scope = match get_namespace(environment, key) {

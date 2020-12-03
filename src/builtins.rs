@@ -19,6 +19,7 @@ use crate::gc::*;
 use crate::interner::*;
 use crate::pretty_print::*;
 use crate::reader::*;
+use crate::symbols::Namespace;
 use crate::types::*;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
@@ -44,7 +45,10 @@ fn builtin_eval(
             // on them itself...
             let ret = match &arg_d.data {
                 ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => eval(environment, ast),
+                    Ok(ast) => {
+                        drop(arg_d);
+                        eval(environment, ast)
+                    }
                     Err(err) => Err(LispError::new(err.reason)),
                 },
                 _ => {
@@ -65,17 +69,11 @@ fn builtin_eval_in_scope(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            let arg_d = arg.get();
-            return match &arg_d.data {
-                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => eval(environment, ast),
-                    Err(err) => Err(LispError::new(err.reason)),
-                },
-                _ => {
-                    drop(arg_d);
-                    eval(environment, &arg)
-                }
-            };
+            if let Some(frame) = environment.stack_frames.last() {
+                let syms = frame.symbols.clone();
+                analyze(environment, &arg, &mut Some(syms))?;
+            }
+            return eval(environment, &arg);
         }
     }
     Err(LispError::new("eval can only have one form"))
@@ -105,10 +103,7 @@ fn builtin_apply(
         };
         for a in itr {
             let b = ExpEnum::Pair(
-                Expression::alloc_data_h(ExpEnum::Symbol(
-                    environment.interner.intern("quote"),
-                    SymLoc::None,
-                )),
+                Expression::alloc_data_h(ExpEnum::Quote),
                 Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
             );
             call_list.push(Expression::alloc_data_h(b));
@@ -518,7 +513,7 @@ pub fn builtin_do(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-fn builtin_quote(
+pub fn builtin_quote(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -527,7 +522,7 @@ fn builtin_quote(
             return Ok(arg);
         }
     }
-    Err(LispError::new("quote takes one form"))
+    Err(LispError::new("quote: takes one form"))
 }
 
 fn replace_commas(
@@ -580,6 +575,9 @@ fn replace_commas(
                 }
                 amp_next = false;
             } else {
+                // Make a new symbol vs sharing structure- can be a proble for
+                // patched symbols later.
+                let exp: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
                 output.push(exp.into());
             }
         } else if comma_next {
@@ -617,7 +615,7 @@ fn replace_commas(
     }
 }
 
-fn builtin_bquote(
+pub fn builtin_bquote(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -641,10 +639,10 @@ fn builtin_bquote(
             _ => Ok(arg.clone()),
         }
     } else {
-        Err(LispError::new("bquote takes one form"))
+        Err(LispError::new("back-quote: takes one form"))
     };
     if args.next().is_some() {
-        Err(LispError::new("bquote takes one form"))
+        Err(LispError::new("back-quote: takes one form"))
     } else {
         ret
     }
@@ -696,67 +694,15 @@ fn builtin_not(
     Err(LispError::new("not takes one form"))
 }
 
-fn builtin_macro(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(params) = args.next() {
-        let (first, second) = (args.next(), args.next());
-        let body = if let Some(first) = first {
-            if let Some(second) = second {
-                let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
-                    "do",
-                    SymLoc::None,
-                )));
-                body.push(first.into());
-                body.push(second.into());
-                for a in args {
-                    body.push(a.into());
-                }
-                Expression::with_list(body)
-            } else {
-                first
-            }
-        } else {
-            Expression::make_nil()
-        };
-        let params_d = params.get();
-        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
-            Box::new(ListIter::new_list(&vec))
-        } else {
-            params.iter()
-        };
-        let mut params = Vec::new();
-        let mut syms = Symbols::new();
-        syms.set_lex(environment);
-        for p in p_iter {
-            if let ExpEnum::Symbol(s, _) = p.get().data {
-                params.push(s);
-                syms.insert(s);
-            } else {
-                return Err(LispError::new("macro: parameters must be symbols"));
-            }
-        }
-        syms.insert("this-fn");
-        let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
-            params,
-            body,
-            syms,
-            namespace: environment.namespace.clone(),
-        })));
-    }
-    Err(LispError::new("macro: need at least a bindings form"))
-}
-
 fn do_expansion(
     environment: &mut Environment,
     command_in: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
-    if let ExpEnum::Symbol(_, _) = &command_in.get().data {
-        if let Some(exp) = get_expression(environment, command_in.clone()) {
+    let com_d = command_in.get();
+    if let ExpEnum::Symbol(_, _) = &com_d.data {
+        drop(com_d);
+        if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
             if let ExpEnum::Macro(sh_macro) = &exp.get().data {
                 let expansion = call_lambda(
                     environment,
@@ -765,26 +711,6 @@ fn do_expansion(
                     false,
                 )?
                 .resolve(environment)?;
-                /*let body: Expression = sh_macro.body.clone().into();
-                // XXX TODO- fix this up to use the stack...
-                //let new_scope = build_new_scope("NA", Some(sh_macro.namespace.clone()));
-                //environment.scopes.push(new_scope);
-                if let Err(err) = setup_args(environment, &sh_macro.params, parts, false) {
-                    //environment.scopes.pop();
-                    return Err(err);
-                }
-                let old_syms = environment.syms.clone();
-                environment.syms = Some(sh_macro.syms.clone());
-                analyze(environment, &body)?;
-                let expansion = eval(environment, &body);
-                if let Err(err) = expansion {
-                    environment.syms = old_syms;
-                    //environment.scopes.pop();
-                    return Err(err);
-                }
-                let expansion = expansion.unwrap();
-                environment.syms = old_syms;
-                //environment.scopes.pop();*/
                 Ok(Some(expansion))
             } else {
                 Ok(None)
@@ -1976,8 +1902,7 @@ Example:
     );
     data.insert(
         interner.intern("quote"),
-        Expression::make_special(
-            builtin_quote,
+        Expression::make_special_quote(
             "Usage: 'expression -> expression
 
 Return expression without evaluation.
@@ -1994,8 +1919,7 @@ Example:
     );
     data.insert(
         interner.intern("back-quote"),
-        Expression::make_special(
-            builtin_bquote,
+        Expression::make_special_backquote(
             "Usage: `expression -> expression
 
 Return expression without evaluation.
@@ -2099,8 +2023,7 @@ Example:
     );
     data.insert(
         interner.intern("macro"),
-        Expression::make_function(
-            builtin_macro,
+        Expression::make_special_macro(
             "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.

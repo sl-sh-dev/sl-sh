@@ -16,14 +16,16 @@ Section: shell
 	(name &rest args)
 	(var usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
+	(var docstring nil)
+	(var body nil)
 	(match (length args)
 		(2 (do
-			(var docstring (vec-nth args 0))
-			(var body (vec-nth args 1))
+			(set! docstring (vec-nth args 0))
+			(set! body (vec-nth args 1))
 			`(defmacro ,name ,docstring (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(1 (do
-			(var body (vec-nth args 0))
+			(set! body (vec-nth args 0))
 			`(defmacro ,name (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
@@ -366,7 +368,9 @@ Section: shell
 		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
-      (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      ;XXX TODO- fix let...(let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      (do 
+        (var make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m")))
       (match color-type
              (:font (make-color 38))
              (:bkrd (make-color 48))
@@ -415,7 +419,8 @@ Example:
 					(if (and (fs-exists? path)(not ret)) (set! ret t)))))))
 	ret)
 
-(let ((alias (make-hash)))
+;(let ((alias (make-hash)))
+((fn (alias)
 	(defn ns::register-alias
 		"
 		Registers an alias to the current scope. Useful if unregistering or
@@ -438,7 +443,7 @@ Example:
 
 		Section: shell
 		"
-		(name) (hash-haskey alias name)))
+		(name) (hash-haskey alias name)))(make-hash))
 
 ; These will be imported with syntax-on (ie copied into another namespace).
 ; Since syntax-on is a macro these copies are what will be read/used in that
@@ -590,7 +595,7 @@ Example:
   "
   () '(undef __line_handler))
 
-(load "endfix.lisp")
+;XXX TODO- fixme (load "endfix.lisp")
 (defmacro endfix-on "
 Allows use of infix notation for common shell forms. The following is the
 complete mapping in lisp/endfix.lisp of all supported infix operators and
@@ -734,7 +739,7 @@ Section: shell"
                     (do
                         (handle-last-command file-contents)
                         (eval (read-all (str (cat fc-file))))))))))
-
+; XXX TODO- alias as the first item is a bug, fix it.
 (ns-export '(
 	alias
 	register-alias

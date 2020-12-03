@@ -96,7 +96,7 @@ impl fmt::Display for Expression {
                 let e2: Expression = e2.into();
                 if is_proper_list(&self) {
                     match &e1.get().data {
-                        ExpEnum::Symbol(sym, _) if sym == &"quote" => {
+                        ExpEnum::Quote => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -106,7 +106,7 @@ impl fmt::Display for Expression {
                                 f.write_str(&e2.to_string())
                             }
                         }
-                        ExpEnum::Symbol(sym, _) if sym == &"bquote" => {
+                        ExpEnum::BackQuote => {
                             f.write_str("`")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -164,6 +164,9 @@ impl fmt::Display for Expression {
             ExpEnum::DeclareDef => write!(f, "#<Function>"),
             ExpEnum::DeclareVar => write!(f, "#<Function>"),
             ExpEnum::DeclareFn => write!(f, "#<Function>"),
+            ExpEnum::DeclareMacro => write!(f, "#<Function>"),
+            ExpEnum::Quote => write!(f, "#<Function>"),
+            ExpEnum::BackQuote => write!(f, "#<Function>"),
             ExpEnum::Undefined => write!(f, "#<Undefined>"), // XXX maybe panic here instead?
         }
     }
@@ -298,6 +301,9 @@ fn pretty_print_int(
         ExpEnum::DeclareDef => expression.writef(environment, writer)?,
         ExpEnum::DeclareVar => expression.writef(environment, writer)?,
         ExpEnum::DeclareFn => expression.writef(environment, writer)?,
+        ExpEnum::DeclareMacro => expression.writef(environment, writer)?,
+        ExpEnum::Quote => expression.writef(environment, writer)?,
+        ExpEnum::BackQuote => expression.writef(environment, writer)?,
         ExpEnum::Undefined => expression.writef(environment, writer)?,
     }
     Ok(())

@@ -204,14 +204,15 @@ Example:
 (assert-equal test-colcv test-colcv2)
 "
 (seq)
+    (var tseq nil)
     (if (vec? seq)
         (do
-            (var tseq (make-vec (length seq)))
+            (set! tseq (make-vec (length seq)))
             (iterator::for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
             (do
-                (var tseq nil)
+                (set! tseq nil)
                 (var tcell nil)
                 (var head nil)
                 (iterator::for el in seq (do

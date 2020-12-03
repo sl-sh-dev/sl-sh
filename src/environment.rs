@@ -10,23 +10,9 @@ use std::sync::Arc;
 
 use liner::Context;
 
-use crate::analyze::*;
-use crate::builtins::add_builtins;
-use crate::builtins_bind::add_bind_builtins;
-use crate::builtins_edit::add_edit_builtins;
-use crate::builtins_file::add_file_builtins;
-use crate::builtins_hashmap::add_hash_builtins;
-use crate::builtins_io::add_io_builtins;
-use crate::builtins_math::add_math_builtins;
-use crate::builtins_namespace::add_namespace_builtins;
-use crate::builtins_pair::add_pair_builtins;
-use crate::builtins_str::add_str_builtins;
-use crate::builtins_system::add_system_builtins;
-use crate::builtins_types::add_type_builtins;
-use crate::builtins_values::add_values_builtins;
-use crate::builtins_vector::add_vec_builtins;
 use crate::interner::*;
 use crate::process::*;
+use crate::symbols::*;
 use crate::types::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,261 +94,6 @@ pub enum FormType {
 }
 
 #[derive(Clone, Debug)]
-pub struct Namespace {
-    map: HashMap<&'static str, usize>,
-    data: Vec<Expression>,
-    doc_strings: Vec<Option<String>>,
-    outer: Option<Rc<RefCell<Namespace>>>,
-    name: &'static str,
-    free_list: Vec<usize>,
-}
-
-impl Namespace {
-    pub fn new_with_outer(name: &'static str, outer: Option<Rc<RefCell<Namespace>>>) -> Namespace {
-        Namespace {
-            map: HashMap::new(),
-            data: Vec::new(),
-            doc_strings: Vec::new(),
-            outer,
-            name,
-            free_list: Vec::new(),
-        }
-    }
-
-    fn new_root(interner: &mut Interner) -> Self {
-        let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
-        add_builtins(interner, &mut data);
-        add_system_builtins(interner, &mut data);
-        add_math_builtins(interner, &mut data);
-        add_str_builtins(interner, &mut data);
-        add_vec_builtins(interner, &mut data);
-        add_values_builtins(interner, &mut data);
-        add_edit_builtins(interner, &mut data);
-        add_file_builtins(interner, &mut data);
-        add_io_builtins(interner, &mut data);
-        add_pair_builtins(interner, &mut data);
-        add_hash_builtins(interner, &mut data);
-        add_type_builtins(interner, &mut data);
-        add_namespace_builtins(interner, &mut data);
-        add_bind_builtins(interner, &mut data);
-        data.insert(
-            interner.intern("*stdin*"),
-            (
-                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
-                    "Usage: (read-line *stdin*)
-
-File that connects to standard in by default.
-
-Can be used in place of a read file object in any form that takes one.
-
-Section: shell
-
-Example:
-(def stdin-test (open \"/tmp/sl-sh.stdin.test\" :create :truncate))
-(write-line stdin-test \"Test line\")
-(close stdin-test)
-; Use a file for stdin for test.
-(dyn *stdin* (open \"/tmp/sl-sh.stdin.test\" :read) (do (test::assert-equal \"Test line\n\" (read-line *stdin*)) (close *stdin*)))
-".to_string()),
-        );
-        data.insert(
-            interner.intern("*stdout*"),
-            (
-                ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
-                    "Usage: (write-line *stdout*)
-
-File that connects to standard out by default.
-
-Can be used in place of a write file object in any form that takes one.  Used
-as the default for print and println.
-
-Section: shell
-
-Example:
-; Use a file for stdout for test.
-(dyn *stdout* (open \"/tmp/sl-sh.stdout.test\" :create :truncate) (do (write-line *stdout* \"Test out\") (close *stdout*)))
-(test::assert-equal \"Test out\n\" (read-line (open \"/tmp/sl-sh.stdout.test\" :read)))
-".to_string()),
-        );
-        data.insert(
-            interner.intern("*stderr*"),
-                (ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr))).into(),
-                    "Usage: (write-line *stderr*)
-
-File that connects to standard error by default.
-
-Can be used in place of a write file object in any form that takes one.  Used
-as the default for eprint and eprintln.
-
-Section: shell
-
-Example:
-; Use a file for stderr for test.
-(dyn *stderr* (open \"/tmp/sl-sh.stderr.test\" :create :truncate) (do (write-line *stderr* \"Test Error\") (close *stderr*)))
-(test::assert-equal \"Test Error\n\" (read-line (open \"/tmp/sl-sh.stderr.test\" :read)))
-".to_string()),
-        );
-        data.insert(
-            interner.intern("*ns*"),
-            (
-                ExpEnum::String(interner.intern("root").into(), None).into(),
-                "Usage: (print *ns*)
-
-Symbol that contains the name of the current namespace.
-
-Can be used anywhere a symbol pointing to a string is valid.
-
-Example:
-(ns-push 'root)
-(test::assert-equal \"root\" *ns*)
-(ns-pop)
-t
-"
-                .to_string(),
-            ),
-        );
-        let mut vdata = Vec::with_capacity(data.len());
-        let mut vdocs = Vec::with_capacity(data.len());
-        let mut map = HashMap::new();
-        for (k, (exp, doc_str)) in data.drain() {
-            vdata.push(exp);
-            if doc_str.is_empty() {
-                vdocs.push(None);
-            } else {
-                vdocs.push(Some(doc_str));
-            }
-            map.insert(k, vdata.len() - 1);
-        }
-        Namespace {
-            map,
-            data: vdata,
-            doc_strings: vdocs,
-            outer: None,
-            name: interner.intern("root"),
-            free_list: Vec::new(),
-        }
-    }
-
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.map.contains_key(key)
-    }
-
-    pub fn keys(&self) -> std::collections::hash_map::Keys<'_, &'static str, usize> {
-        self.map.keys()
-    }
-
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn outer(&self) -> Option<Rc<RefCell<Namespace>>> {
-        self.outer.clone()
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Expression> {
-        if let Some(idx) = self.map.get(key) {
-            if let Some(reference) = self.data.get(*idx) {
-                Some(reference)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn get_docs(&self, key: &str) -> Option<&str> {
-        if let Some(idx) = self.map.get(key) {
-            if let Some(docs) = self.doc_strings.get(*idx) {
-                if let Some(docs) = docs {
-                    Some(docs)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn get_idx(&self, idx: usize) -> Option<Expression> {
-        if let Some(reference) = self.data.get(idx) {
-            Some(reference.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.map.clear();
-        self.data.clear();
-    }
-
-    pub fn remove(&mut self, key: &str) -> Option<Expression> {
-        if let Some(idx) = self.map.remove(key) {
-            self.free_list.push(idx);
-            self.data.push(Expression::make_nil());
-            self.doc_strings.push(None);
-            self.doc_strings.swap_remove(idx);
-            return Some(self.data.swap_remove(idx));
-        }
-        None
-    }
-
-    pub fn update_entry(
-        &mut self,
-        key: &str,
-        val: Expression,
-        doc_str: Option<String>,
-    ) -> Result<Expression, LispError> {
-        if let Some(idx) = self.map.get(key) {
-            if let Some(docs) = self.doc_strings.get_mut(*idx) {
-                if doc_str.is_some() {
-                    *docs = doc_str;
-                }
-            }
-            if let Some(entry) = self.data.get_mut(*idx) {
-                *entry = val;
-                return Ok(entry.clone());
-            }
-        }
-        Err(LispError::new(format!("update, key not found {}", key)))
-    }
-
-    pub fn insert(&mut self, key: &'static str, exp: Expression) {
-        self.insert_with_doc(key, exp, None)
-    }
-
-    pub fn insert_exp_data(&mut self, key: &'static str, data: ExpEnum) {
-        let exp: Expression = data.into();
-        // XXX verify this but is making a ref should have been analyzed.
-        exp.get_mut().analyzed = true;
-        self.insert(key, exp);
-    }
-
-    pub fn insert_with_doc(
-        &mut self,
-        key: &'static str,
-        exp: Expression,
-        doc_string: Option<String>,
-    ) {
-        if let Some(idx) = self.free_list.pop() {
-            self.data.push(exp);
-            self.data.swap_remove(idx);
-            self.doc_strings.push(doc_string);
-            self.doc_strings.swap_remove(idx);
-            self.map.insert(key, idx);
-        } else {
-            self.data.push(exp);
-            self.doc_strings.push(doc_string);
-            self.map.insert(key, self.data.len() - 1);
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub enum JobStatus {
     Running,
     Stopped,
@@ -386,8 +117,8 @@ pub struct Job {
 
 #[derive(Clone, Debug)]
 pub struct StackFrame {
-    index: usize,
-    symbols: Symbols,
+    pub index: usize,
+    pub symbols: Symbols,
 }
 
 //#[derive(Clone, Debug)]
@@ -395,7 +126,7 @@ pub struct Environment {
     // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
     pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
-    pub stack: Vec<Expression>,
+    pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
@@ -414,7 +145,7 @@ pub struct Environment {
     pub exit_code: Option<i32>,
     // This is the dynamic bindings.  These take precidence over the other
     // bindings.
-    pub dynamic_scope: HashMap<&'static str, Expression>,
+    pub dynamic_scope: HashMap<&'static str, Binding>,
     // This is the environment's root (global namespace), it will also be part of
     // higher level namespaces.
     // It's special so keep a reference here as well for handy access.
@@ -433,7 +164,6 @@ pub struct Environment {
     pub last_meta: Option<ExpMeta>,
     pub repl_settings: ReplSettings,
     pub liners: HashMap<&'static str, Context>,
-    pub syms: Option<Symbols>,
     pub next_lex_id: usize,
 }
 
@@ -479,62 +209,24 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         last_meta: None,
         repl_settings: ReplSettings::default(),
         liners: HashMap::new(),
-        syms: None,
         next_lex_id: 1,
     }
-}
-
-pub fn build_new_scope(
-    name: &'static str,
-    outer: Option<Rc<RefCell<Namespace>>>,
-) -> Rc<RefCell<Namespace>> {
-    let map = HashMap::new();
-    let data = Vec::new();
-    let doc_strings = Vec::new();
-    Rc::new(RefCell::new(Namespace {
-        map,
-        data,
-        doc_strings,
-        outer,
-        name,
-        free_list: Vec::new(),
-    }))
-}
-
-pub fn stack_push_data(environment: &mut Environment, data: ExpEnum) {
-    environment.stack.push(data.into());
-}
-
-pub fn stack_push_exp(environment: &mut Environment, exp: Expression) {
-    environment.stack.push(exp);
 }
 
 pub fn build_new_namespace(
     environment: &mut Environment,
     name: &str,
-) -> Result<Rc<RefCell<Namespace>>, String> {
+) -> Result<Rc<RefCell<Namespace>>, LispError> {
     if environment.namespaces.contains_key(name) {
         let msg = format!("Namespace {} already exists!", name);
-        Err(msg)
+        Err(LispError::new(msg))
     } else {
         let name = environment.interner.intern(name);
-        let mut map = HashMap::new();
-        let mut data = Vec::new();
-        let mut doc_strings = Vec::new();
-        data.push(ExpEnum::String(name.into(), None).into());
-        doc_strings.push(None);
-        map.insert(environment.interner.intern("*ns*"), 0);
-        let scope = Namespace {
-            map,
-            data,
-            doc_strings,
-            outer: Some(environment.root_scope.clone()),
-            name,
-            free_list: Vec::new(),
-        };
-        let scope = Rc::new(RefCell::new(scope));
-        environment.namespaces.insert(name, scope.clone());
-        Ok(scope)
+        let mut namespace = Namespace::new_with_outer(name, Some(environment.root_scope.clone()));
+        namespace.insert("*ns*", ExpEnum::String(name.into(), None).into());
+        let namespace = Rc::new(RefCell::new(namespace));
+        environment.namespaces.insert(name, namespace.clone());
+        Ok(namespace)
     }
 }
 
@@ -542,15 +234,14 @@ pub fn get_from_namespace(environment: &Environment, key: &str) -> Option<Expres
     let mut loop_scope = Some(environment.namespace.clone());
     while let Some(scope) = loop_scope {
         if let Some(exp) = scope.borrow().get(key) {
-            return Some(exp.clone());
+            return Some(exp);
         }
-        loop_scope = scope.borrow().outer.clone();
+        loop_scope = scope.borrow().outer();
     }
     None
 }
 
-pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Expression> {
-    // First check any "local" lexical scopes.
+fn lookup_in_stack(environment: &Environment, key: &str) -> Option<Binding> {
     if let Some(current_frame) = environment.stack_frames.last() {
         let lex_id = current_frame.symbols.lex_id();
         let lex_depth = current_frame.symbols.lex_depth();
@@ -576,81 +267,112 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Express
             }
         }
     }
-    /*let mut loop_scope = if !environment.scopes.is_empty() {
-        Some(environment.scopes.last().unwrap().clone())
-    } else {
-        None
-    };
-    let mut namespace = None;
-    // First check any "local" lexical scopes.
-    while let Some(scope_outer) = loop_scope {
-        let scope = scope_outer.borrow_mut();
-        // Stop when we get to the underlying namespace- handle those afer dynamics.
-        if scope.name.is_some() {
-            namespace = Some(scope_outer.clone());
-            break;
-        }
-        if let Some(reference) = scope.get(key) {
-            return Some(reference.clone());
-        }
-        loop_scope = scope.outer.clone();
-    }*/
-    // Then check dynamic scope.
-    if let Some(reference) = environment.dynamic_scope.get(key) {
-        Some(reference.clone())
+    None
+}
+
+fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) -> Option<Binding> {
     // Check for namespaced symbols.
-    } else if key.contains("::") {
+    if key.contains("::") {
         // namespace reference.
         let mut key_i = key.splitn(2, "::");
         if let Some(namespace) = key_i.next() {
             if let Some(scope) = environment.namespaces.get(namespace) {
                 if let Some(key) = key_i.next() {
-                    // Do not let it sneak past a dynamic binding!
-                    if let Some(reference) = environment.dynamic_scope.get(key) {
-                        return Some(reference.clone());
-                    } else if let Some(reference) = scope.borrow().get(key) {
-                        return Some(reference.clone());
+                    if allow_dyn {
+                        // Do not let it sneak past a dynamic binding!
+                        if let Some(reference) = environment.dynamic_scope.get(key) {
+                            return Some(reference.clone());
+                        } else if let Some(reference) = scope.borrow().get_binding(key) {
+                            return Some(reference);
+                        }
+                    } else if let Some(reference) = scope.borrow().get_binding(key) {
+                        return Some(reference);
                     }
                 }
             }
         }
         None
     // Then check the namespace. Note, use the namespace from lexical scope if available.
-    /*    } else if let Some(namespace) = namespace {
-    if let Some(reference) = namespace.borrow().get(key) {
-        Some(reference.clone())
-    } else if let Some(reference) = environment.root_scope.borrow().get(key) {
-        Some(reference.clone())
-    } else {
-        None
-    }*/
+    } else if let Some(frame) = environment.stack_frames.last() {
+        if let Some(reference) = frame.symbols.namespace().borrow().get_binding(key) {
+            Some(reference)
+        } else if let Some(reference) = environment.root_scope.borrow().get_binding(key) {
+            Some(reference)
+        } else {
+            None
+        }
     // If no namespace from lexical scope use the default.
-    } else if let Some(reference) = environment.namespace.borrow().get(key) {
-        Some(reference.clone())
+    } else if let Some(reference) = environment.namespace.borrow().get_binding(key) {
+        Some(reference)
     // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
-    } else if let Some(reference) = environment.root_scope.borrow().get(key) {
-        Some(reference.clone())
+    } else if let Some(reference) = environment.root_scope.borrow().get_binding(key) {
+        Some(reference)
     } else {
         None
     }
 }
 
-pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Expression> {
+pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Expression> {
+    // First check any "local" lexical scopes.
+    if let Some(exp) = lookup_in_stack(environment, key) {
+        Some(exp.get())
+    // Then check dynamic scope.
+    } else if let Some(binding) = environment.dynamic_scope.get(key) {
+        Some(binding.get())
+    // Check for namespaced symbols.
+    } else if let Some(binding) = lookup_in_namespace(environment, key, true) {
+        Some(binding.get())
+    } else {
+        None
+    }
+}
+
+pub fn capture_expression(environment: &Environment, key: &str) -> Option<Binding> {
+    // First check any "local" lexical scopes.
+    if let Some(exp) = lookup_in_stack(environment, key) {
+        Some(exp)
+    // Check for namespaced symbols.
+    } else {
+        lookup_in_namespace(environment, key, false)
+    }
+}
+
+fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
+    if let Some(frame) = environment.stack_frames.last() {
+        if let Some(r) = environment.stack.get(frame.index + idx) {
+            Some(r.get())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+pub fn get_expression_look(
+    environment: &Environment,
+    expression: Expression,
+    allow_lookup: bool,
+) -> Option<Expression> {
     match &expression.get().data {
         ExpEnum::Symbol(sym, location) => match location {
-            SymLoc::None => lookup_expression(environment, sym),
-            SymLoc::Ref(r) => Some(r.clone()),
-            SymLoc::Namespace(scope, idx) => scope.borrow().get_idx(*idx),
-            SymLoc::Stack(idx) => {
-                if let Some(r) = environment.stack.get(*idx) {
-                    Some(r.clone())
+            SymLoc::None => {
+                if allow_lookup {
+                    lookup_expression(environment, sym)
                 } else {
                     None
                 }
             }
+            SymLoc::Ref(r) => Some(r.clone()),
+            SymLoc::Namespace(scope, idx) => scope.borrow().get_idx(*idx),
+            SymLoc::Stack(idx) => get_expression_stack(environment, *idx),
         },
         _ => None, // XXX Maybe this should be an error?
     }
+}
+
+pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Expression> {
+    get_expression_look(environment, expression, true) // XXX TODO- this should work with false..
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
@@ -665,7 +387,7 @@ pub fn is_expression(environment: &Environment, key: &str) -> bool {
 pub fn get_symbol_namespaces(environment: &Environment, key: &str) -> Vec<Rc<RefCell<Namespace>>> {
     let mut ret: Vec<Rc<RefCell<Namespace>>> = Vec::new();
     for namespace in environment.namespaces.values() {
-        if namespace.borrow().map.contains_key(key) {
+        if namespace.borrow().contains_key(key) {
             ret.push(namespace.clone());
         }
     }
@@ -738,4 +460,303 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     }
     // XXX remove them or better replace pid with exit status
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use std::sync::Once;
+
+    use crate::gc::init_gc;
+
+    static INIT: Once = Once::new();
+
+    pub fn setup() {
+        INIT.call_once(|| {
+            init_gc();
+        });
+    }
+
+    fn assert_lookup(environment: &Environment, key: &str, val: i64) {
+        let xxx_i = if let Some(exp) = lookup_expression(environment, key) {
+            if let ExpEnum::Int(i) = exp.get().data {
+                i
+            } else {
+                -2
+            }
+        } else {
+            -1
+        };
+        assert!(xxx_i == val);
+    }
+
+    fn assert_capture(environment: &Environment, key: &str, val: i64) {
+        let xxx_i = if let Some(exp) = capture_expression(environment, key) {
+            if let ExpEnum::Int(i) = exp.get().get().data {
+                i
+            } else {
+                -2
+            }
+        } else {
+            -1
+        };
+        assert!(xxx_i == val);
+    }
+
+    fn assert_exp_lookup(environment: &Environment, exp: Expression, val: i64) {
+        let xxx_i = if let Some(exp) = get_expression_look(environment, exp, true) {
+            if let ExpEnum::Int(i) = exp.get().data {
+                i
+            } else {
+                -2
+            }
+        } else {
+            -1
+        };
+        assert!(xxx_i == val);
+    }
+
+    fn assert_exp(environment: &Environment, exp: Expression, val: i64) {
+        let xxx_i = if let Some(exp) = get_expression(environment, exp) {
+            if let ExpEnum::Int(i) = exp.get().data {
+                i
+            } else {
+                -2
+            }
+        } else {
+            -1
+        };
+        assert!(xxx_i == val);
+    }
+
+    #[test]
+    fn test_lookup_expression() -> Result<(), LispError> {
+        setup();
+        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        assert!(lookup_expression(&mut environment, "XXX").is_none());
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(222).into()));
+        let mut syms = Symbols::with_frame(&mut environment, &None);
+        syms.insert("XXX");
+        environment.stack_frames.push(StackFrame {
+            index: 0,
+            symbols: syms.clone(),
+        });
+        assert!(lookup_expression(&mut environment, "XXXX").is_none());
+        assert_lookup(&environment, "XXX", 222);
+        assert!(lookup_expression(&mut environment, "YYY").is_none());
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(322).into()));
+        syms.insert("YYY");
+        assert_lookup(&environment, "YYY", 322);
+
+        let mut syms2 = Symbols::with_frame(&mut environment, &Some(syms.clone()));
+        syms2.insert("XXX2");
+        environment.stack_frames.push(StackFrame {
+            index: syms.len(),
+            symbols: syms2.clone(),
+        });
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(2).into()));
+        assert!(lookup_expression(&mut environment, "XXXX").is_none());
+        assert_lookup(&environment, "XXX", 222);
+        assert_lookup(&environment, "YYY", 322);
+        assert_lookup(&environment, "XXX2", 2);
+
+        let mut syms3 = Symbols::with_frame(&mut environment, &None);
+        syms3.insert("XXX3");
+        syms3.insert("XXX3-2");
+        syms3.insert("XXX3-3");
+        environment.stack_frames.push(StackFrame {
+            index: (syms.len() + syms2.len()),
+            symbols: syms3.clone(),
+        });
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(3).into()));
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(32).into()));
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(33).into()));
+        assert!(lookup_expression(&mut environment, "XXX").is_none());
+        assert!(lookup_expression(&mut environment, "YYY").is_none());
+        assert!(lookup_expression(&mut environment, "XXX2").is_none());
+        assert_lookup(&environment, "XXX3", 3);
+        assert_lookup(&environment, "XXX3-2", 32);
+        assert_lookup(&environment, "XXX3-3", 33);
+
+        environment
+            .stack
+            .truncate(environment.stack.len() - syms3.len());
+        environment
+            .stack_frames
+            .truncate(environment.stack_frames.len() - 1);
+        assert!(lookup_expression(&mut environment, "XXX3").is_none());
+        assert!(lookup_expression(&mut environment, "XXX3-2").is_none());
+        assert!(lookup_expression(&mut environment, "XXX3-3").is_none());
+        assert_lookup(&environment, "XXX", 222);
+        assert_lookup(&environment, "YYY", 322);
+        assert_lookup(&environment, "XXX2", 2);
+
+        assert!(lookup_expression(&mut environment, "*ns*").is_some());
+
+        let ns_a = build_new_namespace(&mut environment, "ns-a")?;
+        ns_a.borrow_mut().insert("a1", ExpEnum::Int(11).into());
+        let ns_b = build_new_namespace(&mut environment, "ns-b")?;
+        ns_b.borrow_mut().insert("b1", ExpEnum::Int(21).into());
+        let ns_c = build_new_namespace(&mut environment, "ns-c")?;
+        ns_c.borrow_mut().insert("c1", ExpEnum::Int(31).into());
+        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert!(lookup_expression(&mut environment, "b1").is_none());
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+        assert_lookup(&environment, "ns-a::a1", 11);
+        assert_lookup(&environment, "ns-b::b1", 21);
+        assert_lookup(&environment, "ns-c::c1", 31);
+        environment.namespace = ns_a.clone();
+        environment.stack.truncate(0);
+        environment.stack_frames.truncate(0);
+        assert_lookup(&environment, "ns-a::a1", 11);
+        assert!(lookup_expression(&mut environment, "b1").is_none());
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+        environment.namespace = ns_b.clone();
+        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert_lookup(&environment, "ns-b::b1", 21);
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+        environment.namespace = ns_c.clone();
+        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert!(lookup_expression(&mut environment, "b1").is_none());
+        assert_lookup(&environment, "ns-c::c1", 31);
+        environment
+            .dynamic_scope
+            .insert("a1", Binding::with_expression(ExpEnum::Int(111).into()));
+        environment
+            .dynamic_scope
+            .insert("b1", Binding::with_expression(ExpEnum::Int(211).into()));
+        environment
+            .dynamic_scope
+            .insert("c1", Binding::with_expression(ExpEnum::Int(311).into()));
+        assert_lookup(&environment, "ns-b::b1", 211);
+        assert_lookup(&environment, "b1", 211);
+        assert_lookup(&environment, "ns-c::c1", 311);
+        assert_lookup(&environment, "c1", 311);
+        assert_capture(&environment, "ns-b::b1", 21);
+        assert!(capture_expression(&mut environment, "b1").is_none());
+        assert_capture(&environment, "ns-c::c1", 31);
+        assert_capture(&environment, "c1", 31);
+        environment.namespace = ns_b.clone();
+        assert_lookup(&environment, "ns-b::b1", 211);
+        assert_lookup(&environment, "b1", 211);
+        // Note that a dynamic var will be available even it's namespace is not.
+        // XXX TODO- Is this a good idea?
+        assert_lookup(&environment, "ns-c::c1", 311);
+        assert_lookup(&environment, "c1", 311);
+        environment.dynamic_scope.clear();
+        assert_lookup(&environment, "ns-b::b1", 21);
+        assert_lookup(&environment, "b1", 21);
+        assert_lookup(&environment, "ns-c::c1", 31);
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+
+        environment.namespace = ns_b.clone();
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(20).into()));
+        let mut syms4 = Symbols::with_frame(&mut environment, &None);
+        syms4.insert("st-1");
+        environment.stack_frames.push(StackFrame {
+            index: 0,
+            symbols: syms4.clone(),
+        });
+        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+        assert_lookup(&environment, "b1", 21);
+        assert_lookup(&environment, "st-1", 20);
+        assert_lookup(&environment, "ns-c::c1", 31);
+        environment.namespace = ns_a.clone();
+        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert!(lookup_expression(&mut environment, "c1").is_none());
+        assert_lookup(&environment, "b1", 21);
+        assert_lookup(&environment, "st-1", 20);
+        assert_lookup(&environment, "ns-c::c1", 31);
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_expression() -> Result<(), LispError> {
+        setup();
+        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        assert!(
+            get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
+        );
+        assert!(get_expression_look(
+            &mut environment,
+            ExpEnum::Symbol("NA", SymLoc::None).into(),
+            true
+        )
+        .is_none());
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(222).into()));
+        let mut syms = Symbols::with_frame(&mut environment, &None);
+        syms.insert("NA");
+        environment.stack_frames.push(StackFrame {
+            index: 0,
+            symbols: syms.clone(),
+        });
+        assert!(
+            get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
+        );
+        assert_exp_lookup(
+            &environment,
+            ExpEnum::Symbol("NA", SymLoc::None).into(),
+            222,
+        );
+        assert_exp(
+            &environment,
+            ExpEnum::Symbol("NA", SymLoc::Stack(0)).into(),
+            222,
+        );
+
+        let mut syms2 = Symbols::with_frame(&mut environment, &Some(syms.clone()));
+        syms2.insert("NA2");
+        environment.stack_frames.push(StackFrame {
+            index: syms.len(),
+            symbols: syms2.clone(),
+        });
+        environment
+            .stack
+            .push(Binding::with_expression(ExpEnum::Int(2).into()));
+        assert_exp_lookup(
+            &environment,
+            ExpEnum::Symbol("NA", SymLoc::None).into(),
+            222,
+        );
+        assert_exp_lookup(&environment, ExpEnum::Symbol("NA2", SymLoc::None).into(), 2);
+        assert_exp(
+            &environment,
+            ExpEnum::Symbol("NA2", SymLoc::Stack(0)).into(),
+            2,
+        );
+
+        assert_exp(
+            &environment,
+            ExpEnum::Symbol("NA2", SymLoc::Ref(ExpEnum::Int(3).into())).into(),
+            3,
+        );
+        let ns_a = build_new_namespace(&mut environment, "ns-a")?;
+        ns_a.borrow_mut().insert("a1", ExpEnum::Int(11).into());
+        assert_exp(
+            &environment,
+            ExpEnum::Symbol("NA2", SymLoc::Namespace(ns_a.clone(), 1)).into(),
+            11,
+        );
+
+        Ok(())
+    }
 }
