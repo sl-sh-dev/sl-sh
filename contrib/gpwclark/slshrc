@@ -71,10 +71,8 @@
 
 		Section: user-shell"
 		(str-to-tail-f) (progn
-		(def matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
-		(println "list match: " matching-list)
-		(def tail-target (first matching-list))
-		(println "tail -f " tail-target)
+		(var 'matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
+		(var 'tail-target (first matching-list))
 		(tail -f tail-target)))
 
 	(defn cdt
@@ -83,7 +81,7 @@
 	"
 		()
 		(progn
-			(def most-recent-dir
+			(var 'most-recent-dir
 				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir))))
 
@@ -110,7 +108,7 @@
 	"
 	()
 	(progn
-		(def raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+		(var 'raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
 		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
 
 (defn stripcolor
@@ -159,12 +157,12 @@
 	(let ((log-out-file "last_build.log"))
 	(progn
 		(|
-			(def gradle-proc (eval (append-to! '(./gradlew) args)))
+			(var 'gradle-proc (eval (append-to! '(./gradlew) args)))
 			(tee log-out-file)
 		)
-		(def gradle-ret-code (wait gradle-proc))
-		(def log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
-		(def proj-name (str (basename $PWD)))
+		(var 'gradle-ret-code (wait gradle-proc))
+		(var 'log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+		(var 'proj-name (str (basename $PWD)))
 		(if (= 0 gradle-ret-code)
 			(nss-pass (str "PASS! - " proj-name) log-out-txt)
 			(nss-fail (str "FAIL! - " proj-name) log-out-txt))
@@ -250,37 +248,32 @@
 
 ;; notification helpers {{{
 
+(defmacro nss (title msg icon)
+	`(notify-send -t 0 ,title ,msg -i ,icon))
+
 (defn persist-nss
 	"provide persistent notification via notify-send and libnotify
 	Section: notify"
-	(&rest args)
-		(if (= (length args) 2)
-			(eval `(notify-send -t 0 ,@args --icon=system-software-update))
-			(err "takes 2 arguments")))
+	(title msg)
+	(nss title msg "system-software-update"))
 
 (defn nss-pass
 	"provide persistent success notification via notify-send and libnotify
 	Section: notify"
-	(&rest args)
-	(if (= (length args) 2)
-		(eval `(notify-send -t 0 ,@args --icon=face-wink))
-		(err "takes 2 arguments")))
+	(title msg)
+	(nss title msg "face-wink"))
 
 (defn nss-fail
 	"provide persistent failure notification via notify-send and libnotify
 	Section: notify"
-	(&rest args)
-		(if (= (length args) 2)
-			(eval `(notify-send -t 0 ,@args --icon=process-stop))
-			(err "takes 2 arguments")))
+	(title msg)
+	(nss title msg "process-stop"))
 
 (defn pnss
 	"provide fun persistent notification via notify-send and libnotify
 	Section: notify"
-	(&rest args)
-	(if (> (length args) 1)
-		(err "I take one argument dude.")
-		(persist-nss (nth 0 args) (str (fortune)))))
+	(title)
+	(persist-nss title (str (fortune))))
 
 ;;tell me about it!
 (defn tmai
@@ -288,7 +281,7 @@
 	Section: notify"
 	()
 	(progn
-		(def last-ret-val *last-status*)
+		(var 'last-ret-val *last-status*)
 		(pnss (str "Last program exit status: " last-ret-val  "."))
 		last-ret-val))
 
@@ -349,7 +342,7 @@ Section: tmux"
 	(&rest args)
 		(if (= (length args) 1)
 			(progn
-				(def tmux-ret-code (tmux a -t (first args)))
+				(var 'tmux-ret-code (tmux a -t (first args)))
 				(if (= 0 tmux-ret-code)
 					0
 					(tmuxnew (first args))))
@@ -430,10 +423,12 @@ Section: tmux"
 		(str "(" (str-trim branch) ")"))))
 
 (defn get-build-type () (progn
-	(def build-type (nth 3 (str-split " " (version))))
+	(var 'build-type (nth 3 (str-split " " (version))))
 	(if (= build-type "debug")
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
 		"")))
+
+;; TODO maybe list bkrd processes as well in prompt.
 
 ;; prompt ensures
 ;;	1. always a new line above prompt
@@ -443,7 +438,7 @@ Section: tmux"
 ;;	5. cursor on near empty line
 (defn __prompt ()
     (progn
-        (def token-str (str-trim *last-command*))
+        (var 'token-str (str-trim *last-command*))
         (when (> (length token-str) 0)
             (set! token-str (collect (reverse (read-all token-str)))))
         (when (and
@@ -461,7 +456,7 @@ Section: tmux"
                   (if (= (nth 2 token-str) '$3la)
                     (export '3la $3la)
                     (export '3la (str (nth 2 token-str)))))))
-        (def last-status *last-status*)
+        (var 'last-status *last-status*)
         (str
             "\n"
             (if (> (length (get-dirs)) 0)
@@ -494,60 +489,51 @@ Section: tmux"
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 ;; }}}
 
-(defn handle-get-error (on-success on-failure result)
-      (var 'response (cdr result))
-      (if (= :ok (car result))
-        (progn (println "good job.") (on-success response) response)
-        (progn (println "bad job." ) (on-failure response) nil)))
-
 ;; user ns docs {{{
 (pushd "~/development/slsh/docs/")
 (when (or
         (not (fs-exists? "index.markdown"))
         (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))))
-  ;;j(handle-get-error
-   ;; (fn (x) (println "Generated docs."))
-   ;; (fn (x) (println "Error generating docs.\n" x))
-    ;;(get-error
     (progn
     (load "mk-docs.lisp")
 
     (defn filter-non-user-forms (sym-list namespaces) (progn
-            (if (empty-seq? namespaces)
-                sym-list
-                (progn
-                (def the-ns (first namespaces))
-                (set! sym-list (filter (fn (x) (not (in? (ns-symbols (to-symbol the-ns)) x))) sym-list))
-                (recur sym-list (rest namespaces))))))
+        (if (empty-seq? namespaces)
+            sym-list
+              (recur
+                  (collect-vec (filter (fn (x) (progn
+                                (not (in? (ns-symbols (to-symbol (first namespaces))) x))))
+                      sym-list))
+              (rest namespaces)))))
 
     (defn filter-user-undocable-forms (sym-list)
-        (var 'to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms all-docstrings))
+        (var 'to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings))
           (filter (fn (x) (not (in? to-filter x))) sym-list))
 
     ;; TODO ideally this would live in mk-docs.lisp
     ;; and :user would be an option as param of mkdocs::get-doc-list-for
     (defn list-of-user-slsh-syms () (progn
         (var 'user-syms (list))
-        (def all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
+        (var 'all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
         (for a-ns in (filter
-                    (fn (x) (not (in? all-non-user-namespaces x)))
-                    (ns-list))
+                        (fn (x) (not (in? all-non-user-namespaces x)))
+                        (ns-list))
             (append-to! user-syms (ns-symbols (to-symbol a-ns))))
-        (def user-forms (mkdocs::filter-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
-        (set! user-forms (filter-user-undocable-forms (filter-non-user-forms user-syms default-namespaces)))
-        (collect-vec user-forms)))
+        (var 'user-forms (filter-non-user-forms user-syms default-namespaces))
+        (var 'partial-docable-user-forms (mkdocs::filter-undocable-forms user-forms))
+        (var 'all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
+        (collect-vec all-docable-user-forms)))
 
-    (def all-user-slsh-syms (list-of-user-slsh-syms))
-    (def all-docstrings
+    (def 'all-user-slsh-syms (list-of-user-slsh-syms))
+    (def 'all-docstrings
         (map (fn (x) (doc (to-symbol x))) (filter (fn (x) (= :ok (car (get-error (doc (to-symbol x)))))) all-user-slsh-syms)))
     ;; check the last modified time of index.markdown and only do this if
     ; has not been done in some amount of time.
     (mkdocs::make-md-file-with-docstrings
         "index.markdown"
         (collect-vec all-docstrings))
-    (println "Built docs!"))
-      ;;))
-)
+    (println "Built docs!")))
 
 (popd)
+
 ;; }}}

@@ -65,7 +65,7 @@ up until the next token delimeted option, -c.
     (str "Illegal option " key ", not in allowable arguments provided to getopts."))
 
 (defn verify-arity (idx given-args options-map bindings-map)
-    (var 'option (vec-nth idx given-args))
+    (var 'option (vec-nth given-args idx))
     (var 'key (to-symbol (str ":" option)))
     (var 'arity-map (hash-get options-map key))
     (var 'arity (if (nil? arity-map)
@@ -90,7 +90,7 @@ up until the next token delimeted option, -c.
     (debugln "vec-args: " vec-args)
     (for-i idx cmd in vec-args
          (do
-           (debugln "cmd: " (vec-nth idx vec-args) ", idx: " idx)
+           (debugln "cmd: " (vec-nth vec-args idx) ", idx: " idx)
            (cond
              ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-single-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
@@ -102,17 +102,23 @@ up until the next token delimeted option, -c.
                  (var 'de-multi-single-arged-str
                       (str-split " " (str token-delim
                            (str-cat-list (str " " token-delim)
-                           (collect-vec (str-replace (vec-nth idx vec-args) token-delim ""))))))
+                           (collect-vec (str-replace (vec-nth vec-args idx) token-delim ""))))))
                  (var 'sub-vec (map str (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args)))))
                    (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
+(defn printtype (thing)
+      (println  "thing: " thing ", type: " (type thing)))
+
 (defn build-getopts-param (arity default type-fun)
+    (printtype arity)
+    (printtype default)
+    (printtype type-fun)
     (make-hash
         (list
-        (join :arity arity)
-        (join :default default)
-        (join :type type-fun))))
+            (join :arity arity)
+            (join :default default)
+            (join :type type-fun))))
 
 (defn valid-first-arg? (args)
     (when (not (is-getopts-option-string (first args)))
@@ -322,9 +328,11 @@ single character with arity N as long as said character appears last: -mne \"foo
       (list
         (join :-b (make-hash (list))))))
 
-(assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
-(assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
-(assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
+(build-getopts-param 1 (list "bar") nil)
+
+;;(assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
+;;(assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
+;;(assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
 
 (def 'test-options-map
     (make-hash
@@ -332,7 +340,7 @@ single character with arity N as long as said character appears last: -mne \"foo
         (join :-l (build-getopts-param 0 #t nil))
         (join :-m (build-getopts-param 0 nil nil))
         (join :-a (build-getopts-param 1 "foo" nil))
-        (join :--c-arg (build-getopts-param 1 '#("bar") nil))
+        (join :--c-arg (build-getopts-param 1 (list "bar") nil))
         (join :--d-arg (build-getopts-param 2 nil nil))
         (join :-b (build-getopts-param 3 nil nil)))))
 
@@ -675,7 +683,8 @@ single character with arity N as long as said character appears last: -mne \"foo
 (println (doc 'getopts))
 
 (println "Passing: " args " to getopts.")
-(def 'bindings (getopts (make-hash (list (join :-m (make-hash (list (join :arity 1) (join :default 0) (join :type :int?))))))  args))
+(def 'bindings
+     (getopts (make-hash (list (join :-m (make-hash (list (join :arity 1) (join :default 0) (join :type :int?))))))  args))
 (println "My Bindings: " bindings)
 (println "Binding for -m is " (hash-get bindings :-m))
 (ns-pop) ;; must be last line
