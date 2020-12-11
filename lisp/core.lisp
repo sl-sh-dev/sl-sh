@@ -361,13 +361,34 @@ Example:
 (test::assert-equal \"Three\" test-do-three)
 "
     (vals &rest let-body)
+    ;(lex
+      (var vars (make-vec (length vals)))
+      (var binds (make-vec (length vals)))
+        ((fn (plist)
+          (if (> (length plist) 0)
+            (do
+              (var el (car plist))
+              (if (= 1 (length el))
+                (do
+                  (vec-push! vars (car el))
+                  (vec-push! binds nil))
+                (if (= 2 (length el))
+                  (do
+                    (vec-push! vars (car el))
+                    (vec-push! binds (car (cdr el))))
+                  (err "ERROR: invalid bindings on let")))
+              (recur (cdr plist)))))vals)
+        `((fn ,vars ,@let-body) ,@binds));)
+
+(defmacro let-panic
+    (vals &rest let-body)
     (lex
       (var vars (make-vec (length vals)))
         (iterator::for el in vals (do
             (if (= 1 (length el))
                 (vec-push! vars `(var ,(iterator::nth 0 el) nil))
                 (if (= 2 (length el))
-                  (do (var el0 `(var ,(iterator::next! el)))(vec-push! vars `(var ,el0 ,(iterator::next! el))))
+                  (vec-push! vars `(var ,(iterator::next! el) ,(iterator::next! el)))
                   (err "ERROR: invalid bindings on let")))))
         `(lex ,@vars ,@let-body)))
 
@@ -402,7 +423,7 @@ Example:
 "
     (provided-condition if-true)
     `(if ,provided-condition ,if-true))
-
+#|
 (defmacro ->
 "inserts result of previous expression as second argument to current expression.
 First argument is not evaluated.
@@ -460,7 +481,7 @@ Example:
                         (set! sexp (collect (iterator::append fcn curr-form)))
                         (set! sexp (list fcn curr-form)))
                       (recur (eval sexp) (rest forms))))))))
-
+|#
 ; Reader macro for #.
 (defn reader-macro-dot
 "Reader macro for #.(...).  Do not call directly.

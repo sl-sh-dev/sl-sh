@@ -10,7 +10,6 @@ use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::analyze::*;
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
@@ -19,7 +18,7 @@ use crate::gc::*;
 use crate::interner::*;
 use crate::pretty_print::*;
 use crate::reader::*;
-use crate::symbols::Namespace;
+use crate::symbols::*;
 use crate::types::*;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
@@ -69,14 +68,89 @@ fn builtin_eval_in_scope(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            if let Some(frame) = environment.stack_frames.last() {
-                let syms = frame.symbols.clone();
-                analyze(environment, &arg, &mut Some(syms))?;
-            }
             return eval(environment, &arg);
         }
     }
     Err(LispError::new("eval can only have one form"))
+}
+
+fn apply_fn_call(
+    environment: &mut Environment,
+    command: Expression,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    match command.get().data.clone() {
+        ExpEnum::Symbol(command_sym, _) => {
+            if let Some(exp) = get_expression(environment, command.clone()) {
+                match exp.get().data.clone() {
+                    ExpEnum::Function(c) if !c.is_special_form => {
+                        let old_sup = environment.supress_eval;
+                        environment.supress_eval = true;
+                        let ret = (c.func)(environment, args); //&mut *args);
+                        environment.supress_eval = old_sup;
+                        ret
+                    }
+                    ExpEnum::Lambda(_) => {
+                        if environment.allow_lazy_fn {
+                            //                        make_lazy(environment, exp.clone(), args)
+                            Ok(Expression::alloc(ExpObj {
+                                data: ExpEnum::LazyFn(
+                                    exp.clone().into(),
+                                    args.map(|a| a.into()).collect(),
+                                ),
+                                meta: None,
+                                meta_tags: None,
+                                analyzed: RefCell::new(true),
+                            }))
+                        } else {
+                            call_lambda(environment, exp.clone(), args, false)
+                        }
+                    }
+                    _ => {
+                        let msg = format!(
+                            "Symbol {} of type {} is not callable (or is macro or special form).1",
+                            command_sym,
+                            command.display_type()
+                        );
+                        Err(LispError::new(msg))
+                    }
+                }
+            } else {
+                let msg = format!("Symbol {} not found.", command_sym,);
+                Err(LispError::new(msg))
+            }
+        }
+        ExpEnum::Lambda(_) => {
+            if environment.allow_lazy_fn {
+                //let mut parms: Vec<Handle> = Vec::collect(args);
+                Ok(Expression::alloc(ExpObj {
+                    data: ExpEnum::LazyFn(command.clone().into(), args.map(|a| a.into()).collect()),
+                    meta: None,
+                    meta_tags: None,
+                    analyzed: RefCell::new(true),
+                }))
+            //make_lazy(environment, command.clone(), args)
+            } else {
+                call_lambda(environment, command.clone(), args, false)
+            }
+        }
+        //ExpEnum::Macro(m) => exec_macro(environment, &m, args),
+        ExpEnum::Function(c) if !c.is_special_form => {
+            let old_sup = environment.supress_eval;
+            environment.supress_eval = true;
+            let ret = (c.func)(environment, args); //&mut *args);
+            environment.supress_eval = old_sup;
+            ret
+        }
+        _ => {
+            let msg = format!(
+                "Called an invalid command {}, type {}.",
+                command.make_string(environment)?,
+                command.display_type()
+            );
+            Err(LispError::new(msg))
+        }
+    }
 }
 
 fn builtin_apply(
@@ -87,7 +161,7 @@ fn builtin_apply(
     let mut last_arg: Option<Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(a.into());
+            call_list.push(eval(environment, a)?.into());
         }
         last_arg = Some(arg);
     }
@@ -102,17 +176,16 @@ fn builtin_apply(
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
-            let b = ExpEnum::Pair(
+            /*let b = ExpEnum::Pair(
                 Expression::alloc_data_h(ExpEnum::Quote),
                 Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
-            );
-            call_list.push(Expression::alloc_data_h(b));
+            );*/
+            call_list.push(a.into()); //Expression::alloc_data_h(b));
         }
     }
     let mut args = box_slice_it(&call_list[..]);
     if let Some(command) = args.next() {
-        let command = eval(environment, command)?;
-        fn_call(environment, command, &mut args)
+        apply_fn_call(environment, command, &mut args)
     } else {
         Err(LispError::new("apply: empty call"))
     }
@@ -524,7 +597,22 @@ pub fn builtin_quote(
     }
     Err(LispError::new("quote: takes one form"))
 }
-
+/*
+fn copy_clear_symbol(exp: Expression) -> Expression {
+    let mut iexp: Expression = exp.clone();
+    // Don't reuse structure for symbols or bad stuff can happen...
+    {
+        let iexp_d = iexp.get();
+        if let ExpEnum::Symbol(sym, _) = &iexp_d.data {
+            let sym = <&str>::clone(sym);
+            drop(iexp_d);
+            // XXX TODO- better copy?
+            iexp = ExpEnum::Symbol(sym, SymLoc::None).into();
+        }
+    }
+    iexp
+}
+*/
 fn replace_commas(
     environment: &mut Environment,
     list: &mut dyn Iterator<Item = Expression>,
@@ -575,10 +663,12 @@ fn replace_commas(
                 }
                 amp_next = false;
             } else {
-                // Make a new symbol vs sharing structure- can be a proble for
+                // Make a new symbol vs sharing structure- can be a problem for
                 // patched symbols later.
-                let exp: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
-                output.push(exp.into());
+                let exp2: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
+                exp2.get_mut().meta = exp.get().meta;
+                exp2.get_mut().meta_tags = exp.get().meta_tags.clone();
+                output.push(exp2.into());
             }
         } else if comma_next {
             drop(exp_d);
@@ -703,14 +793,11 @@ fn do_expansion(
     if let ExpEnum::Symbol(_, _) = &com_d.data {
         drop(com_d);
         if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
-            if let ExpEnum::Macro(sh_macro) = &exp.get().data {
-                let expansion = call_lambda(
-                    environment,
-                    ExpEnum::Lambda(sh_macro.clone()).into(),
-                    parts,
-                    false,
-                )?
-                .resolve(environment)?;
+            let exp_d = exp.get();
+            if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
+                drop(exp_d);
+                let expansion =
+                    call_lambda(environment, exp, parts, false)?.resolve(environment)?;
                 Ok(Some(expansion))
             } else {
                 Ok(None)
@@ -801,7 +888,7 @@ pub(crate) fn expand_macro(
     res
 }
 
-fn expand_macro_all(
+pub(crate) fn expand_macro_all(
     environment: &mut Environment,
     arg: &Expression,
 ) -> Result<Expression, LispError> {
@@ -875,7 +962,7 @@ fn builtin_expand_macro(
     ))
 }
 
-fn builtin_expand_macro1(
+fn _builtin_expand_macro1(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -2105,49 +2192,49 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("expand-macro1"),
-        Expression::make_special(
-            builtin_expand_macro1,
-            "Usage: (expand-macro1 expression)
+    /*data.insert(
+            interner.intern("expand-macro1"),
+            Expression::make_special(
+                builtin_expand_macro1,
+                "Usage: (expand-macro1 expression)
 
-Expands a macro expression.  Only expand the first macro.
+    Expands a macro expression.  Only expand the first macro.
 
-Just returns the expression if not a macro.
+    Just returns the expression if not a macro.
 
-Section: core
+    Section: core
 
-Example:
-(test::assert-equal '(def xx \"value\") (expand-macro1 (def xx \"value\")))
+    Example:
+    (test::assert-equal '(def xx \"value\") (expand-macro1 (def xx \"value\")))
 
-(defmacro mac-test-for
-    (bind in in_list body) (do
-	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
-    `((fn (,bind)
-        (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (do
-                (set! ,bind (root::first plist))
-                (,@body)
-                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
+    (defmacro mac-test-for
+        (bind in in_list body) (do
+        (if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
+        `((fn (,bind)
+            (if (> (length ,in_list) 0)
+                (root::loop (plist) (,in_list) (do
+                    (set! ,bind (root::first plist))
+                    (,@body)
+                    (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
 
-(test::assert-equal '((fn
-    (i)
-    (if
-        (> (length '(1 2 3)) 0)
-        (root::loop
-            (plist)
-            ('(1 2 3))
-            (do
-                (set! i (root::first plist)) nil
-                (if
-                    (> (length plist) 1)
-                    (recur (root::rest plist)))))))nil)
-    (expand-macro1 (mac-test-for i in '(1 2 3) ())))
+    (test::assert-equal '((fn
+        (i)
+        (if
+            (> (length '(1 2 3)) 0)
+            (root::loop
+                (plist)
+                ('(1 2 3))
+                (do
+                    (set! i (root::first plist)) nil
+                    (if
+                        (> (length plist) 1)
+                        (recur (root::rest plist)))))))nil)
+        (expand-macro1 (mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
-",
-        ),
-    );
+    (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
+    ",
+            ),
+        );*/
     data.insert(
         interner.intern("expand-macro-all"),
         Expression::make_special(

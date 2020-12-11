@@ -43,6 +43,7 @@ fn do_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     name: &str,
+    is_var: bool,
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if let Some(val) = args.next() {
@@ -50,14 +51,22 @@ fn do_set(
                 let val = eval(environment, val)?;
                 match &mut key.get_mut().data {
                     ExpEnum::Symbol(key_str, location) => match location {
-                        SymLoc::None => {
-                            return Err(LispError::new(format!(
-                                "{}: symbol {} not found",
-                                name, key_str
-                            )));
+                        SymLoc::None if !is_var => {
+                            if let Some(binding) =
+                                environment.namespace.borrow().get_with_outer(key_str)
+                            {
+                                binding.replace(val.clone());
+                            } else {
+                                return Err(LispError::new(format!(
+                                    "{}: symbol {} not found",
+                                    name, key_str
+                                )));
+                            }
                         }
-                        SymLoc::Ref(_r) => location.replace(SymLoc::Ref(val.clone())),
-                        SymLoc::Namespace(_scope, _idx) => {
+                        SymLoc::Ref(binding) if !is_var => {
+                            binding.replace(val.clone());
+                        }
+                        SymLoc::Namespace(_scope, _idx) if !is_var => {
                             // XXX TODO- code this or get rid of this case...
                         }
                         SymLoc::Stack(idx) => {
@@ -66,6 +75,12 @@ fn do_set(
                                     binding.replace(val.clone());
                                 }
                             }
+                        }
+                        _ => {
+                            return Err(LispError::new(format!(
+                                "{}: symbol {} not found",
+                                name, key_str
+                            )));
                         }
                     },
                     _ => {
@@ -87,14 +102,14 @@ pub(crate) fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    do_set(environment, args, "set!")
+    do_set(environment, args, "set!", false)
 }
 
 pub(crate) fn builtin_var(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    do_set(environment, args, "var")
+    do_set(environment, args, "var", true)
 }
 
 pub(crate) fn builtin_def(

@@ -161,6 +161,72 @@ Example:
         (list? sequence) (do (setnth-list idx obj sequence) sequence)
         (err "setnth!: Not a vector or list")))
 
+(defn first
+"
+Produces the first element of the provided list or vector.  Nil if the
+list/vector is nil/empty.  Note this is like car that works for lists and
+vectors.
+
+
+Section: sequence
+
+Example:
+(assert-equal 1 (first '(1 2 3)))
+(assert-equal 1 (first '#(1 2 3)))
+(assert-equal nil (first '()))
+(assert-equal nil (first nil))
+(assert-equal nil (first '#()))
+"
+    (obj)
+    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
+        (list? obj) (car obj)
+        (err "Not a vector or list")))
+
+(defn rest
+"
+Produces the provided list or vector minus the first element.  Nil if the
+list/vector is nil/empty or one element.  Note this is like cdr that works for
+lists and vectors.  This calls vec-slice to create a new vector when called with
+a vector (i.e. is much more efficient with lists).
+
+Section: sequence
+
+
+Example:
+(assert-equal '(2 3) (rest '(1 2 3)))
+(assert-equal '(2 3) (rest '#(1 2 3)))
+(assert-equal nil (rest '(1)))
+(assert-equal nil (rest '#(1)))
+(assert-equal nil (rest '()))
+(assert-equal nil (rest nil))
+(assert-equal nil (rest '#()))
+"
+    (obj)
+    (if (vec? obj) (vec-slice obj 1)
+        (list? obj) (cdr obj)
+        (err "Not a vector or list")))
+
+(defmacro seq-for
+"
+Loops over each element in a sequence.  Simple version that works with lists and
+vectors, use iterator::for in general.
+
+Section: sequence
+
+Example:
+(def i 0)
+(seq-for x in '(1 2 3 4 5 6) (set! i (+ 1 i)))
+(assert-equal 6 i)
+"
+    (bind in items body) (do
+    (if (not (= in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
+    `((fn (lst)
+         (if (non-empty-seq? lst)
+           (do
+             (var ,bind (first lst))
+             (,@body)
+             (recur (rest lst))))),items)))
+
 (defn in?
 "
 Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and
@@ -203,67 +269,25 @@ Example:
 (assert-true (vec? test-colcv2))
 (assert-equal test-colcv test-colcv2)
 "
+
 (seq)
     (var tseq nil)
     (if (vec? seq)
         (do
             (set! tseq (make-vec (length seq)))
-            (iterator::for el in seq (vec-push! tseq el))
+            (seq-for el in seq (vec-push! tseq el))
             tseq)
         (if (list? seq)
             (do
                 (set! tseq nil)
                 (var tcell nil)
                 (var head nil)
-                (iterator::for el in seq (do
+                (seq-for el in seq (do
                     (if (null head)
                         (do (set! tseq (set! head (join el nil))))
                         (do (set! tcell (join el nil)) (xdr! tseq tcell) (set! tseq tcell)))))
                 head)
             (err "Not a list or vector."))))
-
-(defn first
-"
-Produces the first element of the provided list or vector.  Nil if the
-list/vector is nil/empty.  Note this is like car that works for lists and
-vectors.
-
-Section: sequence
-
-Example:
-(assert-equal 1 (first '(1 2 3)))
-(assert-equal 1 (first '#(1 2 3)))
-(assert-equal nil (first '()))
-(assert-equal nil (first nil))
-(assert-equal nil (first '#()))
-"
-    (obj)
-    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
-        (list? obj) (car obj)
-        (err "Not a vector or list")))
-
-(defn rest
-"
-Produces the provided list or vector minus the first element.  Nil if the
-list/vector is nil/empty or one element.  Note this is like cdr that works for
-lists and vectors.  This calls vec-slice to create a new vector when called with
-a vector (i.e. is much more efficient with lists).
-
-Section: sequence
-
-Example:
-(assert-equal '(2 3) (rest '(1 2 3)))
-(assert-equal '(2 3) (rest '#(1 2 3)))
-(assert-equal nil (rest '(1)))
-(assert-equal nil (rest '#(1)))
-(assert-equal nil (rest '()))
-(assert-equal nil (rest nil))
-(assert-equal nil (rest '#()))
-"
-    (obj)
-    (if (vec? obj) (vec-slice obj 1)
-        (list? obj) (cdr obj)
-        (err "Not a vector or list")))
 
 (defn qsort
 "Usage: (qsort sequence comp-lambda?) -> [sorted vector]
@@ -313,12 +337,20 @@ Example:
                         (var pivot (first lst))
                         (var less (vec))
                         (var greater (vec))
-                        (iterator::for i in (rest lst)
-                            (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
+                        ; Don't have for yet so do it the "hard" way.
+                        ((fn (lst)
+                          (if (non-empty-seq? lst)
+                            (do
+                              (var i (first lst))
+                              (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i))
+                              (recur (rest lst)))))(rest lst))
+                        ;(iterator::for i in (rest lst)
+                        ;    (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
                         (vec-push! to-sort greater)
                         (vec-push! to-sort pivot)
                         (vec-push! to-sort less)
                         (recur comp-fn sorted to-sort)))))
+
             sorted)))
 
     (if (> (length comp) 1) (err "qsort takes one option compare lambda"))

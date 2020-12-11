@@ -10,6 +10,7 @@ Some stuff
 |#
 
 (ns-import 'test)
+(ns-import 'iterator)
 
 (let ((non-empty-vec (vec 'a))
 	(empty-vec (make-vec))

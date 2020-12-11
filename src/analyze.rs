@@ -49,7 +49,9 @@ pub fn make_fn(
                 return Err(LispError::new("fn: parameters must be symbols"));
             }
         }
+        drop(params_d);
         syms.insert("this-fn");
+        let body = body.copy();
         analyze(environment, &body, &mut Some(syms.clone()))?;
         let body = body.handle_no_root();
         return Ok(Lambda {
@@ -107,13 +109,13 @@ fn patch_symbol(
             if let Some(idx) = syms.get(name) {
                 location.replace(SymLoc::Stack(idx));
             } else if syms.can_capture(name) {
-                let idx = syms.insert_capture(name);
+                let idx = syms.insert_capture(name, environment);
                 location.replace(SymLoc::Stack(idx));
-            } else if let Some(exp) = syms.namespace().borrow().get_with_outer(name) {
-                location.replace(SymLoc::Ref(exp));
+            } else if let Some(binding) = syms.namespace().borrow().get_with_outer(name) {
+                location.replace(SymLoc::Ref(binding));
             }
-        } else if let Some(r) = environment.namespace.borrow().get_with_outer(name) {
-            location.replace(SymLoc::Ref(r));
+        } else if let Some(binding) = environment.namespace.borrow().get_with_outer(name) {
+            location.replace(SymLoc::Ref(binding));
         }
     }
 }
@@ -148,11 +150,7 @@ fn backquote_syms(
     }
 }
 
-fn analyze_seq(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-    syms: &mut Option<Symbols>,
-) -> Result<(Option<ExpEnum>, bool), LispError> {
+fn is_quoted(environment: &mut Environment, args: &mut dyn Iterator<Item = Expression>) -> bool {
     if let Some(car) = args.next() {
         let car_d = car.get();
         if let ExpEnum::Symbol(_s, _location) = &car_d.data {
@@ -160,36 +158,64 @@ fn analyze_seq(
             let form = get_expression_look(environment, car.clone(), true);
             if let Some(form_exp) = form {
                 let exp_d = form_exp.get();
+                return match &exp_d.data {
+                    ExpEnum::Quote => true,
+                    ExpEnum::BackQuote => true,
+                    ExpEnum::DeclareFn => true,
+                    ExpEnum::DeclareMacro => true,
+                    _ => false,
+                };
+            }
+        }
+    }
+    false
+}
+
+fn analyze_seq(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    syms: &mut Option<Symbols>,
+) -> Result<(Option<ExpEnum>, bool), LispError> {
+    if let Some(car) = args.next() {
+        let car_d = car.get();
+        if let ExpEnum::Symbol(_sym, _location) = &car_d.data {
+            drop(car_d);
+            let form = get_expression_look(environment, car.clone(), true);
+            if let Some(form_exp) = form {
+                let exp_d = form_exp.get();
                 match &exp_d.data {
                     ExpEnum::DeclareFn => {
+                        drop(exp_d);
                         let lambda = make_fn(environment, args, syms)?;
                         let lambda: Expression = ExpEnum::Lambda(lambda).into();
                         return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
                     }
                     ExpEnum::DeclareMacro => {
+                        drop(exp_d);
                         let lambda = make_fn(environment, args, syms)?;
                         let lambda: Expression = ExpEnum::Macro(lambda).into();
                         return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
                     }
                     ExpEnum::DeclareDef => {}
                     ExpEnum::DeclareVar => {
+                        drop(exp_d);
                         declare_var(args, syms)?;
                     }
                     ExpEnum::Quote => {
+                        drop(exp_d);
                         if let ExpEnum::Symbol(name, loc) = &mut car.get_mut().data {
                             // Patch the 'quote' symbol so eval will work.
                             patch_symbol(environment, syms, name, loc);
                         }
-                        if let Some(exp) = args.next() {
+                        if let Some(_exp) = args.next() {
                             if args.next().is_none() {
-                                // Don't need to analyze something quoted.
-                                *exp.get().analyzed.borrow_mut() = true;
                                 return Ok((None, false));
                             }
                         }
                         return Err(LispError::new("quote: Takes one form."));
                     }
                     ExpEnum::BackQuote => {
+                        drop(exp_d);
                         if let ExpEnum::Symbol(name, loc) = &mut car.get_mut().data {
                             patch_symbol(environment, syms, name, loc);
                         }
@@ -223,29 +249,60 @@ fn analyze_seq(
                         }
                         return Ok((None, false));
                     }
-                    _ => {}
+                    _ => {
+                        //eprintln!("WARNING: Non callable symbol {} of type {} in function call.", sym, form_exp.display_type());
+                    }
                 }
+            } else {
+                //eprintln!("WARNING: Unbound symbol {} in function call.", sym);
             }
         }
     }
     Ok((None, true))
 }
 
-pub fn analyze(
+fn analyze_expand(environment: &mut Environment, expression: Expression) -> Result<(), LispError> {
+    let quoted = {
+        let exp_d = expression.get();
+        if let ExpEnum::Vector(v) = &exp_d.data {
+            let mut ib = box_slice_it(v);
+            is_quoted(environment, &mut ib)
+        } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
+            drop(exp_d);
+            is_quoted(environment, &mut expression.iter())
+        } else {
+            true // Can't be a macro expansion so skip it.
+        }
+    };
+    if !quoted {
+        if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
+            expression.get_mut().data.replace(exp.into());
+        }
+        {
+            let exp_d = expression.get();
+            if let ExpEnum::Vector(v) = &exp_d.data {
+                let v = v.clone();
+                drop(exp_d);
+                for exp in v {
+                    analyze_expand(environment, exp.into())?;
+                }
+            } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
+                drop(exp_d);
+                for exp in expression.iter() {
+                    analyze_expand(environment, exp)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn analyze_prep(
     environment: &mut Environment,
-    expression_in: &Expression,
+    expression: Expression,
     syms: &mut Option<Symbols>,
 ) -> Result<(), LispError> {
-    if *expression_in.get().analyzed.borrow() {
-        return Ok(());
-    }
-    let expression = expression_in.clone_root();
-    if let Some(exp) = expand_macro(environment, &expression, false, 0)? {
-        let mut exp_d = expression.get_mut();
-        exp_d.meta = exp.get().meta;
-        exp_d.meta_tags = exp.get().meta_tags.clone();
-        exp_d.data.replace(exp.into());
-    }
     {
         let exp_d = expression.get();
         if let ExpEnum::Vector(v) = &exp_d.data {
@@ -257,8 +314,10 @@ pub fn analyze(
                 drop(exp_d);
                 expression.get_mut().data.replace(exp_enum);
             } else if do_list {
+                let v = v.clone();
+                drop(exp_d);
                 for exp in v {
-                    analyze(environment, &exp.into(), syms)?;
+                    analyze_prep(environment, exp.into(), syms)?;
                 }
             }
         } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
@@ -268,7 +327,7 @@ pub fn analyze(
                 expression.get_mut().data.replace(exp_enum);
             } else if do_list {
                 for exp in expression.iter() {
-                    analyze(environment, &exp, syms)?;
+                    analyze_prep(environment, exp, syms)?;
                 }
             }
         } else if let ExpEnum::Symbol(_, _) = &exp_d.data {
@@ -281,4 +340,17 @@ pub fn analyze(
 
     *expression.get().analyzed.borrow_mut() = true;
     Ok(())
+}
+
+pub fn analyze(
+    environment: &mut Environment,
+    expression_in: &Expression,
+    syms: &mut Option<Symbols>,
+) -> Result<(), LispError> {
+    if *expression_in.get().analyzed.borrow() {
+        return Ok(());
+    }
+    let expression = expression_in.clone_root();
+    analyze_expand(environment, expression.clone())?;
+    analyze_prep(environment, expression, syms)
 }

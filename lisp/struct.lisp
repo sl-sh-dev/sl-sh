@@ -1,11 +1,13 @@
 (ns-push 'struct)
 
-(defn method (field dispatch-map tags doc doc-exp)
+(defn method (field prefix methods dispatcher tags doc doc-exp)
     (var tsym (sym ":" (car field)))
+    (var msym (sym prefix (car field)))
     (var second (cadr field))
     (var m-params nil)
     (var m-body nil)
-    (if (string? second) (do
+    (if (string? second)
+      (do
         (var doc-split (str-splitn 2 "Example:" second))
         (str-push! doc "method: " tsym "\n\t" (vec-nth doc-split 0) "\n")
         (if (= 2 (length doc-split))
@@ -16,7 +18,9 @@
         (str-push! doc "method: " tsym "\n")
         (set! m-params (cadr field))
         (set! m-body (caddr field))))
-    (hash-set! dispatch-map tsym `(fn ,m-params ,m-body))
+    (vec-push! methods `(var ,msym (fn ,m-params ,m-body)))
+    (vec-push! dispatcher `(= msg ,tsym))
+    (vec-push! dispatcher `(apply ,msym this-fn args))
     (vec-push! tags (sym ":method" tsym)))
 
 ; macro to build a "trait" that can be implemented by a struct
@@ -29,6 +33,7 @@ Section: struct
 
 Example:
 (ns-push 'test-deftrait)
+
 (struct::deftrait test-trait
   ; Require what-a and what-d in the structures that implement this trait.
   (:fn aaa (self) (self :what-a))
@@ -60,6 +65,8 @@ Example:
         (var tags (vec))
         (vec-push! tags (sym ":trait-" name))
         (var dispatch-map (make-hash))
+        (var methods (vec))
+        (var dispatcher (vec))
         (var fields-len (length fields))
         (var doc "")
         (var doc-exp "")
@@ -75,20 +82,31 @@ Example:
         ((fn (idx)
             (if (< idx fields-len) (do
                 (var field (vec-nth fields idx))
-                (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
+                (if (= (car field) :fn) 
+                    (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
                     (err "Traits only have :fn fields!"))
                 (recur (+ idx 1))
             )))idx-start)
         (var keys (hash-keys dispatch-map))
         (var keys-len (length keys))
         (var tags-len (length tags))
+        (var methods-len (length methods))
+        (var dispatcher-len (length dispatcher))
         (var doc-final "")
         (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (deftrait ... (:impl " name "))\n\n"))
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
-        `(def ,name ,doc-final (fn (target-dispatch-map target-tags)
+        `(def ,name ,doc-final (fn (target-dispatch-map target-methods target-dispatcher target-tags)
             ((fn (idx)
                 (if (< idx ,tags-len) (do
                     (vec-push! target-tags (vec-nth ',tags idx))
+                    (recur (+ idx 1)))))0)
+            ((fn (idx)
+                (if (< idx ,methods-len) (do
+                    (vec-push! target-methods (vec-nth ',methods idx))
+                    (recur (+ idx 1)))))0)
+            ((fn (idx)
+                (if (< idx ,dispatcher-len) (do
+                    (vec-push! target-dispatcher (vec-nth ',dispatcher idx))
                     (recur (+ idx 1)))))0)
             ((fn (idx)
                 (if (< idx ,keys-len) (do
@@ -134,6 +152,8 @@ Example:
         (vec-push! tags :struct)
         (vec-push! tags (sym ":struct-" name))
         (var dispatch-map (make-hash))
+        (var methods (vec))
+        (var dispatcher (vec))
         (var fields-len (length fields))
         (var doc "")
         (var doc-exp "")
@@ -171,25 +191,43 @@ Example:
                       (var binding (cadr field))
                       (var perm (caddr field))
                       (var tsym nil)
+                      (var msym nil)
                       (vec-push! params param)
                       (vec-push! bindings binding)
                       (if (= perm :rw) (do
                               (str-push! doc "attribute: " (car field) " read/write" fdoc "\n")
                               (set! tsym (sym ":" param))
+                              (set! msym (sym name "^acc^" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
+                              (vec-push! methods `(var ,msym (fn (_) ,param)))
                               (vec-push! tags (sym ":accessor:" param))
+                              (vec-push! dispatcher `(= msg ,tsym))
+                              (vec-push! dispatcher `(apply ,msym this-fn args))
                               (set! tsym (sym ":set-" param))
+                              (set! msym (sym name "^set^" param))
                               (hash-set! dispatch-map tsym `(fn (_ arg) (set! ,param arg)))
+                              (vec-push! methods `(var ,msym (fn (_ arg) (set! ,param arg))))
+                              (vec-push! dispatcher `(= msg ,tsym))
+                              (vec-push! dispatcher `(apply ,msym this-fn args))
                               (vec-push! tags (sym ":setter:" param)))
                           (= perm :ro) (do
                               (str-push! doc "attribute: " (car field) " read" fdoc "\n")
                               (set! tsym (sym ":" param))
+                              (set! msym (sym name "^acc^" param))
                               (hash-set! dispatch-map tsym `(fn (_) ,param))
+                              (vec-push! methods `(var ,msym (fn (_) ,param)))
+                              (vec-push! dispatcher `(= msg ,tsym))
+                              (vec-push! dispatcher `(apply ,msym this-fn args))
                               (vec-push! tags (sym ":accessor:" param)))
                           (= perm :wo) (do
                               (str-push! doc "attribute: " (car field) " write" fdoc "\n")
                               (set! tsym (sym ":set-" param))
+                              (set! msym (sym name "^set^" param))
                               (hash-set! dispatch-map tsym `(fn (_ arg) (set! ,param arg)))
+                              (vec-push! methods `(var ,msym (fn (_ arg) (set! ,param arg))))
+                              (vec-push! dispatcher `(= msg ,tsym))
+                              (vec-push! dispatcher `(apply ,msym this-fn args))
+                              ;(hash-set! dispatch-map tsym `(fn (_ arg) (set! ,param arg)))
                               (vec-push! tags (sym ":setter:" param)))
                           (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
                 (err "ERROR: invalid attribute bindings on defstruct")))
@@ -198,13 +236,13 @@ Example:
             (if (not (not field))
               (do
                 (str-push! doc "impl " (car field) "\n")
-                (apply (car field) dispatch-map tags nil)
+                (apply (car field) dispatch-map methods dispatcher tags nil)
                 (recur (cdr field) doc))))
 
         ((fn (idx)
             (if (< idx fields-len) (do
                 (var field (vec-nth fields idx))
-                (if (= (car field) :fn)  (struct::method (cdr field) dispatch-map tags doc doc-exp)
+                (if (= (car field) :fn) (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
                     (= (car field) :impl) nil ; do impls last (struct methods take precident).
                     (attrib field doc doc-exp))
                 (recur (+ idx 1))
@@ -219,24 +257,22 @@ Example:
             )idx-start)
 
         (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
+        (var msym (sym name "^type"))
+        (vec-push! methods `(var ,msym (fn (_) (sym->str ',name))))
+        (vec-push! dispatcher `(= msg :type))
+        (vec-push! dispatcher `(apply ,msym this-fn args))
         (var doc-final "")
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
-        `(def ,name ,doc-final (fn () ((fn (dispatch-map ,@params)
-            (var my-dispatch (make-hash))
-            (var keys (hash-keys dispatch-map))
-            (var keys-len (length keys))
-            (var key nil)
-            ; Can not use iterators yet (they need structs...) so do it the 'hard' way.
-            ; Build the local map of lambdas now so that local struct scope is visible.
-            ((fn (i)
-              (if (< i keys-len) 
-                (do
-                  (set! key (vec-nth keys i))
-                  (hash-set! my-dispatch key (eval-in-scope (hash-get dispatch-map key)))
-                  (recur (+ i 1)))))0)
-            (var self (fn (msg &rest args) (apply (hash-get my-dispatch msg (err (str "Invalid message (" msg ") to struct: " ',name))) this-fn args)))
+        ;(println "\nXXXX dispatchmap: " dispatch-map)
+        ;(println "\nXXXX dispatcher: " dispatcher)
+        ;(println "\nXXXX methods: " methods)
+        `(def ,name ,doc-final (fn () ((fn (,@params)
+            ,@methods
+            (var self
+                (fn (msg &rest args)
+                  (if ,@dispatcher (err (str "Invalid message (" msg ") to struct: " ',name)))))
             (meta-add-tags self ',tags)
-            #| XXX TODO- test memory (undef self)|#self),dispatch-map ,@bindings))) ) ; bindings for params
+            #| XXX TODO- test memory (undef self)|#self) ,@bindings))) ) ; bindings for params
      (make-vec (length fields)) ; params
      (make-vec (length fields)))) ; bindings
 

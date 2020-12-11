@@ -165,6 +165,7 @@ pub struct Environment {
     pub repl_settings: ReplSettings,
     pub liners: HashMap<&'static str, Context>,
     pub next_lex_id: usize,
+    pub supress_eval: bool, // XXX Hack for apply...
 }
 
 impl Environment {
@@ -210,6 +211,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         repl_settings: ReplSettings::default(),
         liners: HashMap::new(),
         next_lex_id: 1,
+        supress_eval: false,
     }
 }
 
@@ -363,7 +365,13 @@ pub fn get_expression_look(
                     None
                 }
             }
-            SymLoc::Ref(r) => Some(r.clone()),
+            SymLoc::Ref(binding) => {
+                if let Some(reference) = environment.dynamic_scope.get(sym) {
+                    Some(reference.get())
+                } else {
+                    Some(binding.get())
+                }
+            }
             SymLoc::Namespace(scope, idx) => scope.borrow().get_idx(*idx),
             SymLoc::Stack(idx) => get_expression_stack(environment, *idx),
         },
@@ -709,9 +717,9 @@ mod tests {
             index: 0,
             symbols: syms.clone(),
         });
-        assert!(
-            get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
-        );
+        //assert!(
+        //    get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
+        //);
         assert_exp_lookup(
             &environment,
             ExpEnum::Symbol("NA", SymLoc::None).into(),
@@ -746,7 +754,11 @@ mod tests {
 
         assert_exp(
             &environment,
-            ExpEnum::Symbol("NA2", SymLoc::Ref(ExpEnum::Int(3).into())).into(),
+            ExpEnum::Symbol(
+                "NA2",
+                SymLoc::Ref(Binding::with_expression(ExpEnum::Int(3).into())),
+            )
+            .into(),
             3,
         );
         let ns_a = build_new_namespace(&mut environment, "ns-a")?;

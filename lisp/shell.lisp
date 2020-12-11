@@ -456,14 +456,15 @@ Example:
 (def tok-string-color shell::*fg-magenta*)
 (def tok-invalid-color shell::*fg-red*)
 
-(defmacro syntax-on
+;(defmacro syntax-on
+(defn syntax-on
   "
   Turn on syntax highlighting at the repl.
 
   Section: shell
   "
   ()
-  '(lex
+  ;'(lex
      (var plev 0)
      (var ch nil)
      (var bad-syms (make-hash))
@@ -585,7 +586,7 @@ Example:
            (var result (get-error (line-handler line)))
            (if (= :error (car result)) (shell::print-error result) (cdr result)))
 
-     nil))
+     nil);)
 
 (defmacro syntax-off
   "

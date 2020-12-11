@@ -27,9 +27,11 @@
         (err "Not an error!"))))
 
 (def result (get-error (do
+(load "core.lisp"))))
 
-(load "core.lisp")
+(if (= :error (car result)) (prim-print-error result))
 
+(def result (get-error (do
 (defn error-stack-on
 "Currently a no-op, used to turn on error stacks.
 
@@ -102,7 +104,8 @@ t
 
 (if (def? *run-script*)
   (do
-    (def result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
+    ;(def result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
+    (def result (get-error (load *run-script*)))
     (if (= :error (car result))
       (shell::print-error result))))
 

@@ -60,12 +60,28 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
+fn copy_handle(h: &Handle) -> Handle {
+    let obj = h.get().copy();
+    Expression::alloc_h(obj)
+}
+
 #[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Vec<&'static str>,
     pub body: Handle,
     pub syms: Symbols,
     pub namespace: Rc<RefCell<Namespace>>,
+}
+
+impl Lambda {
+    pub fn copy(&self) -> Self {
+        Lambda {
+            params: self.params.iter().map(|s| *s).collect(),
+            body: copy_handle(&self.body),
+            syms: self.syms.clone(), // XXX TODO deep?
+            namespace: self.namespace.clone(),
+        }
+    }
 }
 
 fn params_to_string(params: &[&'static str]) -> String {
@@ -187,7 +203,7 @@ pub struct ExpMeta {
 #[derive(Clone, Debug)]
 pub enum SymLoc {
     None,
-    Ref(Expression),
+    Ref(Binding),
     Namespace(Rc<RefCell<Namespace>>, usize),
     Stack(usize),
 }
@@ -284,6 +300,40 @@ impl ExpEnum {
             }
         }
         last_pair
+    }
+
+    fn copy(&self) -> ExpEnum {
+        match self {
+            ExpEnum::True => ExpEnum::True,
+            ExpEnum::Nil => ExpEnum::Nil,
+            ExpEnum::Float(n) => ExpEnum::Float(*n),
+            ExpEnum::Int(i) => ExpEnum::Int(*i),
+            ExpEnum::Symbol(s, _) => ExpEnum::Symbol(s, SymLoc::None),
+            // XXX TODO- make a new Cow (next two)?
+            ExpEnum::String(s, _) => ExpEnum::String(s.clone(), None),
+            ExpEnum::Char(c) => ExpEnum::Char(c.clone()),
+            ExpEnum::CodePoint(c) => ExpEnum::CodePoint(*c),
+            ExpEnum::Lambda(l) => ExpEnum::Lambda(l.copy()),
+            ExpEnum::Macro(m) => ExpEnum::Macro(m.copy()),
+            ExpEnum::Function(c) => ExpEnum::Function(c.clone()),
+            ExpEnum::LazyFn(h, v) => {
+                ExpEnum::LazyFn(copy_handle(h), v.iter().map(|h| copy_handle(h)).collect())
+            }
+            ExpEnum::Vector(v) => ExpEnum::Vector(v.iter().map(|h| copy_handle(h)).collect()),
+            ExpEnum::Values(v) => ExpEnum::Values(v.iter().map(|h| copy_handle(h)).collect()),
+            ExpEnum::Pair(car, cdr) => ExpEnum::Pair(copy_handle(car), copy_handle(cdr)),
+            ExpEnum::HashMap(map) => ExpEnum::HashMap(map.clone()), //XXX TODO- deep copy
+            ExpEnum::Process(p) => ExpEnum::Process(*p),
+            ExpEnum::File(f) => ExpEnum::File(f.clone()),
+            ExpEnum::Wrapper(h) => ExpEnum::Wrapper(copy_handle(h)),
+            ExpEnum::DeclareDef => ExpEnum::DeclareDef,
+            ExpEnum::DeclareVar => ExpEnum::DeclareVar,
+            ExpEnum::DeclareFn => ExpEnum::DeclareFn,
+            ExpEnum::DeclareMacro => ExpEnum::DeclareMacro,
+            ExpEnum::Quote => ExpEnum::Quote,
+            ExpEnum::BackQuote => ExpEnum::BackQuote,
+            ExpEnum::Undefined => ExpEnum::Undefined,
+        }
     }
 }
 
@@ -384,6 +434,35 @@ pub struct ExpObj {
     pub analyzed: RefCell<bool>,
 }
 
+impl ExpObj {
+    pub fn copy(&self) -> Self {
+        let meta = if let Some(meta) = self.meta {
+            Some(ExpMeta {
+                file: meta.file,
+                line: meta.line,
+                col: meta.col,
+            })
+        } else {
+            None
+        };
+        let meta_tags = if let Some(tags) = &self.meta_tags {
+            let mut ntags = HashSet::with_capacity(tags.len());
+            for t in tags {
+                ntags.insert(*t);
+            }
+            Some(ntags)
+        } else {
+            None
+        };
+        ExpObj {
+            data: self.data.copy(),
+            meta,
+            meta_tags,
+            analyzed: RefCell::new(*self.analyzed.borrow()),
+        }
+    }
+}
+
 impl Trace for ExpEnum {
     fn trace(&self, tracer: &mut Tracer) {
         match self {
@@ -422,6 +501,12 @@ pub struct Expression {
 }
 
 impl Expression {
+    pub fn copy(&self) -> Expression {
+        Expression {
+            obj: Expression::alloc_h(self.obj.get().copy()),
+        }
+    }
+
     pub fn new(obj: Handle) -> Expression {
         Expression { obj }
     }
@@ -653,7 +738,7 @@ impl Expression {
             ExpEnum::DeclareMacro => "SpecialForm".to_string(),
             ExpEnum::Quote => "SpecialForm".to_string(),
             ExpEnum::BackQuote => "SpecialForm".to_string(),
-            ExpEnum::Undefined => panic!("Tried to get type for undefined!"),
+            ExpEnum::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
         }
     }
 
