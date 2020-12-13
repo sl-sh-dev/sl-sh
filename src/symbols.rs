@@ -63,6 +63,8 @@ pub struct SymbolsInt {
     count: usize,
 }
 
+type Captures = Rc<RefCell<Vec<(&'static str, usize, Binding)>>>;
+
 #[derive(Clone, Debug)]
 pub struct Symbols {
     pub data: Rc<RefCell<SymbolsInt>>,
@@ -70,7 +72,7 @@ pub struct Symbols {
     lex_depth: u16,
     outer: Option<Rc<RefCell<Symbols>>>,
     namespace: Rc<RefCell<Namespace>>,
-    captures: Rc<RefCell<Vec<(&'static str, usize, Binding)>>>,
+    captures: Captures,
 }
 
 impl Symbols {
@@ -201,6 +203,7 @@ impl Symbols {
     }
 
     pub fn refresh_captures(&mut self, environment: &mut Environment) -> Result<(), LispError> {
+        self.namespace = environment.namespace.clone();
         for cap in self.captures.borrow_mut().iter_mut() {
             if let Some(r) = capture_expression(environment, cap.0) {
                 *cap = (cap.0, cap.1, r);

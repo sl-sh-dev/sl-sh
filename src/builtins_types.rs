@@ -236,6 +236,12 @@ fn builtin_is_builtin(
         if args.next().is_none() {
             return match eval_no_values(environment, arg)?.get().data {
                 ExpEnum::Function(_) => Ok(Expression::make_true()),
+                ExpEnum::DeclareDef => Ok(Expression::make_true()),
+                ExpEnum::DeclareVar => Ok(Expression::make_true()),
+                ExpEnum::DeclareFn => Ok(Expression::make_true()),
+                ExpEnum::DeclareMacro => Ok(Expression::make_true()),
+                ExpEnum::Quote => Ok(Expression::make_true()),
+                ExpEnum::BackQuote => Ok(Expression::make_true()),
                 _ => Ok(Expression::make_nil()),
             };
         }

@@ -21,9 +21,13 @@
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
 
-(defn exec-str (docstring) (do
+(defn exec-str (docstring)
 	(var test (vec-nth (str-split "Example:" docstring) 1))
-	(fn () (for exp in (read-all test) (eval exp)))))
+	(fn ()
+		(var exp (read test :done))
+		(if (not (= exp :done))
+			(do (eval exp) (recur)))))
+	;(fn () (for exp in (read-all test) (eval exp)))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))

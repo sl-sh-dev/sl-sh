@@ -950,10 +950,11 @@ fn builtin_expand_macro(
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, false, 0)? {
+            let exp_macro = eval(environment, arg0)?;
+            return if let Some(exp) = expand_macro(environment, &exp_macro, false, 0)? {
                 Ok(exp)
             } else {
-                Ok(arg0)
+                Ok(exp_macro)
             };
         }
     }
@@ -962,16 +963,17 @@ fn builtin_expand_macro(
     ))
 }
 
-fn _builtin_expand_macro1(
+fn builtin_expand_macro1(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, true, 0)? {
+            let exp_macro = eval(environment, arg0)?;
+            return if let Some(exp) = expand_macro(environment, &exp_macro, true, 0)? {
                 Ok(exp)
             } else {
-                Ok(arg0)
+                Ok(exp_macro)
             };
         }
     }
@@ -986,7 +988,8 @@ fn builtin_expand_macro_all(
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return expand_macro_all(environment, &arg0);
+            let exp_macro = eval(environment, arg0)?;
+            return expand_macro_all(environment, &exp_macro);
         }
     }
     Err(LispError::new(
@@ -2150,7 +2153,7 @@ Example:
     );
     data.insert(
         interner.intern("expand-macro"),
-        Expression::make_special(
+        Expression::make_function(
             builtin_expand_macro,
             "Usage: (expand-macro expression)
 
@@ -2161,7 +2164,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(def xx \"value\") (expand-macro (def xx \"value\")))
+(test::assert-equal '(def xx \"value\") (expand-macro '(def xx \"value\")))
 
 (defmacro mac-test-for
     (bind in in_list body) (do
@@ -2186,15 +2189,15 @@ Example:
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist))))))) nil)
-    (expand-macro (mac-test-for i in '(1 2 3) ())))
+    (expand-macro '(mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
+(test::assert-equal '(1 2 3) (expand-macro '(1 2 3)))
 ",
         ),
     );
-    /*data.insert(
+    data.insert(
             interner.intern("expand-macro1"),
-            Expression::make_special(
+            Expression::make_function(
                 builtin_expand_macro1,
                 "Usage: (expand-macro1 expression)
 
@@ -2205,7 +2208,7 @@ Example:
     Section: core
 
     Example:
-    (test::assert-equal '(def xx \"value\") (expand-macro1 (def xx \"value\")))
+    (test::assert-equal '(def xx \"value\") (expand-macro1 '(def xx \"value\")))
 
     (defmacro mac-test-for
         (bind in in_list body) (do
@@ -2229,15 +2232,15 @@ Example:
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist)))))))nil)
-        (expand-macro1 (mac-test-for i in '(1 2 3) ())))
+        (expand-macro1 '(mac-test-for i in '(1 2 3) ())))
 
-    (test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
+    (test::assert-equal '(1 2 3) (expand-macro1 '(1 2 3)))
     ",
             ),
-        );*/
+        );
     data.insert(
         interner.intern("expand-macro-all"),
-        Expression::make_special(
+        Expression::make_function(
             builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
 
@@ -2248,7 +2251,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(def xx \"value\") (expand-macro-all (def xx \"value\")))
+(test::assert-equal '(def xx \"value\") (expand-macro-all '(def xx \"value\")))
 
 (defmacro mac-test-for
     (bind in in_list body) (do
@@ -2274,9 +2277,9 @@ Example:
                             (> (length plist) 1)
                             (recur (root::rest plist)))))
                 '(1 2 3)))) nil)
-    (expand-macro-all (mac-test-for i in '(1 2 3) ())))
+    (expand-macro-all '(mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
+(test::assert-equal '(1 2 3) (expand-macro-all '(1 2 3)))
 ",
         ),
     );

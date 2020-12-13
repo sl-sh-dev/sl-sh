@@ -1,14 +1,23 @@
 ;;; These are core forms that are installed in the root namespace so they
 ;;; are always available.
 
-(def internal-macro
-"
-Template for macros the define macros, can pass an 'op' like def or set.
-Intended for use by other core macros.
+(def defmacro
+"Usage: (defmacro name doc_string? argument_list body)
+
+Create a macro and bind it to a symbol in the current scope.
 
 Section: core
+
+Example:
+(defmacro test-mac (x) (var y (+ (ref (ref x)) 1)) `(set! ,x ,y))
+(def test-mac-x 2)
+(test-mac test-mac-x)
+(test::assert-equal 3 test-mac-x)
+(defmacro test-mac (x) `(set! ,x 15))
+(test-mac test-mac-x)
+(test::assert-equal 15 test-mac-x)
 "
-    (macro (op name &rest args)
+    (macro (name &rest args) 
            ((fn ()
                 (var ars nil)
                 (var body nil)
@@ -18,30 +27,11 @@ Section: core
                     (var doc-str (vec-nth args 0))
                     (set! ars (vec-nth args 1))
                     (set! body (vec-slice args 2))
-                    `(do (,op ,name ,doc-str (macro ,ars ,@body)) nil))
+                    `(do (def ,name ,doc-str (macro ,ars ,@body)) nil))
                   (do
                     (set! ars (vec-nth args 0))
                     (set! body (vec-slice args 1))
-                    `(do (,op ,name (macro ,ars ,@body)) nil)))))))
-
-(def defmacro
-"Usage: (defmacro name doc_string? argument_list body)
-
-Create a macro and bind it to a symbol in the current scope.
-
-Section: core
-"
-    (macro (name &rest args) 
-           `(internal-macro def ,name ,@args)))
-
-(def setmacro!
-"Usage: (setmacro! name doc_string? argument_list body)
-
-Set a macro to an existing symbol.
-
-Section: core
-"
-    (macro (name &rest args) `(internal-macro set! ,name ,@args)))
+                    `(def ,name (macro ,ars ,@body))))))))
 
 (defmacro lex 
             "Usage: (lex exp0 ... expN) -> expN
@@ -153,10 +143,12 @@ Example:
     (name &rest args) `(internal-fn var ,name ,@args)) 
 
 ;; Scope to contain ns-push/ns-pop.
-(lex
-  (var ns-stack (list))
+;(lex
+; XXX TODO- better name or gensym since this is not hidden at all.
+  (def ns-stack (list))
 
-  (defn ns-push
+; XXX TODO- fix then tests for push and pop- may be a harness issue.
+  (defmacro ns-push
 "Usage: (ns-push 'namespace)
 
 Pushes the current namespace on a stack for ns-pop and enters or creates namespace.
@@ -166,19 +158,21 @@ Section: namespace
 Example:
 (def test-ns-push *ns*)
 (ns-push 'ns-pop-test-namespace)
-(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+; *ns* will not be right...
+(test::assert-equal \"ns-pop-test-namespace\" *active-ns*)
 (ns-push 'ns-pop-test-namespace2)
-(test::assert-equal \"ns-pop-test-namespace2\" *ns*)
+(test::assert-equal \"ns-pop-test-namespace2\" *active-ns*)
 (ns-pop)
-(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+(test::assert-equal \"ns-pop-test-namespace\" *active-ns*)
 (ns-pop)
 (test::assert-equal test-ns-push *ns*)
 "
     (namespace)
-    (set! ns-stack (join (if (def? *active-ns*) *active-ns* 'root) ns-stack))
-    (if (ns-exists? namespace) (ns-enter namespace) (ns-create namespace)))
+    `(do
+      (set! ns-stack (join (if (def? *active-ns*) *active-ns* 'root) ns-stack))
+      (if (ns-exists? ,namespace) (ns-enter ,namespace) (ns-create ,namespace))))
 
-  (defn ns-pop
+  (defmacro ns-pop
 "Usage: (ns-pop)
 
 Returns to the previous namespace saved in the last ns-push.
@@ -188,14 +182,15 @@ Section: namespace
 Example:
 (def test-ns-pop *ns*)
 (ns-push 'ns-pop-test-namespace)
-(test::assert-equal \"ns-pop-test-namespace\" *ns*)
+(test::assert-equal \"ns-pop-test-namespace\" *active-ns*)
 (ns-pop)
 (test::assert-equal test-ns-pop *ns*)
 "
     ()
-    (var last-ns (car ns-stack))
-    (set! ns-stack (cdr ns-stack))
-    (ns-enter last-ns)))
+    `(do
+       (ns-enter (car ns-stack))
+       (set! ns-stack (cdr ns-stack))));)
+       ;(ns-enter ,last-ns))))
 
 (defmacro loop
 "
@@ -361,36 +356,23 @@ Example:
 (test::assert-equal \"Three\" test-do-three)
 "
     (vals &rest let-body)
-    ;(lex
-      (var vars (make-vec (length vals)))
-      (var binds (make-vec (length vals)))
-        ((fn (plist)
-          (if (> (length plist) 0)
-            (do
-              (var el (car plist))
-              (if (= 1 (length el))
+    (var vars (make-vec (length vals)))
+    (var binds (make-vec (length vals)))
+      ((fn (plist)
+        (if (> (length plist) 0)
+          (do
+            (var el (car plist))
+            (if (= 1 (length el))
+              (do
+                (vec-push! vars (car el))
+                (vec-push! binds nil))
+              (if (= 2 (length el))
                 (do
                   (vec-push! vars (car el))
-                  (vec-push! binds nil))
-                (if (= 2 (length el))
-                  (do
-                    (vec-push! vars (car el))
-                    (vec-push! binds (car (cdr el))))
-                  (err "ERROR: invalid bindings on let")))
-              (recur (cdr plist)))))vals)
-        `((fn ,vars ,@let-body) ,@binds));)
-
-(defmacro let-panic
-    (vals &rest let-body)
-    (lex
-      (var vars (make-vec (length vals)))
-        (iterator::for el in vals (do
-            (if (= 1 (length el))
-                (vec-push! vars `(var ,(iterator::nth 0 el) nil))
-                (if (= 2 (length el))
-                  (vec-push! vars `(var ,(iterator::next! el) ,(iterator::next! el)))
-                  (err "ERROR: invalid bindings on let")))))
-        `(lex ,@vars ,@let-body)))
+                  (vec-push! binds (car (cdr el))))
+                (err "ERROR: invalid bindings on let")))
+            (recur (cdr plist)))))vals)
+      `((fn ,vars ,@let-body) ,@binds))
 
 (defmacro func?
 "

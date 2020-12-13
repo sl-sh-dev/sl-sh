@@ -418,10 +418,7 @@ Example:
     (set! test-do-one \"1111\")
     (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
-    (test::assert-equal \"2222\" test-do-two)
-    ;(var (sym \"test-do-one2\") \"do one\")
-    ;(test::assert-equal \"do one\" test-do-one2)
-    (test::assert-error (var (sym->str test-do-one) \"do one 2 3\")))
+    (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two))

@@ -76,7 +76,7 @@ pub struct Lambda {
 impl Lambda {
     pub fn copy(&self) -> Self {
         Lambda {
-            params: self.params.iter().map(|s| *s).collect(),
+            params: self.params.iter().copied().collect(),
             body: copy_handle(&self.body),
             syms: self.syms.clone(), // XXX TODO deep?
             namespace: self.namespace.clone(),
@@ -251,6 +251,7 @@ pub enum ExpEnum {
 
     // Used to help the analyzer reconize things it cares about without
     // doing a lot of extra work.  These are morally equivelent to a Function.
+    // If adding to this list be sure to add to builtins_types.rs/builtin_is_builtin.
     DeclareDef,
     DeclareVar,
     DeclareFn,

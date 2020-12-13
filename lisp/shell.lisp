@@ -386,7 +386,7 @@ True if the supplied command is an alias for a system command.
 
 Section: shell
 "
-	(com) `(do
+	(com) `((fn ()
 	(var ret nil)
 	(var val (shell::find-symbol ,com))
 	(if (def? (ref val))
@@ -394,7 +394,7 @@ Section: shell
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(var expansion (expand-macro (val)))
 		(set! ret (sys-command? (sym->str (first expansion))))))
-	ret))
+	ret)))
 
 (defn sys-command?
 "
@@ -474,11 +474,13 @@ Example:
      (var in-sys-command nil)
      (var tok-command t)
 
-     (varfn func? (com)
+     (varfn syn-func? (com)
             ; Want the actual thing pointed to by the symbol in com for the test.
             (set! com (shell::find-symbol com))
             (if (def? (ref com))
-              (do (set! com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
+              (do
+                (set! com (eval (sym com)))
+                (or (builtin? com) (lambda? com) (macro? com)))
               nil))
 
      (varfn paren-color (level)
@@ -502,13 +504,13 @@ Example:
             (var ns-command (shell::find-symbol command))
             (if (not tok-command)
               (if (def? (ref ns-command))
-                (if (func? command)
+                (if (syn-func? command)
                   (if in-sys-command
                     (str shell::tok-default-color command shell::*fg-default*)
                     (str shell::tok-slsh-fcn-color command shell::*fg-default*))
                   (str shell::tok-slsh-form-color command shell::*fg-default*))
                 (str shell::tok-default-color command shell::*fg-default*))
-              (if (func? command)
+              (if (syn-func? command)
                 (if (or (shell::alias? command)(shell::sys-alias? command))
                   (do
                     (set! in-sys-command t)
@@ -596,7 +598,8 @@ Example:
   "
   () '(undef __line_handler))
 
-;XXX TODO- fixme (load "endfix.lisp")
+(load "endfix.lisp")
+
 (defmacro endfix-on "
 Allows use of infix notation for common shell forms. The following is the
 complete mapping in lisp/endfix.lisp of all supported infix operators and
@@ -665,32 +668,42 @@ Section: shell
     (set! *last-command* line))
 
 (defn repl-line (line line-len)
-      (do
-        (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
-        (var my-read (if strict? read read-all))
-        (export 'LAST_STATUS "0")
-        (set! *last-status* 0)
+    (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
+    (var my-read (if strict? read read-all))
+    (export 'LAST_STATUS "0")
+    (set! *last-status* 0)
+    (var result nil)
+
+    ; This next section is odd, it makes sure the eval happens in the active
+    ; namespace NOT shell since that is the namespace if repl-line is the last
+    ; function to be called.
+    (ns-push *active-ns*)
+    (varfn do-eval fn ()
         (var exec-hook (sym *active-ns* "::__exec_hook"))
         (var ast (if (and (not strict?)(def? (ref exec-hook))(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (my-read line)))
         (set! ast (if (string? ast) (my-read ast) ast))
-        (var result (if strict? (get-error (eval ast))(loose-symbols (get-error (eval ast)))))
-        (if (= :ok (car result))
+        (set! result (if strict? (get-error (eval ast))(loose-symbols (get-error (eval ast))))))
+    (ns-pop)
+    (do-eval)
+    ; end weird namespace section
+
+    (if (= :ok (car result))
+      (do
+        (if (process? (cdr result)) nil
+          (and (not strict?)(nil? (cdr result))) nil
+          (file? (cdr result)) nil
+          (println (cdr result)))
+        (if (> line-len 0)
           (do
-            (if (process? (cdr result)) nil
-              (and (not strict?)(nil? (cdr result))) nil
-              (file? (cdr result)) nil
-              (println (cdr result)))
-            (if (> line-len 0)
-              (do
-                (when (not (= "fc" (str-trim line)))
-                  (handle-last-command line)))))
-          (do
-            (set! *last-command* line)
-            ; Save temp history
-            (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
-            (print-error result)))))
+            (when (not (= "fc" (str-trim line)))
+              (handle-last-command line)))))
+      (do
+        (set! *last-command* line)
+        ; Save temp history
+        (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
+        (print-error result))))
 
 (defn repl ()
       (var get-prompt (fn ()

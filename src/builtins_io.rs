@@ -276,6 +276,11 @@ fn builtin_read(
         }
     }
     if let Some(exp) = args.next() {
+        let err_exp = if let Some(exp) = args.next() {
+            Some(eval(environment, exp)?)
+        } else {
+            None
+        };
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
             let mut exp_d = exp.get_mut();
@@ -290,7 +295,11 @@ fn builtin_read(
                             }
                             Err((err, i_iter)) => {
                                 file_iter.replace(i_iter);
-                                return Err(LispError::new(err.reason));
+                                return if let Some(err_exp) = err_exp {
+                                    Ok(err_exp)
+                                } else {
+                                    Err(LispError::new(err.reason))
+                                };
                             }
                         }
                     }
@@ -318,7 +327,11 @@ fn builtin_read(
                                 Ok(ast)
                             }
                             Err((err, _)) => {
-                                return Err(LispError::new(err.reason));
+                                return if let Some(err_exp) = err_exp {
+                                    Ok(err_exp)
+                                } else {
+                                    Err(LispError::new(err.reason))
+                                };
                             }
                         }
                     } else {
@@ -556,9 +569,11 @@ Example:
         interner.intern("read"),
         Expression::make_function(
             builtin_read,
-            "Usage: (read file|string) -> list
+            "Usage: (read file|string end-exp?) -> list
 
 Read a file or string and return the next object (symbol, string, list, etc).
+Raises an error if the file or string has been read unless end-exp is provided
+then returns that on the end condition.
 
 Section: file
 
@@ -570,12 +585,24 @@ Example:
 (def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal '(1 2 3) (read tst-file))
 (test::assert-equal '(x y z) (read tst-file))
+(test::assert-error (read test-file))
+(close tst-file)
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal '(1 2 3) (read tst-file :done))
+(test::assert-equal '(x y z) (read tst-file :done))
+(test::assert-equal :done (read tst-file :done))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
 (def test-str \"7 8 9\")
 (test::assert-equal 7 (read test-str))
 (test::assert-equal 8 (read test-str))
 (test::assert-equal 9 (read test-str))
+(test::assert-error (read test-str))
+(def test-str \"7 8 9\")
+(test::assert-equal 7 (read test-str :done))
+(test::assert-equal 8 (read test-str :done))
+(test::assert-equal 9 (read test-str :done))
+(test::assert-equal :done (read test-str :done))
 (test::assert-equal '(x y z) (read \"(x y z)\"))
 ",
         ),

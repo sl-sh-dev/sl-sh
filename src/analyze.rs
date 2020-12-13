@@ -84,9 +84,14 @@ fn declare_var(
                         Ok(())
                     }
                 }
-                _ => Err(LispError::new(
-                    "var: First form (binding key) must be a symbol",
-                )),
+                _ => {
+                    drop(key_d);
+                    Err(LispError::new(format!(
+                        "var: First form (binding key) must be a symbol, got {}- {}",
+                        key.display_type(),
+                        key
+                    )))
+                }
             }
         } else {
             Err(LispError::new("var: Requires a symbol."))

@@ -294,16 +294,7 @@ fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) ->
             }
         }
         None
-    // Then check the namespace. Note, use the namespace from lexical scope if available.
-    } else if let Some(frame) = environment.stack_frames.last() {
-        if let Some(reference) = frame.symbols.namespace().borrow().get_binding(key) {
-            Some(reference)
-        } else if let Some(reference) = environment.root_scope.borrow().get_binding(key) {
-            Some(reference)
-        } else {
-            None
-        }
-    // If no namespace from lexical scope use the default.
+    // If in a lambda then it's namespace should be current.
     } else if let Some(reference) = environment.namespace.borrow().get_binding(key) {
         Some(reference)
     // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
@@ -339,7 +330,7 @@ pub fn capture_expression(environment: &Environment, key: &str) -> Option<Bindin
     }
 }
 
-fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
+pub fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
     if let Some(frame) = environment.stack_frames.last() {
         if let Some(r) = environment.stack.get(frame.index + idx) {
             Some(r.get())

@@ -103,9 +103,7 @@ fn prep_stack(
     setup_args(environment, var_names, vars)?;
     let symbols = lambda.syms;
     // Push the 'this-fn' value.
-    environment
-        .stack
-        .push(Binding::with_expression(lambda_exp));
+    environment.stack.push(Binding::with_expression(lambda_exp));
     let mut i = 0;
     let extras = symbols.len() - (environment.stack.len() - index);
     while i < extras {
@@ -120,28 +118,16 @@ fn prep_stack(
 fn call_lambda_int(
     environment: &mut Environment,
     lambda_exp: Expression,
+    lambda: Lambda,
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> Result<Expression, LispError> {
-    let lambda_d = lambda_exp.get();
-    let lambda = if let ExpEnum::Lambda(l) = &lambda_d.data {
-        l
-    } else if let ExpEnum::Macro(l) = &lambda_d.data {
-        l
-    } else {
-        return Err(LispError::new(format!(
-            "Lambda required got {} {}.",
-            lambda_exp.display_type(),
-            lambda_exp
-        )));
-    };
-    let mut lambda_int = lambda.clone();
+    let mut lambda_int = lambda;
     let mut lambda: &mut Lambda = &mut lambda_int;
-    drop(lambda_d);
     let mut body: Expression = lambda.body.clone_root().into();
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
-    let mut lambda_current = lambda_exp.clone();
+    let mut lambda_current = lambda_exp;
     // XXX TODO- see about making lambda a cheaper clone (or get rid of it).
     if eval_args {
         let mut tvars: Vec<Handle> = Vec::new();
@@ -203,22 +189,7 @@ fn call_lambda_int(
                     lambda = &mut lambda_int;
                     body = lambda.body.clone_root().into();
                     looping = true;
-                    /*if eval_args {
-                        let mut tvars: Vec<Handle> = Vec::new();
-                        for v in parts {
-                            let v: Expression = v.into();
-                            tvars.push(eval(environment, &v)?.into());
-                        }
-                        environment.stack.truncate(stack_len);
-                        environment.stack_frames.truncate(stack_frames_len);
-                        prep_stack(
-                            environment,
-                            &lambda.params,
-                            &mut box_slice_it(&tvars),
-                            lambda.clone(),
-                            lambda_current.clone(),
-                        )?;
-                    } else {*/
+                    environment.namespace = lambda.syms.namespace().clone();
                     environment.stack.truncate(stack_len);
                     environment.stack_frames.truncate(stack_frames_len);
                     prep_stack(
@@ -229,7 +200,6 @@ fn call_lambda_int(
                         lambda_current.clone(),
                     )?;
                 }
-                //}
             }
         }
         llast_eval = Some(last_eval);
@@ -245,14 +215,28 @@ pub fn call_lambda(
     args: &mut dyn Iterator<Item = Expression>,
     eval_args: bool,
 ) -> Result<Expression, LispError> {
+    let lambda = if let ExpEnum::Lambda(l) = &lambda_exp.get().data {
+        l.clone()
+    } else if let ExpEnum::Macro(l) = &lambda_exp.get().data {
+        l.clone()
+    } else {
+        return Err(LispError::new(format!(
+            "Lambda required got {} {}.",
+            lambda_exp.display_type(),
+            lambda_exp
+        )));
+    };
+    let old_ns = environment.namespace.clone();
+    environment.namespace = lambda.syms.namespace().clone();
     let old_loose = environment.loose_symbols;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     environment.loose_symbols = false;
-    let ret = call_lambda_int(environment, lambda_exp, args, eval_args);
+    let ret = call_lambda_int(environment, lambda_exp, lambda, args, eval_args);
     environment.loose_symbols = old_loose;
     environment.stack.truncate(stack_len);
     environment.stack_frames.truncate(stack_frames_len);
+    environment.namespace = old_ns;
     ret
 }
 
@@ -462,37 +446,6 @@ fn fn_eval_lazy(
             drop(command_d); // Drop the lock on command.
             let com_exp = eval(environment, &command)?;
             eval_command(environment, &com_exp, &mut parts)
-            /*let exp: Expression = h.into();
-            let exp_d = exp.get();
-            let exp2 = match &exp_d.data {
-                ExpEnum::Lambda(l) => {
-                    let p = l.params.clone();
-                    let mut syms = l.syms.dup();
-                    syms.refresh_captures(environment)?;
-                    Expression::alloc_data(ExpEnum::Lambda(Lambda {
-                        params: p,
-                        body: l.body.clone(),
-                        syms,
-                        namespace: environment.namespace.clone(),
-                    }))
-                }
-                ExpEnum::Macro(l) => {
-                    let p = l.params.clone();
-                    let mut syms = l.syms.dup();
-                    syms.refresh_captures(environment)?;
-                    Expression::alloc_data(ExpEnum::Macro(Lambda {
-                        params: p,
-                        body: l.body.clone(),
-                        syms,
-                        namespace: environment.namespace.clone(),
-                    }))
-                }
-                _ => {
-                    drop(exp_d);
-                    exp
-                }
-            };
-            eval_command(environment, &exp2, &mut parts)*/
         }
         _ => {
             let msg = format!(
@@ -672,7 +625,32 @@ fn internal_eval(
             Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(s, _loc) => {
+        ExpEnum::Symbol(sym, SymLoc::Ref(binding)) => {
+            if let Some(reference) = environment.dynamic_scope.get(sym) {
+                Ok(reference.get())
+            } else {
+                Ok(binding.get())
+            }
+        }
+        ExpEnum::Symbol(sym, SymLoc::Namespace(scope, idx)) => {
+            if let Some(exp) = scope.borrow().get_idx(*idx) {
+                Ok(exp)
+            } else {
+                Err(LispError::new(format!(
+                    "Symbol {} not found in namespace {}.",
+                    sym,
+                    scope.borrow().name()
+                )))
+            }
+        }
+        ExpEnum::Symbol(_, SymLoc::Stack(idx)) => {
+            if let Some(exp) = get_expression_stack(environment, *idx) {
+                Ok(exp)
+            } else {
+                panic!("Invalid stack reference!");
+            }
+        }
+        ExpEnum::Symbol(s, SymLoc::None) => {
             if s.starts_with('$') {
                 match env::var(&s[1..]) {
                     Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
@@ -695,7 +673,7 @@ fn internal_eval(
             } else if environment.loose_symbols {
                 str_process(environment, s, false)
             } else {
-                let msg = format!("Symbol {} not found.", s);
+                let msg = format!("Symbol {} not found x.", s);
                 Err(LispError::new(msg))
             }
         }
