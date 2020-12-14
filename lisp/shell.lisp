@@ -684,9 +684,9 @@ Section: shell
                     (apply exec-hook line nil)
                     (my-read line)))
         (set! ast (if (string? ast) (my-read ast) ast))
-        (set! result (if strict? (get-error (eval ast))(loose-symbols (get-error (eval ast))))))
+        (if strict? (eval ast)(loose-symbols (eval ast))))
     (ns-pop)
-    (do-eval)
+    (set! result (get-error (do-eval)))
     ; end weird namespace section
 
     (if (= :ok (car result))
