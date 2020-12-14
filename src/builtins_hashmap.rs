@@ -24,8 +24,10 @@ fn build_map(
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
-            let val: Expression = val.into();
-            let val: Handle = eval(environment, val)?.into();
+            // XXX TODO- remove this?  This went in 10/29/2020 but seems more trouble then it's
+            // worth.  Commenting to think about it a little more.
+            //let val: Expression = val.into();
+            //let val: Handle = eval(environment, val)?.into();
             match &key.get().data {
                 ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
                 ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
