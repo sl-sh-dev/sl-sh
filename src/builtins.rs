@@ -61,7 +61,8 @@ fn builtin_eval(
     Err(LispError::new("eval can only have one form"))
 }
 
-fn builtin_eval_in_scope(
+//XXX TODO- remove once eval str suppor is gone.
+fn _builtin_eval_in_scope(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -1649,29 +1650,6 @@ pub fn add_builtins<S: BuildHasher>(
             "Usage: (eval expression)
 
 Evaluate the provided expression.
-
-If expression is a string read it to make an ast first to evaluate otherwise
-evaluate the expression (note eval is a function not a special form, the
-provided expression will be evaluated as part of call).
-
-Section: core
-
-Example:
-(def test-eval-one nil)
-(eval \"(set! test-eval-one \\\"ONE\\\")\")
-(test::assert-equal \"ONE\" test-eval-one)
-(eval '(set! test-eval-one \"TWO\"))
-(test::assert-equal \"TWO\" test-eval-one)
-",
-        ),
-    );
-    data.insert(
-        interner.intern("eval-in-scope"),
-        Expression::make_function(
-            builtin_eval_in_scope,
-            "Usage: (eval-in-scope expression)
-
-Evaluate the provided expression.  Does so in the context of the current scope.
 
 If expression is a string read it to make an ast first to evaluate otherwise
 evaluate the expression (note eval is a function not a special form, the

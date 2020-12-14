@@ -369,11 +369,10 @@ pub fn get_expression_look(
 }
 
 pub fn get_expression(environment: &Environment, expression: Expression) -> Option<Expression> {
-    get_expression_look(environment, expression, true) // XXX TODO- this should work with false..
+    get_expression_look(environment, expression, true) // XXX TODO- this should work with false- or maybe not...
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
-    // XXX TODO- check where this is called, making key an Expression is probably better.
     if let Some(key) = key.strip_prefix('$') {
         env::var(key).is_ok()
     } else {
@@ -557,6 +556,7 @@ mod tests {
             index: syms.len(),
             symbols: syms2.clone(),
         });
+        environment.stack_frame_base = syms.len();
         environment
             .stack
             .push(Binding::with_expression(ExpEnum::Int(2).into()));
@@ -573,6 +573,7 @@ mod tests {
             index: (syms.len() + syms2.len()),
             symbols: syms3.clone(),
         });
+        environment.stack_frame_base = syms.len() + syms2.len();
         environment
             .stack
             .push(Binding::with_expression(ExpEnum::Int(3).into()));
@@ -595,6 +596,7 @@ mod tests {
         environment
             .stack_frames
             .truncate(environment.stack_frames.len() - 1);
+        environment.stack_frame_base = syms.len();
         assert!(lookup_expression(&mut environment, "XXX3").is_none());
         assert!(lookup_expression(&mut environment, "XXX3-2").is_none());
         assert!(lookup_expression(&mut environment, "XXX3-3").is_none());
@@ -619,6 +621,7 @@ mod tests {
         environment.namespace = ns_a.clone();
         environment.stack.truncate(0);
         environment.stack_frames.truncate(0);
+        environment.stack_frame_base = 0;
         assert_lookup(&environment, "ns-a::a1", 11);
         assert!(lookup_expression(&mut environment, "b1").is_none());
         assert!(lookup_expression(&mut environment, "c1").is_none());
@@ -670,14 +673,16 @@ mod tests {
             index: 0,
             symbols: syms4.clone(),
         });
+        environment.stack_frame_base = 0;
         assert!(lookup_expression(&mut environment, "a1").is_none());
         assert!(lookup_expression(&mut environment, "c1").is_none());
         assert_lookup(&environment, "b1", 21);
         assert_lookup(&environment, "st-1", 20);
         assert_lookup(&environment, "ns-c::c1", 31);
         environment.namespace = ns_a.clone();
-        assert!(lookup_expression(&mut environment, "a1").is_none());
+        assert!(lookup_expression(&mut environment, "a1").is_some());
         assert!(lookup_expression(&mut environment, "c1").is_none());
+        environment.namespace = ns_b.clone();
         assert_lookup(&environment, "b1", 21);
         assert_lookup(&environment, "st-1", 20);
         assert_lookup(&environment, "ns-c::c1", 31);
@@ -726,6 +731,7 @@ mod tests {
             index: syms.len(),
             symbols: syms2.clone(),
         });
+        environment.stack_frame_base = syms.len();
         environment
             .stack
             .push(Binding::with_expression(ExpEnum::Int(2).into()));
