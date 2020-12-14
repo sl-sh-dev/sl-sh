@@ -70,10 +70,10 @@ fn do_set(
                             // XXX TODO- code this or get rid of this case...
                         }
                         SymLoc::Stack(idx) => {
-                            if let Some(frame) = environment.stack_frames.last() {
-                                if let Some(binding) = environment.stack.get(frame.index + *idx) {
-                                    binding.replace(val.clone());
-                                }
+                            if let Some(binding) =
+                                environment.stack.get(environment.stack_frame_base + *idx)
+                            {
+                                binding.replace(val.clone());
                             }
                         }
                         _ => {
@@ -95,7 +95,10 @@ fn do_set(
         }
     }
 
-    Err(LispError::new("set!: requires a symbol and value"))
+    Err(LispError::new(format!(
+        "{}: requires a symbol and value",
+        name
+    )))
 }
 
 pub(crate) fn builtin_set(

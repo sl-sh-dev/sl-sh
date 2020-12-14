@@ -94,14 +94,13 @@ fn setup_args(
 
 fn prep_stack(
     environment: &mut Environment,
-    var_names: &[&'static str],
     vars: &mut dyn Iterator<Item = Expression>,
-    lambda: Lambda,
+    lambda: &Lambda,
     lambda_exp: Expression,
 ) -> Result<(), LispError> {
     let index = environment.stack.len();
-    setup_args(environment, var_names, vars)?;
-    let symbols = lambda.syms;
+    setup_args(environment, &lambda.params, vars)?;
+    let symbols = lambda.syms.clone();
     // Push the 'this-fn' value.
     environment.stack.push(Binding::with_expression(lambda_exp));
     let mut i = 0;
@@ -112,6 +111,7 @@ fn prep_stack(
     }
     symbols.stack_captures(environment, index);
     environment.stack_frames.push(StackFrame { index, symbols });
+    environment.stack_frame_base = index;
     Ok(())
 }
 
@@ -127,8 +127,8 @@ fn call_lambda_int(
     let mut body: Expression = lambda.body.clone_root().into();
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
+    let stack_base = environment.stack_frame_base;
     let mut lambda_current = lambda_exp;
-    // XXX TODO- see about making lambda a cheaper clone (or get rid of it).
     if eval_args {
         let mut tvars: Vec<Handle> = Vec::new();
         for v in args {
@@ -136,19 +136,12 @@ fn call_lambda_int(
         }
         prep_stack(
             environment,
-            &lambda.params,
             &mut box_slice_it(&tvars),
-            lambda.clone(),
+            &lambda,
             lambda_current.clone(),
         )?;
     } else {
-        prep_stack(
-            environment,
-            &lambda.params,
-            args,
-            lambda.clone(),
-            lambda_current.clone(),
-        )?;
+        prep_stack(environment, args, &lambda, lambda_current.clone())?;
     }
 
     let mut llast_eval: Option<Expression> = None;
@@ -170,11 +163,11 @@ fn call_lambda_int(
                 }
                 environment.stack.truncate(stack_len);
                 environment.stack_frames.truncate(stack_frames_len);
+                environment.stack_frame_base = stack_base;
                 prep_stack(
                     environment,
-                    &lambda.params,
                     &mut ListIter::new_list(&new_args),
-                    lambda.clone(),
+                    &lambda,
                     lambda_current.clone(),
                 )?;
             }
@@ -192,11 +185,11 @@ fn call_lambda_int(
                     environment.namespace = lambda.syms.namespace().clone();
                     environment.stack.truncate(stack_len);
                     environment.stack_frames.truncate(stack_frames_len);
+                    environment.stack_frame_base = stack_base;
                     prep_stack(
                         environment,
-                        &lambda.params,
                         &mut ListIter::new_list(&parts),
-                        lambda.clone(),
+                        &lambda,
                         lambda_current.clone(),
                     )?;
                 }
@@ -231,11 +224,13 @@ pub fn call_lambda(
     let old_loose = environment.loose_symbols;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
+    let old_base = environment.stack_frame_base;
     environment.loose_symbols = false;
     let ret = call_lambda_int(environment, lambda_exp, lambda, args, eval_args);
     environment.loose_symbols = old_loose;
     environment.stack.truncate(stack_len);
     environment.stack_frames.truncate(stack_frames_len);
+    environment.stack_frame_base = old_base;
     environment.namespace = old_ns;
     ret
 }
@@ -738,10 +733,7 @@ fn internal_eval(
             panic!("Illegal fn state in eval, tried to eval an undefined symbol!")
         }
     };
-    match ret {
-        Ok(ret) => Ok(ret.clone_root()),
-        Err(err) => Err(err),
-    }
+    ret
 }
 
 pub fn eval_nr(
@@ -759,15 +751,7 @@ pub fn eval_nr(
         return Err(LispError::new("Eval calls to deep."));
     }
     environment.state.eval_level += 1;
-    //let analyzed = *expression.get().analyzed.borrow();
-    //let expression = if !analyzed {
-    //    let exp2 = expression.copy();
-    //analyze(environment, &exp2, &mut None)?;
     analyze(environment, expression, &mut None)?;
-    //    exp2
-    //} else {
-    //    expression.clone()
-    //};
     let tres = internal_eval(environment, &expression);
     let mut result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;

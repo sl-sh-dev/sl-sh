@@ -128,6 +128,7 @@ pub struct Environment {
     pub state: EnvState,
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
+    pub stack_frame_base: usize,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
@@ -186,6 +187,7 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         state: EnvState::default(),
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
+        stack_frame_base: 0,
         reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
@@ -331,12 +333,8 @@ pub fn capture_expression(environment: &Environment, key: &str) -> Option<Bindin
 }
 
 pub fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
-    if let Some(frame) = environment.stack_frames.last() {
-        if let Some(r) = environment.stack.get(frame.index + idx) {
-            Some(r.get())
-        } else {
-            None
-        }
+    if let Some(r) = environment.stack.get(environment.stack_frame_base + idx) {
+        Some(r.get())
     } else {
         None
     }
