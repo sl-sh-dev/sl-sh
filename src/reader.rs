@@ -420,7 +420,7 @@ fn call_reader_macro(
                         .as_ref()
                         .unwrap()
                         .file_name
-                        .unwrap_or_else(|| ""),
+                        .unwrap_or(""),
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
@@ -441,7 +441,7 @@ fn call_reader_macro(
                         .as_ref()
                         .unwrap()
                         .file_name
-                        .unwrap_or_else(|| ""),
+                        .unwrap_or(""),
                     environment.reader_state.as_ref().unwrap().line,
                     environment.reader_state.as_ref().unwrap().column
                 );
@@ -459,7 +459,7 @@ fn call_reader_macro(
                 .as_ref()
                 .unwrap()
                 .file_name
-                .unwrap_or_else(|| ""),
+                .unwrap_or(""),
             environment.reader_state.as_ref().unwrap().line,
             environment.reader_state.as_ref().unwrap().column
         );
@@ -821,7 +821,7 @@ fn read_inner(
                         ));
                     }
                     level -= 1;
-                    let (line, column) = line_stack.pop().unwrap_or_else(|| (0, 0));
+                    let (line, column) = line_stack.pop().unwrap_or((0, 0));
                     if let Err(e) = close_list(
                         stack,
                         get_meta(

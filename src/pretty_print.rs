@@ -29,10 +29,10 @@ impl fmt::Display for Expression {
                 if !first {
                     if let ExpEnum::Symbol(sym, _) = &last_exp.get().data {
                         if sym != &"," && sym != &",@" {
-                            res.push_str(" ");
+                            res.push(' ');
                         }
                     } else {
-                        res.push_str(" ");
+                        res.push(' ');
                     }
                 } else {
                     first = false;
@@ -118,7 +118,7 @@ impl fmt::Display for Expression {
                         }
                         _ => {
                             let mut res = String::new();
-                            res.push_str("(");
+                            res.push('(');
                             list_out(&mut res, &mut self.iter());
                             res.push(')');
                             write!(f, "{}", res)

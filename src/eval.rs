@@ -646,8 +646,8 @@ fn internal_eval(
             }
         }
         ExpEnum::Symbol(s, SymLoc::None) => {
-            if s.starts_with('$') {
-                match env::var(&s[1..]) {
+            if let Some(s) = s.strip_prefix('$') {
+                match env::var(s) {
                     Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
                         environment.interner.intern(&val).into(),
                         None,

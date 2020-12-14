@@ -282,8 +282,8 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
         None => org_start,
     };
 
-    let (start, need_quotes) = if org_start.starts_with('"') {
-        (&org_start[1..], true)
+    let (start, need_quotes) = if let Some(new_start) = org_start.strip_prefix('"') {
+        (new_start, true)
     } else {
         (org_start, false)
     };
@@ -308,7 +308,7 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
             }
             pat.push('/');
         } else {
-            pat.push_str("*");
+            pat.push('*');
             pat.push('/');
         }
     }
@@ -373,8 +373,8 @@ fn get_path_matches(start: &str) -> Vec<String> {
 }
 
 fn get_env_matches(start: &str) -> Vec<String> {
-    let env_start = if start.starts_with('$') {
-        &start[1..]
+    let env_start = if let Some(new_start) = start.strip_prefix('$') {
+        new_start
     } else {
         start
     };
@@ -464,8 +464,8 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str
 }
 
 fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_start: &str) {
-    let (start, need_quote) = if org_start.starts_with('\'') {
-        (&org_start[1..], true)
+    let (start, need_quote) = if let Some(new_start) = org_start.strip_prefix('\'') {
+        (new_start, true)
     } else {
         (org_start, false)
     };

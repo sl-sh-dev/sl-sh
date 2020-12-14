@@ -374,8 +374,8 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
     // XXX TODO- check where this is called, making key an Expression is probably better.
-    if key.starts_with('$') {
-        env::var(&key[1..]).is_ok()
+    if let Some(key) = key.strip_prefix('$') {
+        env::var(key).is_ok()
     } else {
         lookup_expression(environment, key).is_some()
     }
