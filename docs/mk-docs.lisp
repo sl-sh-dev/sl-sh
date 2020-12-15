@@ -17,6 +17,7 @@
 			(not (= x '*uid*))
 			(not (= x '*repl-settings*))
 			(not (= x '*ns-exports*))
+			(not (= x '^ns-stack-xyz^))
 			(not (= x 'tok-slsh-form-color))
 			(not (= x 'tok-slsh-fcn-color))
 			(not (= x 'tok-default-color))

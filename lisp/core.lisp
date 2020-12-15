@@ -142,13 +142,11 @@ Example:
 "
     (name &rest args) `(internal-fn var ,name ,@args)) 
 
-;; Scope to contain ns-push/ns-pop.
-;(lex
-; XXX TODO- better name or gensym since this is not hidden at all.
-  (def ns-stack (list))
+; Due to the way namespaces interact with lambdas this needs to be a symbol in
+; root.
+(def ^ns-stack-xyz^ (list))
 
-; XXX TODO- fix then tests for push and pop- may be a harness issue.
-  (defmacro ns-push
+(defmacro ns-push
 "Usage: (ns-push 'namespace)
 
 Pushes the current namespace on a stack for ns-pop and enters or creates namespace.
@@ -169,10 +167,10 @@ Example:
 "
     (namespace)
     `(do
-      (set! ns-stack (join (if (def? *active-ns*) *active-ns* 'root) ns-stack))
-      (if (ns-exists? ,namespace) (ns-enter ,namespace) (ns-create ,namespace))))
+        (set! ^ns-stack-xyz^ (join (if (def? *active-ns*) *active-ns* 'root) ^ns-stack-xyz^))
+        (if (ns-exists? ,namespace) (ns-enter ,namespace) (ns-create ,namespace))))
 
-  (defmacro ns-pop
+(defmacro ns-pop
 "Usage: (ns-pop)
 
 Returns to the previous namespace saved in the last ns-push.
@@ -188,9 +186,8 @@ Example:
 "
     ()
     `(do
-       (ns-enter (car ns-stack))
-       (set! ns-stack (cdr ns-stack))));)
-       ;(ns-enter ,last-ns))))
+        (ns-enter (car ^ns-stack-xyz^))
+        (set! ^ns-stack-xyz^ (cdr ^ns-stack-xyz^))));)
 
 (defmacro loop
 "
