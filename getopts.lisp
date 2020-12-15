@@ -7,7 +7,7 @@
 ;; TODO do keys have to start with :-?
 ;; TODO need to validate keys in the options-map :(
 (defmacro debugln (&rest args)
-    (if (nil? nil)
+    (if (nil? #t)
         `(println "=> " ,@args)))
 
 (def 'sample "-la -c -b")
@@ -26,7 +26,7 @@
     (str "Input types did not match :type specified in options-map. At argument " key ", failed to read in provided " binding " as type " opt-type-fun ". Binding, " binding ", was of type " (type binding) "."))
 
 (defn is-single-char-arg (token)
-    (and (= 2 (length token)) (str-starts-with token-delim token)))
+    (and (not (or (char? token) (macro? token) (lambda? token))) (= 2 (length token)) (str-starts-with token-delim token)))
 
 (defn is-multi-char-arg (token)
     (str-starts-with (str token-delim token-delim) token))
@@ -107,13 +107,7 @@ up until the next token delimeted option, -c.
                    (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
-(defn printtype (thing)
-      (println  "thing: " thing ", type: " (type thing)))
-
 (defn build-getopts-param (arity default type-fun)
-    (printtype arity)
-    (printtype default)
-    (printtype type-fun)
     (make-hash
         (list
             (join :arity arity)
@@ -276,7 +270,7 @@ The hash map for the key :-m showcases the configuration keys that exist for
 each flag: arity, :default, and :type. :arity specifies that the -m flag will
 take one argument. :default specifies the bindng for :-m should be 0 if the
 -m flag is not seen in args. :type :int? specifies that the binding should
-conform to that type, in this case int?. Running the script again with no -m
+be of that type, in this case int?. Running the script again with no -m
 flag yields:
 $> ./sample-getopts.lisp
 => Passing: #() to getopts
@@ -330,9 +324,9 @@ single character with arity N as long as said character appears last: -mne \"foo
 
 (build-getopts-param 1 (list "bar") nil)
 
-;;(assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
-;;(assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
-;;(assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
+(assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
+(assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
+(assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
 
 (def 'test-options-map
     (make-hash
@@ -366,18 +360,18 @@ single character with arity N as long as said character appears last: -mne \"foo
 (assert-error-msg (getopts test-options-map '("-lb" "an-argument")) (bad-option-arity "-b" 3))
 
 (defn map= (m n)
-    (var 'keys-in-map (fn (m n) (loop (keys m n last-ret) ((hash-keys m) m n #t)
+    (var 'keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
                        (if (nil? last-ret)
                          nil
-                         (if (empty-seq? keys)
+                         (if (empty-seq? m-keys)
                            #t
                            (recur
-                             (rest keys)
+                             (rest m-keys)
                              m
                              n
                              (and
-                               (hash-haskey n (first keys))
-                               (= (hash-get m (first keys)) (hash-get n (first keys))))))))))
+                               (hash-haskey n (first m-keys))
+                               (= (hash-get m (first m-keys)) (hash-get n (first m-keys))))))))))
     (and (hash? m) (hash? n) (= (length (hash-keys m)) (length (hash-keys n)))
       (keys-in-map m n)
       (keys-in-map n m)))
@@ -390,7 +384,7 @@ single character with arity N as long as said character appears last: -mne \"foo
             (join :-l #t)
             (join :-m #t)
             (join :-a "foo")
-            (join :--c-arg '#("bar"))
+            (join :--c-arg (list "bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -426,7 +420,7 @@ single character with arity N as long as said character appears last: -mne \"foo
             (join :-l #t)
             (join :-m #t)
             (join :-a "foo")
-            (join :--c-arg '#("bar"))
+            (join :--c-arg (list "bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -438,7 +432,7 @@ single character with arity N as long as said character appears last: -mne \"foo
         (join :-l #t)
         (join :-m nil)
         (join :-a "1")
-        (join :--c-arg '#("bar"))
+        (join :--c-arg (list "bar"))
         (join :--d-arg nil)
         (join :-b nil)))))
 
@@ -450,7 +444,7 @@ single character with arity N as long as said character appears last: -mne \"foo
             (join :-l #t)
             (join :-m nil)
             (join :-a "one-arg")
-            (join :--c-arg '#("bar"))
+            (join :--c-arg (list "bar"))
             (join :--d-arg nil)
             (join :-b nil)))))
 
@@ -462,7 +456,7 @@ single character with arity N as long as said character appears last: -mne \"foo
             (join :-l #t)
             (join :-m nil)
             (join :-a "foo")
-            (join :--c-arg '#("bar"))
+            (join :--c-arg (list "bar"))
             (join :--d-arg nil)
             (join :-b '#("1" "2" "3"))))))
 
@@ -498,7 +492,7 @@ single character with arity N as long as said character appears last: -mne \"foo
         (join :-l #t)
         (join :-m nil)
         (join :-a "foo")
-        (join :--c-arg '#("bar"))
+        (join :--c-arg (list "bar"))
         (join :--d-arg nil)
         (join :-b nil)))))
 
@@ -510,7 +504,7 @@ single character with arity N as long as said character appears last: -mne \"foo
         (join :-l #t)
         (join :-m nil)
         (join :-a "1")
-        (join :--c-arg '#("bar"))
+        (join :--c-arg (list "bar"))
         (join :--d-arg nil)
         (join :-b '#("1" "2" "3"))))))
 
@@ -529,6 +523,7 @@ single character with arity N as long as said character appears last: -mne \"foo
         (join :-l (build-getopts-param 0 #t :true?))))
     '("-l"))
   invalid-type-function)
+
 
 (assert-error-msg
   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :float?)))) '("-c" "#\a"))
@@ -593,7 +588,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 
 (var 'c-char-bindings
  (hash-get
-   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) '("-c" #\a))
+   (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) (list "-c" #\a))
    :-c))
 (assert-true (char? c-char-bindings) ". Return value should be of type Char.")
 
@@ -643,20 +638,20 @@ single character with arity N as long as said character appears last: -mne \"foo
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" '#(1 2 3 4)))
    :-h))
 (assert-true (vec? vec-bindings) ". Return value should be of type Vector.")
-(assert-true (= (vec-nth 0 vec-bindings) '1) ". Idx 0 is wrong.")
-(assert-true (= (vec-nth 1 vec-bindings) '2) ". Idx 2 is wrong.")
-(assert-true (=(vec-nth 2 vec-bindings) '3) ". Idx 3 is wrong.")
-(assert-true (= (vec-nth 3 vec-bindings) '4) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth vec-bindings 0) '1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth vec-bindings 1) '2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth vec-bindings 2) '3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth vec-bindings 3) '4) ". Idx 3 is wrong.")
 
 (var 'vec-bindings2
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (vec 1 2 3 4)))
    :-h))
 (assert-true (vec? vec-bindings2) ". Return value should be of type Vector.")
-(assert-true (= (vec-nth 0 vec-bindings2) 1) ". Idx 0 is wrong.")
-(assert-true (= (vec-nth 1 vec-bindings2) 2) ". Idx 2 is wrong.")
-(assert-true (=(vec-nth 2 vec-bindings2) 3) ". Idx 3 is wrong.")
-(assert-true (= (vec-nth 3 vec-bindings2) 4) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth vec-bindings2 0) 1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth vec-bindings2 1) 2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth vec-bindings2 2) 3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth vec-bindings2 3) 4) ". Idx 3 is wrong.")
 
 (assert-error-msg
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (list 'nxx 'nxx)))
@@ -681,10 +676,3 @@ single character with arity N as long as said character appears last: -mne \"foo
 (assert-true (lambda? lambda-bindings) ". Return value should be of type lambda."))
 
 (println (doc 'getopts))
-
-(println "Passing: " args " to getopts.")
-(def 'bindings
-     (getopts (make-hash (list (join :-m (make-hash (list (join :arity 1) (join :default 0) (join :type :int?))))))  args))
-(println "My Bindings: " bindings)
-(println "Binding for -m is " (hash-get bindings :-m))
-(ns-pop) ;; must be last line
