@@ -600,6 +600,8 @@ Example:
 
 (load "endfix.lisp")
 
+(load "getopts.lisp")
+
 (defmacro endfix-on "
 Allows use of infix notation for common shell forms. The following is the
 complete mapping in lisp/endfix.lisp of all supported infix operators and
