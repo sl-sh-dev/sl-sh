@@ -4,15 +4,6 @@
 (ns-import 'shell)
 (ns-import 'test)
 
-;;TODO sstanfield replace get-error with prog-error
-(defmacro prog-error (&rest args) `(do
-	(var ret (get-error ,@args))
-	(if (and (vec? ret) (= :error (first ret)))
-		(do
-			(var err-map (make-hash))
-			(hash-set! err-map :error (first (rest ret))))
-		ret)))
-
 ;;TODO gpwclark remove this error stack on call when "(error-stack-on)" becomes an environment variable
 (error-stack-on)
 
@@ -27,7 +18,6 @@
 		(var exp (read test :done))
 		(if (not (= exp :done))
 			(do (eval exp) (recur)))))
-	;(fn () (for exp in (read-all test) (eval exp)))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))

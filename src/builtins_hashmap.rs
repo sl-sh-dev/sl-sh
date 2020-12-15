@@ -24,10 +24,6 @@ fn build_map(
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
-            // XXX TODO- remove this?  This went in 10/29/2020 but seems more trouble then it's
-            // worth.  Commenting to think about it a little more.
-            //let val: Expression = val.into();
-            //let val: Handle = eval(environment, val)?.into();
             match &key.get().data {
                 ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
                 ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
@@ -316,7 +312,8 @@ pub fn add_hash_builtins<S: BuildHasher>(
 Make a new hash map.
 
 If associations is provided (makes an empty map if not) then it is a list of
-pairs (key . value) that populate the intial map.
+pairs (key . value) that populate the intial map.  Neither key nor value in the
+associations will be evaluated.
 
 Section: hashmap
 
@@ -337,6 +334,13 @@ Example:
 (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
+; Not in test below that tst-hash-val is NOT evaluated so the symbol is the value.
+(def tst-hash-val \"some val\")
+(def tst-hash (make-hash '#((:keyv1 . \"val one\")(:keyv2 . \"val two\")(:keyv3 . tst-hash-val))))
+(test::assert-equal 3 (length (hash-keys tst-hash)))
+(test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
+(test::assert-equal \"val two\" (hash-get tst-hash :keyv2))
+(test::assert-equal 'tst-hash-val (hash-get tst-hash :keyv3))
 "
         ),
     );
