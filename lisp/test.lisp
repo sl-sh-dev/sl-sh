@@ -59,12 +59,6 @@
 (defmacro assert-error (form)
     `(test::assert-equal :error (car (get-error ,form)) ". Expected :error"))
 
-(defmacro assert-error-msg (form msg)
-    `(do
-       (def 'ret (get-error ,form))
-       (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
-       ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\"")))
-
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
     `(eval (str "(dyn exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))")))

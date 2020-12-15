@@ -4,19 +4,17 @@
 (ns-import 'test)
 (ns-import 'iterator)
 
-;; TODO do keys have to start with :-?
-;; TODO need to validate keys in the options-map :(
 (defmacro debugln (&rest args)
     (if (nil? #t)
         `(println "=> " ,@args)))
 
-(def 'sample "-la -c -b")
+(def sample "-la -c -b")
 
-(def 'token-delim "-")
+(def token-delim "-")
 
-(def 'options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
+(def options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
 
-(def 'bad-first-arg "First argument must be a flag.")
+(def bad-first-arg "First argument must be a flag.")
 
 (defn bad-option-arity (option expected)
     (str "Wrong number of arguments passed to " option ". Expected " expected
@@ -45,10 +43,10 @@ get-next-params would return \"foo\" since that is the rest of the vector
 up until the next token delimeted option, -c.
 "
     (idx vec-args)
-    (var 'possible-params (vec-slice vec-args (+ idx 1) (length vec-args)))
+    (var possible-params (vec-slice vec-args (+ idx 1) (length vec-args)))
     ;; possible params is nil if at the end of a list, return an empty vec 
     ;; indicating no paramaters
-    (var 'potential-params (make-vec))
+    (var potential-params (make-vec))
     (if (nil? possible-params)
       potential-params
       (loop (params) (possible-params)
@@ -65,10 +63,10 @@ up until the next token delimeted option, -c.
     (str "Illegal option " key ", not in allowable arguments provided to getopts."))
 
 (defn verify-arity (idx given-args options-map bindings-map)
-    (var 'option (vec-nth given-args idx))
-    (var 'key (to-symbol (str ":" option)))
-    (var 'arity-map (hash-get options-map key))
-    (var 'arity (if (nil? arity-map)
+    (var option (vec-nth given-args idx))
+    (var key (to-symbol (str ":" option)))
+    (var arity-map (hash-get options-map key))
+    (var arity (if (nil? arity-map)
                   0
                   (hash-get arity-map :arity 0)))
     (when (nil? arity-map)
@@ -79,14 +77,14 @@ up until the next token delimeted option, -c.
       (err (bad-option-arity option arity)))
     ;; since all options start with a " -" use a str-split/str-cat trick
     ;; to get a vector representing all args to current option
-    (var 'potential-args (get-next-params idx given-args))
+    (var potential-args (get-next-params idx given-args))
     (debugln "potential-args: " potential-args ", type: " (type potential-args))
       (when (not (= (length potential-args) arity))
           (err (bad-option-arity option arity)))
     (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
-    (var 'vec-args (collect-vec cmd-line-args))
+    (var vec-args (collect-vec cmd-line-args))
     (debugln "vec-args: " vec-args)
     (for-i idx cmd in vec-args
          (do
@@ -99,11 +97,11 @@ up until the next token delimeted option, -c.
                  ;; if the command in question looked like "-ab", de-multi-single-arged-str
                  ;; will be "-a -b" this way the new cmd-line-args list can
                  ;; be fed recursively to verify-all-options-valid
-                 (var 'de-multi-single-arged-str
+                 (var de-multi-single-arged-str
                       (str-split " " (str token-delim
                            (str-cat-list (str " " token-delim)
                            (collect-vec (str-replace (vec-nth vec-args idx) token-delim ""))))))
-                 (var 'sub-vec (map str (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args)))))
+                 (var sub-vec (map str (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args)))))
                    (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
@@ -118,7 +116,7 @@ up until the next token delimeted option, -c.
     (when (not (is-getopts-option-string (first args)))
         (err bad-first-arg)))
 
-(def 'nyi "not-yet-implemented")
+(def nyi "not-yet-implemented")
 
 (defn make-hash-with-keys (hmap)
     (make-hash (collect (map (fn (x) (join (to-symbol x) nil)) (hash-keys hmap)))))
@@ -130,10 +128,10 @@ a vector whose only element is the desired binding."
     (loop (keys bindings-map) ((hash-keys bindings-map) bindings-map)
         (when (not (empty-seq? keys))
             (progn
-             (var 'key (first keys))
-             (var 'opt-config (hash-get options-map key))
-             (var 'opt-arity (hash-get opt-config :arity))
-             (var 'binding (hash-get bindings-map key))
+             (var key (first keys))
+             (var opt-config (hash-get options-map key))
+             (var opt-arity (hash-get opt-config :arity))
+             (var binding (hash-get bindings-map key))
              (when (and (not (nil? opt-arity)) (= 1 opt-arity) (seq? binding) (= 1 (length binding)))
                (hash-set! bindings-map key (first binding)))
              (recur (rest keys) bindings-map)))))
@@ -142,8 +140,8 @@ a vector whose only element is the desired binding."
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
             (progn
-             (var 'key (first keys))
-             (var 'opt-config (hash-get options-map key))
+             (var key (first keys))
+             (var opt-config (hash-get options-map key))
              (when (and (hash-haskey opt-config :default) (nil? (hash-get bindings-map key)))
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
@@ -174,12 +172,12 @@ error message. If the given (applier (predicate string)) is true the string is r
 otherwise the error message is thrown."
   (applier predicate)
   (fn (string custom-message)
-    (var 'res (applier string))
+    (var res (applier string))
     (if (predicate res)
       res
       (err custom-message))))
 
-(def 'supported-types-map
+(def supported-types-map
     (make-hash
       (list
         (join :int? (fn (x unused) (str->int x)))
@@ -197,18 +195,18 @@ otherwise the error message is thrown."
         (join :lambda? (check lambda?))
         (join :macro? (check macro?)))))
 
-(def 'invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
+(def invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
 
 (defn enforce-types (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
             (progn
-             (var 'key (first keys))
-             (var 'opt-config (hash-get options-map key))
-             (var 'opt-type-arity (hash-get opt-config :arity))
-             (var 'opt-type-fun (hash-get opt-config :type))
-             (var 'default (hash-get opt-config :default))
-             (var 'binding (hash-get bindings-map key))
+             (var key (first keys))
+             (var opt-config (hash-get options-map key))
+             (var opt-type-arity (hash-get opt-config :arity))
+             (var opt-type-fun (hash-get opt-config :type))
+             (var default (hash-get opt-config :default))
+             (var binding (hash-get bindings-map key))
              (when (and (not (nil? opt-type-arity))
                         (not (nil? opt-type-fun)))
                (progn
@@ -218,7 +216,7 @@ otherwise the error message is thrown."
                      (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
                        (progn
                          (debugln "look our binding is: " binding ", of type: " (type binding))
-                         (var 'err-str (type-error-message key binding opt-type-fun))
+                         (var err-str (type-error-message key binding opt-type-fun))
                          (if (= 1 opt-type-arity)
                              (hash-set!
                                bindings-map
@@ -248,7 +246,7 @@ sample-getopts.lisp
 (println \"Passing: \" args \" to getopts\")
 ;; getopts is given a hash map with one key, :-m, that corresponds to the flag,
 ;; -m, that it configures.
-(var 'bindings
+(var bindings
      (getopts
        (make-hash
          (list (join
@@ -291,7 +289,7 @@ is thrown.
     Use this as a default if the given flag is not provided at execution time.
 - :type (optional)
     Specify a type for every provided argument for the given flag. Types can be
-any of: $(str (collect (map (fn (x) (var 'func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map))))
+any of: $(str (collect (map (fn (x) (var func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map))))
 
 
 Rules for flags:
@@ -305,7 +303,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 (options-map args)
     (when (not (hash? options-map)) (err options-map-is-map))
     (when (> (length args) 0) (valid-first-arg? args))
-    (var 'bindings-map (make-hash-with-keys options-map))
+    (var bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
     ;; perform after setting defaults, in case user desires binding with
     ;; (= arity 1) to be a sequence.
@@ -317,18 +315,23 @@ single character with arity N as long as said character appears last: -mne \"foo
     (debugln "bindings-map: " bindings-map)
     bindings-map)
 
-(def 'sparse-options-map
+(def sparse-options-map
     (make-hash
       (list
         (join :-b (make-hash (list))))))
 
 (build-getopts-param 1 (list "bar") nil)
 
+(defmacro assert-error-msg (form msg)
+    `((fn (ret) (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
+     ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\""))
+        (get-error ,form)))
+
 (assert-error-msg (getopts sparse-options-map '("-b" "1")) (bad-option-arity "-b" 0))
 (assert-true (= (getopts sparse-options-map '("-b")) (make-hash (list (join :-b #t)))))
 (assert-true (= (getopts sparse-options-map '()) (make-hash (list (join :-b nil)))))
 
-(def 'test-options-map
+(def test-options-map
     (make-hash
       (list
         (join :-l (build-getopts-param 0 #t nil))
@@ -360,7 +363,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 (assert-error-msg (getopts test-options-map '("-lb" "an-argument")) (bad-option-arity "-b" 3))
 
 (defn map= (m n)
-    (var 'keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
+    (var keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
                        (if (nil? last-ret)
                          nil
                          (if (empty-seq? m-keys)
@@ -535,39 +538,39 @@ single character with arity N as long as said character appears last: -mne \"foo
   (getopts (make-hash (list (join :-i (build-getopts-param 1 nil :int?)))) '("-i" "1.23"))
   "str->int: string is not a valid integer")
 
-(var 'i-int-bindings
+(var i-int-bindings
  (hash-get
    (getopts (make-hash (list (join :-i (build-getopts-param 1 nil :int?)))) '("-i" "1"))
    :-i))
 (assert-true (int? i-int-bindings) ". Return value should be of type Int.")
 
-(var 'f-float-bindings
+(var f-float-bindings
  (hash-get
    (getopts (make-hash (list (join :-f (build-getopts-param 1 nil :float?)))) '("-f" "1.3"))
    :-f))
 (assert-true (float? f-float-bindings) ". Return value should be of type Float.")
 
-(var 'f-float-vec-bindings
+(var f-float-vec-bindings
  (hash-get
    (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :float?)))) '("-f" "1.3" "0.12"))
    :-f))
 (for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type Float."))
 
-(var 'fs-file-vec-bindings
+(var fs-file-vec-bindings
 (hash-get
 (getopts (make-hash (list (join :-f (build-getopts-param 2 nil :fs-file?))))
          '("-f" "/etc/fstab" "/etc/passwd"))
            :-f))
 (for f in fs-file-vec-bindings (assert-true (fs-file? f) ". Return value should pass test fs-file?."))
 
-(var 'fs-dir-bindings
+(var fs-dir-bindings
      (hash-get
        (getopts (make-hash (list (join :--fs-dir (build-getopts-param 1 nil :fs-dir?))))
                 '("--fs-dir" "/tmp"))
        :--fs-dir))
 (assert-true (fs-dir? fs-dir-bindings) ". Return value should pass test fs-dir?.")
 
-(var 'fs-exists-bindings
+(var fs-exists-bindings
     (hash-get
       (getopts (make-hash (list (join :--exists (build-getopts-param 1 nil :fs-exists?))))
                '("--exists" "/etc/fstab"))
@@ -579,14 +582,14 @@ single character with arity N as long as said character appears last: -mne \"foo
            '("--not-exists" "/tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj"))
   "Argument, /tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj, should pass test fs-exists?")
 
-(var 'symbol-bindings
+(var symbol-bindings
     (hash-get
       (getopts (make-hash (list (join :-s (build-getopts-param 1 nil :symbol?))))
                '("-s" ":a-keyword-symbol"))
       :-s))
 (assert-true (symbol? symbol-bindings) ". Return value should be of type Symbol?.")
 
-(var 'c-char-bindings
+(var c-char-bindings
  (hash-get
    (getopts (make-hash (list (join :-c (build-getopts-param 1 nil :char?)))) (list "-c" #\a))
    :-c))
@@ -598,13 +601,13 @@ single character with arity N as long as said character appears last: -mne \"foo
        (list "-c" (list #\a)))
   (type-error-message ":-c" (list #\a) ":char?"))
 
-(var 'hash-bindings
+(var hash-bindings
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :hash?)))) (list "-h" (make-hash (list (join :-h "meow")))))
    :-h))
 (assert-true (hash? hash-bindings) ". Return value should be of type HashMap.")
 
-(var 'nil-bindings
+(var nil-bindings
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :nil?)))) '("-h" nil))
    :-h))
@@ -614,7 +617,7 @@ single character with arity N as long as said character appears last: -mne \"foo
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :nil?)))) '("-h" "nickel"))
    (type-error-message ":-h" "nickel" ":nil?"))
 
-(var 'list-bindings
+(var list-bindings
  (hash-get
 ;;   (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) '("-h" (arg1 arg2)))
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) (list "-h" (list 'arg1 'arg2)))
@@ -622,7 +625,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 (assert-true (= 'arg1 (car list-bindings)) ". First arg not correct symbol.")
 (assert-true (= 'arg2 (cadr list-bindings)) ". Second arg not correct symbol.")
 
-(var 'list-bindings2
+(var list-bindings2
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) (list "-h" (list "arg1" "arg2")))
    :-h))
@@ -633,7 +636,7 @@ single character with arity N as long as said character appears last: -mne \"foo
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :list?)))) '("-h" "(list nxx nxx)"))
    (type-error-message  ":-h" "(list nxx nxx)" ":list?"))
 
-(var 'vec-bindings
+(var vec-bindings
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" '#(1 2 3 4)))
    :-h))
@@ -643,7 +646,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 (assert-true (=(vec-nth vec-bindings 2) '3) ". Idx 3 is wrong.")
 (assert-true (= (vec-nth vec-bindings 3) '4) ". Idx 3 is wrong.")
 
-(var 'vec-bindings2
+(var vec-bindings2
  (hash-get
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (vec 1 2 3 4)))
    :-h))
@@ -657,7 +660,7 @@ single character with arity N as long as said character appears last: -mne \"foo
    (getopts (make-hash (list (join :-h (build-getopts-param 1 nil :vec?)))) (list "-h" (list 'nxx 'nxx)))
    (type-error-message  ":-h" (list 'nxx 'nxx) ":vec?"))
 
-(var 'macro-bindings
+(var macro-bindings
      (hash-get
          (getopts
            (make-hash
@@ -666,7 +669,7 @@ single character with arity N as long as said character appears last: -mne \"foo
          :--macro))
 
 (assert-true (macro? macro-bindings) ". Return value should be of type macro.")
-(var 'lambda-bindings
+(var lambda-bindings
      (hash-get
          (getopts
            (make-hash
