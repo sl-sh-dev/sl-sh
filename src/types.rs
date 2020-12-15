@@ -68,6 +68,8 @@ fn copy_handle(h: &Handle) -> Handle {
 #[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Vec<&'static str>,
+    pub num_params: usize,
+    pub has_rest: bool,
     pub body: Handle,
     pub syms: Symbols,
     pub namespace: Rc<RefCell<Namespace>>,
@@ -77,6 +79,8 @@ impl Lambda {
     pub fn copy(&self) -> Self {
         Lambda {
             params: self.params.iter().copied().collect(),
+            num_params: self.num_params,
+            has_rest: self.has_rest,
             body: copy_handle(&self.body),
             syms: self.syms.clone(), // XXX TODO deep?
             namespace: self.namespace.clone(),

@@ -14,80 +14,43 @@ use crate::types::*;
 
 fn setup_args(
     environment: &mut Environment,
-    var_names: &[&'static str],
+    num_params: usize,
+    has_rest: bool,
     vars: &mut dyn Iterator<Item = Expression>,
 ) -> Result<(), LispError> {
-    let mut names_iter = var_names.iter();
     let mut params = 0;
-    loop {
-        let k = names_iter.next();
-        let v = vars.next();
-        if k.is_none() && v.is_none() {
-            break;
-        } else if k.is_some() && *k.unwrap() == "&rest" {
-            let rest_name = if let Some(k) = names_iter.next() {
-                k
-            } else {
-                return Err(LispError::new("&rest requires a parameter to follow"));
-            };
-            if *rest_name == "&rest" {
-                return Err(LispError::new("&rest can only appear once"));
-            }
-            if names_iter.next().is_some() {
-                return Err(LispError::new("&rest must be before the last parameter"));
-            }
-            let mut rest_data: Vec<Handle> = Vec::new();
-            if let Some(v) = v {
-                rest_data.push(v.into());
-            }
-            for v in vars {
-                rest_data.push(v.into());
-            }
-            if rest_data.is_empty() {
-                environment
-                    .stack
-                    .push(Binding::with_expression(Expression::make_nil()));
-            } else {
-                environment
-                    .stack
-                    .push(Binding::with_expression(Expression::with_list(rest_data)));
-            }
-            return Ok(());
-        } else if k.is_none() || v.is_none() {
-            let mut min_params = params;
-            if v.is_some() {
-                params += 1;
-            }
-            if k.is_some() {
-                min_params += 1;
-            }
-            let mut has_rest = false;
-            for k in names_iter {
-                if *k == "&rest" {
-                    has_rest = true;
-                } else {
-                    min_params += 1;
-                }
-            }
-            let msg = if has_rest {
-                format!(
-                    "wrong number of parameters, expected at least {} got {}",
-                    min_params,
-                    (params + vars.count())
-                )
-            } else {
-                format!(
-                    "wrong number of parameters, expected {} got {} [{:?}]",
-                    min_params,
-                    (params + vars.count()),
-                    var_names
-                )
-            };
-            return Err(LispError::new(msg));
-        }
-        let var = v.unwrap().resolve(environment)?;
-        environment.stack.push(Binding::with_expression(var));
+    let mut rest_data: Option<Vec<Handle>> = if has_rest { Some(Vec::new()) } else { None };
+    for v in vars {
+        let var = v.resolve(environment)?;
         params += 1;
+        if params < num_params || (!has_rest && params == num_params) {
+            environment.stack.push(Binding::with_expression(var));
+        } else if let Some(rest_data) = &mut rest_data {
+            rest_data.push(var.into());
+        }
+    }
+    if has_rest && params < (num_params - 1) {
+        return Err(LispError::new(format!(
+            "wrong number of parameters, expected at least {} got {}",
+            (num_params - 1),
+            params,
+        )));
+    } else if !has_rest && params != num_params {
+        return Err(LispError::new(format!(
+            "wrong number of parameters, expected {} got {}",
+            num_params, params,
+        )));
+    }
+    if let Some(rest_data) = rest_data {
+        if rest_data.is_empty() {
+            environment
+                .stack
+                .push(Binding::with_expression(Expression::make_nil()));
+        } else {
+            environment
+                .stack
+                .push(Binding::with_expression(Expression::with_list(rest_data)));
+        }
     }
     Ok(())
 }
@@ -99,7 +62,7 @@ fn prep_stack(
     lambda_exp: Expression,
 ) -> Result<(), LispError> {
     let index = environment.stack.len();
-    setup_args(environment, &lambda.params, vars)?;
+    setup_args(environment, lambda.num_params, lambda.has_rest, vars)?;
     let symbols = lambda.syms.clone();
     // Push the 'this-fn' value.
     environment.stack.push(Binding::with_expression(lambda_exp));
@@ -705,6 +668,8 @@ fn internal_eval(
                     syms.refresh_captures(environment)?;
                     Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
                         params: p,
+                        num_params: l.num_params,
+                        has_rest: l.has_rest,
                         body: l.body.clone(),
                         syms,
                         namespace: environment.namespace.clone(),
@@ -716,6 +681,8 @@ fn internal_eval(
                     syms.refresh_captures(environment)?;
                     Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
                         params: p,
+                        num_params: l.num_params,
+                        has_rest: l.has_rest,
                         body: l.body.clone(),
                         syms,
                         namespace: environment.namespace.clone(),
