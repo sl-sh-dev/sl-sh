@@ -464,38 +464,6 @@ impl ExpObj {
     }
 }
 
-impl Trace for ExpEnum {
-    fn trace(&self, tracer: &mut Tracer) {
-        match self {
-            Self::Vector(list) => list.trace(tracer),
-            Self::Values(list) => list.trace(tracer),
-            Self::Pair(p1, p2) => {
-                p1.trace(tracer);
-                p2.trace(tracer);
-            }
-            Self::HashMap(map) => map.trace(tracer),
-            Self::LazyFn(lambda, exp) => {
-                lambda.trace(tracer);
-                exp.trace(tracer);
-            }
-            Self::Lambda(lambda) => {
-                lambda.body.trace(tracer);
-            }
-            Self::Macro(mac) => {
-                mac.body.trace(tracer);
-            }
-            Self::Wrapper(exp) => exp.trace(tracer),
-            _ => {}
-        }
-    }
-}
-
-impl Trace for ExpObj {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.data.trace(tracer);
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Expression {
     obj: Handle,
@@ -513,11 +481,11 @@ impl Expression {
     }
 
     pub fn alloc_h(obj: ExpObj) -> Handle {
-        gc_mut().insert(obj)
+        Handle::new(obj)
     }
 
     pub fn alloc_data_h(data: ExpEnum) -> Handle {
-        gc_mut().insert(ExpObj {
+        Handle::new(ExpObj {
             data,
             meta: None,
             meta_tags: None,
@@ -534,7 +502,7 @@ impl Expression {
     }
 
     pub fn make_nil_h() -> Handle {
-        gc_mut().insert(ExpObj {
+        Handle::new(ExpObj {
             data: ExpEnum::Nil,
             meta: None,
             meta_tags: None,
@@ -543,7 +511,7 @@ impl Expression {
     }
 
     pub fn make_true_h() -> Handle {
-        gc_mut().insert(ExpObj {
+        Handle::new(ExpObj {
             data: ExpEnum::True,
             meta: None,
             meta_tags: None,
@@ -560,7 +528,7 @@ impl Expression {
     }
 
     pub fn handle_no_root(&self) -> Handle {
-        self.obj.clone_no_root()
+        self.obj.clone()
     }
 
     pub fn duplicate(&self) -> Expression {
@@ -573,12 +541,6 @@ impl Expression {
 
     pub fn get_mut(&self) -> RefMut<ExpObj> {
         self.obj.get_mut()
-    }
-
-    pub fn clone_root(&self) -> Expression {
-        Expression {
-            obj: self.obj.clone_root(),
-        }
     }
 
     pub fn meta(&self) -> Option<ExpMeta> {
@@ -997,36 +959,6 @@ impl Expression {
     }
 }
 
-impl Trace for Expression {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.obj.trace(tracer);
-    }
-}
-
-impl Trace for [Expression] {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.iter().for_each(|object| object.trace(tracer));
-    }
-}
-
-impl<K, S: ::std::hash::BuildHasher> Trace for HashMap<K, Expression, S> {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.values().for_each(|object| object.trace(tracer));
-    }
-}
-
-impl Trace for [Handle] {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.iter().for_each(|object| object.trace(tracer));
-    }
-}
-
-impl<K, S: ::std::hash::BuildHasher> Trace for HashMap<K, Handle, S> {
-    fn trace(&self, tracer: &mut Tracer) {
-        self.values().for_each(|object| object.trace(tracer));
-    }
-}
-
 impl AsRef<Handle> for Expression {
     fn as_ref(&self) -> &Handle {
         &self.obj
@@ -1074,7 +1006,7 @@ impl From<&mut Handle> for Expression {
 
 impl From<ExpEnum> for Expression {
     fn from(data: ExpEnum) -> Self {
-        let root = gc_mut().insert(ExpObj {
+        let root = Handle::new(ExpObj {
             data,
             meta: None,
             meta_tags: None,
@@ -1086,7 +1018,7 @@ impl From<ExpEnum> for Expression {
 
 impl From<&ExpEnum> for Expression {
     fn from(data: &ExpEnum) -> Self {
-        let root = gc_mut().insert(ExpObj {
+        let root = Handle::new(ExpObj {
             data: data.clone(),
             meta: None,
             meta_tags: None,
@@ -1098,7 +1030,7 @@ impl From<&ExpEnum> for Expression {
 
 impl From<&mut ExpEnum> for Expression {
     fn from(data: &mut ExpEnum) -> Self {
-        let root = gc_mut().insert(ExpObj {
+        let root = Handle::new(ExpObj {
             data: data.clone(),
             meta: None,
             meta_tags: None,
@@ -1114,16 +1046,14 @@ mod tests {
 
     #[test]
     fn test_one() {
-        init_gc();
         let s1 = Expression::alloc_data_h(ExpEnum::String("sls".into(), None));
         let n1 = Expression::make_nil_h();
-        let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone_no_root(), n1.clone_no_root()));
+        let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone(), n1.clone()));
         let nlist = vec![
-            Expression::make_nil_h().clone_no_root(),
-            Expression::make_nil_h().clone_no_root(),
+            Expression::make_nil_h().clone(),
+            Expression::make_nil_h().clone(),
         ];
         let _l1 = Expression::with_list(nlist);
-        gc_mut().clean();
         //println!("XXX {}, {}, {}", p1, s1, n1);
         //println!("XXX {}", l1);
         //assert!(1 == 2);

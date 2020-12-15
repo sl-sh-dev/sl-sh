@@ -463,17 +463,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::sync::Once;
-
-    use crate::gc::init_gc;
-
-    static INIT: Once = Once::new();
-
-    pub fn setup() {
-        INIT.call_once(|| {
-            init_gc();
-        });
-    }
 
     fn assert_lookup(environment: &Environment, key: &str, val: i64) {
         let xxx_i = if let Some(exp) = lookup_expression(environment, key) {
@@ -529,7 +518,6 @@ mod tests {
 
     #[test]
     fn test_lookup_expression() -> Result<(), LispError> {
-        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         assert!(lookup_expression(&mut environment, "XXX").is_none());
         environment
@@ -691,7 +679,6 @@ mod tests {
 
     #[test]
     fn test_get_expression() -> Result<(), LispError> {
-        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         assert!(
             get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()

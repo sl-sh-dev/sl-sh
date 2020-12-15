@@ -78,7 +78,6 @@ t
             err
         );
     }
-    gc_mut().clean();
 }
 
 pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {

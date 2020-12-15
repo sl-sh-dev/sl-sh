@@ -14,12 +14,10 @@ use nix::{
 };
 
 use ::sl_sh::config::*;
-use ::sl_sh::gc::init_gc;
 use ::sl_sh::shell::*;
 use ::sl_sh::types::LispError;
 
 fn main() -> Result<(), LispError> {
-    init_gc();
     let config = get_config();
     if let Ok(config) = config {
         if config.command.is_none() && config.script.is_none() {

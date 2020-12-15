@@ -124,7 +124,7 @@ fn call_lambda_int(
 ) -> Result<Expression, LispError> {
     let mut lambda_int = lambda;
     let mut lambda: &mut Lambda = &mut lambda_int;
-    let mut body: Expression = lambda.body.clone_root().into();
+    let mut body: Expression = lambda.body.clone().into();
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     let stack_base = environment.stack_frame_base;
@@ -180,7 +180,7 @@ fn call_lambda_int(
                     lambda_int = lam.clone();
                     drop(lam_d);
                     lambda = &mut lambda_int;
-                    body = lambda.body.clone_root().into();
+                    body = lambda.body.clone().into();
                     looping = true;
                     environment.namespace = lambda.syms.namespace().clone();
                     environment.stack.truncate(stack_len);
@@ -582,7 +582,7 @@ fn internal_eval(
     environment: &mut Environment,
     expression_in: &Expression,
 ) -> Result<Expression, LispError> {
-    let expression = expression_in.clone_root();
+    let expression = expression_in.clone();
     if environment.sig_int.load(Ordering::Relaxed) {
         environment.sig_int.store(false, Ordering::Relaxed);
         return Err(LispError::new("Script interupted by SIGINT."));

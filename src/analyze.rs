@@ -355,7 +355,7 @@ pub fn analyze(
     if *expression_in.get().analyzed.borrow() {
         return Ok(());
     }
-    let expression = expression_in.clone_root();
+    let expression = expression_in.clone();
     analyze_expand(environment, expression.clone())?;
     analyze_prep(environment, expression, syms)
 }

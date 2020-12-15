@@ -28,7 +28,7 @@ jobs:
           cp ./target/release/sl-sh .
           strip sl-sh
     - name: Run Rust tests
-      run: cargo test --verbose -- --test-threads=1
+      run: cargo test --verbose
     - name: Run Lisp tests
       run: ./sl-sh ./run-tests.lisp
     - name: Deploy Docs
@@ -102,6 +102,6 @@ jobs:
           rustc --version
           cargo build --verbose
     - name: Run Rust tests
-      run: cargo test --verbose -- --test-threads=1
+      run: cargo test --verbose
     - name: Run Lisp tests
       run: ./target/debug/sl-sh ./run-tests.lisp
