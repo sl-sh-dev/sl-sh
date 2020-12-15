@@ -7,15 +7,9 @@ use crate::interner::*;
 use crate::types::*;
 
 fn set_active_namespace(environment: &mut Environment, ns: &'static str) {
-    environment.root_scope.borrow_mut().data.insert(
+    environment.root_scope.borrow_mut().insert(
         environment.interner.intern("*active-ns*"),
-        Reference::new(
-            ExpEnum::String(ns.into(), None),
-            RefMetaData {
-                namespace: Some("root"),
-                doc_string: None,
-            },
-        ),
+        ExpEnum::String(ns.into(), None).into(),
     );
 }
 
@@ -26,7 +20,7 @@ fn builtin_ns_create(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -34,10 +28,7 @@ fn builtin_ns_create(
                     ))
                 }
             };
-            let scope = match build_new_namespace(environment, key) {
-                Ok(scope) => scope,
-                Err(msg) => return Err(LispError::new(msg)),
-            };
+            let scope = build_new_namespace(environment, key)?;
             set_active_namespace(environment, key);
             environment.namespace = scope;
             return Ok(Expression::make_nil());
@@ -54,13 +45,16 @@ fn builtin_ns_enter(
 ) -> Result<Expression, LispError> {
     if let Some(key) = args.next() {
         if args.next().is_none() {
-            let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+            let key_exp = eval(environment, key)?;
+            let key = match &key_exp.get().data {
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
-                    return Err(LispError::new(
-                        "ns-enter: namespace must be a symbol or string",
-                    ))
+                    return Err(LispError::new(format!(
+                        "ns-enter: namespace must be a symbol or string, got {} {}",
+                        key_exp.display_type(),
+                        key_exp
+                    )))
                 }
             };
             let scope = match get_namespace(environment, key) {
@@ -87,7 +81,7 @@ fn builtin_ns_exists(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -131,7 +125,7 @@ fn builtin_ns_symbols(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
-                ExpEnum::Symbol(sym) => sym,
+                ExpEnum::Symbol(sym, _) => sym,
                 ExpEnum::String(s, _) => environment.interner.intern(&s),
                 _ => {
                     return Err(LispError::new(
@@ -142,8 +136,9 @@ fn builtin_ns_symbols(
             if environment.namespaces.contains_key(key) {
                 if let Some(symbols) = environment.namespaces.get(key) {
                     let mut ns_symbols = Vec::new();
-                    for sym in symbols.borrow().data.keys() {
-                        ns_symbols.push(Expression::alloc_data_h(ExpEnum::Symbol(sym)));
+                    for sym in symbols.borrow().keys() {
+                        ns_symbols
+                            .push(Expression::alloc_data_h(ExpEnum::Symbol(sym, SymLoc::None)));
                     }
                     return Ok(Expression::with_list(ns_symbols));
                 }
@@ -158,9 +153,8 @@ fn builtin_ns_symbols(
 
 pub fn add_namespace_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("ns-create"),
         Expression::make_function(
@@ -182,7 +176,6 @@ Example:
 (ns-pop)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -210,7 +203,6 @@ Example:
 (ns-pop)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -229,7 +221,6 @@ Example:
 (ns-pop)
 (test::assert-true (ns-exists? 'ns-exists-test-namespace))
 ",
-            root,
         ),
     );
     data.insert(
@@ -249,7 +240,6 @@ Example:
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -268,7 +258,6 @@ Example:
 (test::assert-includes 'car (ns-symbols 'root))
 t
 ",
-            root,
         ),
     );
 }

@@ -20,9 +20,8 @@ fn make_args(
 
 pub fn add_math_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("+"),
         Expression::make_function(
@@ -51,7 +50,6 @@ Example:
 (test::assert-equal 6.5 (+ 1 5.5))
 (test::assert-equal 7 (+ 1 2 4))
 ",
-            root,
         ),
     );
 
@@ -90,7 +88,6 @@ Example:
 (test::assert-equal 16.0 (* 2 2.0 4))
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
 ",
-            root,
         ),
     );
 
@@ -132,7 +129,6 @@ Example:
 (test::assert-equal 4 (- 10 2 4))
 (test::assert-equal 4.9 (- 10.9 2 4))
 ",
-            root,
         ),
     );
 
@@ -184,7 +180,6 @@ Example:
 (test::assert-equal 2 (/ 16 2 4))
 (test::assert-equal 5 (/ 100 2 5 2))
 ",
-            root,
         ),
     );
 
@@ -219,7 +214,6 @@ Example:
 (test::assert-equal 5 (% 55 10))
 (test::assert-equal 1 (% 1 2))
 ",
-            root,
         ),
     );
 }

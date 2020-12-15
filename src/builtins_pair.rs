@@ -159,9 +159,8 @@ fn builtin_xdr(
 
 pub fn add_pair_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("join"),
         Expression::make_function(
@@ -178,7 +177,6 @@ Example:
 (test::assert-equal 2 (cdr tst-pair-one))
 (test::assert-equal '(1 2 3) (join 1 (join 2 (join 3 nil))))
 ",
-            root,
         ),
     );
     data.insert(
@@ -194,7 +192,6 @@ Section: pair
 Example:
 (test::assert-equal '(1 2 3) (list 1 2 3))
 ",
-            root,
         ),
     );
     data.insert(
@@ -213,7 +210,6 @@ Example:
 (test::assert-equal 10 (car '(10)))
 (test::assert-equal 9 (car '(9 11 13)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -230,7 +226,7 @@ Example:
 (test::assert-equal nil (cdr '(10)))
 (test::assert-equal '(13) (cdr '(9 13)))
 (test::assert-equal '(11 13) (cdr '(9 11 13)))
-", root),
+"),
     );
     data.insert(
         interner.intern("xar!"),
@@ -255,7 +251,6 @@ Example:
 (test::assert-equal '(t) (xar! tst-pairs-four 't))
 (test::assert-equal '(t) tst-pairs-four)
 ",
-            root,
         ),
     );
     data.insert(
@@ -281,7 +276,6 @@ Example:
 (test::assert-equal '(nil . v) (xdr! tst-pairs-six 'v))
 (test::assert-equal '(nil . v) tst-pairs-six)
 ",
-            root,
         ),
     );
 }

@@ -1,5 +1,3 @@
-use std::collections::hash_map::Entry;
-use std::collections::hash_map::OccupiedEntry;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -7,58 +5,18 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
+use crate::symbols::*;
 use crate::types::*;
 
-fn builtin_lex(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let outer = Some(get_current_scope(environment));
-    // Make sure not to return without popping this off the scope stack.
-    environment.scopes.push(build_new_scope(outer));
-    let mut ret: Option<Expression> = None;
-    for arg in args {
-        if let Some(ret) = ret {
-            ret.resolve(environment).map_err(|e| {
-                environment.scopes.pop();
-                e
-            })?;
-        }
-        ret = Some(eval_nr(environment, arg.clone_root()).map_err(|e| {
-            environment.scopes.pop();
-            e
-        })?);
-    }
-    environment.scopes.pop();
-    Ok(ret.unwrap_or_else(Expression::make_nil))
-}
-
-fn proc_set_vars<'a>(
+pub fn proc_set_vars<'a>(
     environment: &mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
 ) -> Result<(&'static str, Option<String>, Expression), LispError> {
-    fn eval_key(
-        environment: &mut Environment,
-        key_exp: Expression,
-    ) -> Result<&'static str, LispError> {
-        match eval(environment, key_exp)?.get().data {
-            ExpEnum::Symbol(s) => Ok(s),
-            _ => Err(LispError::new("first form (binding key) must be a symbol")),
-        }
-    }
     if let Some(key) = args.next() {
         if let Some(arg1) = args.next() {
             let key_d = key.get();
             let key = match &key_d.data {
-                ExpEnum::Symbol(s) => *s,
-                ExpEnum::Pair(_, _) => {
-                    drop(key_d);
-                    eval_key(environment, key.clone())?
-                }
-                ExpEnum::Vector(_) => {
-                    drop(key_d);
-                    eval_key(environment, key.clone())?
-                }
+                ExpEnum::Symbol(s, _) => *s,
                 _ => return Err(LispError::new("first form (binding key) must be a symbol")),
             };
             if let Some(arg2) = args.next() {
@@ -81,116 +39,88 @@ fn proc_set_vars<'a>(
     ))
 }
 
-fn val_to_reference(
+fn do_set(
     environment: &mut Environment,
-    namespace: Option<&'static str>,
-    doc_string: Option<String>,
-    val_in: Expression,
-) -> Result<(Reference, Expression), LispError> {
-    let val_in_d = val_in.get();
-    if let ExpEnum::Symbol(s) = &val_in_d.data {
-        if let Some(reference) = get_expression(environment, s) {
-            drop(val_in_d); // Free read lock on val_in.
-            Ok((reference, eval(environment, val_in)?))
-        } else {
-            drop(val_in_d); // Free read lock on val_in.
-            let val = eval(environment, val_in)?;
-            Ok((
-                Reference::new_rooted(
-                    val.clone_root(),
-                    RefMetaData {
-                        namespace,
-                        doc_string,
+    args: &mut dyn Iterator<Item = Expression>,
+    name: &str,
+    is_var: bool,
+) -> Result<Expression, LispError> {
+    if let Some(key) = args.next() {
+        if let Some(val) = args.next() {
+            if args.next().is_none() {
+                let val = eval(environment, val)?;
+                match &mut key.get_mut().data {
+                    ExpEnum::Symbol(key_str, location) => match location {
+                        SymLoc::None if !is_var => {
+                            if let Some(binding) =
+                                environment.namespace.borrow().get_with_outer(key_str)
+                            {
+                                binding.replace(val.clone());
+                            } else {
+                                return Err(LispError::new(format!(
+                                    "{}: symbol {} not found",
+                                    name, key_str
+                                )));
+                            }
+                        }
+                        SymLoc::Ref(binding) if !is_var => {
+                            binding.replace(val.clone());
+                        }
+                        SymLoc::Namespace(_scope, _idx) if !is_var => {
+                            // XXX TODO- code this or get rid of this case...
+                        }
+                        SymLoc::Stack(idx) => {
+                            if let Some(binding) =
+                                environment.stack.get(environment.stack_frame_base + *idx)
+                            {
+                                binding.replace(val.clone());
+                            }
+                        }
+                        _ => {
+                            return Err(LispError::new(format!(
+                                "{}: symbol {} not found",
+                                name, key_str
+                            )));
+                        }
                     },
-                ),
-                val,
-            ))
+                    _ => {
+                        return Err(LispError::new(format!(
+                            "{}: first form must be a symbol",
+                            name
+                        )))
+                    }
+                }
+                return Ok(val);
+            }
         }
-    } else {
-        drop(val_in_d); // Free read lock on val_in.
-        let val = eval(environment, val_in)?;
-        Ok((
-            Reference::new_rooted(
-                val.clone_root(),
-                RefMetaData {
-                    namespace,
-                    doc_string,
-                },
-            ),
-            val,
-        ))
     }
+
+    Err(LispError::new(format!(
+        "{}: requires a symbol and value",
+        name
+    )))
 }
 
-fn builtin_set(
+pub(crate) fn builtin_set(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn update_entry(
-        mut entry: OccupiedEntry<&'static str, Reference>,
-        val: Expression,
-        doc_str: Option<String>,
-    ) -> Result<Expression, LispError> {
-        let entry = entry.get_mut();
-        entry.exp = val;
-        if doc_str.is_some() {
-            entry.meta.doc_string = doc_str;
-        }
-        Ok(entry.exp.clone())
-    }
-    let (key, doc_str, val) = proc_set_vars(environment, args)?;
-    let val = eval(environment, val)?;
-    let mut loop_scope = if !environment.scopes.is_empty() {
-        Some(environment.scopes.last().unwrap().clone())
-    } else {
-        None
-    };
-    let mut namespace = None;
-    // First check any "local" lexical scopes.
-    while let Some(scope_out) = loop_scope {
-        let mut scope = scope_out.borrow_mut();
-        if scope.name.is_some() {
-            namespace = Some(scope_out.clone());
-            break;
-        }
-        if let Entry::Occupied(entry) = scope.data.entry(key) {
-            return update_entry(entry, val, doc_str);
-        }
-        loop_scope = scope.outer.clone();
-    }
-    // If not there, check the dynamic scope.
-    if let Entry::Occupied(entry) = environment.dynamic_scope.entry(key) {
-        update_entry(entry, val, doc_str)
-    // Then check the namespace. Note, use the namespace from lexical scope if available.
-    } else if let Some(namespace) = namespace {
-        if let Entry::Occupied(entry) = namespace.borrow_mut().data.entry(key) {
-            update_entry(entry, val, doc_str)
-        } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
-            update_entry(entry, val, doc_str)
-        } else {
-            Err(LispError::new(
-                "set!: first form must evaluate to an existing symbol",
-            ))
-        }
-    // If not then check the default namespace.
-    } else if let Entry::Occupied(entry) = environment.namespace.borrow_mut().data.entry(key) {
-        update_entry(entry, val, doc_str)
-    // Finally check root (this might be a duplicate is in root but in that case about to error out anyway).
-    } else if let Entry::Occupied(entry) = environment.root_scope.borrow_mut().data.entry(key) {
-        update_entry(entry, val, doc_str)
-    } else {
-        Err(LispError::new(
-            "set!: first form must evaluate to an existing symbol",
-        ))
-    }
+    do_set(environment, args, "set!", false)
 }
 
-fn builtin_def(
+pub(crate) fn builtin_var(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn current_namespace(environment: &mut Environment) -> Option<&'static str> {
-        environment.namespace.borrow().name
+    do_set(environment, args, "var", true)
+}
+
+pub(crate) fn builtin_def(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    fn current_namespace(environment: &mut Environment) -> &'static str {
+        environment.namespace.borrow().name()
     }
     let (key, doc_string, val) = proc_set_vars(environment, args)?;
     if key.contains("::") {
@@ -200,71 +130,35 @@ fn builtin_def(
             if let Some(key) = key_i.next() {
                 let namespace = if namespace == "ns" {
                     current_namespace(environment)
-                        .unwrap_or_else(|| environment.interner.intern("NO_NAME"))
                 } else {
                     namespace
                 };
-                let mut scope = Some(get_current_scope(environment));
+                let mut scope = Some(environment.namespace.clone());
                 while let Some(in_scope) = scope {
-                    let name = in_scope.borrow().name;
-                    if let Some(name) = name {
-                        if name == namespace {
-                            let (reference, val) =
-                                val_to_reference(environment, Some(name), doc_string, val)?;
-                            in_scope.borrow_mut().data.insert(key, reference);
-                            return Ok(val);
-                        }
+                    let name = in_scope.borrow().name();
+                    if name == namespace {
+                        let val = eval(environment, val)?;
+                        in_scope
+                            .borrow_mut()
+                            .insert_with_doc(key, val.clone(), doc_string);
+                        return Ok(val);
                     }
-                    scope = in_scope.borrow().outer.clone();
+                    scope = in_scope.borrow().outer();
                 }
             }
         }
         let msg = format!(
-            "def namespaced symbol {} not valid or namespace not a parent namespace",
+            "def: namespaced symbol {} not valid or namespace not a parent namespace",
             key
         );
         Err(LispError::new(msg))
     } else {
-        let ns = current_namespace(environment);
-        let (reference, val) = val_to_reference(environment, ns, doc_string, val)?;
-        set_expression_current_namespace(environment, key, reference);
+        let val = eval(environment, val)?;
+        environment
+            .namespace
+            .borrow_mut()
+            .insert_with_doc(key, val.clone(), doc_string);
         Ok(val)
-    }
-}
-
-fn builtin_var(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let (key, doc_string, val) = proc_set_vars(environment, args)?;
-    if !environment.scopes.is_empty() {
-        if environment
-            .scopes
-            .last()
-            .unwrap()
-            .borrow()
-            .data
-            .contains_key(key)
-        {
-            Err(LispError::new(format!(
-                "var: Symbol {} already exists in local scope, use set! to change it",
-                key
-            )))
-        } else {
-            let (reference, val) = val_to_reference(environment, None, doc_string, val)?;
-            environment
-                .scopes
-                .last()
-                .unwrap()
-                .borrow_mut()
-                .data
-                .insert(key, reference);
-            Ok(val)
-        }
-    } else {
-        Err(LispError::new(
-            "var: Can only be used in a local lexical scope (not a namespace- use def for that)",
-        ))
     }
 }
 
@@ -275,9 +169,9 @@ fn builtin_undef(
     if let Some(key) = args.next() {
         if args.next().is_none() {
             let key_d = &key.get().data;
-            if let ExpEnum::Symbol(k) = key_d {
-                return if let Some(rexp) = remove_expression_current(environment, &k) {
-                    Ok(rexp.exp)
+            if let ExpEnum::Symbol(k, _) = key_d {
+                return if let Some(rexp) = environment.namespace.borrow_mut().remove(&k) {
+                    Ok(rexp)
                 } else {
                     let msg = format!("undef: symbol {} not defined in current scope (can only undef symbols in current scope).", k);
                     Err(LispError::new(msg))
@@ -297,7 +191,7 @@ fn builtin_dyn(
     let (key, val) = if let Some(key) = args.next() {
         let key_d = key.get();
         let key = match &key_d.data {
-            ExpEnum::Symbol(_) => key.clone(),
+            ExpEnum::Symbol(_, _) => key.clone(),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 eval(environment, key.clone())?
@@ -310,7 +204,7 @@ fn builtin_dyn(
         };
         if let Some(val) = args.next() {
             let key = match key.get().data {
-                ExpEnum::Symbol(s) => s,
+                ExpEnum::Symbol(s, _) => s,
                 _ => {
                     return Err(LispError::new(
                         "dyn: first form (binding key) must be a symbol",
@@ -332,16 +226,9 @@ fn builtin_dyn(
     };
     if let Some(exp) = args.next() {
         if args.next().is_none() {
-            environment.dynamic_scope.insert(
-                key,
-                Reference::new_rooted(
-                    val,
-                    RefMetaData {
-                        namespace: None,
-                        doc_string: None,
-                    },
-                ),
-            );
+            environment
+                .dynamic_scope
+                .insert(key, Binding::with_expression(val));
             let res = eval(environment, exp);
             if let Some(old_val) = old_val {
                 environment.dynamic_scope.insert(key, old_val);
@@ -370,7 +257,7 @@ fn builtin_is_def(
     fn do_list(environment: &mut Environment, key: Expression) -> Result<Expression, LispError> {
         let new_key = eval(environment, key)?;
         let new_key_d = new_key.get();
-        if let ExpEnum::Symbol(s) = &new_key_d.data {
+        if let ExpEnum::Symbol(s, _) = &new_key_d.data {
             get_ret(environment, s)
         } else {
             Err(LispError::new(
@@ -382,7 +269,7 @@ fn builtin_is_def(
         params_done(args, "def?")?;
         let key_d = key.get();
         match &key_d.data {
-            ExpEnum::Symbol(s) => get_ret(environment, s),
+            ExpEnum::Symbol(s, _) => get_ret(environment, s),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 do_list(environment, key.clone())
@@ -406,7 +293,7 @@ fn builtin_ref(
         params_done(args, "ref")?;
         let key_d = key.get();
         let key = match &key_d.data {
-            ExpEnum::Symbol(_) => key.clone(),
+            ExpEnum::Symbol(_, _) => key.clone(),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 eval(environment, key.clone())?
@@ -419,9 +306,9 @@ fn builtin_ref(
         };
         let key_d = key.get();
         match &key_d.data {
-            ExpEnum::Symbol(s) => {
-                if let Some(form) = get_expression(environment, s) {
-                    Ok(form.exp)
+            ExpEnum::Symbol(s, _) => {
+                if let Some(form) = get_expression(environment, key.clone()) {
+                    Ok(form)
                 } else {
                     Err(LispError::new(format!("ref: symbol {} not bound", s)))
                 }
@@ -435,32 +322,8 @@ fn builtin_ref(
 
 pub fn add_bind_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
-    data.insert(
-        interner.intern("lex"),
-        Expression::make_special(
-            builtin_lex,
-            "Usage: (lex exp0 ... expN) -> expN
-
-Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
-This is basically like wrapping in a fn call but without the fn call or like a let
-without the initial bindings (you can use var to bind symbols in the new scope instead).
-
-Section: core
-
-Example:
-(def test-do-one \"One1\")
-(def test-do-two \"Two1\")
-(def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
-(test::assert-equal \"One1\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-",
-            root,
-        ),
-    );
     data.insert(
         interner.intern("set!"),
         Expression::make_special(
@@ -468,7 +331,7 @@ Example:
             "Usage: (set! symbol expression) -> expression
 
 Sets an existing expression in the current scope(s).  Return the expression that was set.
-Symbol is not evaluted unless it is a list which must produce a symbol.
+Symbol is not evaluted.
 
 Set will set the first binding it finds starting in the current scope and then
 trying enclosing scopes until exhausted.
@@ -488,21 +351,20 @@ Example:
     (test::assert-equal \"1111\" test-do-one))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
-(set! (sym \"test-do-one\") \"do one\")
-(test::assert-equal \"do one\" test-do-one)
+;(set! (sym \"test-do-one\") \"do one\")
+;(test::assert-equal \"do one\" test-do-one)
 (test::assert-error (set! (sym->str test-do-one) \"do one 2\"))
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("def"),
-        Expression::make_special(
-            builtin_def,
-            "Usage: (def symbol expression) -> expression
+        Expression::make_special_def(
+            "Usage: (def symbol doc_string? expression) -> expression
 
 Adds an expression to the current namespace.  Return the expression that was defined.
-Symbol is not evaluted unless it is a list which must produce a symbol.
+Symbol is not evaluted.  Can take an option doc string (docstrings can only be
+set on namespaced (global) symbols).
 
 Section: core
 
@@ -525,23 +387,22 @@ Example:
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Default\" test-do-four)
-(def (sym \"test-do-one\") \"do one\")
-(test::assert-equal \"do one\" test-do-one)
+;(def (sym \"test-do-one\") \"do one\")
+(test::assert-error (def (sym \"test-do-one\") \"do one\"))
+;(test::assert-equal \"do one\" test-do-one)
 (test::assert-error (def (sym->str test-do-one) \"do one 2\"))
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("var"),
-        Expression::make_special(
-            builtin_var,
+        Expression::make_special_var(
             "Usage: (var symbol expression) -> expression
 
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
 lex forms to create local bindings.
-Symbol is not evaluted unless it is a list which must produce a symbol.
+Symbol is not evaluted.
 
 Section: core
 
@@ -554,21 +415,17 @@ Example:
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 (let ((test-do-one nil))
-    ; Add this to tthe let's scope (shadow the outer test-do-two).
+    ; Add this to the let's scope (shadow the outer test-do-two).
     (test::assert-equal \"Default\" (var test-do-two \"Default\"))
     ; set the currently scoped value.
     (set! test-do-one \"1111\")
     (set! test-do-two \"2222\")
     (test::assert-equal \"1111\" test-do-one)
-    (test::assert-equal \"2222\" test-do-two)
-    (var (sym \"test-do-one2\") \"do one\")
-    (test::assert-equal \"do one\" test-do-one2)
-    (test::assert-error (var (sym->str test-do-one) \"do one 2 3\")))
+    (test::assert-equal \"2222\" test-do-two))
 ; Original outer scope not changed.
 (test::assert-equal \"One\" test-do-one)
 (test::assert-equal \"Two\" test-do-two))
 ",
-            root,
         ),
     );
     data.insert(
@@ -577,8 +434,8 @@ Example:
             builtin_undef,
             "Usage: (undef symbol) -> expression
 
-Remove a symbol from the current scope (if it exists).  Returns the expression
-that was removed.  It is an error if symbol is not defined in the current scope.
+Remove a symbol from the current namespace (if it exists).  Returns the expression
+that was removed.  It is an error if symbol is not defined in the current namespace.
 Symbol is not evaluted.
 
 Section: core
@@ -593,7 +450,6 @@ Example:
 (test::assert-false (def? test-undef))
 (test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef test-undef))))
 ",
-            root,
         ),
     );
     data.insert(
@@ -629,7 +485,6 @@ Example:
 (def test-dyn-true t)
 (test::assert-error (dyn (ref test-dyn-true) (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn2)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -653,7 +508,6 @@ Example:
 (test::assert-false (def? (sym \"test-is-def-not-defined\")))
 (test::assert-error (def? (ref test-is-def)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -678,7 +532,6 @@ Example:
 (test::assert-error (ref (ref test-is-def)))
 (test::assert-equal '(1 2 3) (ref (ref test-is-def2)))
 ",
-            root,
         ),
     );
 }

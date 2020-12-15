@@ -27,12 +27,12 @@ impl fmt::Display for Expression {
             let mut last_exp: Expression = Expression::make_nil();
             for p in itr {
                 if !first {
-                    if let ExpEnum::Symbol(sym) = &last_exp.get().data {
+                    if let ExpEnum::Symbol(sym, _) = &last_exp.get().data {
                         if sym != &"," && sym != &",@" {
-                            res.push_str(" ");
+                            res.push(' ');
                         }
                     } else {
-                        res.push_str(" ");
+                        res.push(' ');
                     }
                 } else {
                     first = false;
@@ -46,7 +46,7 @@ impl fmt::Display for Expression {
             ExpEnum::True => write!(f, "true"),
             ExpEnum::Float(n) => write!(f, "{}", n),
             ExpEnum::Int(i) => write!(f, "{}", i),
-            ExpEnum::Symbol(s) => write!(f, "{}", s),
+            ExpEnum::Symbol(s, _) => write!(f, "{}", s),
             ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
             ExpEnum::Char(c) => write!(f, "#\\{}", c),
             ExpEnum::CodePoint(c) => write!(f, "#\\{}", c),
@@ -96,7 +96,7 @@ impl fmt::Display for Expression {
                 let e2: Expression = e2.into();
                 if is_proper_list(&self) {
                     match &e1.get().data {
-                        ExpEnum::Symbol(sym) if sym == &"quote" => {
+                        ExpEnum::Quote => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -106,7 +106,7 @@ impl fmt::Display for Expression {
                                 f.write_str(&e2.to_string())
                             }
                         }
-                        ExpEnum::Symbol(sym) if sym == &"bquote" => {
+                        ExpEnum::BackQuote => {
                             f.write_str("`")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -118,7 +118,7 @@ impl fmt::Display for Expression {
                         }
                         _ => {
                             let mut res = String::new();
-                            res.push_str("(");
+                            res.push('(');
                             list_out(&mut res, &mut self.iter());
                             res.push(')');
                             write!(f, "{}", res)
@@ -164,6 +164,10 @@ impl fmt::Display for Expression {
             ExpEnum::DeclareDef => write!(f, "#<Function>"),
             ExpEnum::DeclareVar => write!(f, "#<Function>"),
             ExpEnum::DeclareFn => write!(f, "#<Function>"),
+            ExpEnum::DeclareMacro => write!(f, "#<Function>"),
+            ExpEnum::Quote => write!(f, "#<Function>"),
+            ExpEnum::BackQuote => write!(f, "#<Function>"),
+            ExpEnum::Undefined => write!(f, "#<Undefined>"), // XXX maybe panic here instead?
         }
     }
 }
@@ -225,7 +229,7 @@ fn pretty_print_int(
                 let mut last_p: Expression = Expression::make_nil();
                 for p in expression.iter() {
                     if !first {
-                        if let ExpEnum::Symbol(sym) = &last_p.get().data {
+                        if let ExpEnum::Symbol(sym, _) = &last_p.get().data {
                             if sym != &"," && sym != &",@" {
                                 writer.write_all(b" ")?;
                             }
@@ -289,7 +293,7 @@ fn pretty_print_int(
         ExpEnum::True => expression.writef(environment, writer)?,
         ExpEnum::Float(_) => expression.writef(environment, writer)?,
         ExpEnum::Int(_) => expression.writef(environment, writer)?,
-        ExpEnum::Symbol(_) => expression.writef(environment, writer)?,
+        ExpEnum::Symbol(_, _) => expression.writef(environment, writer)?,
         ExpEnum::Function(_) => expression.writef(environment, writer)?,
         ExpEnum::LazyFn(_, _) => expression.writef(environment, writer)?,
         ExpEnum::Process(_) => expression.writef(environment, writer)?,
@@ -297,6 +301,10 @@ fn pretty_print_int(
         ExpEnum::DeclareDef => expression.writef(environment, writer)?,
         ExpEnum::DeclareVar => expression.writef(environment, writer)?,
         ExpEnum::DeclareFn => expression.writef(environment, writer)?,
+        ExpEnum::DeclareMacro => expression.writef(environment, writer)?,
+        ExpEnum::Quote => expression.writef(environment, writer)?,
+        ExpEnum::BackQuote => expression.writef(environment, writer)?,
+        ExpEnum::Undefined => expression.writef(environment, writer)?,
     }
     Ok(())
 }

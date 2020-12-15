@@ -25,7 +25,7 @@ fn builtin_open(
 ) -> Result<Expression, LispError> {
     if let Some(a) = args.next() {
         let a = eval(environment, a)?;
-        if let ExpEnum::Symbol(sym) = &a.get().data {
+        if let ExpEnum::Symbol(sym, _) = &a.get().data {
             let ret = match &sym[..] {
                 ":stdin" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin)))),
                 ":stdout" => Some(ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout)))),
@@ -60,7 +60,7 @@ fn builtin_open(
         for a in args {
             let a = eval(environment, a)?;
             let a_d = a.get();
-            if let ExpEnum::Symbol(sym) = &a_d.data {
+            if let ExpEnum::Symbol(sym, _) = &a_d.data {
                 match &sym[..] {
                     ":read" => {
                         is_read = true;
@@ -224,8 +224,10 @@ fn builtin_read_line(
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
                             let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error =
-                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
+                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                                ":unexpected-eof",
+                                SymLoc::None,
+                            ));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
@@ -235,8 +237,10 @@ fn builtin_read_line(
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
                             let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error =
-                                Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof"));
+                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                                ":unexpected-eof",
+                                SymLoc::None,
+                            ));
                             Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                         } else {
                             Ok(Expression::alloc_data(ExpEnum::String(line.into(), None)))
@@ -272,6 +276,11 @@ fn builtin_read(
         }
     }
     if let Some(exp) = args.next() {
+        let err_exp = if let Some(exp) = args.next() {
+            Some(eval(environment, exp)?)
+        } else {
+            None
+        };
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
             let mut exp_d = exp.get_mut();
@@ -286,7 +295,11 @@ fn builtin_read(
                             }
                             Err((err, i_iter)) => {
                                 file_iter.replace(i_iter);
-                                return Err(LispError::new(err.reason));
+                                return if let Some(err_exp) = err_exp {
+                                    Ok(err_exp)
+                                } else {
+                                    Err(LispError::new(err.reason))
+                                };
                             }
                         }
                     }
@@ -314,7 +327,11 @@ fn builtin_read(
                                 Ok(ast)
                             }
                             Err((err, _)) => {
-                                return Err(LispError::new(err.reason));
+                                return if let Some(err_exp) = err_exp {
+                                    Ok(err_exp)
+                                } else {
+                                    Err(LispError::new(err.reason))
+                                };
                             }
                         }
                     } else {
@@ -457,9 +474,8 @@ fn builtin_write_string(
 
 pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("open"),
         Expression::make_function(
@@ -485,7 +501,6 @@ Example:
 (close test-open-f)
 (test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
 ",
-            root,
         ),
     );
     data.insert(
@@ -506,7 +521,6 @@ Example:
 (test::assert-equal \"Test Line Two\n\" (read-line tst-file))
 (close tst-file)
 ",
-            root,
         ),
     );
     data.insert(
@@ -527,7 +541,6 @@ Example:
 (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
 (close tst-file)
 ",
-            root,
         ),
     );
     data.insert(
@@ -550,16 +563,17 @@ Example:
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("read"),
         Expression::make_function(
             builtin_read,
-            "Usage: (read file|string) -> list
+            "Usage: (read file|string end-exp?) -> list
 
 Read a file or string and return the next object (symbol, string, list, etc).
+Raises an error if the file or string has been read unless end-exp is provided
+then returns that on the end condition.
 
 Section: file
 
@@ -571,15 +585,26 @@ Example:
 (def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
 (test::assert-equal '(1 2 3) (read tst-file))
 (test::assert-equal '(x y z) (read tst-file))
+(test::assert-error (read test-file))
+(close tst-file)
+(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(test::assert-equal '(1 2 3) (read tst-file :done))
+(test::assert-equal '(x y z) (read tst-file :done))
+(test::assert-equal :done (read tst-file :done))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read \"(4 5 6)\"))
 (def test-str \"7 8 9\")
 (test::assert-equal 7 (read test-str))
 (test::assert-equal 8 (read test-str))
 (test::assert-equal 9 (read test-str))
+(test::assert-error (read test-str))
+(def test-str \"7 8 9\")
+(test::assert-equal 7 (read test-str :done))
+(test::assert-equal 8 (read test-str :done))
+(test::assert-equal 9 (read test-str :done))
+(test::assert-equal :done (read test-str :done))
 (test::assert-equal '(x y z) (read \"(x y z)\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -608,7 +633,6 @@ Example:
 (test::assert-equal '(7 8 9) (read-all \"7 8 9\"))
 (test::assert-equal '(x y z) (read-all \"(x y z)\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -629,7 +653,6 @@ Example:
 (test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
 (close tst-file)
 ",
-            root,
         ),
     );
     data.insert(
@@ -650,7 +673,6 @@ Example:
 (test::assert-equal \"Test Line Write String\" (read-line tst-file))
 (close tst-file)
 ",
-            root,
         ),
     );
 }

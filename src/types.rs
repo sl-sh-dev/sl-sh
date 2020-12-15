@@ -14,6 +14,7 @@ use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::gc::*;
 use crate::process::*;
+use crate::symbols::*;
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -59,11 +60,28 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
+fn copy_handle(h: &Handle) -> Handle {
+    let obj = h.get().copy();
+    Expression::alloc_h(obj)
+}
+
 #[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Vec<&'static str>,
     pub body: Handle,
-    pub capture: Rc<RefCell<Scope>>,
+    pub syms: Symbols,
+    pub namespace: Rc<RefCell<Namespace>>,
+}
+
+impl Lambda {
+    pub fn copy(&self) -> Self {
+        Lambda {
+            params: self.params.iter().copied().collect(),
+            body: copy_handle(&self.body),
+            syms: self.syms.clone(), // XXX TODO deep?
+            namespace: self.namespace.clone(),
+        }
+    }
 }
 
 fn params_to_string(params: &[&'static str]) -> String {
@@ -182,13 +200,27 @@ pub struct ExpMeta {
     pub col: usize,
 }
 
+#[derive(Clone, Debug)]
+pub enum SymLoc {
+    None,
+    Ref(Binding),
+    Namespace(Rc<RefCell<Namespace>>, usize),
+    Stack(usize),
+}
+
+impl SymLoc {
+    pub fn replace(&mut self, new_data: SymLoc) {
+        *self = new_data;
+    }
+}
+
 pub enum ExpEnum {
     // Primatives
     True,
     Nil,
     Float(f64),
     Int(i64),
-    Symbol(&'static str),
+    Symbol(&'static str, SymLoc),
     // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
     // to None if it is Some.
     String(Cow<'static, str>, Option<CharIter>),
@@ -218,10 +250,17 @@ pub enum ExpEnum {
     Wrapper(Handle),
 
     // Used to help the analyzer reconize things it cares about without
-    // doing a lot of extra work.
+    // doing a lot of extra work.  These are morally equivelent to a Function.
+    // If adding to this list be sure to add to builtins_types.rs/builtin_is_builtin.
     DeclareDef,
     DeclareVar,
     DeclareFn,
+    DeclareMacro,
+    Quote,
+    BackQuote,
+
+    // This is a placeholder for an unset variable- error to evaluate.
+    Undefined,
 }
 
 impl ExpEnum {
@@ -241,7 +280,7 @@ impl ExpEnum {
                             data: last_pair.clone(),
                             meta: None,
                             meta_tags: None,
-                            analyzed: false,
+                            analyzed: RefCell::new(false),
                         })
                         .into(),
                     );
@@ -253,7 +292,7 @@ impl ExpEnum {
                             data: last_pair.clone(),
                             meta: None,
                             meta_tags: None,
-                            analyzed: false,
+                            analyzed: RefCell::new(false),
                         })
                         .into(),
                     );
@@ -262,6 +301,40 @@ impl ExpEnum {
             }
         }
         last_pair
+    }
+
+    fn copy(&self) -> ExpEnum {
+        match self {
+            ExpEnum::True => ExpEnum::True,
+            ExpEnum::Nil => ExpEnum::Nil,
+            ExpEnum::Float(n) => ExpEnum::Float(*n),
+            ExpEnum::Int(i) => ExpEnum::Int(*i),
+            ExpEnum::Symbol(s, _) => ExpEnum::Symbol(s, SymLoc::None),
+            // XXX TODO- make a new Cow (next two)?
+            ExpEnum::String(s, _) => ExpEnum::String(s.clone(), None),
+            ExpEnum::Char(c) => ExpEnum::Char(c.clone()),
+            ExpEnum::CodePoint(c) => ExpEnum::CodePoint(*c),
+            ExpEnum::Lambda(l) => ExpEnum::Lambda(l.copy()),
+            ExpEnum::Macro(m) => ExpEnum::Macro(m.copy()),
+            ExpEnum::Function(c) => ExpEnum::Function(c.clone()),
+            ExpEnum::LazyFn(h, v) => {
+                ExpEnum::LazyFn(copy_handle(h), v.iter().map(|h| copy_handle(h)).collect())
+            }
+            ExpEnum::Vector(v) => ExpEnum::Vector(v.iter().map(|h| copy_handle(h)).collect()),
+            ExpEnum::Values(v) => ExpEnum::Values(v.iter().map(|h| copy_handle(h)).collect()),
+            ExpEnum::Pair(car, cdr) => ExpEnum::Pair(copy_handle(car), copy_handle(cdr)),
+            ExpEnum::HashMap(map) => ExpEnum::HashMap(map.clone()), //XXX TODO- deep copy
+            ExpEnum::Process(p) => ExpEnum::Process(*p),
+            ExpEnum::File(f) => ExpEnum::File(f.clone()),
+            ExpEnum::Wrapper(h) => ExpEnum::Wrapper(copy_handle(h)),
+            ExpEnum::DeclareDef => ExpEnum::DeclareDef,
+            ExpEnum::DeclareVar => ExpEnum::DeclareVar,
+            ExpEnum::DeclareFn => ExpEnum::DeclareFn,
+            ExpEnum::DeclareMacro => ExpEnum::DeclareMacro,
+            ExpEnum::Quote => ExpEnum::Quote,
+            ExpEnum::BackQuote => ExpEnum::BackQuote,
+            ExpEnum::Undefined => ExpEnum::Undefined,
+        }
     }
 }
 
@@ -272,7 +345,7 @@ impl Clone for ExpEnum {
             ExpEnum::Nil => ExpEnum::Nil,
             ExpEnum::Float(n) => ExpEnum::Float(*n),
             ExpEnum::Int(i) => ExpEnum::Int(*i),
-            ExpEnum::Symbol(s) => ExpEnum::Symbol(s),
+            ExpEnum::Symbol(s, l) => ExpEnum::Symbol(s, l.clone()),
             ExpEnum::String(s, _) => ExpEnum::String(s.clone(), None),
             ExpEnum::Char(c) => ExpEnum::Char(c.clone()),
             ExpEnum::CodePoint(c) => ExpEnum::CodePoint(*c),
@@ -290,6 +363,10 @@ impl Clone for ExpEnum {
             ExpEnum::DeclareDef => ExpEnum::DeclareDef,
             ExpEnum::DeclareVar => ExpEnum::DeclareVar,
             ExpEnum::DeclareFn => ExpEnum::DeclareFn,
+            ExpEnum::DeclareMacro => ExpEnum::DeclareMacro,
+            ExpEnum::Quote => ExpEnum::Quote,
+            ExpEnum::BackQuote => ExpEnum::BackQuote,
+            ExpEnum::Undefined => ExpEnum::Undefined,
         }
     }
 }
@@ -300,7 +377,7 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::True => write!(f, "ExpEnum::True"),
             ExpEnum::Float(n) => write!(f, "ExpEnum::Float({})", n),
             ExpEnum::Int(i) => write!(f, "ExpEnum::Int({})", i),
-            ExpEnum::Symbol(s) => write!(f, "ExpEnum::Symbol({})", s),
+            ExpEnum::Symbol(s, loc) => write!(f, "ExpEnum::Symbol({}, {:?})", s, loc),
             ExpEnum::String(s, _) => write!(f, "ExpEnum::String(\"{}\")", s),
             ExpEnum::Char(c) => write!(f, "ExpEnum::Char(#\\{})", c),
             ExpEnum::CodePoint(c) => write!(f, "ExpEnum::CodePoint(#\\{})", c),
@@ -342,6 +419,10 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::DeclareDef => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::DeclareVar => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::DeclareFn => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::DeclareMacro => write!(f, "ExpEnum::Macro(_)"),
+            ExpEnum::Quote => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::BackQuote => write!(f, "ExpEnum::Function(_)"),
+            ExpEnum::Undefined => write!(f, "ExpEnum::Undefined"),
         }
     }
 }
@@ -351,7 +432,36 @@ pub struct ExpObj {
     pub data: ExpEnum,
     pub meta: Option<ExpMeta>,
     pub meta_tags: Option<HashSet<&'static str>>,
-    pub analyzed: bool, // XXX check where these are inited and see if can be true.
+    pub analyzed: RefCell<bool>,
+}
+
+impl ExpObj {
+    pub fn copy(&self) -> Self {
+        let meta = if let Some(meta) = self.meta {
+            Some(ExpMeta {
+                file: meta.file,
+                line: meta.line,
+                col: meta.col,
+            })
+        } else {
+            None
+        };
+        let meta_tags = if let Some(tags) = &self.meta_tags {
+            let mut ntags = HashSet::with_capacity(tags.len());
+            for t in tags {
+                ntags.insert(*t);
+            }
+            Some(ntags)
+        } else {
+            None
+        };
+        ExpObj {
+            data: self.data.copy(),
+            meta,
+            meta_tags,
+            analyzed: RefCell::new(*self.analyzed.borrow()),
+        }
+    }
 }
 
 impl Trace for ExpEnum {
@@ -392,6 +502,12 @@ pub struct Expression {
 }
 
 impl Expression {
+    pub fn copy(&self) -> Expression {
+        Expression {
+            obj: Expression::alloc_h(self.obj.get().copy()),
+        }
+    }
+
     pub fn new(obj: Handle) -> Expression {
         Expression { obj }
     }
@@ -405,7 +521,7 @@ impl Expression {
             data,
             meta: None,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -422,7 +538,7 @@ impl Expression {
             data: ExpEnum::Nil,
             meta: None,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -431,7 +547,7 @@ impl Expression {
             data: ExpEnum::True,
             meta: None,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -498,34 +614,42 @@ impl Expression {
         }
     }
 
-    pub fn make_function(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::Function(Callable::new(func, false)),
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
+    pub fn make_function(func: CallFunc, doc_str: &str) -> (Expression, String) {
+        (
+            ExpEnum::Function(Callable::new(func, false)).into(),
+            doc_str.to_string(),
         )
     }
 
-    pub fn make_special(func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::Function(Callable::new(func, true)),
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
+    pub fn make_special(func: CallFunc, doc_str: &str) -> (Expression, String) {
+        (
+            ExpEnum::Function(Callable::new(func, true)).into(),
+            doc_str.to_string(),
         )
     }
 
-    pub fn make_special_fn(_func: CallFunc, doc_str: &str, namespace: &'static str) -> Reference {
-        Reference::new(
-            ExpEnum::DeclareFn,
-            RefMetaData {
-                namespace: Some(namespace),
-                doc_string: Some(doc_str.to_string()),
-            },
-        )
+    pub fn make_special_fn(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareFn.into(), doc_str.to_string())
+    }
+
+    pub fn make_special_macro(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareMacro.into(), doc_str.to_string())
+    }
+
+    pub fn make_special_def(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareDef.into(), doc_str.to_string())
+    }
+
+    pub fn make_special_var(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::DeclareVar.into(), doc_str.to_string())
+    }
+
+    pub fn make_special_quote(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::Quote.into(), doc_str.to_string())
+    }
+
+    pub fn make_special_backquote(doc_str: &str) -> (Expression, String) {
+        (ExpEnum::BackQuote.into(), doc_str.to_string())
     }
 
     pub fn with_list(list: Vec<Handle>) -> Expression {
@@ -533,7 +657,7 @@ impl Expression {
             data: ExpEnum::Vector(list),
             meta: None,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -542,7 +666,7 @@ impl Expression {
             data: ExpEnum::Vector(list),
             meta,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -557,7 +681,7 @@ impl Expression {
                         data: last_pair.clone(),
                         meta: None,
                         meta_tags: None,
-                        analyzed: false,
+                        analyzed: RefCell::new(false),
                     })
                     .into(),
                 );
@@ -568,7 +692,7 @@ impl Expression {
             data: last_pair,
             meta,
             meta_tags: None,
-            analyzed: false,
+            analyzed: RefCell::new(false),
         })
     }
 
@@ -577,7 +701,7 @@ impl Expression {
             ExpEnum::True => "True".to_string(),
             ExpEnum::Float(_) => "Float".to_string(),
             ExpEnum::Int(_) => "Int".to_string(),
-            ExpEnum::Symbol(_) => "Symbol".to_string(),
+            ExpEnum::Symbol(_, _) => "Symbol".to_string(),
             ExpEnum::String(_, _) => "String".to_string(),
             ExpEnum::Char(_) => "Char".to_string(),
             ExpEnum::CodePoint(_) => "CodePoint".to_string(),
@@ -612,6 +736,10 @@ impl Expression {
             ExpEnum::DeclareDef => "SpecialForm".to_string(),
             ExpEnum::DeclareVar => "SpecialForm".to_string(),
             ExpEnum::DeclareFn => "SpecialForm".to_string(),
+            ExpEnum::DeclareMacro => "SpecialForm".to_string(),
+            ExpEnum::Quote => "SpecialForm".to_string(),
+            ExpEnum::BackQuote => "SpecialForm".to_string(),
+            ExpEnum::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
         }
     }
 
@@ -724,6 +852,9 @@ impl Expression {
             ExpEnum::DeclareDef => Err(LispError::new("Def not a number")),
             ExpEnum::DeclareVar => Err(LispError::new("Var not a number")),
             ExpEnum::DeclareFn => Err(LispError::new("Fn not a number")),
+            ExpEnum::DeclareMacro => Err(LispError::new("Macro not a number")),
+            ExpEnum::Quote => Err(LispError::new("Function not a number")),
+            ExpEnum::BackQuote => Err(LispError::new("Function not a number")),
             _ => Err(LispError::new("Not a number")),
         }
     }
@@ -761,6 +892,9 @@ impl Expression {
             ExpEnum::DeclareDef => Err(LispError::new("Def not an integer")),
             ExpEnum::DeclareVar => Err(LispError::new("Var not an integer")),
             ExpEnum::DeclareFn => Err(LispError::new("Fn not an integer")),
+            ExpEnum::DeclareMacro => Err(LispError::new("Macro not an integer")),
+            ExpEnum::Quote => Err(LispError::new("Function not a integer")),
+            ExpEnum::BackQuote => Err(LispError::new("Function not a integer")),
             _ => Err(LispError::new("Not an integer")),
         }
     }
@@ -929,6 +1063,48 @@ impl From<Handle> for Expression {
 impl From<&Handle> for Expression {
     fn from(item: &Handle) -> Self {
         Expression::new(item.clone())
+    }
+}
+
+impl From<&mut Handle> for Expression {
+    fn from(item: &mut Handle) -> Self {
+        Expression::new(item.clone())
+    }
+}
+
+impl From<ExpEnum> for Expression {
+    fn from(data: ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data,
+            meta: None,
+            meta_tags: None,
+            analyzed: RefCell::new(false),
+        });
+        Expression::new(root)
+    }
+}
+
+impl From<&ExpEnum> for Expression {
+    fn from(data: &ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data: data.clone(),
+            meta: None,
+            meta_tags: None,
+            analyzed: RefCell::new(false),
+        });
+        Expression::new(root)
+    }
+}
+
+impl From<&mut ExpEnum> for Expression {
+    fn from(data: &mut ExpEnum) -> Self {
+        let root = gc_mut().insert(ExpObj {
+            data: data.clone(),
+            meta: None,
+            meta_tags: None,
+            analyzed: RefCell::new(false),
+        });
+        Expression::new(root)
     }
 }
 

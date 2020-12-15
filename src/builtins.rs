@@ -1,9 +1,11 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::BuildHasher;
 use std::io::{self, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -16,6 +18,7 @@ use crate::gc::*;
 use crate::interner::*;
 use crate::pretty_print::*;
 use crate::reader::*;
+use crate::symbols::*;
 use crate::types::*;
 
 const CORE_LISP: &[u8] = include_bytes!("../lisp/core.lisp");
@@ -37,10 +40,14 @@ fn builtin_eval(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             let arg_d = arg.get();
-            let old_scopes = std::mem::replace(&mut environment.scopes, Vec::new());
+            // XXX TODO- do not do anything special with strings, the calling code should use read
+            // on them itself...
             let ret = match &arg_d.data {
                 ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => eval(environment, ast),
+                    Ok(ast) => {
+                        drop(arg_d);
+                        eval(environment, ast)
+                    }
                     Err(err) => Err(LispError::new(err.reason)),
                 },
                 _ => {
@@ -48,34 +55,103 @@ fn builtin_eval(
                     eval(environment, &arg)
                 }
             };
-            let _ = std::mem::replace(&mut environment.scopes, old_scopes);
             return ret;
         }
     }
     Err(LispError::new("eval can only have one form"))
 }
 
-fn builtin_eval_in_scope(
+//XXX TODO- remove once eval str suppor is gone.
+fn _builtin_eval_in_scope(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            let arg_d = arg.get();
-            return match &arg_d.data {
-                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => eval(environment, ast),
-                    Err(err) => Err(LispError::new(err.reason)),
-                },
-                _ => {
-                    drop(arg_d);
-                    eval(environment, &arg)
-                }
-            };
+            return eval(environment, &arg);
         }
     }
     Err(LispError::new("eval can only have one form"))
+}
+
+fn apply_fn_call(
+    environment: &mut Environment,
+    command: Expression,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    match command.get().data.clone() {
+        ExpEnum::Symbol(command_sym, _) => {
+            if let Some(exp) = get_expression(environment, command.clone()) {
+                match exp.get().data.clone() {
+                    ExpEnum::Function(c) if !c.is_special_form => {
+                        let old_sup = environment.supress_eval;
+                        environment.supress_eval = true;
+                        let ret = (c.func)(environment, args); //&mut *args);
+                        environment.supress_eval = old_sup;
+                        ret
+                    }
+                    ExpEnum::Lambda(_) => {
+                        if environment.allow_lazy_fn {
+                            //                        make_lazy(environment, exp.clone(), args)
+                            Ok(Expression::alloc(ExpObj {
+                                data: ExpEnum::LazyFn(
+                                    exp.clone().into(),
+                                    args.map(|a| a.into()).collect(),
+                                ),
+                                meta: None,
+                                meta_tags: None,
+                                analyzed: RefCell::new(true),
+                            }))
+                        } else {
+                            call_lambda(environment, exp.clone(), args, false)
+                        }
+                    }
+                    _ => {
+                        let msg = format!(
+                            "Symbol {} of type {} is not callable (or is macro or special form).1",
+                            command_sym,
+                            command.display_type()
+                        );
+                        Err(LispError::new(msg))
+                    }
+                }
+            } else {
+                let msg = format!("Symbol {} not found.", command_sym,);
+                Err(LispError::new(msg))
+            }
+        }
+        ExpEnum::Lambda(_) => {
+            if environment.allow_lazy_fn {
+                //let mut parms: Vec<Handle> = Vec::collect(args);
+                Ok(Expression::alloc(ExpObj {
+                    data: ExpEnum::LazyFn(command.clone().into(), args.map(|a| a.into()).collect()),
+                    meta: None,
+                    meta_tags: None,
+                    analyzed: RefCell::new(true),
+                }))
+            //make_lazy(environment, command.clone(), args)
+            } else {
+                call_lambda(environment, command.clone(), args, false)
+            }
+        }
+        //ExpEnum::Macro(m) => exec_macro(environment, &m, args),
+        ExpEnum::Function(c) if !c.is_special_form => {
+            let old_sup = environment.supress_eval;
+            environment.supress_eval = true;
+            let ret = (c.func)(environment, args); //&mut *args);
+            environment.supress_eval = old_sup;
+            ret
+        }
+        _ => {
+            let msg = format!(
+                "Called an invalid command {}, type {}.",
+                command.make_string(environment)?,
+                command.display_type()
+            );
+            Err(LispError::new(msg))
+        }
+    }
 }
 
 fn builtin_apply(
@@ -86,7 +162,7 @@ fn builtin_apply(
     let mut last_arg: Option<Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(a.into());
+            call_list.push(eval(environment, a)?.into());
         }
         last_arg = Some(arg);
     }
@@ -101,17 +177,16 @@ fn builtin_apply(
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
-            let b = ExpEnum::Pair(
-                Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern("quote"))),
+            /*let b = ExpEnum::Pair(
+                Expression::alloc_data_h(ExpEnum::Quote),
                 Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
-            );
-            call_list.push(Expression::alloc_data_h(b));
+            );*/
+            call_list.push(a.into()); //Expression::alloc_data_h(b));
         }
     }
     let mut args = box_slice_it(&call_list[..]);
     if let Some(command) = args.next() {
-        let command = eval(environment, command)?;
-        fn_call(environment, command, &mut args)
+        apply_fn_call(environment, command, &mut args)
     } else {
         Err(LispError::new("apply: empty call"))
     }
@@ -155,16 +230,16 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         Some(f) => f,
         None => file_name.to_string(),
     };
-    let file_path = if let Some(lp) = get_expression(environment, "*load-path*") {
-        let lp_d = lp.exp.get();
+    let file_path = if let Some(lp) = lookup_expression(environment, "*load-path*") {
+        let lp_d = lp.get();
         let p_itr = match &lp_d.data {
             ExpEnum::Vector(vec) => Box::new(ListIter::new_list(&vec)),
-            _ => lp.exp.iter(),
+            _ => lp.iter(),
         };
         let mut path_out = file_name.clone();
         for l in p_itr {
             let path_name = match &l.get().data {
-                ExpEnum::Symbol(sym) => Some((*sym).to_string()),
+                ExpEnum::Symbol(sym, _) => Some((*sym).to_string()),
                 ExpEnum::String(s, _) => Some(s.to_string()),
                 _ => None,
             };
@@ -368,10 +443,10 @@ fn print_to_oe(
     default_error: bool,
     key: &str,
 ) -> Result<(), LispError> {
-    let out = get_expression(environment, key);
+    let out = lookup_expression(environment, key);
     match out {
         Some(out) => {
-            if let ExpEnum::File(f) = &out.exp.get().data {
+            if let ExpEnum::File(f) = &out.get().data {
                 let mut f_borrow = f.borrow_mut();
                 match &mut *f_borrow {
                     FileState::Stdout => {
@@ -512,53 +587,7 @@ pub fn builtin_do(
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
 
-pub fn builtin_fn(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(params) = args.next() {
-        let (first, second) = (args.next(), args.next());
-        let body = if let Some(first) = first {
-            if let Some(second) = second {
-                let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
-                body.push(first.into());
-                body.push(second.into());
-                for a in args {
-                    body.push(a.into());
-                }
-                Expression::with_list(body)
-            } else {
-                first
-            }
-        } else {
-            Expression::make_nil()
-        };
-        let params_d = params.get();
-        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
-            Box::new(ListIter::new_list(&vec))
-        } else {
-            params.iter()
-        };
-        let mut params = Vec::new();
-        for p in p_iter {
-            if let ExpEnum::Symbol(s) = p.get().data {
-                params.push(s);
-            } else {
-                return Err(LispError::new("fn: parameters must be symbols"));
-            }
-        }
-        let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Lambda(Lambda {
-            params,
-            body,
-            capture: get_current_scope(environment),
-        })));
-    }
-    Err(LispError::new("fn: needs at least one form"))
-}
-
-fn builtin_quote(
+pub fn builtin_quote(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -567,9 +596,24 @@ fn builtin_quote(
             return Ok(arg);
         }
     }
-    Err(LispError::new("quote takes one form"))
+    Err(LispError::new("quote: takes one form"))
 }
-
+/*
+fn copy_clear_symbol(exp: Expression) -> Expression {
+    let mut iexp: Expression = exp.clone();
+    // Don't reuse structure for symbols or bad stuff can happen...
+    {
+        let iexp_d = iexp.get();
+        if let ExpEnum::Symbol(sym, _) = &iexp_d.data {
+            let sym = <&str>::clone(sym);
+            drop(iexp_d);
+            // XXX TODO- better copy?
+            iexp = ExpEnum::Symbol(sym, SymLoc::None).into();
+        }
+    }
+    iexp
+}
+*/
 fn replace_commas(
     environment: &mut Environment,
     list: &mut dyn Iterator<Item = Expression>,
@@ -590,7 +634,7 @@ fn replace_commas(
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             _ => exp.clone(),
         };
-        if let ExpEnum::Symbol(symbol) = &exp_d.data {
+        if let ExpEnum::Symbol(symbol, _) = &exp_d.data {
             if symbol == &"," {
                 comma_next = true;
             } else if symbol == &",@" {
@@ -620,7 +664,12 @@ fn replace_commas(
                 }
                 amp_next = false;
             } else {
-                output.push(exp.into());
+                // Make a new symbol vs sharing structure- can be a problem for
+                // patched symbols later.
+                let exp2: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
+                exp2.get_mut().meta = exp.get().meta;
+                exp2.get_mut().meta_tags = exp.get().meta_tags.clone();
+                output.push(exp2.into());
             }
         } else if comma_next {
             drop(exp_d);
@@ -657,14 +706,14 @@ fn replace_commas(
     }
 }
 
-fn builtin_bquote(
+pub fn builtin_bquote(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let ret = if let Some(arg) = args.next() {
         let meta = arg.meta();
         match &arg.get().data {
-            ExpEnum::Symbol(s) if s == &"," => {
+            ExpEnum::Symbol(s, _) if s == &"," => {
                 if let Some(exp) = args.next() {
                     Ok(eval(environment, exp)?)
                 } else {
@@ -681,35 +730,14 @@ fn builtin_bquote(
             _ => Ok(arg.clone()),
         }
     } else {
-        Err(LispError::new("bquote takes one form"))
+        Err(LispError::new("back-quote: takes one form"))
     };
     if args.next().is_some() {
-        Err(LispError::new("bquote takes one form"))
+        Err(LispError::new("back-quote: takes one form"))
     } else {
         ret
     }
 }
-
-/*fn builtin_spawn(environment: &mut Environment, args: &[Expression]) -> Result<Expression, LispError> {
-    let mut new_args: Vec<Expression> = Vec::with_capacity(args.len());
-    for a in args {
-        new_args.push(a.clone());
-    }
-    let mut data: HashMap<String, Expression> = HashMap::new();
-    clone_symbols(
-        &environment.current_scope.last().unwrap().borrow(),
-        &mut data,
-    );
-    let _child = std::thread::spawn(move || {
-        let mut enviro = build_new_spawn_scope(data, environment.sig_int);
-        let _args = to_args(&mut enviro, &new_args).unwrap();
-        if let Err(err) = reap_procs(&enviro) {
-            eprintln!("Error waiting on spawned processes: {}", err);
-        }
-    });
-    //let res = child.join()
-    Ok(Expression::alloc_data(ExpEnum::Nil))
-}*/
 
 fn builtin_and(
     environment: &mut Environment,
@@ -757,74 +785,20 @@ fn builtin_not(
     Err(LispError::new("not takes one form"))
 }
 
-fn builtin_macro(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(params) = args.next() {
-        let (first, second) = (args.next(), args.next());
-        let body = if let Some(first) = first {
-            if let Some(second) = second {
-                let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol("do")));
-                body.push(first.into());
-                body.push(second.into());
-                for a in args {
-                    body.push(a.into());
-                }
-                Expression::with_list(body)
-            } else {
-                first
-            }
-        } else {
-            Expression::make_nil()
-        };
-        let params_d = params.get();
-        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
-            Box::new(ListIter::new_list(&vec))
-        } else {
-            params.iter()
-        };
-        let mut params = Vec::new();
-        for p in p_iter {
-            if let ExpEnum::Symbol(s) = p.get().data {
-                params.push(s);
-            } else {
-                return Err(LispError::new("macro: parameters must be symbols"));
-            }
-        }
-        let body = body.handle_no_root();
-        return Ok(Expression::alloc_data(ExpEnum::Macro(Lambda {
-            params,
-            body,
-            capture: get_current_scope(environment),
-        })));
-    }
-    Err(LispError::new("macro: need at least a bindings form"))
-}
-
 fn do_expansion(
     environment: &mut Environment,
-    command: &Expression,
+    command_in: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
-    if let ExpEnum::Symbol(command) = &command.get().data {
-        if let Some(exp) = get_expression(environment, &command) {
-            if let ExpEnum::Macro(sh_macro) = &exp.exp.get().data {
-                let body: Expression = sh_macro.body.clone().into();
-                let new_scope = build_new_scope(Some(sh_macro.capture.clone()));
-                environment.scopes.push(new_scope);
-                if let Err(err) = setup_args(environment, None, &sh_macro.params, parts, false) {
-                    environment.scopes.pop();
-                    return Err(err);
-                }
-                let expansion = eval(environment, &body);
-                if let Err(err) = expansion {
-                    environment.scopes.pop();
-                    return Err(err);
-                }
-                let expansion = expansion.unwrap();
-                environment.scopes.pop();
+    let com_d = command_in.get();
+    if let ExpEnum::Symbol(_, _) = &com_d.data {
+        drop(com_d);
+        if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
+            let exp_d = exp.get();
+            if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
+                drop(exp_d);
+                let expansion =
+                    call_lambda(environment, exp, parts, false)?.resolve(environment)?;
                 Ok(Some(expansion))
             } else {
                 Ok(None)
@@ -915,7 +889,7 @@ pub(crate) fn expand_macro(
     res
 }
 
-fn expand_macro_all(
+pub(crate) fn expand_macro_all(
     environment: &mut Environment,
     arg: &Expression,
 ) -> Result<Expression, LispError> {
@@ -977,10 +951,11 @@ fn builtin_expand_macro(
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, false, 0)? {
+            let exp_macro = eval(environment, arg0)?;
+            return if let Some(exp) = expand_macro(environment, &exp_macro, false, 0)? {
                 Ok(exp)
             } else {
-                Ok(arg0)
+                Ok(exp_macro)
             };
         }
     }
@@ -995,10 +970,11 @@ fn builtin_expand_macro1(
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return if let Some(exp) = expand_macro(environment, &arg0, true, 0)? {
+            let exp_macro = eval(environment, arg0)?;
+            return if let Some(exp) = expand_macro(environment, &exp_macro, true, 0)? {
                 Ok(exp)
             } else {
-                Ok(arg0)
+                Ok(exp_macro)
             };
         }
     }
@@ -1013,7 +989,8 @@ fn builtin_expand_macro_all(
 ) -> Result<Expression, LispError> {
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
-            return expand_macro_all(environment, &arg0);
+            let exp_macro = eval(environment, arg0)?;
+            return expand_macro_all(environment, &exp_macro);
         }
     }
     Err(LispError::new(
@@ -1049,6 +1026,7 @@ fn builtin_gensym(
             environment
                 .interner
                 .intern(&format!("gs@@{}", *gensym_count)),
+            SymLoc::None,
         )))
     }
 }
@@ -1132,6 +1110,7 @@ fn builtin_get_error(
             Err(err) => {
                 let err_sym = Expression::alloc_data_h(ExpEnum::Symbol(
                     environment.interner.intern(":error"),
+                    SymLoc::None,
                 ));
                 let msg = format!("{}", err);
                 let err_msg = Expression::alloc_data_h(ExpEnum::String(msg.into(), None));
@@ -1144,7 +1123,10 @@ fn builtin_get_error(
             }
         }
     }
-    let ok = Expression::alloc_data_h(ExpEnum::Symbol(environment.interner.intern(":ok")));
+    let ok = Expression::alloc_data_h(ExpEnum::Symbol(
+        environment.interner.intern(":ok"),
+        SymLoc::None,
+    ));
     Ok(Expression::alloc_data_h(ExpEnum::Pair(
         ok,
         ret.unwrap_or_else(Expression::make_nil).into(),
@@ -1170,31 +1152,27 @@ fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
 
 fn make_doc(
     _environment: &mut Environment,
-    exp: &Reference,
+    exp: &Expression,
     key: &str,
-) -> Result<Expression, LispError> {
+    namespace: Rc<RefCell<Namespace>>,
+) -> Result<String, LispError> {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
-    new_docs.push_str(&exp.exp.display_type());
-    if let Some(ns) = &exp.meta.namespace {
-        new_docs.push_str("\nNamespace: ");
-        new_docs.push_str(&ns);
-    }
-    if let Some(doc_str) = &exp.meta.doc_string {
+    new_docs.push_str(&exp.display_type());
+    new_docs.push_str("\nNamespace: ");
+    new_docs.push_str(namespace.borrow().name());
+    if let Some(doc_str) = namespace.borrow().get_docs(key) {
         if !doc_str.contains("Usage:") {
-            add_usage(&mut new_docs, key, &exp.exp);
+            add_usage(&mut new_docs, key, &exp);
         }
         new_docs.push_str("\n\n");
         new_docs.push_str(&doc_str);
     } else {
-        add_usage(&mut new_docs, key, &exp.exp);
+        add_usage(&mut new_docs, key, &exp);
     }
     new_docs.push('\n');
-    Ok(Expression::alloc_data(ExpEnum::String(
-        new_docs.into(),
-        None,
-    )))
+    Ok(new_docs)
 }
 
 fn get_doc(
@@ -1207,7 +1185,7 @@ fn get_doc(
             let key = eval(environment, key)?;
             let key_d = &key.get().data;
             let key = match key_d {
-                ExpEnum::Symbol(s) => s,
+                ExpEnum::Symbol(s, _) => s,
                 _ => {
                     return Err(LispError::new("doc: first form must evaluate to a symbol"));
                 }
@@ -1218,8 +1196,8 @@ fn get_doc(
                 if let Some(namespace) = key_i.next() {
                     if let Some(key) = key_i.next() {
                         let namespace = if namespace == "ns" {
-                            if let Some(exp) = get_expression(environment, "*ns*") {
-                                match &exp.exp.get().data {
+                            if let Some(exp) = lookup_expression(environment, "*ns*") {
+                                match &exp.get().data {
                                     ExpEnum::String(s, _) => s.to_string(),
                                     _ => "NO_NAME".to_string(),
                                 }
@@ -1229,46 +1207,65 @@ fn get_doc(
                         } else {
                             namespace.to_string()
                         };
-                        if let Some(scope) = get_namespace(environment, &namespace) {
+                        if let Some(namespace) = get_namespace(environment, &namespace) {
                             if is_raw {
-                                if let Some(exp) = scope.borrow().data.get(key) {
-                                    if let Some(doc_string) = &exp.meta.doc_string {
-                                        return Ok(Expression::alloc_data(ExpEnum::String(
-                                            doc_string.to_string().into(),
-                                            None,
-                                        )));
-                                    } else {
-                                        return Ok(Expression::alloc_data(ExpEnum::Nil));
-                                    }
+                                if let Some(doc_string) = namespace.borrow().get_docs(key) {
+                                    return Ok(Expression::alloc_data(ExpEnum::String(
+                                        doc_string.to_string().into(),
+                                        None,
+                                    )));
+                                } else {
+                                    return Ok(Expression::alloc_data(ExpEnum::String(
+                                        "".into(),
+                                        None,
+                                    )));
                                 }
-                                return Ok(Expression::alloc_data(ExpEnum::Nil));
-                            } else if let Some(exp) = scope.borrow().data.get(key) {
-                                return make_doc(environment, &exp, key);
+                            } else if let Some(exp) = namespace.borrow().get(key) {
+                                return Ok(Expression::alloc_data(ExpEnum::String(
+                                    make_doc(environment, &exp, key, namespace.clone())?.into(),
+                                    None,
+                                )));
                             }
                         }
                     }
                 }
-                return Ok(Expression::alloc_data(ExpEnum::Nil));
-            } else if let Some(scope) = get_symbols_scope(environment, &key) {
-                if is_raw {
-                    if let Some(exp) = scope.borrow().data.get(key) {
-                        if let Some(doc_string) = &exp.meta.doc_string {
-                            return Ok(Expression::alloc_data(ExpEnum::String(
-                                doc_string.to_string().into(),
-                                None,
-                            )));
-                        } else {
-                            return Ok(Expression::alloc_data(ExpEnum::Nil));
+                return Ok(Expression::alloc_data(ExpEnum::String("".into(), None)));
+            } else {
+                let namespaces = get_symbol_namespaces(environment, &key);
+                if namespaces.is_empty() {
+                    return Err(LispError::new(
+                        "doc: first form must evaluate to an existing global symbol",
+                    ));
+                } else if is_raw {
+                    let mut doc_final = String::new();
+                    for namespace in namespaces {
+                        if let Some(doc_string) = namespace.borrow().get_docs(key) {
+                            doc_final.push_str(doc_string);
+                            doc_final.push('\n');
                         }
                     }
-                    return Ok(Expression::alloc_data(ExpEnum::Nil));
-                } else if let Some(exp) = scope.borrow().data.get(key) {
-                    return make_doc(environment, &exp, &key);
+                    return Ok(Expression::alloc_data(ExpEnum::String(
+                        doc_final.into(),
+                        None,
+                    )));
+                } else {
+                    let mut doc_final = String::new();
+                    for namespace in namespaces {
+                        if let Some(exp) = namespace.borrow().get(key) {
+                            doc_final.push_str(&make_doc(
+                                environment,
+                                &exp,
+                                key,
+                                namespace.clone(),
+                            )?);
+                            doc_final.push('\n');
+                        }
+                    }
+                    return Ok(Expression::alloc_data(ExpEnum::String(
+                        doc_final.into(),
+                        None,
+                    )));
                 }
-            } else {
-                return Err(LispError::new(
-                    "doc: first form must evaluate to an existing symbol",
-                ));
             }
         }
     }
@@ -1296,7 +1293,7 @@ pub fn builtin_block(
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
         let name_d = &name.get().data;
-        let name = if let ExpEnum::Symbol(n) = name_d {
+        let name = if let ExpEnum::Symbol(n, _) = name_d {
             n
         } else {
             return Err(LispError::new(
@@ -1343,7 +1340,7 @@ pub fn builtin_return_from(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(name) = args.next() {
-        let name = if let ExpEnum::Symbol(n) = &name.get().data {
+        let name = if let ExpEnum::Symbol(n, _) = &name.get().data {
             Some(*n)
         } else if name.is_nil() {
             None
@@ -1483,7 +1480,7 @@ pub fn builtin_meta_add_tags(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     fn put_tag(exp: &Expression, tag: Expression) -> Result<(), LispError> {
-        if let ExpEnum::Symbol(s) = &tag.get().data {
+        if let ExpEnum::Symbol(s, _) = &tag.get().data {
             let mut exp_d = exp.get_mut();
             if let Some(tags) = &mut exp_d.meta_tags {
                 tags.insert(s);
@@ -1513,7 +1510,7 @@ pub fn builtin_meta_add_tags(
                         put_tag(&exp, tag.into())?;
                     }
                 }
-                ExpEnum::Symbol(_) => {
+                ExpEnum::Symbol(_, _) => {
                     put_tag(&exp, arg.clone())?;
                 }
                 _ => {
@@ -1537,7 +1534,7 @@ pub fn builtin_meta_tag_set(
             if args.next().is_none() {
                 let tag = eval(environment, tag)?;
                 let tag_d = tag.get();
-                if let ExpEnum::Symbol(s) = &tag_d.data {
+                if let ExpEnum::Symbol(s, _) = &tag_d.data {
                     let exp_d = exp.get();
                     if let Some(tags) = &exp_d.meta_tags {
                         if tags.contains(s) {
@@ -1644,9 +1641,8 @@ pub fn builtin_greater_than_equal(
 
 pub fn add_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("eval"),
         Expression::make_function(
@@ -1668,31 +1664,6 @@ Example:
 (eval '(set! test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
 ",
-            root,
-        ),
-    );
-    data.insert(
-        interner.intern("eval-in-scope"),
-        Expression::make_function(
-            builtin_eval_in_scope,
-            "Usage: (eval-in-scope expression)
-
-Evaluate the provided expression.  Does so in the context of the current scope.
-
-If expression is a string read it to make an ast first to evaluate otherwise
-evaluate the expression (note eval is a function not a special form, the
-provided expression will be evaluated as part of call).
-
-Section: core
-
-Example:
-(def test-eval-one nil)
-(eval \"(set! test-eval-one \\\"ONE\\\")\")
-(test::assert-equal \"ONE\" test-eval-one)
-(eval '(set! test-eval-one \"TWO\"))
-(test::assert-equal \"TWO\" test-eval-one)
-",
-            root,
         ),
     );
     data.insert(
@@ -1710,7 +1681,6 @@ Example:
 (test::assert-equal \"ONE\" test-apply-one)
 (test::assert-equal 10 (apply + 1 '(2 7)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1745,7 +1715,7 @@ Example:
 (test::assert-equal nil test-unwind-two)
 (test::assert-equal \"set three\" test-unwind-three)
 (test::assert-equal \"set four\" test-unwind-four)
-", root
+",
         ),
     );
     data.insert(
@@ -1763,7 +1733,6 @@ Example:
 (test::assert-equal :error (car test-err-err))
 (test::assert-equal \"Test Error\" (cadr test-err-err))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1786,7 +1755,6 @@ Example:
 (test::assert-equal \"LOAD TEST\" test-load-one)
 (test::assert-equal '(1 2 3) test-load-two)
 ",
-            root,
         ),
     );
     data.insert(
@@ -1812,7 +1780,6 @@ Example:
 (test::assert-error (length 100.0))
 (test::assert-error (length #\\x))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1855,7 +1822,6 @@ Example:
 (test::assert-false (if nil))
 (test::assert-false (if nil t nil t nil t))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1873,7 +1839,6 @@ Example:
 (dyn *stdout* (open \"/tmp/sl-sh.print.test\" :create :truncate) (do (print \"Print test out\")(print \" two\") (close *stdout*)))
 (test::assert-equal \"Print test out two\" (read-line (open \"/tmp/sl-sh.print.test\" :read)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1893,7 +1858,6 @@ Example:
 (test::assert-equal \"Println test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1911,7 +1875,6 @@ Example:
 (dyn *stderr* (open \"/tmp/sl-sh.eprint.test\" :create :truncate) (do (eprint \"eprint test out\")(eprint \" two\") (close *stderr*)))
 (test::assert-equal \"eprint test out two\" (read-line (open \"/tmp/sl-sh.eprint.test\" :read)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1930,7 +1893,7 @@ Example:
 (def topen (open \"/tmp/sl-sh.eprintln.test\" :read))
 (test::assert-equal \"eprintln test out\n\" (read-line topen))
 (test::assert-equal \"line two\n\" (read-line topen))
-", root
+"
         ),
     );
     data.insert(
@@ -1951,7 +1914,6 @@ Example:
 (test::assert-equal \"string 50\" (format \"string\" \" \" 50))
 (test::assert-equal \"string 50 100.5\" (format \"string\" \" \" 50 \" \" 100.5))
 ",
-            root,
         ),
     );
     data.insert(
@@ -1972,13 +1934,11 @@ Example:
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("fn"),
         Expression::make_special_fn(
-            builtin_fn,
             "Usage: (fn (param*) expr*) -> exprN
 
 Create a function (lambda).
@@ -2006,13 +1966,11 @@ Example:
 (test::assert-equal 30 test-fn3)
 (test::assert-equal 63 ((fn (x y z) (set! test-fn1 x)(set! test-fn2 y)(set! test-fn3 z)(+ x y z)) 12 21 30))
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("quote"),
-        Expression::make_special(
-            builtin_quote,
+        Expression::make_special_quote(
             "Usage: 'expression -> expression
 
 Return expression without evaluation.
@@ -2025,13 +1983,11 @@ Example:
 (test::assert-equal (list 1 2 3) '(1 2 3))
 (test::assert-equal '(1 2 3) (quote (1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("back-quote"),
-        Expression::make_special(
-            builtin_bquote,
+        Expression::make_special_backquote(
             "Usage: `expression -> expression
 
 Return expression without evaluation.
@@ -2050,7 +2006,6 @@ Example:
 (test::assert-equal (list 1 2 3) `(,test-bquote-one 2 3))
 (test::assert-equal (list 1 2 3) `(,@test-bquote-list))
 ",
-            root,
         ),
     );
     /*data.insert(
@@ -2074,7 +2029,7 @@ Example:
 (test::assert-equal \"and- done\" (and t t \"and- done\"))
 (test::assert-equal 6 (and t t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
-", root),
+"),
     );
     data.insert(
         interner.intern("or"),
@@ -2096,7 +2051,6 @@ Example:
 (test::assert-equal 6 (or nil nil (+ 1 2 3)))
 (test::assert-equal 2 (or (/ 10 5) (* 5 2) (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2115,7 +2069,6 @@ Example:
 (test::assert-false (not t))
 (test::assert-false (not (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2134,13 +2087,11 @@ Example:
 (test::assert-false (null t))
 (test::assert-false (null (+ 1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("macro"),
-        Expression::make_function(
-            builtin_macro,
+        Expression::make_special_macro(
             "Usage: (macro (args) `(apply + ,@args))
 
 Define an anonymous macro.
@@ -2176,12 +2127,11 @@ Example:
 (test::assert-equal 30 test-macro1)
 (test::assert-equal 100 test-macro2)
 ",
-            root,
         ),
     );
     data.insert(
         interner.intern("expand-macro"),
-        Expression::make_special(
+        Expression::make_function(
             builtin_expand_macro,
             "Usage: (expand-macro expression)
 
@@ -2192,7 +2142,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(def xx \"value\") (expand-macro (def xx \"value\")))
+(test::assert-equal '(def xx \"value\") (expand-macro '(def xx \"value\")))
 
 (defmacro mac-test-for
     (bind in in_list body) (do
@@ -2217,60 +2167,58 @@ Example:
                     (if
                         (> (length plist) 1)
                         (recur (root::rest plist))))))) nil)
-    (expand-macro (mac-test-for i in '(1 2 3) ())))
+    (expand-macro '(mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro (1 2 3)))
+(test::assert-equal '(1 2 3) (expand-macro '(1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
-        interner.intern("expand-macro1"),
-        Expression::make_special(
-            builtin_expand_macro1,
-            "Usage: (expand-macro1 expression)
+            interner.intern("expand-macro1"),
+            Expression::make_function(
+                builtin_expand_macro1,
+                "Usage: (expand-macro1 expression)
 
-Expands a macro expression.  Only expand the first macro.
+    Expands a macro expression.  Only expand the first macro.
 
-Just returns the expression if not a macro.
+    Just returns the expression if not a macro.
 
-Section: core
+    Section: core
 
-Example:
-(test::assert-equal '(def xx \"value\") (expand-macro1 (def xx \"value\")))
+    Example:
+    (test::assert-equal '(def xx \"value\") (expand-macro1 '(def xx \"value\")))
 
-(defmacro mac-test-for
-    (bind in in_list body) (do
-	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
-    `((fn (,bind)
-        (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (do
-                (set! ,bind (root::first plist))
-                (,@body)
-                (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
+    (defmacro mac-test-for
+        (bind in in_list body) (do
+        (if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
+        `((fn (,bind)
+            (if (> (length ,in_list) 0)
+                (root::loop (plist) (,in_list) (do
+                    (set! ,bind (root::first plist))
+                    (,@body)
+                    (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
 
-(test::assert-equal '((fn
-    (i)
-    (if
-        (> (length '(1 2 3)) 0)
-        (root::loop
-            (plist)
-            ('(1 2 3))
-            (do
-                (set! i (root::first plist)) nil
-                (if
-                    (> (length plist) 1)
-                    (recur (root::rest plist)))))))nil)
-    (expand-macro1 (mac-test-for i in '(1 2 3) ())))
+    (test::assert-equal '((fn
+        (i)
+        (if
+            (> (length '(1 2 3)) 0)
+            (root::loop
+                (plist)
+                ('(1 2 3))
+                (do
+                    (set! i (root::first plist)) nil
+                    (if
+                        (> (length plist) 1)
+                        (recur (root::rest plist)))))))nil)
+        (expand-macro1 '(mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro1 (1 2 3)))
-",
-            root,
-        ),
-    );
+    (test::assert-equal '(1 2 3) (expand-macro1 '(1 2 3)))
+    ",
+            ),
+        );
     data.insert(
         interner.intern("expand-macro-all"),
-        Expression::make_special(
+        Expression::make_function(
             builtin_expand_macro_all,
             "Usage: (expand-macro-all expression)
 
@@ -2281,7 +2229,7 @@ Just returns the expression if not a macro.
 Section: core
 
 Example:
-(test::assert-equal '(def xx \"value\") (expand-macro-all (def xx \"value\")))
+(test::assert-equal '(def xx \"value\") (expand-macro-all '(def xx \"value\")))
 
 (defmacro mac-test-for
     (bind in in_list body) (do
@@ -2307,11 +2255,10 @@ Example:
                             (> (length plist) 1)
                             (recur (root::rest plist)))))
                 '(1 2 3)))) nil)
-    (expand-macro-all (mac-test-for i in '(1 2 3) ())))
+    (expand-macro-all '(mac-test-for i in '(1 2 3) ())))
 
-(test::assert-equal '(1 2 3) (expand-macro-all (1 2 3)))
+(test::assert-equal '(1 2 3) (expand-macro-all '(1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2345,7 +2292,6 @@ Example:
     (if (> idx 1) (recur (- idx 1)))))5)
 (assert-equal 5 tot)
 ",
-            root,
         ),
     );
     data.insert(
@@ -2373,7 +2319,6 @@ Example:
 (test::assert-true (symbol? test-gensym-two))
 (test::assert-true (symbol? test-gensym-three))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2389,7 +2334,6 @@ Section: shell
 Example:
 (test::assert-true (string? (version)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2405,7 +2349,7 @@ Section: shell
 Example:
 (test::assert-equal \"Failed to execute [str string]: No such file or directory (os error 2)\" (cadr (get-error (command (str \"string\")))))
 (test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
-", root
+"
         ),
     );
     data.insert(
@@ -2422,7 +2366,6 @@ Example:
 (test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2439,7 +2382,6 @@ Example:
 (test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
 (test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2463,7 +2405,7 @@ Example:
 (test::assert-true (vec? (caddr get-error-t1)))
 (test::assert-equal '(:ok . \"Some String\") (get-error \"Some String\"))
 (test::assert-equal '(:ok . \"Some Other String\") (get-error (def test-get-error \"Some \") (str test-get-error \"Other String\")))
-", root
+"
         ),
     );
     data.insert(
@@ -2480,7 +2422,6 @@ Example:
 ;(doc 'car)
 t
 ",
-            root,
         ),
     );
     data.insert(
@@ -2497,7 +2438,6 @@ Example:
 ;(doc-raw 'car)
 t
 ",
-            root,
         ),
     );
 
@@ -2518,7 +2458,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-", root
+"
         ),
     );
 
@@ -2538,7 +2478,7 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
-", root
+"
         ),
     );
 
@@ -2556,7 +2496,6 @@ Example:
 ;(intern-stats)
 t
 ",
-            root,
         ),
     );
 
@@ -2574,7 +2513,6 @@ Example:
 ;(meta-line-no)
 t
 ",
-            root,
         ),
     );
 
@@ -2592,7 +2530,6 @@ Example:
 ;(meta-column-no)
 t
 ",
-            root,
         ),
     );
 
@@ -2610,7 +2547,6 @@ Example:
 ;(meta-file-name)
 t
 ",
-            root,
         ),
     );
 
@@ -2640,7 +2576,6 @@ Example:
 (test::assert-true (meta-tag? meta-add-tags-var :tag6))
 (test::assert-true (meta-tag? meta-add-tags-var :tag7))
 ",
-            root,
         ),
     );
 
@@ -2661,7 +2596,6 @@ Example:
 (test::assert-true (meta-tag? meta-add-tag-var :tag1))
 (test::assert-false (meta-tag? meta-add-tag-var :tag2))
 ",
-            root,
         ),
     );
 
@@ -2697,7 +2631,6 @@ Example:
 (test::assert-false (= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (= \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2729,7 +2662,6 @@ Example:
 (test::assert-true (> \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (> \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2760,7 +2692,6 @@ Example:
 (test::assert-true (>= \"ccc\" \"aab\" \"aaa\"))
 (test::assert-false (>= \"aaa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2791,7 +2722,6 @@ Example:
 (test::assert-true (< \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (< \"baa\" \"aab\"))
 ",
-            root,
         ),
     );
     data.insert(
@@ -2821,7 +2751,6 @@ Example:
 (test::assert-true (<= \"aaa\" \"aab\" \"ccc\"))
 (test::assert-false (<= \"baa\" \"aab\"))
 ",
-            root,
         ),
     );
     fn to_cow(input: &'static [u8]) -> Cow<'static, str> {
@@ -2829,12 +2758,9 @@ Example:
     }
     data.insert(
         interner.intern("*core-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(CORE_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *core-src*)
+        (
+            ExpEnum::String(to_cow(CORE_LISP), None).into(),
+            "Usage: (print *core-src*)
 
 The builtin source code for core.lisp.
 
@@ -2844,19 +2770,14 @@ Example:
 ;(print *core-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*struct-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(STRUCT_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *struct-src*)
+        (
+            ExpEnum::String(to_cow(STRUCT_LISP), None).into(),
+            "Usage: (print *struct-src*)
 
 The builtin source code for struct.lisp.
 
@@ -2866,19 +2787,14 @@ Example:
 ;(print *struct-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*iterator-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(ITERATOR_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *iterator-src*)
+        (
+            ExpEnum::String(to_cow(ITERATOR_LISP), None).into(),
+            "Usage: (print *iterator-src*)
 
 The builtin source code for iterator.lisp.
 
@@ -2888,19 +2804,14 @@ Example:
 ;(print *iterator-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*collection-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(COLLECTION_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *collection-src*)
+        (
+            ExpEnum::String(to_cow(COLLECTION_LISP), None).into(),
+            "Usage: (print *collection-src*)
 
 The builtin source code for collection.lisp.
 
@@ -2910,19 +2821,14 @@ Example:
 ;(print *collection-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*seq-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SEQ_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *seq-src*)
+        (
+            ExpEnum::String(to_cow(SEQ_LISP), None).into(),
+            "Usage: (print *seq-src*)
 
 The builtin source code for seq.lisp.
 
@@ -2932,19 +2838,14 @@ Example:
 ;(print *seq-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*shell-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SHELL_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *shell-src*)
+        (
+            ExpEnum::String(to_cow(SHELL_LISP), None).into(),
+            "Usage: (print *shell-src*)
 
 The builtin source code for shell.lisp.
 
@@ -2954,19 +2855,14 @@ Example:
 ;(print *shell-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*endfix-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(ENDFIX_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *endfix-src*)
+        (
+            ExpEnum::String(to_cow(ENDFIX_LISP), None).into(),
+            "Usage: (print *endfix-src*)
 
 The builtin source code for endfix.lisp.
 
@@ -2976,19 +2872,14 @@ Example:
 ;(print *endfix-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*test-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(TEST_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *test-src*)
+        (
+            ExpEnum::String(to_cow(TEST_LISP), None).into(),
+            "Usage: (print *test-src*)
 
 The builtin source code for test.lisp.
 
@@ -2998,19 +2889,14 @@ Example:
 ;(print *test-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*slsh-std-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SLSH_STD_LISP), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *slsh-std-src*)
+        (
+            ExpEnum::String(to_cow(SLSH_STD_LISP), None).into(),
+            "Usage: (print *slsh-std-src*)
 
 The builtin source code for slsh-std.lisp.
 
@@ -3020,19 +2906,14 @@ Example:
 ;(print *slsh-std-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
     data.insert(
         interner.intern("*slshrc-src*"),
-        Reference::new(
-            ExpEnum::String(to_cow(SLSHRC), None),
-            RefMetaData {
-                namespace: Some(root),
-                doc_string: Some(
-                    "Usage: (print *slshrc-src*)
+        (
+            ExpEnum::String(to_cow(SLSHRC), None).into(),
+            "Usage: (print *slshrc-src*)
 
 The builtin source code for slshrc.
 
@@ -3042,9 +2923,7 @@ Example:
 ;(print *slshrc-src*)
 t
 "
-                    .to_string(),
-                ),
-            },
+            .to_string(),
         ),
     );
 }

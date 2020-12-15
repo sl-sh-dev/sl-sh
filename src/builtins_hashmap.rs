@@ -24,10 +24,12 @@ fn build_map(
     for key_val in assocs {
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             let key: Expression = key.into();
-            let val: Expression = val.into();
-            let val: Handle = eval(environment, val)?.into();
+            // XXX TODO- remove this?  This went in 10/29/2020 but seems more trouble then it's
+            // worth.  Commenting to think about it a little more.
+            //let val: Expression = val.into();
+            //let val: Handle = eval(environment, val)?.into();
             match &key.get().data {
-                ExpEnum::Symbol(sym) => map.insert(sym, val.clone()),
+                ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
                 ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
                 ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, &ch), val.clone()),
                 _ => {
@@ -85,7 +87,7 @@ fn builtin_hash_set(
                     if let ExpEnum::HashMap(map) = &mut exp_map_d.data {
                         let val: Handle = val.into();
                         match &key.get().data {
-                            ExpEnum::Symbol(sym) => {
+                            ExpEnum::Symbol(sym, _) => {
                                 map.insert(*sym, val);
                                 return Ok(exp_map.clone());
                             }
@@ -132,7 +134,7 @@ fn builtin_hash_remove(
                 let mut map_d = map.get_mut();
                 if let ExpEnum::HashMap(map) = &mut map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_rem(map, sym);
                         }
                         ExpEnum::String(s, _) => {
@@ -189,7 +191,7 @@ fn builtin_hash_get(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_get(environment, map, sym, default);
                         }
                         ExpEnum::String(s, _) => {
@@ -232,7 +234,7 @@ fn builtin_hash_haskey(
                 let map_d = map.get();
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
-                        ExpEnum::Symbol(sym) => {
+                        ExpEnum::Symbol(sym, _) => {
                             return do_has(map, sym);
                         }
                         ExpEnum::String(s, _) => {
@@ -272,6 +274,7 @@ fn builtin_hash_keys(
                 for key in map.keys() {
                     key_list.push(Expression::alloc_data_h(ExpEnum::Symbol(
                         environment.interner.intern(key),
+                        SymLoc::None,
                     )));
                 }
                 return Ok(Expression::with_list(key_list));
@@ -302,9 +305,8 @@ fn builtin_hash_clear(
 
 pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("make-hash"),
         Expression::make_function(
@@ -335,7 +337,7 @@ Example:
 (test::assert-equal \"val one\" (hash-get tst-hash :keyv1))
 (test::assert-equal \"val two\" (hash-get tst-hash 'keyv2))
 (test::assert-equal \"val three\" (hash-get tst-hash \"keyv3\"))
-", root
+"
         ),
     );
     data.insert(
@@ -374,7 +376,6 @@ Example:
 (test::assert-equal \"val three b\" (hash-get tst-hash \"key3\"))
 (test::assert-equal '(1 2 3) (hash-get tst-hash :new-key))
 ",
-            root,
         ),
     );
     data.insert(
@@ -409,7 +410,6 @@ Example:
 (hash-remove! tst-hash #\\S)
 (test::assert-equal 0 (length (hash-keys tst-hash)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -434,7 +434,6 @@ Example:
 (test::assert-equal \"default\" (hash-get tst-hash :not-here \"default\"))
 (test::assert-equal \"string default\" (hash-get tst-hash :not-here (str \"string \" \"default\")))
 ",
-            root,
         ),
     );
     data.insert(
@@ -462,7 +461,6 @@ Example:
 (hash-set! tst-hash :key1 \"val one b\")
 (test::assert-true (hash-haskey tst-hash :key1))
 ",
-            root,
         ),
     );
     data.insert(
@@ -485,7 +483,6 @@ Example:
 (test::assert-true (in? (hash-keys tst-hash) 'key3) \" Test key3\")
 (test::assert-false (in? (hash-keys tst-hash) :key4))
 ",
-            root,
         ),
     );
     data.insert(
@@ -512,7 +509,6 @@ Example:
 (test::assert-false (hash-haskey tst-hash \"key3\"))
 (test::assert-false (hash-haskey tst-hash #\\S))
 ",
-            root,
         ),
     );
 }

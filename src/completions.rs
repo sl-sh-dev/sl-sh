@@ -91,19 +91,17 @@ impl<'env> ShellCompleter<'env> {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let hook_name = if let Some(ns) = self.environment.namespace.borrow().name {
-            self.environment
-                .interner
-                .intern(&format!("{}::__completion_hook", ns))
-        } else {
-            self.environment.interner.intern("__completion_hook")
-        };
-        let comp_exp = get_expression(&self.environment, hook_name);
+        let ns = self.environment.namespace.borrow().name();
+        let hook_name = self
+            .environment
+            .interner
+            .intern(&format!("{}::__completion_hook", ns));
+        let comp_exp = lookup_expression(&self.environment, hook_name);
         if let Some(comp_exp) = comp_exp {
-            let exp = match &comp_exp.exp.get().data {
+            let exp = match &comp_exp.get().data {
                 ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
-                    let data = ExpEnum::Symbol(hook_name);
+                    let data = ExpEnum::Symbol(hook_name, SymLoc::None);
                     v.push(Expression::alloc_data(data).handle_no_root());
                     for a in self.args.drain(..) {
                         v.push(
@@ -122,7 +120,7 @@ impl<'env> ShellCompleter<'env> {
             match eval(self.environment, exp) {
                 Ok(res) => {
                     match &res.get().data {
-                        ExpEnum::Symbol(s) => match *s {
+                        ExpEnum::Symbol(s, _) => match *s {
                             ":path" => HookResult::Path,
                             ":default" => HookResult::Default,
                             _ => {
@@ -284,8 +282,8 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
         None => org_start,
     };
 
-    let (start, need_quotes) = if org_start.starts_with('"') {
-        (&org_start[1..], true)
+    let (start, need_quotes) = if let Some(new_start) = org_start.strip_prefix('"') {
+        (new_start, true)
     } else {
         (org_start, false)
     };
@@ -310,7 +308,7 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
             }
             pat.push('/');
         } else {
-            pat.push_str("*");
+            pat.push('*');
             pat.push('/');
         }
     }
@@ -375,8 +373,8 @@ fn get_path_matches(start: &str) -> Vec<String> {
 }
 
 fn get_env_matches(start: &str) -> Vec<String> {
-    let env_start = if start.starts_with('$') {
-        &start[1..]
+    let env_start = if let Some(new_start) = start.strip_prefix('$') {
+        new_start
     } else {
         start
     };
@@ -427,39 +425,36 @@ fn find_lisp_things(
         if let Some(namespace) = key_i.next() {
             if let Some(scope) = environment.namespaces.get(namespace) {
                 if let Some(start) = key_i.next() {
-                    let data = &scope.borrow().data;
-                    for key in data.keys() {
+                    let scope = scope.borrow();
+                    //let map = &scope.map;
+                    for key in scope.keys() {
                         if key.starts_with(start) {
                             let val = if need_quote {
                                 format!("'{}::{}", namespace, key)
                             } else {
                                 format!("{}::{}", namespace, key)
                             };
-                            save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                            save_val(comps, &scope.get(key).unwrap(), val, symbols);
                         }
                     }
                 }
             }
         }
     } else {
-        let mut loop_scope = if !environment.scopes.is_empty() {
-            Some(environment.scopes.last().unwrap().clone())
-        } else {
-            Some(environment.namespace.clone())
-        };
+        let mut loop_scope = Some(environment.namespace.clone());
         while let Some(scope) = loop_scope {
-            let data = &scope.borrow().data;
-            for key in data.keys() {
+            let scope = scope.borrow();
+            for key in scope.keys() {
                 if key.starts_with(start) {
                     let val = if need_quote {
                         format!("'{}", key)
                     } else {
                         (*key).to_string()
                     };
-                    save_val(comps, &data.get(key).unwrap().exp, val, symbols);
+                    save_val(comps, &scope.get(key).unwrap(), val, symbols);
                 }
             }
-            loop_scope = scope.borrow().outer.clone();
+            loop_scope = scope.outer();
         }
     }
 }
@@ -469,8 +464,8 @@ fn find_lisp_fns(environment: &Environment, comps: &mut Vec<String>, start: &str
 }
 
 fn find_lisp_symbols(environment: &Environment, comps: &mut Vec<String>, org_start: &str) {
-    let (start, need_quote) = if org_start.starts_with('\'') {
-        (&org_start[1..], true)
+    let (start, need_quote) = if let Some(new_start) = org_start.strip_prefix('\'') {
+        (new_start, true)
     } else {
         (org_start, false)
     };

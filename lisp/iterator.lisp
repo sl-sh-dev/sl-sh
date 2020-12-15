@@ -4,6 +4,55 @@
 (def defstruct struct::defstruct)
 (def deftrait struct::deftrait)
 
+(defmacro for
+"
+Loops over each element in an iterator.  Will call iter on the input object.
+bind is bound to the current element of items and is accesible
+in body. body is evaluated a number of times equal to the the number of items
+in in_list.
+
+Section: iterator
+
+Example:
+(def i 0)
+(iterator::for x in (iterator::range 11) (set! i (+ 1 i)))
+(assert-equal 11 i)
+"
+    (bind in items body) (do
+    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
+    `(loop (plist) ((iterator::iter ,items))
+         (if (not (plist :empty?)) (do
+             (var ,bind (plist :next!))
+             (,@body)
+             (recur plist))))))
+
+(defmacro for-i
+"
+Loops over each element in an iterator.  Will call iter on the input object.
+idx-bind is bound to an incrementing number starting with 0.
+bind is bound to the current element of items and is accesible
+in body. body is evaluated a number of times equal to the the number of items
+in in_list.
+
+Section: iterator
+
+Example:
+(def i 0)
+(def i-tot 0)
+(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (do (set! i-tot (+ idx i-tot))(set! i (+ 1 i))))
+(assert-equal 11 i)
+(assert-equal 55 i-tot)
+"
+    (idx-bind bind in items body) (do
+    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
+    (var loop-idx (gensym))
+    `(loop (plist ,loop-idx) ((iterator::iter ,items) 0)
+         (if (not (plist :empty?)) (do
+             (var ,bind (plist :next!))
+             (var ,idx-bind ,loop-idx)
+             (,@body)
+             (recur plist (+ ,loop-idx 1)))))))
+
 (deftrait iterator
 "Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))
 
@@ -178,8 +227,8 @@ Example:
   (current 0)
   (current-end 2)
   ; methods
-  (:fn next! (self) (do (def val current)(set! current (+ 1 current)) val))
-  (:fn next-back! (self) (do (def val current-end)(set! current-end (- current-end 1)) val))
+  (:fn next! (self) (do (var val current)(set! current (+ 1 current)) val))
+  (:fn next-back! (self) (do (var val current-end)(set! current-end (- current-end 1)) val))
   (:fn empty? (self) (> current current-end))
   (:impl iterator::iterator iterator::double-ended-iterator))
 (def tmap (test-double-iter))
@@ -312,7 +361,7 @@ Example:
   (:fn nth-back! (self idx) (do (set! end (- end idx))(self :next-back!)))
   (:fn init (self v s) (do (if (vec? v)
                                 (do (set! data v) (set! start s) (set! end (- (length v) 1)))
-                                (err "seq-vec requires a vector")) self))
+                                (err (str "vec-iter requires a vector, got " (type v) ", " v))) self))
   (:impl iterator::iterator iterator::double-ended-iterator))
 
 (defstruct string-iter
@@ -453,11 +502,20 @@ Example:
   (:fn init (self &rest rest-iters) (do
     (var tcell nil)
     (var tseq nil)
-    (iterator::for v in rest-iters (do
+    ((fn (rest-iters)
+        (if (non-empty-seq? rest-iters)
+          (do
+            (var v (first rest-iters))
+            (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
+                (set! tcell (join (iterator::iter-or-single v) nil))
+                (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
+                (set! tseq tcell)))
+            (recur (rest rest-iters)))))rest-iters)
+    #|XXXX (iterator::for v in rest-iters (do
         (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
             (set! tcell (join (iterator::iter-or-single v) nil))
             (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
-            (set! tseq tcell)))))
+            (set! tseq tcell)))))|#
     self))
   (:impl iterator::iterator))
 
@@ -607,19 +665,19 @@ Example:
 Section: iterator
 
 Example:
-(def test-iter ((single-iter) :init 3))
+(def test-iter ((iterator::single-iter) :init 3))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def test-iter ((single-iter) :init \"iter\"))
+(def test-iter ((iterator::single-iter) :init \"iter\"))
 (assert-false (test-iter :empty?))
 (assert-equal \"iter\" (test-iter :next!))
 (assert-true (test-iter :empty?))
-(def test-iter ((single-iter) :init 3))
+(def test-iter ((iterator::single-iter) :init 3))
 (assert-false (test-iter :empty?))
 (assert-equal 3 (test-iter :next-back!))
 (assert-true (test-iter :empty?))
-(def test-iter ((single-iter) :init \"iter\"))
+(def test-iter ((iterator::single-iter) :init \"iter\"))
 (assert-false (test-iter :empty?))
 (assert-equal \"iter\" (test-iter :next-back!))
 (assert-true (test-iter :empty?))
@@ -681,6 +739,7 @@ Example:
   (if (iter? thing)
         thing
       (list? thing)
+        ;(do (println "XXXX listing") (var ret ((list-iter) :init thing)) (println "XXXX post listing") ret)
         ((list-iter) :init thing)
       (vec? thing)
         ((vec-iter) :init thing 0)
@@ -1088,55 +1147,6 @@ Example:
         (err "append-to!: First element not a list or vector."))
     ret))
 
-(defmacro for
-"
-Loops over each element in an iterator.  Will call iter on the input object.
-bind is bound to the current element of items and is accesible
-in body. body is evaluated a number of times equal to the the number of items
-in in_list.
-
-Section: iterator
-
-Example:
-(def i 0)
-(iterator::for x in (iterator::range 11) (set! i (+ 1 i)))
-(assert-equal 11 i)
-"
-    (bind in items body) (do
-    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    `(loop (plist) ((iterator::iter ,items))
-         (if (not (plist :empty?)) (do
-             (var ,bind (plist :next!))
-             (,@body)
-             (recur plist))))))
-
-(defmacro for-i
-"
-Loops over each element in an iterator.  Will call iter on the input object.
-idx-bind is bound to an incrementing number starting with 0.
-bind is bound to the current element of items and is accesible
-in body. body is evaluated a number of times equal to the the number of items
-in in_list.
-
-Section: iterator
-
-Example:
-(def i 0)
-(def i-tot 0)
-(for-i idx x in '(1 2 3 4 5 6 7 8 9 10 11) (do (set! i-tot (+ idx i-tot))(set! i (+ 1 i))))
-(assert-equal 11 i)
-(assert-equal 55 i-tot)
-"
-    (idx-bind bind in items body) (do
-    (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    (var loop-idx (gensym))
-    `(loop (plist ,loop-idx) ((iterator::iter ,items) 0)
-         (if (not (plist :empty?)) (do
-             (var ,bind (plist :next!))
-             (var ,idx-bind ,loop-idx)
-             (,@body)
-             (recur plist (+ ,loop-idx 1)))))))
-
 (ns-export '(
     iterator
     double-ended-iterator
@@ -1172,3 +1182,4 @@ Example:
     for-i))
 
 (ns-pop)
+

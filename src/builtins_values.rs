@@ -56,9 +56,8 @@ fn builtin_values_length(
 
 pub fn add_values_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("values"),
         Expression::make_function(
@@ -77,7 +76,6 @@ Example:
 (test::assert-equal \"str\" (values-nth 1 (values 1 \"str\" 5.5)))
 (test::assert-equal 5.5 (values-nth 2 (values 1 \"str\" 5.5)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -99,7 +97,6 @@ Example:
 (test::assert-equal \"str\" (values-nth 1 test-vals-nth))
 (test::assert-equal 5.5 (values-nth 2 test-vals-nth))
 ",
-            root,
         ),
     );
     data.insert(
@@ -122,7 +119,6 @@ Example:
 (def test-vals-len (values 1 \"str\" 5.5))
 (test::assert-equal 3 (values-length test-vals-len))
 ",
-            root,
         ),
     );
 }

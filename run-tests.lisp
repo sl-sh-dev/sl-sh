@@ -21,9 +21,13 @@
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
 
-(defn exec-str (docstring) (do
+(defn exec-str (docstring)
 	(var test (vec-nth (str-split "Example:" docstring) 1))
-	(fn () (eval (str "(do " test ")")))))
+	(fn ()
+		(var exp (read test :done))
+		(if (not (= exp :done))
+			(do (eval exp) (recur)))))
+	;(fn () (for exp in (read-all test) (eval exp)))))
 
 (defn all-items-by-whitespace (producer)
 	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
@@ -146,8 +150,8 @@
 ;; run tests for root namespaces
 (lex
 (printer (str "Tests from root"))
-(var sym-list (qsort (ns-symbols 'root)))
-(set! sym-list (make-test-list-from-symbols sym-list "root"))
+(var sym-list (qsort (ns-symbols 'root)));'root)))
+(set! sym-list (make-test-list-from-symbols sym-list "root"));"root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 
 ;; run tests for root namespace special namespace tests (ns cmd can not be run

@@ -16,14 +16,16 @@ Section: shell
 	(name &rest args)
 	(var usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
 	(shell::register-alias name)
+	(var docstring nil)
+	(var body nil)
 	(match (length args)
 		(2 (do
-			(var docstring (vec-nth args 0))
-			(var body (vec-nth args 1))
+			(set! docstring (vec-nth args 0))
+			(set! body (vec-nth args 1))
 			`(defmacro ,name ,docstring (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(1 (do
-			(var body (vec-nth args 0))
+			(set! body (vec-nth args 0))
 			`(defmacro ,name (&rest ars)
 				(iterator::collect (iterator::append (quote ,body) ars)))))
 		(0 (err usage))
@@ -366,7 +368,9 @@ Section: shell
 		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
-      (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      ;XXX TODO- fix let...(let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
+      (do 
+        (var make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m")))
       (match color-type
              (:font (make-color 38))
              (:bkrd (make-color 48))
@@ -382,7 +386,7 @@ True if the supplied command is an alias for a system command.
 
 Section: shell
 "
-	(com) `(do
+	(com) `((fn ()
 	(var ret nil)
 	(var val (shell::find-symbol ,com))
 	(if (def? (ref val))
@@ -390,7 +394,7 @@ Section: shell
 	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
 		(var expansion (expand-macro (val)))
 		(set! ret (sys-command? (sym->str (first expansion))))))
-	ret))
+	ret)))
 
 (defn sys-command?
 "
@@ -415,7 +419,8 @@ Example:
 					(if (and (fs-exists? path)(not ret)) (set! ret t)))))))
 	ret)
 
-(let ((alias (make-hash)))
+;(let ((alias (make-hash)))
+((fn (alias)
 	(defn ns::register-alias
 		"
 		Registers an alias to the current scope. Useful if unregistering or
@@ -438,7 +443,7 @@ Example:
 
 		Section: shell
 		"
-		(name) (hash-haskey alias name)))
+		(name) (hash-haskey alias name)))(make-hash))
 
 ; These will be imported with syntax-on (ie copied into another namespace).
 ; Since syntax-on is a macro these copies are what will be read/used in that
@@ -451,14 +456,15 @@ Example:
 (def tok-string-color shell::*fg-magenta*)
 (def tok-invalid-color shell::*fg-red*)
 
-(defmacro syntax-on
+;(defmacro syntax-on
+(defn syntax-on
   "
   Turn on syntax highlighting at the repl.
 
   Section: shell
   "
   ()
-  '(lex
+  ;'(lex
      (var plev 0)
      (var ch nil)
      (var bad-syms (make-hash))
@@ -468,11 +474,13 @@ Example:
      (var in-sys-command nil)
      (var tok-command t)
 
-     (varfn func? (com)
+     (varfn syn-func? (com)
             ; Want the actual thing pointed to by the symbol in com for the test.
             (set! com (shell::find-symbol com))
             (if (def? (ref com))
-              (do (set! com (eval (sym com))) (or(builtin? com)(lambda? com)(macro? com)))
+              (do
+                (set! com (eval (sym com)))
+                (or (builtin? com) (lambda? com) (macro? com)))
               nil))
 
      (varfn paren-color (level)
@@ -496,13 +504,13 @@ Example:
             (var ns-command (shell::find-symbol command))
             (if (not tok-command)
               (if (def? (ref ns-command))
-                (if (func? command)
+                (if (syn-func? command)
                   (if in-sys-command
                     (str shell::tok-default-color command shell::*fg-default*)
                     (str shell::tok-slsh-fcn-color command shell::*fg-default*))
                   (str shell::tok-slsh-form-color command shell::*fg-default*))
                 (str shell::tok-default-color command shell::*fg-default*))
-              (if (func? command)
+              (if (syn-func? command)
                 (if (or (shell::alias? command)(shell::sys-alias? command))
                   (do
                     (set! in-sys-command t)
@@ -580,7 +588,7 @@ Example:
            (var result (get-error (line-handler line)))
            (if (= :error (car result)) (shell::print-error result) (cdr result)))
 
-     nil))
+     nil);)
 
 (defmacro syntax-off
   "
@@ -591,6 +599,7 @@ Example:
   () '(undef __line_handler))
 
 (load "endfix.lisp")
+
 (defmacro endfix-on "
 Allows use of infix notation for common shell forms. The following is the
 complete mapping in lisp/endfix.lisp of all supported infix operators and
@@ -659,32 +668,42 @@ Section: shell
     (set! *last-command* line))
 
 (defn repl-line (line line-len)
-      (do
-        (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
-        (var my-read (if strict? read read-all))
-        (export 'LAST_STATUS "0")
-        (set! *last-status* 0)
+    (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
+    (var my-read (if strict? read read-all))
+    (export 'LAST_STATUS "0")
+    (set! *last-status* 0)
+    (var result nil)
+
+    ; This next section is odd, it makes sure the eval happens in the active
+    ; namespace NOT shell since that is the namespace if repl-line is the last
+    ; function to be called.
+    (ns-push *active-ns*)
+    (varfn do-eval fn ()
         (var exec-hook (sym *active-ns* "::__exec_hook"))
         (var ast (if (and (not strict?)(def? (ref exec-hook))(lambda? (eval exec-hook)))
                     (apply exec-hook line nil)
                     (my-read line)))
         (set! ast (if (string? ast) (my-read ast) ast))
-        (var result (if strict? (get-error (eval ast))(loose-symbols (get-error (eval ast)))))
-        (if (= :ok (car result))
+        (if strict? (eval ast)(loose-symbols (eval ast))))
+    (ns-pop)
+    (set! result (get-error (do-eval)))
+    ; end weird namespace section
+
+    (if (= :ok (car result))
+      (do
+        (if (process? (cdr result)) nil
+          (and (not strict?)(nil? (cdr result))) nil
+          (file? (cdr result)) nil
+          (println (cdr result)))
+        (if (> line-len 0)
           (do
-            (if (process? (cdr result)) nil
-              (and (not strict?)(nil? (cdr result))) nil
-              (file? (cdr result)) nil
-              (println (cdr result)))
-            (if (> line-len 0)
-              (do
-                (when (not (= "fc" (str-trim line)))
-                  (handle-last-command line)))))
-          (do
-            (set! *last-command* line)
-            ; Save temp history
-            (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
-            (print-error result)))))
+            (when (not (= "fc" (str-trim line)))
+              (handle-last-command line)))))
+      (do
+        (set! *last-command* line)
+        ; Save temp history
+        (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
+        (print-error result))))
 
 (defn repl ()
       (var get-prompt (fn ()
@@ -734,7 +753,7 @@ Section: shell"
                     (do
                         (handle-last-command (str-trim file-contents))
                         (eval (read-all (str (cat fc-file))))))))))
-
+; XXX TODO- alias as the first item is a bug, fix it.
 (ns-export '(
 	alias
 	register-alias

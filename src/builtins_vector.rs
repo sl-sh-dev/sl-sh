@@ -140,7 +140,11 @@ fn builtin_vec_nth(
                 Ok(list[*idx as usize].clone().into())
             }
         } else {
-            Err(LispError::new("vec-nth: first form must be a vector"))
+            Err(LispError::new(format!(
+                "vec-nth: first form must be a vector, got {} {}",
+                vector.display_type(),
+                vector
+            )))
         }
     } else {
         Err(LispError::new("vec-nth: second form must be an int"))
@@ -184,12 +188,20 @@ fn builtin_vec_push(
             if args.next().is_none() {
                 let new_item = eval(environment, new_item)?;
                 let vec = eval(environment, list)?;
-                return match &mut vec.get_mut().data {
+                let mut vec_d = vec.get_mut();
+                return match &mut vec_d.data {
                     ExpEnum::Vector(list) => {
                         list.push(new_item.handle_no_root());
                         Ok(vec.clone())
                     }
-                    _ => Err(LispError::new("vec-push!'s first form must be a vector")),
+                    _ => {
+                        drop(vec_d);
+                        Err(LispError::new(format!(
+                            "vec-push!'s first form must be a vector, got {} {}",
+                            vec.display_type(),
+                            vec
+                        )))
+                    }
                 };
             }
         }
@@ -322,9 +334,8 @@ fn builtin_vec_insert(
 
 pub fn add_vec_builtins<S: BuildHasher>(
     interner: &mut Interner,
-    data: &mut HashMap<&'static str, Reference, S>,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
-    let root = interner.intern("root");
     data.insert(
         interner.intern("vec"),
         Expression::make_function(
@@ -339,7 +350,6 @@ Example:
 (test::assert-false (vec))
 (test::assert-equal '(1 2 3) (vec 1 2 3))
 ",
-            root,
         ),
     );
     data.insert(
@@ -358,7 +368,6 @@ Example:
 (test::assert-equal '(nil nil nil nil nil) (make-vec 5 nil))
 (test::assert-equal '() (make-vec 5))
 ",
-            root,
         ),
     );
     data.insert(
@@ -377,7 +386,6 @@ Example:
 (test::assert-equal '(3 4 5) (vec-slice '#(1 2 3 4 5 6) 2 5))
 (test::assert-equal '(3 4 5 6) (vec-slice '#(1 2 3 4 5 6) 2))
 ",
-            root,
         ),
     );
     data.insert(
@@ -397,7 +405,6 @@ Example:
 (test::assert-equal 3 (vec-nth '#(1 2 3 4 5 6) 2))
 (test::assert-equal 6 (vec-nth '#(1 2 3 4 5 6) 5))
 ",
-            root,
         ),
     );
     data.insert(
@@ -417,7 +424,6 @@ Example:
 (test::assert-equal '(7 5 3) (vec-set! test-setnth-vec 0 7))
 (test::assert-equal '(7 5 9) (vec-set! test-setnth-vec 2 9))
 ",
-            root,
         ),
     );
     data.insert(
@@ -439,7 +445,6 @@ Example:
 (test::assert-equal '(1 2 3) (vec-push! test-push-vec 3))
 (test::assert-equal '(1 2 3) test-push-vec)
 ",
-            root,
         ),
     );
     data.insert(
@@ -461,7 +466,6 @@ Example:
 (test::assert-equal 1 (vec-pop! test-pop-vec))
 (test::assert-equal '() test-pop-vec)
 ",
-            root,
         ),
     );
     data.insert(
@@ -478,7 +482,6 @@ Example:
 (test::assert-true (vec-empty? '#()))
 (test::assert-false (vec-empty? '#(1 2 3)))
 ",
-            root,
         ),
     );
     data.insert(
@@ -497,7 +500,6 @@ Example:
 (vec-clear! test-clear-vec)
 (test::assert-true (vec-empty? test-clear-vec))
 ",
-            root,
         ),
     );
     data.insert(
@@ -521,7 +523,6 @@ Example:
 (vec-remove! test-remove-nth-vec 0)
 (test::assert-equal '() test-remove-nth-vec)
 ",
-            root,
         ),
     );
     data.insert(
@@ -544,7 +545,6 @@ Example:
 (vec-insert! test-insert-nth-vec 0 4)
 (test::assert-equal '(4 1 5 6 2 3) test-insert-nth-vec)
 ",
-            root,
         ),
     );
 }
