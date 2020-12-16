@@ -514,7 +514,7 @@ Example:
         interner.intern("ref"),
         Expression::make_special(
             builtin_ref,
-            "Usage: (ref? symbol) -> expression
+            "Usage: (ref symbol) -> expression
 
 Return the expression that is referenced by symbol.
 Symbol is only evaluated if a list (that produces a symbol) and must be bound

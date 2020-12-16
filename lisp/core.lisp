@@ -71,7 +71,7 @@ Section: namespace"
     (namespace)
     `((fn ()
         (def import (vec def 1 2))
-        (iterator::for symbol in (eval (sym ,namespace "::*ns-exports*"))
+        (iterator::for symbol in (ref (sym ,namespace "::*ns-exports*"))
                        (do
                          (vec-set! import 1 (sym "ns::" symbol))
                          (vec-set! import 2 (sym ,namespace "::" symbol))
@@ -402,7 +402,7 @@ Example:
 "
     (provided-condition if-true)
     `(if ,provided-condition ,if-true))
-#|
+
 (defmacro ->
 "inserts result of previous expression as second argument to current expression.
 First argument is not evaluated.
@@ -417,20 +417,21 @@ Example:
         (str \"I'll be stuck in the middle.\")
         (str \"I'll be at the end.\")))"
 (&rest args)
-    `(if (< (length (quote ,args)) 2)
+    (if (< (length args) 2)
         (err "-> (thush operator) requires at least two arguments")
         (do
-            (def fst (first (quote ,args)))
-            (loop (curr-form forms) (fst (rest (quote ,args)))
+            (var fst (first args))
+            (loop (curr-form forms) (fst (rest args))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                    (def sexp nil)
-                    (def fcn (first forms))
-                    (if (seq? fcn)
-                        (set! sexp (collect (iterator::append (list (first fcn)) curr-form (rest fcn))))
-                        (set! sexp (list fcn curr-form)))
-                    (recur (eval sexp) (rest forms))))))))
+                        (var sexp nil)
+                        (var fcn (first forms))
+                        (if (seq? fcn)
+                            ;(set! sexp (apply list (first fcn) curr-form (rest fcn)))
+                            (set! sexp `(,(first fcn) ,curr-form ,@(rest fcn)))
+                            (set! sexp (list fcn curr-form)))
+                        (recur sexp (rest forms))))))))
 
 (defmacro ->>
 "inserts result of previous expression as last argument to current expression.
@@ -446,21 +447,22 @@ Example:
         (str \"I'll be more in the middle.\")
         (str \"I'll be at the beginning.\")))"
 (&rest args)
-    `(if (< (length (quote ,args)) 2)
+    (if (< (length args) 2)
         (err "->> (thush operator) requires at least two arguments")
         (do
-            (def fst (first (quote ,args)))
-            (loop (curr-form forms) (fst (rest (quote ,args)))
+            (var fst (first args))
+            (loop (curr-form forms) (fst (rest args))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                      (def sexp nil)
-                      (def fcn (first forms))
+                      (var sexp nil)
+                      (var fcn (first forms))
                       (if (seq? fcn)
-                        (set! sexp (collect (iterator::append fcn curr-form)))
+                        ;(set! sexp (collect (iterator::append fcn curr-form)))
+                        (set! sexp `(,@fcn ,curr-form))
                         (set! sexp (list fcn curr-form)))
-                      (recur (eval sexp) (rest forms))))))))
-|#
+                      (recur sexp (rest forms))))))))
+
 ; Reader macro for #.
 (defn reader-macro-dot
 "Reader macro for #.(...).  Do not call directly.
