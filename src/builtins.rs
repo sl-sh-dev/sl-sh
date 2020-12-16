@@ -39,36 +39,6 @@ fn builtin_eval(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            let arg_d = arg.get();
-            // XXX TODO- do not do anything special with strings, the calling code should use read
-            // on them itself...
-            let ret = match &arg_d.data {
-                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => {
-                        drop(arg_d);
-                        eval(environment, ast)
-                    }
-                    Err(err) => Err(LispError::new(err.reason)),
-                },
-                _ => {
-                    drop(arg_d);
-                    eval(environment, &arg)
-                }
-            };
-            return ret;
-        }
-    }
-    Err(LispError::new("eval can only have one form"))
-}
-
-//XXX TODO- remove once eval str suppor is gone.
-fn _builtin_eval_in_scope(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
             return eval(environment, &arg);
         }
     }
@@ -1651,7 +1621,7 @@ Section: core
 
 Example:
 (def test-eval-one nil)
-(eval \"(set! test-eval-one \\\"ONE\\\")\")
+(eval (read \"(set! test-eval-one \\\"ONE\\\")\"))
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set! test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)
