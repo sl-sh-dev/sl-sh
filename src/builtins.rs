@@ -28,6 +28,7 @@ const COLLECTION_LISP: &[u8] = include_bytes!("../lisp/collection.lisp");
 const SEQ_LISP: &[u8] = include_bytes!("../lisp/seq.lisp");
 const SHELL_LISP: &[u8] = include_bytes!("../lisp/shell.lisp");
 const ENDFIX_LISP: &[u8] = include_bytes!("../lisp/endfix.lisp");
+const GETOPTS_LISP: &[u8] = include_bytes!("../lisp/getopts.lisp");
 const TEST_LISP: &[u8] = include_bytes!("../lisp/test.lisp");
 const SLSH_STD_LISP: &[u8] = include_bytes!("../lisp/slsh-std.lisp");
 const SLSHRC: &[u8] = include_bytes!("../lisp/slshrc");
@@ -247,6 +248,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             "seq.lisp" => read_list_wrap(environment, to_str(SEQ_LISP), file_name),
             "shell.lisp" => read_list_wrap(environment, to_str(SHELL_LISP), file_name),
             "endfix.lisp" => read_list_wrap(environment, to_str(ENDFIX_LISP), file_name),
+            "getopts.lisp" => read_list_wrap(environment, to_str(GETOPTS_LISP), file_name),
             "test.lisp" => read_list_wrap(environment, to_str(TEST_LISP), file_name),
             "slsh-std.lisp" => read_list_wrap(environment, to_str(SLSH_STD_LISP), file_name),
             "slshrc" => read_list_wrap(environment, to_str(SLSHRC), file_name),
@@ -2815,6 +2817,23 @@ Section: core
 
 Example:
 ;(print *shell-src*)
+t
+"
+            .to_string(),
+        ),
+    );
+    data.insert(
+        interner.intern("*getopts-src*"),
+        (
+            ExpEnum::String(to_cow(GETOPTS_LISP), None).into(),
+            "Usage: (print *getopts-src*)
+
+The builtin source code for shell.lisp.
+
+Section: core
+
+Example:
+;(print *getopts-src*)
 t
 "
             .to_string(),

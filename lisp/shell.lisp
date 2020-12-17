@@ -623,8 +623,7 @@ Section: shell
 	() '(def __exec_hook shell::endfix-hook))
 
 
-
-(defn print-backtrace (backtrace) 
+(defn print-backtrace (backtrace)
     (println (first backtrace))
     (for b in backtrace
         (if (builtin? b)(print "BUILTIN")
@@ -751,8 +750,11 @@ Section: shell"
                 (var file-contents (str (cat fc-file)))
                 (when (not (= "" (str-trim file-contents)))
                     (do
-                        (handle-last-command file-contents)
+                        (handle-last-command (str-trim file-contents))
                         (eval (read-all (str (cat fc-file))))))))))
+
+(load "getopts.lisp")
+
 ; XXX TODO- alias as the first item is a bug, fix it.
 (ns-export '(
 	alias
@@ -790,6 +792,7 @@ Section: shell"
 	bg-color-rgb
 	endfix-on
 	fc
+	getopts
 	temp-dir))
 
 (ns-pop)

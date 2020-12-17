@@ -519,7 +519,7 @@ Example:
     self))
   (:impl iterator::iterator))
 
-(defstruct slice-iter 
+(defstruct slice-iter
 "Iterator that provides a slice of the underlying iter.  Slice iter will consume
 the iterator it is slicing.
 

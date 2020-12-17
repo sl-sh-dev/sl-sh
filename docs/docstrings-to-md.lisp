@@ -1,4 +1,5 @@
 (load "parse-docstrings.lisp")
+
 (ns-push 'docmd)
 
 (ns-import 'iterator)
@@ -194,10 +195,13 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		(write-line file "")
 		(if (not (nil? doc-example))
 			(do
-				(write-line file "```")
+                (write-line file "<details style=\"padding-bottom: 5px;\">")
+                (write-line file "<summary>⮞</summary>")
+				(write-line file "<code>")
 					(for line in (str-split "\n" doc-example) (write-line file line))
-				(write-line file "```"))
-			(write-line file "<br>"))))
+				(write-line file "</code>")
+                (write-line file "</details>"))
+            (write-line file "<br>"))))
 	(close file)
 	file-name)
 
@@ -229,4 +233,5 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		 #t)))
 
 (ns-export '(make-md-file))
+
 (ns-pop)

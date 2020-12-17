@@ -57,7 +57,12 @@
       (if found (do (println (str value " found in " seq))(exit 3))))
 
 (defmacro assert-error (form)
-    `(test::assert-equal :error (car (get-error ,form)) " Expected ERROR, did not get it!"))
+    `(test::assert-equal :error (car (get-error ,form)) ". Expected :error"))
+
+(defmacro assert-error-msg (form msg)
+    `((fn (ret) (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
+     ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\""))
+        (get-error ,form)))
 
 ; Make this a macro to it will not create a scope and will work for namespace tests.
 (defmacro run-ns-example (sym)
@@ -72,7 +77,7 @@
             (do
              :no-test))))
 
-(ns-export '(assert-equal assert-not-equal assert-true assert-false assert-error run-example))
+(ns-export '(assert-equal assert-not-equal assert-true assert-false assert-error assert-error-msg run-example))
 
 (ns-pop)
 
