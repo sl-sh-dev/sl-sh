@@ -466,6 +466,10 @@ Example:
 "Reader macro for #.(...).  Do not call directly.
 
 Section: core
+
+Example:
+(def dot-test (read \"(1 2 #.(* 3 10) #.(str \"o\" \"ne\"))))
+(test::assert-equal '(1 2 30 \"one\"))
 "
       (stream ch) (eval (read stream)))
 

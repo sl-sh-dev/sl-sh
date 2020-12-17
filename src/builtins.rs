@@ -1215,14 +1215,16 @@ fn get_doc(
                 } else {
                     let mut doc_final = String::new();
                     for namespace in namespaces {
-                        if let Some(exp) = namespace.borrow().get(key) {
-                            doc_final.push_str(&make_doc(
-                                environment,
-                                &exp,
-                                key,
-                                namespace.clone(),
-                            )?);
-                            doc_final.push('\n');
+                        if namespace.borrow().get_docs(key).is_some() {
+                            if let Some(exp) = namespace.borrow().get(key) {
+                                doc_final.push_str(&make_doc(
+                                    environment,
+                                    &exp,
+                                    key,
+                                    namespace.clone(),
+                                )?);
+                                doc_final.push('\n');
+                            }
                         }
                     }
                     return Ok(Expression::alloc_data(ExpEnum::String(

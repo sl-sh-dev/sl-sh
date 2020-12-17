@@ -36,6 +36,10 @@
 "Currently a no-op, used to turn on error stacks.
 
 Section: core
+
+Example:
+; no-op
+(error-stack-on)
 "
       () nil)
 
@@ -43,6 +47,10 @@ Section: core
 "Currently a no-op, used to turn off error stacks.
 
 Section: core
+
+Example:
+; no-op
+(error-stack-off)
 "
       () nil)
 

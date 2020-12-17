@@ -417,6 +417,15 @@ pub fn add_file_builtins<S: BuildHasher>(
 Change directory.
 
 Section: shell
+
+Example:
+(mkdir \"/tmp/tst-fs-cd\")
+(touch \"/tmp/tst-fs-cd/fs-cd-marker\")
+(test::assert-false (fs-exists? \"fs-cd-marker\"))
+(cd \"/tmp/tst-fs-cd\")
+(test::assert-true (fs-exists? \"fs-cd-marker\"))
+(rm \"/tmp/tst-fs-cd/fs-cd-marker\")
+(rmdir \"/tmp/tst-fs-cd\")
 ",
         ),
     );
@@ -429,6 +438,15 @@ Section: shell
 Does the given path exist?
 
 Section: shell
+
+Example:
+(mkdir \"/tmp/tst-fs-exists\")
+(touch \"/tmp/tst-fs-exists/fs-exists\")
+(test::assert-true (fs-exists? \"/tmp/tst-fs-exists/fs-exists\"))
+(test::assert-true (fs-exists? \"/tmp/tst-fs-exists\"))
+(test::assert-false (fs-exists? \"/tmp/tst-fs-exists/fs-exists-nope\"))
+(rm \"/tmp/tst-fs-exists/fs-exists\")
+(rmdir \"/tmp/tst-fs-exists\")
 ",
         ),
     );
@@ -441,6 +459,15 @@ Section: shell
 Is the given path a file?
 
 Section: shell
+
+Example:
+(mkdir \"/tmp/tst-fs-file\")
+(touch \"/tmp/tst-fs-file/fs-file\")
+(test::assert-true (fs-file? \"/tmp/tst-fs-file/fs-file\"))
+(test::assert-false (fs-file? \"/tmp/tst-fs-file\"))
+(test::assert-false (fs-file? \"/tmp/tst-fs-file/fs-file-nope\"))
+(rm \"/tmp/tst-fs-file/fs-file\")
+(rmdir \"/tmp/tst-fs-file\")
 ",
         ),
     );
@@ -453,6 +480,15 @@ Section: shell
 Is the given path a directory?
 
 Section: shell
+
+Example:
+(mkdir \"/tmp/tst-fs-dir\")
+(touch \"/tmp/tst-fs-dir/fs-dir-file\")
+(test::assert-false (fs-dir? \"/tmp/tst-fs-dir/fs-dir-file\"))
+(test::assert-true (fs-dir? \"/tmp/tst-fs-dir\"))
+(test::assert-false (fs-dir? \"/tmp/tst-fs-dir/fs-dir-nope\"))
+(rm \"/tmp/tst-fs-dir/fs-dir-file\")
+(rmdir \"/tmp/tst-fs-dir\")
 ",
         ),
     );
@@ -465,6 +501,10 @@ Section: shell
 Setup a pipe between processes.
 
 Section: shell
+
+Example:
+(def pipe-test (str (pipe (echo \"one\ntwo\nthree\")(grep two))))
+(test::assert-equal \"two\n\" pipe-test)
 ",
         ),
     );
@@ -477,6 +517,10 @@ Section: shell
 Wait for a process to end and return it's exit status.
 
 Section: shell
+
+Example:
+(def wait-test (wait (err>null (ls /does/not/exist/123))))
+(test::assert-true (> wait-test 0))
 ",
         ),
     );
@@ -489,6 +533,11 @@ Section: shell
 Return the pid of a process.
 
 Section: shell
+
+Example:
+(def pid-test (echo -n))
+(test::assert-true (int? (pid pid-test)))
+(test::assert-error (pid 1))
 ",
         ),
     );
@@ -501,6 +550,17 @@ Section: shell
 Takes a list/varargs of globs and return the list of them expanded.
 
 Section: shell
+
+Example:
+(mkdir \"/tmp/tst-fs-glob\")
+(touch \"/tmp/tst-fs-glob/g1\")
+(touch \"/tmp/tst-fs-glob/g2\")
+(touch \"/tmp/tst-fs-glob/g3\")
+(test::assert-equal '(\"/tmp/tst-fs-glob/g1\" \"/tmp/tst-fs-glob/g2\" \"/tmp/tst-fs-glob/g3\") (glob \"/tmp/tst-fs-glob/*\"))
+(rm \"/tmp/tst-fs-glob/g1\")
+(rm \"/tmp/tst-fs-glob/g2\")
+(rm \"/tmp/tst-fs-glob/g3\")
+(rmdir \"/tmp/tst-fs-glob\")
 ",
         ),
     );

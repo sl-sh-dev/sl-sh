@@ -134,6 +134,10 @@ Section: shell
 Shorthand for pipe builtin.
 
 Section: shell
+
+Example:
+(def pipe-test (str (| (echo \"one\ntwo\nthree\")(grep two))))
+(test::assert-equal \"two\n\" pipe-test)
 "
 	(&rest body)
 	`(pipe ,@body))
@@ -352,6 +356,14 @@ Usage: (fg-color-rgb red-val green-val blue-val)
 Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
 
 Section: shell
+
+Example:
+(test::assert-equal \"\x1b[38;2;128;128;128m\" (fg-color-rgb 128 128 128))
+(test::assert-equal \"\x1b[38;2;255;255;255m\" (fg-color-rgb 255 255 255))
+(test::assert-equal \"\x1b[38;2;255;0;0m\" (fg-color-rgb 255 0 0))
+(test::assert-equal \"\x1b[38;2;0;255;0m\" (fg-color-rgb 0 255 0))
+(test::assert-equal \"\x1b[38;2;0;0;255m\" (fg-color-rgb 0 0 255))
+(test::assert-equal \"\x1b[38;2;0;0;0m\" (fg-color-rgb 0 0 0))
 "
 	(R G B)
 		(get-rgb-seq R G B :font))
@@ -363,18 +375,24 @@ Usage: (bg-color-rgb red-val green-val blue-val)
 Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
 
 Section: shell
+
+Example:
+(test::assert-equal \"\x1b[48;2;128;128;128m\" (bg-color-rgb 128 128 128))
+(test::assert-equal \"\x1b[48;2;255;255;255m\" (bg-color-rgb 255 255 255))
+(test::assert-equal \"\x1b[48;2;255;0;0m\" (bg-color-rgb 255 0 0))
+(test::assert-equal \"\x1b[48;2;0;255;0m\" (bg-color-rgb 0 255 0))
+(test::assert-equal \"\x1b[48;2;0;0;255m\" (bg-color-rgb 0 0 255))
+(test::assert-equal \"\x1b[48;2;0;0;0m\" (bg-color-rgb 0 0 0))
 "
 	(R G B)
 		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
-      ;XXX TODO- fix let...(let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
-      (do 
-        (var make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m")))
-      (match color-type
-             (:font (make-color 38))
-             (:bkrd (make-color 48))
-             (nil (make-color 38)))))
+    (varfn make-color (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))
+    (match color-type
+        (:font (make-color 38))
+        (:bkrd (make-color 48))
+        (nil (make-color 38))))
 
 (defn find-symbol (com)
 	(var val (sym *active-ns* "::" com))
@@ -755,7 +773,6 @@ Section: shell"
 
 (load "getopts.lisp")
 
-; XXX TODO- alias as the first item is a bug, fix it.
 (ns-export '(
 	alias
 	register-alias

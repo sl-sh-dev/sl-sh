@@ -31,13 +31,7 @@ The above docker command will produce a completely static binary while compiling
 be linked to you systems libc.  You can use the musl target with cargo to produce a static binary
 with an installed rust.
 
-## Pre-built packages
-
-### Arch
-* sl-sh is in the AUR as `sl-sh-git`
-
 ## Tasks
-- [ ] file-io and idiomatic file iteration in sl-sh
 - [ ] better error reporting and debugging
 - [ ] benchmarks
 - [ ] better maths
@@ -191,14 +185,7 @@ Prints this "truth-telling" string while also not changing any chars printed aft
 by setting the fg and bg back to the default.
 
 ### Error reporting
-Use
-```
-	(error-stack-on)
-```
-if stack traces are desired. The default is
-```
-	(error-stack-off)
-```
+Errors will produce a stack trace as well as a message.
 
 ## Scripting
 Sl-sh supports scripts. If you put a `#!/path/to/sl-sh` at the top
