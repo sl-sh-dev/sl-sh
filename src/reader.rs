@@ -906,19 +906,19 @@ fn stack_to_exp(
                         // is set).
                         let exp_d = &exp.get().data;
                         match exp_d {
-                            ExpEnum::Vector(_) => Ok(exp.clone_root()),
-                            ExpEnum::Pair(_, _) => Ok(exp.clone_root()),
-                            ExpEnum::Nil => Ok(exp.clone_root()),
+                            ExpEnum::Vector(_) => Ok(exp.clone()),
+                            ExpEnum::Pair(_, _) => Ok(exp.clone()),
+                            ExpEnum::Nil => Ok(exp.clone()),
                             _ => {
                                 v.vec.push(exp.handle_no_root());
-                                Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
+                                Ok(Expression::with_list_meta(v.vec, exp_meta))
                             }
                         }
                     } else {
-                        Ok(exp.clone_root())
+                        Ok(exp)
                     }
                 } else {
-                    Ok(Expression::with_list_meta(v.vec, exp_meta).clone_root())
+                    Ok(Expression::with_list_meta(v.vec, exp_meta))
                 }
             }
             None => Err(ReadError {
@@ -1066,12 +1066,8 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::sync::Once;
 
     use crate::builtins_util::is_proper_list;
-    use crate::gc::init_gc;
-
-    static INIT: Once = Once::new();
 
     fn to_strs(output: &mut Vec<String>, exp: &Expression) {
         match &exp.get().data {
@@ -1145,14 +1141,8 @@ mod tests {
         environment
     }
 
-    pub fn setup() {
-        INIT.call_once(|| {
-            init_gc();
-        });
-    }
     #[test]
     fn test_tokenize() {
-        setup();
         let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "one two three \"four\" 5 6", None);
         assert!(tokens.len() == 8);
@@ -1222,7 +1212,6 @@ mod tests {
 
     #[test]
     fn test_quotes() {
-        setup();
         let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "'(1 2 3)", None);
         assert!(tokens.len() == 8);
@@ -1312,7 +1301,6 @@ mod tests {
 
     #[test]
     fn test_types() {
-        setup();
         let mut environment = build_def_env();
         let tokens = tokenize(
             &mut environment,
@@ -1371,7 +1359,6 @@ mod tests {
 
     #[test]
     fn test_wrap() {
-        setup();
         let mut environment = build_def_env();
         let tokens = tokenize(&mut environment, "(1 2 3)", None);
         assert!(tokens.len() == 5);
@@ -1477,7 +1464,6 @@ mod tests {
 
     #[test]
     fn test_tok_strings() {
-        setup();
         let mut environment = build_def_env();
         let input =
             "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";

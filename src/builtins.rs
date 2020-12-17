@@ -40,36 +40,6 @@ fn builtin_eval(
     if let Some(arg) = args.next() {
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
-            let arg_d = arg.get();
-            // XXX TODO- do not do anything special with strings, the calling code should use read
-            // on them itself...
-            let ret = match &arg_d.data {
-                ExpEnum::String(s, _) => match read(environment, &s, None, false) {
-                    Ok(ast) => {
-                        drop(arg_d);
-                        eval(environment, ast)
-                    }
-                    Err(err) => Err(LispError::new(err.reason)),
-                },
-                _ => {
-                    drop(arg_d);
-                    eval(environment, &arg)
-                }
-            };
-            return ret;
-        }
-    }
-    Err(LispError::new("eval can only have one form"))
-}
-
-//XXX TODO- remove once eval str suppor is gone.
-fn _builtin_eval_in_scope(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            let arg = eval(environment, arg)?;
             return eval(environment, &arg);
         }
     }
@@ -584,7 +554,7 @@ pub fn builtin_do(
         if let Some(ret) = ret {
             ret.resolve(environment)?;
         }
-        ret = Some(eval_nr(environment, arg.clone_root())?);
+        ret = Some(eval_nr(environment, arg.clone())?);
     }
     Ok(ret.unwrap_or_else(Expression::make_nil))
 }
@@ -683,7 +653,7 @@ fn replace_commas(
             match &nl.get().data {
                 ExpEnum::Vector(new_list) => {
                     for item in new_list {
-                        output.push(item.clone_no_root());
+                        output.push(item.clone());
                     }
                 }
                 ExpEnum::Pair(_, _) => {
@@ -832,7 +802,7 @@ fn expand_macro_internal(
         };
         let expansion = do_expansion(
             environment,
-            &command.clone_no_root().into(),
+            &command.clone().into(),
             &mut Box::new(ListIter::new_slice(parts)),
         )?;
         if let Some(expansion) = expansion {
@@ -901,12 +871,10 @@ pub(crate) fn expand_macro_all(
         if let ExpEnum::Vector(list) = &exp_d.data {
             let mut nv: Vec<Handle> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
+                nv.push(expand_macro_all(environment, &item.clone().into())?.into());
             }
             drop(exp_d);
             exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
-            // XXX
-            gc_mut().down_root(&exp_outer);
         } else if let ExpEnum::Pair(_, _) = &exp_d.data {
             let mut nv: Vec<Handle> = Vec::new();
             drop(exp_d);
@@ -917,8 +885,6 @@ pub(crate) fn expand_macro_all(
                 .get_mut()
                 .data
                 .replace(ExpEnum::cons_from_vec(&mut nv));
-            // XXX
-            gc_mut().down_root(&exp_outer);
         }
         Ok(exp_outer)
     } else {
@@ -927,12 +893,10 @@ pub(crate) fn expand_macro_all(
         if let ExpEnum::Vector(list) = &arg_d.data {
             let mut nv: Vec<Handle> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, &item.clone_no_root().into())?.into());
+                nv.push(expand_macro_all(environment, &item.clone().into())?.into());
             }
             drop(arg_d);
             arg.get_mut().data.replace(ExpEnum::Vector(nv));
-            // XXX
-            gc_mut().down_root(arg);
         } else if let ExpEnum::Pair(_, _) = &arg_d.data {
             let mut nv = Vec::new();
             drop(arg_d);
@@ -940,8 +904,6 @@ pub(crate) fn expand_macro_all(
                 nv.push(expand_macro_all(environment, &item)?.into());
             }
             arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
-            // XXX
-            gc_mut().down_root(arg);
         }
         Ok(arg2.clone())
     }
@@ -1661,7 +1623,7 @@ Section: core
 
 Example:
 (def test-eval-one nil)
-(eval \"(set! test-eval-one \\\"ONE\\\")\")
+(eval (read \"(set! test-eval-one \\\"ONE\\\")\"))
 (test::assert-equal \"ONE\" test-eval-one)
 (eval '(set! test-eval-one \"TWO\"))
 (test::assert-equal \"TWO\" test-eval-one)

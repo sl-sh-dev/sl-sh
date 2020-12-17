@@ -745,7 +745,7 @@ Section: shell"
     (var fc-file (str (temp-dir) "/sl-sh-fc.txt"))
     (do
         (out> fc-file (print *last-command*))
-        (when (= 0 (wait (eval (str $EDITOR " " fc-file))))
+        (when (= 0 (wait (eval (read (str "(" $EDITOR " " fc-file ")")))))
             (do
                 (var file-contents (str (cat fc-file)))
                 (when (not (= "" (str-trim file-contents)))

@@ -245,16 +245,13 @@ Example:
                 (if (= (car field) :fn) (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
                     (= (car field) :impl) nil ; do impls last (struct methods take precident).
                     (attrib field doc doc-exp))
-                (recur (+ idx 1))
-            )))idx-start)
+                (recur (+ idx 1)))))idx-start)
 
         ((fn (idx)
             (if (< idx fields-len) (do
                 (var field (vec-nth fields idx))
                 (if (= (car field) :impl) (impl (cdr field) doc))
-                (recur (+ idx 1))
-            ))
-            )idx-start)
+                (recur (+ idx 1)))))idx-start)
 
         (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
         (var msym (sym name "^type"))
@@ -263,16 +260,12 @@ Example:
         (vec-push! dispatcher `(apply ,msym this-fn args))
         (var doc-final "")
         (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
-        ;(println "\nXXXX dispatchmap: " dispatch-map)
-        ;(println "\nXXXX dispatcher: " dispatcher)
-        ;(println "\nXXXX methods: " methods)
         `(def ,name ,doc-final (fn () ((fn (,@params)
             ,@methods
             (var self
                 (fn (msg &rest args)
                   (if ,@dispatcher (err (str "Invalid message (" msg ") to struct: " ',name)))))
-            (meta-add-tags self ',tags)
-            #| XXX TODO- test memory (undef self)|#self) ,@bindings))) ) ; bindings for params
+            (meta-add-tags self ',tags) self) ,@bindings))) ) ; bindings for params
      (make-vec (length fields)) ; params
      (make-vec (length fields)))) ; bindings
 

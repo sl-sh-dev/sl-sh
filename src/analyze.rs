@@ -39,15 +39,32 @@ pub fn make_fn(
         };
         let mut params = Vec::new();
         let mut syms = Symbols::with_frame(environment, outer_syms);
+        let mut has_rest = false;
+        let mut num_params = 0;
+        let mut num_post_rest = 0;
         for p in p_iter {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
-                if s != "&rest" {
+                if s == "&rest" {
+                    if has_rest {
+                        return Err(LispError::new("fn: &rest can only appear once"));
+                    }
+                    has_rest = true;
+                } else {
                     syms.insert(s);
+                    num_params += 1;
+                    if has_rest {
+                        num_post_rest += 1;
+                    }
                 }
             } else {
                 return Err(LispError::new("fn: parameters must be symbols"));
             }
+        }
+        if has_rest && num_post_rest != 1 {
+            return Err(LispError::new(
+                "fn: &rest must be before the last parameter",
+            ));
         }
         drop(params_d);
         syms.insert("this-fn");
@@ -56,6 +73,8 @@ pub fn make_fn(
         let body = body.handle_no_root();
         return Ok(Lambda {
             params,
+            num_params,
+            has_rest,
             body,
             syms,
             namespace: environment.namespace.clone(),
@@ -355,7 +374,7 @@ pub fn analyze(
     if *expression_in.get().analyzed.borrow() {
         return Ok(());
     }
-    let expression = expression_in.clone_root();
+    let expression = expression_in.clone();
     analyze_expand(environment, expression.clone())?;
     analyze_prep(environment, expression, syms)
 }

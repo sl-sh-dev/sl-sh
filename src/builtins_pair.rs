@@ -16,10 +16,7 @@ fn builtin_join(
             if args.next().is_none() {
                 let arg0: Handle = eval(environment, arg0)?.into();
                 let arg1: Handle = eval(environment, arg1)?.into();
-                return Ok(Expression::alloc_data(ExpEnum::Pair(
-                    arg0.clone_no_root(),
-                    arg1.clone_no_root(),
-                )));
+                return Ok(Expression::alloc_data(ExpEnum::Pair(arg0, arg1)));
             }
         }
     }
@@ -37,20 +34,14 @@ fn builtin_list(
         if let Some(inner_last) = last.clone() {
             if let ExpEnum::Pair(_, e2) = &inner_last.get().data {
                 let e2: Expression = e2.into();
-                e2.get_mut().data.replace(ExpEnum::Pair(
-                    a.clone_no_root(),
-                    Expression::make_nil_h().clone_no_root(),
-                ));
-                // XXX
-                gc_mut().down_root(&e2);
+                e2.get_mut()
+                    .data
+                    .replace(ExpEnum::Pair(a.clone(), Expression::make_nil_h().clone()));
                 last = Some(e2.clone());
             }
         } else {
-            let nil = Expression::make_nil_h().clone_no_root();
-            last = Some(Expression::alloc_data(ExpEnum::Pair(
-                a.clone_no_root(),
-                nil,
-            )));
+            let nil = Expression::make_nil_h().clone();
+            last = Some(Expression::alloc_data(ExpEnum::Pair(a.clone(), nil)));
         }
         if head.is_none() {
             head = last.clone();
@@ -111,7 +102,7 @@ fn builtin_xar(
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
                 let new_pair = match &pair_d.data {
-                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg.into(), e2.clone_no_root()),
+                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg.into(), e2.clone()),
                     ExpEnum::Nil => ExpEnum::Pair(arg.into(), Expression::make_nil_h()),
                     _ => {
                         return Err(LispError::new("xar! requires a pair for it's first form"));
@@ -119,8 +110,6 @@ fn builtin_xar(
                 };
                 pair_d.data.replace(new_pair);
                 drop(pair_d);
-                // XXX
-                gc_mut().down_root(&pair);
                 return Ok(pair.clone());
             }
         }
@@ -148,8 +137,6 @@ fn builtin_xdr(
                 };
                 pair_d.data.replace(new_pair);
                 drop(pair_d);
-                // XXX
-                gc_mut().down_root(&pair);
                 return Ok(pair.clone());
             }
         }

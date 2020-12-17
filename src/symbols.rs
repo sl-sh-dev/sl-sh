@@ -534,17 +534,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::sync::Once;
-
-    use crate::gc::init_gc;
-
-    static INIT: Once = Once::new();
-
-    pub fn setup() {
-        INIT.call_once(|| {
-            init_gc();
-        });
-    }
 
     fn assert_int_equal(exp1: &Expression, exp2: &Expression) {
         if let ExpEnum::Int(i1) = exp1.get().data {
@@ -558,7 +547,6 @@ mod tests {
 
     #[test]
     fn test_namespace() -> Result<(), LispError> {
-        setup();
         let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
         let root = Rc::new(RefCell::new(Namespace::new_root(&mut environment.interner)));
         let ns_name = environment.interner.intern("namespace");
