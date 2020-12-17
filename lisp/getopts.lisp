@@ -2,20 +2,30 @@
     (if (nil? #t)
         `(println "=> " ,@args)))
 
-(def sample "-la -c -b")
-
 (def token-delim "-")
 
-(def options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
+(def getopts-invalid-type-function (str "Type not supported. See (doc 'getopts) for supported types."))
 
-(def bad-first-arg "First argument must be a flag.")
+(def getopts-options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
 
-(defn bad-option-arity (option expected)
+(def getopts-bad-first-arg "First argument must be a flag.")
+
+(defn getopts-bad-option-arity (option expected)
     (str "Wrong number of arguments passed to " option ". Expected " expected
          " arguments."))
 
-(defn type-error-message (key binding opt-type-fun)
+(defn getopts-type-error-message (key binding opt-type-fun)
     (str "Input types did not match :type specified in options-map. At argument " key ", failed to read in provided " binding " as type " opt-type-fun ". Binding, " binding ", was of type " (type binding) "."))
+
+(defn getopts-build-param (arity default type-fun)
+    (make-hash
+        (list
+            (join :arity arity)
+            (join :default default)
+            (join :type type-fun))))
+
+(defn getopts-illegal-option (key)
+    (str "Illegal option " key ", not in allowable arguments provided to getopts."))
 
 (defn is-single-char-arg (token)
     (and (not (or (char? token) (macro? token) (lambda? token))) (= 2 (length token)) (str-starts-with token-delim token)))
@@ -53,9 +63,6 @@ up until the next token delimeted option, -c.
 (defn is-getopts-option-string (arg)
     (and (string? arg) (str-starts-with token-delim arg)))
 
-(defn illegal-option (key)
-    (str "Illegal option " key ", not in allowable arguments provided to getopts."))
-
 (defn verify-arity (idx given-args options-map bindings-map)
     (var option (vec-nth given-args idx))
     (var key (to-symbol (str ":" option)))
@@ -64,17 +71,17 @@ up until the next token delimeted option, -c.
                   0
                   (hash-get arity-map :arity 0)))
     (when (nil? arity-map)
-      (err (illegal-option option)))
+      (err (getopts-illegal-option option)))
     ;; in case we are at end of args vector but the last option expects more
     ;; params than rest of args vector has after idx.
     (when (>= (+ idx arity) (length given-args))
-      (err (bad-option-arity option arity)))
+      (err (getopts-bad-option-arity option arity)))
     ;; since all options start with a " -" use a str-split/str-cat trick
     ;; to get a vector representing all args to current option
     (var potential-args (get-next-params idx given-args))
     (debugln "potential-args: " potential-args ", type: " (type potential-args))
       (when (not (= (length potential-args) arity))
-          (err (bad-option-arity option arity)))
+          (err (getopts-bad-option-arity option arity)))
     (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
@@ -99,16 +106,9 @@ up until the next token delimeted option, -c.
                    (verify-all-options-valid sub-vec options-map bindings-map)
                    "a"))))))
 
-(defn build-getopts-param (arity default type-fun)
-    (make-hash
-        (list
-            (join :arity arity)
-            (join :default default)
-            (join :type type-fun))))
-
 (defn valid-first-arg? (args)
     (when (not (is-getopts-option-string (first args)))
-        (err bad-first-arg)))
+        (err getopts-bad-first-arg)))
 
 (def nyi "not-yet-implemented")
 
@@ -189,8 +189,6 @@ otherwise the error message is thrown."
         (join :lambda? (check lambda?))
         (join :macro? (check macro?)))))
 
-(def invalid-type-function (str "Type function must be one of " (hash-keys supported-types-map)))
-
 (defn enforce-types (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
@@ -205,12 +203,12 @@ otherwise the error message is thrown."
                         (not (nil? opt-type-fun)))
                (progn
                  (if (not (in? (hash-keys supported-types-map) opt-type-fun))
-                   (err invalid-type-function)
+                   (err getopts-invalid-type-function)
                    (progn
                      (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
                        (progn
                          (debugln "look our binding is: " binding ", of type: " (type binding))
-                         (var err-str (type-error-message key binding opt-type-fun))
+                         (var err-str (getopts-type-error-message key binding opt-type-fun))
                          (if (= 1 opt-type-arity)
                              (hash-set!
                                bindings-map
@@ -295,7 +293,7 @@ single character with arity N as long as said character appears last: -mne \"foo
 - Flags can be multi-character as long as they are preceded by two dashes: --multi-char-arg
 "
 (options-map args)
-    (when (not (hash? options-map)) (err options-map-is-map))
+    (when (not (hash? options-map)) (err getopts-options-map-is-map))
     (when (> (length args) 0) (valid-first-arg? args))
     (var bindings-map (make-hash-with-keys options-map))
     (verify-all-options-valid args options-map bindings-map)
