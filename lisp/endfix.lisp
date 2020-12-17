@@ -250,11 +250,11 @@
 
 ;; entrypoint for all 1 arg commands... used to make filepaths cd commands
 ;; to themselves.
-(defn change-dir-if-arg-is-dir (cmd)
+(defn change-dir-if-arg-is-dir (cmd orig-cmd-ast)
 	(let ((cmd-str (str cmd)))
 		(if (fs-dir? cmd-str)
 			(list root::cd cmd-str)
-			cmd-str)))
+			orig-cmd-ast)))
 
 (defn endfix-hook (cmd-str)
 	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
@@ -265,7 +265,7 @@
 		;; everything was a comment
 		(0 cmd-ast)
 		;; check to see if this single argument is a filepath
-		(1 (change-dir-if-arg-is-dir (first cmd-ast)))
+		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
 		;; check for infix notation
 		(nil (apply-infix-modifications cmd-ast))))))
 
