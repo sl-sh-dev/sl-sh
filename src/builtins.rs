@@ -2823,6 +2823,23 @@ t
         ),
     );
     data.insert(
+        interner.intern("*getopts-src*"),
+        (
+            ExpEnum::String(to_cow(GETOPTS_LISP), None).into(),
+            "Usage: (print *getopts-src*)
+
+The builtin source code for shell.lisp.
+
+Section: core
+
+Example:
+;(print *getopts-src*)
+t
+"
+            .to_string(),
+        ),
+    );
+    data.insert(
         interner.intern("*endfix-src*"),
         (
             ExpEnum::String(to_cow(ENDFIX_LISP), None).into(),
