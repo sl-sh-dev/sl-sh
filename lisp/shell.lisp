@@ -600,8 +600,6 @@ Example:
 
 (load "endfix.lisp")
 
-(load "getopts.lisp")
-
 (defmacro endfix-on "
 Allows use of infix notation for common shell forms. The following is the
 complete mapping in lisp/endfix.lisp of all supported infix operators and
@@ -625,8 +623,7 @@ Section: shell
 	() '(def __exec_hook shell::endfix-hook))
 
 
-
-(defn print-backtrace (backtrace) 
+(defn print-backtrace (backtrace)
     (println (first backtrace))
     (for b in backtrace
         (if (builtin? b)(print "BUILTIN")
@@ -755,6 +752,9 @@ Section: shell"
                     (do
                         (handle-last-command (str-trim file-contents))
                         (eval (read-all (str (cat fc-file))))))))))
+
+(load "getopts.lisp")
+
 ; XXX TODO- alias as the first item is a bug, fix it.
 (ns-export '(
 	alias
@@ -792,6 +792,7 @@ Section: shell"
 	bg-color-rgb
 	endfix-on
 	fc
+	getopts
 	temp-dir))
 
 (ns-pop)

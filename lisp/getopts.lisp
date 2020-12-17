@@ -1,6 +1,3 @@
-(ns-import 'shell)
-(ns-import 'test)
-
 (defmacro debugln (&rest args)
     (if (nil? #t)
         `(println "=> " ,@args)))

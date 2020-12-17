@@ -524,8 +524,8 @@ Section: tmux"
         (var all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
         (collect-vec all-docable-user-forms)))
 
-    (def 'all-user-slsh-syms (list-of-user-slsh-syms))
-    (def 'all-docstrings
+    (def all-user-slsh-syms (list-of-user-slsh-syms))
+    (def all-docstrings
         (map (fn (x) (doc (to-symbol x))) (filter (fn (x) (= :ok (car (get-error (doc (to-symbol x)))))) all-user-slsh-syms)))
     ;; check the last modified time of index.markdown and only do this if
     ; has not been done in some amount of time.
