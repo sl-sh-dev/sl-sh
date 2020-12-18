@@ -41,6 +41,19 @@ Section: shell
 Redirect stdout to file, append the output.
 
 Section: shell
+
+Example:
+(out> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir one\"))
+(def topen (open \"/tmp/sl-sh.out>>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(out>> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir two\"))
+(def topen (open \"/tmp/sl-sh.out>>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-equal \"stdout redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
@@ -52,6 +65,18 @@ Section: shell
 Redirect stdout to file, truncate the file first.
 
 Section: shell
+
+Example:
+(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir one\"))
+(def topen (open \"/tmp/sl-sh.out>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir two\"))
+(def topen (open \"/tmp/sl-sh.out>.test\" :read))
+(test::assert-equal \"stdout redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
@@ -63,6 +88,19 @@ Section: shell
 Redirect stderr to file, append the output.
 
 Section: shell
+
+Example:
+(err> \"/tmp/sl-sh.err>>.test\" (eprintln \"stderr redir one\"))
+(def topen (open \"/tmp/sl-sh.err>>.test\" :read))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(err>> \"/tmp/sl-sh.err>>.test\" (eprintln \"stderr redir two\"))
+(def topen (open \"/tmp/sl-sh.err>>.test\" :read))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-equal \"stderr redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
@@ -74,6 +112,18 @@ Section: shell
 Redirect stderr to file, truncate the file first.
 
 Section: shell
+
+Example:
+(err> \"/tmp/sl-sh.err>.test\" (eprintln \"stderr redir one\"))
+(def topen (open \"/tmp/sl-sh.err>.test\" :read))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(err> \"/tmp/sl-sh.err>.test\" (eprintln \"stderr redir two\"))
+(def topen (open \"/tmp/sl-sh.err>.test\" :read))
+(test::assert-equal \"stderr redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
