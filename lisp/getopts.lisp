@@ -291,6 +291,12 @@ need for additional dashes: -mnc
 - Multiple flags of a single character with arity 0 can precede a flag of a
 single character with arity N as long as said character appears last: -mne \"foo\"
 - Flags can be multi-character as long as they are preceded by two dashes: --multi-char-arg
+
+Section: shell
+
+Example:
+;See tests/getopts.lisp
+t
 "
 (options-map args)
     (when (not (hash? options-map)) (err getopts-options-map-is-map))
