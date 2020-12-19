@@ -135,6 +135,22 @@ Example:
 Redirect both stdout and stderr to the same file, append the output.
 
 Section: shell
+
+Example:
+(out-err> \"/tmp/sl-sh.out-err>>.test\" (do (println \"stdout redir one\")(eprintln \"stderr redir one\")))
+(def topen (open \"/tmp/sl-sh.out-err>>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(out-err>> \"/tmp/sl-sh.out-err>>.test\" (do (println \"stdout redir two\")(eprintln \"stderr redir two\")))
+(def topen (open \"/tmp/sl-sh.out-err>>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-equal \"stdout redir two\n\" (read-line topen))
+(test::assert-equal \"stderr redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
@@ -146,6 +162,20 @@ Section: shell
 Redirect both stdout and stderr to the same file, truncate the file first.
 
 Section: shell
+
+Example:
+(out-err> \"/tmp/sl-sh.out-err>.test\" (do (println \"stdout redir one\")(eprintln \"stderr redir one\")))
+(def topen (open \"/tmp/sl-sh.out-err>.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(out-err> \"/tmp/sl-sh.out-err>.test\" (do (println \"stdout redir two\")(eprintln \"stderr redir two\")))
+(def topen (open \"/tmp/sl-sh.out-err>.test\" :read))
+(test::assert-equal \"stdout redir two\n\" (read-line topen))
+(test::assert-equal \"stderr redir two\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(file body)
 	`(if (file? ,file)
@@ -157,6 +187,13 @@ Section: shell
 Redirect stdout to null (/dev/null equivelent).
 
 Section: shell
+
+Example:
+(out> \"/tmp/sl-sh.out>null.test\" (do (println \"stdout redir one\")(out>null (println \"stdnull redir one\"))))
+(def topen (open \"/tmp/sl-sh.out>null.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(body)
 	`(dyn *stdout* (open "/dev/null" :write) ,body))
@@ -166,6 +203,13 @@ Section: shell
 Redirect stderr to null (/dev/null equivelent).
 
 Section: shell
+
+Example:
+(err> \"/tmp/sl-sh.err>null.test\" (do (eprintln \"stderr redir one\")(err>null (eprintln \"stdnull redir one\"))))
+(def topen (open \"/tmp/sl-sh.err>null.test\" :read))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 (body)
 	`(dyn *stderr* (open "/dev/null" :write) ,body))
@@ -175,6 +219,19 @@ Section: shell
 Redirect both stdout and stderr to null (/dev/null equivelent).
 
 Section: shell
+
+Example:
+(out-err> \"/tmp/sl-sh.out-err>null.test\" (do
+                                             (println \"stdout redir one\")
+                                             (eprintln \"stderr redir one\")
+                                             (out-err>null (do
+                                               (println \"stdnull redir one\")
+                                               (eprintln \"stdnull redir one\")))))
+(def topen (open \"/tmp/sl-sh.out-err>null.test\" :read))
+(test::assert-equal \"stdout redir one\n\" (read-line topen))
+(test::assert-equal \"stderr redir one\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
 "
 	(body)
 	`(dyn *stdout* (open "/dev/null" :write) (dyn *stderr* *stdout* ,body)))
