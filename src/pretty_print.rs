@@ -41,6 +41,13 @@ impl fmt::Display for Expression {
                 last_exp = p;
             }
         }
+        fn lambda_out(f: &mut fmt::Formatter, l: &Lambda) -> fmt::Result {
+            write!(f, "(fn {}", params_to_string(&l.params),)?;
+            for b in &l.body {
+                write!(f, "{}", b.to_string())?;
+            }
+            write!(f, ")")
+        }
 
         match &self.get().data {
             ExpEnum::True => write!(f, "true"),
@@ -50,24 +57,8 @@ impl fmt::Display for Expression {
             ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
             ExpEnum::Char(c) => write!(f, "#\\{}", c),
             ExpEnum::CodePoint(c) => write!(f, "#\\{}", c),
-            ExpEnum::Lambda(l) => {
-                let body: Expression = l.body.clone().into();
-                write!(
-                    f,
-                    "(fn {} {})",
-                    params_to_string(&l.params),
-                    body.to_string()
-                )
-            }
-            ExpEnum::Macro(m) => {
-                let body: Expression = m.body.clone().into();
-                write!(
-                    f,
-                    "(macro {} {})",
-                    params_to_string(&m.params),
-                    body.to_string()
-                )
-            }
+            ExpEnum::Lambda(l) => lambda_out(f, l),
+            ExpEnum::Macro(m) => lambda_out(f, m),
             ExpEnum::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),
             ExpEnum::Process(ProcessState::Over(pid, exit_status)) => write!(
                 f,
@@ -275,15 +266,17 @@ fn pretty_print_int(
             write!(writer, "{}", expression.to_string())?;
         }
         ExpEnum::Lambda(l) => {
-            let body: Expression = l.body.clone().into();
             write!(writer, "(fn {}", params_to_string(&l.params))?;
-            pretty_print_int(&body, environment, indent + 1, writer)?;
+            for b in &l.body {
+                pretty_print_int(&b, environment, indent + 1, writer)?;
+            }
             writer.write_all(b")")?;
         }
         ExpEnum::Macro(m) => {
-            let body: Expression = m.body.clone().into();
             write!(writer, "(macro {}", params_to_string(&m.params))?;
-            pretty_print_int(&body, environment, indent + 1, writer)?;
+            for b in &m.body {
+                pretty_print_int(&b, environment, indent + 1, writer)?;
+            }
             writer.write_all(b")")?;
         }
         ExpEnum::Wrapper(exp) => {

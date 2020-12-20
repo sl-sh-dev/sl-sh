@@ -1,7 +1,6 @@
 use crate::builtins::expand_macro;
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::*;
 use crate::symbols::*;
 use crate::types::*;
 
@@ -11,26 +10,12 @@ pub fn make_fn(
     outer_syms: &Option<Symbols>,
 ) -> Result<Lambda, LispError> {
     if let Some(params) = args.next() {
-        let (first, second) = (args.next(), args.next());
-        let body = if let Some(first) = first {
-            if let Some(second) = second {
-                let mut body: Vec<Handle> = Vec::new();
-                body.push(Expression::alloc_data_h(ExpEnum::Symbol(
-                    "do",
-                    SymLoc::None,
-                )));
-                body.push(first.into());
-                body.push(second.into());
-                for a in args {
-                    body.push(a.into());
-                }
-                Expression::with_list(body)
-            } else {
-                first
-            }
-        } else {
-            Expression::make_nil()
-        };
+        let mut body = Vec::new();
+        for a in args {
+            // This copy is important, otherwise you will get shared structure errors when
+            // analyzing and calling the lambda.
+            body.push(a.copy());
+        }
         let params_d = params.get();
         let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
             Box::new(ListIter::new_list(&vec))
@@ -68,9 +53,9 @@ pub fn make_fn(
         }
         drop(params_d);
         syms.insert("this-fn");
-        let body = body.copy();
-        analyze(environment, &body, &mut Some(syms.clone()))?;
-        let body = body.handle_no_root();
+        for arg in &body {
+            analyze(environment, &arg, &mut Some(syms.clone()))?;
+        }
         return Ok(Lambda {
             params,
             num_params,

@@ -87,7 +87,7 @@ fn call_lambda_int(
 ) -> Result<Expression, LispError> {
     let mut lambda_int = lambda;
     let mut lambda: &mut Lambda = &mut lambda_int;
-    let mut body: Expression = lambda.body.clone().into();
+    let mut body: &Vec<Expression> = &lambda.body;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     let stack_base = environment.stack_frame_base;
@@ -114,7 +114,18 @@ fn call_lambda_int(
             environment.sig_int.store(false, Ordering::Relaxed);
             return Err(LispError::new("Lambda interupted by SIGINT."));
         }
-        let last_eval = eval_nr(environment, &body)?;
+        let mut last_eval: Option<Expression> = None;
+        for arg in body {
+            if let Some(ret) = last_eval {
+                ret.resolve(environment)?;
+            }
+            last_eval = Some(eval_nr(environment, arg.clone())?);
+        }
+        let last_eval = if let Some(le) = last_eval {
+            le
+        } else {
+            Expression::make_nil()
+        };
         looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
             // This is a recur call, must be a tail call.
@@ -143,7 +154,7 @@ fn call_lambda_int(
                     lambda_int = lam.clone();
                     drop(lam_d);
                     lambda = &mut lambda_int;
-                    body = lambda.body.clone().into();
+                    body = &lambda.body;
                     looping = true;
                     environment.namespace = lambda.syms.namespace().clone();
                     environment.stack.truncate(stack_len);

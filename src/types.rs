@@ -70,7 +70,7 @@ pub struct Lambda {
     pub params: Vec<&'static str>,
     pub num_params: usize,
     pub has_rest: bool,
-    pub body: Handle,
+    pub body: Vec<Expression>,
     pub syms: Symbols,
     pub namespace: Rc<RefCell<Namespace>>,
 }
@@ -81,26 +81,11 @@ impl Lambda {
             params: self.params.iter().copied().collect(),
             num_params: self.num_params,
             has_rest: self.has_rest,
-            body: copy_handle(&self.body),
+            body: self.body.iter().map(|b| b.copy()).collect(),
             syms: self.syms.clone(), // XXX TODO deep?
             namespace: self.namespace.clone(),
         }
     }
-}
-
-fn params_to_string(params: &[&'static str]) -> String {
-    let mut pstr = "(".to_string();
-    let mut first = true;
-    for p in params {
-        if first {
-            first = false;
-        } else {
-            pstr.push(' ');
-        }
-        pstr.push_str(p);
-    }
-    pstr.push(')');
-    pstr
 }
 
 #[derive(Clone, Copy)]
@@ -385,23 +370,13 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::String(s, _) => write!(f, "ExpEnum::String(\"{}\")", s),
             ExpEnum::Char(c) => write!(f, "ExpEnum::Char(#\\{})", c),
             ExpEnum::CodePoint(c) => write!(f, "ExpEnum::CodePoint(#\\{})", c),
-            ExpEnum::Lambda(l) => {
-                let body: Expression = l.body.clone().into();
-                write!(
-                    f,
-                    "ExpEnum::Lambda((fn {} {}))",
-                    params_to_string(&l.params),
-                    body.to_string()
-                )
+            ExpEnum::Lambda(_) => {
+                let exp: Expression = self.into();
+                write!(f, "ExpEnum::Lambda({})", exp)
             }
-            ExpEnum::Macro(m) => {
-                let body: Expression = m.body.clone().into();
-                write!(
-                    f,
-                    "ExpEnum::Macro((macro {} {}))",
-                    params_to_string(&m.params),
-                    body.to_string()
-                )
+            ExpEnum::Macro(_) => {
+                let exp: Expression = self.into();
+                write!(f, "ExpEnum::Macro({})", exp)
             }
             ExpEnum::Vector(l) => write!(f, "ExpEnum::Vector({:?})", l),
             ExpEnum::Values(v) => write!(f, "ExpEnum::Vector({:?})", v),
