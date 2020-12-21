@@ -66,11 +66,30 @@ fn copy_handle(h: &Handle) -> Handle {
 }
 
 #[derive(Clone, Debug)]
+pub enum MultiExpression {
+    None,
+    Single(Expression),
+    Multiple(Vec<Expression>),
+}
+
+impl MultiExpression {
+    pub fn copy(&self) -> Self {
+        match self {
+            MultiExpression::None => MultiExpression::None,
+            MultiExpression::Single(exp) => MultiExpression::Single(exp.copy()),
+            MultiExpression::Multiple(exps) => {
+                MultiExpression::Multiple(exps.iter().map(|b| b.copy()).collect())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Lambda {
     pub params: Vec<&'static str>,
     pub num_params: usize,
     pub has_rest: bool,
-    pub body: Vec<Expression>,
+    pub body: MultiExpression,
     pub syms: Symbols,
     pub namespace: Rc<RefCell<Namespace>>,
 }
@@ -81,7 +100,7 @@ impl Lambda {
             params: self.params.iter().copied().collect(),
             num_params: self.num_params,
             has_rest: self.has_rest,
-            body: self.body.iter().map(|b| b.copy()).collect(),
+            body: self.body.copy(),
             syms: self.syms.clone(), // XXX TODO deep?
             namespace: self.namespace.clone(),
         }

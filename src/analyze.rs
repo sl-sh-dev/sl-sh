@@ -10,12 +10,24 @@ pub fn make_fn(
     outer_syms: &Option<Symbols>,
 ) -> Result<Lambda, LispError> {
     if let Some(params) = args.next() {
-        let mut body = Vec::new();
-        for a in args {
-            // This copy is important, otherwise you will get shared structure errors when
-            // analyzing and calling the lambda.
-            body.push(a.copy());
-        }
+        let (first, second) = (args.next(), args.next());
+        let body = if let Some(first) = first {
+            if let Some(second) = second {
+                // The copies below are important, otherwise you will get shared
+                // structure errors when analyzing and calling the lambda.
+                let mut body = Vec::new();
+                body.push(first.copy());
+                body.push(second.copy());
+                for arg in args {
+                    body.push(arg.copy());
+                }
+                MultiExpression::Multiple(body)
+            } else {
+                MultiExpression::Single(first.copy())
+            }
+        } else {
+            MultiExpression::None
+        };
         let params_d = params.get();
         let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
             Box::new(ListIter::new_list(&vec))
@@ -53,8 +65,14 @@ pub fn make_fn(
         }
         drop(params_d);
         syms.insert("this-fn");
-        for arg in &body {
-            analyze(environment, &arg, &mut Some(syms.clone()))?;
+        match &body {
+            MultiExpression::None => {}
+            MultiExpression::Single(arg) => analyze(environment, &arg, &mut Some(syms.clone()))?,
+            MultiExpression::Multiple(body) => {
+                for arg in body {
+                    analyze(environment, &arg, &mut Some(syms.clone()))?;
+                }
+            }
         }
         return Ok(Lambda {
             params,

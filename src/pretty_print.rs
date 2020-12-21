@@ -43,8 +43,14 @@ impl fmt::Display for Expression {
         }
         fn lambda_out(f: &mut fmt::Formatter, l: &Lambda) -> fmt::Result {
             write!(f, "(fn {}", params_to_string(&l.params),)?;
-            for b in &l.body {
-                write!(f, "{}", b.to_string())?;
+            match &l.body {
+                MultiExpression::None => {}
+                MultiExpression::Single(body) => write!(f, "{}", body.to_string())?,
+                MultiExpression::Multiple(body) => {
+                    for b in body {
+                        write!(f, "{}", b.to_string())?;
+                    }
+                }
             }
             write!(f, ")")
         }
@@ -267,15 +273,31 @@ fn pretty_print_int(
         }
         ExpEnum::Lambda(l) => {
             write!(writer, "(fn {}", params_to_string(&l.params))?;
-            for b in &l.body {
-                pretty_print_int(&b, environment, indent + 1, writer)?;
+            match &l.body {
+                MultiExpression::None => {}
+                MultiExpression::Single(body) => {
+                    pretty_print_int(&body, environment, indent + 1, writer)?
+                }
+                MultiExpression::Multiple(body) => {
+                    for b in body {
+                        pretty_print_int(&b, environment, indent + 1, writer)?;
+                    }
+                }
             }
             writer.write_all(b")")?;
         }
         ExpEnum::Macro(m) => {
             write!(writer, "(macro {}", params_to_string(&m.params))?;
-            for b in &m.body {
-                pretty_print_int(&b, environment, indent + 1, writer)?;
+            match &m.body {
+                MultiExpression::None => {}
+                MultiExpression::Single(body) => {
+                    pretty_print_int(&body, environment, indent + 1, writer)?
+                }
+                MultiExpression::Multiple(body) => {
+                    for b in body {
+                        pretty_print_int(&b, environment, indent + 1, writer)?;
+                    }
+                }
             }
             writer.write_all(b")")?;
         }

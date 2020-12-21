@@ -87,7 +87,7 @@ fn call_lambda_int(
 ) -> Result<Expression, LispError> {
     let mut lambda_int = lambda;
     let mut lambda: &mut Lambda = &mut lambda_int;
-    let mut body: &Vec<Expression> = &lambda.body;
+    let mut body: &MultiExpression = &lambda.body;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     let stack_base = environment.stack_frame_base;
@@ -114,17 +114,23 @@ fn call_lambda_int(
             environment.sig_int.store(false, Ordering::Relaxed);
             return Err(LispError::new("Lambda interupted by SIGINT."));
         }
-        let mut last_eval: Option<Expression> = None;
-        for arg in body {
-            if let Some(ret) = last_eval {
-                ret.resolve(environment)?;
+        let mut tmp_eval: Option<Expression> = None;
+        let last_eval = match body {
+            MultiExpression::None => Expression::make_nil(),
+            MultiExpression::Single(body) => eval_nr(environment, &body)?,
+            MultiExpression::Multiple(body) => {
+                for arg in body {
+                    if let Some(ret) = tmp_eval {
+                        ret.resolve(environment)?;
+                    }
+                    tmp_eval = Some(eval_nr(environment, arg.clone())?);
+                }
+                if let Some(exp) = tmp_eval {
+                    exp
+                } else {
+                    Expression::make_nil()
+                }
             }
-            last_eval = Some(eval_nr(environment, arg.clone())?);
-        }
-        let last_eval = if let Some(le) = last_eval {
-            le
-        } else {
-            Expression::make_nil()
         };
         looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
