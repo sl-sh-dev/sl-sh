@@ -72,11 +72,10 @@ impl fmt::Display for Expression {
                 pid, exit_status
             ),
             ExpEnum::Function(_) => write!(f, "#<Function>"),
-            ExpEnum::Vector(list) => {
+            ExpEnum::Vector(_) => {
                 let mut res = String::new();
                 res.push_str("#(");
-                let mut ib = Box::new(ListIter::new_list(&list));
-                list_out(&mut res, &mut ib);
+                list_out(&mut res, &mut self.iter());
                 res.push(')');
                 write!(f, "{}", res)
             }
@@ -150,7 +149,8 @@ impl fmt::Display for Expression {
             ExpEnum::LazyFn(_, args) => {
                 let mut res = String::new();
                 res.push_str("#<LAZYFN<");
-                list_out(&mut res, &mut Box::new(ListIter::new_list(args)));
+                let ib = &mut args[..].iter().map(|h| h.into());
+                list_out(&mut res, ib);
                 res.push_str(">>");
                 write!(f, "{}", res)
             }

@@ -55,9 +55,7 @@ fn builtin_make_hash(
             match &assocs_d.data {
                 ExpEnum::Pair(_, _) => build_map(environment, map, &mut assocs.iter()),
                 ExpEnum::Nil => Ok(Expression::alloc_data(ExpEnum::HashMap(map))),
-                ExpEnum::Vector(list) => {
-                    build_map(environment, map, &mut Box::new(ListIter::new_list(&list)))
-                }
+                ExpEnum::Vector(_) => build_map(environment, map, &mut assocs.iter()),
                 _ => Err(LispError::new("make-hash takes a sequence")),
             }
         } else {

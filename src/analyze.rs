@@ -1,6 +1,5 @@
 use crate::builtins::expand_macro;
 use crate::environment::*;
-use crate::eval::*;
 use crate::symbols::*;
 use crate::types::*;
 
@@ -9,7 +8,7 @@ pub fn make_fn(
     args: &mut dyn Iterator<Item = Expression>,
     outer_syms: &Option<Symbols>,
 ) -> Result<Lambda, LispError> {
-    if let Some(params) = args.next() {
+    if let Some(params_exp) = args.next() {
         let (first, second) = (args.next(), args.next());
         let body = if let Some(first) = first {
             if let Some(second) = second {
@@ -28,18 +27,12 @@ pub fn make_fn(
         } else {
             MultiExpression::None
         };
-        let params_d = params.get();
-        let p_iter = if let ExpEnum::Vector(vec) = &params_d.data {
-            Box::new(ListIter::new_list(&vec))
-        } else {
-            params.iter()
-        };
         let mut params = Vec::new();
         let mut syms = Symbols::with_frame(environment, outer_syms);
         let mut has_rest = false;
         let mut num_params = 0;
         let mut num_post_rest = 0;
-        for p in p_iter {
+        for p in params_exp.iter() {
             if let ExpEnum::Symbol(s, _) = p.get().data {
                 params.push(s);
                 if s == "&rest" {
@@ -63,7 +56,6 @@ pub fn make_fn(
                 "fn: &rest must be before the last parameter",
             ));
         }
-        drop(params_d);
         syms.insert("this-fn");
         match &body {
             MultiExpression::None => {}
@@ -164,9 +156,9 @@ fn backquote_syms(
                     last_unquote = true;
                 }
             }
-            ExpEnum::Vector(v) => {
-                let mut ib = box_slice_it(v);
-                backquote_syms(environment, &mut ib, syms);
+            ExpEnum::Vector(_) => {
+                drop(arg_d);
+                backquote_syms(environment, &mut exp.iter(), syms);
             }
             ExpEnum::Pair(_, _) => {
                 drop(arg_d);
@@ -259,9 +251,8 @@ fn analyze_seq(
                                         ));
                                     }
                                 }
-                                ExpEnum::Vector(v) => {
-                                    let mut ib = box_slice_it(v);
-                                    backquote_syms(environment, &mut ib, syms);
+                                ExpEnum::Vector(_) => {
+                                    backquote_syms(environment, &mut arg.iter(), syms);
                                 }
                                 ExpEnum::Pair(_, _) => {
                                     backquote_syms(environment, &mut arg.iter(), syms);
@@ -291,9 +282,9 @@ fn analyze_seq(
 fn analyze_expand(environment: &mut Environment, expression: Expression) -> Result<(), LispError> {
     let quoted = {
         let exp_d = expression.get();
-        if let ExpEnum::Vector(v) = &exp_d.data {
-            let mut ib = box_slice_it(v);
-            is_quoted(environment, &mut ib)
+        if let ExpEnum::Vector(_) = &exp_d.data {
+            drop(exp_d);
+            is_quoted(environment, &mut expression.iter())
         } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
             drop(exp_d);
             is_quoted(environment, &mut expression.iter())
@@ -332,19 +323,14 @@ fn analyze_prep(
 ) -> Result<(), LispError> {
     {
         let exp_d = expression.get();
-        if let ExpEnum::Vector(v) = &exp_d.data {
-            let (exp_enum, do_list) = {
-                let mut ib = box_slice_it(v);
-                analyze_seq(environment, &mut ib, syms)?
-            };
+        if let ExpEnum::Vector(_) = &exp_d.data {
+            drop(exp_d);
+            let (exp_enum, do_list) = analyze_seq(environment, &mut expression.iter(), syms)?;
             if let Some(exp_enum) = exp_enum {
-                drop(exp_d);
                 expression.get_mut().data.replace(exp_enum);
             } else if do_list {
-                let v = v.clone();
-                drop(exp_d);
-                for exp in v {
-                    analyze_prep(environment, exp.into(), syms)?;
+                for exp in expression.iter() {
+                    analyze_prep(environment, exp, syms)?;
                 }
             }
         } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {

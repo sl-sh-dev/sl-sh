@@ -97,12 +97,8 @@ fn call_lambda_int(
         for v in args {
             tvars.push(eval(environment, &v)?.into());
         }
-        prep_stack(
-            environment,
-            &mut box_slice_it(&tvars),
-            &lambda,
-            lambda_current.clone(),
-        )?;
+        let ib = &mut tvars[..].iter().map(|h| h.into());
+        prep_stack(environment, ib, &lambda, lambda_current.clone())?;
     } else {
         prep_stack(environment, args, &lambda, lambda_current.clone())?;
     }
@@ -146,7 +142,7 @@ fn call_lambda_int(
                 environment.stack_frame_base = stack_base;
                 prep_stack(
                     environment,
-                    &mut ListIter::new_list(&new_args),
+                    &mut last_eval.iter(),
                     &lambda,
                     lambda_current.clone(),
                 )?;
@@ -166,12 +162,8 @@ fn call_lambda_int(
                     environment.stack.truncate(stack_len);
                     environment.stack_frames.truncate(stack_frames_len);
                     environment.stack_frame_base = stack_base;
-                    prep_stack(
-                        environment,
-                        &mut ListIter::new_list(&parts),
-                        &lambda,
-                        lambda_current.clone(),
-                    )?;
+                    let ib = &mut parts[..].iter().map(|h| h.into());
+                    prep_stack(environment, ib, &lambda, lambda_current.clone())?;
                 }
             }
         }
@@ -255,10 +247,6 @@ fn make_lazy(
     }))
 }
 
-pub fn box_slice_it<'a>(v: &'a [Handle]) -> Box<dyn Iterator<Item = Expression> + 'a> {
-    Box::new(ListIter::new_slice(v))
-}
-
 fn eval_command(
     environment: &mut Environment,
     com_exp: &Expression,
@@ -299,34 +287,21 @@ fn fn_eval_lazy(
     expression: &Expression,
 ) -> Result<Expression, LispError> {
     let exp_d = expression.get();
-    let e2: Expression;
-    let e2_d;
-    let (command, mut parts) = match &exp_d.data {
-        ExpEnum::Vector(parts) => {
-            let (command, parts) = match parts.split_first() {
-                Some((c, p)) => (c, p),
-                None => {
-                    return Err(LispError::new("No valid command."));
-                }
-            };
-            let ib = box_slice_it(parts);
-            (command.clone(), ib)
+    let (command, mut parts) = {
+        match &exp_d.data {
+            ExpEnum::Vector(_) => {}
+            ExpEnum::Pair(_, _) => {}
+            ExpEnum::Nil => return Ok(Expression::alloc_data(ExpEnum::Nil)),
+            _ => return Err(LispError::new("Not a callable expression.")),
         }
-        ExpEnum::Pair(e1, ie2) => {
-            e2 = ie2.into();
-            e2_d = e2.get();
-            let e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
-                Box::new(ListIter::new_list(&list))
-            } else {
-                drop(e2_d);
-                e2.iter()
-            };
-            (e1.clone(), e2_iter)
-        }
-        ExpEnum::Nil => return Ok(Expression::alloc_data(ExpEnum::Nil)),
-        _ => return Err(LispError::new("Not a callable expression.")),
+        let mut ib = expression.iter();
+        let command = if let Some(c) = ib.next() {
+            c
+        } else {
+            return Err(LispError::new("No valid command."));
+        };
+        (command, ib)
     };
-    let command: Expression = command.into();
     let command = command.resolve(environment)?;
     let command_d = command.get();
     let allow_sys_com =

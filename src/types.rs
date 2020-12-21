@@ -152,33 +152,33 @@ impl Iterator for PairIter {
     }
 }
 
-pub struct ListIter<'a> {
-    inner_iter: std::slice::Iter<'a, Handle>,
+pub struct ListIter {
+    current: Expression,
+    index: usize,
 }
 
-impl<'a> ListIter<'a> {
-    pub fn new_list(list: &[Handle]) -> ListIter<'_> {
+impl ListIter {
+    fn new(exp: Expression) -> ListIter {
         ListIter {
-            inner_iter: list.iter(),
-        }
-    }
-
-    pub fn new_slice(list: &'a [Handle]) -> ListIter<'a> {
-        ListIter {
-            inner_iter: list.iter(),
+            current: exp,
+            index: 0,
         }
     }
 }
 
-impl<'a> Iterator for ListIter<'a> {
+impl Iterator for ListIter {
     type Item = Expression;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(exp) = self.inner_iter.next() {
-            let exp: Expression = exp.into();
-            Some(exp)
+        if let ExpEnum::Vector(v) = &self.current.get().data {
+            if let Some(exp) = v.get(self.index) {
+                self.index += 1;
+                Some(exp.into())
+            } else {
+                None
+            }
         } else {
-            None
+            panic!("Not a vector, invalid for ListIter!");
         }
     }
 }
@@ -549,8 +549,7 @@ impl Expression {
         let data = self.get();
         match &data.data {
             ExpEnum::Pair(_, _) => Box::new(PairIter::new(self.clone())),
-            ExpEnum::Vector(_) => panic!("Can not make a vector iterator this way!"),
-            ExpEnum::Values(_) => panic!("Can not make a values iterator this way!"),
+            ExpEnum::Vector(_) => Box::new(ListIter::new(self.clone())),
             _ => Box::new(iter::empty()),
         }
     }
@@ -564,7 +563,7 @@ impl Expression {
     pub fn resolve(self, environment: &mut Environment) -> Result<Self, LispError> {
         let self_d = self.get();
         if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
-            let ib = &mut ListIter::new_list(parts);
+            let ib = &mut parts[..].iter().map(|h| h.into());
             let res = call_lambda(environment, lambda.clone().into(), ib, false)?;
             drop(self_d);
             res.resolve(environment)

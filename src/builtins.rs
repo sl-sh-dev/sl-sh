@@ -142,22 +142,18 @@ fn builtin_apply(
         last_evaled = eval(environment, alist)?;
         let last_d = last_evaled.get();
         let itr = match &last_d.data {
-            ExpEnum::Vector(list) => Box::new(ListIter::new_list(&list)),
+            ExpEnum::Vector(_) => last_evaled.iter(),
             ExpEnum::Pair(_, _) => last_evaled.iter(),
             ExpEnum::Nil => last_evaled.iter(),
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
-            /*let b = ExpEnum::Pair(
-                Expression::alloc_data_h(ExpEnum::Quote),
-                Expression::alloc_data_h(ExpEnum::Pair(a.into(), Expression::make_nil_h())),
-            );*/
-            call_list.push(a.into()); //Expression::alloc_data_h(b));
+            call_list.push(a.into());
         }
     }
-    let mut args = box_slice_it(&call_list[..]);
+    let args = &mut call_list[..].iter().map(|h| h.into());
     if let Some(command) = args.next() {
-        apply_fn_call(environment, command, &mut args)
+        apply_fn_call(environment, command, args)
     } else {
         Err(LispError::new("apply: empty call"))
     }
@@ -202,13 +198,8 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         None => file_name.to_string(),
     };
     let file_path = if let Some(lp) = lookup_expression(environment, "*load-path*") {
-        let lp_d = lp.get();
-        let p_itr = match &lp_d.data {
-            ExpEnum::Vector(vec) => Box::new(ListIter::new_list(&vec)),
-            _ => lp.iter(),
-        };
         let mut path_out = file_name.clone();
-        for l in p_itr {
+        for l in lp.iter() {
             let path_name = match &l.get().data {
                 ExpEnum::Symbol(sym, _) => Some((*sym).to_string()),
                 ExpEnum::String(s, _) => Some(s.to_string()),
@@ -570,22 +561,7 @@ pub fn builtin_quote(
     }
     Err(LispError::new("quote: takes one form"))
 }
-/*
-fn copy_clear_symbol(exp: Expression) -> Expression {
-    let mut iexp: Expression = exp.clone();
-    // Don't reuse structure for symbols or bad stuff can happen...
-    {
-        let iexp_d = iexp.get();
-        if let ExpEnum::Symbol(sym, _) = &iexp_d.data {
-            let sym = <&str>::clone(sym);
-            drop(iexp_d);
-            // XXX TODO- better copy?
-            iexp = ExpEnum::Symbol(sym, SymLoc::None).into();
-        }
-    }
-    iexp
-}
-*/
+
 fn replace_commas(
     environment: &mut Environment,
     list: &mut dyn Iterator<Item = Expression>,
@@ -599,10 +575,7 @@ fn replace_commas(
         let meta = exp.meta();
         let exp_d = exp.get();
         let exp = match &exp_d.data {
-            ExpEnum::Vector(list) => {
-                let mut i = Box::new(ListIter::new_list(&list));
-                replace_commas(environment, &mut i, is_vector, meta)?
-            }
+            ExpEnum::Vector(_) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
             _ => exp.clone(),
         };
@@ -692,12 +665,7 @@ pub fn builtin_bquote(
                     Ok(Expression::alloc_data(ExpEnum::Nil))
                 }
             }
-            ExpEnum::Vector(list) => replace_commas(
-                environment,
-                &mut Box::new(ListIter::new_list(list)),
-                true,
-                meta,
-            ),
+            ExpEnum::Vector(_) => replace_commas(environment, &mut arg.iter(), true, meta),
             ExpEnum::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false, meta),
             _ => Ok(arg.clone()),
         }
@@ -793,54 +761,30 @@ fn expand_macro_internal(
         return Err(LispError::new("Macro expand recursion to deep!"));
     }
     let arg_d = arg.get();
-    if let ExpEnum::Vector(list) = &arg_d.data {
-        let (command, parts) = match list.split_first() {
-            Some((c, p)) => (c, p),
-            None => {
-                return Ok(None);
-            }
+    match &arg_d.data {
+        ExpEnum::Vector(_) => {}
+        ExpEnum::Pair(_, _) => {}
+        _ => return Ok(None),
+    }
+    let (command, mut parts) = {
+        let mut ib = arg.iter();
+        let command = if let Some(c) = ib.next() {
+            c
+        } else {
+            return Err(LispError::new("No valid command."));
         };
-        let expansion = do_expansion(
-            environment,
-            &command.clone().into(),
-            &mut Box::new(ListIter::new_slice(parts)),
-        )?;
-        if let Some(expansion) = expansion {
-            if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
-                    Ok(Some(new_expansion))
-                } else {
-                    Ok(Some(expansion))
-                }
+        (command, ib)
+    };
+    let expansion = do_expansion(environment, &command, &mut parts)?;
+    if let Some(expansion) = expansion {
+        if !one {
+            if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
+                Ok(Some(new_expansion))
             } else {
                 Ok(Some(expansion))
             }
         } else {
-            Ok(None)
-        }
-    } else if let ExpEnum::Pair(e1, e2) = &arg_d.data {
-        let e1: Expression = e1.into();
-        let e2: Expression = e2.into();
-        let e2_d = e2.get();
-        let mut e2_iter = if let ExpEnum::Vector(list) = &e2_d.data {
-            Box::new(ListIter::new_list(&list))
-        } else {
-            drop(e2_d);
-            e2.iter()
-        };
-        let expansion = do_expansion(environment, &e1, &mut e2_iter)?;
-        if let Some(expansion) = expansion {
-            if !one {
-                if let Some(new_expansion) = expand_macro(environment, &expansion, one, depth)? {
-                    Ok(Some(new_expansion))
-                } else {
-                    Ok(Some(expansion))
-                }
-            } else {
-                Ok(Some(expansion))
-            }
-        } else {
-            Ok(None)
+            Ok(Some(expansion))
         }
     } else {
         Ok(None)
