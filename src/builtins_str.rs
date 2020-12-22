@@ -6,7 +6,6 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
@@ -102,20 +101,20 @@ fn builtin_str_split(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Handle> = Vec::new();
+                let mut split_list: Vec<Expression> = Vec::new();
                 if pat == ":whitespace" {
                     for s in text.split_whitespace() {
-                        split_list.push(
-                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
-                                .handle_no_root(),
-                        );
+                        split_list.push(Expression::alloc_data(ExpEnum::String(
+                            s.to_string().into(),
+                            None,
+                        )));
                     }
                 } else {
                     for s in text.split(&pat) {
-                        split_list.push(
-                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
-                                .handle_no_root(),
-                        );
+                        split_list.push(Expression::alloc_data(ExpEnum::String(
+                            s.to_string().into(),
+                            None,
+                        )));
                     }
                 }
                 return Ok(Expression::with_list(split_list));
@@ -136,12 +135,12 @@ fn builtin_str_rsplit(
                 let pat = as_string(environment, &pat)?;
                 let text = eval(environment, text)?;
                 let text = as_string(environment, &text)?;
-                let mut split_list: Vec<Handle> = Vec::new();
+                let mut split_list: Vec<Expression> = Vec::new();
                 for s in text.rsplit(&pat) {
-                    split_list.push(
-                        Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
-                            .handle_no_root(),
-                    );
+                    split_list.push(Expression::alloc_data(ExpEnum::String(
+                        s.to_string().into(),
+                        None,
+                    )));
                 }
                 return Ok(Expression::with_list(split_list));
             }
@@ -172,12 +171,12 @@ fn builtin_str_splitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Handle> = Vec::new();
+                    let mut split_list: Vec<Expression> = Vec::new();
                     for s in text.splitn(n as usize, &pat) {
-                        split_list.push(
-                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
-                                .handle_no_root(),
-                        );
+                        split_list.push(Expression::alloc_data(ExpEnum::String(
+                            s.to_string().into(),
+                            None,
+                        )));
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -209,12 +208,12 @@ fn builtin_str_rsplitn(
                     let pat = as_string(environment, &pat)?;
                     let text = eval(environment, text)?;
                     let text = as_string(environment, &text)?;
-                    let mut split_list: Vec<Handle> = Vec::new();
+                    let mut split_list: Vec<Expression> = Vec::new();
                     for s in text.rsplitn(n as usize, &pat) {
-                        split_list.push(
-                            Expression::alloc_data(ExpEnum::String(s.to_string().into(), None))
-                                .handle_no_root(),
-                        );
+                        split_list.push(Expression::alloc_data(ExpEnum::String(
+                            s.to_string().into(),
+                            None,
+                        )));
                     }
                     return Ok(Expression::with_list(split_list));
                 }
@@ -242,7 +241,6 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            let s: Expression = s.into();
                             new_str.push_str(&as_string(environment, &s)?);
                             first = false;
                         }
@@ -604,8 +602,8 @@ fn str_map_inner(
     let mut res = String::new();
     for ch in UnicodeSegmentation::graphemes(string, true) {
         let mut list = Vec::with_capacity(2);
-        list.push(Expression::alloc_data(ExpEnum::Lambda(func.clone())).handle_no_root());
-        list.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())).handle_no_root());
+        list.push(Expression::alloc_data(ExpEnum::Lambda(func.clone())));
+        list.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
         let a = eval(environment, Expression::with_list(list))?;
         res.push_str(&as_string(environment, &a)?);
     }

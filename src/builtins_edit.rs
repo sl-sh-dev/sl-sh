@@ -16,7 +16,6 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings::default();
     if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
-            let keybindings: Expression = keybindings.into();
             if let ExpEnum::Symbol(keybindings, _) = &keybindings.get().data {
                 match &keybindings[..] {
                     ":vi" => ret.key_bindings = Keys::Vi,
@@ -26,7 +25,6 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             };
         }
         if let Some(max) = repl_settings.get(":max-history") {
-            let max: Expression = max.into();
             if let ExpEnum::Int(max) = &max.get().data {
                 if *max >= 0 {
                     ret.max_history = *max as usize;
@@ -38,7 +36,6 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             };
         }
         if let Some(vi_esc) = repl_settings.get(":vi_esc_sequence") {
-            let vi_esc: Expression = vi_esc.into();
             let mut i = vi_esc.iter();
             if let Some(arg0) = i.next() {
                 if let ExpEnum::String(keys, _) = &arg0.get().data {
@@ -72,25 +69,21 @@ fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
             }
         }
         if let Some(prefix) = repl_settings.get(":vi-normal-prompt-prefix") {
-            let prefix: Expression = prefix.into();
             if let ExpEnum::String(prefix, _) = &prefix.get().data {
                 ret.vi_normal_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-normal-prompt-suffix") {
-            let suffix: Expression = suffix.into();
             if let ExpEnum::String(suffix, _) = &suffix.get().data {
                 ret.vi_normal_prompt_suffix = Some(suffix.to_string());
             };
         }
         if let Some(prefix) = repl_settings.get(":vi-insert-prompt-prefix") {
-            let prefix: Expression = prefix.into();
             if let ExpEnum::String(prefix, _) = &prefix.get().data {
                 ret.vi_insert_prompt_prefix = Some(prefix.to_string());
             };
         }
         if let Some(suffix) = repl_settings.get(":vi-insert-prompt-suffix") {
-            let suffix: Expression = suffix.into();
             if let ExpEnum::String(suffix, _) = &suffix.get().data {
                 ret.vi_insert_prompt_suffix = Some(suffix.to_string());
             };
@@ -192,11 +185,11 @@ fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
             let exp = match &fn_exp.get().data {
                 ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1);
-                    v.push(fn_exp.clone().into());
-                    v.push(
-                        Expression::alloc_data(ExpEnum::String(input.to_string().into(), None))
-                            .handle_no_root(),
-                    );
+                    v.push(fn_exp.clone());
+                    v.push(Expression::alloc_data(ExpEnum::String(
+                        input.to_string().into(),
+                        None,
+                    )));
                     Expression::with_list(v)
                 }
                 _ => return input.to_string(),
@@ -300,15 +293,15 @@ fn builtin_prompt(
             Ok(input) => Ok(Expression::alloc_data(ExpEnum::String(input.into(), None))),
             Err(err) => match err.kind() {
                 ErrorKind::UnexpectedEof => {
-                    let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                    let input = Expression::alloc_data(ExpEnum::String("".into(), None));
                     let error =
-                        Expression::alloc_data_h(ExpEnum::Symbol(":unexpected-eof", SymLoc::None));
+                        Expression::alloc_data(ExpEnum::Symbol(":unexpected-eof", SymLoc::None));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 ErrorKind::Interrupted => {
-                    let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
+                    let input = Expression::alloc_data(ExpEnum::String("".into(), None));
                     let error =
-                        Expression::alloc_data_h(ExpEnum::Symbol(":interrupted", SymLoc::None));
+                        Expression::alloc_data(ExpEnum::Symbol(":interrupted", SymLoc::None));
                     Ok(Expression::alloc_data(ExpEnum::Values(vec![input, error])))
                 }
                 _ => {

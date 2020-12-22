@@ -39,7 +39,6 @@ pub fn params_done(
 pub fn is_proper_list(exp: &Expression) -> bool {
     // does not detect empty (nil) lists on purpose.
     if let ExpEnum::Pair(_e1, e2) = &exp.get().data {
-        let e2: Expression = e2.into();
         if e2.is_nil() {
             true
         } else {

@@ -4,7 +4,6 @@ use std::hash::BuildHasher;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
@@ -12,9 +11,9 @@ fn builtin_values(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut vals: Vec<Handle> = Vec::new();
+    let mut vals: Vec<Expression> = Vec::new();
     for a in args {
-        vals.push(eval(environment, a)?.handle_no_root());
+        vals.push(eval(environment, a)?);
     }
     Ok(Expression::alloc_data(ExpEnum::Values(vals)))
 }
@@ -32,7 +31,7 @@ fn builtin_values_nth(
                 let msg = format!("values-nth: index {} out of range {}", idx, vals.len());
                 return Err(LispError::new(msg));
             }
-            return Ok(vals[*idx as usize].clone().into());
+            return Ok(vals[*idx as usize].clone());
         }
     }
     Err(LispError::new(

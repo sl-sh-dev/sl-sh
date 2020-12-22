@@ -5,7 +5,6 @@ use std::iter::FromIterator;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::Handle;
 use crate::interner::*;
 use crate::types::*;
 
@@ -13,9 +12,9 @@ fn builtin_vec(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut new_args: Vec<Handle> = Vec::new();
+    let mut new_args: Vec<Expression> = Vec::new();
     for a in args {
-        new_args.push(eval(environment, a)?.handle_no_root());
+        new_args.push(eval(environment, a)?);
     }
     Ok(Expression::with_list(new_args))
 }
@@ -32,7 +31,7 @@ fn builtin_make_vec(
             let msg = format!("make-vec first arg must be an integer, found {:?}", cap);
             return Err(LispError::new(msg));
         };
-        let mut list: Vec<Handle> = Vec::with_capacity(cap as usize);
+        let mut list: Vec<Expression> = Vec::with_capacity(cap as usize);
         if let Some(item) = args.next() {
             if args.next().is_some() {
                 return Err(LispError::new("make-vec takes at most two forms"));
@@ -40,7 +39,7 @@ fn builtin_make_vec(
             let item = eval(environment, item)?;
             for _ in 0..cap {
                 // Make a copy of each item instead if using the same item for each.
-                list.push(item.duplicate().handle_no_root());
+                list.push(item.duplicate());
             }
         }
         list
@@ -137,7 +136,7 @@ fn builtin_vec_nth(
                 let msg = format!("vec-nth: index {} out of range {}", idx, list.len());
                 Err(LispError::new(msg))
             } else {
-                Ok(list[*idx as usize].clone().into())
+                Ok(list[*idx as usize].clone())
             }
         } else {
             Err(LispError::new(format!(
@@ -171,7 +170,7 @@ fn builtin_vec_set(
             if idx < 0 || idx >= vec.len() as i64 {
                 return Err(LispError::new("vec-set! index out of range"));
             }
-            vec[idx as usize] = obj.handle_no_root();
+            vec[idx as usize] = obj;
             Ok(vector.clone())
         }
         _ => Err(LispError::new("vec-set! first form must be a vector")),
@@ -191,7 +190,7 @@ fn builtin_vec_push(
                 let mut vec_d = vec.get_mut();
                 return match &mut vec_d.data {
                     ExpEnum::Vector(list) => {
-                        list.push(new_item.handle_no_root());
+                        list.push(new_item);
                         Ok(vec.clone())
                     }
                     _ => {
@@ -221,7 +220,7 @@ fn builtin_vec_pop(
             return match &mut eval(environment, list)?.get_mut().data {
                 ExpEnum::Vector(list) => {
                     if let Some(item) = list.pop() {
-                        Ok(item.into())
+                        Ok(item)
                     } else {
                         Ok(Expression::make_nil())
                     }
@@ -321,7 +320,7 @@ fn builtin_vec_insert(
                 if idx < 0 || idx > inner_list.len() as i64 {
                     Err(LispError::new("vec-insert!: index out of range"))
                 } else {
-                    inner_list.insert(idx as usize, obj.handle_no_root());
+                    inner_list.insert(idx as usize, obj);
                     Ok(vector.clone())
                 }
             }

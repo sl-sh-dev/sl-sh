@@ -207,13 +207,13 @@ fn analyze_seq(
                         drop(exp_d);
                         let lambda = make_fn(environment, args, syms)?;
                         let lambda: Expression = ExpEnum::Lambda(lambda).into();
-                        return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
+                        return Ok((Some(ExpEnum::Wrapper(lambda)), false));
                     }
                     ExpEnum::DeclareMacro => {
                         drop(exp_d);
                         let lambda = make_fn(environment, args, syms)?;
                         let lambda: Expression = ExpEnum::Macro(lambda).into();
-                        return Ok((Some(ExpEnum::Wrapper(lambda.into())), false));
+                        return Ok((Some(ExpEnum::Wrapper(lambda)), false));
                     }
                     ExpEnum::DeclareDef => {}
                     ExpEnum::DeclareVar => {
@@ -302,7 +302,7 @@ fn analyze_expand(environment: &mut Environment, expression: Expression) -> Resu
                 let v = v.clone();
                 drop(exp_d);
                 for exp in v {
-                    analyze_expand(environment, exp.into())?;
+                    analyze_expand(environment, exp)?;
                 }
             } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
                 drop(exp_d);

@@ -385,8 +385,7 @@ pub fn do_command(
             if v.is_empty() {
                 environment.data_in = Some(Expression::make_nil());
             } else {
-                let exp: Expression = (&v[0]).into();
-                environment.data_in = Some(exp);
+                environment.data_in = Some(v[0].clone());
             }
         }
     }

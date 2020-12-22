@@ -102,12 +102,9 @@ impl<'env> ShellCompleter<'env> {
                 ExpEnum::Lambda(_) => {
                     let mut v = Vec::with_capacity(1 + self.args.len());
                     let data = ExpEnum::Symbol(hook_name, SymLoc::None);
-                    v.push(Expression::alloc_data(data).handle_no_root());
+                    v.push(Expression::alloc_data(data));
                     for a in self.args.drain(..) {
-                        v.push(
-                            Expression::alloc_data(ExpEnum::String(a.into(), None))
-                                .handle_no_root(),
-                        );
+                        v.push(Expression::alloc_data(ExpEnum::String(a.into(), None)));
                     }
                     Expression::with_list(v)
                 }
@@ -131,7 +128,6 @@ impl<'env> ShellCompleter<'env> {
                         ExpEnum::Vector(list) => {
                             let mut v = Vec::with_capacity(list.len());
                             for l in list {
-                                let l: Expression = l.into();
                                 let s = match l.as_string(self.environment) {
                                     Ok(s) => s.trim().to_string(),
                                     Err(_) => "ERROR".to_string(),

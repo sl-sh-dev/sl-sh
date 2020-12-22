@@ -223,8 +223,8 @@ fn builtin_read_line(
                         // XXX TODO- something better if/when support binary.
                         let mut line = String::new();
                         if 0 == f.read_line(&mut line)? {
-                            let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                            let input = Expression::alloc_data(ExpEnum::String("".into(), None));
+                            let error = Expression::alloc_data(ExpEnum::Symbol(
                                 ":unexpected-eof",
                                 SymLoc::None,
                             ));
@@ -236,8 +236,8 @@ fn builtin_read_line(
                     FileState::Stdin => {
                         let mut line = String::new();
                         if 0 == io::stdin().read_line(&mut line)? {
-                            let input = Expression::alloc_data_h(ExpEnum::String("".into(), None));
-                            let error = Expression::alloc_data_h(ExpEnum::Symbol(
+                            let input = Expression::alloc_data(ExpEnum::String("".into(), None));
+                            let error = Expression::alloc_data(ExpEnum::Symbol(
                                 ":unexpected-eof",
                                 SymLoc::None,
                             ));

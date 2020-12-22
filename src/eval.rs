@@ -6,7 +6,6 @@ use crate::analyze::*;
 use crate::builtins::{builtin_bquote, builtin_quote};
 use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
-use crate::gc::*;
 use crate::process::*;
 use crate::reader::read;
 use crate::symbols::*;
@@ -19,14 +18,14 @@ fn setup_args(
     vars: &mut dyn Iterator<Item = Expression>,
 ) -> Result<(), LispError> {
     let mut params = 0;
-    let mut rest_data: Option<Vec<Handle>> = if has_rest { Some(Vec::new()) } else { None };
+    let mut rest_data: Option<Vec<Expression>> = if has_rest { Some(Vec::new()) } else { None };
     for v in vars {
         let var = v.resolve(environment)?;
         params += 1;
         if params < num_params || (!has_rest && params == num_params) {
             environment.stack.push(Binding::with_expression(var));
         } else if let Some(rest_data) = &mut rest_data {
-            rest_data.push(var.into());
+            rest_data.push(var);
         }
     }
     if has_rest && params < (num_params - 1) {
@@ -93,11 +92,11 @@ fn call_lambda_int(
     let stack_base = environment.stack_frame_base;
     let mut lambda_current = lambda_exp;
     if eval_args {
-        let mut tvars: Vec<Handle> = Vec::new();
+        let mut tvars: Vec<Expression> = Vec::new();
         for v in args {
-            tvars.push(eval(environment, &v)?.into());
+            tvars.push(eval(environment, &v)?);
         }
-        let ib = &mut tvars[..].iter().map(|h| h.into());
+        let ib = &mut tvars.iter().cloned();
         prep_stack(environment, ib, &lambda, lambda_current.clone())?;
     } else {
         prep_stack(environment, args, &lambda, lambda_current.clone())?;
@@ -150,7 +149,7 @@ fn call_lambda_int(
         } else if environment.exit_code.is_none() {
             // This will detect a normal tail call and optimize it.
             if let ExpEnum::LazyFn(lam, parts) = &last_eval.get().data {
-                lambda_current = lam.into();
+                lambda_current = lam.clone();
                 let lam_d = lambda_current.get();
                 if let ExpEnum::Lambda(lam) = &lam_d.data {
                     lambda_int = lam.clone();
@@ -162,7 +161,7 @@ fn call_lambda_int(
                     environment.stack.truncate(stack_len);
                     environment.stack_frames.truncate(stack_frames_len);
                     environment.stack_frame_base = stack_base;
-                    let ib = &mut parts[..].iter().map(|h| h.into());
+                    let ib = &mut parts.iter().cloned();
                     prep_stack(environment, ib, &lambda, lambda_current.clone())?;
                 }
             }
@@ -235,12 +234,12 @@ fn make_lazy(
     lambda: Expression,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut parms: Vec<Handle> = Vec::new();
+    let mut parms: Vec<Expression> = Vec::new();
     for p in args {
-        parms.push(eval(environment, p)?.into());
+        parms.push(eval(environment, p)?);
     }
     Ok(Expression::alloc(ExpObj {
-        data: ExpEnum::LazyFn(lambda.into(), parms),
+        data: ExpEnum::LazyFn(lambda, parms),
         meta: None,
         meta_tags: None,
         analyzed: RefCell::new(true),
@@ -564,8 +563,7 @@ fn internal_eval(
             if v.is_empty() {
                 Ok(Expression::make_nil())
             } else {
-                let v: Expression = (&v[0]).into();
-                internal_eval(environment, &v)
+                internal_eval(environment, &v[0])
             }
         }
         ExpEnum::Pair(_, _) => {
@@ -651,7 +649,6 @@ fn internal_eval(
             eval(environment, int_exp)
         }
         ExpEnum::Wrapper(exp) => {
-            let exp: Expression = exp.into();
             let exp_d = exp.get();
             match &exp_d.data {
                 ExpEnum::Lambda(l) => {
@@ -682,7 +679,7 @@ fn internal_eval(
                 }
                 _ => {
                     drop(exp_d);
-                    Ok(exp)
+                    Ok(exp.clone())
                 }
             }
         }
@@ -723,7 +720,7 @@ pub fn eval_nr(
             err.backtrace = Some(Vec::new());
         }
         if let Some(backtrace) = &mut err.backtrace {
-            backtrace.push(expression.clone().into());
+            backtrace.push(expression.clone());
         }
     }
     environment.state.eval_level -= 1;
@@ -755,7 +752,7 @@ pub fn eval_no_values(
         if v.is_empty() {
             Ok(Expression::make_nil())
         } else {
-            Ok((&v[0]).into())
+            Ok(v[0].clone())
         }
     } else {
         drop(exp_d);

@@ -11,7 +11,6 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::builtins_hashmap::cow_to_ref;
 use crate::environment::*;
 use crate::eval::eval;
-use crate::gc::Handle;
 use crate::types::*;
 
 #[derive(Clone, Debug)]
@@ -34,7 +33,7 @@ enum ListType {
 
 struct List {
     list_type: ListType,
-    vec: Vec<Handle>,
+    vec: Vec<Expression>,
 }
 
 fn is_whitespace(ch: &str) -> bool {
@@ -86,23 +85,18 @@ fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), Re
             Some(mut v2) => {
                 match v.list_type {
                     ListType::Vector => {
-                        v2.vec.push(Expression::with_list(v.vec).into());
+                        v2.vec.push(Expression::with_list(v.vec));
                     }
                     ListType::List => {
-                        if v.vec.len() == 3 && Expression::new(v.vec[1].clone()).to_string() == "."
-                        {
-                            v2.vec.push(
-                                Expression::alloc(ExpObj {
-                                    data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
-                                    meta: exp_meta,
-                                    meta_tags: None,
-                                    analyzed: RefCell::new(false),
-                                })
-                                .into(),
-                            );
+                        if v.vec.len() == 3 && v.vec[1].to_string() == "." {
+                            v2.vec.push(Expression::alloc(ExpObj {
+                                data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
+                                meta: exp_meta,
+                                meta_tags: None,
+                                analyzed: RefCell::new(false),
+                            }));
                         } else {
-                            v2.vec
-                                .push(Expression::cons_from_vec(&v.vec, exp_meta).into());
+                            v2.vec.push(Expression::cons_from_vec(&v.vec, exp_meta));
                         }
                     }
                 }
@@ -315,7 +309,7 @@ fn push_stack(
 ) -> Result<(), ReadError> {
     match stack.pop() {
         Some(mut v) => {
-            v.vec.push(expression.handle_no_root());
+            v.vec.push(expression);
             stack.push(v);
             Ok(())
         }
@@ -398,17 +392,12 @@ fn call_reader_macro(
         let exp = match &exp.get().data {
             ExpEnum::Lambda(_) => {
                 let mut v = Vec::with_capacity(1);
-                v.push(
-                    Expression::alloc_data(ExpEnum::Symbol(
-                        environment.interner.intern(name),
-                        SymLoc::None,
-                    ))
-                    .handle_no_root(),
-                );
-                v.push(stream.handle_no_root());
-                v.push(
-                    Expression::alloc_data(ExpEnum::Char(ch.to_string().into())).handle_no_root(),
-                );
+                v.push(Expression::alloc_data(ExpEnum::Symbol(
+                    environment.interner.intern(name),
+                    SymLoc::None,
+                )));
+                v.push(stream);
+                v.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
                 Expression::with_list(v)
             }
             _ => {
@@ -628,14 +617,11 @@ fn read_inner(
                     }
                 }
                 "'" => {
-                    let mut quoted = Vec::<Handle>::new();
-                    quoted.push(
-                        Expression::alloc_data(ExpEnum::Symbol(
-                            environment.interner.intern("quote"),
-                            SymLoc::None,
-                        ))
-                        .handle_no_root(),
-                    );
+                    let mut quoted = Vec::<Expression>::new();
+                    quoted.push(Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern("quote"),
+                        SymLoc::None,
+                    )));
                     stack.push(List {
                         list_type: ListType::List,
                         vec: quoted,
@@ -656,23 +642,17 @@ fn read_inner(
                     }
                 }
                 "`" => {
-                    let mut quoted = Vec::<Handle>::new();
+                    let mut quoted = Vec::<Expression>::new();
                     if in_back_quote {
-                        quoted.push(
-                            Expression::alloc_data(ExpEnum::Symbol(
-                                environment.interner.intern("quote"),
-                                SymLoc::None,
-                            ))
-                            .handle_no_root(),
-                        );
+                        quoted.push(Expression::alloc_data(ExpEnum::Symbol(
+                            environment.interner.intern("quote"),
+                            SymLoc::None,
+                        )));
                     } else {
-                        quoted.push(
-                            Expression::alloc_data(ExpEnum::Symbol(
-                                environment.interner.intern("back-quote"),
-                                SymLoc::None,
-                            ))
-                            .handle_no_root(),
-                        );
+                        quoted.push(Expression::alloc_data(ExpEnum::Symbol(
+                            environment.interner.intern("back-quote"),
+                            SymLoc::None,
+                        )));
                     }
                     stack.push(List {
                         list_type: ListType::List,
@@ -766,7 +746,7 @@ fn read_inner(
                             level += 1;
                             stack.push(List {
                                 list_type: ListType::Vector,
-                                vec: Vec::<Handle>::new(),
+                                vec: Vec::<Expression>::new(),
                             });
                         }
                         "t" => {
@@ -808,7 +788,7 @@ fn read_inner(
                     ));
                     stack.push(List {
                         list_type: ListType::List,
-                        vec: Vec::<Handle>::new(),
+                        vec: Vec::<Expression>::new(),
                     });
                 }
                 ")" => {
@@ -899,7 +879,7 @@ fn stack_to_exp(
                         reason: "Empty results".to_string(),
                     })
                 } else if v.vec.len() == 1 && !always_wrap {
-                    let exp: Expression = v.vec.pop().unwrap().into();
+                    let exp: Expression = v.vec.pop().unwrap();
                     if list_only {
                         // If we only have one thing and it is a vector or list then
                         // remove the outer list that was added (unless always_wrap
@@ -910,7 +890,7 @@ fn stack_to_exp(
                             ExpEnum::Pair(_, _) => Ok(exp.clone()),
                             ExpEnum::Nil => Ok(exp.clone()),
                             _ => {
-                                v.vec.push(exp.handle_no_root());
+                                v.vec.push(exp.clone());
                                 Ok(Expression::with_list_meta(v.vec, exp_meta))
                             }
                         }
@@ -951,7 +931,7 @@ fn read2(
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
-        vec: Vec::<Handle>::new(),
+        vec: Vec::<Expression>::new(),
     });
     // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
     // reference and iterator go away at the end of this function.
@@ -1017,7 +997,7 @@ pub fn read_form(
     let mut stack: Vec<List> = Vec::new();
     stack.push(List {
         list_type: ListType::Vector,
-        vec: Vec::<Handle>::new(),
+        vec: Vec::<Expression>::new(),
     });
     let ichars = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
         Ok((_, ichars)) => ichars,
@@ -1074,7 +1054,7 @@ mod tests {
             ExpEnum::Vector(list) => {
                 output.push("#(".to_string());
                 for exp in list.iter() {
-                    to_strs(output, &exp.into());
+                    to_strs(output, &exp);
                 }
                 output.push(")".to_string());
             }
@@ -1087,9 +1067,9 @@ mod tests {
                     output.push(")".to_string());
                 } else {
                     output.push("(".to_string());
-                    to_strs(output, &e1.into());
+                    to_strs(output, &e1);
                     output.push(".".to_string());
-                    to_strs(output, &e2.into());
+                    to_strs(output, &e2);
                     output.push(")".to_string());
                 }
             }

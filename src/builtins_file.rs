@@ -382,7 +382,7 @@ fn builtin_glob(
                     match p {
                         Ok(p) => {
                             if let Some(p) = p.to_str() {
-                                files.push(Expression::alloc_data_h(ExpEnum::String(
+                                files.push(Expression::alloc_data(ExpEnum::String(
                                     p.to_string().into(),
                                     None,
                                 )));

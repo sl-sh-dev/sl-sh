@@ -3,7 +3,6 @@ use std::hash::BuildHasher;
 
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::*;
 use crate::interner::*;
 use crate::types::*;
 
@@ -14,8 +13,8 @@ fn builtin_join(
     if let Some(arg0) = args.next() {
         if let Some(arg1) = args.next() {
             if args.next().is_none() {
-                let arg0: Handle = eval(environment, arg0)?.into();
-                let arg1: Handle = eval(environment, arg1)?.into();
+                let arg0 = eval(environment, arg0)?;
+                let arg1 = eval(environment, arg1)?;
                 return Ok(Expression::alloc_data(ExpEnum::Pair(arg0, arg1)));
             }
         }
@@ -30,17 +29,16 @@ fn builtin_list(
     let mut head: Option<Expression> = None;
     let mut last = head.clone();
     for a in args {
-        let a: Handle = eval(environment, a)?.into();
+        let a = eval(environment, a)?;
         if let Some(inner_last) = last.clone() {
             if let ExpEnum::Pair(_, e2) = &inner_last.get().data {
-                let e2: Expression = e2.into();
                 e2.get_mut()
                     .data
-                    .replace(ExpEnum::Pair(a.clone(), Expression::make_nil_h().clone()));
+                    .replace(ExpEnum::Pair(a.clone(), Expression::make_nil()));
                 last = Some(e2.clone());
             }
         } else {
-            let nil = Expression::make_nil_h().clone();
+            let nil = Expression::make_nil();
             last = Some(Expression::alloc_data(ExpEnum::Pair(a.clone(), nil)));
         }
         if head.is_none() {
@@ -58,7 +56,7 @@ fn builtin_car(
         if args.next().is_none() {
             let arg = eval(environment, arg1)?;
             return match &arg.get().data {
-                ExpEnum::Pair(e1, _) => Ok(e1.into()),
+                ExpEnum::Pair(e1, _) => Ok(e1.clone()),
                 ExpEnum::Nil => Ok(arg.clone()),
                 _ => Err(LispError::new(format!(
                     "car requires a pair, got {}",
@@ -78,7 +76,7 @@ fn builtin_cdr(
         if args.next().is_none() {
             let arg = eval(environment, arg)?;
             return match &arg.get().data {
-                ExpEnum::Pair(_, e2) => Ok(e2.into()),
+                ExpEnum::Pair(_, e2) => Ok(e2.clone()),
                 ExpEnum::Nil => Ok(arg.clone()),
                 _ => Err(LispError::new(format!(
                     "cdr requires a pair, got a {}",
@@ -102,8 +100,8 @@ fn builtin_xar(
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
                 let new_pair = match &pair_d.data {
-                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg.into(), e2.clone()),
-                    ExpEnum::Nil => ExpEnum::Pair(arg.into(), Expression::make_nil_h()),
+                    ExpEnum::Pair(_e1, e2) => ExpEnum::Pair(arg, e2.clone()),
+                    ExpEnum::Nil => ExpEnum::Pair(arg, Expression::make_nil()),
                     _ => {
                         return Err(LispError::new("xar! requires a pair for it's first form"));
                     }
@@ -129,8 +127,8 @@ fn builtin_xdr(
                 let pair = eval(environment, pair)?;
                 let mut pair_d = pair.get_mut();
                 let new_pair = match &pair_d.data {
-                    ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(e1.clone(), arg.into()),
-                    ExpEnum::Nil => ExpEnum::Pair(Expression::make_nil_h(), arg.into()),
+                    ExpEnum::Pair(e1, _e2) => ExpEnum::Pair(e1.clone(), arg),
+                    ExpEnum::Nil => ExpEnum::Pair(Expression::make_nil(), arg),
                     _ => {
                         return Err(LispError::new("xdr! requires a pair for it's first form"));
                     }

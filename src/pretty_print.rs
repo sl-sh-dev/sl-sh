@@ -83,20 +83,16 @@ impl fmt::Display for Expression {
                 if v.is_empty() {
                     f.write_str("nil")
                 } else {
-                    let v: Expression = (&v[0]).into();
-                    v.fmt(f)
+                    v[0].fmt(f)
                 }
             }
             ExpEnum::Pair(e1, e2) => {
-                let e1: Expression = e1.into();
-                let e2: Expression = e2.into();
                 if is_proper_list(&self) {
                     match &e1.get().data {
                         ExpEnum::Quote => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
-                                let a2: Expression = a2.into();
                                 f.write_str(&a2.to_string())
                             } else {
                                 f.write_str(&e2.to_string())
@@ -106,7 +102,6 @@ impl fmt::Display for Expression {
                             f.write_str("`")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
-                                let a2: Expression = a2.into();
                                 f.write_str(&a2.to_string())
                             } else {
                                 f.write_str(&e2.to_string())
@@ -121,8 +116,6 @@ impl fmt::Display for Expression {
                         }
                     }
                 } else {
-                    let e1: Expression = e1;
-                    let e2: Expression = e2;
                     write!(f, "({} . {})", e1.to_string(), e2.to_string())
                 }
             }
@@ -131,7 +124,6 @@ impl fmt::Display for Expression {
                 let mut res = String::new();
                 res.push_str("(make-hash (");
                 for (key, val) in map.iter() {
-                    let val: Expression = val.into();
                     res.push_str(&format!("({} . {})", key, val));
                 }
                 res.push_str("))");
@@ -149,15 +141,12 @@ impl fmt::Display for Expression {
             ExpEnum::LazyFn(_, args) => {
                 let mut res = String::new();
                 res.push_str("#<LAZYFN<");
-                let ib = &mut args[..].iter().map(|h| h.into());
+                let ib = &mut args.iter().cloned();
                 list_out(&mut res, ib);
                 res.push_str(">>");
                 write!(f, "{}", res)
             }
-            ExpEnum::Wrapper(exp) => {
-                let exp: Expression = exp.into();
-                exp.fmt(f)
-            }
+            ExpEnum::Wrapper(exp) => exp.fmt(f),
             ExpEnum::DeclareDef => write!(f, "#<Function>"),
             ExpEnum::DeclareVar => write!(f, "#<Function>"),
             ExpEnum::DeclareFn => write!(f, "#<Function>"),
@@ -196,7 +185,6 @@ fn pretty_print_int(
                 writer.write_all(b"#(")?;
                 let mut first = true;
                 for exp in list.iter() {
-                    let exp: Expression = exp.into();
                     if !first {
                         writer.write_all(b" ")?;
                     } else {
@@ -211,8 +199,7 @@ fn pretty_print_int(
             if v.is_empty() {
                 write!(writer, "nil")?;
             } else {
-                let v: Expression = (&v[0]).into();
-                pretty_print_int(&v, environment, indent, writer)?;
+                pretty_print_int(&v[0], environment, indent, writer)?;
             }
         }
         ExpEnum::Pair(e1, e2) => {
@@ -241,8 +228,6 @@ fn pretty_print_int(
                 }
                 writer.write_all(b")")?;
             } else {
-                let e1: Expression = e1.into();
-                let e2: Expression = e2.into();
                 write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
             }
         }
@@ -255,7 +240,6 @@ fn pretty_print_int(
             } else {
                 writer.write_all(b"(make-hash (")?;
                 for (key, val) in map.iter() {
-                    let val: Expression = val.into();
                     init_space(indent + 1, writer)?;
                     write!(writer, "({} . {})", key, val)?;
                 }
@@ -302,7 +286,6 @@ fn pretty_print_int(
             writer.write_all(b")")?;
         }
         ExpEnum::Wrapper(exp) => {
-            let exp: Expression = exp.into();
             pretty_print_int(&exp, environment, indent, writer)?;
         }
         ExpEnum::True => expression.writef(environment, writer)?,

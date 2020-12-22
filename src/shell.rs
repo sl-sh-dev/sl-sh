@@ -14,7 +14,6 @@ use nix::unistd::{gethostname, Uid};
 use crate::builtins::load;
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::*;
 use crate::reader::*;
 use crate::types::*;
 
@@ -31,16 +30,13 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: 
     environment.insert_into_root_scope(interned_sym, data);
 
     let mut load_path = Vec::new();
-    load_path.push(
-        Expression::alloc_data(ExpEnum::String(
-            environment
-                .interner
-                .intern(&format!("{}/.config/sl-sh", home))
-                .into(),
-            None,
-        ))
-        .handle_no_root(),
-    );
+    load_path.push(Expression::alloc_data(ExpEnum::String(
+        environment
+            .interner
+            .intern(&format!("{}/.config/sl-sh", home))
+            .into(),
+        None,
+    )));
     let data = Expression::with_list(load_path);
     environment.root_scope.borrow_mut().insert_with_doc(
         environment.interner.intern("*load-path*"),
@@ -284,12 +280,12 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         )),
     );
 
-    let mut exp_args: Vec<Handle> = Vec::with_capacity(args.len());
+    let mut exp_args: Vec<Expression> = Vec::with_capacity(args.len());
     for a in args {
-        exp_args.push(
-            Expression::alloc_data(ExpEnum::String(environment.interner.intern(a).into(), None))
-                .handle_no_root(),
-        );
+        exp_args.push(Expression::alloc_data(ExpEnum::String(
+            environment.interner.intern(a).into(),
+            None,
+        )));
     }
     let data = Expression::with_list(exp_args);
     environment

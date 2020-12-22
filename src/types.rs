@@ -12,14 +12,13 @@ use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::call_lambda;
-use crate::gc::*;
 use crate::process::*;
 use crate::symbols::*;
 
 #[derive(Clone, Debug)]
 pub struct LispError {
     pub reason: String,
-    pub backtrace: Option<Vec<Handle>>,
+    pub backtrace: Option<Vec<Expression>>,
 }
 
 impl Error for LispError {}
@@ -60,9 +59,9 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
-fn copy_handle(h: &Handle) -> Handle {
+fn copy_handle(h: &Expression) -> Expression {
     let obj = h.get().copy();
-    Expression::alloc_h(obj)
+    Expression::alloc(obj)
 }
 
 #[derive(Clone, Debug)]
@@ -139,10 +138,8 @@ impl Iterator for PairIter {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.clone() {
             if let ExpEnum::Pair(e1, e2) = &current.get().data {
-                let e1: Expression = e1.into();
-                let e2: Expression = e2.into();
-                self.current = Some(e2);
-                Some(e1)
+                self.current = Some(e2.clone());
+                Some(e1.clone())
             } else {
                 None
             }
@@ -173,7 +170,7 @@ impl Iterator for ListIter {
         if let ExpEnum::Vector(v) = &self.current.get().data {
             if let Some(exp) = v.get(self.index) {
                 self.index += 1;
-                Some(exp.into())
+                Some(exp.clone())
             } else {
                 None
             }
@@ -239,13 +236,13 @@ pub enum ExpEnum {
     Lambda(Lambda),
     Macro(Lambda),
     Function(Callable),
-    LazyFn(Handle, Vec<Handle>), // Lambda ready to call- used for tail call optimization
+    LazyFn(Expression, Vec<Expression>), // Lambda ready to call- used for tail call optimization
 
     // Buildin data structures
-    Vector(Vec<Handle>),
-    Values(Vec<Handle>), // Used for multi value returns
-    Pair(Handle, Handle),
-    HashMap(HashMap<&'static str, Handle>),
+    Vector(Vec<Expression>),
+    Values(Vec<Expression>), // Used for multi value returns
+    Pair(Expression, Expression),
+    HashMap(HashMap<&'static str, Expression>),
 
     // Represents a running or completed system process
     Process(ProcessState),
@@ -255,7 +252,7 @@ pub enum ExpEnum {
 
     // Used as part of analyzer (a wrapped thing has already been 'prepped' so
     // when evaluated just unwrap it).
-    Wrapper(Handle),
+    Wrapper(Expression),
 
     // Used to help the analyzer reconize things it cares about without
     // doing a lot of extra work.  These are morally equivelent to a Function.
@@ -276,7 +273,7 @@ impl ExpEnum {
         *self = new_data;
     }
 
-    pub fn cons_from_vec(v: &mut Vec<Handle>) -> ExpEnum {
+    pub fn cons_from_vec(v: &mut Vec<Expression>) -> ExpEnum {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len() - 1;
@@ -289,8 +286,7 @@ impl ExpEnum {
                             meta: None,
                             meta_tags: None,
                             analyzed: RefCell::new(false),
-                        })
-                        .into(),
+                        }),
                     );
                     break;
                 } else {
@@ -301,8 +297,7 @@ impl ExpEnum {
                             meta: None,
                             meta_tags: None,
                             analyzed: RefCell::new(false),
-                        })
-                        .into(),
+                        }),
                     );
                 }
                 i -= 1;
@@ -464,26 +459,28 @@ impl ExpObj {
 
 #[derive(Clone, Debug)]
 pub struct Expression {
-    obj: Handle,
+    data: Rc<RefCell<ExpObj>>,
 }
 
 impl Expression {
     pub fn copy(&self) -> Expression {
         Expression {
-            obj: Expression::alloc_h(self.obj.get().copy()),
+            data: Rc::new(RefCell::new(self.data.borrow().copy())),
         }
     }
 
-    pub fn new(obj: Handle) -> Expression {
-        Expression { obj }
+    //pub fn new(obj: Expression) -> Expression {
+    //    Expression { data: obj.data }
+    //}
+
+    pub fn alloc(obj: ExpObj) -> Expression {
+        Expression {
+            data: Rc::new(RefCell::new(obj)),
+        }
     }
 
-    pub fn alloc_h(obj: ExpObj) -> Handle {
-        Handle::new(obj)
-    }
-
-    pub fn alloc_data_h(data: ExpEnum) -> Handle {
-        Handle::new(ExpObj {
+    pub fn alloc_data(data: ExpEnum) -> Expression {
+        Expression::alloc(ExpObj {
             data,
             meta: None,
             meta_tags: None,
@@ -491,16 +488,8 @@ impl Expression {
         })
     }
 
-    pub fn alloc(obj: ExpObj) -> Expression {
-        Expression::alloc_h(obj).into()
-    }
-
-    pub fn alloc_data(data: ExpEnum) -> Expression {
-        Expression::alloc_data_h(data).into()
-    }
-
-    pub fn make_nil_h() -> Handle {
-        Handle::new(ExpObj {
+    pub fn make_nil() -> Expression {
+        Expression::alloc(ExpObj {
             data: ExpEnum::Nil,
             meta: None,
             meta_tags: None,
@@ -508,8 +497,8 @@ impl Expression {
         })
     }
 
-    pub fn make_true_h() -> Handle {
-        Handle::new(ExpObj {
+    pub fn make_true() -> Expression {
+        Expression::alloc(ExpObj {
             data: ExpEnum::True,
             meta: None,
             meta_tags: None,
@@ -517,32 +506,27 @@ impl Expression {
         })
     }
 
-    pub fn make_nil() -> Expression {
-        Expression::make_nil_h().into()
-    }
-
-    pub fn make_true() -> Expression {
-        Expression::make_true_h().into()
-    }
-
-    pub fn handle_no_root(&self) -> Handle {
-        self.obj.clone()
-    }
-
     pub fn duplicate(&self) -> Expression {
         Expression::alloc(self.get().clone())
     }
 
     pub fn get(&self) -> Ref<ExpObj> {
-        self.obj.get()
+        self.data.borrow()
     }
 
     pub fn get_mut(&self) -> RefMut<ExpObj> {
-        self.obj.get_mut()
+        self.data.borrow_mut()
+    }
+
+    pub fn try_unwrap(self) -> Result<ExpObj, Expression> {
+        match Rc::try_unwrap(self.data) {
+            Ok(data) => Ok(data.into_inner()),
+            Err(data) => Err(Expression { data }),
+        }
     }
 
     pub fn meta(&self) -> Option<ExpMeta> {
-        self.obj.get().meta
+        self.get().meta
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = Expression>> {
@@ -563,8 +547,8 @@ impl Expression {
     pub fn resolve(self, environment: &mut Environment) -> Result<Self, LispError> {
         let self_d = self.get();
         if let ExpEnum::LazyFn(lambda, parts) = &self_d.data {
-            let ib = &mut parts[..].iter().map(|h| h.into());
-            let res = call_lambda(environment, lambda.clone().into(), ib, false)?;
+            let ib = &mut parts.iter().cloned();
+            let res = call_lambda(environment, lambda.clone(), ib, false)?;
             drop(self_d);
             res.resolve(environment)
         } else {
@@ -611,7 +595,7 @@ impl Expression {
         (ExpEnum::BackQuote.into(), doc_str.to_string())
     }
 
-    pub fn with_list(list: Vec<Handle>) -> Expression {
+    pub fn with_list(list: Vec<Expression>) -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta: None,
@@ -620,7 +604,7 @@ impl Expression {
         })
     }
 
-    pub fn with_list_meta(list: Vec<Handle>, meta: Option<ExpMeta>) -> Expression {
+    pub fn with_list_meta(list: Vec<Expression>, meta: Option<ExpMeta>) -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Vector(list),
             meta,
@@ -629,7 +613,7 @@ impl Expression {
         })
     }
 
-    pub fn cons_from_vec(v: &[Handle], meta: Option<ExpMeta>) -> Expression {
+    pub fn cons_from_vec(v: &[Expression], meta: Option<ExpMeta>) -> Expression {
         let mut last_pair = ExpEnum::Nil;
         if !v.is_empty() {
             let mut i = v.len();
@@ -641,8 +625,7 @@ impl Expression {
                         meta: None,
                         meta_tags: None,
                         analyzed: RefCell::new(false),
-                    })
-                    .into(),
+                    }),
                 );
                 i -= 1;
             }
@@ -679,7 +662,7 @@ impl Expression {
                 if v.is_empty() {
                     "Nil".to_string()
                 } else {
-                    let v: Expression = (&v[0]).into();
+                    let v: Expression = (&v[0]).clone();
                     v.display_type()
                 }
             }
@@ -688,7 +671,7 @@ impl Expression {
             ExpEnum::File(_) => "File".to_string(),
             ExpEnum::LazyFn(_, _) => "Lambda".to_string(),
             ExpEnum::Wrapper(exp) => {
-                let exp: Expression = exp.into();
+                let exp: Expression = exp.clone();
                 exp.display_type()
             }
             ExpEnum::Nil => "Nil".to_string(),
@@ -730,7 +713,7 @@ impl Expression {
                 if v.is_empty() {
                     Ok(self.to_string())
                 } else {
-                    let v: Expression = (&v[0]).into();
+                    let v: Expression = (&v[0]).clone();
                     v.make_string(environment)
                 }
             }
@@ -760,7 +743,7 @@ impl Expression {
                 }
             }
             ExpEnum::Wrapper(exp) => {
-                let exp: Expression = exp.into();
+                let exp: Expression = exp.clone();
                 exp.make_string(environment)
             }
             _ => Ok(self.to_string()),
@@ -798,8 +781,7 @@ impl Expression {
                 if v.is_empty() {
                     Err(LispError::new("Empty values not a number"))
                 } else {
-                    let v: Expression = (&v[0]).into();
-                    v.make_float(environment)
+                    v[0].make_float(environment)
                 }
             }
             ExpEnum::Pair(_, _) => Err(LispError::new("Pair not a number")),
@@ -838,8 +820,7 @@ impl Expression {
                 if v.is_empty() {
                     Err(LispError::new("Empty values not an integer"))
                 } else {
-                    let v: Expression = (&v[0]).into();
-                    v.make_int(environment)
+                    v[0].make_int(environment)
                 }
             }
             ExpEnum::Pair(_, _) => Err(LispError::new("Pair not an integer")),
@@ -900,7 +881,7 @@ impl Expression {
                 if v.is_empty() {
                     write!(writer, "{}", self.to_string())?;
                 } else {
-                    let v: Expression = (&v[0]).into();
+                    let v: Expression = (&v[0]).clone();
                     v.writef(environment, writer)?;
                 }
             }
@@ -939,7 +920,7 @@ impl Expression {
             },
             ExpEnum::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Wrapper(exp) => {
-                let exp: Expression = exp.into();
+                let exp: Expression = exp.clone();
                 exp.writef(environment, writer)?;
             }
             ExpEnum::String(s, _) => write!(writer, "{}", s)?, // Do not quote strings.
@@ -956,12 +937,6 @@ impl Expression {
     }
 }
 
-impl AsRef<Handle> for Expression {
-    fn as_ref(&self) -> &Handle {
-        &self.obj
-    }
-}
-
 impl AsRef<Expression> for Expression {
     fn as_ref(&self) -> &Expression {
         &self
@@ -970,70 +945,43 @@ impl AsRef<Expression> for Expression {
 
 impl From<Expression> for ExpEnum {
     fn from(item: Expression) -> Self {
-        match item.obj.try_unwrap() {
+        match item.try_unwrap() {
             Ok(data) => data.data,
-            Err(handle) => handle.get().data.clone(),
+            Err(item) => item.get().data.clone(),
         }
-    }
-}
-
-impl From<Expression> for Handle {
-    fn from(item: Expression) -> Self {
-        item.obj
-    }
-}
-
-impl From<Handle> for Expression {
-    fn from(item: Handle) -> Self {
-        Expression::new(item)
-    }
-}
-
-impl From<&Handle> for Expression {
-    fn from(item: &Handle) -> Self {
-        Expression::new(item.clone())
-    }
-}
-
-impl From<&mut Handle> for Expression {
-    fn from(item: &mut Handle) -> Self {
-        Expression::new(item.clone())
     }
 }
 
 impl From<ExpEnum> for Expression {
     fn from(data: ExpEnum) -> Self {
-        let root = Handle::new(ExpObj {
+        Expression::alloc(ExpObj {
             data,
             meta: None,
             meta_tags: None,
             analyzed: RefCell::new(false),
-        });
-        Expression::new(root)
+        })
     }
 }
 
 impl From<&ExpEnum> for Expression {
     fn from(data: &ExpEnum) -> Self {
-        let root = Handle::new(ExpObj {
+        Expression::alloc(ExpObj {
             data: data.clone(),
             meta: None,
             meta_tags: None,
             analyzed: RefCell::new(false),
-        });
-        Expression::new(root)
+        })
     }
 }
 
 impl From<&mut ExpEnum> for Expression {
     fn from(data: &mut ExpEnum) -> Self {
-        let root = Handle::new(ExpObj {
+        Expression::alloc(ExpObj {
             data: data.clone(),
             meta: None,
             meta_tags: None,
             analyzed: RefCell::new(false),
-        });
-        Expression::new(root)
+        })
     }
 }
 
@@ -1043,12 +991,12 @@ mod tests {
 
     #[test]
     fn test_one() {
-        let s1 = Expression::alloc_data_h(ExpEnum::String("sls".into(), None));
-        let n1 = Expression::make_nil_h();
+        let s1 = Expression::alloc_data(ExpEnum::String("sls".into(), None));
+        let n1 = Expression::make_nil();
         let _p1 = Expression::alloc_data(ExpEnum::Pair(s1.clone(), n1.clone()));
         let nlist = vec![
-            Expression::make_nil_h().clone(),
-            Expression::make_nil_h().clone(),
+            Expression::make_nil().clone(),
+            Expression::make_nil().clone(),
         ];
         let _l1 = Expression::with_list(nlist);
         //println!("XXX {}, {}, {}", p1, s1, n1);

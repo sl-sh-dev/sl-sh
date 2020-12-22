@@ -14,7 +14,6 @@ use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
 use crate::eval::*;
-use crate::gc::*;
 use crate::interner::*;
 use crate::pretty_print::*;
 use crate::reader::*;
@@ -66,10 +65,7 @@ fn apply_fn_call(
                         if environment.allow_lazy_fn {
                             //                        make_lazy(environment, exp.clone(), args)
                             Ok(Expression::alloc(ExpObj {
-                                data: ExpEnum::LazyFn(
-                                    exp.clone().into(),
-                                    args.map(|a| a.into()).collect(),
-                                ),
+                                data: ExpEnum::LazyFn(exp.clone(), args.collect()),
                                 meta: None,
                                 meta_tags: None,
                                 analyzed: RefCell::new(true),
@@ -94,19 +90,16 @@ fn apply_fn_call(
         }
         ExpEnum::Lambda(_) => {
             if environment.allow_lazy_fn {
-                //let mut parms: Vec<Handle> = Vec::collect(args);
                 Ok(Expression::alloc(ExpObj {
-                    data: ExpEnum::LazyFn(command.clone().into(), args.map(|a| a.into()).collect()),
+                    data: ExpEnum::LazyFn(command.clone(), args.collect()),
                     meta: None,
                     meta_tags: None,
                     analyzed: RefCell::new(true),
                 }))
-            //make_lazy(environment, command.clone(), args)
             } else {
                 call_lambda(environment, command.clone(), args, false)
             }
         }
-        //ExpEnum::Macro(m) => exec_macro(environment, &m, args),
         ExpEnum::Function(c) if !c.is_special_form => {
             let old_sup = environment.supress_eval;
             environment.supress_eval = true;
@@ -129,11 +122,11 @@ fn builtin_apply(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut call_list: Vec<Handle> = Vec::new();
+    let mut call_list: Vec<Expression> = Vec::new();
     let mut last_arg: Option<Expression> = None;
     for arg in args {
         if let Some(a) = last_arg {
-            call_list.push(eval(environment, a)?.into());
+            call_list.push(eval(environment, a)?);
         }
         last_arg = Some(arg);
     }
@@ -148,10 +141,10 @@ fn builtin_apply(
             _ => return Err(LispError::new("apply: last arg not a list")),
         };
         for a in itr {
-            call_list.push(a.into());
+            call_list.push(a);
         }
     }
-    let args = &mut call_list[..].iter().map(|h| h.into());
+    let args = &mut call_list.iter().cloned();
     if let Some(command) = args.next() {
         apply_fn_call(environment, command, args)
     } else {
@@ -258,7 +251,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             match &ast.get().data {
                 ExpEnum::Vector(list) => {
                     for l in list {
-                        let l: Expression = l.into();
                         res = Some(eval(environment, &l)?);
                     }
                 }
@@ -312,12 +304,10 @@ fn builtin_length(
                     Ok(Expression::alloc_data(ExpEnum::Int(list.len() as i64)))
                 }
                 ExpEnum::Pair(_, e2) => {
-                    let e2: Expression = e2.into();
                     let mut len = 0;
-                    let mut e_next = e2;
+                    let mut e_next = e2.clone();
                     loop {
                         let e2 = if let ExpEnum::Pair(_, e2) = &e_next.get().data {
-                            let e2: Expression = e2.into();
                             Some(e2.clone())
                         } else {
                             None
@@ -568,7 +558,7 @@ fn replace_commas(
     is_vector: bool,
     meta: Option<ExpMeta>,
 ) -> Result<Expression, LispError> {
-    let mut output: Vec<Handle> = Vec::new();
+    let mut output: Vec<Expression> = Vec::new();
     let mut comma_next = false;
     let mut amp_next = false;
     for exp in list {
@@ -586,7 +576,7 @@ fn replace_commas(
                 amp_next = true;
             } else if comma_next {
                 drop(exp_d);
-                output.push(eval(environment, exp)?.into());
+                output.push(eval(environment, exp)?);
                 comma_next = false;
             } else if amp_next {
                 drop(exp_d);
@@ -599,7 +589,7 @@ fn replace_commas(
                     }
                     ExpEnum::Pair(_, _) => {
                         for item in nl.iter() {
-                            output.push(item.into());
+                            output.push(item);
                         }
                     }
                     ExpEnum::Nil => {}
@@ -614,11 +604,11 @@ fn replace_commas(
                 let exp2: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
                 exp2.get_mut().meta = exp.get().meta;
                 exp2.get_mut().meta_tags = exp.get().meta_tags.clone();
-                output.push(exp2.into());
+                output.push(exp2);
             }
         } else if comma_next {
             drop(exp_d);
-            output.push(eval(environment, exp)?.into());
+            output.push(eval(environment, exp)?);
             comma_next = false;
         } else if amp_next {
             drop(exp_d);
@@ -631,7 +621,7 @@ fn replace_commas(
                 }
                 ExpEnum::Pair(_, _) => {
                     for item in nl.iter() {
-                        output.push(item.into());
+                        output.push(item);
                     }
                 }
                 ExpEnum::Nil => {}
@@ -641,7 +631,7 @@ fn replace_commas(
             }
             amp_next = false;
         } else {
-            output.push(exp.into());
+            output.push(exp);
         }
     }
     if is_vector {
@@ -813,17 +803,17 @@ pub(crate) fn expand_macro_all(
         let exp_outer_c = exp_outer.clone();
         let exp_d = exp_outer_c.get();
         if let ExpEnum::Vector(list) = &exp_d.data {
-            let mut nv: Vec<Handle> = Vec::new();
+            let mut nv: Vec<Expression> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, &item.clone().into())?.into());
+                nv.push(expand_macro_all(environment, &item.clone())?);
             }
             drop(exp_d);
             exp_outer.get_mut().data.replace(ExpEnum::Vector(nv));
         } else if let ExpEnum::Pair(_, _) = &exp_d.data {
-            let mut nv: Vec<Handle> = Vec::new();
+            let mut nv: Vec<Expression> = Vec::new();
             drop(exp_d);
             for item in exp_outer.iter() {
-                nv.push(expand_macro_all(environment, &item)?.into());
+                nv.push(expand_macro_all(environment, &item)?);
             }
             exp_outer
                 .get_mut()
@@ -835,9 +825,9 @@ pub(crate) fn expand_macro_all(
         let arg2 = arg;
         let arg_d = arg.get();
         if let ExpEnum::Vector(list) = &arg_d.data {
-            let mut nv: Vec<Handle> = Vec::new();
+            let mut nv: Vec<Expression> = Vec::new();
             for item in list {
-                nv.push(expand_macro_all(environment, &item.clone().into())?.into());
+                nv.push(expand_macro_all(environment, &item.clone())?);
             }
             drop(arg_d);
             arg.get_mut().data.replace(ExpEnum::Vector(nv));
@@ -845,7 +835,7 @@ pub(crate) fn expand_macro_all(
             let mut nv = Vec::new();
             drop(arg_d);
             for item in arg2.iter() {
-                nv.push(expand_macro_all(environment, &item)?.into());
+                nv.push(expand_macro_all(environment, &item)?);
             }
             arg.get_mut().data.replace(ExpEnum::cons_from_vec(&mut nv));
         }
@@ -910,11 +900,11 @@ fn builtin_recur(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut arg_list: Vec<Handle> = Vec::new();
+    let mut arg_list: Vec<Expression> = Vec::new();
     let mut arg_num = 0;
     for a in args {
         let a = eval(environment, a)?;
-        arg_list.push(a.into());
+        arg_list.push(a);
         arg_num += 1;
     }
     environment.state.recur_num_args = Some(arg_num);
@@ -1016,30 +1006,29 @@ fn builtin_get_error(
         match eval(environment, arg) {
             Ok(exp) => ret = Some(exp),
             Err(err) => {
-                let err_sym = Expression::alloc_data_h(ExpEnum::Symbol(
+                let err_sym = Expression::alloc_data(ExpEnum::Symbol(
                     environment.interner.intern(":error"),
                     SymLoc::None,
                 ));
                 let msg = format!("{}", err);
-                let err_msg = Expression::alloc_data_h(ExpEnum::String(msg.into(), None));
+                let err_msg = Expression::alloc_data(ExpEnum::String(msg.into(), None));
                 let res = if let Some(backtrace) = err.backtrace {
-                    vec![err_sym, err_msg, Expression::with_list(backtrace).into()]
+                    vec![err_sym, err_msg, Expression::with_list(backtrace)]
                 } else {
-                    vec![err_sym, err_msg, Expression::make_nil_h()]
+                    vec![err_sym, err_msg, Expression::make_nil()]
                 };
                 return Ok(Expression::cons_from_vec(&res, None));
             }
         }
     }
-    let ok = Expression::alloc_data_h(ExpEnum::Symbol(
+    let ok = Expression::alloc_data(ExpEnum::Symbol(
         environment.interner.intern(":ok"),
         SymLoc::None,
     ));
-    Ok(Expression::alloc_data_h(ExpEnum::Pair(
+    Ok(Expression::alloc_data(ExpEnum::Pair(
         ok,
-        ret.unwrap_or_else(Expression::make_nil).into(),
-    ))
-    .into())
+        ret.unwrap_or_else(Expression::make_nil),
+    )))
 }
 
 fn add_usage(doc_str: &mut String, sym: &str, exp: &Expression) {
@@ -1417,7 +1406,7 @@ pub fn builtin_meta_add_tags(
                 }
                 ExpEnum::Vector(v) => {
                     for tag in v {
-                        put_tag(&exp, tag.into())?;
+                        put_tag(&exp, tag.clone())?;
                     }
                 }
                 ExpEnum::Symbol(_, _) => {
