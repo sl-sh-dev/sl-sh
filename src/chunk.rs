@@ -4,12 +4,23 @@ use crate::error::*;
 use crate::opcodes::*;
 use crate::value::*;
 
+macro_rules! decode_u8_enum {
+    ($code:expr) => {{
+        if let Some((_, val)) = $code.next() {
+            Ok(val)
+        } else {
+            Err(VMError::new_chunk(
+                "Error decoding a u8 from chunk stream, missing operand.",
+            ))
+        }
+    }};
+}
+
 #[macro_export]
 macro_rules! decode_u16 {
     ($code:expr) => {{
         if let Some(idx1) = $code.next() {
             if let Some(idx2) = $code.next() {
-                println!("XXXX decode: {:#02x}:{:#02x}", *idx1, *idx2);
                 Ok(((*idx1 as u16) << 8) | (*idx2 as u16))
             } else {
                 Err(VMError::new_chunk(
@@ -138,7 +149,7 @@ impl Chunk {
                     if current_offsets + offsets as u16 > 0x3f {
                         self.line_numbers.push(0x3f);
                         self.line_numbers
-                            .push((offsets - (127 - current_offsets) as u8) | 0x80);
+                            .push((offsets - (0x3f - current_offsets) as u8) | 0x80);
                     } else {
                         self.line_numbers
                             .push((current_offsets as u8 + offsets) | 0x80);
@@ -216,6 +227,14 @@ impl Chunk {
         Ok(())
     }
 
+    pub fn push_u16(&mut self, op_code: OpCode, operand: u16, line_number: u32) -> VMResult<()> {
+        self.encode_line_number(3, line_number)?;
+        self.code.push(op_code);
+        self.code.push(((operand & 0xFF00) >> 8) as u8);
+        self.code.push((operand & 0x00FF) as u8);
+        Ok(())
+    }
+
     pub fn push_const(&mut self, offset: usize, line_number: u32) -> VMResult<()> {
         if offset <= u8::MAX as usize {
             self.encode_line_number(2, line_number)?;
@@ -243,6 +262,46 @@ impl Chunk {
         Ok(())
     }
 
+    pub fn push_load(&mut self, offset: usize, line_number: u32) -> VMResult<()> {
+        if offset <= u8::MAX as usize {
+            self.encode_line_number(2, line_number)?;
+            self.code.push(LOAD);
+            self.code.push(offset as u8);
+        } else if offset <= u16::MAX as usize {
+            self.encode_line_number(3, line_number)?;
+            self.code.push(LOAD2);
+            self.code.push(((offset & 0xFF00) >> 8) as u8);
+            self.code.push((offset & 0x00FF) as u8);
+        } else {
+            return Err(VMError::new_chunk(format!(
+                "LOAD ERROR: offset {:#018x} to large, max size is {:#06x}",
+                offset,
+                u16::MAX
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn push_store(&mut self, offset: usize, line_number: u32) -> VMResult<()> {
+        if offset <= u8::MAX as usize {
+            self.encode_line_number(2, line_number)?;
+            self.code.push(STORE);
+            self.code.push(offset as u8);
+        } else if offset <= u16::MAX as usize {
+            self.encode_line_number(3, line_number)?;
+            self.code.push(STORE2);
+            self.code.push(((offset & 0xFF00) >> 8) as u8);
+            self.code.push((offset & 0x00FF) as u8);
+        } else {
+            return Err(VMError::new_chunk(format!(
+                "STORE ERROR: offset {:#018x} to large, max size is {:#06x}",
+                offset,
+                u16::MAX
+            )));
+        }
+        Ok(())
+    }
+
     fn disassemble_instruction<I>(chunk: I, op: OpCode) -> VMResult<()>
     where
         I: IntoIterator<Item = (usize, u8)>,
@@ -255,14 +314,8 @@ impl Chunk {
             }
             CONST => {
                 print!("CONST   \t");
-                if let Some((_, idx)) = code.next() {
-                    println!("{:#04x} ", idx);
-                    Ok(())
-                } else {
-                    Err(VMError::new_chunk(
-                        "ERROR: invalid bytcode, missing operand(s) for CONST",
-                    ))
-                }
+                println!("{:#04x} ", decode_u8_enum!(code)?);
+                Ok(())
             }
             CONST2 => {
                 print!("CONST2  \t");
@@ -272,6 +325,30 @@ impl Chunk {
             CONST4 => {
                 print!("CONST4  \t");
                 println!("{:#010x} ", decode_u32_enum!(code)?);
+                Ok(())
+            }
+            LOAD => {
+                print!("LOAD    \t");
+                println!("{:#04x} ", decode_u8_enum!(code)?);
+                Ok(())
+            }
+            LOAD2 => {
+                print!("LOAD2   \t");
+                println!("{:#06x} ", decode_u16_enum!(code)?);
+                Ok(())
+            }
+            POP => {
+                println!("POP");
+                Ok(())
+            }
+            STORE => {
+                print!("STORE   \t");
+                println!("{:#04x} ", decode_u8_enum!(code)?);
+                Ok(())
+            }
+            STORE2 => {
+                print!("STORE2  \t");
+                println!("{:#06x} ", decode_u16_enum!(code)?);
                 Ok(())
             }
             ADD => {
@@ -288,6 +365,31 @@ impl Chunk {
             }
             DIV => {
                 println!("DIV");
+                Ok(())
+            }
+            CONS => {
+                println!("CONS");
+                Ok(())
+            }
+            CAR => {
+                println!("CAR");
+                Ok(())
+            }
+            CDR => {
+                println!("CDR");
+                Ok(())
+            }
+            XAR => {
+                println!("XAR");
+                Ok(())
+            }
+            XDR => {
+                println!("XDR");
+                Ok(())
+            }
+            LIST => {
+                print!("LIST    \t");
+                println!("{:#06x} ", decode_u16_enum!(code)?);
                 Ok(())
             }
             _ => Err(VMError::new_chunk(format!("ERROR: unknow opcode {}", op))),

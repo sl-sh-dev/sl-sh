@@ -53,4 +53,13 @@ impl GCHeap {
             Err(VMError::new_heap("Invalid object handle!"))
         }
     }
+
+    pub fn replace(&mut self, handle: &GCHandle, obj: Object) -> VMResult<Object> {
+        if let Some(data) = self.objects.get_mut(handle.idx) {
+            let old = data.obj.replace(obj);
+            Ok(old)
+        } else {
+            Err(VMError::new_heap("Invalid object handle!"))
+        }
+    }
 }

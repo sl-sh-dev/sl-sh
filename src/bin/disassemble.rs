@@ -20,6 +20,9 @@ fn main() -> Result<(), VMError> {
     chunk.push_simple(ADD, 11)?;
     chunk.push_const(0, 11)?;
     chunk.push_simple(SUB, 11)?;
+    chunk.push_simple(CONS, 12)?;
+    chunk.push_simple(CAR, 12)?;
+    chunk.push_u16(LIST, 10, 13)?;
     chunk.disassemble_chunk()?;
     Ok(())
 }

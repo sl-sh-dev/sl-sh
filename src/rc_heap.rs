@@ -48,4 +48,9 @@ impl RCHeap {
     pub fn get_mut<'a>(&self, handle: &'a RCHandle) -> VMResult<RCHandleRefMut<'a>> {
         Ok(handle.borrow_mut())
     }
+
+    pub fn replace(&mut self, handle: &RCHandle, obj: Object) -> VMResult<Object> {
+        let old = handle.object.replace(obj);
+        Ok(old)
+    }
 }
