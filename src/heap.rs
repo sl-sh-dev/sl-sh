@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
+#[cfg(not(feature = "gc"))]
 use crate::rc_heap::*;
-//use crate::gc_heap::*;
+
+#[cfg(feature = "gc")]
+use crate::gc_heap::*;
 use crate::value::*;
 
 // This is anything that can live on the heap.  Values normally live on the
@@ -16,12 +19,28 @@ pub enum Object {
     Pair(Handle, Handle),
 }
 
+impl Object {
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Object::Value(Value::Nil))
+    }
+}
+
 // Can swap heap strategies by replacing these at compile time.
+#[cfg(not(feature = "gc"))]
 pub type HandleRef<'a> = RCHandleRef<'a>;
+#[cfg(not(feature = "gc"))]
 pub type HandleRefMut<'a> = RCHandleRefMut<'a>;
+#[cfg(not(feature = "gc"))]
 pub type Handle = RCHandle;
+#[cfg(not(feature = "gc"))]
 pub type Heap = RCHeap;
-//pub type HandleRef<'a> = GCHandleRef<'a>;
-//pub type HandleRefMut<'a> = GCHandleRefMut<'a>;
-//pub type Handle = GCHandle;
-//pub type Heap = GCHeap;
+
+
+#[cfg(feature = "gc")]
+pub type HandleRef<'a> = GCHandleRef<'a>;
+#[cfg(feature = "gc")]
+pub type HandleRefMut<'a> = GCHandleRefMut<'a>;
+#[cfg(feature = "gc")]
+pub type Handle = GCHandle;
+#[cfg(feature = "gc")]
+pub type Heap = GCHeap;

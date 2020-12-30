@@ -2,6 +2,7 @@ use std::cell::{Ref, RefCell, RefMut};
 
 use crate::error::*;
 use crate::heap::Object;
+use crate::value::Value;
 
 pub type GCHandleRef<'a> = Ref<'a, Object>;
 pub type GCHandleRefMut<'a> = RefMut<'a, Object>;
@@ -38,7 +39,7 @@ impl GCHeap {
         GCHandle { idx }
     }
 
-    pub fn get<'a>(&'a self, handle: &GCHandle) -> VMResult<GCHandleRef<'a>> {
+    pub fn get<'a>(&'a self, handle: &'a GCHandle) -> VMResult<GCHandleRef<'a>> {
         if let Some(data) = self.objects.get(handle.idx) {
             Ok(data.obj.borrow())
         } else {
@@ -46,7 +47,7 @@ impl GCHeap {
         }
     }
 
-    pub fn get_mut<'a>(&'a self, handle: &GCHandle) -> VMResult<GCHandleRefMut<'a>> {
+    pub fn get_mut<'a>(&'a self, handle: &'a GCHandle) -> VMResult<GCHandleRefMut<'a>> {
         if let Some(data) = self.objects.get(handle.idx) {
             Ok(data.obj.borrow_mut())
         } else {
@@ -60,6 +61,14 @@ impl GCHeap {
             Ok(old)
         } else {
             Err(VMError::new_heap("Invalid object handle!"))
+        }
+    }
+
+    pub fn normal_val(&self, handle: &GCHandle) -> VMResult<Value> {
+        if let Object::Value(val) = &*self.get(handle)? {
+            Ok(val.clone())
+        } else {
+            Ok(Value::Reference(handle.clone()))
         }
     }
 }

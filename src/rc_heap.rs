@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::error::*;
 use crate::heap::Object;
+use crate::value::Value;
 
 pub type RCHandleRef<'a> = Ref<'a, Object>;
 pub type RCHandleRefMut<'a> = RefMut<'a, Object>;
@@ -41,16 +42,24 @@ impl RCHeap {
         }
     }
 
-    pub fn get<'a>(&self, handle: &'a RCHandle) -> VMResult<RCHandleRef<'a>> {
+    pub fn get<'a>(&'a self, handle: &'a RCHandle) -> VMResult<RCHandleRef<'a>> {
         Ok(handle.borrow())
     }
 
-    pub fn get_mut<'a>(&self, handle: &'a RCHandle) -> VMResult<RCHandleRefMut<'a>> {
+    pub fn get_mut<'a>(&'a self, handle: &'a RCHandle) -> VMResult<RCHandleRefMut<'a>> {
         Ok(handle.borrow_mut())
     }
 
     pub fn replace(&mut self, handle: &RCHandle, obj: Object) -> VMResult<Object> {
         let old = handle.object.replace(obj);
         Ok(old)
+    }
+
+    pub fn normal_val(&self, handle: &RCHandle) -> VMResult<Value> {
+        if let Object::Value(val) = &*self.get(handle)? {
+            Ok(val.clone())
+        } else {
+            Ok(Value::Reference(handle.clone()))
+        }
     }
 }

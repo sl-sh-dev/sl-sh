@@ -63,6 +63,14 @@ impl Vm {
         }
     }
 
+    pub fn alloc(&mut self, obj: Object) -> Handle {
+        self.heap.alloc(obj)
+    }
+
+    pub fn get<'a>(&'a self, handle: &'a Handle) -> VMResult<HandleRef<'a>> {
+        Ok(self.heap.get(handle)?)
+    }
+
     pub fn intern(&mut self, string: &str) -> &'static str {
         self.interner.intern(string)
     }
@@ -86,44 +94,32 @@ impl Vm {
             }
             CAR => {
                 let op = one_val!(self)?;
-                if let Value::Reference(handle) = op {
-                    let handle_d = self.heap.get(&handle)?;
-                    if let Object::Pair(car, _) = &*handle_d {
-                        if let Object::Value(val) = &*self.heap.get(car)? {
-                            self.stack.push(val.clone());
+                match op.unref(self)? {
+                    Value::Reference(handle) => {
+                        let handle_d = self.heap.get(&handle)?;
+                        if let Object::Pair(car, _) = &*handle_d {
+                            self.stack.push(self.heap.normal_val(car)?);
                         } else {
-                            self.stack.push(Value::Reference(car.clone()));
+                            return Err(VMError::new_vm("CAR: Not a pair/conscell."));
                         }
-                    } else if let Object::Value(Value::Nil) = &*handle_d {
-                        self.stack.push(Value::Nil);
-                    } else {
-                        return Err(VMError::new_vm("CAR: Not a pair/conscell."));
                     }
-                } else if let Value::Nil = op {
-                    self.stack.push(Value::Nil);
-                } else {
-                    return Err(VMError::new_vm("CAR: Not a pair/conscell."));
+                    Value::Nil => self.stack.push(Value::Nil),
+                    _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
                 }
             }
             CDR => {
                 let op = one_val!(self)?;
-                if let Value::Reference(handle) = op {
-                    let handle_d = self.heap.get(&handle)?;
-                    if let Object::Pair(_, cdr) = &*handle_d {
-                        if let Object::Value(val) = &*self.heap.get(cdr)? {
-                            self.stack.push(val.clone());
+                match op.unref(self)? {
+                    Value::Reference(handle) => {
+                        let handle_d = self.heap.get(&handle)?;
+                        if let Object::Pair(_, cdr) = &*handle_d {
+                            self.stack.push(self.heap.normal_val(cdr)?);
                         } else {
-                            self.stack.push(Value::Reference(cdr.clone()));
+                            return Err(VMError::new_vm("CAR: Not a pair/conscell."));
                         }
-                    } else if let Object::Value(Value::Nil) = &*handle_d {
-                        self.stack.push(Value::Nil);
-                    } else {
-                        return Err(VMError::new_vm("CDR: Not a pair/conscell."));
                     }
-                } else if let Value::Nil = op {
-                    self.stack.push(Value::Nil);
-                } else {
-                    return Err(VMError::new_vm("CDR: Not a pair/conscell."));
+                    Value::Nil => self.stack.push(Value::Nil),
+                    _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
                 }
             }
             XAR => {
@@ -145,15 +141,11 @@ impl Vm {
                                     .replace(&cons_handle, Object::Pair(new_car, cdr))?;
                             }
                             self.stack.push(pair.clone());
-                        } else if let Object::Value(Value::Nil) = &*cons_d {
-                            let car = if let Value::Reference(handle) = val {
-                                handle
-                            } else {
-                                self.heap.alloc(Object::Value(val))
-                            };
+                        } else if cons_d.is_nil() {
+                            drop(cons_d);
+                            let car = val.handle(self)?;
                             let cdr = self.heap.alloc(Object::Value(Value::Nil));
                             let pair = Object::Pair(car, cdr);
-                            drop(cons_d);
                             self.heap.replace(&cons_handle, pair)?;
                             self.stack.push(Value::Reference(cons_handle.clone()));
                         } else {
@@ -161,11 +153,7 @@ impl Vm {
                         }
                     }
                     Value::Nil => {
-                        let car = if let Value::Reference(handle) = val {
-                            handle
-                        } else {
-                            self.heap.alloc(Object::Value(val))
-                        };
+                        let car = val.handle(self)?;
                         let cdr = self.heap.alloc(Object::Value(Value::Nil));
                         let pair = self.heap.alloc(Object::Pair(car, cdr));
                         self.stack.push(Value::Reference(pair));
@@ -194,15 +182,11 @@ impl Vm {
                                     .replace(&cons_handle, Object::Pair(car, new_cdr))?;
                             }
                             self.stack.push(pair.clone());
-                        } else if let Object::Value(Value::Nil) = &*cons_d {
-                            let car = self.heap.alloc(Object::Value(Value::Nil));
-                            let cdr = if let Value::Reference(handle) = val {
-                                handle
-                            } else {
-                                self.heap.alloc(Object::Value(val))
-                            };
-                            let pair = Object::Pair(car, cdr);
+                        } else if cons_d.is_nil() {
                             drop(cons_d);
+                            let car = self.heap.alloc(Object::Value(Value::Nil));
+                            let cdr = val.handle(self)?;
+                            let pair = Object::Pair(car, cdr);
                             self.heap.replace(&cons_handle, pair)?;
                             self.stack.push(Value::Reference(cons_handle.clone()));
                         } else {
@@ -211,11 +195,7 @@ impl Vm {
                     }
                     Value::Nil => {
                         let car = self.heap.alloc(Object::Value(Value::Nil));
-                        let cdr = if let Value::Reference(handle) = val {
-                            handle
-                        } else {
-                            self.heap.alloc(Object::Value(val))
-                        };
+                        let cdr = val.handle(self)?;
                         let pair = self.heap.alloc(Object::Pair(car, cdr));
                         self.stack.push(Value::Reference(pair));
                     }

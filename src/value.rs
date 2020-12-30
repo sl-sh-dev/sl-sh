@@ -1,5 +1,6 @@
 use crate::error::*;
-use crate::heap::Handle;
+use crate::heap::*;
+use crate::vm::Vm;
 
 // Ideally Value would implement Copy but if Handle is a RC wrapper it can not
 // be Copy.  Then intent is to support both an RC based heap and GC based heap
@@ -11,7 +12,9 @@ pub enum Value {
     Int(i64),
     UInt(u64),
     Float(f64),
+    Symbol(&'static str),
     Reference(Handle),
+    True,
     Nil,
     Undefined,
 }
@@ -25,6 +28,23 @@ impl Default for Value {
 impl Value {
     pub fn new() -> Self {
         Value::Undefined
+    }
+
+    pub fn unref(self, vm: &Vm) -> VMResult<Value> {
+        if let Value::Reference(handle) = &self {
+            if let Object::Value(value) = &*vm.get(handle)? {
+                return Ok(value.clone());
+            }
+        }
+        Ok(self)
+    }
+
+    pub fn handle(self, vm: &mut Vm) -> VMResult<Handle> {
+        if let Value::Reference(handle) = self {
+            Ok(handle)
+        } else {
+            Ok(vm.alloc(Object::Value(self)))
+        }
     }
 
     pub fn is_int(&self) -> bool {
