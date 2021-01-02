@@ -123,14 +123,15 @@ macro_rules! decode_u32_enum {
 pub struct Chunk {
     pub code: Vec<u8>,
     pub file_name: &'static str,
-    pub start_line: u32,
-    pub last_line: u32,
-    pub line_numbers: Vec<u8>,
+    start_line: u32,
+    last_line: u32,
+    line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
+    pub namespace: NamespaceRef,
 }
 
 impl Chunk {
-    pub fn with_file(file_name: &'static str, start_line: u32) -> Self {
+    pub fn new(file_name: &'static str, start_line: u32, namespace: NamespaceRef) -> Self {
         Chunk {
             code: Vec::new(),
             file_name,
@@ -138,6 +139,7 @@ impl Chunk {
             last_line: start_line,
             line_numbers: Vec::new(),
             constants: Vec::new(),
+            namespace,
         }
     }
 
@@ -425,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_push_const() {
-        let mut chunk = Chunk::with_file("no_file", 0);
+        let mut chunk = Chunk::new("no_file", 0, Namespace::new_ref("test"));
         chunk.push_const(0, 2).unwrap();
         chunk.push_const(128, 2).unwrap();
         chunk.push_const(255, 3).unwrap();
@@ -456,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_line_numbers() {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         chunk.push_const(0, 1).unwrap();
         chunk.push_const(128, 2).unwrap();
         chunk.push_const(255, 3).unwrap();

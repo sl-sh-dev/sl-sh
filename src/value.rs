@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use crate::error::*;
 use crate::heap::*;
 use crate::vm::Vm;
@@ -81,3 +85,26 @@ impl Value {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct Namespace {
+    objects: HashMap<&'static str, Handle>,
+    doc_strings: HashMap<&'static str, String>,
+    name: &'static str,
+}
+
+impl Namespace {
+    pub fn new(name: &'static str) -> Self {
+        Namespace {
+            objects: HashMap::new(),
+            doc_strings: HashMap::new(),
+            name,
+        }
+    }
+
+    pub fn new_ref(name: &'static str) -> NamespaceRef {
+        Rc::new(RefCell::new(Namespace::new(name)))
+    }
+}
+
+pub type NamespaceRef = Rc<RefCell<Namespace>>;

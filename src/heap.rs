@@ -35,7 +35,6 @@ pub type Handle = RCHandle;
 #[cfg(not(feature = "gc"))]
 pub type Heap = RCHeap;
 
-
 #[cfg(feature = "gc")]
 pub type HandleRef<'a> = GCHandleRef<'a>;
 #[cfg(feature = "gc")]

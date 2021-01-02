@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::chunk::*;
 use crate::decode_u16;
 use crate::decode_u32;
@@ -6,14 +8,6 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::opcodes::*;
 use crate::value::*;
-
-pub struct Vm {
-    interner: Interner,
-    heap: Heap,
-    chunk: Chunk,
-    stack: Vec<Value>,
-    ip: usize,
-}
 
 macro_rules! one_val {
     ($vm:expr) => {{
@@ -52,14 +46,29 @@ macro_rules! binary_math {
     }};
 }
 
+pub struct Vm {
+    interner: Interner,
+    heap: Heap,
+    chunk: Chunk,
+    stack: Vec<Value>,
+    ip: usize,
+    _root_namespace: NamespaceRef,
+    _namespaces: HashMap<&'static str, NamespaceRef>,
+}
+
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
+        let _root_namespace = Namespace::new_ref("root");
+        let mut _namespaces = HashMap::new();
+        _namespaces.insert("root", _root_namespace.clone());
         Vm {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             chunk,
             stack: Vec::with_capacity(256),
             ip: 0,
+            _root_namespace,
+            _namespaces,
         }
     }
 
@@ -369,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_list() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         chunk.add_constant(Value::Int(1));
         chunk.add_constant(Value::Int(2));
@@ -622,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_stack() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         for i in 0..(u16::MAX as usize + 10) {
             chunk.add_constant(Value::Int(i as i64));
@@ -730,7 +739,7 @@ mod tests {
 
     #[test]
     fn test_add() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         let mut off = chunk.add_constant(Value::Int(2 as i64));
         chunk.push_const(off, line).unwrap();
@@ -746,7 +755,7 @@ mod tests {
         assert!(vm.stack.len() == 1);
         assert!(vm.stack.pop().unwrap().get_int()? == 6);
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(2 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Int(3 as i64));
@@ -768,7 +777,7 @@ mod tests {
 
     #[test]
     fn test_sub() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         let mut off = chunk.add_constant(Value::Int(2 as i64));
         chunk.push_const(off, line).unwrap();
@@ -784,7 +793,7 @@ mod tests {
         assert!(vm.stack.len() == 1);
         assert!(vm.stack.pop().unwrap().get_int()? == -2);
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(5 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Int(3 as i64));
@@ -806,7 +815,7 @@ mod tests {
 
     #[test]
     fn test_mul() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         let mut off = chunk.add_constant(Value::Int(2 as i64));
         chunk.push_const(off, line).unwrap();
@@ -822,7 +831,7 @@ mod tests {
         assert!(vm.stack.len() == 1);
         assert!(vm.stack.pop().unwrap().get_int()? == 6);
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(5 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Int(3 as i64));
@@ -844,7 +853,7 @@ mod tests {
 
     #[test]
     fn test_div() -> VMResult<()> {
-        let mut chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
         let mut off = chunk.add_constant(Value::Int(18 as i64));
         chunk.push_const(off, line).unwrap();
@@ -860,7 +869,7 @@ mod tests {
         assert!(vm.stack.len() == 1);
         assert!(vm.stack.pop().unwrap().get_int()? == 3);
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(10 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Int(2 as i64));
@@ -878,7 +887,7 @@ mod tests {
         assert!(item.is_number());
         assert!(item.get_float()? == 2.5);
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Int(10 as i64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Int(0 as i64));
@@ -890,7 +899,7 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(10 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Float(0 as f64));
@@ -902,7 +911,7 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
-        chunk = Chunk::with_file("no_file", 1);
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         off = chunk.add_constant(Value::Float(10 as f64));
         chunk.push_const(off, line).unwrap();
         off = chunk.add_constant(Value::Byte(0));

@@ -1,13 +1,13 @@
 //use std::iter::Iterator;
 //use std::borrow::Borrow;
 
-use slvm::opcodes::*;
-//use slvm::value::*;
 use slvm::chunk::*;
 use slvm::error::*;
+use slvm::opcodes::*;
+use slvm::value::*;
 
 fn main() -> Result<(), VMError> {
-    let mut chunk = Chunk::with_file("no_file", 1);
+    let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("disassemble"));
     chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
