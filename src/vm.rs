@@ -1,48 +1,128 @@
 use std::collections::HashMap;
 
 use crate::chunk::*;
-use crate::decode_u16;
-use crate::decode_u32;
 use crate::error::*;
 use crate::heap::*;
 use crate::interner::*;
 use crate::opcodes::*;
 use crate::value::*;
 
-macro_rules! one_val {
+macro_rules! decode_u16 {
     ($vm:expr) => {{
-        if let Some(op) = $vm.stack.pop() {
-            Ok(op)
-        } else {
-            Err(VMError::new_vm("Not enough values on stack."))
-        }
+        let idx1 = $vm.chunk.code[$vm.ip];
+        let idx2 = $vm.chunk.code[$vm.ip + 1];
+        $vm.ip += 2;
+        ((idx1 as u16) << 8) | (idx2 as u16)
     }};
 }
 
-macro_rules! two_vals {
-    ($vm:expr) => {{
-        if let Some(op2) = $vm.stack.pop() {
-            if let Some(op1) = $vm.stack.pop() {
-                Ok((op1, op2))
-            } else {
-                Err(VMError::new_vm("Not enough values on stack."))
-            }
+macro_rules! decode2 {
+    ($vm:expr, $wide:expr) => {{
+        let op1 = if $wide {
+            decode_u16!($vm)
         } else {
-            Err(VMError::new_vm("Not enough values on stack."))
-        }
+            let ret = $vm.chunk.code[$vm.ip] as u16;
+            $vm.ip += 1;
+            ret
+        };
+        let op2 = if $wide {
+            decode_u16!($vm)
+        } else {
+            let ret = $vm.chunk.code[$vm.ip] as u16;
+            $vm.ip += 1;
+            ret
+        };
+        (op1, op2)
+    }};
+}
+
+macro_rules! decode3 {
+    ($vm:expr, $wide:expr) => {{
+        let op1 = if $wide {
+            decode_u16!($vm)
+        } else {
+            let ret = $vm.chunk.code[$vm.ip] as u16;
+            $vm.ip += 1;
+            ret
+        };
+        let op2 = if $wide {
+            decode_u16!($vm)
+        } else {
+            let ret = $vm.chunk.code[$vm.ip] as u16;
+            $vm.ip += 1;
+            ret
+        };
+        let op3 = if $wide {
+            decode_u16!($vm)
+        } else {
+            let ret = $vm.chunk.code[$vm.ip] as u16;
+            $vm.ip += 1;
+            ret
+        };
+        (op1, op2, op3)
     }};
 }
 
 macro_rules! binary_math {
-    ($vm:expr, $bin_fn:expr) => {{
-        let (op1, op2) = two_vals!($vm)?;
-        if op1.is_int() && op2.is_int() {
-            $vm.stack
-                .push(Value::Int($bin_fn(op1.get_int()?, op2.get_int()?)));
+    ($vm:expr, $registers:expr, $bin_fn:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
+        let (dest, op2, op3) = decode3!($vm, $wide);
+        let op2 = if $op2_reg {
+            $registers[op2 as usize].clone()
         } else {
-            $vm.stack
-                .push(Value::Float($bin_fn(op1.get_float()?, op2.get_float()?)));
-        }
+            $vm.chunk.constants[op2 as usize].clone()
+        };
+        let op3 = if $op3_reg {
+            $registers[op3 as usize].clone()
+        } else {
+            $vm.chunk.constants[op3 as usize].clone()
+        };
+        let val = if op2.is_int() && op3.is_int() {
+            Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
+        } else {
+            Value::Float($bin_fn(op2.get_float()?, op3.get_float()?))
+        };
+        set_register!($registers, dest, val);
+    }};
+}
+
+macro_rules! div_math {
+    ($vm:expr, $registers:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
+        let (dest, op2, op3) = decode3!($vm, $wide);
+        let op2 = if $op2_reg {
+            $registers[op2 as usize].clone()
+        } else {
+            $vm.chunk.constants[op2 as usize].clone()
+        };
+        let op3 = if $op3_reg {
+            $registers[op3 as usize].clone()
+        } else {
+            $vm.chunk.constants[op3 as usize].clone()
+        };
+        let val = if op2.is_int() && op3.is_int() {
+            let op3 = op3.get_int()?;
+            if op3 == 0 {
+                return Err(VMError::new_vm("Divide by zero error."));
+            }
+            Value::Int(op2.get_int()? / op3)
+        } else {
+            let op3 = op3.get_float()?;
+            if op3 == 0.0 {
+                return Err(VMError::new_vm("Divide by zero error."));
+            }
+            Value::Float(op2.get_float()? / op3)
+        };
+        set_register!($registers, dest, val);
+        // Ok(())
+    }};
+}
+
+macro_rules! set_register {
+    ($registers:expr, $idx:expr, $val:expr) => {{
+        $registers[$idx as usize] = $val;
+        /*unsafe {
+            let r = $registers.get_unchecked_mut($idx as usize);
+            *r = $val;
+        }*/
     }};
 }
 
@@ -61,11 +141,13 @@ impl Vm {
         let _root_namespace = Namespace::new_ref("root");
         let mut _namespaces = HashMap::new();
         _namespaces.insert("root", _root_namespace.clone());
+        let mut stack = Vec::with_capacity(1024);
+        stack.resize(1024, Value::Undefined);
         Vm {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             chunk,
-            stack: Vec::with_capacity(256),
+            stack,
             ip: 0,
             _root_namespace,
             _namespaces,
@@ -83,271 +165,237 @@ impl Vm {
     pub fn intern(&mut self, string: &str) -> &'static str {
         self.interner.intern(string)
     }
+    /*
+        fn exec_cons(&mut self, opcode: OpCode) -> VMResult<()> {
+            match opcode {
+                LIST => {
+                    //let mut decode_iter = self.chunk.code[self.ip..=self.ip + 1].iter();
+                    let num_elements = decode_u16!(self); //decode_u16!(decode_iter)?;
+                    if num_elements > 0 {
+                        let mut last_cdr = self.heap.alloc(Object::Value(Value::Nil));
+                        for _ in 0..num_elements {
+                            let car = if let Some(op) = self.stack.pop() {
+                                if let Value::Reference(handle) = op {
+                                    handle
+                                } else {
+                                    self.heap.alloc(Object::Value(op))
+                                }
+                            } else {
+                                return Err(VMError::new_vm("List: Not enough elements."));
+                            };
+                            let cdr = last_cdr;
+                            last_cdr = self.heap.alloc(Object::Pair(car, cdr));
+                        }
+                        self.stack.push(Value::Reference(last_cdr));
+                    } else {
+                        self.stack
+                            .push(Value::Reference(self.heap.alloc(Object::Value(Value::Nil))));
+                    }
+                    self.ip += 2;
+                }
+                _ => {
+                    //This should be impossible (due to how it is called) so could just panic?
+                    return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
+                }
+            }
+            Ok(())
+        }
+    */
 
-    fn exec_cons(&mut self, opcode: OpCode) -> VMResult<()> {
-        match opcode {
-            CONS => {
-                let (op1, op2) = two_vals!(self)?;
-                let car = if let Value::Reference(handle) = op1 {
-                    handle
+    fn xar(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+        let (pair_reg, val) = decode2!(self, wide);
+        let pair = registers[pair_reg as usize].clone();
+        let val = registers[val as usize].clone();
+        match &pair {
+            Value::Reference(cons_handle) => {
+                let cons_d = self.heap.get(&cons_handle)?;
+                if let Object::Pair(_car, cdr) = &*cons_d {
+                    if let Value::Reference(val_handle) = val {
+                        let cdr = cdr.clone();
+                        drop(cons_d);
+                        self.heap
+                            .replace(&cons_handle, Object::Pair(val_handle, cdr))?;
+                    } else {
+                        let cdr = cdr.clone();
+                        drop(cons_d);
+                        let new_car = self.heap.alloc(Object::Value(val));
+                        self.heap
+                            .replace(&cons_handle, Object::Pair(new_car, cdr))?;
+                    }
+                } else if cons_d.is_nil() {
+                    drop(cons_d);
+                    let car = val.handle(self)?;
+                    let cdr = self.heap.alloc(Object::Value(Value::Nil));
+                    let pair = Object::Pair(car, cdr);
+                    self.heap.replace(&cons_handle, pair)?;
                 } else {
-                    self.heap.alloc(Object::Value(op1))
-                };
-                let cdr = if let Value::Reference(handle) = op2 {
-                    handle
-                } else {
-                    self.heap.alloc(Object::Value(op2))
-                };
-                self.stack
-                    .push(Value::Reference(self.heap.alloc(Object::Pair(car, cdr))));
-            }
-            CAR => {
-                let op = one_val!(self)?;
-                match op.unref(self)? {
-                    Value::Reference(handle) => {
-                        let handle_d = self.heap.get(&handle)?;
-                        if let Object::Pair(car, _) = &*handle_d {
-                            self.stack.push(self.heap.normal_val(car)?);
-                        } else {
-                            return Err(VMError::new_vm("CAR: Not a pair/conscell."));
-                        }
-                    }
-                    Value::Nil => self.stack.push(Value::Nil),
-                    _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
+                    return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
             }
-            CDR => {
-                let op = one_val!(self)?;
-                match op.unref(self)? {
-                    Value::Reference(handle) => {
-                        let handle_d = self.heap.get(&handle)?;
-                        if let Object::Pair(_, cdr) = &*handle_d {
-                            self.stack.push(self.heap.normal_val(cdr)?);
-                        } else {
-                            return Err(VMError::new_vm("CAR: Not a pair/conscell."));
-                        }
-                    }
-                    Value::Nil => self.stack.push(Value::Nil),
-                    _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
-                }
-            }
-            XAR => {
-                let (pair, val) = two_vals!(self)?;
-                match &pair {
-                    Value::Reference(cons_handle) => {
-                        let cons_d = self.heap.get(&cons_handle)?;
-                        if let Object::Pair(_car, cdr) = &*cons_d {
-                            if let Value::Reference(val_handle) = val {
-                                let cdr = cdr.clone();
-                                drop(cons_d);
-                                self.heap
-                                    .replace(&cons_handle, Object::Pair(val_handle, cdr))?;
-                            } else {
-                                let cdr = cdr.clone();
-                                drop(cons_d);
-                                let new_car = self.heap.alloc(Object::Value(val));
-                                self.heap
-                                    .replace(&cons_handle, Object::Pair(new_car, cdr))?;
-                            }
-                            self.stack.push(pair.clone());
-                        } else if cons_d.is_nil() {
-                            drop(cons_d);
-                            let car = val.handle(self)?;
-                            let cdr = self.heap.alloc(Object::Value(Value::Nil));
-                            let pair = Object::Pair(car, cdr);
-                            self.heap.replace(&cons_handle, pair)?;
-                            self.stack.push(Value::Reference(cons_handle.clone()));
-                        } else {
-                            return Err(VMError::new_vm("XAR: Not a pair/conscell."));
-                        }
-                    }
-                    Value::Nil => {
-                        let car = val.handle(self)?;
-                        let cdr = self.heap.alloc(Object::Value(Value::Nil));
-                        let pair = self.heap.alloc(Object::Pair(car, cdr));
-                        self.stack.push(Value::Reference(pair));
-                    }
-                    _ => {
-                        return Err(VMError::new_vm("XAR: Not a pair/conscell."));
-                    }
-                }
-            }
-            XDR => {
-                let (pair, val) = two_vals!(self)?;
-                match &pair {
-                    Value::Reference(cons_handle) => {
-                        let cons_d = self.heap.get(&cons_handle)?;
-                        if let Object::Pair(car, _cdr) = &*cons_d {
-                            if let Value::Reference(val_handle) = val {
-                                let car = car.clone();
-                                drop(cons_d);
-                                self.heap
-                                    .replace(&cons_handle, Object::Pair(car, val_handle))?;
-                            } else {
-                                let car = car.clone();
-                                drop(cons_d);
-                                let new_cdr = self.heap.alloc(Object::Value(val));
-                                self.heap
-                                    .replace(&cons_handle, Object::Pair(car, new_cdr))?;
-                            }
-                            self.stack.push(pair.clone());
-                        } else if cons_d.is_nil() {
-                            drop(cons_d);
-                            let car = self.heap.alloc(Object::Value(Value::Nil));
-                            let cdr = val.handle(self)?;
-                            let pair = Object::Pair(car, cdr);
-                            self.heap.replace(&cons_handle, pair)?;
-                            self.stack.push(Value::Reference(cons_handle.clone()));
-                        } else {
-                            return Err(VMError::new_vm("XDR: Not a pair/conscell."));
-                        }
-                    }
-                    Value::Nil => {
-                        let car = self.heap.alloc(Object::Value(Value::Nil));
-                        let cdr = val.handle(self)?;
-                        let pair = self.heap.alloc(Object::Pair(car, cdr));
-                        self.stack.push(Value::Reference(pair));
-                    }
-                    _ => {
-                        return Err(VMError::new_vm("XDR: Not a pair/conscell."));
-                    }
-                }
-            }
-            LIST => {
-                let mut decode_iter = self.chunk.code[self.ip..=self.ip + 1].iter();
-                let num_elements = decode_u16!(decode_iter)?;
-                if num_elements > 0 {
-                    let mut last_cdr = self.heap.alloc(Object::Value(Value::Nil));
-                    for _ in 0..num_elements {
-                        let car = if let Some(op) = self.stack.pop() {
-                            if let Value::Reference(handle) = op {
-                                handle
-                            } else {
-                                self.heap.alloc(Object::Value(op))
-                            }
-                        } else {
-                            return Err(VMError::new_vm("List: Not enough elements."));
-                        };
-                        let cdr = last_cdr;
-                        last_cdr = self.heap.alloc(Object::Pair(car, cdr));
-                    }
-                    self.stack.push(Value::Reference(last_cdr));
-                } else {
-                    self.stack
-                        .push(Value::Reference(self.heap.alloc(Object::Value(Value::Nil))));
-                }
-                self.ip += 2;
+            Value::Nil => {
+                let car = val.handle(self)?;
+                let cdr = self.heap.alloc(Object::Value(Value::Nil));
+                let pair = Value::Reference(self.heap.alloc(Object::Pair(car, cdr)));
+                set_register!(registers, pair_reg, pair);
             }
             _ => {
-                //This should be impossible (due to how it is called) so could just panic?
-                return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
+                return Err(VMError::new_vm("XAR: Not a pair/conscell."));
             }
         }
         Ok(())
     }
 
+    fn xdr(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
+        let (pair_reg, val) = decode2!(self, wide);
+        let pair = registers[pair_reg as usize].clone();
+        let val = registers[val as usize].clone();
+        match &pair {
+            Value::Reference(cons_handle) => {
+                let cons_d = self.heap.get(&cons_handle)?;
+                if let Object::Pair(car, _cdr) = &*cons_d {
+                    if let Value::Reference(val_handle) = val {
+                        let car = car.clone();
+                        drop(cons_d);
+                        self.heap
+                            .replace(&cons_handle, Object::Pair(car, val_handle))?;
+                    } else {
+                        let car = car.clone();
+                        drop(cons_d);
+                        let new_cdr = self.heap.alloc(Object::Value(val));
+                        self.heap
+                            .replace(&cons_handle, Object::Pair(car, new_cdr))?;
+                    }
+                } else if cons_d.is_nil() {
+                    drop(cons_d);
+                    let car = self.heap.alloc(Object::Value(Value::Nil));
+                    let cdr = val.handle(self)?;
+                    let pair = Object::Pair(car, cdr);
+                    self.heap.replace(&cons_handle, pair)?;
+                } else {
+                    return Err(VMError::new_vm("XAR: Not a pair/conscell."));
+                }
+            }
+            Value::Nil => {
+                let car = self.heap.alloc(Object::Value(Value::Nil));
+                let cdr = val.handle(self)?;
+                let pair = Value::Reference(self.heap.alloc(Object::Pair(car, cdr)));
+                set_register!(registers, pair_reg, pair);
+            }
+            _ => {
+                return Err(VMError::new_vm("XAR: Not a pair/conscell."));
+            }
+        }
+        Ok(())
+    }
+
+    // Need to break the registers lifetime away from self or we can not do much...
+    // The underlying stack should never be deleted or reallocated for the life
+    // of Vm so this should be safe.
+    fn make_registers(&mut self, start: usize) -> &'static mut [Value] {
+        unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
+    }
+
     pub fn execute(&mut self) -> VMResult<()> {
+        let registers = self.make_registers(0);
         loop {
             let opcode = self.chunk.code[self.ip];
             self.ip += 1;
-            match opcode {
+            let wide = (opcode & 0x80) != 0;
+            match opcode & 0x7F {
                 RET => {
                     return Ok(());
                 }
-                CONST => {
-                    let slot = self.chunk.code[self.ip] as usize;
-                    self.ip += 1;
-                    if let Some(v) = self.chunk.constants.get(slot) {
-                        self.stack.push(v.clone());
-                    }
-                }
-                CONST2 => {
-                    let mut decode_iter = self.chunk.code[self.ip..=self.ip + 1].iter();
-                    let slot = decode_u16!(decode_iter)?;
-                    self.ip += 2;
-                    if let Some(v) = self.chunk.constants.get(slot as usize) {
-                        self.stack.push(v.clone());
-                    }
-                }
-                CONST4 => {
-                    let mut decode_iter = self.chunk.code[self.ip..=self.ip + 3].iter();
-                    let slot = decode_u32!(decode_iter)?;
-                    self.ip += 4;
-                    if let Some(v) = self.chunk.constants.get(slot as usize) {
-                        self.stack.push(v.clone());
-                    }
-                }
-                LOAD => {
-                    let slot = self.chunk.code[self.ip] as usize;
-                    self.ip += 1;
-                    let val = self.stack.get(slot);
-                    if let Some(v) = val {
-                        let v = v.clone();
-                        self.stack.push(v);
-                    } else {
-                        return Err(VMError::new_vm("LOAD: Invalid stack access."));
-                    }
-                }
-                LOAD2 => {
-                    let mut decode_iter = self.chunk.code[self.ip..=self.ip + 1].iter();
-                    let slot = decode_u16!(decode_iter)? as usize;
-                    self.ip += 2;
-                    let val = self.stack.get(slot);
-                    if let Some(v) = val {
-                        let v = v.clone();
-                        self.stack.push(v);
-                    } else {
-                        return Err(VMError::new_vm("LOAD2: Invalid stack access."));
-                    }
-                }
-                POP => {
-                    self.stack.pop();
-                }
                 STORE => {
-                    let slot = self.chunk.code[self.ip] as usize;
-                    self.ip += 1;
-                    if let Some(v) = self.stack.pop() {
-                        self.stack[slot] = v;
-                    } else {
-                        return Err(VMError::new_vm("STORE: Invalid stack access."));
-                    }
+                    let (dest, src) = decode2!(self, wide);
+                    let val = registers[src as usize].clone();
+                    set_register!(registers, dest, val);
                 }
-                STORE2 => {
-                    let mut decode_iter = self.chunk.code[self.ip..=self.ip + 1].iter();
-                    let slot = decode_u16!(decode_iter)? as usize;
-                    self.ip += 2;
-                    if let Some(v) = self.stack.pop() {
-                        self.stack[slot] = v;
-                    } else {
-                        return Err(VMError::new_vm("STORE2: Invalid stack access."));
-                    }
+                STORE_K => {
+                    let (dest, src) = decode2!(self, wide);
+                    let val = self.chunk.constants[src as usize].clone();
+                    set_register!(registers, dest, val);
                 }
                 ADD => {
-                    binary_math!(self, |a, b| a + b);
+                    binary_math!(self, registers, |a, b| a + b, wide, true, true);
+                }
+                ADD_RK => {
+                    binary_math!(self, registers, |a, b| a + b, wide, true, false);
+                }
+                ADD_KR => {
+                    binary_math!(self, registers, |a, b| a + b, wide, false, true);
                 }
                 SUB => {
-                    binary_math!(self, |a, b| a - b);
+                    binary_math!(self, registers, |a, b| a - b, wide, true, true);
+                }
+                SUB_RK => {
+                    binary_math!(self, registers, |a, b| a - b, wide, true, false);
+                }
+                SUB_KR => {
+                    binary_math!(self, registers, |a, b| a - b, wide, false, true);
                 }
                 MUL => {
-                    binary_math!(self, |a, b| a * b);
+                    binary_math!(self, registers, |a, b| a * b, wide, true, true);
+                }
+                MUL_RK => {
+                    binary_math!(self, registers, |a, b| a * b, wide, true, false);
+                }
+                MUL_KR => {
+                    binary_math!(self, registers, |a, b| a * b, wide, false, true);
                 }
                 DIV => {
-                    let (op1, op2) = two_vals!(self)?;
-                    if op1.is_int() && op2.is_int() {
-                        let op2 = op2.get_int()?;
-                        if op2 == 0 {
-                            return Err(VMError::new_vm("Divide by zero error."));
+                    div_math!(self, registers, wide, true, true);
+                }
+                DIV_RK => {
+                    div_math!(self, registers, wide, true, false);
+                }
+                DIV_KR => {
+                    div_math!(self, registers, wide, false, true);
+                }
+                CONS => {
+                    let (dest, op2, op3) = decode3!(self, wide);
+                    let car = registers[op2 as usize].clone().handle(self)?;
+                    let cdr = registers[op3 as usize].clone().handle(self)?;
+                    set_register!(
+                        registers,
+                        dest,
+                        Value::Reference(self.heap.alloc(Object::Pair(car, cdr)))
+                    );
+                }
+                CAR => {
+                    let (dest, op) = decode2!(self, wide);
+                    let op = registers[op as usize].clone();
+                    match op.unref(self)? {
+                        Value::Reference(handle) => {
+                            let handle_d = self.heap.get(&handle)?;
+                            if let Object::Pair(car, _) = &*handle_d {
+                                set_register!(registers, dest, self.heap.normal_val(car)?);
+                            } else {
+                                return Err(VMError::new_vm("CAR: Not a pair/conscell."));
+                            }
                         }
-                        self.stack.push(Value::Int(op1.get_int()? / op2));
-                    } else {
-                        let op2 = op2.get_float()?;
-                        if op2 == 0.0 {
-                            return Err(VMError::new_vm("Divide by zero error."));
-                        }
-                        self.stack.push(Value::Float(op1.get_float()? / op2));
+                        Value::Nil => set_register!(registers, dest, Value::Nil),
+                        _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
                     }
                 }
-                CONS..=LIST => self.exec_cons(opcode)?,
+                CDR => {
+                    let (dest, op) = decode2!(self, wide);
+                    let op = registers[op as usize].clone();
+                    match op.unref(self)? {
+                        Value::Reference(handle) => {
+                            let handle_d = self.heap.get(&handle)?;
+                            if let Object::Pair(_, cdr) = &*handle_d {
+                                set_register!(registers, dest, self.heap.normal_val(cdr)?);
+                            } else {
+                                return Err(VMError::new_vm("CDR: Not a pair/conscell."));
+                            }
+                        }
+                        Value::Nil => set_register!(registers, dest, Value::Nil),
+                        _ => return Err(VMError::new_vm("CDR: Not a pair/conscell.")),
+                    }
+                }
+                XAR => self.xar(registers, wide)?,
+                XDR => self.xdr(registers, wide)?,
+                //CONS..=LIST => self.exec_cons(opcode)?,
                 _ => {
                     return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
                 }
@@ -385,142 +433,209 @@ mod tests {
         chunk.add_constant(Value::Int(3));
         chunk.add_constant(Value::Int(4));
         chunk.add_constant(Value::Nil);
-        chunk.push_const(0, line).unwrap();
-        chunk.push_const(1, line).unwrap();
-        chunk.push_simple(CONS, line)?;
-        chunk.push_simple(CAR, line)?;
-        chunk.push_simple(RET, line)?;
+        chunk.encode2(STORE_K, 0, 0, line).unwrap();
+        chunk.encode2(STORE_K, 1, 1, line).unwrap();
+        chunk.encode3(CONS, 1, 0, 1, line).unwrap();
+        chunk.encode2(CAR, 0, 1, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.chunk
             .add_constant(Value::Reference(vm.heap.alloc(Object::Value(Value::Nil))));
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap().get_int()?;
+        let result = vm.stack[0].get_int()?;
         assert!(result == 1);
 
-        vm.chunk.push_const(0, line).unwrap();
-        vm.chunk.push_const(1, line).unwrap();
-        vm.chunk.push_simple(CONS, line)?;
-        vm.chunk.push_simple(CDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
+        vm.chunk.encode2(CDR, 0, 1, line).unwrap();
+        vm.chunk.encode0(RET, line)?;
         vm.execute()?;
-        assert!(vm.stack.len() == 2);
-        let result = vm.stack.last().unwrap().get_int()?;
+        let result = vm.stack[0].get_int()?;
         assert!(result == 2);
 
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(0, line).unwrap();
-        vm.chunk.push_const(1, line).unwrap();
-        vm.chunk.push_simple(CONS, line)?;
-        vm.chunk.push_load(0, line).unwrap();
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XAR, line)?;
-        vm.chunk.push_simple(CAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
+        vm.chunk.encode2(STORE_K, 2, 4, line).unwrap();
+        vm.chunk.encode2(CAR, 0, 2, line).unwrap();
+        vm.chunk.encode0(RET, line)?;
         vm.execute()?;
-        assert!(vm.stack.len() == 2);
-        let result = vm.stack.last().unwrap().get_int()?;
-        assert!(result == 3);
+        assert!(vm.stack[0].is_nil());
 
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(CAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
+        vm.chunk.encode2(CDR, 0, 2, line).unwrap();
+        vm.chunk.encode0(RET, line)?;
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap().get_int()?;
-        assert!(result == 3);
+        assert!(vm.stack[0].is_nil());
+        /*
 
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(0, line).unwrap();
-        vm.chunk.push_const(1, line).unwrap();
-        vm.chunk.push_simple(CONS, line)?;
-        vm.chunk.push_load(0, line).unwrap();
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XDR, line)?;
-        vm.chunk.push_simple(CDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 2);
-        let result = vm.stack.last().unwrap().get_int()?;
-        assert!(result == 3);
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(0, line).unwrap();
+                vm.chunk.push_const(1, line).unwrap();
+                vm.chunk.push_simple(CONS, line)?;
+                vm.chunk.push_load(0, line).unwrap();
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XAR, line)?;
+                vm.chunk.push_simple(CAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 2);
+                let result = vm.stack.last().unwrap().get_int()?;
+                assert!(result == 3);
 
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(CDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap().get_int()?;
-        assert!(result == 3);
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_simple(CAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap().get_int()?;
+                assert!(result == 3);
 
-        // Test nil with CAR
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(4, line).unwrap();
-        vm.chunk.push_simple(CAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Nil = result {
-        } else {
-            assert!(false);
-        }
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(0, line).unwrap();
+                vm.chunk.push_const(1, line).unwrap();
+                vm.chunk.push_simple(CONS, line)?;
+                vm.chunk.push_load(0, line).unwrap();
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XDR, line)?;
+                vm.chunk.push_simple(CDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 2);
+                let result = vm.stack.last().unwrap().get_int()?;
+                assert!(result == 3);
 
-        // Test nil stored on the heap with CAR
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(5, line).unwrap();
-        vm.chunk.push_simple(CAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Nil = result {
-        } else {
-            assert!(false);
-        }
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_simple(CDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap().get_int()?;
+                assert!(result == 3);
 
-        // Test nil with CDR
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(4, line).unwrap();
-        vm.chunk.push_simple(CDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Nil = result {
-        } else {
-            assert!(false);
-        }
+                // Test nil with CAR
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(4, line).unwrap();
+                vm.chunk.push_simple(CAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Nil = result {
+                } else {
+                    assert!(false);
+                }
 
-        // Test nil stored on the heap with CDR
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(5, line).unwrap();
-        vm.chunk.push_simple(CDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Nil = result {
-        } else {
-            assert!(false);
-        }
+                // Test nil stored on the heap with CAR
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(5, line).unwrap();
+                vm.chunk.push_simple(CAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Nil = result {
+                } else {
+                    assert!(false);
+                }
 
-        // Test a list with elements.
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(0, line).unwrap();
-        vm.chunk.push_const(1, line).unwrap();
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_u16(LIST, 3, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Reference(h) = result {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(h)? {
-                assert!(get_int(&vm, car)? == 1);
-                if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
-                    assert!(get_int(&vm, car)? == 2);
-                    if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                // Test nil with CDR
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(4, line).unwrap();
+                vm.chunk.push_simple(CDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Nil = result {
+                } else {
+                    assert!(false);
+                }
+
+                // Test nil stored on the heap with CDR
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(5, line).unwrap();
+                vm.chunk.push_simple(CDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;PTO
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Nil = result {
+                } else {
+                    assert!(false);
+                }
+
+                // Test a list with elements.
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(0, line).unwrap();
+                vm.chunk.push_const(1, line).unwrap();
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_u16(LIST, 3, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Reference(h) = result {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(h)? {
+                        assert!(get_int(&vm, car)? == 1);
+                        if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                            assert!(get_int(&vm, car)? == 2);
+                            if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                                assert!(get_int(&vm, car)? == 3);
+                                assert!(is_nil(&vm, cdr)?);
+                            } else {
+                                assert!(false);PTO
+                            }
+                        } else {
+                            assert!(false);
+                        }
+                    } else {
+                        assert!(false);
+                    }
+                } else {
+                    assert!(false);
+                }
+
+                // Test that an empty list produces nil (stored on the heap).
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_u16(LIST, 0, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;PTO
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Reference(h) = result {
+                    assert!(is_nil(&vm, &h)?);
+                } else {
+                    assert!(false);
+                }
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                if let Value::Reference(handle) = vm.stack.last().unwrap() {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
+                        assert!(get_int(&vm, cdr)? == 3);
+                        assert!(is_nil(&vm, car)?);
+                    } else {
+                        assert!(false);
+                    }
+                } else {
+                    assert!(false);
+                }
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_u16(LIST, 0, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                let result = vm.stack.last().unwrap();
+                if let Value::Reference(h) = result {
+                    assert!(is_nil(&vm, &h)?);
+                } else {
+                    assert!(false);
+                }
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                if let Value::Reference(handle) = vm.stack.last().unwrap() {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
                         assert!(get_int(&vm, car)? == 3);
                         assert!(is_nil(&vm, cdr)?);
                     } else {
@@ -529,210 +644,78 @@ mod tests {
                 } else {
                     assert!(false);
                 }
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
 
-        // Test that an empty list produces nil (stored on the heap).
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_u16(LIST, 0, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Reference(h) = result {
-            assert!(is_nil(&vm, &h)?);
-        } else {
-            assert!(false);
-        }
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        if let Value::Reference(handle) = vm.stack.last().unwrap() {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
-                assert!(get_int(&vm, cdr)? == 3);
-                assert!(is_nil(&vm, car)?);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_u16(LIST, 0, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap();
-        if let Value::Reference(h) = result {
-            assert!(is_nil(&vm, &h)?);
-        } else {
-            assert!(false);
-        }
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        if let Value::Reference(handle) = vm.stack.last().unwrap() {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
-                assert!(get_int(&vm, car)? == 3);
-                assert!(is_nil(&vm, cdr)?);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(4, line).unwrap();
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XAR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                if let Value::Reference(handle) = vm.stack.last().unwrap() {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
+                        assert!(get_int(&vm, car)? == 3);
+                        assert!(is_nil(&vm, cdr)?);
+                    } else {
+                        assert!(false);
+                    }
+                } else {
+                    assert!(false);
+                }
 
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(4, line).unwrap();
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XAR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        if let Value::Reference(handle) = vm.stack.last().unwrap() {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
-                assert!(get_int(&vm, car)? == 3);
-                assert!(is_nil(&vm, cdr)?);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
-
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_const(4, line).unwrap();
-        vm.chunk.push_const(2, line).unwrap();
-        vm.chunk.push_simple(XDR, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        if let Value::Reference(handle) = vm.stack.last().unwrap() {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
-                assert!(get_int(&vm, cdr)? == 3);
-                assert!(is_nil(&vm, car)?);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
-
+                vm.chunk.push_simple(POP, line)?;
+                vm.chunk.push_const(4, line).unwrap();
+                vm.chunk.push_const(2, line).unwrap();
+                vm.chunk.push_simple(XDR, line)?;
+                vm.chunk.push_simple(RET, line)?;
+                vm.execute()?;
+                assert!(vm.stack.len() == 1);
+                if let Value::Reference(handle) = vm.stack.last().unwrap() {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(handle)? {
+                        assert!(get_int(&vm, cdr)? == 3);
+                        assert!(is_nil(&vm, car)?);
+                    } else {
+                        assert!(false);
+                    }
+                } else {
+                    assert!(false);
+                }
+        */
         Ok(())
     }
 
     #[test]
-    fn test_stack() -> VMResult<()> {
+    fn test_store() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
-        for i in 0..(u16::MAX as usize + 10) {
+        for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
         }
-        chunk.push_const(0, line).unwrap();
-        chunk.push_const(255, line).unwrap();
-        chunk.push_simple(ADD, line)?;
-        chunk.push_simple(RET, line)?;
+        chunk.encode2(STORE_K, 0, 0, line).unwrap();
+        chunk.encode2(STORE_K, 1, 255, line).unwrap();
+        chunk.encode3(ADD, 0, 0, 1, line).unwrap();
+        chunk.encode0(RET, line)?;
 
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap().get_int()?;
+        let result = vm.stack[0].get_int()?;
         assert!(result == 255);
 
-        vm.chunk.push_const(256, line).unwrap();
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_simple(RET, line)?;
+        vm.chunk.encode2(STORE_K, 1, 256, line).unwrap();
+        vm.chunk.encode3(ADD, 0, 0, 1, line).unwrap();
+        vm.chunk.encode0(RET, line)?;
 
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.last().unwrap().get_int()?;
+        let result = vm.stack[0].get_int()?;
         assert!(result == 255 + 256);
 
-        vm.chunk.push_const(u16::MAX as usize, line).unwrap();
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_const(u16::MAX as usize + 9, line).unwrap();
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        //let mut vm = Vm::new(chunk);
+        vm.chunk.encode2(STORE, 1, 0, line).unwrap();
+        vm.chunk.encode0(RET, line)?;
+        let result = vm.stack[1].get_int()?;
+        assert!(result == 256);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let result = vm.stack.pop().unwrap().get_int()?;
-        assert!(result == (0 + 255 + 256 + u16::MAX as i64 + (u16::MAX as i64 + 9)) as i64);
-
-        vm.chunk.push_const(0, line)?;
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 0);
-
-        vm.chunk.push_const(1, line)?;
-        vm.chunk.push_const(2, line)?;
-        vm.chunk.push_const(3, line)?;
-        vm.chunk.push_load(0, line)?;
-        vm.chunk.push_load(1, line)?;
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_store(0, line)?;
-        vm.chunk.push_load(1, line)?;
-        vm.chunk.push_load(2, line)?;
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_store(1, line)?;
-        vm.chunk.push_const(0, line)?;
-        vm.chunk.push_store(2, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 3);
-        assert!(vm.stack.pop().unwrap().get_int()? == 0);
-        assert!(vm.stack.pop().unwrap().get_int()? == 5);
-        assert!(vm.stack.pop().unwrap().get_int()? == 3);
-
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(POP, line)?;
-        vm.chunk.push_simple(POP, line)?;
-        // test the "long" versions of load/store
-        for _i in 0..255 {
-            vm.chunk.push_const(0, line)?;
-        }
-        vm.chunk.push_const(1, line)?;
-        vm.chunk.push_const(2, line)?;
-        vm.chunk.push_const(3, line)?;
-        vm.chunk.push_load(255, line)?;
-        vm.chunk.push_load(256, line)?;
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_store(255, line)?;
-        vm.chunk.push_load(256, line)?;
-        vm.chunk.push_load(257, line)?;
-        vm.chunk.push_simple(ADD, line)?;
-        vm.chunk.push_store(256, line)?;
-        vm.chunk.push_const(0, line)?;
-        vm.chunk.push_store(257, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        vm.execute()?;
-        assert!(vm.stack.len() == 258);
-        assert!(vm.stack.pop().unwrap().get_int()? == 0);
-        assert!(vm.stack.pop().unwrap().get_int()? == 5);
-        assert!(vm.stack.pop().unwrap().get_int()? == 3);
-
-        for _i in 0..258 {
-            vm.chunk.push_simple(POP, line)?;
-        }
-        vm.chunk.push_load(3, line)?;
-        vm.chunk.push_simple(RET, line)?;
-        assert!(vm.execute().is_err());
-
-        // Currently trying to write to an invalid stack location will panic
-        // which is probably ok but may revisit to make a vm error instead.
-        //vm.chunk.push_store(3, line)?;
-        //vm.chunk.push_simple(RET, line)?;
-        //assert!(vm.execute().is_err());
+        let result = vm.stack[1].get_int()?;
+        assert!(result == 255 + 256);
 
         Ok(())
     }
@@ -741,37 +724,49 @@ mod tests {
     fn test_add() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
-        let mut off = chunk.add_constant(Value::Int(2 as i64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(ADD, line)?;
-        off = chunk.add_constant(Value::Byte(1));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(ADD, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(1)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(ADD_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        assert!(vm.stack.pop().unwrap().get_int()? == 6);
+        assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(2 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(ADD, line)?;
-        off = chunk.add_constant(Value::Byte(1));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(ADD, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Float(2 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(1)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(ADD_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let item = vm.stack.pop().unwrap();
+        let item = vm.stack[0].clone();
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 6.0);
+
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        for i in 0..u16::MAX {
+            chunk.add_constant(Value::Int(i as i64));
+        }
+        chunk.encode2(STORE_K, 1, 1, line)?;
+        chunk.encode2(STORE_K, 2, 2, line)?;
+        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
+        chunk.encode3(ADD_KR, 0, 5, 0, line).unwrap();
+        chunk.encode3(ADD_KR, 1, 500, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
+        vm.execute()?;
+        let item = vm.stack[0].clone();
+        let item2 = vm.stack[1].clone();
+        assert!(item.is_int());
+        assert!(item.get_int()? == 8);
+        assert!(item2.get_int()? == 508);
         Ok(())
     }
 
@@ -779,37 +774,49 @@ mod tests {
     fn test_sub() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
-        let mut off = chunk.add_constant(Value::Int(2 as i64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(SUB, line)?;
-        off = chunk.add_constant(Value::Byte(1));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(SUB, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(1)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(SUB_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        assert!(vm.stack.pop().unwrap().get_int()? == -2);
+        assert!(vm.stack[0].get_int()? == -2);
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(5 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(SUB, line)?;
-        off = chunk.add_constant(Value::Byte(1));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(SUB, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(1)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(SUB_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let item = vm.stack.pop().unwrap();
+        let item = vm.stack[0].clone();
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 1.0);
+
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        for i in 0..u16::MAX {
+            chunk.add_constant(Value::Int(i as i64));
+        }
+        chunk.encode2(STORE_K, 1, 1, line)?;
+        chunk.encode2(STORE_K, 2, 2, line)?;
+        chunk.encode3(SUB, 0, 1, 2, line).unwrap();
+        chunk.encode3(SUB_KR, 0, 5, 0, line).unwrap();
+        chunk.encode3(SUB_KR, 1, 500, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
+        vm.execute()?;
+        let item = vm.stack[0].clone();
+        let item2 = vm.stack[1].clone();
+        assert!(item.is_int());
+        assert!(item.get_int()? == 6);
+        assert!(item2.get_int()? == 494);
         Ok(())
     }
 
@@ -817,37 +824,49 @@ mod tests {
     fn test_mul() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
-        let mut off = chunk.add_constant(Value::Int(2 as i64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(MUL, line)?;
-        off = chunk.add_constant(Value::Byte(1));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(MUL, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(1)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(MUL_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        assert!(vm.stack.pop().unwrap().get_int()? == 6);
+        assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(5 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(3 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(MUL, line)?;
-        off = chunk.add_constant(Value::Byte(2));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(MUL, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(2)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(MUL_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let item = vm.stack.pop().unwrap();
+        let item = vm.stack[0].clone();
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 30.0);
+
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        for i in 0..u16::MAX {
+            chunk.add_constant(Value::Int(i as i64));
+        }
+        chunk.encode2(STORE_K, 1, 1, line)?;
+        chunk.encode2(STORE_K, 2, 2, line)?;
+        chunk.encode3(MUL, 0, 1, 2, line).unwrap();
+        chunk.encode3(MUL_KR, 0, 5, 0, line).unwrap();
+        chunk.encode3(MUL_KR, 1, 500, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
+        vm.execute()?;
+        let item = vm.stack[0].clone();
+        let item2 = vm.stack[1].clone();
+        assert!(item.is_int());
+        assert!(item.get_int()? == 10);
+        assert!(item2.get_int()? == 5000);
         Ok(())
     }
 
@@ -855,70 +874,82 @@ mod tests {
     fn test_div() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
         let line = 1;
-        let mut off = chunk.add_constant(Value::Int(18 as i64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(2 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        off = chunk.add_constant(Value::Byte(3));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        chunk.push_simple(RET, line)?;
+        let const0 = chunk.add_constant(Value::Int(18 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(3)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(DIV_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        assert!(vm.stack.pop().unwrap().get_int()? == 3);
+        assert!(vm.stack[0].get_int()? == 3);
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(10 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(2 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        off = chunk.add_constant(Value::Byte(2));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        chunk.push_simple(RET, line)?;
-        vm = Vm::new(chunk);
+        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const2 = chunk.add_constant(Value::Byte(2)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode3(DIV_RK, 0, 0, const1, line).unwrap();
+        chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
         vm.execute()?;
-        assert!(vm.stack.len() == 1);
-        let item = vm.stack.pop().unwrap();
+        let item = vm.stack[0].clone();
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 2.5);
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Int(10 as i64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Int(0 as i64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        chunk.push_simple(RET, line)?;
-        vm = Vm::new(chunk);
+        for i in 0..u16::MAX {
+            chunk.add_constant(Value::Int(i as i64));
+        }
+        chunk.encode2(STORE_K, 1, 1, line)?;
+        chunk.encode2(STORE_K, 2, 2, line)?;
+        chunk.encode3(DIV, 0, 2, 1, line).unwrap();
+        chunk.encode3(DIV_KR, 0, 10, 0, line).unwrap();
+        chunk.encode3(DIV_KR, 1, 500, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
+        vm.execute()?;
+        let item = vm.stack[0].clone();
+        let item2 = vm.stack[1].clone();
+        assert!(item.is_int());
+        assert!(item.get_int()? == 5);
+        assert!(item2.get_int()? == 100);
+
+        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let const0 = chunk.add_constant(Value::Int(10 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(0 as i64)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode2(STORE_K, 1, const1, line)?;
+        chunk.encode3(DIV, 0, 0, 1, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
         let res = vm.execute();
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(10 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Float(0 as f64));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        chunk.push_simple(RET, line)?;
-        vm = Vm::new(chunk);
+        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Float(0 as f64)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode2(STORE_K, 1, const1, line)?;
+        chunk.encode3(DIV, 0, 0, 1, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
         let res = vm.execute();
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
-        off = chunk.add_constant(Value::Float(10 as f64));
-        chunk.push_const(off, line).unwrap();
-        off = chunk.add_constant(Value::Byte(0));
-        chunk.push_const(off, line).unwrap();
-        chunk.push_simple(DIV, line)?;
-        chunk.push_simple(RET, line)?;
-        vm = Vm::new(chunk);
+        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::Byte(0)) as u16;
+        chunk.encode2(STORE_K, 0, const0, line)?;
+        chunk.encode2(STORE_K, 1, const1, line)?;
+        chunk.encode3(DIV, 0, 0, 1, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let mut vm = Vm::new(chunk);
         let res = vm.execute();
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");

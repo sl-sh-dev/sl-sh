@@ -7,7 +7,7 @@ use crate::heap::*;
 use crate::vm::Vm;
 
 // Ideally Value would implement Copy but if Handle is a RC wrapper it can not
-// be Copy.  Then intent is to support both an RC based heap and GC based heap
+// be Copy.  The intent is to support both an RC based heap and GC based heap
 // so sticking with Clone for now but may need to revist this.
 // Clone needs to be CHEAP for Value.
 #[derive(Clone, Debug)]
@@ -19,6 +19,7 @@ pub enum Value {
     Symbol(&'static str),
     Reference(Handle),
     True,
+    False,
     Nil,
     Undefined,
 }
@@ -49,6 +50,18 @@ impl Value {
         } else {
             Ok(vm.alloc(Object::Value(self)))
         }
+    }
+
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Value::Nil)
+    }
+
+    pub fn is_true(&self) -> bool {
+        matches!(self, Value::True)
+    }
+
+    pub fn is_false(&self) -> bool {
+        matches!(self, Value::False)
     }
 
     pub fn is_int(&self) -> bool {

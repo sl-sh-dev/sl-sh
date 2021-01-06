@@ -8,7 +8,7 @@ use slvm::value::*;
 
 fn main() -> Result<(), VMError> {
     let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("disassemble"));
-    chunk.push_simple(RET, 1)?;
+    /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
     chunk.push_const(255, 3)?;
@@ -22,7 +22,18 @@ fn main() -> Result<(), VMError> {
     chunk.push_simple(SUB, 11)?;
     chunk.push_simple(CONS, 12)?;
     chunk.push_simple(CAR, 12)?;
-    chunk.push_u16(LIST, 10, 13)?;
+    chunk.push_u16(LIST, 10, 13)?;*/
+    chunk.encode2(STORE, 10, 15, 1)?;
+    chunk.encode2(STORE_K, 10, 15, 1)?;
+    chunk.encode2(STORE_K, 0x8fff, 0x9fff, 1)?;
+    chunk.encode2(REF, 1, 2, 2)?;
+    chunk.encode2(REF_K, 1, 2, 2)?;
+    chunk.encode3(REFNS, 1, 2, 3, 2)?;
+    chunk.encode3(REFNS_K, 1, 2, 3, 2)?;
+    chunk.encode2(BIND, 1, 2, 4)?;
+    chunk.encode2(BIND_K, 1, 2, 4)?;
+    chunk.encode3(BINDNS, 1, 2, 3, 4)?;
+    chunk.encode3(BINDNS_K, 1, 2, 3, 4)?;
     chunk.disassemble_chunk()?;
     Ok(())
 }
