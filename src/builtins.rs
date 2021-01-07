@@ -1189,6 +1189,27 @@ pub fn builtin_block(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
+    fn check_return(environment: &mut Environment, name: &str) -> Option<Expression> {
+        let mut returned = false;
+        let mut new_ret = None;
+        if let Some((ret_name, exp)) = &environment.return_val {
+            if let Some(ret_name) = ret_name {
+                if &name == ret_name {
+                    returned = true;
+                    new_ret = Some(exp.clone());
+                }
+            } else {
+                returned = true;
+                new_ret = Some(exp.clone());
+            }
+        }
+        if returned {
+            environment.return_val = None;
+            Some(new_ret.unwrap_or_else(Expression::make_nil))
+        } else {
+            None
+        }
+    }
     let mut ret: Option<Expression> = None;
     if let Some(name) = args.next() {
         let name_d = &name.get().data;
@@ -1208,25 +1229,20 @@ pub fn builtin_block(
             if environment.return_val.is_none() {
                 ret = Some(eval_nr(environment, arg)?);
             }
-            let mut returned = false;
-            if let Some((ret_name, exp)) = &environment.return_val {
-                if let Some(ret_name) = ret_name {
-                    if name == ret_name {
-                        returned = true;
-                        ret = Some(exp.clone());
-                    }
-                } else {
-                    returned = true;
-                    ret = Some(exp.clone());
-                }
-            }
-            if returned {
-                environment.return_val = None;
-                return Ok(ret.unwrap_or_else(Expression::make_nil));
+            if let Some(ret) = check_return(environment, name) {
+                return Ok(ret);
             }
             if environment.return_val.is_some() {
                 break;
             }
+        }
+        ret = if let Some(ret) = ret {
+            Some(ret.resolve(environment)?)
+        } else {
+            None
+        };
+        if let Some(ret) = check_return(environment, name) {
+            return Ok(ret);
         }
         Ok(ret.unwrap_or_else(Expression::make_nil))
     } else {
@@ -2357,6 +2373,12 @@ Example:
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+(test::assert-equal '(5 6) (block yyy ((fn (p) (return-from yyy p)) '(5 6)) '(a b)) '(2 3))
+(test::assert-equal 2
+    (block forloop
+        (for item in '(1 2 3)
+            (when (= 2 item)
+              (return-from forloop item)))))
 "
         ),
     );
