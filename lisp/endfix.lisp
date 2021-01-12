@@ -165,14 +165,14 @@
 	(recursively-check-for-infix-notation (make-vec) cmd-ast))
 
 (defn find-infix-symbol
-	"starting at idx search for infix-symbol. if found return a parid composed
+	"starting at idx search for infix-symbol. if found return a pair composed
 	of the properties needed to prexfixify the command and the index of the
 	infix symbol."
 	(cmd-ast idx)
 	(if (>= idx (length cmd-ast))
 	  nil
 	  (do
-		(var nxt (vec-nth cmd-ast idx))
+		(var nxt (nth idx cmd-ast))
 		(if (not nxt)
 			nil
 			(do
@@ -248,6 +248,22 @@
 	(handle-parens cmd-ast-parens cmd-ast)
 	(remove-any-infix-notation (remove-any-mixed-infix-notation cmd-ast-parens)))
 
+(defn has-infix? (cmd-ast)
+    (if (empty-seq? cmd-ast)
+      nil
+        (if (find-infix-symbol cmd-ast 1)
+            #t
+            (block forloop
+               (for item in cmd-ast
+                (when (non-empty-seq? item)
+              (when (has-infix? item)
+                (return-from forloop #t))))))))
+
+(defn rewrite-if-infix-present (cmd-ast)
+    (if (has-infix? cmd-ast)
+      (apply-infix-modifications cmd-ast)
+      cmd-ast))
+
 ;; entrypoint for all 1 arg commands... used to make filepaths cd commands
 ;; to themselves.
 (defn change-dir-if-arg-is-dir (cmd orig-cmd-ast)
@@ -267,7 +283,7 @@
 		;; check to see if this single argument is a filepath
 		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
 		;; check for infix notation
-		(nil (apply-infix-modifications cmd-ast))))))
+		(nil (rewrite-if-infix-present cmd-ast))))))
 
 #|
 ;; TODO need tests
