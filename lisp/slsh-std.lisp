@@ -66,18 +66,6 @@ t
 "
   (&rest args) `(do ,@args))
 
-; For compat.
-(defmacro to-symbol
-"Synonym for 'sym' that only takes one arg, use it instead (this is depricated).
-
-Section: type
-
-Example:
-;see sym
-t
-"
-  (arg) `(sym ,arg))
-
 (def *last-status* 0)
 (def *last-command* "")
 

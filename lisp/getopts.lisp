@@ -65,7 +65,7 @@ up until the next token delimeted option, -c.
 
 (defn verify-arity (idx given-args options-map bindings-map)
     (var option (vec-nth given-args idx))
-    (var key (to-symbol (str ":" option)))
+    (var key (sym (str ":" option)))
     (var arity-map (hash-get options-map key))
     (var arity (if (nil? arity-map)
                   0
@@ -113,7 +113,7 @@ up until the next token delimeted option, -c.
 (def nyi "not-yet-implemented")
 
 (defn make-hash-with-keys (hmap)
-    (make-hash (collect (map (fn (x) (join (to-symbol x) nil)) (hash-keys hmap)))))
+    (make-hash (collect (map (fn (x) (join (sym x) nil)) (hash-keys hmap)))))
 
 (defn fix-one-arg-bindings
 "Ensure binding with arity of 1 is bound to actual value passed in, not
@@ -179,7 +179,7 @@ otherwise the error message is thrown."
         (join :fs-file? (check-custom fs-file? (fn (x) (str "Argument, " x ", should pass test fs-file?"))))
         (join :fs-dir? (check-custom fs-dir? (fn (x) (str "Argument, " x ", should pass test fs-dir?"))))
         (join :fs-exists? (check-custom fs-exists? (fn (x) (str "Argument, " x ", should pass test fs-exists?"))))
-        (join :symbol? (fn-to-predicate to-symbol symbol?))
+        (join :symbol? (fn-to-predicate sym symbol?))
         (join :string? (fn (x unused) (str x)))
         (join :char? (check char?))
         (join :hash? (check hash?))

@@ -79,7 +79,7 @@ Section: namespace"
 
 (defmacro internal-fn
 "
-Template for macros the define functions, can pass an 'op' like def or set.
+Template for macros that define functions, can pass an 'op' like def or set.
 Intended for use by other core macros.
 
 Section: core

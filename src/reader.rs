@@ -999,15 +999,22 @@ pub fn read_form(
         list_type: ListType::Vector,
         vec: Vec::<Expression>::new(),
     });
-    let ichars = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
-        Ok((_, ichars)) => ichars,
-        Err((e, ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
+    let mut ichars = chars;
+    let mut icont = true;
+    while icont && stack.len() == 1 && stack[0].vec.is_empty() {
+        let (tcont, tchars) = match read_inner(environment, ichars, &mut stack, &mut buffer, false)
+        {
+            Ok((cont, ichars)) => (cont, ichars),
+            Err((e, ichars)) => {
+                if clear_state {
+                    environment.reader_state = None;
+                }
+                return Err((e, ichars));
             }
-            return Err((e, ichars));
-        }
-    };
+        };
+        icont = tcont;
+        ichars = tchars;
+    }
     let exp_meta = get_meta(
         environment.reader_state.as_ref().unwrap().file_name,
         environment.reader_state.as_ref().unwrap().line,

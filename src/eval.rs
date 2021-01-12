@@ -206,29 +206,6 @@ pub fn call_lambda(
     ret
 }
 
-fn exec_macro(
-    environment: &mut Environment,
-    sh_macro: &Lambda,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    //let bb: Expression = sh_macro.body.clone().into();
-    //println!("XXXX exec macro for {}", bb);
-    let expansion = call_lambda(
-        environment,
-        ExpEnum::Lambda(sh_macro.clone()).into(),
-        args,
-        false,
-    )?
-    .resolve(environment)?;
-    //println!("XXXX execed macro for ");
-    let last_frame = environment.stack_frames.last();
-    if let Some(frame) = last_frame {
-        let mut syms = Some(frame.symbols.clone());
-        analyze(environment, &expansion, &mut syms)?;
-    }
-    eval(environment, &expansion)
-}
-
 fn make_lazy(
     environment: &mut Environment,
     lambda: Expression,
@@ -263,7 +240,6 @@ fn eval_command(
                 call_lambda(environment, com_exp.clone(), parts, true)
             }
         }
-        ExpEnum::Macro(m) => exec_macro(environment, &m, parts),
         ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
         ExpEnum::DeclareDef => builtin_def(environment, &mut *parts),
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
@@ -312,7 +288,6 @@ fn fn_eval_lazy(
             if command_sym.is_empty() {
                 return Ok(Expression::alloc_data(ExpEnum::Nil));
             }
-            //let command_sym = <&str>::clone(command_sym); // XXX this sucks, try to work around the drop below...
             let command_sym: &'static str = command_sym; // This makes the drop happy.
             drop(command_d);
             let form = get_expression(environment, command.clone());
@@ -330,7 +305,6 @@ fn fn_eval_lazy(
                             call_lambda(environment, exp.clone(), &mut parts, true)
                         }
                     }
-                    ExpEnum::Macro(m) if allow_form => exec_macro(environment, &m, &mut parts),
                     ExpEnum::String(s, _) if allow_sys_com => {
                         do_command(environment, s.trim(), &mut parts)
                     }
@@ -384,7 +358,6 @@ fn fn_eval_lazy(
                 call_lambda(environment, command.clone(), &mut parts, true)
             }
         }
-        ExpEnum::Macro(m) => exec_macro(environment, &m, &mut parts),
         ExpEnum::Function(c) => (c.func)(environment, &mut *parts),
         ExpEnum::DeclareDef => builtin_def(environment, &mut *parts),
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
