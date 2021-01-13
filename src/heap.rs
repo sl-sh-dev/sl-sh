@@ -16,7 +16,7 @@ pub enum Object {
     String(Cow<'static, str>),
     Vector(Vec<Value>),
     Bytes(Vec<u8>),
-    Pair(Handle, Handle),
+    Pair(Value, Value),
 }
 
 impl Object {

@@ -52,6 +52,10 @@ impl Value {
         }
     }
 
+    pub fn is_ref(&self) -> bool {
+        matches!(self, Value::Reference(_))
+    }
+
     pub fn is_nil(&self) -> bool {
         matches!(self, Value::Nil)
     }

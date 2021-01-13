@@ -169,27 +169,19 @@ impl Vm {
     fn list(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (dest, start, end) = decode3!(self, wide);
         if end == start {
-            set_register!(
-                registers,
-                dest,
-                Value::Reference(self.heap.alloc(Object::Value(Value::Nil)))
-            );
+            set_register!(registers, dest, Value::Nil);
         } else {
-            let mut last_cdr = self.heap.alloc(Object::Value(Value::Nil));
+            let mut last_cdr = Value::Nil;
             for i in (start..end).rev() {
                 let car = if let Some(op) = registers.get(i as usize) {
-                    if let Value::Reference(handle) = op {
-                        handle.clone()
-                    } else {
-                        self.heap.alloc(Object::Value(op.clone()))
-                    }
+                    op
                 } else {
                     return Err(VMError::new_vm("List: Not enough elements."));
                 };
                 let cdr = last_cdr;
-                last_cdr = self.heap.alloc(Object::Pair(car, cdr));
+                last_cdr = Value::Reference(self.heap.alloc(Object::Pair(car.clone(), cdr)));
             }
-            set_register!(registers, dest, Value::Reference(last_cdr));
+            set_register!(registers, dest, last_cdr);
         }
         Ok(())
     }
@@ -202,32 +194,19 @@ impl Vm {
             Value::Reference(cons_handle) => {
                 let cons_d = self.heap.get(&cons_handle)?;
                 if let Object::Pair(_car, cdr) = &*cons_d {
-                    if let Value::Reference(val_handle) = val {
-                        let cdr = cdr.clone();
-                        drop(cons_d);
-                        self.heap
-                            .replace(&cons_handle, Object::Pair(val_handle, cdr))?;
-                    } else {
-                        let cdr = cdr.clone();
-                        drop(cons_d);
-                        let new_car = self.heap.alloc(Object::Value(val));
-                        self.heap
-                            .replace(&cons_handle, Object::Pair(new_car, cdr))?;
-                    }
+                    let cdr = cdr.clone();
+                    drop(cons_d);
+                    self.heap.replace(&cons_handle, Object::Pair(val, cdr))?;
                 } else if cons_d.is_nil() {
                     drop(cons_d);
-                    let car = val.handle(self)?;
-                    let cdr = self.heap.alloc(Object::Value(Value::Nil));
-                    let pair = Object::Pair(car, cdr);
+                    let pair = Object::Pair(val, Value::Nil);
                     self.heap.replace(&cons_handle, pair)?;
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
             }
             Value::Nil => {
-                let car = val.handle(self)?;
-                let cdr = self.heap.alloc(Object::Value(Value::Nil));
-                let pair = Value::Reference(self.heap.alloc(Object::Pair(car, cdr)));
+                let pair = Value::Reference(self.heap.alloc(Object::Pair(val, Value::Nil)));
                 set_register!(registers, pair_reg, pair);
             }
             _ => {
@@ -245,32 +224,19 @@ impl Vm {
             Value::Reference(cons_handle) => {
                 let cons_d = self.heap.get(&cons_handle)?;
                 if let Object::Pair(car, _cdr) = &*cons_d {
-                    if let Value::Reference(val_handle) = val {
-                        let car = car.clone();
-                        drop(cons_d);
-                        self.heap
-                            .replace(&cons_handle, Object::Pair(car, val_handle))?;
-                    } else {
-                        let car = car.clone();
-                        drop(cons_d);
-                        let new_cdr = self.heap.alloc(Object::Value(val));
-                        self.heap
-                            .replace(&cons_handle, Object::Pair(car, new_cdr))?;
-                    }
+                    let car = car.clone();
+                    drop(cons_d);
+                    self.heap.replace(&cons_handle, Object::Pair(car, val))?;
                 } else if cons_d.is_nil() {
                     drop(cons_d);
-                    let car = self.heap.alloc(Object::Value(Value::Nil));
-                    let cdr = val.handle(self)?;
-                    let pair = Object::Pair(car, cdr);
+                    let pair = Object::Pair(Value::Nil, val);
                     self.heap.replace(&cons_handle, pair)?;
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
             }
             Value::Nil => {
-                let car = self.heap.alloc(Object::Value(Value::Nil));
-                let cdr = val.handle(self)?;
-                let pair = Value::Reference(self.heap.alloc(Object::Pair(car, cdr)));
+                let pair = Value::Reference(self.heap.alloc(Object::Pair(Value::Nil, val)));
                 set_register!(registers, pair_reg, pair);
             }
             _ => {
@@ -321,8 +287,8 @@ impl Vm {
                 DIV_KR => div_math!(self, registers, wide, false, true),
                 CONS => {
                     let (dest, op2, op3) = decode3!(self, wide);
-                    let car = registers[op2 as usize].clone().handle(self)?;
-                    let cdr = registers[op3 as usize].clone().handle(self)?;
+                    let car = registers[op2 as usize].clone();
+                    let cdr = registers[op3 as usize].clone();
                     set_register!(
                         registers,
                         dest,
@@ -336,7 +302,7 @@ impl Vm {
                         Value::Reference(handle) => {
                             let handle_d = self.heap.get(&handle)?;
                             if let Object::Pair(car, _) = &*handle_d {
-                                set_register!(registers, dest, self.heap.normal_val(car)?);
+                                set_register!(registers, dest, car.clone());
                             } else {
                                 return Err(VMError::new_vm("CAR: Not a pair/conscell."));
                             }
@@ -352,7 +318,7 @@ impl Vm {
                         Value::Reference(handle) => {
                             let handle_d = self.heap.get(&handle)?;
                             if let Object::Pair(_, cdr) = &*handle_d {
-                                set_register!(registers, dest, self.heap.normal_val(cdr)?);
+                                set_register!(registers, dest, cdr.clone());
                             } else {
                                 return Err(VMError::new_vm("CDR: Not a pair/conscell."));
                             }
@@ -376,16 +342,16 @@ impl Vm {
 mod tests {
     use super::*;
 
-    fn get_int(vm: &Vm, handle: &Handle) -> VMResult<i64> {
-        if let Object::Value(Value::Int(i)) = &*vm.heap.get(handle)? {
+    fn get_int(_vm: &Vm, val: &Value) -> VMResult<i64> {
+        if let Value::Int(i) = val {
             Ok(*i)
         } else {
             Err(VMError::new_vm("Not an int"))
         }
     }
 
-    fn is_nil(vm: &Vm, handle: &Handle) -> VMResult<bool> {
-        if let Object::Value(Value::Nil) = &*vm.heap.get(handle)? {
+    fn is_nil(_vm: &Vm, val: &Value) -> VMResult<bool> {
+        if let Value::Nil = val {
             Ok(true)
         } else {
             Ok(false)
@@ -493,11 +459,19 @@ mod tests {
         if let Value::Reference(h) = result {
             if let Object::Pair(car, cdr) = &*vm.heap.get(h)? {
                 assert!(get_int(&vm, car)? == 1);
-                if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
-                    assert!(get_int(&vm, car)? == 2);
+                if let Value::Reference(cdr) = cdr {
                     if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
-                        assert!(get_int(&vm, car)? == 3);
-                        assert!(is_nil(&vm, cdr)?);
+                        assert!(get_int(&vm, car)? == 2);
+                        if let Value::Reference(cdr) = cdr {
+                            if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                                assert!(get_int(&vm, car)? == 3);
+                                assert!(is_nil(&vm, cdr)?);
+                            } else {
+                                assert!(false);
+                            }
+                        } else {
+                            assert!(false);
+                        }
                     } else {
                         assert!(false);
                     }
@@ -515,20 +489,12 @@ mod tests {
         vm.chunk.encode0(RET, line)?;
         vm.execute()?;
         let result = vm.stack.get(0).unwrap();
-        if let Value::Reference(h) = result {
-            assert!(is_nil(&vm, &h)?);
-        } else {
-            assert!(false);
-        }
+        assert!(result.is_nil());
         vm.chunk.encode3(LIST, 0, 1, 1, line).unwrap();
         vm.chunk.encode0(RET, line)?;
         vm.execute()?;
         let result = vm.stack.get(0).unwrap();
-        if let Value::Reference(h) = result {
-            assert!(is_nil(&vm, &h)?);
-        } else {
-            assert!(false);
-        }
+        assert!(result.is_nil());
         Ok(())
     }
 
