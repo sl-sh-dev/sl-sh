@@ -262,7 +262,10 @@ fn builtin_read(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn read_stdin(environment: &mut Environment) -> Result<Expression, LispError> {
+    fn read_stdin(
+        environment: &mut Environment,
+        err_exp: Option<Expression>,
+    ) -> Result<Expression, LispError> {
         let input = read_prompt(environment, "read> ", Some("read_history"), ":new")?;
         let input = unsafe { &*(input.as_ref() as *const str) };
         let chars = Box::new(
@@ -272,11 +275,18 @@ fn builtin_read(
         );
         match read_form(environment, chars) {
             Ok((ast, _)) => Ok(ast),
-            Err((err, _)) => Err(LispError::new(err.reason)),
+            Err((err, _)) => {
+                if let Some(err_exp) = err_exp {
+                    Ok(err_exp)
+                } else {
+                    Err(LispError::new(err.reason))
+                }
+            }
         }
     }
+    let mut err_exp = None;
     if let Some(exp) = args.next() {
-        let err_exp = if let Some(exp) = args.next() {
+        err_exp = if let Some(exp) = args.next() {
             Some(eval(environment, exp)?)
         } else {
             None
@@ -303,7 +313,7 @@ fn builtin_read(
                             }
                         }
                     }
-                    FileState::Stdin => read_stdin(environment),
+                    FileState::Stdin => read_stdin(environment, err_exp),
                     _ => Err(LispError::new(
                         "read: requires a character file opened for reading or string",
                     )),
@@ -342,23 +352,43 @@ fn builtin_read(
                     "read: requires a character file opened for reading or string",
                 )),
             };
+        } else {
+            return Err(LispError::new(
+                "read: requires 0-2 parameters ([file|string]? end-exp?)",
+            ));
         }
     }
     // No args, ask for input
-    read_stdin(environment)
+    read_stdin(environment, err_exp)
 }
 
 fn builtin_read_all(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn do_read(environment: &mut Environment, input: &str) -> Result<Expression, LispError> {
+    fn do_read(
+        environment: &mut Environment,
+        input: &str,
+        empty_exp: Option<Expression>,
+    ) -> Result<Expression, LispError> {
         match read(environment, &input, None, true) {
             Ok(ast) => Ok(ast),
-            Err(err) => Err(LispError::new(err.reason)),
+            Err(err) => {
+                if let Some(empty_exp) = empty_exp {
+                    Ok(empty_exp)
+                } else {
+                    Err(LispError::new(err.reason))
+                }
+            }
         }
     }
+    let mut empty_exp = None;
     if let Some(exp) = args.next() {
+        empty_exp = if let Some(exp) = args.next() {
+            Some(eval(environment, exp)?)
+        } else {
+            None
+        };
         if args.next().is_none() {
             let exp = eval(environment, exp)?;
             let mut exp_d = exp.get_mut();
@@ -367,7 +397,7 @@ fn builtin_read_all(
                     FileState::Read(file_iter, _) => {
                         if let Some(file_iter) = file_iter {
                             let input: String = file_iter.collect();
-                            do_read(environment, &input)
+                            do_read(environment, &input, empty_exp)
                         } else {
                             Err(LispError::new("read-all: invalid read character iterator!"))
                         }
@@ -375,27 +405,31 @@ fn builtin_read_all(
                     FileState::ReadBinary(file) => {
                         let mut input = String::new();
                         file.read_to_string(&mut input)?;
-                        do_read(environment, &input)
+                        do_read(environment, &input, empty_exp)
                     }
                     FileState::Stdin => {
                         let input =
                             read_prompt(environment, "read-all> ", Some("read_history"), ":new")?;
-                        do_read(environment, &input)
+                        do_read(environment, &input, empty_exp)
                     }
                     _ => Err(LispError::new(
                         "read-all: requires a file opened for reading or string",
                     )),
                 },
-                ExpEnum::String(input, _char_iter) => do_read(environment, input),
+                ExpEnum::String(input, _char_iter) => do_read(environment, input, empty_exp),
                 _ => Err(LispError::new(
                     "read-all: requires a file opened for reading or string",
                 )),
             };
+        } else {
+            return Err(LispError::new(
+                "read-all: requires 0-2 parameters ([file|string]? end-exp?).",
+            ));
         }
     }
     // No args, ask for input
     let input = read_prompt(environment, "read-all> ", Some("read_history"), ":new")?;
-    do_read(environment, &input)
+    do_read(environment, &input, empty_exp)
 }
 
 fn builtin_write_line(
@@ -569,11 +603,13 @@ Example:
         interner.intern("read"),
         Expression::make_function(
             builtin_read,
-            "Usage: (read file|string end-exp?) -> list
+            "Usage: (read [file|string]? end-exp?) -> expression
 
 Read a file or string and return the next object (symbol, string, list, etc).
 Raises an error if the file or string has been read unless end-exp is provided
 then returns that on the end condition.
+
+If no parameters are provided then read stdin.
 
 Section: file
 
@@ -611,7 +647,7 @@ Example:
         interner.intern("read-all"),
         Expression::make_function(
             builtin_read_all,
-            "Usage: (read-all file|string) -> list
+            "Usage: (read-all [file|string]? empty-exp?) -> list|vec|empty-exp
 
 Read a file or string and return the list representation.  This reads the entire
 file or string and will wrap in an outer vector if not a vector or list (always
@@ -619,6 +655,12 @@ returns a vector or list).
 
 Unlike most lisp readers this one will put loose symbols in a list (i.e. you
 enter things at the repl without the enclosing parens).
+
+Note the file|string arg is optional, if not provided will read from stdin (or
+can provide stdin).
+
+If the read item is empty (including a comment) then raises an error or produces
+empty-exp if it is provided.
 
 Section: file
 
@@ -631,7 +673,8 @@ Example:
 (close tst-file)
 (test::assert-equal '(4 5 6) (read-all \"(4 5 6)\"))
 (test::assert-equal '(7 8 9) (read-all \"7 8 9\"))
-(test::assert-equal '(x y z) (read-all \"(x y z)\"))
+(test::assert-equal '(x y z) (read-all \"(x y z)\" :not-used))
+(test::assert-equal :empty (read-all \";(x y z)\" :empty))
 ",
         ),
     );
