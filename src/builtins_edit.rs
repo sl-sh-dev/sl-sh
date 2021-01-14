@@ -150,6 +150,8 @@ fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
 
 fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
     let mut con = Context::new();
+    // Do this before a history file load...
+    apply_repl_settings(&mut con, &environment.repl_settings);
     con.set_word_divider(Box::new(get_liner_words));
     let mut home = match env::var("HOME") {
         Ok(val) => val,
@@ -171,7 +173,6 @@ fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
             );
         }
     }
-    apply_repl_settings(&mut con, &environment.repl_settings);
     con
 }
 
