@@ -33,17 +33,17 @@ fn version() {
     println!("{}", VERSION_STRING);
 }
 
-fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Result<String, ()> {
+fn get_arg(exe_name: &str, args: &mut Vec<OsString>) -> Option<String> {
     if let Some(argument) = args.pop() {
         if let Ok(arg) = argument.into_string() {
-            return Ok(arg);
+            return Some(arg);
         }
     }
     help(exe_name);
-    Err(())
+    None
 }
 
-pub fn get_config() -> Result<Config, ()> {
+pub fn get_config() -> Option<Config> {
     let mut command: Option<String> = None;
     let mut script: Option<String> = None;
     let mut command_args: Vec<String> = Vec::new();
@@ -60,17 +60,17 @@ pub fn get_config() -> Result<Config, ()> {
                     "-c" => {
                         if command.is_some() {
                             help(&exe_name);
-                            return Err(());
+                            return None;
                         }
                         command = Some(get_arg(&exe_name, &mut args)?);
                     }
                     "-v" | "--version" => {
                         version();
-                        return Err(());
+                        return None;
                     }
                     "-h" | "--help" => {
                         help(&exe_name);
-                        return Err(());
+                        return None;
                     }
                     _ => {
                         if command.is_none() && script.is_none() {
@@ -82,11 +82,11 @@ pub fn get_config() -> Result<Config, ()> {
                 }
             } else {
                 help(&exe_name);
-                return Err(());
+                return None;
             }
         }
     }
-    Ok(Config {
+    Some(Config {
         command,
         script,
         args: command_args,

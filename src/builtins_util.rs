@@ -1,5 +1,4 @@
 use std::env;
-use std::iter::FromIterator;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -61,7 +60,7 @@ pub fn list_to_args(
         }
         Ok(args)
     } else {
-        let args: Vec<Expression> = Vec::from_iter(parts.iter().cloned());
+        let args: Vec<Expression> = parts.to_vec();
         Ok(args)
     }
 }

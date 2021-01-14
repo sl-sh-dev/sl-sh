@@ -37,12 +37,7 @@ struct List {
 }
 
 fn is_whitespace(ch: &str) -> bool {
-    match ch {
-        " " => true,
-        "\t" => true,
-        "\n" => true,
-        _ => false,
-    }
+    matches!(ch, " " | "\t" | "\n")
 }
 
 fn char_to_hex_num(ch: &str) -> u8 {

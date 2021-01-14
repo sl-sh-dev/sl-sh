@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::iter::FromIterator;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -107,9 +106,9 @@ fn builtin_vec_slice(
                     return Err(LispError::new(msg));
                 }
                 let slice = if has_end {
-                    Vec::from_iter(list[start..end].iter().cloned())
+                    list[start..end].to_vec()
                 } else {
-                    Vec::from_iter(list[start..].iter().cloned())
+                    list[start..].to_vec()
                 };
                 Ok(Expression::with_list(slice))
             } else {
