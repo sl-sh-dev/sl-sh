@@ -14,11 +14,14 @@
     (let
       ((copy-args-vec
          (fn (args)
-            (let ((new-vec (make-vec (length args) nil)))
-              (for i in (iterator::range (length args))
-                   (vec-insert! new-vec i (collect-copy (vec-nth args i)))))))
-        (output
-          (loop (elem elems) (init (deep-vec-copy args)) (do
+    (var new-vec (make-vec (length args) nil))
+    (for i in (iterator::range (length args)) (do
+                                                (println "i: " i)
+        (vec-insert! new-vec i (collect-copy (vec-nth args i)))
+        ))
+    new-vec)))
+          (do
+            (var output (loop (elem elems) (init (copy-args-vec args)) (do
             (println "elem: " elem)
             (println "elems: " elems)
             (if (empty-seq? (first elems))
@@ -36,10 +39,9 @@
                             (if (empty-seq? (first lst))
                                 orig-lst
                                (recur replacement (rest lst) orig-lst))))
-                    (rest elems)))))))
-    (println "args after run: " args)
-    output
-    ))
+                    (rest elems))))))
+        (println "args after run: " args)
+        output)))
 
 (defn chain (&rest args)
   ;; syntax of chain requires all elems after 0th elem of args must be non-empty

@@ -70,7 +70,7 @@
 		that string is then \"tail -f\"'d
 
 		Section: user-shell"
-		(str-to-tail-f) (progn
+		(str-to-tail-f) (do
 		(var matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
 		(var tail-target (first matching-list))
 		(tail -f tail-target)))
@@ -80,7 +80,7 @@
 	Section: user-shell
 	"
 		()
-		(progn
+		(do
 			(var most-recent-dir
 				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir))))
@@ -107,7 +107,7 @@
 	Section: user-shell
 	"
 	()
-	(progn
+	(do
 		(var raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
 		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
 
@@ -139,7 +139,7 @@
 			((vimargs (str-split
 				" "
 				(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
-			(progn
+			(do
 				(eval `(vim ,@vimargs))))
 		(err "Only accepts 0 or 1 arguments")))
 
@@ -155,7 +155,7 @@
 	Section: java"
 	(&rest args)
 	(let ((log-out-file "last_build.log"))
-	(progn
+	(do
 		(|
 			(var gradle-proc (eval (append-to! '(./gradlew) args)))
 			(tee log-out-file)
@@ -218,9 +218,9 @@
 ;; Replace cd with a version that also runs ls after.
 ;; Macro to let un-expanded args go to root::cd.
 (defmacro cd
-	"(= 'cd (progn (cd) (ls))) ;; life changing
+	"(= 'cd (do (cd) (ls))) ;; life changing
 	Section: user-shell"
-	(&rest args) (progn
+	(&rest args) (do
 		(if (= (length args) 0)
 			(and (root::cd) (ls .))
 			(if (= (length args) 1)
@@ -280,7 +280,7 @@
 	"provide persistent notification of previous commands return code via notify-send and libnotify
 	Section: notify"
 	()
-	(progn
+	(do
 		(var last-ret-val *last-status*)
 		(pnss (str "Last program exit status: " last-ret-val  "."))
 		last-ret-val))
@@ -341,7 +341,7 @@ Section: tmux"
 	Section: tmux"
 	(&rest args)
 		(if (= (length args) 1)
-			(progn
+			(do
 				(var tmux-ret-code (tmux a -t (first args)))
 				(if (= 0 tmux-ret-code)
 					0
@@ -422,7 +422,7 @@ Section: tmux"
 		(str "")
 		(str "(" (str-trim branch) ")"))))
 
-(defn get-build-type () (progn
+(defn get-build-type () (do
 	(var build-type (nth 3 (str-split " " (version))))
 	(if (= build-type "debug")
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
@@ -437,14 +437,17 @@ Section: tmux"
 ;;	4. if in git dir display current branch
 ;;	5. cursor on near empty line
 (defn __prompt ()
-    (progn
+    (do
         (var token-str (str-trim *last-command*))
-        (when (> (length token-str) 0)
-            (set! token-str (collect (reverse (read-all token-str)))))
+        ;; TODO you can feed read a default argument
+        ;; avoid wrap in get-error
+        (var ret (get-error (read-all token-str)))
         (when (and
+                (= :ok (car ret))
                 (> (length token-str) 0)
                 (not (empty-seq? token-str)))
-            (progn
+            (do
+                (set! token-str (collect (reverse (cdr ret))))
                 (if (= (first token-str) '$la)
                   (export 'la $la)
                   (export 'la (str (first token-str))))
