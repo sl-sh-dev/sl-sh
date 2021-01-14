@@ -2,6 +2,45 @@
 
 (ns-import 'iterator)
 
+(defn deep-vec-copy (args)
+    (var new-vec (make-vec (length args) nil))
+    (for i in (iterator::range (length args)) (do
+                                                (println "i: " i)
+        (vec-insert! new-vec i (collect-copy (vec-nth args i)))
+        ))
+    new-vec)
+
+(defmacro testchain (init &rest args)
+    (let
+      ((copy-args-vec
+         (fn (args)
+            (let ((new-vec (make-vec (length args) nil)))
+              (for i in (iterator::range (length args))
+                   (vec-insert! new-vec i (collect-copy (vec-nth args i)))))))
+        (output
+          (loop (elem elems) (init (deep-vec-copy args)) (do
+            (println "elem: " elem)
+            (println "elems: " elems)
+            (if (empty-seq? (first elems))
+                elem
+                (recur
+                    (loop (replacement lst orig-lst) (elem (first elems) (first elems))
+                        (if (= (first lst) '_)
+                            (do (println "is _")
+                               ;;TODO put in a list copy before the replacement so we don't
+                               ;; change the value of something the user passed in?
+                               ;; deleteme? (println "stuff: " (xdr! (xar! lst "woof") expr))
+                               (xar! lst replacement)
+                               (println "stuff: " orig-lst)
+                               orig-lst)
+                            (if (empty-seq? (first lst))
+                                orig-lst
+                               (recur replacement (rest lst) orig-lst))))
+                    (rest elems)))))))
+    (println "args after run: " args)
+    output
+    ))
+
 (defn chain (&rest args)
   ;; syntax of chain requires all elems after 0th elem of args must be non-empty
   ;; sequences that contain the _ symbol in the non 0 position.
@@ -22,28 +61,5 @@
 
 ;;(chain "meow" (echo _ ", and how!"))
 
-(defmacro testchain (init &rest args)
-    (println "vecnth: " (vec-nth args 0) 2)
-    (println "args: " args)
-    (loop (elem elems) (init args) (do
-        (println "elem: " elem)
-        (println "elems: " elems)
-        (if (empty-seq? (first elems))
-            elem
-            (recur
-                (loop (replacement lst orig-lst) (elem (first elems) (first elems))
-                    (if (= (first lst) '_)
-                        (do (println "is _")
-                           ;;TODO put in a list copy before the replacement so we don't
-                           ;; change the value of something the user passed in?
-                           ;; deleteme? (println "stuff: " (xdr! (xar! lst "woof") expr))
-                           (xar! lst replacement)
-                           (println "stuff: " orig-lst)
-                           orig-lst)
-                        (if (empty-seq? (first lst))
-                            orig-lst
-                           (recur replacement (rest lst) orig-lst))))
-                (rest elems))))))
-
-(println "testchain ret: " (testchain "my" (str "with " _ "sauce") (str "Pasta " _ ", yes please.")))
+(println "testchain ret: " (testchain "my" (str "with " _ " sauce") (str "Pasta " _ ", yes please.")))
 
