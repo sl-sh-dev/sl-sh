@@ -19,14 +19,14 @@
 
 (def index-file (first args))
 (def target-doc-form (do
-	(def kwd (to-symbol (first (rest args))))
+	(def kwd (sym (first (rest args))))
 	(if (in? kwd-list kwd)
 		kwd
 		(err (str "Second argument must be one of " kwd-list " was, " kwd ", type: " (type kwd))))))
 
 (for arg in args (do
 	(if (or (= arg ":lang") (= arg ":user") (= arg ":single"))
-		(set! target-doc-form (to-symbol arg))
+		(set! target-doc-form (sym arg))
 		(set! index-file arg))))
 
 (if (mkdocs::make-md-file index-file target-doc-form) (exit 0) (exit 1))

@@ -502,7 +502,7 @@ Section: tmux"
             sym-list
               (recur
                   (collect-vec (filter (fn (x) (progn
-                                (not (in? (ns-symbols (to-symbol (first namespaces))) x))))
+                                (not (in? (ns-symbols (sym (first namespaces))) x))))
                       sym-list))
               (rest namespaces)))))
 
@@ -518,7 +518,7 @@ Section: tmux"
         (for a-ns in (filter
                         (fn (x) (not (in? all-non-user-namespaces x)))
                         (ns-list))
-            (append-to! user-syms (ns-symbols (to-symbol a-ns))))
+            (append-to! user-syms (ns-symbols (sym a-ns))))
         (var user-forms (filter-non-user-forms user-syms default-namespaces))
         (var partial-docable-user-forms (mkdocs::filter-undocable-forms user-forms))
         (var all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
@@ -526,7 +526,7 @@ Section: tmux"
 
     (def all-user-slsh-syms (list-of-user-slsh-syms))
     (def all-docstrings
-        (map (fn (x) (doc (to-symbol x))) (filter (fn (x) (= :ok (car (get-error (doc (to-symbol x)))))) all-user-slsh-syms)))
+        (map (fn (x) (doc (sym x))) (filter (fn (x) (= :ok (car (get-error (doc (sym x)))))) all-user-slsh-syms)))
     ;; check the last modified time of index.markdown and only do this if
     ; has not been done in some amount of time.
     (mkdocs::make-md-file-with-docstrings
