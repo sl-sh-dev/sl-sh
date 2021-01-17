@@ -112,11 +112,11 @@ pub struct Chunk {
     last_line: u32,
     line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
-    pub namespace: NamespaceRef,
+    pub namespace: Option<NamespaceRef>,
 }
 
 impl Chunk {
-    pub fn new(file_name: &'static str, start_line: u32, namespace: NamespaceRef) -> Self {
+    pub fn new(file_name: &'static str, start_line: u32) -> Self {
         Chunk {
             code: Vec::new(),
             file_name,
@@ -124,7 +124,23 @@ impl Chunk {
             last_line: start_line,
             line_numbers: Vec::new(),
             constants: Vec::new(),
-            namespace,
+            namespace: None,
+        }
+    }
+
+    pub fn with_namespace(
+        file_name: &'static str,
+        start_line: u32,
+        namespace: NamespaceRef,
+    ) -> Self {
+        Chunk {
+            code: Vec::new(),
+            file_name,
+            start_line,
+            last_line: start_line,
+            line_numbers: Vec::new(),
+            constants: Vec::new(),
+            namespace: Some(namespace),
         }
     }
 
@@ -482,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_encode0() {
-        let mut chunk = Chunk::new("no_file", 0, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 0);
         chunk.encode0(RET, 1).unwrap();
         chunk.encode0(CAR, 1).unwrap();
         chunk.encode0(RET, 1).unwrap();
@@ -496,7 +512,7 @@ mod tests {
 
     #[test]
     fn test_encode1() {
-        let mut chunk = Chunk::new("no_file", 0, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 0);
         chunk.encode1(CAR, 0, 1).unwrap();
         chunk.encode1(CAR, 128, 1).unwrap();
         chunk.encode1(CAR, 255, 1).unwrap();
@@ -526,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_encode2() {
-        let mut chunk = Chunk::new("no_file", 0, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 0);
         chunk.encode2(STORE, 0, 0, 1).unwrap();
         chunk.encode2(STORE, 128, 128, 1).unwrap();
         chunk.encode2(STORE, 255, 255, 1).unwrap();
@@ -572,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_encode3() {
-        let mut chunk = Chunk::new("no_file", 0, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 0);
         chunk.encode3(REFNS, 0, 0, 0, 1).unwrap();
         chunk.encode3(REFNS, 128, 128, 128, 1).unwrap();
         chunk.encode3(REFNS, 255, 255, 255, 1).unwrap();
@@ -628,7 +644,7 @@ mod tests {
 
     #[test]
     fn test_line_numbers() {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         chunk.encode2(STORE, 1, 2, 1).unwrap();
         chunk.encode2(STORE, 1, 2, 2).unwrap();
         chunk.encode2(STORE, 1, 2, 3).unwrap();

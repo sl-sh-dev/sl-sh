@@ -133,18 +133,20 @@ pub struct Vm {
     stack: Vec<Value>,
     ip: usize,
     _root_namespace: NamespaceRef,
-    _namespaces: HashMap<&'static str, NamespaceRef>,
+    _namespaces: HashMap<Interned, NamespaceRef, BuildInternedHasher>,
 }
 
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
-        let _root_namespace = Namespace::new_ref("root");
-        let mut _namespaces = HashMap::new();
-        _namespaces.insert("root", _root_namespace.clone());
+        let mut interner = Interner::with_capacity(8192);
+        let root = interner.intern("root");
+        let _root_namespace = Namespace::new_ref(root);
+        let mut _namespaces = HashMap::with_hasher(BuildInternedHasher::new());
+        _namespaces.insert(root, _root_namespace.clone());
         let mut stack = Vec::with_capacity(1024);
         stack.resize(1024, Value::Undefined);
         Vm {
-            interner: Interner::with_capacity(8192),
+            interner,
             heap: Heap::new(),
             chunk,
             stack,
@@ -162,7 +164,7 @@ impl Vm {
         Ok(self.heap.get(handle)?)
     }
 
-    pub fn intern(&mut self, string: &str) -> &'static str {
+    pub fn intern(&mut self, string: &str) -> Interned {
         self.interner.intern(string)
     }
 
@@ -360,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_list() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         chunk.add_constant(Value::Int(1));
         chunk.add_constant(Value::Int(2));
@@ -500,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_store() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
@@ -536,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_add() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
@@ -549,7 +551,7 @@ mod tests {
         vm.execute()?;
         assert!(vm.stack[0].get_int()? == 6);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(2 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
@@ -564,7 +566,7 @@ mod tests {
         assert!(item.is_number());
         assert!(item.get_float()? == 6.0);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
         }
@@ -586,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_sub() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
@@ -599,7 +601,7 @@ mod tests {
         vm.execute()?;
         assert!(vm.stack[0].get_int()? == -2);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
@@ -614,7 +616,7 @@ mod tests {
         assert!(item.is_number());
         assert!(item.get_float()? == 1.0);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
         }
@@ -636,7 +638,7 @@ mod tests {
 
     #[test]
     fn test_mul() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
@@ -649,7 +651,7 @@ mod tests {
         vm.execute()?;
         assert!(vm.stack[0].get_int()? == 6);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
@@ -664,7 +666,7 @@ mod tests {
         assert!(item.is_number());
         assert!(item.get_float()? == 30.0);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
         }
@@ -686,7 +688,7 @@ mod tests {
 
     #[test]
     fn test_div() -> VMResult<()> {
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const0 = chunk.add_constant(Value::Int(18 as i64)) as u16;
         let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
@@ -699,7 +701,7 @@ mod tests {
         vm.execute()?;
         assert!(vm.stack[0].get_int()? == 3);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
@@ -714,7 +716,7 @@ mod tests {
         assert!(item.is_number());
         assert!(item.get_float()? == 2.5);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         for i in 0..u16::MAX {
             chunk.add_constant(Value::Int(i as i64));
         }
@@ -732,7 +734,7 @@ mod tests {
         assert!(item.get_int()? == 5);
         assert!(item2.get_int()? == 100);
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Int(10 as i64)) as u16;
         let const1 = chunk.add_constant(Value::Int(0 as i64)) as u16;
         chunk.encode2(STORE_K, 0, const0, line)?;
@@ -744,7 +746,7 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Float(0 as f64)) as u16;
         chunk.encode2(STORE_K, 0, const0, line)?;
@@ -756,7 +758,7 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
-        let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("test"));
+        let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Byte(0)) as u16;
         chunk.encode2(STORE_K, 0, const0, line)?;

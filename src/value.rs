@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::error::*;
 use crate::heap::*;
+use crate::interner::*;
 use crate::vm::Vm;
 
 // Ideally Value would implement Copy but if Handle is a RC wrapper it can not
@@ -16,7 +17,8 @@ pub enum Value {
     Int(i64),
     UInt(u64),
     Float(f64),
-    Symbol(&'static str),
+    Symbol(Interned),
+    StringConst(Interned),
     Reference(Handle),
     True,
     False,
@@ -69,20 +71,11 @@ impl Value {
     }
 
     pub fn is_int(&self) -> bool {
-        match &self {
-            Value::Byte(_) => true,
-            Value::Int(_) => true,
-            _ => false,
-        }
+        matches!(&self, Value::Byte(_) | Value::Int(_))
     }
 
     pub fn is_number(&self) -> bool {
-        match &self {
-            Value::Byte(_) => true,
-            Value::Int(_) => true,
-            Value::Float(_) => true,
-            _ => false,
-        }
+        matches!(&self, Value::Byte(_) | Value::Int(_) | Value::Float(_))
     }
 
     pub fn get_int(&self) -> VMResult<i64> {
@@ -105,21 +98,21 @@ impl Value {
 
 #[derive(Clone, Debug)]
 pub struct Namespace {
-    objects: HashMap<&'static str, Handle>,
-    doc_strings: HashMap<&'static str, String>,
-    name: &'static str,
+    objects: HashMap<Interned, Handle, BuildInternedHasher>,
+    doc_strings: HashMap<Interned, String, BuildInternedHasher>,
+    name: Interned,
 }
 
 impl Namespace {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: Interned) -> Self {
         Namespace {
-            objects: HashMap::new(),
-            doc_strings: HashMap::new(),
+            objects: HashMap::with_hasher(BuildInternedHasher::new()),
+            doc_strings: HashMap::with_hasher(BuildInternedHasher::new()),
             name,
         }
     }
 
-    pub fn new_ref(name: &'static str) -> NamespaceRef {
+    pub fn new_ref(name: Interned) -> NamespaceRef {
         Rc::new(RefCell::new(Namespace::new(name)))
     }
 }

@@ -3,11 +3,21 @@
 
 use slvm::chunk::*;
 use slvm::error::*;
+use slvm::interner::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 
 fn main() -> Result<(), VMError> {
-    let mut chunk = Chunk::new("no_file", 1, Namespace::new_ref("disassemble"));
+    let mut interner = Interner::with_capacity(8);
+    let mut chunk = Chunk::with_namespace(
+        "no_file",
+        1,
+        Namespace::new_ref(interner.intern("disassemble")),
+    );
+    println!("Value size: {}", std::mem::size_of::<Value>());
+    println!("usize: {}", std::mem::size_of::<usize>());
+    println!("opt usize: {}", std::mem::size_of::<Option<usize>>());
+    println!("&st usize: {}", std::mem::size_of::<&'static str>());
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
