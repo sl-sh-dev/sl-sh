@@ -419,6 +419,7 @@ fn str_process(
                     let ast = read(environment, &string[var_start + 1..=i], None, false);
                     match ast {
                         Ok(ast) => {
+                            let old_loose_symbols = environment.loose_symbols;
                             environment.loose_symbols = true;
                             let old_out = environment.state.stdout_status.clone();
                             let old_err = environment.state.stderr_status.clone();
@@ -452,7 +453,7 @@ fn str_process(
                             environment.data_in = data_in;
                             environment.in_pipe = in_pipe;
                             environment.state.pipe_pgid = pipe_pgid;
-                            environment.loose_symbols = false;
+                            environment.loose_symbols = old_loose_symbols;
                         }
                         Err(err) => return Err(LispError::new(err.reason)),
                     }
