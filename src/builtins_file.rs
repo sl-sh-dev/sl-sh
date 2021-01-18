@@ -97,7 +97,9 @@ fn builtin_cd(
     let new_dir = if new_dir == "-" { &old_dir } else { &new_dir };
     let new_dir = cd_expand_all_dots(new_dir.to_string());
     let root = Path::new(&new_dir);
-    env::set_var("OLDPWD", env::current_dir()?);
+    if let Ok(oldpwd) = env::current_dir() {
+        env::set_var("OLDPWD", oldpwd);
+    }
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("Error changing to {}, {}", root.display(), e);
         Ok(Expression::make_nil())
