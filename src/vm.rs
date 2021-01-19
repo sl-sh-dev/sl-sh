@@ -67,14 +67,14 @@ macro_rules! binary_math {
     ($vm:expr, $registers:expr, $bin_fn:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
         let (dest, op2, op3) = decode3!($vm, $wide);
         let op2 = if $op2_reg {
-            $registers[op2 as usize].clone()
+            $registers[op2 as usize]
         } else {
-            $vm.chunk.constants[op2 as usize].clone()
+            $vm.chunk.constants[op2 as usize]
         };
         let op3 = if $op3_reg {
-            $registers[op3 as usize].clone()
+            $registers[op3 as usize]
         } else {
-            $vm.chunk.constants[op3 as usize].clone()
+            $vm.chunk.constants[op3 as usize]
         };
         let val = if op2.is_int() && op3.is_int() {
             Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
@@ -89,14 +89,14 @@ macro_rules! div_math {
     ($vm:expr, $registers:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
         let (dest, op2, op3) = decode3!($vm, $wide);
         let op2 = if $op2_reg {
-            $registers[op2 as usize].clone()
+            $registers[op2 as usize]
         } else {
-            $vm.chunk.constants[op2 as usize].clone()
+            $vm.chunk.constants[op2 as usize]
         };
         let op3 = if $op3_reg {
-            $registers[op3 as usize].clone()
+            $registers[op3 as usize]
         } else {
-            $vm.chunk.constants[op3 as usize].clone()
+            $vm.chunk.constants[op3 as usize]
         };
         let val = if op2.is_int() && op3.is_int() {
             let op3 = op3.get_int()?;
@@ -160,7 +160,7 @@ impl Vm {
         self.heap.alloc(obj)
     }
 
-    pub fn get<'a>(&'a self, handle: &'a Handle) -> VMResult<HandleRef<'a>> {
+    pub fn get(&self, handle: Handle) -> VMResult<HandleRef<'_>> {
         Ok(self.heap.get(handle)?)
     }
 
@@ -181,7 +181,7 @@ impl Vm {
                     return Err(VMError::new_vm("List: Not enough elements."));
                 };
                 let cdr = last_cdr;
-                last_cdr = Value::Reference(self.heap.alloc(Object::Pair(car.clone(), cdr)));
+                last_cdr = Value::Reference(self.heap.alloc(Object::Pair(*car, cdr)));
             }
             set_register!(registers, dest, last_cdr);
         }
@@ -190,19 +190,19 @@ impl Vm {
 
     fn xar(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (pair_reg, val) = decode2!(self, wide);
-        let pair = registers[pair_reg as usize].clone();
-        let val = registers[val as usize].clone();
+        let pair = registers[pair_reg as usize];
+        let val = registers[val as usize];
         match &pair {
             Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(&cons_handle)?;
+                let cons_d = self.heap.get(*cons_handle)?;
                 if let Object::Pair(_car, cdr) = &*cons_d {
-                    let cdr = cdr.clone();
+                    let cdr = *cdr;
                     drop(cons_d);
-                    self.heap.replace(&cons_handle, Object::Pair(val, cdr))?;
+                    self.heap.replace(*cons_handle, Object::Pair(val, cdr))?;
                 } else if cons_d.is_nil() {
                     drop(cons_d);
                     let pair = Object::Pair(val, Value::Nil);
-                    self.heap.replace(&cons_handle, pair)?;
+                    self.heap.replace(*cons_handle, pair)?;
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -220,19 +220,19 @@ impl Vm {
 
     fn xdr(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (pair_reg, val) = decode2!(self, wide);
-        let pair = registers[pair_reg as usize].clone();
-        let val = registers[val as usize].clone();
+        let pair = registers[pair_reg as usize];
+        let val = registers[val as usize];
         match &pair {
             Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(&cons_handle)?;
+                let cons_d = self.heap.get(*cons_handle)?;
                 if let Object::Pair(car, _cdr) = &*cons_d {
-                    let car = car.clone();
+                    let car = *car;
                     drop(cons_d);
-                    self.heap.replace(&cons_handle, Object::Pair(car, val))?;
+                    self.heap.replace(*cons_handle, Object::Pair(car, val))?;
                 } else if cons_d.is_nil() {
                     drop(cons_d);
                     let pair = Object::Pair(Value::Nil, val);
-                    self.heap.replace(&cons_handle, pair)?;
+                    self.heap.replace(*cons_handle, pair)?;
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -267,12 +267,12 @@ impl Vm {
                 }
                 STORE => {
                     let (dest, src) = decode2!(self, wide);
-                    let val = registers[src as usize].clone();
+                    let val = registers[src as usize];
                     set_register!(registers, dest, val);
                 }
                 STORE_K => {
                     let (dest, src) = decode2!(self, wide);
-                    let val = self.chunk.constants[src as usize].clone();
+                    let val = self.chunk.constants[src as usize];
                     set_register!(registers, dest, val);
                 }
                 ADD => binary_math!(self, registers, |a, b| a + b, wide, true, true),
@@ -289,8 +289,8 @@ impl Vm {
                 DIV_KR => div_math!(self, registers, wide, false, true),
                 CONS => {
                     let (dest, op2, op3) = decode3!(self, wide);
-                    let car = registers[op2 as usize].clone();
-                    let cdr = registers[op3 as usize].clone();
+                    let car = registers[op2 as usize];
+                    let cdr = registers[op3 as usize];
                     set_register!(
                         registers,
                         dest,
@@ -299,12 +299,12 @@ impl Vm {
                 }
                 CAR => {
                     let (dest, op) = decode2!(self, wide);
-                    let op = registers[op as usize].clone();
+                    let op = registers[op as usize];
                     match op.unref(self)? {
                         Value::Reference(handle) => {
-                            let handle_d = self.heap.get(&handle)?;
+                            let handle_d = self.heap.get(handle)?;
                             if let Object::Pair(car, _) = &*handle_d {
-                                set_register!(registers, dest, car.clone());
+                                set_register!(registers, dest, *car);
                             } else {
                                 return Err(VMError::new_vm("CAR: Not a pair/conscell."));
                             }
@@ -315,12 +315,12 @@ impl Vm {
                 }
                 CDR => {
                     let (dest, op) = decode2!(self, wide);
-                    let op = registers[op as usize].clone();
+                    let op = registers[op as usize];
                     match op.unref(self)? {
                         Value::Reference(handle) => {
-                            let handle_d = self.heap.get(&handle)?;
+                            let handle_d = self.heap.get(handle)?;
                             if let Object::Pair(_, cdr) = &*handle_d {
-                                set_register!(registers, dest, cdr.clone());
+                                set_register!(registers, dest, *cdr);
                             } else {
                                 return Err(VMError::new_vm("CDR: Not a pair/conscell."));
                             }
@@ -459,13 +459,13 @@ mod tests {
         vm.execute()?;
         let result = vm.stack.get(0).unwrap();
         if let Value::Reference(h) = result {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(h)? {
+            if let Object::Pair(car, cdr) = &*vm.heap.get(*h)? {
                 assert!(get_int(&vm, car)? == 1);
                 if let Value::Reference(cdr) = cdr {
-                    if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr)? {
                         assert!(get_int(&vm, car)? == 2);
                         if let Value::Reference(cdr) = cdr {
-                            if let Object::Pair(car, cdr) = &*vm.heap.get(cdr)? {
+                            if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr)? {
                                 assert!(get_int(&vm, car)? == 3);
                                 assert!(is_nil(&vm, cdr)?);
                             } else {
@@ -561,7 +561,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
+        let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 6.0);
@@ -578,8 +578,8 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
-        let item2 = vm.stack[1].clone();
+        let item = vm.stack[0];
+        let item2 = vm.stack[1];
         assert!(item.is_int());
         assert!(item.get_int()? == 8);
         assert!(item2.get_int()? == 508);
@@ -611,7 +611,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
+        let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 1.0);
@@ -628,8 +628,8 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
-        let item2 = vm.stack[1].clone();
+        let item = vm.stack[0];
+        let item2 = vm.stack[1];
         assert!(item.is_int());
         assert!(item.get_int()? == 6);
         assert!(item2.get_int()? == 494);
@@ -661,7 +661,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
+        let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 30.0);
@@ -678,8 +678,8 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
-        let item2 = vm.stack[1].clone();
+        let item = vm.stack[0];
+        let item2 = vm.stack[1];
         assert!(item.is_int());
         assert!(item.get_int()? == 10);
         assert!(item2.get_int()? == 5000);
@@ -711,7 +711,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
+        let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
         assert!(item.get_float()? == 2.5);
@@ -728,8 +728,8 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
         vm.execute()?;
-        let item = vm.stack[0].clone();
-        let item2 = vm.stack[1].clone();
+        let item = vm.stack[0];
+        let item2 = vm.stack[1];
         assert!(item.is_int());
         assert!(item.get_int()? == 5);
         assert!(item2.get_int()? == 100);

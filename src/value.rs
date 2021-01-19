@@ -7,11 +7,7 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::vm::Vm;
 
-// Ideally Value would implement Copy but if Handle is a RC wrapper it can not
-// be Copy.  The intent is to support both an RC based heap and GC based heap
-// so sticking with Clone for now but may need to revist this.
-// Clone needs to be CHEAP for Value.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Value {
     Byte(u8),
     Int(i64),
@@ -39,8 +35,8 @@ impl Value {
 
     pub fn unref(self, vm: &Vm) -> VMResult<Value> {
         if let Value::Reference(handle) = &self {
-            if let Object::Value(value) = &*vm.get(handle)? {
-                return Ok(value.clone());
+            if let Object::Value(value) = &*vm.get(*handle)? {
+                return Ok(*value);
             }
         }
         Ok(self)
