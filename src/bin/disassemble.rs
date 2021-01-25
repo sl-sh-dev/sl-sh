@@ -16,6 +16,12 @@ fn main() -> Result<(), VMError> {
     );
     println!("Value size: {}", std::mem::size_of::<Value>());
     println!("usize: {}", std::mem::size_of::<usize>());
+    println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
+    println!("Vec<Value> size: {}", std::mem::size_of::<Vec<Value>>());
+    println!(
+        "Cow size: {}",
+        std::mem::size_of::<std::borrow::Cow<'static, str>>()
+    );
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
