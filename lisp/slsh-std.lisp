@@ -85,6 +85,32 @@ t
 (undef prim-print-backtrace)
 (undef prim-print-error)
 
+;; let* lives here so it lives in the root namespace but can use lib functions
+;; from iterator.
+(defmacro let*
+"Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp. Differs from let in that sexps can reference bindings from previous items
+in the list of vals.
+
+Section: core
+
+Example:
+    (let* ((add-one (fn (x) (+ 1 x)))
+       (double-add (fn (x) (add-one (add-one x)))))
+       (test::assert-equal 4 (add-one 3))
+       (test::assert-equal 6 (double-add 4)))"
+(vals &rest let-body)
+  (let ((reducer (fn (fst nxt)
+                (var val (car nxt))
+                (var bind (cadr nxt))
+                (if (= 1 (length nxt))
+                  `(((fn (,val) ,@fst) nil))
+                  (if (= 2 (length nxt))
+                         `(((fn (,val) ,@fst) ,bind))
+                         (err "ERROR: invalid bindings on let*"))))))
+      (car (iterator::reduce reducer let-body (iterator::reverse vals)))))
+
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? *load-slshrc*)

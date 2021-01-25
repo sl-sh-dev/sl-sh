@@ -20,7 +20,7 @@
 
 ;; shell helpers {{{
 
-	(defn dush
+	(defn dsh
 		"With no arguments: alias for du ./* -sh
 		With any args: provides size of each provided argument
 		Section: user-shell"
@@ -72,18 +72,19 @@
 		Section: user-shell"
 		(str-to-tail-f) (do
 		(var matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
-		(var tail-target (first matching-list))
+		(var tail-target (first (collect matching-list)))
 		(tail -f tail-target)))
 
 	(defn cdt
 	"cd into the directory with the most recent timestamp
 	Section: user-shell
 	"
-		()
-		(do
+		(&rest args)
+			(when (> (length args) 1 )
+				(err "cdt supports zero or one arguments."))
 			(var most-recent-dir
-				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
-			(eval `(cd ,most-recent-dir))))
+				(first (collect-vec (filter (fn (x) (and (if (= 1 (length args)) (str-contains (first args) (str x)) #t) (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
+			(eval `(cd ,most-recent-dir)))
 
 ;; stdin to clipboard
 (defmacro sc
@@ -157,7 +158,7 @@
 	(let ((log-out-file "last_build.log"))
 	(do
 		(|
-			(var gradle-proc (eval (append-to! '(./gradlew) args)))
+			(var gradle-proc (eval (append-to! (list ./gradlew) args)))
 			(tee log-out-file)
 		)
 		(var gradle-ret-code (wait gradle-proc))
@@ -204,6 +205,10 @@
 ;; }}}
 
 ;; quality of shell life {{{
+(alias :q
+       ":q makes sense as an exit alias
+       Section: user-shell"
+       (exit))
 (alias ls
 	"alias ls to a colorified version.
 	Section: user-shell"
@@ -313,6 +318,70 @@ Section: sys-docs
 	- paste normally or with: C-a + ]
 Section: tmux"
 	((str (which tmux))))
+
+(alias journalctl
+"
+GENERAL KNOWLEDGE:
+[learning](https://www.redhat.com/sysadmin/mastering-systemd)
+systemd stores logs in binary format with lots of fields for every given
+system log, to showcase all possible filter options run:
+	#> journalctl --output=verbose --all
+
+cool stuff:
+	/usr/bin/bash # by binary
+	--boot # since boot
+	--catalog # instructs journalctl to show context around lines, e.g. computer reboots,
+				service stopping restarting
+	--utc #!
+	-k  # kernel messages
+	_UID=1000 -n # by user
+	--no-pager # good for read
+	-n # recent logs
+	-n/--lines=1024 #last 1024 logs
+	-f/--follow
+	--output [json/json-pretty/others] # formatted in json!
+	--priority/-p N # provide log level
+
+log levels:
+	journalctl -unit=sshd --priority 3 --output json-pretty
+	0: emergency
+	1: alerts
+	2: critical
+	3: errors
+	4: warning
+	5: notice
+	6: info
+	7: debug
+
+time:
+	# \"yesterday\", \"today\", \"tomorrow\", or \"now\"
+	journalctl --since \"2015-01-10\" --until \"2015-01-11 03:00\"
+	journalctl --since yesterday
+	journalctl --since 09:00 --until \"1 hour ago\"
+
+Common commands:
+KERNEL:
+	- shows the linux kernel logs, could be across boots:
+		#> journalctl --catalog --lines=3000 --pager-end \"_TRANSPORT=kernel\"
+	or
+		#> journalctl --catalog --lines=3000 --pager-end -k
+
+	- shows the linux kernel logs from last --boot:
+		#> journalctl --catalog --lines=35000 --pager-end --boot -k
+	- or from beginning:
+		#> journalctl --catalog --boot -k
+	- or from previous boot:
+		#> journalctl --catalog --boot -1 -k
+ALL:
+	#> journalctl --catalog --lines=3000 --pager-end
+FILTERED:
+	#> journalctl --catalog --lines=3000 --pager-end --unit=sshd.service
+	#> systemctl list-units --type=service # to get service
+GREP:
+	#> journalctl --catalog --lines=3000 --pager-end --grep \"port\" --priority 7
+
+Section sys-docs"
+	((str (which journalctl))))
 
 ;; }}}
 
@@ -430,6 +499,39 @@ Section: tmux"
 
 ;; TODO maybe list bkrd processes as well in prompt.
 
+(defn colorize-rand (string seed)
+	(let ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
+								shell::*fg-green* shell::*fg-yellow*
+								shell::*fg-blue* shell::*fg-magenta*
+								shell::*fg-cyan* shell::*fg-white*))
+		  (ascii-to-int (fn (ascii-char)
+							(str->int (str (bash -c (str "printf \"%d\" \'" ascii-char)))))))
+		(str (vec-nth
+				fg-color-vec
+				(% (reduce (fn (curr nxt)
+							(+ curr (ascii-to-int nxt))) 0 seed)
+					(length fg-color-vec)))
+			string
+			shell::*fg-default*)))
+
+(defn colorize-rand-cache (filename color-str seed)
+    (let ((dir (str "/tmp/sl-sh/"))
+          (fp (str "/tmp/sl-sh/" filename)))
+      (if (and (fs-exists? fp) (not (fs-dir? fp)))
+        (str (str-trim (cat fp)))
+        (do
+          (var color-val (colorize-rand color-str seed))
+          (mkdir -p dir)
+          (out> fp (echo color-val))
+          color-val))))
+
+(def sl-sh-open-paren (colorize-rand-cache "sl-sh-open-paren" "[" (str $HOST "1")))
+(def sl-sh-title (colorize-rand-cache "sl-sh-title" "sl-sh" (str $HOST "4")))
+(def sl-sh-close-paren (colorize-rand-cache "sl-sh-close-paren"  "] " (str $HOST "1")))
+(def open-paren (colorize-rand-cache "open-paren" "{[ " (str $HOST "7")))
+(def host-string (colorize-rand-cache "host-string" $HOST $HOST))
+(def close-paren (colorize-rand-cache "close-paren" " ]}" (str $HOST "7")))
+
 ;; prompt ensures
 ;;	1. always a new line above prompt
 ;;	2. if pushd has been used displays in reverse order dirs to popd
@@ -465,7 +567,7 @@ Section: tmux"
             (if (> (length (get-dirs)) 0)
                 (collect-str (map smaller_path (reverse (get-dirs))))
                 "")
-            "\n\r" "\x1b[32m[sl-sh" (get-build-type) "] " $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
             (set_prompt_tail last-status))))
 
 ;; }}}

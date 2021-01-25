@@ -1,39 +1,20 @@
 #!/usr/bin/env sl-sh
 
 (ns-import 'iterator)
-
-(defmacro testchain (init &rest args)
-    (let
-      ((copy-args-vec
-         (fn (args)
-            (var new-vec (make-vec (length args) nil))
-            (for i in (iterator::range (length args))
-            (vec-insert! new-vec i (collect-copy (vec-nth args i)))) new-vec)))
-          (do
-            (var output (loop (elem elems) (init (copy-args-vec args)) (do
-            (if (empty-seq? (first elems))
-                elem
-                (recur
-                    (loop (replacement lst orig-lst) (elem (first elems) (first elems))
-                        (if (= (first lst) '_)
-                            (do 
-                               ;;TODO put in a list copy before the replacement so we don't
-                               ;; change the value of something the user passed in?
-                               ;; deleteme? (println "stuff: " (xdr! (xar! lst "woof") expr))
-                               (xar! lst replacement)
-                               orig-lst)
-                            (if (empty-seq? (first lst))
-                                orig-lst
-                               (recur replacement (rest lst) orig-lst))))
-                    (rest elems))))))
-        output)))
-
+;; TODO to implement
+;;    - nest
+;;    - nest-reverse
+;;    - chain-and
+;;    - chain-when
+;;    - chain-lambda
+;;    - chain-lambda
 ;; TODO need tests and a docstring
 ;; TODO check scheme spec
-(defmacro chain (init &rest args)
-  ;; syntax of chain requires all elems after 0th elem of args must be non-empty
-  ;; sequences that contain the _ symbol in the non 0 position.
+;; TODO throw err if multiple _ or perhaps... insert arg into them?
+(defn verify-chain-args (args)
       (if (= 0 (length args))
+;; TODO feature specify min number of var args to get rid of common checking
+;; pattern?
         (err "chain operator requires at least two arguments")
         (do
           (for elem in args (when (not (and (non-empty-seq? elem)
@@ -41,24 +22,15 @@
                                             (in? (rest elem) '_)))
              (err "All args in non 0 position must be non-empty sequences that
                   contain the _ symbol in the non 0 position.")))
-          (let ((copy-args-vec (fn (args)
-                                (var new-vec (make-vec (length args) nil))
-                                (for i in (iterator::range (length args))
-                                (vec-insert! new-vec i (collect-copy (vec-nth args i)))) new-vec)))
-            (loop (elem elems) (init (copy-args-vec args))
-            (if (empty-seq? (first elems))
-                elem
-                (recur
-                    (loop (replacement lst orig-lst) (elem (first elems) (first elems))
-                        (if (= (first lst) '_)
-                            (do (xar! lst replacement) orig-lst)
-                            (if (empty-seq? (first lst))
-                                orig-lst
-                               (recur replacement (rest lst) orig-lst))))
-                    (rest elems))))))))
+          #t)))
 
-(println "testchain ret: " (chain "my" (str "with " _ " sauce") (str "Pasta " _ ", yes please.")))
-(println "testchain ret2: " (expand-macro '(chain "my" (str "with " _ " sauce") (str "Pasta " _ ", yes please."))))
 
-;;(chain "meow" (echo _ ", and how!"))
+(defmacro chain (init &rest args)
+  (verify-chain-args args)
+  (let* ((reducer (fn (fst nxt)
+                      (substitute fst '_ nxt))))
+    (reduce reducer init args)))
 
+
+(println "test chain" (chain "a properly worded " (str "will " " become " _) (str "I " _ "statement.") (str "Ordered sentence: " _)))
+(println "Chain macro expansion: " (expand-macro '(chain "my" (str _ " with " " sauce") (str "Pasta " _ ", yes please."))))
