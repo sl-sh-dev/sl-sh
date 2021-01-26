@@ -473,14 +473,14 @@ Example:
 "
       (stream ch) (eval (read stream)))
 
-(defn nsubstitute
+(defn nsubstitute!
 "Replaces all instances of old-item in lst with new-item.
 Section: core
 
 Example:
 
 (let ((lst (list 1 2 3 4 5)))
-    (test::assert-equal (list 1 2 10 4 5) (nsubstitute 10 3 lst))
+    (test::assert-equal (list 1 2 10 4 5) (nsubstitute! 10 3 lst))
     (test::assert-equal (list 1 2 10 4 5) lst))"
     (new-item old-item lst)
     (loop (idx items) (0 lst)
@@ -504,6 +504,6 @@ Example:
     (test::assert-equal (list 1 2 10 4 5) (substitute 10 3 lst)))
     (test::assert-equal lst lst))"
      (new-item old-item lst)
-     (nsubstitute new-item old-item (collect-copy lst)))
+     (nsubstitute! new-item old-item (collect-copy lst)))
 
 (load "collection.lisp")
