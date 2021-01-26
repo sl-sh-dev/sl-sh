@@ -595,7 +595,7 @@ fn internal_eval(
             } else if environment.loose_symbols {
                 str_process(environment, s, false)
             } else {
-                let msg = format!("Symbol {} not found x.", s);
+                let msg = format!("Symbol {} not found.", s);
                 Err(LispError::new(msg))
             }
         }

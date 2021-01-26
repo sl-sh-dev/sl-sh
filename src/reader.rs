@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
@@ -40,38 +39,46 @@ fn is_whitespace(ch: &str) -> bool {
     matches!(ch, " " | "\t" | "\n")
 }
 
-fn char_to_hex_num(ch: &str) -> u8 {
-    if ch > "0" && ch < "9" {
-        ch.chars().next().unwrap() as u8 - b'0'
+fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
+    if ("0"..="9").contains(&ch) {
+        Ok(ch.chars().next().unwrap() as u8 - b'0')
     } else {
         match ch {
-            "a" => 10,
-            "A" => 10,
-            "b" => 11,
-            "B" => 11,
-            "c" => 12,
-            "C" => 12,
-            "d" => 13,
-            "D" => 13,
-            "e" => 14,
-            "E" => 14,
-            "f" => 15,
-            "F" => 15,
-            _ => 0,
+            "a" => Ok(10),
+            "A" => Ok(10),
+            "b" => Ok(11),
+            "B" => Ok(11),
+            "c" => Ok(12),
+            "C" => Ok(12),
+            "d" => Ok(13),
+            "D" => Ok(13),
+            "e" => Ok(14),
+            "E" => Ok(14),
+            "f" => Ok(15),
+            "F" => Ok(15),
+            _ => Err(ReadError {
+                reason: format!("Invalid hex digit {}, expected 0-9 or A-F.", ch),
+            }),
         }
     }
 }
 
-fn escape_to_char(escape_code: &[Cow<'static, str>]) -> char {
-    let mut ch_n: u8 = 0;
-    match escape_code.len().cmp(&1) {
-        Ordering::Greater => {
-            ch_n = (char_to_hex_num(&escape_code[0]) * 16) + (char_to_hex_num(&escape_code[1]))
+fn escape_to_char(escape_code: &[Cow<'static, str>]) -> Result<char, ReadError> {
+    if escape_code.len() != 2 {
+        Err(ReadError {
+            reason: "Invalid hex ascii code, expected two digits.".to_string(),
+        })
+    } else {
+        let ch_n: u8 =
+            (char_to_hex_num(&escape_code[0])? * 16) + (char_to_hex_num(&escape_code[1])?);
+        if ch_n > 0x7f {
+            Err(ReadError {
+                reason: "Invalid hex ascii code, must be less then \\x7f.".to_string(),
+            })
+        } else {
+            Ok(ch_n as char)
         }
-        Ordering::Equal => ch_n = char_to_hex_num(&escape_code[0]),
-        Ordering::Less => {}
     }
-    ch_n as char
 }
 
 fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ReadError> {
@@ -205,6 +212,61 @@ fn do_char(
     }
 }
 
+fn read_utf_scalar(
+    chars: &mut CharIter,
+    reader_state: &mut ReaderState,
+) -> Result<char, ReadError> {
+    let mut first = true;
+    let mut char_u32 = 0;
+    let mut nibbles = 0;
+    let mut out_ch = chars.next();
+    while let Some(ch) = out_ch {
+        if ch == "\n" {
+            reader_state.line += 1;
+            reader_state.column = 0;
+            return Err(ReadError {
+                reason: "Invalid unicode scalar, unexpected newline.".to_string(),
+            });
+        } else {
+            reader_state.column += 1;
+        }
+        if first && ch == "{" {
+            out_ch = chars.next();
+            first = false;
+            continue;
+        }
+        if first {
+            return Err(ReadError {
+                reason: "Invalid unicode scalar, unexpected '{'.".to_string(),
+            });
+        }
+        if ch == "}" {
+            return if let Some(val) = std::char::from_u32(char_u32) {
+                Ok(val)
+            } else {
+                return Err(ReadError {
+                    reason: format!(
+                        "Invalid unicode scalar, {:x} not a valid utf scalar.",
+                        char_u32
+                    ),
+                });
+            };
+        }
+        if nibbles >= 8 {
+            return Err(ReadError {
+                reason: "Invalid unicode scalar, too many bytes (4 max).".to_string(),
+            });
+        }
+        nibbles += 1;
+        let nib = char_to_hex_num(&ch)?;
+        char_u32 = (char_u32 << 4) | nib as u32;
+        out_ch = chars.next();
+    }
+    Err(ReadError {
+        reason: "Invalid unicode scalar, failed to parse.".to_string(),
+    })
+}
+
 fn read_string(
     chars: &mut CharIter,
     symbol: &mut String,
@@ -216,7 +278,8 @@ fn read_string(
     let mut last_ch = Cow::Borrowed(" ");
     let mut skip_last_ch = false;
 
-    for ch in chars {
+    let mut out_ch = chars.next();
+    while let Some(ch) = out_ch {
         if ch == "\n" {
             reader_state.line += 1;
             reader_state.column = 0;
@@ -226,7 +289,7 @@ fn read_string(
         if in_escape_code {
             escape_code.push(ch.clone());
             if escape_code.len() == 2 {
-                symbol.push(escape_to_char(&escape_code));
+                symbol.push(escape_to_char(&escape_code)?);
                 escape_code.clear();
                 in_escape_code = false;
             }
@@ -243,6 +306,7 @@ fn read_string(
                     skip_last_ch = true;
                     symbol.push('\\');
                 }
+                "u" => symbol.push(read_utf_scalar(chars, reader_state)?),
                 _ => {
                     symbol.push('\\');
                     symbol.push_str(&ch);
@@ -262,7 +326,8 @@ fn read_string(
             Cow::Borrowed(" ")
         } else {
             ch
-        }
+        };
+        out_ch = chars.next();
     }
     Ok(Expression::alloc_data(ExpEnum::String(
         symbol.clone().into(),
