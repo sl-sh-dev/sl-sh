@@ -63,14 +63,10 @@ fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
     }
 }
 
-fn escape_to_char(escape_code: &[Cow<'static, str>]) -> Result<char, ReadError> {
-    if escape_code.len() != 2 {
-        Err(ReadError {
-            reason: "Invalid hex ascii code, expected two digits.".to_string(),
-        })
-    } else {
-        let ch_n: u8 =
-            (char_to_hex_num(&escape_code[0])? * 16) + (char_to_hex_num(&escape_code[1])?);
+fn escape_to_char(chars: &mut CharIter, reader_state: &mut ReaderState) -> Result<char, ReadError> {
+    if let (Some(ch1), Some(ch2)) = (chars.next(), chars.next()) {
+        reader_state.column += 1;
+        let ch_n: u8 = (char_to_hex_num(&*ch1)? * 16) + (char_to_hex_num(&*ch2)?);
         if ch_n > 0x7f {
             Err(ReadError {
                 reason: "Invalid hex ascii code, must be less then \\x7f.".to_string(),
@@ -78,6 +74,10 @@ fn escape_to_char(escape_code: &[Cow<'static, str>]) -> Result<char, ReadError> 
         } else {
             Ok(ch_n as char)
         }
+    } else {
+        Err(ReadError {
+            reason: "Invalid hex ascii code, expected two digits.".to_string(),
+        })
     }
 }
 
@@ -175,12 +175,7 @@ fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> 
     }
 }
 
-fn do_char(
-    environment: &mut Environment,
-    symbol: &str,
-    line: usize,
-    column: usize,
-) -> Result<Expression, ReadError> {
+fn do_char(environment: &mut Environment, symbol: &str) -> Result<Expression, ReadError> {
     match &symbol.to_lowercase()[..] {
         "space" => return Ok(Expression::alloc_data(ExpEnum::Char(" ".into()))),
         "tab" => return Ok(Expression::alloc_data(ExpEnum::Char("\t".into()))),
@@ -191,22 +186,46 @@ fn do_char(
         "backspace" => return Ok(Expression::alloc_data(ExpEnum::Char("\u{0008}".into()))),
         _ => {}
     }
-    let mut chars = UnicodeSegmentation::graphemes(symbol, true);
+    // Do this so the chars iterator has a static lifetime.  Should be ok since
+    // iterator dies at the end of the function and symbol does not.
+    // Note: interning the chars below keeps from using the temp buffer.
+    let ntext = unsafe { &*(symbol as *const str) };
+    let mut chars: CharIter = Box::new(
+        UnicodeSegmentation::graphemes(ntext, true)
+            .map(|s| Cow::Borrowed(s))
+            .peekable(),
+    );
     if let Some(ch) = chars.next() {
-        if chars.next().is_some() {
-            let reason = format!(
-                "Not a valid char [{}]: line {}, col: {}",
-                symbol, line, column
-            );
-            return Err(ReadError { reason });
+        if chars.peek().is_some() {
+            match &*ch {
+                "u" => {
+                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
+                    let char_str = format!("{}", read_utf_scalar(&mut chars, reader_state,)?);
+                    return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
+                }
+                "x" => {
+                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
+                    let char_str = format!("{}", escape_to_char(&mut chars, reader_state,)?);
+                    return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
+                }
+                _ => {
+                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
+                    let reason = format!(
+                        "Not a valid char [{}]: line {}, col: {}",
+                        symbol, reader_state.line, reader_state.column
+                    );
+                    return Err(ReadError { reason });
+                }
+            }
         }
         Ok(Expression::alloc_data(ExpEnum::Char(
-            environment.interner.intern(ch).into(),
+            environment.interner.intern(&*ch).into(),
         )))
     } else {
+        let reader_state = &mut environment.reader_state.as_mut().unwrap();
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",
-            symbol, line, column
+            symbol, reader_state.line, reader_state.column
         );
         Err(ReadError { reason })
     }
@@ -216,7 +235,20 @@ fn read_utf_scalar(
     chars: &mut CharIter,
     reader_state: &mut ReaderState,
 ) -> Result<char, ReadError> {
+    fn finish(char_u32: u32) -> Result<char, ReadError> {
+        if let Some(val) = std::char::from_u32(char_u32) {
+            Ok(val)
+        } else {
+            Err(ReadError {
+                reason: format!(
+                    "Invalid unicode scalar, {:x} not a valid utf scalar.",
+                    char_u32
+                ),
+            })
+        }
+    }
     let mut first = true;
+    let mut has_bracket = false;
     let mut char_u32 = 0;
     let mut nibbles = 0;
     let mut out_ch = chars.next();
@@ -224,33 +256,25 @@ fn read_utf_scalar(
         if ch == "\n" {
             reader_state.line += 1;
             reader_state.column = 0;
-            return Err(ReadError {
-                reason: "Invalid unicode scalar, unexpected newline.".to_string(),
-            });
+            if has_bracket {
+                return Err(ReadError {
+                    reason: "Invalid unicode scalar, unexpected newline.".to_string(),
+                });
+            } else {
+                return finish(char_u32);
+            }
         } else {
             reader_state.column += 1;
         }
         if first && ch == "{" {
+            has_bracket = true;
             out_ch = chars.next();
             first = false;
             continue;
         }
-        if first {
-            return Err(ReadError {
-                reason: "Invalid unicode scalar, unexpected '{'.".to_string(),
-            });
-        }
-        if ch == "}" {
-            return if let Some(val) = std::char::from_u32(char_u32) {
-                Ok(val)
-            } else {
-                return Err(ReadError {
-                    reason: format!(
-                        "Invalid unicode scalar, {:x} not a valid utf scalar.",
-                        char_u32
-                    ),
-                });
-            };
+        first = false;
+        if has_bracket && ch == "}" {
+            return finish(char_u32);
         }
         if nibbles >= 8 {
             return Err(ReadError {
@@ -260,11 +284,20 @@ fn read_utf_scalar(
         nibbles += 1;
         let nib = char_to_hex_num(&ch)?;
         char_u32 = (char_u32 << 4) | nib as u32;
+        if let Some(pch) = chars.peek() {
+            if !has_bracket && is_whitespace(&*pch) {
+                return finish(char_u32);
+            }
+        }
         out_ch = chars.next();
     }
-    Err(ReadError {
-        reason: "Invalid unicode scalar, failed to parse.".to_string(),
-    })
+    if has_bracket {
+        Err(ReadError {
+            reason: "Invalid unicode scalar, failed to parse.".to_string(),
+        })
+    } else {
+        finish(char_u32)
+    }
 }
 
 fn read_string(
@@ -273,8 +306,6 @@ fn read_string(
     reader_state: &mut ReaderState,
 ) -> Result<Expression, ReadError> {
     symbol.clear();
-    let mut escape_code: Vec<Cow<'static, str>> = Vec::with_capacity(2);
-    let mut in_escape_code = false;
     let mut last_ch = Cow::Borrowed(" ");
     let mut skip_last_ch = false;
 
@@ -286,22 +317,13 @@ fn read_string(
         } else {
             reader_state.column += 1;
         }
-        if in_escape_code {
-            escape_code.push(ch.clone());
-            if escape_code.len() == 2 {
-                symbol.push(escape_to_char(&escape_code)?);
-                escape_code.clear();
-                in_escape_code = false;
-            }
-        } else if last_ch == "\\" {
+        if last_ch == "\\" {
             match &*ch {
                 "n" => symbol.push('\n'),
                 "r" => symbol.push('\r'),
                 "t" => symbol.push('\t'),
                 "\"" => symbol.push('"'),
-                "x" => {
-                    in_escape_code = true;
-                }
+                "x" => symbol.push(escape_to_char(chars, reader_state)?),
                 "\\" => {
                     skip_last_ch = true;
                     symbol.push('\\');
@@ -776,12 +798,7 @@ fn read_inner(
                                 true,
                                 in_back_quote,
                             );
-                            let do_ch = match do_char(
-                                environment,
-                                buffer,
-                                environment.reader_state.as_ref().unwrap().line,
-                                environment.reader_state.as_ref().unwrap().column,
-                            ) {
+                            let do_ch = match do_char(environment, buffer) {
                                 Ok(ch) => ch,
                                 Err(e) => return Err((e, chars)),
                             };
@@ -1157,6 +1174,7 @@ mod tests {
         if let Ok(exp) = exp {
             to_strs(&mut tokens, &exp);
         } else {
+            println!("{:?}", exp);
             assert!(false);
         }
         tokens
@@ -1515,10 +1533,6 @@ mod tests {
         let input =
             "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut environment, input, None);
-        println!("XXX input: {}", input);
-        for s in &tokens {
-            println!("XXX token {}", s);
-        }
         assert!(tokens.len() == 9);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "String:\"on\te\ntwo\"");
@@ -1529,5 +1543,47 @@ mod tests {
         assert!(tokens[6] == "Int:6");
         assert!(tokens[7] == "String:\"slash/x/:;\"");
         assert!(tokens[8] == ")");
+
+        let input =
+            "\"\\u{03bb} two \" \"\\x20 \\u{03BB} end\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 8);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "String:\"\u{03bb} two \"");
+        assert!(tokens[2] == "String:\"  λ end\"");
+        assert!(tokens[3] == "String:\"fo\"u\\r\"");
+        assert!(tokens[4] == "Int:5");
+        assert!(tokens[5] == "Int:6");
+        assert!(tokens[6] == "String:\"slash/x/:;\"");
+        assert!(tokens[7] == ")");
+
+        let input =
+            "\"\\u03bb two \" \"\\x20 \\u03BB \nend\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 8);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "String:\"\u{03bb} two \"");
+        assert!(tokens[2] == "String:\"  λ \nend\"");
+        assert!(tokens[3] == "String:\"fo\"u\\r\"");
+        assert!(tokens[4] == "Int:5");
+        assert!(tokens[5] == "Int:6");
+        assert!(tokens[6] == "String:\"slash/x/:;\"");
+        assert!(tokens[7] == ")");
+    }
+
+    #[test]
+    fn test_tok_chars() {
+        let mut environment = build_def_env();
+        let input = "#\\x #\\X #\\x20 #\\u03bb #\\u{03BB} #\\u03bb";
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 8);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Char:#\\x");
+        assert!(tokens[2] == "Char:#\\X");
+        assert!(tokens[3] == "Char:#\\ ");
+        assert!(tokens[4] == "Char:#\\λ");
+        assert!(tokens[5] == "Char:#\\\u{03bb}");
+        assert!(tokens[6] == "Char:#\\λ");
+        assert!(tokens[7] == ")");
     }
 }
