@@ -157,7 +157,7 @@ impl Vm {
     }
 
     pub fn alloc(&mut self, obj: Object) -> Handle {
-        self.heap.alloc(obj)
+        self.heap.alloc(obj, |_heap| Ok(()))
     }
 
     pub fn get(&self, handle: Handle) -> VMResult<HandleRef<'_>> {
@@ -181,7 +181,7 @@ impl Vm {
                     return Err(VMError::new_vm("List: Not enough elements."));
                 };
                 let cdr = last_cdr;
-                last_cdr = Value::Reference(self.heap.alloc(Object::Pair(*car, cdr)));
+                last_cdr = Value::Reference(self.alloc(Object::Pair(*car, cdr)));
             }
             set_register!(registers, dest, last_cdr);
         }
@@ -197,10 +197,8 @@ impl Vm {
                 let cons_d = self.heap.get(*cons_handle)?;
                 if let Object::Pair(_car, cdr) = &*cons_d {
                     let cdr = *cdr;
-                    drop(cons_d);
                     self.heap.replace(*cons_handle, Object::Pair(val, cdr))?;
                 } else if cons_d.is_nil() {
-                    drop(cons_d);
                     let pair = Object::Pair(val, Value::Nil);
                     self.heap.replace(*cons_handle, pair)?;
                 } else {
@@ -208,7 +206,7 @@ impl Vm {
                 }
             }
             Value::Nil => {
-                let pair = Value::Reference(self.heap.alloc(Object::Pair(val, Value::Nil)));
+                let pair = Value::Reference(self.alloc(Object::Pair(val, Value::Nil)));
                 set_register!(registers, pair_reg, pair);
             }
             _ => {
@@ -227,10 +225,8 @@ impl Vm {
                 let cons_d = self.heap.get(*cons_handle)?;
                 if let Object::Pair(car, _cdr) = &*cons_d {
                     let car = *car;
-                    drop(cons_d);
                     self.heap.replace(*cons_handle, Object::Pair(car, val))?;
                 } else if cons_d.is_nil() {
-                    drop(cons_d);
                     let pair = Object::Pair(Value::Nil, val);
                     self.heap.replace(*cons_handle, pair)?;
                 } else {
@@ -238,7 +234,7 @@ impl Vm {
                 }
             }
             Value::Nil => {
-                let pair = Value::Reference(self.heap.alloc(Object::Pair(Value::Nil, val)));
+                let pair = Value::Reference(self.alloc(Object::Pair(Value::Nil, val)));
                 set_register!(registers, pair_reg, pair);
             }
             _ => {
@@ -294,7 +290,7 @@ impl Vm {
                     set_register!(
                         registers,
                         dest,
-                        Value::Reference(self.heap.alloc(Object::Pair(car, cdr)))
+                        Value::Reference(self.alloc(Object::Pair(car, cdr)))
                     );
                 }
                 CAR => {
@@ -375,8 +371,8 @@ mod tests {
         chunk.encode2(CDR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new(chunk);
-        vm.chunk
-            .add_constant(Value::Reference(vm.heap.alloc(Object::Value(Value::Nil))));
+        let const_handle = vm.alloc(Object::Value(Value::Nil));
+        vm.chunk.add_constant(Value::Reference(const_handle));
         vm.execute()?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 2);
