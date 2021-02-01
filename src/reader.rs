@@ -175,6 +175,13 @@ fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> 
     }
 }
 
+fn is_digit(ch: &str) -> bool {
+    matches!(
+        ch,
+        "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+    )
+}
+
 fn do_char(environment: &mut Environment, symbol: &str) -> Result<Expression, ReadError> {
     match &symbol.to_lowercase()[..] {
         "space" => return Ok(Expression::alloc_data(ExpEnum::Char(" ".into()))),
@@ -357,20 +364,15 @@ fn read_string(
     )))
 }
 
-fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
-    if symbol.is_empty() {
-        return Expression::alloc_data(ExpEnum::Nil);
-    }
-    if symbol == "t" {
-        Expression::alloc_data(ExpEnum::True)
-    } else if symbol == "nil" {
-        Expression::alloc_data(ExpEnum::Nil)
-    } else {
-        let potential_int: Result<i64, ParseIntError> = symbol.parse();
+fn do_atom(environment: &mut Environment, symbol: &str, is_number: bool) -> Expression {
+    if is_number {
+        let mut num_str = symbol.to_string();
+        num_str.retain(|ch| ch != '_');
+        let potential_int: Result<i64, ParseIntError> = num_str.parse();
         match potential_int {
             Ok(v) => Expression::alloc_data(ExpEnum::Int(v)),
             Err(_) => {
-                let potential_float: Result<f64, ParseFloatError> = symbol.parse();
+                let potential_float: Result<f64, ParseFloatError> = num_str.parse();
                 match potential_float {
                     Ok(v) => Expression::alloc_data(ExpEnum::Float(v)),
                     Err(_) => Expression::alloc_data(ExpEnum::Symbol(
@@ -379,6 +381,20 @@ fn do_atom(environment: &mut Environment, symbol: &str) -> Expression {
                     )),
                 }
             }
+        }
+    } else {
+        if symbol.is_empty() {
+            return Expression::alloc_data(ExpEnum::Nil);
+        }
+        if symbol == "t" {
+            Expression::alloc_data(ExpEnum::True)
+        } else if symbol == "nil" {
+            Expression::alloc_data(ExpEnum::Nil)
+        } else {
+            Expression::alloc_data(ExpEnum::Symbol(
+                environment.interner.intern(symbol),
+                SymLoc::None,
+            ))
         }
     }
 }
@@ -411,12 +427,24 @@ fn read_symbol(
     reader_state: &mut ReaderState,
     for_ch: bool,
     in_back_quote: bool,
-) {
+    skip_underscore: bool,
+) -> bool {
     let mut has_peek;
     let mut push_next = false;
+    let mut is_number = buffer.is_empty()
+        || (buffer.len() == 1
+            && (is_digit(&buffer[..])
+                || (&buffer[..] == "+")
+                || (&buffer[..] == "-")
+                || (&buffer[..] == ".")));
+    let mut decimals = if buffer.len() == 1 && &buffer[..] == "." {
+        1
+    } else {
+        0
+    };
     if let Some(ch) = chars.peek() {
         if end_symbol(&ch, in_back_quote, reader_state) && !for_ch {
-            return;
+            return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };
     let mut next_ch = chars.next();
@@ -437,17 +465,31 @@ fn read_symbol(
         }
         if ch == "\\" && has_peek && !for_ch {
             push_next = true;
-        } else {
+        } else if !skip_underscore || ch != "_" {
+            if !is_digit(&ch) && ch != "." && ch != "_" {
+                is_number = false;
+            }
+            if ch == "." {
+                decimals += 1;
+            }
             buffer.push_str(&ch);
         }
         if push_next {
-            buffer.push_str(&chars.next().unwrap());
+            let next_ch = chars.next().unwrap();
+            if !is_digit(&next_ch) && next_ch != "." && next_ch != "_" {
+                is_number = false;
+            }
+            if next_ch == "." {
+                decimals += 1;
+            }
+            buffer.push_str(&next_ch);
             push_next = false;
         } else if end_symbol(peek_ch, in_back_quote, reader_state) {
             break;
         }
         next_ch = chars.next();
     }
+    is_number && decimals <= 1
 }
 
 fn next2(chars: &mut CharIter) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
@@ -604,6 +646,45 @@ fn consume_trailing_whitespace(environment: &mut Environment, chars: &mut CharIt
         }
         ch = chars.peek();
     }
+}
+
+fn read_num_radix(
+    environment: &mut Environment,
+    mut chars: CharIter, // Pass ownership in and out for reader macro support.
+    stack: &mut Vec<List>,
+    buffer: &mut String,
+    in_back_quote: bool,
+    radix: u32,
+) -> Result<CharIter, (ReadError, CharIter)> {
+    buffer.clear();
+    read_symbol(
+        buffer,
+        &mut chars,
+        &mut environment.reader_state.as_mut().unwrap(),
+        true,
+        in_back_quote,
+        true,
+    );
+    let num = match i64::from_str_radix(buffer, radix) {
+        Ok(n) => Expression::alloc_data(ExpEnum::Int(n)),
+        Err(e) => {
+            return Err((
+                ReadError {
+                    reason: e.to_string(),
+                },
+                chars,
+            ))
+        }
+    };
+    if let Err(e) = push_stack(
+        stack,
+        num,
+        environment.reader_state.as_ref().unwrap().line,
+        environment.reader_state.as_ref().unwrap().column,
+    ) {
+        return Err((e, chars));
+    }
+    Ok(chars)
 }
 
 fn read_inner(
@@ -797,6 +878,7 @@ fn read_inner(
                                 &mut environment.reader_state.as_mut().unwrap(),
                                 true,
                                 in_back_quote,
+                                false,
                             );
                             let do_ch = match do_char(environment, buffer) {
                                 Ok(ch) => ch,
@@ -845,6 +927,27 @@ fn read_inner(
                                 ".",
                                 None,
                             )?;
+                        }
+                        // Read an octal int
+                        "o" => {
+                            chars =
+                                read_num_radix(environment, chars, stack, buffer, in_back_quote, 8)?
+                        }
+                        // Read a hex int
+                        "x" => {
+                            chars = read_num_radix(
+                                environment,
+                                chars,
+                                stack,
+                                buffer,
+                                in_back_quote,
+                                16,
+                            )?
+                        }
+                        // Read a binary int
+                        "b" => {
+                            chars =
+                                read_num_radix(environment, chars, stack, buffer, in_back_quote, 2)?
                         }
                         _ => {
                             let reason = format!(
@@ -899,16 +1002,17 @@ fn read_inner(
                 _ => {
                     buffer.clear();
                     buffer.push_str(&ch);
-                    read_symbol(
+                    let is_number = read_symbol(
                         buffer,
                         &mut chars,
                         &mut environment.reader_state.as_mut().unwrap(),
                         false,
                         in_back_quote,
+                        false,
                     );
                     if let Err(e) = push_stack(
                         stack,
-                        do_atom(environment, buffer),
+                        do_atom(environment, buffer, is_number),
                         environment.reader_state.as_ref().unwrap().line,
                         environment.reader_state.as_ref().unwrap().column,
                     ) {
