@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::error::*;
+use crate::interner::Interned;
 use crate::opcodes::*;
 use crate::value::*;
 
@@ -112,7 +113,7 @@ pub struct Chunk {
     last_line: u32,
     line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
-    pub namespace: Option<NamespaceRef>,
+    pub namespace: Option<Interned>,
 }
 
 impl Chunk {
@@ -128,11 +129,7 @@ impl Chunk {
         }
     }
 
-    pub fn with_namespace(
-        file_name: &'static str,
-        start_line: u32,
-        namespace: NamespaceRef,
-    ) -> Self {
+    pub fn with_namespace(file_name: &'static str, start_line: u32, namespace: Interned) -> Self {
         Chunk {
             code: Vec::new(),
             file_name,
@@ -340,9 +337,9 @@ impl Chunk {
                 print!("REF    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                print!("G([default][");
+                print!("G[");
                 disassemble_operand!(code, true, wide);
-                print!("])");
+                print!("]");
                 println!();
                 Ok(())
             }
@@ -350,41 +347,17 @@ impl Chunk {
                 print!("REF_K  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                print!("G([default][");
+                print!("G[");
                 disassemble_operand!(code, false, wide);
-                print!("])");
-                println!();
-                Ok(())
-            }
-            REFNS => {
-                print!("REFNS  \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                print!("G([");
-                disassemble_operand!(code, true, wide);
-                print!("][");
-                disassemble_operand!(code, true, wide);
-                print!("])");
-                println!();
-                Ok(())
-            }
-            REFNS_K => {
-                print!("REFNS_K\t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                print!("G([");
-                disassemble_operand!(code, false, wide);
-                print!("][");
-                disassemble_operand!(code, false, wide);
-                print!("])");
+                print!("]");
                 println!();
                 Ok(())
             }
             BIND => {
                 print!("BIND   \t");
-                print!("G([default][");
+                print!("G[");
                 disassemble_operand!(code, true, wide);
-                print!("])");
+                print!("]");
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();
@@ -392,33 +365,9 @@ impl Chunk {
             }
             BIND_K => {
                 print!("BIND_K \t");
-                print!("G([default][");
+                print!("G[");
                 disassemble_operand!(code, false, wide);
-                print!("])");
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(())
-            }
-            BINDNS => {
-                print!("BINDNS \t");
-                print!("G([");
-                disassemble_operand!(code, true, wide);
-                print!("][");
-                disassemble_operand!(code, true, wide);
-                print!("])");
-                print!("\t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(())
-            }
-            BINDNS_K => {
-                print!("BINDNS_K\t");
-                print!("G([");
-                disassemble_operand!(code, false, wide);
-                print!("][");
-                disassemble_operand!(code, false, wide);
-                print!("])");
+                print!("]");
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();
@@ -441,7 +390,17 @@ impl Chunk {
                 Ok(())
             }
             CONS => {
-                println!("CONS");
+                print!("CONS   \t");
+                //R(A) = conscell(R(B), R(C))
+                print!("R(");
+                disassemble_operand!(code, false, wide);
+                print!(")");
+                print!("\tconscell(R(");
+                disassemble_operand!(code, true, wide);
+                print!("), R(");
+                disassemble_operand!(code, true, wide);
+                print!(")");
+                println!();
                 Ok(())
             }
             CAR => {
@@ -589,54 +548,54 @@ mod tests {
     #[test]
     fn test_encode3() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode3(REFNS, 0, 0, 0, 1).unwrap();
-        chunk.encode3(REFNS, 128, 128, 128, 1).unwrap();
-        chunk.encode3(REFNS, 255, 255, 255, 1).unwrap();
-        chunk.encode3(REFNS, 256, 256, 256, 1).unwrap();
-        chunk.encode3(REFNS, 2, 256, 256, 1).unwrap();
-        chunk.encode3(REFNS, 256, 1, 1, 1).unwrap();
-        chunk.encode3(REFNS, 257, 257, 257, 1).unwrap();
+        chunk.encode3(CONS, 0, 0, 0, 1).unwrap();
+        chunk.encode3(CONS, 128, 128, 128, 1).unwrap();
+        chunk.encode3(CONS, 255, 255, 255, 1).unwrap();
+        chunk.encode3(CONS, 256, 256, 256, 1).unwrap();
+        chunk.encode3(CONS, 2, 256, 256, 1).unwrap();
+        chunk.encode3(CONS, 256, 1, 1, 1).unwrap();
+        chunk.encode3(CONS, 257, 257, 257, 1).unwrap();
         chunk
-            .encode3(REFNS, u16::MAX, u16::MAX, u16::MAX, 1)
+            .encode3(CONS, u16::MAX, u16::MAX, u16::MAX, 1)
             .unwrap();
         let mut code = chunk.code.iter();
 
-        assert!(*code.next().unwrap() == REFNS);
+        assert!(*code.next().unwrap() == CONS);
         assert!(*code.next().unwrap() == 0);
         assert!(*code.next().unwrap() == 0);
         assert!(*code.next().unwrap() == 0);
 
-        assert!(*code.next().unwrap() == REFNS);
+        assert!(*code.next().unwrap() == CONS);
         assert!(*code.next().unwrap() == 128);
         assert!(*code.next().unwrap() == 128);
         assert!(*code.next().unwrap() == 128);
 
-        assert!(*code.next().unwrap() == REFNS);
+        assert!(*code.next().unwrap() == CONS);
         assert!(*code.next().unwrap() == 255);
         assert!(*code.next().unwrap() == 255);
         assert!(*code.next().unwrap() == 255);
 
-        assert!(*code.next().unwrap() == REFNS | 0x80);
+        assert!(*code.next().unwrap() == CONS | 0x80);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == REFNS | 0x80);
+        assert!(*code.next().unwrap() == CONS | 0x80);
         assert!(decode_u16!(code).unwrap() == 2);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == REFNS | 0x80);
+        assert!(*code.next().unwrap() == CONS | 0x80);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 1);
         assert!(decode_u16!(code).unwrap() == 1);
 
-        assert!(*code.next().unwrap() == REFNS | 0x80);
+        assert!(*code.next().unwrap() == CONS | 0x80);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
 
-        assert!(*code.next().unwrap() == REFNS | 0x80);
+        assert!(*code.next().unwrap() == CONS | 0x80);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);

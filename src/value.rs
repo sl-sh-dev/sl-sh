@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::error::*;
 use crate::heap::*;
@@ -93,24 +91,32 @@ impl Value {
 }
 
 #[derive(Clone, Debug)]
-pub struct Namespace {
-    objects: HashMap<Interned, Handle, BuildInternedHasher>,
+pub struct Globals {
+    objects: Vec<Handle>,
     doc_strings: HashMap<Interned, String, BuildInternedHasher>,
-    name: Interned,
+    interner: Interner,
 }
 
-impl Namespace {
-    pub fn new(name: Interned) -> Self {
-        Namespace {
-            objects: HashMap::with_hasher(BuildInternedHasher::new()),
+impl Globals {
+    pub fn new() -> Self {
+        Globals {
+            objects: Vec::new(),
             doc_strings: HashMap::with_hasher(BuildInternedHasher::new()),
-            name,
+            interner: Interner::with_capacity(8192),
         }
     }
 
-    pub fn new_ref(name: Interned) -> NamespaceRef {
-        Rc::new(RefCell::new(Namespace::new(name)))
+    pub fn intern_symbol(&mut self, string: &str, val: Handle) -> Interned {
+        let sym = self.interner.intern(string);
+        // Note that the index wrapped in sym must equal the index that is being pushed to objects.
+        // ie the interner vector and objects need to stay in lock step.
+        self.objects.push(val);
+        sym
     }
 }
 
-pub type NamespaceRef = Rc<RefCell<Namespace>>;
+impl Default for Globals {
+    fn default() -> Self {
+        Self::new()
+    }
+}

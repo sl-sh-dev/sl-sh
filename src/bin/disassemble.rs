@@ -9,11 +9,7 @@ use slvm::value::*;
 
 fn main() -> Result<(), VMError> {
     let mut interner = Interner::with_capacity(8);
-    let mut chunk = Chunk::with_namespace(
-        "no_file",
-        1,
-        Namespace::new_ref(interner.intern("disassemble")),
-    );
+    let mut chunk = Chunk::with_namespace("no_file", 1, interner.intern("disassemble"));
     println!("Value size: {}", std::mem::size_of::<Value>());
     println!("usize: {}", std::mem::size_of::<usize>());
     println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
@@ -42,12 +38,9 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(STORE_K, 0x8fff, 0x9fff, 1)?;
     chunk.encode2(REF, 1, 2, 2)?;
     chunk.encode2(REF_K, 1, 2, 2)?;
-    chunk.encode3(REFNS, 1, 2, 3, 2)?;
-    chunk.encode3(REFNS_K, 1, 2, 3, 2)?;
+    chunk.encode3(CONS, 1, 2, 3, 2)?;
     chunk.encode2(BIND, 1, 2, 4)?;
     chunk.encode2(BIND_K, 1, 2, 4)?;
-    chunk.encode3(BINDNS, 1, 2, 3, 4)?;
-    chunk.encode3(BINDNS_K, 1, 2, 3, 4)?;
     chunk.disassemble_chunk()?;
     Ok(())
 }

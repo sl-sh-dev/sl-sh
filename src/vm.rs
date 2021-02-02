@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::chunk::*;
 use crate::error::*;
 use crate::heap::*;
@@ -132,27 +130,22 @@ pub struct Vm {
     chunk: Chunk,
     stack: Vec<Value>,
     ip: usize,
-    _root_namespace: NamespaceRef,
-    _namespaces: HashMap<Interned, NamespaceRef, BuildInternedHasher>,
+    globals: Globals,
 }
 
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
-        let mut interner = Interner::with_capacity(8192);
-        let root = interner.intern("root");
-        let _root_namespace = Namespace::new_ref(root);
-        let mut _namespaces = HashMap::with_hasher(BuildInternedHasher::new());
-        _namespaces.insert(root, _root_namespace.clone());
+        //let root = interner.intern("root");
+        let globals = Globals::new();
         let mut stack = Vec::with_capacity(1024);
         stack.resize(1024, Value::Undefined);
         Vm {
-            interner,
+            interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             chunk,
             stack,
             ip: 0,
-            _root_namespace,
-            _namespaces,
+            globals,
         }
     }
 
@@ -166,6 +159,15 @@ impl Vm {
 
     pub fn intern(&mut self, string: &str) -> Interned {
         self.interner.intern(string)
+    }
+
+    pub fn intern_symbol_empty(&mut self, string: &str) -> Interned {
+        let handle = self.alloc(Object::Value(Value::Undefined));
+        self.globals.intern_symbol(string, handle)
+    }
+
+    pub fn intern_symbol(&mut self, string: &str, handle: Handle) -> Interned {
+        self.globals.intern_symbol(string, handle)
     }
 
     fn list(&mut self, registers: &mut [Value], wide: bool) -> VMResult<()> {
