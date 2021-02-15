@@ -429,6 +429,23 @@ fn read_symbol(
     in_back_quote: bool,
     skip_underscore: bool,
 ) -> bool {
+    fn maybe_number(ch: &str, has_e: &mut bool, last_e: &mut bool, has_decimal: &mut bool) -> bool {
+        if ch == "." {
+            if *has_decimal {
+                false
+            } else {
+                *has_decimal = true;
+                true
+            }
+        } else if !*has_e && ch == "e" {
+            *has_e = true;
+            *last_e = true;
+            true
+        } else {
+            is_digit(&ch) || ch == "." || ch == "_" || (*last_e && (ch == "+" || ch == "-"))
+        }
+    }
+
     let mut has_peek;
     let mut push_next = false;
     let mut is_number = buffer.is_empty()
@@ -437,11 +454,9 @@ fn read_symbol(
                 || (&buffer[..] == "+")
                 || (&buffer[..] == "-")
                 || (&buffer[..] == ".")));
-    let mut decimals = if buffer.len() == 1 && &buffer[..] == "." {
-        1
-    } else {
-        0
-    };
+    let mut has_decimal = buffer.len() == 1 && &buffer[..] == ".";
+    let mut has_e = false;
+    let mut last_e = false;
     if let Some(ch) = chars.peek() {
         if end_symbol(&ch, in_back_quote, reader_state) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
@@ -466,21 +481,15 @@ fn read_symbol(
         if ch == "\\" && has_peek && !for_ch {
             push_next = true;
         } else if !skip_underscore || ch != "_" {
-            if !is_digit(&ch) && ch != "." && ch != "_" {
-                is_number = false;
-            }
-            if ch == "." {
-                decimals += 1;
+            if is_number {
+                is_number = maybe_number(&ch, &mut has_e, &mut last_e, &mut has_decimal);
             }
             buffer.push_str(&ch);
         }
         if push_next {
             let next_ch = chars.next().unwrap();
-            if !is_digit(&next_ch) && next_ch != "." && next_ch != "_" {
-                is_number = false;
-            }
-            if next_ch == "." {
-                decimals += 1;
+            if is_number {
+                is_number = maybe_number(&ch, &mut has_e, &mut last_e, &mut has_decimal);
             }
             buffer.push_str(&next_ch);
             push_next = false;
@@ -489,7 +498,7 @@ fn read_symbol(
         }
         next_ch = chars.next();
     }
-    is_number && decimals <= 1
+    is_number
 }
 
 fn next2(chars: &mut CharIter) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
@@ -1284,6 +1293,22 @@ mod tests {
         tokens
     }
 
+    fn tokenize_err(
+        environment: &mut Environment,
+        input: &str,
+        name: Option<&'static str>,
+    ) -> ReadError {
+        let exp = read(environment, input, name, false);
+        if let Err(err) = exp {
+            return err;
+        } else {
+            assert!(false);
+        }
+        ReadError {
+            reason: "WTF".to_string(),
+        }
+    }
+
     fn tokenize_wrap(
         environment: &mut Environment,
         input: &str,
@@ -1689,5 +1714,52 @@ mod tests {
         assert!(tokens[5] == "Char:#\\\u{03bb}");
         assert!(tokens[6] == "Char:#\\λ");
         assert!(tokens[7] == ")");
+    }
+
+    #[test]
+    fn test_tok_ints() {
+        let mut environment = build_def_env();
+        let input = "2300 23_000 #xFF #xff #x0f #xF #b0000_0000 #b1111_1111 #b11111111 #b11111111_11111111 #o07 #o17";
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 14);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Int:2300");
+        assert!(tokens[2] == "Int:23000");
+        assert!(tokens[3] == "Int:255");
+        assert!(tokens[4] == "Int:255");
+        assert!(tokens[5] == "Int:15");
+        assert!(tokens[6] == "Int:15");
+        assert!(tokens[7] == "Int:0");
+        assert!(tokens[8] == "Int:255");
+        assert!(tokens[9] == "Int:255");
+        assert!(tokens[10] == "Int:65535");
+        assert!(tokens[11] == "Int:7");
+        assert!(tokens[12] == "Int:15");
+        assert!(tokens[13] == ")");
+        let input = "#xFG";
+        tokenize_err(&mut environment, input, None);
+        let input = "#b1112";
+        tokenize_err(&mut environment, input, None);
+        let input = "#o80";
+        tokenize_err(&mut environment, input, None);
+    }
+
+    #[test]
+    fn test_tok_floats() {
+        let mut environment = build_def_env();
+        let input = "2300.0 23_000.0 23e10 23e+5 23e-4 23e-+5 23e-5e+4 23.123 0.23.123";
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "Float:2300");
+        assert!(tokens[2] == "Float:23000");
+        assert!(tokens[3] == "Float:230000000000");
+        assert!(tokens[4] == "Float:2300000");
+        assert!(tokens[5] == "Float:0.0023");
+        assert!(tokens[6] == "Symbol:23e-+5");
+        assert!(tokens[7] == "Symbol:23e-5e+4");
+        assert!(tokens[8] == "Float:23.123");
+        assert!(tokens[9] == "Symbol:0.23.123");
+        assert!(tokens[10] == ")");
     }
 }
