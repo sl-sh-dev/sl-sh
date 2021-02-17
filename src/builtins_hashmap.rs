@@ -108,15 +108,12 @@ fn builtin_hash_remove(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn do_rem(
-        map: &mut HashMap<&'static str, Expression>,
-        sym: &str,
-    ) -> Result<Expression, LispError> {
+    fn do_rem(map: &mut HashMap<&'static str, Expression>, sym: &str) -> Expression {
         let old = map.remove(sym);
         if let Some(old) = old {
-            Ok(old)
+            old
         } else {
-            Ok(Expression::make_nil())
+            Expression::make_nil()
         }
     }
     if let Some(map) = args.next() {
@@ -128,13 +125,13 @@ fn builtin_hash_remove(
                 if let ExpEnum::HashMap(map) = &mut map_d.data {
                     match &key.get().data {
                         ExpEnum::Symbol(sym, _) => {
-                            return do_rem(map, sym);
+                            return Ok(do_rem(map, sym));
                         }
                         ExpEnum::String(s, _) => {
-                            return do_rem(map, &s);
+                            return Ok(do_rem(map, &s));
                         }
                         ExpEnum::Char(ch) => {
-                            return do_rem(map, &ch);
+                            return Ok(do_rem(map, &ch));
                         }
                         _ => {
                             return Err(LispError::new(
@@ -211,11 +208,11 @@ fn builtin_hash_haskey(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn do_has(map: &HashMap<&'static str, Expression>, sym: &str) -> Result<Expression, LispError> {
+    fn do_has(map: &HashMap<&'static str, Expression>, sym: &str) -> Expression {
         if map.contains_key(sym) {
-            Ok(Expression::make_true())
+            Expression::make_true()
         } else {
-            Ok(Expression::make_nil())
+            Expression::make_nil()
         }
     }
     if let Some(map) = args.next() {
@@ -227,13 +224,13 @@ fn builtin_hash_haskey(
                 if let ExpEnum::HashMap(map) = &map_d.data {
                     match &key.get().data {
                         ExpEnum::Symbol(sym, _) => {
-                            return do_has(map, sym);
+                            return Ok(do_has(map, sym));
                         }
                         ExpEnum::String(s, _) => {
-                            return do_has(map, &s);
+                            return Ok(do_has(map, &s));
                         }
                         ExpEnum::Char(ch) => {
-                            return do_has(map, &ch);
+                            return Ok(do_has(map, &ch));
                         }
                         _ => {
                             let msg =

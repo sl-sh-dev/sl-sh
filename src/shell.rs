@@ -186,7 +186,7 @@ pub fn read_stdin() -> i32 {
     }
 }
 
-fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> Result<(), LispError> {
+fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) {
     let mut in_string = false;
     let mut in_stringd = false;
     let mut token = String::new();
@@ -225,16 +225,15 @@ fn parse_one_run_command_line(input: &str, nargs: &mut Vec<String>) -> Result<()
     if !token.is_empty() {
         nargs.push(token);
     }
-    Ok(())
 }
 
 pub fn run_one_command(command: &str, args: &[String]) -> Result<(), LispError> {
     // Try to make sense out of whatever crap we get (looking at you fzf-tmux)
     // and make it work.
     let mut nargs: Vec<String> = Vec::new();
-    parse_one_run_command_line(command, &mut nargs)?;
+    parse_one_run_command_line(command, &mut nargs);
     for arg in args {
-        parse_one_run_command_line(&arg, &mut nargs)?;
+        parse_one_run_command_line(&arg, &mut nargs);
     }
 
     if !nargs.is_empty() {

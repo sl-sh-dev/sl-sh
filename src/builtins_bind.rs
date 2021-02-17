@@ -247,18 +247,18 @@ fn builtin_is_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    fn get_ret(environment: &mut Environment, name: &str) -> Result<Expression, LispError> {
+    fn get_ret(environment: &mut Environment, name: &str) -> Expression {
         if is_expression(environment, name) {
-            Ok(Expression::alloc_data(ExpEnum::True))
+            Expression::alloc_data(ExpEnum::True)
         } else {
-            Ok(Expression::alloc_data(ExpEnum::Nil))
+            Expression::alloc_data(ExpEnum::Nil)
         }
     }
     fn do_list(environment: &mut Environment, key: Expression) -> Result<Expression, LispError> {
         let new_key = eval(environment, key)?;
         let new_key_d = new_key.get();
         if let ExpEnum::Symbol(s, _) = &new_key_d.data {
-            get_ret(environment, s)
+            Ok(get_ret(environment, s))
         } else {
             Err(LispError::new(
                 "def?: takes a symbol to lookup (list must eval to symbol)",
@@ -269,7 +269,7 @@ fn builtin_is_def(
         params_done(args, "def?")?;
         let key_d = key.get();
         match &key_d.data {
-            ExpEnum::Symbol(s, _) => get_ret(environment, s),
+            ExpEnum::Symbol(s, _) => Ok(get_ret(environment, s)),
             ExpEnum::Pair(_, _) => {
                 drop(key_d);
                 do_list(environment, key.clone())

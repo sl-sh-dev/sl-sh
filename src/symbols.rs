@@ -419,12 +419,8 @@ t
 
     pub fn get_docs(&self, key: &str) -> Option<&str> {
         if let Some(idx) = self.map.get(key) {
-            if let Some(docs) = self.doc_strings.get(*idx) {
-                if let Some(docs) = docs {
-                    Some(docs)
-                } else {
-                    None
-                }
+            if let Some(Some(docs)) = self.doc_strings.get(*idx) {
+                Some(docs)
             } else {
                 None
             }
