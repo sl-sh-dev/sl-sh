@@ -92,7 +92,7 @@
 	Section: user-shell
 	"
 	()
-	(str-trim (xclip -selection c)))
+	`(xclip -selection c))
 
 (defmacro this
 	"
@@ -158,7 +158,7 @@
 	(let ((log-out-file "last_build.log"))
 	(do
 		(|
-			(var gradle-proc (eval (append-to! (list ./gradlew) args)))
+			(var gradle-proc (eval (append-to! (list "./gradlew") args)))
 			(tee log-out-file)
 		)
 		(var gradle-ret-code (wait gradle-proc))
@@ -205,10 +205,17 @@
 ;; }}}
 
 ;; quality of shell life {{{
+
+(alias dkc
+"Typing out docker-compose takes forever.
+Section: user-shell"
+	(docker-compose))
+
 (alias :q
        ":q makes sense as an exit alias
        Section: user-shell"
        (exit))
+
 (alias ls
 	"alias ls to a colorified version.
 	Section: user-shell"
@@ -289,99 +296,6 @@
 		(var last-ret-val *last-status*)
 		(pnss (str "Last program exit status: " last-ret-val  "."))
 		last-ret-val))
-
-;; }}}
-
-;; long lost documentation for system commands {{{
-
-(alias vi "see doc 'vim'
-Section: sys-docs" ((str (which vim))))
-
-(alias vim
-"
-- how to replace something with a newline in vim.
-:set magic
-:%s/{/{^M/g
-To get the ^M character, type Ctrl + V and hit Enter
-Section: sys-docs
-"
-	((str (which vim))))
-
-(alias tmux
-"List of things no one can remember:
-- change cwd of session
-	- C-a + : then input attach-session -t . -c new-cwd
-- copy and paste
-	- initiate: C-a + [
-	- more initiate: hit space bar (enter visual block highlight text mode)
-	- hit enter to stick in paste buffer
-	- paste normally or with: C-a + ]
-Section: tmux"
-	((str (which tmux))))
-
-(alias journalctl
-"
-GENERAL KNOWLEDGE:
-[learning](https://www.redhat.com/sysadmin/mastering-systemd)
-systemd stores logs in binary format with lots of fields for every given
-system log, to showcase all possible filter options run:
-	#> journalctl --output=verbose --all
-
-cool stuff:
-	/usr/bin/bash # by binary
-	--boot # since boot
-	--catalog # instructs journalctl to show context around lines, e.g. computer reboots,
-				service stopping restarting
-	--utc #!
-	-k  # kernel messages
-	_UID=1000 -n # by user
-	--no-pager # good for read
-	-n # recent logs
-	-n/--lines=1024 #last 1024 logs
-	-f/--follow
-	--output [json/json-pretty/others] # formatted in json!
-	--priority/-p N # provide log level
-
-log levels:
-	journalctl -unit=sshd --priority 3 --output json-pretty
-	0: emergency
-	1: alerts
-	2: critical
-	3: errors
-	4: warning
-	5: notice
-	6: info
-	7: debug
-
-time:
-	# \"yesterday\", \"today\", \"tomorrow\", or \"now\"
-	journalctl --since \"2015-01-10\" --until \"2015-01-11 03:00\"
-	journalctl --since yesterday
-	journalctl --since 09:00 --until \"1 hour ago\"
-
-Common commands:
-KERNEL:
-	- shows the linux kernel logs, could be across boots:
-		#> journalctl --catalog --lines=3000 --pager-end \"_TRANSPORT=kernel\"
-	or
-		#> journalctl --catalog --lines=3000 --pager-end -k
-
-	- shows the linux kernel logs from last --boot:
-		#> journalctl --catalog --lines=35000 --pager-end --boot -k
-	- or from beginning:
-		#> journalctl --catalog --boot -k
-	- or from previous boot:
-		#> journalctl --catalog --boot -1 -k
-ALL:
-	#> journalctl --catalog --lines=3000 --pager-end
-FILTERED:
-	#> journalctl --catalog --lines=3000 --pager-end --unit=sshd.service
-	#> systemctl list-units --type=service # to get service
-GREP:
-	#> journalctl --catalog --lines=3000 --pager-end --grep \"port\" --priority 7
-
-Section sys-docs"
-	((str (which journalctl))))
 
 ;; }}}
 

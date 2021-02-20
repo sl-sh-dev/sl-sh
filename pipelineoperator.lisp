@@ -1,82 +1,75 @@
 #!/usr/bin/env sl-sh
 
 (ns-import 'iterator)
+(ns-import 'test)
+
+(defn visit-all (consumer seq)
+  (if (non-empty-seq? seq)
+    (do
+      (visit consumer (first seq))
+      (visit consumer (rest seq)))
+    (when (not (empty-seq? seq))
+      (consumer seq))))
+
+(defn in-any? (seq-to-search item-to-match)
+  (when (non-empty-seq? seq-to-search)
+    (if (in? seq-to-search item-to-match)
+      #t
+      (if (in-recur? (first seq-to-search) item-to-match)
+        #t
+        (in-recur? (rest seq-to-search) item-to-match)))))
+
 ;; TODO to implement
-;;    - nest
-;;    - nest-reverse
-;;    - chain-and
-;;    - chain-when
+;;    - chain-and (need to implement)
+;;    - chain-when (ne
 ;;    - chain-lambda
-;;    - chain-lambda
-;; replace chain impl with let*?
-;; support variadic placeholder symbol
-;; support ellipsis
 ;; TODO need tests and a docstring
-;; TODO check scheme spec
-;; TODO throw err if multiple _ or perhaps... insert arg into them?
-(defn verify-chain-args (args)
-      (if (= 0 (length args))
-;; TODO feature specify min number of var args to get rid of common checking
-;; pattern?
-        (err "chain operator requires at least two arguments")
-        (do
-          (for elem in args (when (not (and (non-empty-seq? elem)
-                                            (> (length elem) 1)
-                                            (in? (rest elem) '_)))
-             (err "All args in non 0 position must be non-empty sequences that
-                  contain the _ symbol in the non 0 position.")))
-          #t)))
+(defn verify-chain-args (arg0 args)
+      (vec-insert! args 0 arg0)
+      (for elem in args (when (not (and (non-empty-seq? elem)
+                                        (> (length elem) 1)
+                                        (in? elem '_)))
+         (err "All args must be non-empty sequences that
+              contain the _ symbol.")))
+      #t)
 
-
-(defmacro chain (init &rest args)
-  (verify-chain-args args)
-  (let* ((reducer (fn (fst nxt)
-                      (substitute fst '_ nxt))))
-    (reduce reducer init args)))
-
-
-(println "test chain: " (chain "a properly worded " (str "will " " become " _) (str "I " _ "statement.") (str "Ordered sentence: " _)))
-(println "Chain macro expansion: " (expand-macro '(chain "my" (str _ " with " " sauce") (str "Pasta " _ ", yes please."))))
-
-;; let* lives here so it lives in the root namespace but can use lib functions
-;; from iterator.
-(defmacro and-let*
-"Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
-let-body with all values of binding bound to the result of the evaluation of
-sexp. Differs from let in that sexps can reference bindings from previous items
-in the list of vals.
+(defn count
+"Counts instances of item in sequence.
 
 Section: core
 
 Example:
-    (let* ((add-one (fn (x) (+ 1 x)))
-       (double-add (fn (x) (add-one (add-one x)))))
-       (test::assert-equal 4 (add-one 3))
-       (test::assert-equal 6 (double-add 4)))"
-(vals &rest let-body)
-  (let ((reducer (fn (fst nxt)
-                (var val (car nxt))
-                (var bind (cadr nxt))
-                (if (= 1 (length nxt))
-                  `(((fn (,val) ,@fst) nil))
-                  (if (= 2 (length nxt))
-                         `(((fn (,val) ,@fst) ,bind))
-                         (err "ERROR: invalid bindings on let*"))))))
-      (car (iterator::reduce reducer let-body (iterator::reverse vals)))))
+(test::assert-equal 3 (count (list 1 3 5 2 4 10 2 4 88 2 1) 2))
+(test::assert-equal 0 (count (list 1 3 5 2 4 10 2 4 88 2 1) 42))"
+      (sequence item)
+    (let ((add-if-equals-item (fn (fst nxt) (if (= nxt item) (+ 1 fst) fst))))
+      (reduce add-if-equals-item 0 sequence)))
+
+
+(defmacro chain (init arg0 &rest args)
+  (verify-chain-args arg0 args)
+  (let* ((reducer (fn (fst nxt)
+          (substitute fst '_ nxt))))
+    (reduce reducer init args)))
+
+(test::assert-equal "Ordered sentence: I will become a properly worded statement." (chain "a properly worded " (str "will " "become " _) (str "I " _ "statement.") (str "Ordered sentence: " _)))
+
 
 ;;TODO it's not good that these error message strings are somewhat duplicated.
 ;;  is there a good way to make them accessible for use in the std lib
 ;;  w/o leaking. would such a language feature be desirable anyway.
 (defmacro and-let* (vals &rest let-body)
-      (let* ((rev (iterator::reverse vals))
-             (init (if nil ;; (empty-seq? let-body)
-                     (let ((last-binding (next! rev)))
-                       (if (= 1 (length last-binding))
-                         (car last-binding)
-                         (if (= 2 (length last-binding))
-                           (cdr last-binding)
-                           (err "ERROR: invalid bindings on and-let*"))))
-                     let-body)))
+    (let* ((rev (iterator::reverse vals))
+           ;; if there is no let-body the last binding is returned
+           (init
+             (if (empty-seq? let-body)
+               (let ((last-binding (next! rev)))
+                 (if (= 1 (length last-binding))
+                   (car last-binding)
+                   (if (= 2 (length last-binding))
+                     (cdr last-binding)
+                     (err "ERROR: invalid bindings on and-let*"))))
+               let-body)))
         (car (iterator::reduce
              (fn (fst nxt)
                 (if (= 1 (length nxt))
@@ -95,19 +88,61 @@ Example:
              init
              rev))))
 
-(println "test stuff with let-body: "
-         (expand-macro '(and-let* ((val (str "alpha")) (other-val (str "bravo"))) (str "charlie: (" other-val "i)"))))
-(println "test stuff w/o let body:"
-         (expand-macro '(and-let* ((val (str "alpha")) (other-val (str "bravo"))))))
-(println "test stuff: [" (and-let* ((val (do
-                                         (println "alpha")
-                                         (str "alpha, ")))
+(test::assert-equal "charlie bravo alpha."
+                    (and-let* ((val (do (str "alpha.")))
+                               (other-val (do (str "bravo " val)))) (str "charlie " other-val)) "]")
+
+(test::assert-equal "alpha, bravo." (and-let* ((val (do
+                                         (str "bravo.")))
                                   (other-val (do
-                                                 (println "bravo " val)
-                                                 (str "bravo " val)))) (str "charlie " other-val)) "]")
-(println "test stuff: [" (and-let* ((val (do
-                                         ;;(println "alpha")
-                                         (str "alpha, ")))
-                                  (other-val (do
-                                                 ;;(println "bravo " val)
-                                                 (str "bravo " val))))) "]")
+                                                 (str "alpha, " val))))))
+
+(test::assert-equal nil (and-let* ((val (do (str "alpha, ") nil))
+                                   (other-val (do (str "bravo " val))))))
+
+#|
+(defmacro chain-and (init &rest meows)
+  (let* ((reducer (fn (fst nxt)
+            (append-to! fst (substitute fst '_ nxt)))))
+    (reduce reducer `((,binding ,init)) meows)))
+(defmacro chain-and (init &rest args)
+  (let* ((reducer (fn (fst nxt)
+            (append-to! fst (substitute ,binding '_ nxt)))))
+    (reduce reducer `((,binding ,init)) args)))
+|#
+
+(defmacro chain-and (init arg0 &rest args)
+  (verify-chain-args arg0 args)
+  (let* ((rev-args (collect (reverse args)))
+         (first-rev (first rev-args))
+         (rest-rev (collect (append-to! (rest rev-args) (list init))))
+         (p (println "restrev " rest-rev))
+         (reducer (fn (fst nxt)
+                     `((fn (_) (when _ ,fst)) ,nxt))))
+        (reduce reducer first-rev rest-rev)))
+(println "expand chain-and: " (expand-macro '(chain-and "howdy" (string? _) (= _ "howdy"))))
+
+(when (string? "howdy") (= (string? "howdy") "howdy"))
+((fn (x) (when x
+           ((fn (y) (when y
+                      (= y "howdy")))
+            (string? x))))
+     "howdy")
+#|
+
+(println "ok: " (chain-and "howdy"
+                           (string? _)
+                           (= _ "howdy"))
+(defn has-args (m &rest ns)
+      (let* ((reverse-ns (reverse ns))
+             (first-n (first reverse-ns))
+             (rest-n (rest reverse-ns)))
+        ;;(println "rest: " (collect (append-iter rest-n m)))
+        (println "rest: " rest-n)
+        ))
+
+(defn has-args (m &rest ns)
+      (println "ns: " (collect (first (reverse ns)))))
+
+(has-args "emm" 1 2 3 4)
+         |#
