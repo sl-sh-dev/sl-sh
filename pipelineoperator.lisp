@@ -3,32 +3,22 @@
 (ns-import 'iterator)
 (ns-import 'test)
 
-(defn visit-all (consumer seq)
-  (if (non-empty-seq? seq)
-    (do
-      (visit consumer (first seq))
-      (visit consumer (rest seq)))
-    (when (not (empty-seq? seq))
-      (consumer seq))))
-
-(defn in-any? (seq-to-search item-to-match)
-  (when (non-empty-seq? seq-to-search)
-    (if (in? seq-to-search item-to-match)
-      #t
-      (if (in-recur? (first seq-to-search) item-to-match)
-        #t
-        (in-recur? (rest seq-to-search) item-to-match)))))
-
-;; TODO to implement
-;;    - chain-and (need to implement)
-;;    - chain-when (ne
-;;    - chain-lambda
 ;; TODO need tests and a docstring
+
+(defn verify-chain-when-args (arg0 args)
+      (vec-insert! args 0 arg0)
+      (for elem in args
+           (do
+             (if (empty-seq? elem)
+                 (err "All args must be non-empty sequences that
+                  contain the _ symbol.")
+                 (when (not (= 2 (length elem)))
+                   (err "Each clause in chain-when args must be of length 2.")))))
+      #t)
+
 (defn verify-chain-args (arg0 args)
       (vec-insert! args 0 arg0)
-      (for elem in args (when (not (and (non-empty-seq? elem)
-                                        (> (length elem) 1)
-                                        (in? elem '_)))
+      (for elem in args (when (empty-seq? elem)
          (err "All args must be non-empty sequences that
               contain the _ symbol.")))
       #t)
@@ -100,49 +90,35 @@ Example:
 (test::assert-equal nil (and-let* ((val (do (str "alpha, ") nil))
                                    (other-val (do (str "bravo " val))))))
 
-#|
-(defmacro chain-and (init &rest meows)
-  (let* ((reducer (fn (fst nxt)
-            (append-to! fst (substitute fst '_ nxt)))))
-    (reduce reducer `((,binding ,init)) meows)))
-(defmacro chain-and (init &rest args)
-  (let* ((reducer (fn (fst nxt)
-            (append-to! fst (substitute ,binding '_ nxt)))))
-    (reduce reducer `((,binding ,init)) args)))
-|#
-
 (defmacro chain-and (init arg0 &rest args)
   (verify-chain-args arg0 args)
   (let* ((rev-args (collect (reverse args)))
          (first-rev (first rev-args))
          (rest-rev (collect (append-to! (rest rev-args) (list init))))
-         (p (println "restrev " rest-rev))
          (reducer (fn (fst nxt)
                      `((fn (_) (when _ ,fst)) ,nxt))))
         (reduce reducer first-rev rest-rev)))
-(println "expand chain-and: " (expand-macro '(chain-and "howdy" (string? _) (= _ "howdy"))))
 
-(when (string? "howdy") (= (string? "howdy") "howdy"))
-((fn (x) (when x
-           ((fn (y) (when y
-                      (= y "howdy")))
-            (string? x))))
-     "howdy")
-#|
+(test::assert-false (chain-and "howdy" (string? _) (= _ "howdy")))
+(test::assert-true  (chain-and "howdy" (str _ " partner") (= _ "howdy partner")))
 
-(println "ok: " (chain-and "howdy"
-                           (string? _)
-                           (= _ "howdy"))
-(defn has-args (m &rest ns)
-      (let* ((reverse-ns (reverse ns))
-             (first-n (first reverse-ns))
-             (rest-n (rest reverse-ns)))
-        ;;(println "rest: " (collect (append-iter rest-n m)))
-        (println "rest: " rest-n)
-        ))
+(defmacro chain-when (init arg0 &rest args)
+  (verify-chain-when-args arg0 args)
+  (let* ((reducer
+           (fn (fst nxt)
+             (let* ((if-true (car nxt))
+                    (test (car (cdr nxt))))
+               `((fn (_) (if ,if-true ,test _)) ,fst)))))
+        (reduce reducer init args)))
 
-(defn has-args (m &rest ns)
-      (println "ns: " (collect (first (reverse ns)))))
+(defn describe-number (n)
+    (chain-when ""
+        ((not (= (% n 2) 0)) (str "odd" _))
+        ((= (% n 2) 0) (str "even" _))
+        ((= 0 n) (str "zero" _))
+        ((> n 0) (str "positive" _))))
 
-(has-args "emm" 1 2 3 4)
-         |#
+(test::assert-true (str-contains "odd" (describe-number 3)))
+(test::assert-true (str-contains "positive" (describe-number 3)))
+(test::assert-true (str-contains "even" (describe-number 4)))
+(test::assert-true (str-contains "positive" (describe-number 4)))
