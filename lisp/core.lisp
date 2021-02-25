@@ -407,7 +407,7 @@ Example:
 "inserts result of previous expression as second argument to current expression.
 First argument is not evaluated.
 
-Section: shell
+Section: Threading-macros
 
 Example:
 
@@ -436,7 +436,7 @@ Example:
 "inserts result of previous expression as last argument to current expression.
 First argument is not evaluated.
 
-Section: shell
+Section: Threading-macros
 
 Example:
 

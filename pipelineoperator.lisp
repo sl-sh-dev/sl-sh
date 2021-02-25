@@ -10,8 +10,7 @@
       (for elem in args
            (do
              (if (empty-seq? elem)
-                 (err "All args must be non-empty sequences that
-                  contain the _ symbol.")
+                 (err "All args must be non-empty sequences.")
                  (when (not (= 2 (length elem)))
                    (err "Each clause in chain-when args must be of length 2.")))))
       #t)
@@ -19,12 +18,8 @@
 (defn verify-chain-args (arg0 args)
       (vec-insert! args 0 arg0)
       (for elem in args (when (empty-seq? elem)
-         (err "All args must be non-empty sequences that
-              contain the _ symbol.")))
+         (err "All args must be non-empty sequences.")))
       #t)
-
-(defn count
-"Counts instances of item in sequence.
 
 Section: core
 
@@ -42,12 +37,15 @@ Example:
           (substitute fst '_ nxt))))
     (reduce reducer init args)))
 
-(test::assert-equal "Ordered sentence: I will become a properly worded statement." (chain "a properly worded " (str "will " "become " _) (str "I " _ "statement.") (str "Ordered sentence: " _)))
+(test::assert-equal "Ordered sentence: I will become a properly worded statement."
+    (chain "a properly worded "
+           (str "will " "become " _)
+           (str "I " _ "statement.")
+           (str "Ordered sentence: " _)))
 
+;;(test::assert-equal 42
+;;   (chain 7 (% _ 4)))
 
-;;TODO it's not good that these error message strings are somewhat duplicated.
-;;  is there a good way to make them accessible for use in the std lib
-;;  w/o leaking. would such a language feature be desirable anyway.
 (defmacro and-let* (vals &rest let-body)
     (let* ((rev (iterator::reverse vals))
            ;; if there is no let-body the last binding is returned
@@ -111,14 +109,17 @@ Example:
                `((fn (_) (if ,if-true ,test _)) ,fst)))))
         (reduce reducer init args)))
 
-(defn describe-number (n)
-    (chain-when ""
-        ((not (= (% n 2) 0)) (str "odd" _))
-        ((= (% n 2) 0) (str "even" _))
-        ((= 0 n) (str "zero" _))
-        ((> n 0) (str "positive" _))))
+(defn add-number-attributes (n)
+    (chain-when (make-hash)
+        ((not (= (% n 2) 0)) (hash-set! _ :property "odd"))
+        ((= (% n 2) 0) (hash-set! _ :property "even"))
+        ((= 0 n) (hash-set! _ :zero "zero"))
+        ((> n 0) (hash-set! _ :symmetry "positive"))
+        ((< n 0) (hash-set! _ :symmetry "negative"))))
 
-(test::assert-true (str-contains "odd" (describe-number 3)))
-(test::assert-true (str-contains "positive" (describe-number 3)))
-(test::assert-true (str-contains "even" (describe-number 4)))
-(test::assert-true (str-contains "positive" (describe-number 4)))
+(test::assert-equal "odd" (hash-get (add-number-attributes 3) :property))
+(test::assert-equal "even" (hash-get (add-number-attributes 4) :property))
+(test::assert-false (hash-get (add-number-attributes 4) :zero))
+(test::assert-equal "positive" (hash-get (add-number-attributes 4) :symmetry))
+(test::assert-equal "negative" (hash-get (add-number-attributes -4) :symmetry))
+(test::assert-equal "zero" (hash-get (add-number-attributes 0) :zero))
