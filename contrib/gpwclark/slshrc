@@ -3,7 +3,6 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
-
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
@@ -19,6 +18,12 @@
 (endfix-on)
 
 ;; shell helpers {{{
+
+    (defmacro rsynccp
+        "sane defaults for treating rsync like copy.
+        Section: user-shell"
+        (src target)
+        `(rsync -av ,src ,target --progress --inplace --no-compress))
 
 	(defn dsh
 		"With no arguments: alias for du ./* -sh
@@ -414,23 +419,24 @@ Section: user-shell"
 ;; TODO maybe list bkrd processes as well in prompt.
 
 (defn colorize-rand (string seed)
-	(let ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
-								shell::*fg-green* shell::*fg-yellow*
-								shell::*fg-blue* shell::*fg-magenta*
-								shell::*fg-cyan* shell::*fg-white*))
-		  (ascii-to-int (fn (ascii-char)
-							(str->int (str (bash -c (str "printf \"%d\" \'" ascii-char)))))))
-		(str (vec-nth
-				fg-color-vec
-				(% (reduce (fn (curr nxt)
-							(+ curr (ascii-to-int nxt))) 0 seed)
-					(length fg-color-vec)))
-			string
-			shell::*fg-default*)))
+    (let* ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
+                            shell::*fg-green* shell::*fg-yellow*
+                            shell::*fg-blue* shell::*fg-magenta*
+                            shell::*fg-cyan* shell::*fg-white*))
+           (ascii-to-int (fn (ascii-char)
+                        (str->int (str (bash -c (str "printf \"%d\" \'" ascii-char))))))
+           (color (vec-nth
+                    fg-color-vec
+                    (% (reduce (fn (curr nxt)
+                                (+ curr (ascii-to-int nxt))) 0 seed)
+                        (length fg-color-vec)))))
+        (str color
+            string
+            shell::*fg-default*)))
 
 (defn colorize-rand-cache (filename color-str seed)
-    (let ((dir (str "/tmp/sl-sh/"))
-          (fp (str "/tmp/sl-sh/" filename)))
+    (let* ((dir (str (temp-dir) "/sl-sh/"))
+          (fp (str dir filename)))
       (if (and (fs-exists? fp) (not (fs-dir? fp)))
         (str (str-trim (cat fp)))
         (do
