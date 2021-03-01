@@ -46,19 +46,6 @@ Example:
            (add-if-equals-item (fn (fst nxt) (if (= (xform nxt) item) (+ 1 fst) fst))))
       (iterator::reduce add-if-equals-item 0 sequence)))
 
-
-(defn str-slice
-"Returns subset of string from start (inclusive) to end (exclusive). Does
-not modify provided string.
-
-Section: String
-
-Example:
-(assert-equal \"2021\" (str-slice \"20210227T154705Z\" 0 4))
-(assert-equal \"I hate sl-sh\" (str-slice \"Well, you see, I hate sl-sh the least out of all things.\" 15 27))"
-(string start end)
-      (apply str (iterator::collect ((iterator::iter (str string)) :slice start end))))
-
 (defmacro chain
 "Inserts result of previous expression into place indicated by the _ symbol
 in the next expression. This macro is useful when nested actions
@@ -222,7 +209,7 @@ Example:
                      (fn (orig-string)
                      (let ((result (get-error
                          (chain orig-string
-                            (str-slice _ start end)
+                            (str-sub start (- end start) _)
                             (str->int _)
                             (tst _)))))
                      (if (= :ok (car result))
@@ -234,7 +221,7 @@ Example:
            (valid-hour? (do-fst (fn (x) (and (> x 0) (< x 24))) 9 11))
            (valid-minute? (do-fst (fn (x) (and (> x -1) (< x 60))) 11 13))
            (valid-second? (do-fst (fn (x) (and (> x -1) (< x 60))) 13 15))
-           (is-zulu? (fn (orig-string) (= \"Z\" (str-slice orig-string 15 16)))))
+           (is-zulu? (fn (orig-string) (= \"Z\" (str-sub 15 1 orig-string)))))
       (chain-and alleged-time-str
             (valid-year? _)
             (valid-month? _)
