@@ -40,14 +40,6 @@ entries:
       url: /mydoc_faq_layout.html
       output: web, pdf
 
-  - title: Release Notes
-    output: web, pdf
-    folderitems:
-
-    - title: 1.0 Release notes
-      url: /mydoc_release_notes_10.html
-      output: web, pdf
-
   - title: Standard Library
     output: web, pdf
     folderitems:
@@ -82,6 +74,14 @@ entries:
         - title: Hash Maps
           url: /mydoc_api.html#Hashmap forms-body
           output: web
+
+  - title: Release Notes
+    output: web, pdf
+    folderitems:
+
+    - title: 1.0 Release notes
+      url: /mydoc_release_notes_10.html
+      output: web, pdf
 
   - title: Contributing
     output: web, pdf
