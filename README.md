@@ -31,13 +31,6 @@ The above docker command will produce a completely static binary while compiling
 be linked to you systems libc.  You can use the musl target with cargo to produce a static binary
 with an installed rust.
 
-## Tasks
-- [ ] better error reporting and debugging
-- [ ] benchmarks
-- [ ] better maths
-- [ ] regular expressions
-- [ ] add better documentation about some of the useful shell features implemented in sl-sh and goodies inherited from liner
-
 ## Examples
 Currently sparse but if you grep lisp/ and contrib/ for a form you want an example of you will probably find one.
 

@@ -1,0 +1,92 @@
+# This is your sidebar TOC. The sidebar code loops through sections here and provides the appropriate formatting.
+
+entries:
+- title: sidebar
+  product: sl-sh doc
+  version: 1.0
+  folders:
+
+  - title:
+    output: pdf
+    type: frontmatter
+    folderitems:
+    - title:
+      url: /titlepage.html
+      output: pdf
+      type: frontmatter
+    - title:
+      url: /tocpage.html
+      output: pdf
+      type: frontmatter
+
+  - title: Overview
+    output: web, pdf
+    folderitems:
+
+    - title: Get started
+      url: /index.html
+      output: web, pdf
+      type: homepage
+
+    - title: Introduction
+      url: /mydoc_introduction.html
+      output: web, pdf
+
+    - title: Support
+      url: /mydoc_support.html
+      output: web, pdf
+
+    - title: FAQ
+      url: /mydoc_faq_layout.html
+      output: web, pdf
+
+  - title: Release Notes
+    output: web, pdf
+    folderitems:
+
+    - title: 1.0 Release notes
+      url: /mydoc_release_notes_10.html
+      output: web, pdf
+
+  - title: Standard Library
+    output: web, pdf
+    folderitems:
+
+    - title: Standard Library
+      url: /mydoc_api.html
+      output: web, pdf
+
+#TODO Generate this list of quick links dynamically from the data we have
+# in slsh.
+      subfolders:
+      - title: Quick Links
+        output: web
+        subfolderitems:
+
+        - title: Core macros
+          url: /mydoc_api.html#Core forms-body
+          output: web
+
+        - title: Pair
+          url: /mydoc_api.html#Pair forms-body
+          output: web
+
+        - title: Sequence
+          url: /mydoc_api.html#Sequence forms-body
+          output: web
+
+        - title: Vector
+          url: /mydoc_api.html#Vector forms-body
+          output: web
+
+        - title: Hash Maps
+          url: /mydoc_api.html#Hashmap forms-body
+          output: web
+
+  - title: Contributing
+    output: web, pdf
+
+    folderitems:
+    - title: Pull Requests
+      url: /mydoc_pull_requests.html
+      output: web, pdf

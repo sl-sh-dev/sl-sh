@@ -9,8 +9,13 @@
 (defn create-header (index-file)
 	(var new-file (open index-file :create :truncate))
 	(write-string new-file "---
-layout: default
-title: Sl-sh form documentation
+title: Sl-sh Standard Library
+tags: [documentation]
+keywords: forms, sl-sh, examples, api, standard library
+last_updated: March 1, 2021
+sidebar: mydoc_sidebar
+permalink: mydoc_api.html
+toc: false
 ---
 
 # Sl-sh
