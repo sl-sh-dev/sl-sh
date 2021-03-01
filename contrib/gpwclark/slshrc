@@ -3,7 +3,6 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
-
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
@@ -20,7 +19,13 @@
 
 ;; shell helpers {{{
 
-	(defn dush
+    (defmacro rsynccp
+        "sane defaults for treating rsync like copy.
+        Section: user-shell"
+        (src target)
+        `(rsync -av ,src ,target --progress --inplace --no-compress))
+
+	(defn dsh
 		"With no arguments: alias for du ./* -sh
 		With any args: provides size of each provided argument
 		Section: user-shell"
@@ -70,20 +75,21 @@
 		that string is then \"tail -f\"'d
 
 		Section: user-shell"
-		(str-to-tail-f) (progn
+		(str-to-tail-f) (do
 		(var matching-list (filter (fn (x) (and (fs-file? x) (str-contains str-to-tail-f x))) (mrf)))
-		(var tail-target (first matching-list))
+		(var tail-target (first (collect matching-list)))
 		(tail -f tail-target)))
 
 	(defn cdt
 	"cd into the directory with the most recent timestamp
 	Section: user-shell
 	"
-		()
-		(progn
+		(&rest args)
+			(when (> (length args) 1 )
+				(err "cdt supports zero or one arguments."))
 			(var most-recent-dir
-				(first (collect-vec (filter (fn (x) (and (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
-			(eval `(cd ,most-recent-dir))))
+				(first (collect-vec (filter (fn (x) (and (if (= 1 (length args)) (str-contains (first args) (str x)) #t) (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
+			(eval `(cd ,most-recent-dir)))
 
 ;; stdin to clipboard
 (defmacro sc
@@ -91,7 +97,7 @@
 	Section: user-shell
 	"
 	()
-	(str-trim (xclip -selection c)))
+	`(xclip -selection c))
 
 (defmacro this
 	"
@@ -107,7 +113,7 @@
 	Section: user-shell
 	"
 	()
-	(progn
+	(do
 		(var raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
 		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
 
@@ -139,7 +145,7 @@
 			((vimargs (str-split
 				" "
 				(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
-			(progn
+			(do
 				(eval `(vim ,@vimargs))))
 		(err "Only accepts 0 or 1 arguments")))
 
@@ -155,9 +161,9 @@
 	Section: java"
 	(&rest args)
 	(let ((log-out-file "last_build.log"))
-	(progn
+	(do
 		(|
-			(var gradle-proc (eval (append-to! '(./gradlew) args)))
+			(var gradle-proc (eval (append-to! (list "./gradlew") args)))
 			(tee log-out-file)
 		)
 		(var gradle-ret-code (wait gradle-proc))
@@ -204,6 +210,17 @@
 ;; }}}
 
 ;; quality of shell life {{{
+
+(alias dkc
+"Typing out docker-compose takes forever.
+Section: user-shell"
+	(docker-compose))
+
+(alias :q
+       ":q makes sense as an exit alias
+       Section: user-shell"
+       (exit))
+
 (alias ls
 	"alias ls to a colorified version.
 	Section: user-shell"
@@ -218,9 +235,9 @@
 ;; Replace cd with a version that also runs ls after.
 ;; Macro to let un-expanded args go to root::cd.
 (defmacro cd
-	"(= 'cd (progn (cd) (ls))) ;; life changing
+	"(= 'cd (do (cd) (ls))) ;; life changing
 	Section: user-shell"
-	(&rest args) (progn
+	(&rest args) (do
 		(if (= (length args) 0)
 			(and (root::cd) (ls .))
 			(if (= (length args) 1)
@@ -280,39 +297,10 @@
 	"provide persistent notification of previous commands return code via notify-send and libnotify
 	Section: notify"
 	()
-	(progn
+	(do
 		(var last-ret-val *last-status*)
 		(pnss (str "Last program exit status: " last-ret-val  "."))
 		last-ret-val))
-
-;; }}}
-
-;; long lost documentation for system commands {{{
-
-(alias vi "see doc 'vim'
-Section: sys-docs" ((str (which vim))))
-
-(alias vim
-"
-- how to replace something with a newline in vim.
-:set magic
-:%s/{/{^M/g
-To get the ^M character, type Ctrl + V and hit Enter
-Section: sys-docs
-"
-	((str (which vim))))
-
-(alias tmux
-"List of things no one can remember:
-- change cwd of session
-	- C-a + : then input attach-session -t . -c new-cwd
-- copy and paste
-	- initiate: C-a + [
-	- more initiate: hit space bar (enter visual block highlight text mode)
-	- hit enter to stick in paste buffer
-	- paste normally or with: C-a + ]
-Section: tmux"
-	((str (which tmux))))
 
 ;; }}}
 
@@ -341,7 +329,7 @@ Section: tmux"
 	Section: tmux"
 	(&rest args)
 		(if (= (length args) 1)
-			(progn
+			(do
 				(var tmux-ret-code (tmux a -t (first args)))
 				(if (= 0 tmux-ret-code)
 					0
@@ -422,13 +410,47 @@ Section: tmux"
 		(str "")
 		(str "(" (str-trim branch) ")"))))
 
-(defn get-build-type () (progn
+(defn get-build-type () (do
 	(var build-type (nth 3 (str-split " " (version))))
 	(if (= build-type "debug")
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
 		"")))
 
 ;; TODO maybe list bkrd processes as well in prompt.
+
+(defn colorize-rand (string seed)
+    (let* ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
+                            shell::*fg-green* shell::*fg-yellow*
+                            shell::*fg-blue* shell::*fg-magenta*
+                            shell::*fg-cyan* shell::*fg-white*))
+           (ascii-to-int (fn (ascii-char)
+                        (str->int (str (bash -c (str "printf \"%d\" \'" ascii-char))))))
+           (color (vec-nth
+                    fg-color-vec
+                    (% (reduce (fn (curr nxt)
+                                (+ curr (ascii-to-int nxt))) 0 seed)
+                        (length fg-color-vec)))))
+        (str color
+            string
+            shell::*fg-default*)))
+
+(defn colorize-rand-cache (filename color-str seed)
+    (let* ((dir (str (temp-dir) "/sl-sh/"))
+          (fp (str dir filename)))
+      (if (and (fs-exists? fp) (not (fs-dir? fp)))
+        (str (str-trim (cat fp)))
+        (do
+          (var color-val (colorize-rand color-str seed))
+          (mkdir -p dir)
+          (out> fp (echo color-val))
+          color-val))))
+
+(def sl-sh-open-paren (colorize-rand-cache "sl-sh-open-paren" "[" (str $HOST "1")))
+(def sl-sh-title (colorize-rand-cache "sl-sh-title" "sl-sh" (str $HOST "4")))
+(def sl-sh-close-paren (colorize-rand-cache "sl-sh-close-paren"  "] " (str $HOST "1")))
+(def open-paren (colorize-rand-cache "open-paren" "{[ " (str $HOST "7")))
+(def host-string (colorize-rand-cache "host-string" $HOST $HOST))
+(def close-paren (colorize-rand-cache "close-paren" " ]}" (str $HOST "7")))
 
 ;; prompt ensures
 ;;	1. always a new line above prompt
@@ -437,14 +459,17 @@ Section: tmux"
 ;;	4. if in git dir display current branch
 ;;	5. cursor on near empty line
 (defn __prompt ()
-    (progn
+    (do
         (var token-str (str-trim *last-command*))
-        (when (> (length token-str) 0)
-            (set! token-str (collect (reverse (read-all token-str)))))
+        ;; TODO you can feed read a default argument
+        ;; avoid wrap in get-error
+        (var ret (get-error (read-all token-str)))
         (when (and
+                (= :ok (car ret))
                 (> (length token-str) 0)
                 (not (empty-seq? token-str)))
-            (progn
+            (do
+                (set! token-str (collect (reverse (cdr ret))))
                 (if (= (first token-str) '$la)
                   (export 'la $la)
                   (export 'la (str (first token-str))))
@@ -462,7 +487,7 @@ Section: tmux"
             (if (> (length (get-dirs)) 0)
                 (collect-str (map smaller_path (reverse (get-dirs))))
                 "")
-            "\n\r" "\x1b[32m[sl-sh" (get-build-type) "] " $HOST ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
             (set_prompt_tail last-status))))
 
 ;; }}}

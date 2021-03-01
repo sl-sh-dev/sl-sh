@@ -407,7 +407,7 @@ Example:
 "inserts result of previous expression as second argument to current expression.
 First argument is not evaluated.
 
-Section: shell
+Section: Threading-macros
 
 Example:
 
@@ -436,7 +436,7 @@ Example:
 "inserts result of previous expression as last argument to current expression.
 First argument is not evaluated.
 
-Section: shell
+Section: Threading-macros
 
 Example:
 
@@ -473,5 +473,48 @@ Example:
 "
       (stream ch) (eval (read stream)))
 
-(load "collection.lisp")
+(defn nsubstitute!
+"Replaces all instances of old-item in lst with new-item. If last argument
+passed in is keyword :first only the first instance of old-item will be
+replaced.
 
+Section: core
+
+Example:
+
+(let ((lst (list 1 2 3 4 5)))
+    (test::assert-equal (list 1 2 10 4 5) (nsubstitute! 10 3 lst))
+    (test::assert-equal (list 1 2 10 4 5) lst))"
+    (new-item old-item lst &rest mods)
+    (let ((early-return (in? mods :first)))
+      (block search
+      (loop (idx items) (0 lst)
+        (if (empty-seq? items)
+            lst
+            (do
+              (when (= (first items) old-item)
+                  (do
+                    (setnth! idx new-item lst)
+                    (when early-return (return-from search lst))))
+              (recur (+ 1 idx) (rest items)))))))
+    lst)
+
+(defmacro substitute
+"Replaces all instances of old-item in copy of lst with new-item.  If last
+argument passed in is keyword :first only the first instance of old-item will be
+replaced.
+
+Section: core
+
+Example:
+
+(let ((lst (list 1 2 3 4 5))
+      (lst2 (list 1 2 3 3 3 4 5)))
+    (test::assert-equal (list 1 2 10 4 5) (substitute 10 3 lst))
+    (test::assert-equal lst lst)
+    (test::assert-equal (list 1 2 4 4 4 4 5) (substitute 4 3 lst2))
+    (test::assert-equal (list 1 2 4 3 3 4 5) (substitute 4 3 lst2 :first)))"
+     (new-item old-item lst &rest mods)
+     `(nsubstitute! ,new-item ,old-item (collect-copy ,lst) ,@mods))
+
+(load "collection.lisp")

@@ -76,7 +76,8 @@ t
 (load "struct.lisp")
 (load "iterator.lisp")
 (load "shell.lisp")
-(load "test.lisp"))))
+(load "test.lisp")
+(load "lib.lisp"))))
 
 (if (= :error (car result)) (prim-print-error result))
 
