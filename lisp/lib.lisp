@@ -60,7 +60,7 @@ Example:
       (apply str (iterator::collect ((iterator::iter (str string)) :slice start end))))
 
 (defmacro chain
-"Inserts result of previous expression into place inidicated by the _ symbol
+"Inserts result of previous expression into place indicated by the _ symbol
 in the next expression. This macro is useful when nested actions
 need to occur but when a more sequential enumeration of steps is preferable.
 To demonstrate a sequence of operations:
@@ -207,7 +207,7 @@ Example:
 
 (defmacro chain-and
 "Evaluates each sexp, if true, inserts result of previous expression into place
-inidicated by the _ symbol. This macro is useful when nested actions
+indicated by the _ symbol. This macro is useful when nested actions
 need to take place but the operations should stop and return nil if any step
 evaluates to false.
 
