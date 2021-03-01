@@ -97,7 +97,9 @@ fn builtin_cd(
     let new_dir = if new_dir == "-" { &old_dir } else { &new_dir };
     let new_dir = cd_expand_all_dots(new_dir.to_string());
     let root = Path::new(&new_dir);
-    env::set_var("OLDPWD", env::current_dir()?);
+    if let Ok(oldpwd) = env::current_dir() {
+        env::set_var("OLDPWD", oldpwd);
+    }
     if let Err(e) = env::set_current_dir(&root) {
         eprintln!("Error changing to {}, {}", root.display(), e);
         Ok(Expression::make_nil())
@@ -213,22 +215,27 @@ fn builtin_pipe(
     let mut error: Option<Result<Expression, LispError>> = None;
     let mut i = 1; // Meant 1 here.
     let mut pipe = args.next();
+    let mut last_pid = None;
     while let Some(p) = pipe {
         let next_pipe = args.next();
         if next_pipe.is_none() {
             environment.state.stdout_status = old_out_status.clone();
-            environment.in_pipe = false; // End of the pipe and want to wait.
+            // End of the pipe and want to wait.
+            // Unless this is being piped to something itself (ie in a 'str' form) then do not wait.
+            environment.in_pipe = matches!(old_out_status, Some(IOState::Pipe));
         }
         environment.data_in = Some(out.clone());
         let res = eval(environment, p);
         match &res {
             Ok(res) => match &res.get().data {
                 ExpEnum::Process(ProcessState::Running(pid)) => {
+                    last_pid = Some(*pid);
                     if environment.state.pipe_pgid.is_none() {
                         environment.state.pipe_pgid = Some(*pid);
                     }
                 }
                 ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
+                    last_pid = Some(*pid);
                     if environment.state.pipe_pgid.is_none() {
                         environment.state.pipe_pgid = Some(*pid);
                     }
@@ -283,7 +290,12 @@ fn builtin_pipe(
                         break;
                     }
                 },
-                _ => {}
+                _ => {
+                    error = Some(Err(LispError::new(
+                        "Invalid form in pipe (pipes are for system commands or files).",
+                    )));
+                    break;
+                }
             },
             Err(err) => {
                 error = Some(Err(LispError::new(err.to_string())));
@@ -303,6 +315,15 @@ fn builtin_pipe(
     environment.state.pipe_pgid = None;
     environment.state.stdout_status = old_out_status;
     if let Some(error) = error {
+        if let Some(pid) = last_pid {
+            // Send a sigint to the feeding job so it does not hang on a full output buffer.
+            if let Err(err) = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid as i32),
+                nix::sys::signal::Signal::SIGINT,
+            ) {
+                eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
+            }
+        }
         error
     } else {
         Ok(out)

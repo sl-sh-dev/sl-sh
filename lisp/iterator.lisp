@@ -20,11 +20,12 @@ Example:
 "
     (bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
-    `(loop (plist) ((iterator::iter ,items))
-         (if (not (plist :empty?)) (do
-             (var ,bind (plist :next!))
+    (var plist (gensym))
+    `(loop (,plist) ((iterator::iter ,items))
+         (if (not (,plist :empty?)) (do
+             (var ,bind (,plist :next!))
              (,@body)
-             (recur plist))))))
+             (recur ,plist))))))
 
 (defmacro for-i
 "
@@ -46,12 +47,13 @@ Example:
     (idx-bind bind in items body) (do
     (if (not (= in 'in)) (err "Invalid for: (for [i] in [iterator] (body))"))
     (var loop-idx (gensym))
-    `(loop (plist ,loop-idx) ((iterator::iter ,items) 0)
-         (if (not (plist :empty?)) (do
-             (var ,bind (plist :next!))
+    (var plist (gensym))
+    `(loop (,plist ,loop-idx) ((iterator::iter ,items) 0)
+         (if (not (,plist :empty?)) (do
+             (var ,bind (,plist :next!))
              (var ,idx-bind ,loop-idx)
              (,@body)
-             (recur plist (+ ,loop-idx 1)))))))
+             (recur ,plist (+ ,loop-idx 1)))))))
 
 (deftrait iterator
 "Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))

@@ -143,6 +143,8 @@ fn builtin_jobs(
     if args.next().is_some() {
         Err(LispError::new("jobs takes no arguments"))
     } else {
+        // Update the list before printing.
+        reap_procs(environment)?;
         for (i, job) in environment.jobs.borrow().iter().enumerate() {
             println!(
                 "[{}]\t{}\t{:?}\t{:?}",

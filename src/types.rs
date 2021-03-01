@@ -420,6 +420,44 @@ impl fmt::Debug for ExpEnum {
     }
 }
 
+// This is used when getting a process output into a string, puts an upper limit
+// on the amount of bytes that can be read before an error is generated.
+pub struct TakeN<'a, T> {
+    inner: &'a mut T,
+    limit: u64,
+    pid: u32,
+}
+
+impl<'a, T: Read> Read for TakeN<'a, T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        // Don't call into inner reader at all at EOF because it may still block
+        if self.limit == 0 {
+            // Send a sigint to the feeding job so it does not hang on a full output buffer.
+            let error = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(self.pid as i32),
+                nix::sys::signal::Signal::SIGINT,
+            )
+            .is_err();
+            return if error {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "String from process is to large, failed to send sigint to job.",
+                ))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "String from process is to large, sent sigint to job.",
+                ))
+            };
+        }
+
+        let max = std::cmp::min(buf.len() as u64, self.limit) as usize;
+        let n = self.inner.read(&mut buf[..max])?;
+        self.limit -= n as u64;
+        Ok(n)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ExpObj {
     pub data: ExpEnum,
@@ -692,9 +730,14 @@ impl Expression {
     ) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
             Some(child) => {
-                if child.stdout.is_some() {
+                if let Some(childout) = child.stdout.as_mut() {
                     let mut buffer = String::new();
-                    child.stdout.as_mut().unwrap().read_to_string(&mut buffer)?;
+                    let mut taken = TakeN {
+                        inner: childout,
+                        limit: 16_777_216, // 16M limit
+                        pid,
+                    };
+                    taken.read_to_string(&mut buffer)?;
                     Ok(buffer)
                 } else {
                     Ok("".to_string())
@@ -707,6 +750,9 @@ impl Expression {
     pub fn make_string(&self, environment: &Environment) -> Result<String, LispError> {
         match &self.get().data {
             ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
+                self.pid_to_string(environment.procs.clone(), *pid)
+            }
+            ExpEnum::Process(ProcessState::Running(pid)) => {
                 self.pid_to_string(environment.procs.clone(), *pid)
             }
             ExpEnum::Values(v) => {

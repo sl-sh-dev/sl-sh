@@ -18,8 +18,7 @@ use ::sl_sh::shell::*;
 use ::sl_sh::types::LispError;
 
 fn main() -> Result<(), LispError> {
-    let config = get_config();
-    if let Ok(config) = config {
+    if let Some(config) = get_config() {
         if config.command.is_none() && config.script.is_none() {
             /* See if we are running interactively.  */
             let shell_terminal = nix::libc::STDIN_FILENO;

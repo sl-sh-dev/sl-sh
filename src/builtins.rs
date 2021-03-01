@@ -999,6 +999,8 @@ fn builtin_loose_symbols(
     last_eval
 }
 
+// Suppress this lint because we have to return a Result here since it is a builtin...
+#[allow(clippy::unnecessary_wraps)]
 fn builtin_get_error(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -1054,7 +1056,7 @@ fn make_doc(
     exp: &Expression,
     key: &str,
     namespace: Rc<RefCell<Namespace>>,
-) -> Result<String, LispError> {
+) -> String {
     let mut new_docs = String::new();
     new_docs.push_str(key);
     new_docs.push_str("\nType: ");
@@ -1071,7 +1073,7 @@ fn make_doc(
         add_usage(&mut new_docs, key, &exp);
     }
     new_docs.push('\n');
-    Ok(new_docs)
+    new_docs
 }
 
 fn get_doc(
@@ -1121,7 +1123,7 @@ fn get_doc(
                                 }
                             } else if let Some(exp) = namespace.borrow().get(key) {
                                 return Ok(Expression::alloc_data(ExpEnum::String(
-                                    make_doc(environment, &exp, key, namespace.clone())?.into(),
+                                    make_doc(environment, &exp, key, namespace.clone()).into(),
                                     None,
                                 )));
                             }
@@ -1157,7 +1159,7 @@ fn get_doc(
                                     &exp,
                                     key,
                                     namespace.clone(),
-                                )?);
+                                ));
                                 doc_final.push('\n');
                             }
                         }

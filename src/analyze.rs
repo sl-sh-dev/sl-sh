@@ -177,13 +177,13 @@ fn is_quoted(environment: &mut Environment, args: &mut dyn Iterator<Item = Expre
             let form = get_expression_look(environment, car.clone(), true);
             if let Some(form_exp) = form {
                 let exp_d = form_exp.get();
-                return match &exp_d.data {
-                    ExpEnum::Quote => true,
-                    ExpEnum::BackQuote => true,
-                    ExpEnum::DeclareFn => true,
-                    ExpEnum::DeclareMacro => true,
-                    _ => false,
-                };
+                return matches!(
+                    &exp_d.data,
+                    ExpEnum::Quote
+                        | ExpEnum::BackQuote
+                        | ExpEnum::DeclareFn
+                        | ExpEnum::DeclareMacro
+                );
             }
         }
     }

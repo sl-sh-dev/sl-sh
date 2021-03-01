@@ -220,7 +220,7 @@ Example:
     (times body)
     ((fn (idx-name)
     `(if (> ,times 0)
-        (root::loop (,idx-name) (,times) (do
+        (loop (,idx-name) (,times) (do
             (,@body)
             (if (> ,idx-name 1) (recur (- ,idx-name 1)))))))(gensym)))
 
@@ -241,7 +241,7 @@ Example:
     (idx-bind times body)
     ((fn (stop-name)
     `(if (> ,times 0)
-        (root::loop (,idx-bind ,stop-name) (0 (- ,times 1)) (do
+        (loop (,idx-bind ,stop-name) (0 (- ,times 1)) (do
             (,@body)
             (if (< ,idx-bind ,stop-name) (recur (+ ,idx-bind 1) ,stop-name))))))(gensym)))
 
@@ -287,9 +287,9 @@ Example:
         (var make-cond (fn (condition val action others)
             (if (null val) (make-action action)
                 (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
-                    `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (root::first (root::first others)) (root::rest (root::first others)) (root::rest others)))))))
+                    `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (first (first others)) (rest (first others)) (rest others)))))))
         (var cond-name condition)
-        `(if ,@(make-cond cond-name (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
+        `(if ,@(make-cond cond-name (first (first branches)) (rest (first branches)) (rest branches))))))
 
 (defmacro cond
 "Usage: (cond ((test form*)*) -> result
@@ -333,8 +333,8 @@ Example:
         (var make-cond (fn (condition action others)
             (if (empty-seq? others)
                 `(,condition ,(make-action action) nil)
-                `(,condition ,(make-action action) ,@(make-cond (root::first (root::first others)) (root::rest (root::first others)) (root::rest others))))))
-        `(if ,@(make-cond (root::first (root::first branches)) (root::rest (root::first branches)) (root::rest branches))))))
+                `(,condition ,(make-action action) ,@(make-cond (first (first others)) (rest (first others)) (rest others))))))
+        `(if ,@(make-cond (first (first branches)) (rest (first branches)) (rest branches))))))
 
 (defmacro let
 "
