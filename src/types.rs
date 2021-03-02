@@ -232,7 +232,7 @@ pub enum ExpEnum {
     Char(Cow<'static, str>),
     CodePoint(char),
 
-    // Lambda and macros and builtings
+    // Lambda and macros and builtins
     Lambda(Lambda),
     Macro(Lambda),
     Function(Callable),
@@ -506,10 +506,6 @@ impl Expression {
             data: Rc::new(RefCell::new(self.data.borrow().copy())),
         }
     }
-
-    //pub fn new(obj: Expression) -> Expression {
-    //    Expression { data: obj.data }
-    //}
 
     pub fn alloc(obj: ExpObj) -> Expression {
         Expression {

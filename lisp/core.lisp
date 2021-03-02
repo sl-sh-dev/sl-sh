@@ -90,7 +90,7 @@ t
 "
     (op name &rest args)
     ((fn ()
-         (if (< (length args) 1) (err "defn: Wrong number of args."))
+         (if (< (length args) 1) (err (str "defn: Wrong number of args creating " name)))
          (var ars nil)
          (var body nil)
          (if (string? (vec-nth args 0))
