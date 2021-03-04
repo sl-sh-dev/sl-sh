@@ -14,7 +14,7 @@ shell, it is a scripting language, and it is a REPL.
 
 Some of the more prominent features of this theme include the following:
 
-* Supports endfix notatin so familiar bash-isms like
+* Supports endfix notation so familiar bash-isms like
     ```bash
     cat file | tr -s " " | cut -d " " _f 2,4
     ```

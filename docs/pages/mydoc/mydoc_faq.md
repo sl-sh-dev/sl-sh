@@ -32,7 +32,7 @@ folder: mydoc
         </div>
         <div id="collapseTwo" class="panel-collapse collapse noCrossRef">
             <div class="panel-body">
-            Yes! One is currently being developed. It is called [slvm](https://github.com/sstanfield/slvm).
+            Yes! One is currently being developed. It is called <a href="https://github.com/sstanfield/slvm">slvm</a>
             </div>
         </div>
     </div>

@@ -3,6 +3,7 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
+
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
@@ -504,6 +505,7 @@ Section: user-shell"
 ;; }}}
 
 ;; machine specific {{{
+
     (def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
     (if (fs-exists? custom-lisp-config)
         ((fn (result)
@@ -515,50 +517,53 @@ Section: user-shell"
 ;; }}}
 
 ;; user ns docs {{{
+(def api-page "pages/mydoc/mydoc_api.md")
 (pushd "~/development/slsh/docs/")
-(when (or
-        (not (fs-exists? "index.markdown"))
-        (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))))
-    (progn
-    (load "mk-docs.lisp")
+(let* ((docs-made (get-error
+        (when (or
+            (not (fs-exists? api-page))
+            (= api-page (str-trim (str (find index.markdown -type f -mmin "+1440")))))
+        (progn
+        (load "mk-docs.lisp")
 
-    (defn filter-non-user-forms (sym-list namespaces) (progn
-        (if (empty-seq? namespaces)
-            sym-list
-              (recur
-                  (collect-vec (filter (fn (x) (progn
-                                (not (in? (ns-symbols (sym (first namespaces))) x))))
-                      sym-list))
-              (rest namespaces)))))
+        (defn filter-non-user-forms (sym-list namespaces) (progn
+            (if (empty-seq? namespaces)
+                sym-list
+                  (recur
+                      (collect-vec (filter (fn (x) (progn
+                                    (not (in? (ns-symbols (sym (first namespaces))) x))))
+                          sym-list))
+                  (rest namespaces)))))
 
-    (defn filter-user-undocable-forms (sym-list)
-        (var to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings))
-          (filter (fn (x) (not (in? to-filter x))) sym-list))
+        (defn filter-user-undocable-forms (sym-list)
+            (var to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings))
+              (filter (fn (x) (not (in? to-filter x))) sym-list))
 
-    ;; TODO ideally this would live in mk-docs.lisp
-    ;; and :user would be an option as param of mkdocs::get-doc-list-for
-    (defn list-of-user-slsh-syms () (progn
-        (var user-syms (list))
-        (var all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
-        (for a-ns in (filter
-                        (fn (x) (not (in? all-non-user-namespaces x)))
-                        (ns-list))
-            (append-to! user-syms (ns-symbols (sym a-ns))))
-        (var user-forms (filter-non-user-forms user-syms default-namespaces))
-        (var partial-docable-user-forms (mkdocs::filter-undocable-forms user-forms))
-        (var all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
-        (collect-vec all-docable-user-forms)))
+        ;; TODO ideally this would live in mk-docs.lisp
+        ;; and :user would be an option as param of mkdocs::get-doc-list-for
+        (defn list-of-user-slsh-syms () (progn
+            (var user-syms (list))
+            (var all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
+            (for a-ns in (filter
+                            (fn (x) (not (in? all-non-user-namespaces x)))
+                            (ns-list))
+                (append-to! user-syms (ns-symbols (sym a-ns))))
+            (var user-forms (filter-non-user-forms user-syms default-namespaces))
+            (var partial-docable-user-forms (mkdocs::filter-undocable-forms user-forms))
+            (var all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
+            (collect-vec all-docable-user-forms)))
 
-    (def all-user-slsh-syms (list-of-user-slsh-syms))
-    (def all-docstrings
-        (map (fn (x) (doc (sym x))) (filter (fn (x) (= :ok (car (get-error (doc (sym x)))))) all-user-slsh-syms)))
-    ;; check the last modified time of index.markdown and only do this if
-    ; has not been done in some amount of time.
-    (mkdocs::make-md-file-with-docstrings
-        "index.markdown"
-        (collect-vec all-docstrings))
-    (println "Built docs!")))
-
+        (def all-user-slsh-syms (list-of-user-slsh-syms))
+        (def all-docstrings
+            (filter (fn (x) (> (length x) 0)) (map (fn (x) (doc (sym x))) (filter (fn (x) (= :ok (car (get-error (doc (sym x)))))) all-user-slsh-syms))))
+        ;; check the last modified time of index.markdown and only do this if
+        ; has not been done in some amount of time.
+        (mkdocs::make-md-file-with-docstrings
+            api-page
+            (collect-vec all-docstrings))
+        (println "Built docs!")))))
+    (is-ok (= :ok (car docs-made))))
+    (when (not is-ok)
+      (println "Failed to make docs! " (cdr docs-made))))
 (popd)
-
 ;; }}}
