@@ -56,6 +56,28 @@ fn get_unquote_splice_tmp(exp: &Expression) -> Result<Option<Expression>, LispEr
     get_form_exp!(exp, "#<unquote-splice>")
 }
 
+fn get_unquote_splice_bang(exp: &Expression) -> Result<Option<Expression>, LispError> {
+    get_form_exp!(exp, "unquote-splice!")
+}
+
+fn get_unquote_splice_either(exp: &Expression) -> Result<Option<Expression>, LispError> {
+    let oe = get_form_exp!(exp, "unquote-splice");
+    match oe {
+        Err(err) => Err(err),
+        Ok(oe) => {
+            if oe.is_some() {
+                Ok(oe)
+            } else {
+                get_form_exp!(exp, "unquote-splice!")
+            }
+        }
+    }
+}
+
+fn get_unquote_splice_bang_tmp(exp: &Expression) -> Result<Option<Expression>, LispError> {
+    get_form_exp!(exp, "#<unquote-splice!>")
+}
+
 fn get_backquote(exp: &Expression) -> Result<Option<Expression>, LispError> {
     get_form_exp!(exp, "back-quote")
 }
@@ -82,6 +104,47 @@ fn change_fn(exp: Expression, new_fn: &'static str) -> Result<Expression, LispEr
             Ok(exp)
         }
         _ => Err(LispError::new("Invalid form, not a list or vector.")),
+    }
+}
+
+struct ConsIter {
+    current: Option<Expression>,
+}
+
+impl ConsIter {
+    fn new(exp: Expression) -> ConsIter {
+        ConsIter { current: Some(exp) }
+    }
+}
+
+impl Iterator for ConsIter {
+    type Item = Expression;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.current.clone() {
+            let current_d = current.get();
+            match &current_d.data {
+                ExpEnum::Pair(_, cdr) => {
+                    let last_current = current.clone();
+                    match &cdr.get().data {
+                        ExpEnum::Pair(_, _) => self.current = Some(cdr.clone()),
+                        ExpEnum::Nil => self.current = Some(cdr.clone()),
+                        _ => {
+                            self.current =
+                                Some(ExpEnum::Pair(cdr.clone(), Expression::make_nil()).into())
+                        }
+                    }
+                    Some(last_current)
+                }
+                ExpEnum::Nil => None,
+                _ => {
+                    // Should not happen since dotted pairs will be made proper.
+                    None
+                }
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -139,6 +202,45 @@ fn do_backquote_list(
                     backquote(environment, arg.clone(), bq_level)?,
                 );
             }
+        } else if let Some(exp) = get_unquote_splice_bang(&arg)? {
+            if args.is_dotted() {
+                return Err(LispError::new("unquote-splice! (,.) not valid after '.'."));
+            }
+            if bq_level == 0 {
+                let exp = eval(environment, &exp)?;
+                let exp_d = exp.get();
+                match &exp_d.data {
+                    ExpEnum::Vector(v) => {
+                        for arg in v {
+                            add_item(&mut head, &mut last_pair, arg.clone());
+                        }
+                    }
+                    ExpEnum::Pair(_, _) => {
+                        drop(exp_d);
+                        if let ExpEnum::Pair(_, cdr) = &last_pair {
+                            cdr.get_mut().data = exp.get().data.clone();
+                        }
+                        if let ExpEnum::Nil = head {
+                            head = last_pair.clone();
+                        }
+                        // unwrap() should be safe since exp is a pair and the iterator will
+                        // return at least one thing.
+                        last_pair = ConsIter::new(exp).last().unwrap().into();
+                    }
+                    ExpEnum::Nil => {}
+                    _ => {
+                        return Err(LispError::new(
+                            "unquote-splice! (,.) only applies to a list or vector.",
+                        ));
+                    }
+                }
+            } else {
+                add_item(
+                    &mut head,
+                    &mut last_pair,
+                    backquote(environment, arg.clone(), bq_level)?,
+                );
+            }
         } else {
             let arg = backquote(environment, arg.clone(), bq_level)?;
             if args.is_dotted() {
@@ -170,7 +272,7 @@ fn do_backquote_vector(
 ) -> Result<Expression, LispError> {
     let mut output: Vec<Expression> = Vec::new();
     for arg in args {
-        if let Some(exp) = get_unquote_splice(&arg)? {
+        if let Some(exp) = get_unquote_splice_either(&arg)? {
             if bq_level == 0 {
                 let exp = eval(environment, &exp)?;
                 let exp_d = exp.get();
@@ -222,6 +324,14 @@ fn backquote(
         } else {
             change_fn(exp, environment.interner.intern("#<unquote-splice>"))
         }
+    } else if get_unquote_splice_bang(&exp)?.is_some() {
+        if bq_level == 0 {
+            Err(LispError::new(
+                "unquote-splice! (,.) invalid outside a list.",
+            ))
+        } else {
+            change_fn(exp, environment.interner.intern("#<unquote-splice!>"))
+        }
     } else if let Some(inexp) = get_backquote(&exp)? {
         let exp2 = backquote(environment, inexp, bq_level + 1)?;
         let mut output2: Vec<Expression> = Vec::new();
@@ -264,6 +374,9 @@ fn scrub_backquote(environment: &mut Environment, exp: Expression) -> Result<(),
         scrub_backquote(environment, inexp)?;
     } else if let Some(inexp) = get_unquote_splice_tmp(&exp)? {
         change_fn(exp.clone(), "unquote-splice")?;
+        scrub_backquote(environment, inexp)?;
+    } else if let Some(inexp) = get_unquote_splice_bang_tmp(&exp)? {
+        change_fn(exp.clone(), "unquote-splice!")?;
         scrub_backquote(environment, inexp)?;
     } else if let Some(inexp) = get_backquote_tmp(&exp)? {
         change_fn(exp.clone(), "back-quote")?;

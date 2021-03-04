@@ -679,23 +679,27 @@ fn get_unquote_lst(exp: &Expression) -> Option<Expression> {
 }
 
 fn is_unquote_splice(exp: &Expression) -> bool {
+    fn is_splice(car: &Expression) -> bool {
+        if let ExpEnum::Symbol("unquote-splice", _) = car.get().data {
+            return true;
+        }
+        if let ExpEnum::Symbol("unquote-splice!", _) = car.get().data {
+            return true;
+        }
+        false
+    }
     let exp_d = exp.get();
     match &exp_d.data {
-        ExpEnum::Pair(car, _) => {
-            if let ExpEnum::Symbol("unquote-splice", _) = &car.get().data {
-                return true;
-            }
-        }
+        ExpEnum::Pair(car, _) => is_splice(car),
         ExpEnum::Vector(v) => {
             if let Some(car) = v.get(0) {
-                if let ExpEnum::Symbol("unquote-splice", _) = &car.get().data {
-                    return true;
-                }
+                is_splice(car)
+            } else {
+                false
             }
         }
-        _ => {}
+        _ => false,
     }
-    false
 }
 
 fn read_list(
@@ -750,7 +754,8 @@ fn read_list(
                 if is_unquote_splice(&exp) {
                     return Err((
                         ReadError {
-                            reason: "Invalid dotted pair syntax with unquote-splice.".to_string(),
+                            reason: "Invalid dotted pair syntax with unquote-splice (,@/,.)."
+                                .to_string(),
                         },
                         ichars,
                     ));
@@ -938,6 +943,12 @@ fn read_inner(
                     chars.next();
                     Expression::alloc_data(ExpEnum::Symbol(
                         environment.interner.intern("unquote-splice"),
+                        SymLoc::None,
+                    ))
+                } else if peek_ch == "." {
+                    chars.next();
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern("unquote-splice!"),
                         SymLoc::None,
                     ))
                 } else {
@@ -1427,26 +1438,8 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        let tokens = tokenize(&mut environment, "'(1 2 ,3)", None);
-        assert!(tokens.len() == 8);
-        assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:quote");
-        assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,3");
-        assert!(tokens[6] == ")");
-        assert!(tokens[7] == ")");
-        let tokens = tokenize(&mut environment, "'(1 2 ,@3)", None);
-        assert!(tokens.len() == 8);
-        assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:quote");
-        assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,@3");
-        assert!(tokens[6] == ")");
-        assert!(tokens[7] == ")");
+        tokenize_err(&mut environment, "'(1 2 ,3)", None);
+        tokenize_err(&mut environment, "'(1 2 ,@3)", None);
         let tokens = tokenize(&mut environment, "`(1 2 ,3)", None);
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
@@ -1469,6 +1462,19 @@ mod tests {
         assert!(tokens[4] == "Int:2");
         assert!(tokens[5] == "(");
         assert!(tokens[6] == "Symbol:unquote-splice");
+        assert!(tokens[7] == "Int:3");
+        assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
+        assert!(tokens[10] == ")");
+        let tokens = tokenize(&mut environment, "`(1 2 ,.3)", None);
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:back-quote");
+        assert!(tokens[2] == "(");
+        assert!(tokens[3] == "Int:1");
+        assert!(tokens[4] == "Int:2");
+        assert!(tokens[5] == "(");
+        assert!(tokens[6] == "Symbol:unquote-splice!");
         assert!(tokens[7] == "Int:3");
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");

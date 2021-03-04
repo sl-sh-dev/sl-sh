@@ -26,4 +26,7 @@
   (assert-equal '#(1 2 3 #(7 8 9)) `#(1 2 3 ,xv))
   (assert-equal '(4 5 6 1 2 3) `(,@x 1 2 3))
   (assert-equal '(1 2 3 4 5 6) `(1 2 3 . ,x))
-  (assert-equal '(1 2 3 . 10) `(1 2 3 . ,y)))
+  (assert-equal '(1 2 3 . 10) `(1 2 3 . ,y))
+  (assert-equal '(4 5 6) x)
+  (assert-equal '(1 4 5 6 2 3) `(1 ,.x 2 3))
+  (assert-equal '(4 5 6 2 3) x))
