@@ -9,3 +9,21 @@
 (def-bqtest-caller dtest apply)
 (assert-equal 6 (dtest x (+ x 1) '(5)))
 
+; Quine from https://letoverlambda.com/index.cl/guest/chap4.html attributed to Mike McMahon
+(def let-quine1 '(let ((let '`(let ((let ',let))
+                    ,let)))
+      `(let ((let ',let)) ,let)))
+(def let-quine2 (let ((let '`(let ((let ',let))
+                    ,let)))
+      `(let ((let ',let)) ,let)))
+(assert-equal let-quine1 let-quine2)
+
+(let ((x '(4 5 6)) (xv '#(7 8 9)) (y 10))
+  (assert-equal '(1 2 3 4 5 6) `(1 2 3 ,@x))
+  (assert-equal '(1 2 3 7 8 9) `(1 2 3 ,@xv))
+  (assert-equal '(1 2 3 #(7 8 9)) `(1 2 3 ,xv))
+  (assert-equal '#(1 2 3 7 8 9) `#(1 2 3 ,@xv))
+  (assert-equal '#(1 2 3 #(7 8 9)) `#(1 2 3 ,xv))
+  (assert-equal '(4 5 6 1 2 3) `(,@x 1 2 3))
+  (assert-equal '(1 2 3 4 5 6) `(1 2 3 . ,x))
+  (assert-equal '(1 2 3 . 10) `(1 2 3 . ,y)))

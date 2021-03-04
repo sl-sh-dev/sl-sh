@@ -121,20 +121,11 @@ fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     }
 }
 
-fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> bool {
+fn end_symbol(ch: &str, reader_state: &mut ReaderState) -> bool {
     if is_whitespace(ch) || (reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap()) {
         true
     } else {
-        match ch {
-            "(" => true,
-            ")" => true,
-            "#" => true,
-            "\"" => true,
-            "," if in_back_quote => true,
-            "'" => true,
-            "`" => true,
-            _ => false,
-        }
+        matches!(ch, "(" | ")" | "#" | "\"" | "," | "'" | "`")
     }
 }
 
@@ -379,7 +370,6 @@ fn read_symbol(
     chars: &mut CharIter,
     reader_state: &mut ReaderState,
     for_ch: bool,
-    in_back_quote: bool,
     skip_underscore: bool,
 ) -> bool {
     fn maybe_number(ch: &str, has_e: &mut bool, last_e: &mut bool, has_decimal: &mut bool) -> bool {
@@ -411,7 +401,7 @@ fn read_symbol(
     let mut has_e = false;
     let mut last_e = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(&ch, in_back_quote, reader_state) && !for_ch {
+        if end_symbol(&ch, reader_state) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };
@@ -446,7 +436,7 @@ fn read_symbol(
             }
             buffer.push_str(&next_ch);
             push_next = false;
-        } else if end_symbol(peek_ch, in_back_quote, reader_state) {
+        } else if end_symbol(peek_ch, reader_state) {
             break;
         }
         next_ch = chars.next();
@@ -612,7 +602,6 @@ fn read_num_radix(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
     buffer: &mut String,
-    in_back_quote: bool,
     radix: u32,
     meta: Option<ExpMeta>,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
@@ -622,7 +611,6 @@ fn read_num_radix(
         &mut chars,
         &mut environment.reader_state.as_mut().unwrap(),
         true,
-        in_back_quote,
         true,
     );
     match i64::from_str_radix(buffer, radix) {
@@ -680,6 +668,36 @@ fn read_vector(
     ))
 }
 
+fn get_unquote_lst(exp: &Expression) -> Option<Expression> {
+    let exp_d = exp.get();
+    if let ExpEnum::Pair(car, cdr) = &exp_d.data {
+        if let ExpEnum::Symbol("unquote", _) = &car.get().data {
+            return Some(cdr.clone());
+        }
+    }
+    None
+}
+
+fn is_unquote_splice(exp: &Expression) -> bool {
+    let exp_d = exp.get();
+    match &exp_d.data {
+        ExpEnum::Pair(car, _) => {
+            if let ExpEnum::Symbol("unquote-splice", _) = &car.get().data {
+                return true;
+            }
+        }
+        ExpEnum::Vector(v) => {
+            if let Some(car) = v.get(0) {
+                if let ExpEnum::Symbol("unquote-splice", _) = &car.get().data {
+                    return true;
+                }
+            }
+        }
+        _ => {}
+    }
+    false
+}
+
 fn read_list(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
@@ -729,6 +747,35 @@ fn read_list(
                 head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
                 tail = head.clone();
             } else if dot {
+                if is_unquote_splice(&exp) {
+                    return Err((
+                        ReadError {
+                            reason: "Invalid dotted pair syntax with unquote-splice.".to_string(),
+                        },
+                        ichars,
+                    ));
+                }
+                let exp = if let Some(uqexp) = get_unquote_lst(&exp) {
+                    // Do this so `(x y . ,z) works
+                    let mut v = Vec::new();
+                    v.push(ExpEnum::Symbol("unquote", SymLoc::None).into());
+                    let mut i = 0;
+                    for e in uqexp.iter() {
+                        v.push(e);
+                        i += 1;
+                    }
+                    if i != 1 {
+                        return Err((
+                            ReadError {
+                                reason: "Invalid dotted pair syntax with unquote.".to_string(),
+                            },
+                            ichars,
+                        ));
+                    }
+                    Expression::with_list(v)
+                } else {
+                    exp
+                };
                 if let ExpEnum::Pair(_, cdr) = &tail {
                     let mut cdr = cdr.get_mut();
                     cdr.data = exp.get().data.clone();
@@ -805,7 +852,6 @@ fn read_inner(
                 if let ExpEnum::HashMap(map) = &read_table.get().data {
                     if map.contains_key(&*ch) {
                         if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
-                            //return prep_reader_macro(environment, chars, s, &ch, end_ch);
                             let res = prep_reader_macro(environment, chars, s, &ch, end_ch);
                             match res {
                                 Ok((None, ichars)) => {
@@ -926,6 +972,14 @@ fn read_inner(
                     }
                 }
             }
+            "," => {
+                return Err((
+                    ReadError {
+                        reason: "Unquote outside of a back-quote".to_string(),
+                    },
+                    chars,
+                ))
+            }
             "#" => {
                 chars.next();
                 match &*peek_ch {
@@ -940,7 +994,6 @@ fn read_inner(
                             &mut chars,
                             &mut environment.reader_state.as_mut().unwrap(),
                             true,
-                            in_back_quote,
                             false,
                         );
                         match do_char(environment, buffer, meta) {
@@ -974,20 +1027,17 @@ fn read_inner(
                     }
                     // Read an octal int
                     "o" => {
-                        let (exp, chars) =
-                            read_num_radix(environment, chars, buffer, in_back_quote, 8, meta)?;
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 8, meta)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a hex int
                     "x" => {
-                        let (exp, chars) =
-                            read_num_radix(environment, chars, buffer, in_back_quote, 16, meta)?;
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 16, meta)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a binary int
                     "b" => {
-                        let (exp, chars) =
-                            read_num_radix(environment, chars, buffer, in_back_quote, 2, meta)?;
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 2, meta)?;
                         return Ok((Some(exp), chars));
                     }
                     _ => {
@@ -1031,7 +1081,6 @@ fn read_inner(
                     &mut chars,
                     &mut environment.reader_state.as_mut().unwrap(),
                     false,
-                    in_back_quote,
                     false,
                 );
                 return Ok((Some(do_atom(environment, buffer, is_number, meta)), chars));

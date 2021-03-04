@@ -1,6 +1,7 @@
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
+use std::cell::RefCell;
 
 macro_rules! get_form_exp {
     ($exp:expr, $form:expr) => {{
@@ -86,8 +87,84 @@ fn change_fn(exp: Expression, new_fn: &'static str) -> Result<Expression, LispEr
 
 fn do_backquote_list(
     environment: &mut Environment,
+    args: Expression,
+    meta: Option<ExpMeta>,
+    bq_level: usize,
+) -> Result<Expression, LispError> {
+    fn add_item(head: &mut ExpEnum, last_pair: &mut ExpEnum, arg: Expression) {
+        let new_last_pair = ExpEnum::Pair(arg, Expression::make_nil());
+        if let ExpEnum::Pair(_, cdr) = &last_pair {
+            cdr.get_mut().data = new_last_pair.clone();
+        }
+        if let ExpEnum::Nil = head {
+            *head = new_last_pair.clone();
+        }
+        *last_pair = new_last_pair;
+    }
+
+    let mut last_pair = ExpEnum::Nil;
+    let mut head = ExpEnum::Nil;
+    let mut args = PairIter::new(args);
+    let mut argo = args.next();
+    while let Some(arg) = &argo {
+        if let Some(exp) = get_unquote_splice(&arg)? {
+            if args.is_dotted() {
+                return Err(LispError::new("unquote-splice (,@) not valid after '.'."));
+            }
+            if bq_level == 0 {
+                let exp = eval(environment, &exp)?;
+                let exp_d = exp.get();
+                match &exp_d.data {
+                    ExpEnum::Vector(v) => {
+                        for arg in v {
+                            add_item(&mut head, &mut last_pair, arg.clone());
+                        }
+                    }
+                    ExpEnum::Pair(_, _) => {
+                        for item in exp.iter() {
+                            add_item(&mut head, &mut last_pair, item);
+                        }
+                    }
+                    ExpEnum::Nil => {}
+                    _ => {
+                        return Err(LispError::new(
+                            "unquote-splice (,@) only applies to a list or vector.",
+                        ));
+                    }
+                }
+            } else {
+                add_item(
+                    &mut head,
+                    &mut last_pair,
+                    backquote(environment, arg.clone(), bq_level)?,
+                );
+            }
+        } else {
+            let arg = backquote(environment, arg.clone(), bq_level)?;
+            if args.is_dotted() {
+                if let ExpEnum::Pair(_, cdr) = &last_pair {
+                    let mut cdr = cdr.get_mut();
+                    cdr.data = arg.get().data.clone();
+                    cdr.meta = arg.get().meta;
+                }
+            } else {
+                add_item(&mut head, &mut last_pair, arg);
+            }
+        }
+        argo = args.next();
+    }
+    let head = Expression::alloc(ExpObj {
+        data: head,
+        meta,
+        meta_tags: None,
+        analyzed: RefCell::new(false),
+    });
+    Ok(head)
+}
+
+fn do_backquote_vector(
+    environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-    is_list: bool,
     meta: Option<ExpMeta>,
     bq_level: usize,
 ) -> Result<Expression, LispError> {
@@ -110,9 +187,9 @@ fn do_backquote_list(
                     }
                     ExpEnum::Nil => {}
                     _ => {
-                        //drop(exp_d);
-                        //output.push(exp);
-                        return Err(LispError::new(",@ only applies to a list or vector."));
+                        return Err(LispError::new(
+                            "unquote-splice (,@) only applies to a list or vector.",
+                        ));
                     }
                 }
             } else {
@@ -122,11 +199,7 @@ fn do_backquote_list(
             output.push(backquote(environment, arg.clone(), bq_level)?);
         }
     }
-    if is_list {
-        Ok(Expression::cons_from_vec(&output, meta))
-    } else {
-        Ok(Expression::with_list_meta(output, meta))
-    }
+    Ok(Expression::with_list_meta(output, meta))
 }
 
 fn backquote(
@@ -143,7 +216,9 @@ fn backquote(
         }
     } else if get_unquote_splice(&exp)?.is_some() {
         if bq_level == 0 {
-            Err(LispError::new(",@ invalid outside a list."))
+            Err(LispError::new(
+                "unquote-splice (,@) invalid outside a list.",
+            ))
         } else {
             change_fn(exp, environment.interner.intern("#<unquote-splice>"))
         }
@@ -163,12 +238,8 @@ fn backquote(
     } else {
         let exp_d = exp.get();
         match &exp_d.data {
-            ExpEnum::Vector(_) => {
-                do_backquote_list(environment, &mut exp.iter(), false, meta, bq_level)
-            }
-            ExpEnum::Pair(_, _) => {
-                do_backquote_list(environment, &mut exp.iter(), true, meta, bq_level)
-            }
+            ExpEnum::Vector(_) => do_backquote_vector(environment, &mut exp.iter(), meta, bq_level),
+            ExpEnum::Pair(_, _) => do_backquote_list(environment, exp.clone(), meta, bq_level),
             _ => {
                 drop(exp_d);
                 Ok(exp)

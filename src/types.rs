@@ -124,11 +124,19 @@ pub enum FileState {
 
 pub struct PairIter {
     current: Option<Expression>,
+    dotted: bool,
 }
 
 impl PairIter {
-    fn new(exp: Expression) -> PairIter {
-        PairIter { current: Some(exp) }
+    pub fn new(exp: Expression) -> PairIter {
+        PairIter {
+            current: Some(exp),
+            dotted: false,
+        }
+    }
+
+    pub fn is_dotted(&self) -> bool {
+        self.dotted
     }
 }
 
@@ -137,11 +145,20 @@ impl Iterator for PairIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.clone() {
-            if let ExpEnum::Pair(e1, e2) = &current.get().data {
-                self.current = Some(e2.clone());
-                Some(e1.clone())
-            } else {
-                None
+            let current_d = current.get();
+            match &current_d.data {
+                ExpEnum::Pair(e1, e2) => {
+                    self.current = Some(e2.clone());
+                    Some(e1.clone())
+                }
+                ExpEnum::Nil => None,
+                _ => {
+                    drop(current_d);
+                    let cur = Some(current);
+                    self.current = None;
+                    self.dotted = true;
+                    cur
+                }
             }
         } else {
             None
