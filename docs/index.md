@@ -21,8 +21,9 @@ Follow these instructions to install sl-sh.
     git clone https://github.com/sstanfield/slsh
     cd slsh
     cargo build --release
+    ./target/release/sl-sh
     ```
--  sl-sh binary will be available in `target/release/sl-sh`
+-  sl-sh will load with the default slshrc file.
 
 {% include links.html %}
 

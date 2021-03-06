@@ -32,8 +32,8 @@
 		Section: user-shell"
 		(&rest paths)
 		(if (= 0 (length paths))
-			(du ./* -sh)
-			(for path in paths (du path -sh))))
+			(| (du ./* -sh) (sort -h))
+			(for path in paths (| (du path -sh) (sort -h)))))
 
 	(defn pgz
 		"Parallelized gzip.

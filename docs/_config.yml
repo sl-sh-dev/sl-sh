@@ -1,58 +1,32 @@
+# TODO
+# 1. Fix tag or remove them and make note they exist if I'm not using them.
 repository: sstanfield/slsh
-
-title: sl-sh
-description: >- # this means to ignore newlines until "baseurl:"
-  Documentation for sl-sh shell script.
+description: documentation for Simple Lisp SHell
+title: sl-sh documentation
+output: web
+topnav_title: sl-sh documentation
+site_title: sl-sh documentation
+company_name: sl-sh
+github_editme_path: sstanfield/slsh/blob/gh-pages/
 baseurl: "/slsh" # the subpath of your site, e.g. /blog
 url: "https://sstanfield.github.io" # the base hostname & protocol for your site, e.g. http://example.com
-
-output: web
-# this property is useful for conditional filtering of content that is separate from the PDF.
-
-topnav_title: sl-sh documentation
-# this appears on the top navigation bar next to the home button
-
-site_title: sl-sh documentation
-# this appears in the html browser tab for the site title (seen mostly by search engines, not users)
-
-company_name: sl-sh
-# this appears in the footer
-
-github_editme_path: sstanfield/slsh/blob/gh-pages/
-# if you're using Github, provide the basepath to the branch you've created for reviews, following the sample here. if not, leave this value blank.
-
-# gitlab_editme_path: tomjoht/documentation-theme-jekyll/blob/gh-pages/
-# if you're using GitLab, provide the basepath to the branch you've created for reviews, following the sample here. if not, leave this value blank.
-
-google_analytics: UA-66296557-1
-# if you have google-analytics ID, put it in. if not, edit this value to blank.
-
-
 exclude:
   - .idea/
   - .gitignore
   - vendor
 # these are the files and directories that jekyll will exclude from the build
-
- feedback_disable: true
-
+feedback_disable: true
 highlighter: rouge
 # library used for syntax highlighting
-
 markdown: kramdown
 kramdown:
   input: GFM
   auto_ids: true
-  hard_wrap: false
-  syntax_highlighter: rouge
-
 # filter used to process markdown. note that kramdown differs from github-flavored markdown in some subtle ways
-
 collections:
   tooltips:
     output: false
 # collections are declared here. this renders the content in _tooltips and processes it, but doesn't output it as actual files in the output unless you change output to true
-
 defaults:
   -
     scope:
@@ -71,7 +45,6 @@ defaults:
       layout: "page"
       search: true
       tooltip: true
-
   -
     scope:
       path: ""
@@ -83,14 +56,10 @@ defaults:
       topnav: topnav
 
 # these are defaults used for the frontmatter for these file types
-
 sidebars:
   - home_sidebar
   - mydoc_sidebar
   - other
-
-description: "simple lisp shell sl-sh documentation"
-# the description is used in the feed.xml file
 
 # needed for sitemap.xml file only
 # url: http://idratherbewriting.com
