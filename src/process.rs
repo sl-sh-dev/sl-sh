@@ -3,7 +3,6 @@ use std::io::{self, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::atomic::Ordering;
 
 use glob::glob;
 use nix::{
@@ -18,6 +17,7 @@ use nix::{
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
+use crate::signals::test_clear_sigint;
 use crate::types::*;
 
 pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
@@ -60,7 +60,7 @@ pub fn wait_pid(
     let result: Option<i32>;
     let mut int_cnt = 0;
     loop {
-        if environment.sig_int.load(Ordering::Relaxed) {
+        if test_clear_sigint() {
             if int_cnt == 0 {
                 if let Err(err) = kill(Pid::from_raw(pid as i32), Signal::SIGINT) {
                     eprintln!("ERROR sending SIGINT to child process {}, {}", pid, err);
@@ -73,7 +73,6 @@ pub fn wait_pid(
                 eprintln!("ERROR sending SIGKILL to child process {}, {}", pid, err);
             }
             int_cnt += 1;
-            environment.sig_int.store(false, Ordering::Relaxed);
         }
         let (stop, status) = try_wait_pid(environment, pid);
         if stop {

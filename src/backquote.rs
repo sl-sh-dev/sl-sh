@@ -402,11 +402,8 @@ mod tests {
     use super::*;
     use crate::reader::read;
 
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
-
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         environment.reader_state = Some(ReaderState {
             line: 0,
             column: 0,

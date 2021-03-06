@@ -5,8 +5,6 @@ use std::fmt;
 use std::io;
 use std::process::Child;
 use std::rc::Rc;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use liner::Context;
 
@@ -123,8 +121,6 @@ pub struct StackFrame {
 
 //#[derive(Clone, Debug)]
 pub struct Environment {
-    // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
-    pub sig_int: Arc<AtomicBool>,
     pub state: EnvState,
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
@@ -175,7 +171,7 @@ impl Environment {
     }
 }
 
-pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
+pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
@@ -183,7 +179,6 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
     let mut namespaces = HashMap::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
-        sig_int,
         state: EnvState::default(),
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
@@ -461,8 +456,6 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     fn assert_lookup(environment: &Environment, key: &str, val: i64) {
         let xxx_i = if let Some(exp) = lookup_expression(environment, key) {
@@ -518,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_lookup_expression() -> Result<(), LispError> {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         assert!(lookup_expression(&mut environment, "XXX").is_none());
         environment
             .stack
@@ -679,7 +672,7 @@ mod tests {
 
     #[test]
     fn test_get_expression() -> Result<(), LispError> {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         assert!(
             get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
         );

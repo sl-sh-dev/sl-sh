@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::env;
-use std::sync::atomic::Ordering;
 
 use crate::analyze::*;
 use crate::builtins::{builtin_bquote, builtin_quote};
@@ -8,6 +7,7 @@ use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
 use crate::process::*;
 use crate::reader::read;
+use crate::signals::test_clear_sigint;
 use crate::symbols::*;
 use crate::types::*;
 
@@ -105,8 +105,7 @@ fn call_lambda_int(
     let mut llast_eval: Option<Expression> = None;
     let mut looping = true;
     while looping {
-        if environment.sig_int.load(Ordering::Relaxed) {
-            environment.sig_int.store(false, Ordering::Relaxed);
+        if test_clear_sigint() {
             return Err(LispError::new("Lambda interupted by SIGINT."));
         }
         let mut tmp_eval: Option<Expression> = None;
@@ -511,8 +510,7 @@ fn internal_eval(
     expression_in: &Expression,
 ) -> Result<Expression, LispError> {
     let expression = expression_in.clone();
-    if environment.sig_int.load(Ordering::Relaxed) {
-        environment.sig_int.store(false, Ordering::Relaxed);
+    if test_clear_sigint() {
         return Err(LispError::new("Script interupted by SIGINT."));
     }
     // exit was called so just return nil to unwind.

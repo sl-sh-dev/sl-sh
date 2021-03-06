@@ -1262,8 +1262,6 @@ pub fn read_list_wrap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     use crate::builtins_util::is_proper_list;
 
@@ -1346,7 +1344,7 @@ mod tests {
     }
 
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         environment.reader_state = Some(ReaderState {
             line: 0,
             column: 0,

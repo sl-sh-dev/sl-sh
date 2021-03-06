@@ -528,8 +528,6 @@ t
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     fn assert_int_equal(exp1: &Expression, exp2: &Expression) {
         if let ExpEnum::Int(i1) = exp1.get().data {
@@ -543,7 +541,7 @@ mod tests {
 
     #[test]
     fn test_namespace() -> Result<(), LispError> {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         let root = Rc::new(RefCell::new(Namespace::new_root(&mut environment.interner)));
         let ns_name = environment.interner.intern("namespace");
         let ns = Rc::new(RefCell::new(Namespace::new_with_outer(

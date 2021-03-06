@@ -4,8 +4,6 @@ use std::fs::create_dir_all;
 use std::io;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use libc::uid_t;
 use nix::sys::signal::{self, SigHandler, Signal};
@@ -76,7 +74,7 @@ t
     }
 }
 
-pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
+pub fn start_interactive() -> i32 {
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
@@ -110,7 +108,7 @@ pub fn start_interactive(sig_int: Arc<AtomicBool>) -> i32 {
             share_dir, err
         );
     }
-    let mut environment = build_default_environment(sig_int);
+    let mut environment = build_default_environment();
     load_user_env(&mut environment, &home, true, true);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
@@ -134,7 +132,7 @@ pub fn read_stdin() -> i32 {
             share_dir, err
         );
     }
-    let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+    let mut environment = build_default_environment();
     environment.do_job_control = false;
     environment.is_tty = false;
     load_user_env(&mut environment, &home, true, false);
@@ -261,7 +259,7 @@ pub fn run_one_command(command: &str, args: &[String]) -> Result<(), LispError> 
 }
 
 pub fn run_one_script(command: &str, args: &[String]) -> i32 {
-    let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+    let mut environment = build_default_environment();
     environment.do_job_control = false;
 
     let mut home = match env::var("HOME") {
