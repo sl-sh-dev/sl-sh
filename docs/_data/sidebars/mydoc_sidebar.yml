@@ -75,6 +75,22 @@ entries:
           url: /mydoc_api.html#Hashmap forms-body
           output: web
 
+  - title: Shell
+    output: web, pdf
+    folderitems:
+
+    - title: Slshrc config
+      url: /mydoc_slsh_config.html
+      output: web, pdf
+
+    - title: Working with files
+      url: /mydoc_files.html
+      output: web, pdf
+
+    - title: Endfix notation on the REPL
+      url: /mydoc_endfix.html
+      output: web, pdf
+
   - title: Release Notes
     output: web, pdf
     folderitems:

@@ -25,3 +25,8 @@ cargo clippy
 Therefore, all new sl-sh functions must include a docstring that has an 
 `Example: ` section with a sufficient number of test cases (the test library
 is made available automatically in this section) to verify correctness.
+
+## Checking out issues
+
+*  peruse [open issues](https://github.com/sstanfield/slsh/issues?q=is%3Aopen+is%3Aissue)
+if you want to get started right away.

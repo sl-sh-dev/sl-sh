@@ -1,24 +1,8 @@
 ---
-title: Sl-sh Standard Library
-tags: [documentation]
-keywords: forms, sl-sh, files, api, standard library
-last_updated: March 6, 2021
-sidebar: mydoc_sidebar
-permalink: mydoc_files.html
+layout: default
+title: file-io-forms
+categories: [file]
 ---
-
-# sl-sh file api
-
-
-## reading files
-
-## writing to files
-
-## reading and writing files
-
-## something cool
-
-## redirection, note endfix
 # investigating-file-io-forms
 
 
@@ -35,3 +19,4 @@ cat /var/log/pacman.log out> /tmp/pacman.log
 maybe add in a tr in the native stdin-stdout pacman.log case and something equivalent for the pure sl-sh case
 <hr>
 [<-- back to the docs]( {{ site.url }} )
+

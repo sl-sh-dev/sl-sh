@@ -1,12 +1,9 @@
 ;; exec hook fcn {{{
 
-;; TODO move this functionality explanation to a docstring?
 ;; fcnality
 ;; 1. entering 1 arg on the CLI that is a valid directory results in changing
 ;;	to that directory.
-;; 2. support $la env variable which is set to the last argument of the previous
-;;	command input.
-;; 3. allows for use of infix notation. e.g.
+;; 2. allows for use of infix notation. e.g.
 ;; ```
 ;; cat file | grep -i "username"
 ;; or
@@ -15,14 +12,6 @@
 ;; can use infix notation in any nested form as well.
 ;; supports the bash equivalent of ; but use @@ instead (conflict with ; b/c it
 ;; in lisp that indicates a comment.
-
-;; TODOS gpwclark
-;; 0. handle-process failing in evaluation?
-;; 1. support things like $2la for second to last arg, $3la, etc..
-;; 2. organize fcns
-;; 3. use docstrings
-;; 4. need ability to include any number of exec hooks to allow for conditionally
-;;	adding completions.
 
 (ns-import 'iterator)
 

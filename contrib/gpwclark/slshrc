@@ -7,8 +7,6 @@
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; gpwclark TODOs
-;; - getopts!
-;; - hash-hashkey -> hashkey built in [(and (hash? test-result) (hash-haskey test-result :error))]
 ;; - rewrite bash so we don't have gpl in here?
 ;; - track bkrd processes in PS1? could be helpful?
 
@@ -518,8 +516,8 @@ Section: user-shell"
 
 ;; user ns docs {{{
 (def api-page "pages/mydoc/mydoc_api.md")
-(pushd "~/development/slsh/docs/")
 (let* ((docs-made (get-error
+        (pushd "~/development/slsh/docs/")
         (when (or
             (not (fs-exists? api-page))
             (= api-page (str-trim (str (find index.markdown -type f -mmin "+1440")))))
