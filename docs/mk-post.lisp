@@ -1,8 +1,7 @@
 #!/usr/bin/env sl-sh
 
 ;; "load" calls go above here but below interpreter directive.
-(if (ns-exists? 'mkpost) (ns-enter 'mkpost) (ns-create 'mkpost))
-(core::ns-import 'core)
+(ns-push 'mkpost)
 (ns-import 'shell) ;; imports from load calls & body below
 
 (defn -make-jekyll-post-file
@@ -10,8 +9,8 @@
 	directory, title of post, the header, for the post, and optionally,
 	categories.
 	Section: post"
-	(post-dir title header &rest categories) (progn
-	(defq post-body (str "---
+	(post-dir title header &rest categories) (do
+	(var post-body (str "---
 layout: default
 title: " title "
 categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categories)) "]
@@ -20,8 +19,8 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 <hr>
 [<-- back to the docs]( {{ site.url }} )
 "))
-	(defq date (str-trim (str (date +%Y-%m-%d))))
-	(defq post (open (str post-dir "/evalable-" date "-" (str-replace title " " "-") ".md") :create :append))
+	(var date (str-trim (str (date +%Y-%m-%d))))
+	(var post (open (str post-dir "/evalable-" date "-" (str-replace title " " "-") ".md") :create :append))
 	(write-line post post-body)
 	(close post)))
 
@@ -39,9 +38,9 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(title header &rest categories)
 	`(-make-jekyll-post-file "_posts" ,title ,header ,@categories))
 
-(defq begin-comment "{% comment %}")
-(defq end-comment "{% endcomment %}")
-(defq code-block-delim "```")
+(def begin-comment "{% comment %}")
+(def end-comment "{% endcomment %}")
+(def code-block-delim "```")
 
 (defn -get-directive-hash-map
 	"By convention sl-sh hashmaps in lisp strings exit betwen liquid templating
@@ -51,20 +50,20 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	evaled md file.
 	Section: post"
 	(src-file dest-file) (block file-read
-	(defq line (read-line src-file))
+	(var line (read-line src-file))
 	(when (nil? line)
 		(return-from file-read nil))
-	(progn
+	(do
 		(write-string dest-file line)
 		(if (and
 			(str-contains begin-comment (line))
 			(str-contains end-comment (line)))
-		(progn
-			(defq directive-metadata (vec-nth 1 (str-split begin-comment (vec-nth 0 (str-split end-comment line)))))
+		(do
+			(var directive-metadata (vec-nth 1 (str-split begin-comment (vec-nth 0 (str-split end-comment line)))))
 			(eval (read directive-metadata))
-			(hash-set! do :trigger-line line)
-			do)
-		(progn
+			(hash-set! directive :trigger-line line)
+			directive)
+		(do
 			(recur src-file dest-file))))))
 
 (defn -read-in-code-block
@@ -72,16 +71,16 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 continue to write the lines in the evalable md file into the evaled
 md file.
 Section: post"
-	(src-file dest-file directive-map code-snippets) (progn
-	(defq line (str-trim (read-line src-file)))
+	(src-file dest-file directive-map code-snippets) (do
+	(var line (str-trim (read-line src-file)))
 	(write-line dest-file line)
 	(println "codeblockstart::: " line)
-	(defq contents (list))
+	(var contents (list))
 	(when (not (= line code-block-delim))
 		(err "First line after :entrypoint or :lib directive must be ```"))
 	;; read code block into list of strings, store list in directive map as
 	;; contents and return.
-	(loop (src-file contents) (src-file contents) (progn
+	(loop (src-file contents) (src-file contents) (do
 		(setq line (read-line src-file))
 		(write-string dest-file line)
 		(setq line (str-trim line))
@@ -94,33 +93,33 @@ Section: post"
 	directive-map))
 
 ;;TODO better name
-(defn -eval-file (src-file dest-file directive-map code-snippets) (progn
-	(defq temp-dir (str-replace (str (mktemp -d)) "\n" ""))
-	(defq entrypoint nil)
+(defn -eval-file (src-file dest-file directive-map code-snippets) (do
+	(var temp-dir (str-replace (str (mktemp -d)) "\n" ""))
+	(var entrypoint nil)
 	;; write all the files to a temp directory so the entrypoint(s) can be
 	;; evaled
-	(for file-name (hash-get directive-map :files) (progn
-		(defq snippet (hash-get code-snippets file-name))
-		(defq target-file-name (str temp-dir "/" file-name))
+	(for file-name (hash-get directive-map :files) (do
+		(var snippet (hash-get code-snippets file-name))
+		(var target-file-name (str temp-dir "/" file-name))
 		(println "target-file-name: " target-file-name)
-		(defq target-file (open target-file-name :create :truncate))
-		(for line (hash-get snippet :contents) (progn
+		(var target-file (open target-file-name :create :truncate))
+		(for line (hash-get snippet :contents) (do
 			(write-line target-file line)))
-		(when (= :entrypoint (hash-get snippet :type)) (progn
+		(when (= :entrypoint (hash-get snippet :type)) (do
 			(setq entrypoint target-file-name)
 			(chmod +x target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
-	(defq temp-out (str temp-dir "/output" ))
+	(var temp-out (str temp-dir "/output" ))
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(defq return-value (error-or-ok (out-err> temp-out (eval (entrypoint)))))
+	(var return-value (error-or-ok (out-err> temp-out (eval (entrypoint)))))
 	;; write output in temp-out to the dest-file
 	(popd)
-	(loop (input-file) ((open temp-out :read)) (progn
-			(defq line (read-line input-file))
-			(when (not (nil? line)) (progn
+	(loop (input-file) ((open temp-out :read)) (do
+			(var line (read-line input-file))
+			(when (not (nil? line)) (do
 				(write-string dest-file (str ";; " line))
 				(recur input-file)))))
 	(write-line dest-file (str "==> " return-value))
@@ -129,9 +128,8 @@ Section: post"
 (defn -eval-post
 	"enumerate different directive and expectations
 	Section: scripting"
-	(src-file dest-file code-snippets) (progn
-			(defq directive-map (-get-directive-hash-map src-file dest-file))
-			(when (not (nil? directive-map)) (progn
+	(src-file dest-file code-snippets) (let* ((directive-map (-get-directive-hash-map src-file dest-file)))
+			(when (not (nil? directive-map)) (do
 				(match (hash-get directive-map :type)
 					;; :entrypoint and :lib directives indicate that directly
 					;; below is a git flavored markdown (gfm) code block that
@@ -147,10 +145,10 @@ Section: post"
 (defn eval-post
 	"enumerate different directive and expectations
 	Section: scripting"
-	(evalable-post-file-name evaled-post-file-name) (progn
-		(defq code-snippets (make-hash))
-		(defq src-file (open evalable-post-file-name :read))
-		(defq dest-file (open evaled-post-file-name :create :truncate))
+	(evalable-post-file-name evaled-post-file-name) (do
+		(var code-snippets (make-hash))
+		(var src-file (open evalable-post-file-name :read))
+		(var dest-file (open evaled-post-file-name :create :truncate))
 		(-eval-post src-file dest-file code-snippets)
 		(close src-file)
 		(close dest-file)))
