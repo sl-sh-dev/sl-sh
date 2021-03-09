@@ -12,6 +12,7 @@ use crate::interner::*;
 use crate::process::*;
 use crate::symbols::*;
 use crate::types::*;
+use crate::unix::cvt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keys {
@@ -58,7 +59,6 @@ pub struct EnvState {
     pub stdout_status: Option<IOState>,
     pub stderr_status: Option<IOState>,
     pub eval_level: u32,
-    pub is_spawn: bool,
     pub pipe_pgid: Option<u32>,
 }
 
@@ -70,7 +70,6 @@ impl Default for EnvState {
             stdout_status: None,
             stderr_status: None,
             eval_level: 0,
-            is_spawn: false,
             pipe_pgid: None,
         }
     }
@@ -128,14 +127,12 @@ pub struct Environment {
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
-    pub in_pipe: bool,
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
     pub loose_symbols: bool,
     pub str_ignore_expand: bool,
     pub procs: Rc<RefCell<HashMap<u32, Child>>>,
-    pub data_in: Option<Expression>,
     pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
@@ -163,6 +160,7 @@ pub struct Environment {
     pub liners: HashMap<&'static str, Context>,
     pub next_lex_id: usize,
     pub supress_eval: bool, // XXX Hack for apply...
+    pub terminal_fd: i32,
 }
 
 impl Environment {
@@ -177,6 +175,13 @@ pub fn build_default_environment() -> Environment {
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
+    let terminal_fd = unsafe {
+        if let Ok(fd) = cvt(libc::dup(0)) {
+            fd
+        } else {
+            0
+        }
+    };
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
         state: EnvState::default(),
@@ -186,14 +191,12 @@ pub fn build_default_environment() -> Environment {
         reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
-        in_pipe: false,
         run_background: false,
         is_tty: true,
         do_job_control: true,
         loose_symbols: false,
         str_ignore_expand: false,
         procs,
-        data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
@@ -209,6 +212,7 @@ pub fn build_default_environment() -> Environment {
         liners: HashMap::new(),
         next_lex_id: 1,
         supress_eval: false,
+        terminal_fd,
     }
 }
 

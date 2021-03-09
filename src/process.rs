@@ -1,8 +1,8 @@
 use std::env;
-use std::io::{self, Write};
+use std::io;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
-use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Command, Stdio};
 
 use glob::glob;
 use nix::{
@@ -93,7 +93,7 @@ pub fn wait_pid(
     // If we were given terminal settings restore them.
     if let Some(settings) = term_settings {
         if let Err(err) =
-            termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, settings)
+            termios::tcsetattr(environment.terminal_fd, termios::SetArg::TCSANOW, settings)
         {
             eprintln!("Error resetting shell terminal settings: {}", err);
         }
@@ -101,7 +101,7 @@ pub fn wait_pid(
     // Move the shell back into the foreground.
     if environment.is_tty {
         let pid = unistd::getpid();
-        if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
+        if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
             eprintln!("Error making shell {} foreground: {}", pid, err);
         }
     }
@@ -115,7 +115,6 @@ fn run_command(
     stdin: Stdio,
     stdout: Stdio,
     stderr: Stdio,
-    data_in: Option<Expression>,
 ) -> Result<Expression, LispError> {
     let mut command = command;
     let ncommand;
@@ -126,9 +125,8 @@ fn run_command(
         }
     }
     let mut com_obj = Command::new(command);
-    let foreground =
-        !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
-    let shell_terminal = nix::libc::STDIN_FILENO;
+    let foreground = !environment.run_background;
+    let shell_terminal = environment.terminal_fd;
     com_obj
         .args(&args)
         .stdin(stdin)
@@ -180,7 +178,7 @@ fn run_command(
     let proc = com_obj.spawn();
 
     match proc {
-        Ok(mut proc) => {
+        Ok(proc) => {
             let pgid_raw = match pgid {
                 Some(pgid) => Pid::from_raw(pgid as i32),
                 None => Pid::from_raw(proc.id() as i32),
@@ -203,23 +201,15 @@ fn run_command(
                         job.names.push(command.to_string());
                         environment.jobs.borrow_mut().push(job);
                     } else {
-                        eprintln!("WARNING: Soemthing in pipe is amiss, probably a command not part of pipe or a bug!");
+                        eprintln!("WARNING: Something in pipe is amiss, probably a command not part of pipe or a bug!");
                     }
                 }
                 if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
                     // Ignore, do in parent and child.
                 }
             }
-            if let Some(data_in) = data_in {
-                if proc.stdin.is_some() {
-                    let mut input: Option<ChildStdin> = None;
-                    std::mem::swap(&mut proc.stdin, &mut input);
-                    let mut input = input.unwrap();
-                    input.write_all(data_in.to_string().as_bytes())?;
-                }
-            }
             let pid = proc.id();
-            let result = if foreground && !environment.in_pipe {
+            let result = if foreground {
                 if environment.do_job_control {
                     if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid_raw) {
                         // Ignore, do in parent and child.
@@ -262,7 +252,7 @@ fn run_command(
             // Move the shell back into the foreground.
             if environment.is_tty {
                 let pid = unistd::getpid();
-                if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
+                if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
                     eprintln!("Error making shell {} foreground: {}", pid, err);
                 }
             }
@@ -371,172 +361,8 @@ pub fn do_command(
     command: &str,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let mut data = None;
-    let foreground =
-        !environment.in_pipe && !environment.run_background && !environment.state.is_spawn;
-    if let Some(data_in) = environment.data_in.clone() {
-        if let ExpEnum::LazyFn(_, _) = &data_in.get().data {
-            environment.data_in = Some(environment.data_in.clone().unwrap().resolve(environment)?);
-        }
-    }
-    if let Some(data_in) = environment.data_in.clone() {
-        if let ExpEnum::Values(v) = &data_in.get().data {
-            if v.is_empty() {
-                environment.data_in = Some(Expression::make_nil());
-            } else {
-                environment.data_in = Some(v[0].clone());
-            }
-        }
-    }
-    let stdin = if let Some(data_in) = &environment.data_in {
-        match &data_in.get().data {
-            ExpEnum::True => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Float(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Int(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Symbol(_, _) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::String(_, _) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Char(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::CodePoint(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Lambda(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Macro(_) => {
-                data = Some(data_in.clone());
-                Stdio::piped()
-            }
-            ExpEnum::Process(ProcessState::Running(pid)) => {
-                let procs = environment.procs.clone();
-                let mut procs = procs.borrow_mut();
-                if let Some(proc) = procs.get_mut(&pid) {
-                    if proc.stdout.is_some() {
-                        let mut out: Option<ChildStdout> = None;
-                        std::mem::swap(&mut proc.stdout, &mut out);
-                        Stdio::from(out.unwrap())
-                    } else if foreground {
-                        Stdio::inherit()
-                    } else {
-                        Stdio::null()
-                    }
-                } else if foreground {
-                    Stdio::inherit()
-                } else {
-                    Stdio::null()
-                }
-            }
-            ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (process is already done).",
-                ))
-            }
-            ExpEnum::Function(_) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::Vector(_) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (list).",
-                ))
-            }
-            ExpEnum::Values(_) => {
-                // Should never happen- gets resolved to first item above.
-                return Err(LispError::new(
-                    "Invalid expression state before command (list).",
-                ));
-            }
-            ExpEnum::Pair(_, _) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (pair).",
-                ));
-            }
-            ExpEnum::Nil => Stdio::inherit(),
-            ExpEnum::HashMap(_) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (hashmap).",
-                ))
-            }
-            ExpEnum::File(file) => match &*file.borrow() {
-                FileState::Stdin => Stdio::inherit(),
-                FileState::Read(_, fd) => unsafe { Stdio::from_raw_fd(*fd as i32) },
-                FileState::ReadBinary(file) => {
-                    // If there is ever a Windows version then use raw_handle instead of raw_fd.
-                    unsafe { Stdio::from_raw_fd(file.get_ref().as_raw_fd()) }
-                }
-                _ => {
-                    return Err(LispError::new(
-                        "Invalid expression state before command (not a readable file).",
-                    ))
-                }
-            },
-            ExpEnum::LazyFn(_, _) => {
-                return Err(LispError::new(
-                "Invalid expression state before command (lazyfn- this should be impossible...).",
-            ));
-            }
-            ExpEnum::Wrapper(_) => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (wrapper).",
-                ));
-            }
-            ExpEnum::DeclareDef => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::DeclareVar => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::DeclareFn => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::DeclareMacro => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (macro).",
-                ))
-            }
-            ExpEnum::Quote => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::BackQuote => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (function).",
-                ))
-            }
-            ExpEnum::Undefined => {
-                return Err(LispError::new(
-                    "Invalid expression state before command (UNDEFINED).",
-                ))
-            }
-        }
-    } else if foreground {
+    let foreground = !environment.run_background;
+    let stdin = if foreground {
         Stdio::inherit()
     } else {
         Stdio::null()
@@ -598,5 +424,5 @@ pub fn do_command(
         }
     }
     environment.loose_symbols = old_loose_syms;
-    run_command(environment, command, args, stdin, stdout, stderr, data)
+    run_command(environment, command, args, stdin, stdout, stderr)
 }

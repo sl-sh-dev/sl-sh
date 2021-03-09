@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::io::{self, Write};
+//use std::io::Write;
 use std::path::Path;
 
 use glob::glob;
@@ -12,6 +12,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
+use crate::unix::*;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -162,7 +163,10 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Result<(), LispError> {
+/*fn _pipe_write_file(
+    environment: &mut Environment,
+    writer: &mut dyn Write,
+) -> Result<(), LispError> {
     let mut do_write = false;
     if let Some(data_in) = environment.data_in.clone() {
         match &data_in.get().data {
@@ -199,32 +203,47 @@ fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Res
         data_in.writef(environment, writer)?;
     }
     Ok(())
-}
+}*/
 
 fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if environment.in_pipe {
-        return Err(LispError::new("pipe within pipe, not valid"));
-    }
-    let old_out_status = environment.state.stdout_status.clone();
-    environment.in_pipe = true;
-    let mut out = Expression::make_nil();
-    environment.state.stdout_status = Some(IOState::Pipe);
-    let mut error: Option<Result<Expression, LispError>> = None;
-    let mut i = 1; // Meant 1 here.
     let mut pipe = args.next();
-    let mut last_pid = None;
+    let mut last_pid: Option<u32> = None;
+    let mut pipe1 = None;
+    let mut pipe2;
+    let mut pipe3;
+    let mut res = Ok(Expression::make_nil());
+    let job = Job {
+        pids: Vec::new(),
+        names: Vec::new(),
+        status: JobStatus::Running,
+    };
+    environment.jobs.borrow_mut().push(job);
     while let Some(p) = pipe {
         let next_pipe = args.next();
         if next_pipe.is_none() {
-            environment.state.stdout_status = old_out_status.clone();
-            // End of the pipe and want to wait.
-            // Unless this is being piped to something itself (ie in a 'str' form) then do not wait.
-            environment.in_pipe = matches!(old_out_status, Some(IOState::Pipe));
+            let old_stdin = if let Some(pipe1) = pipe1 {
+                Some(load_dup_stdin(pipe1)?)
+            } else {
+                None
+            };
+            res = eval(environment, p);
+            if let Some(old_stdin) = old_stdin {
+                dup_stdin(old_stdin)?;
+            }
+        } else {
+            let (p1, p2) = anon_pipe()?; // p1 is read
+            pipe2 = Some(p2);
+            pipe3 = Some(p1);
+            last_pid = Some(fork(environment, p, pipe1, pipe2)?);
+            if environment.state.pipe_pgid.is_none() {
+                environment.state.pipe_pgid = last_pid;
+            }
+            pipe1 = pipe3;
         }
-        environment.data_in = Some(out.clone());
+        /*environment.data_in = Some(out.clone());
         let res = eval(environment, p);
         match &res {
             Ok(res) => match &res.get().data {
@@ -301,20 +320,11 @@ fn builtin_pipe(
                 error = Some(Err(LispError::new(err.to_string())));
                 break;
             }
-        }
-        out = if let Ok(out) = res {
-            out.clone()
-        } else {
-            out.clone()
-        };
-        i += 1;
+        }*/
         pipe = next_pipe;
     }
-    environment.data_in = None;
-    environment.in_pipe = false;
     environment.state.pipe_pgid = None;
-    environment.state.stdout_status = old_out_status;
-    if let Some(error) = error {
+    if res.is_err() {
         if let Some(pid) = last_pid {
             // Send a sigint to the feeding job so it does not hang on a full output buffer.
             if let Err(err) = nix::sys::signal::kill(
@@ -324,10 +334,8 @@ fn builtin_pipe(
                 eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
             }
         }
-        error
-    } else {
-        Ok(out)
     }
+    res
 }
 
 fn builtin_wait(

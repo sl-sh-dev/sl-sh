@@ -426,10 +426,6 @@ fn str_process(
                             environment.state.stderr_status = Some(IOState::Pipe);
 
                             // Get out of a pipe for the str call if in one...
-                            let data_in = environment.data_in.clone();
-                            environment.data_in = None;
-                            let in_pipe = environment.in_pipe;
-                            environment.in_pipe = false;
                             let pipe_pgid = environment.state.pipe_pgid;
                             environment.state.pipe_pgid = None;
                             new_string.push_str(
@@ -449,8 +445,6 @@ fn str_process(
                             );
                             environment.state.stdout_status = old_out;
                             environment.state.stderr_status = old_err;
-                            environment.data_in = data_in;
-                            environment.in_pipe = in_pipe;
                             environment.state.pipe_pgid = pipe_pgid;
                             environment.loose_symbols = old_loose_symbols;
                         }
