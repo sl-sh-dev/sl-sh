@@ -22,6 +22,7 @@
 	(filter (fn (x)
 		(and
 			(not (= x 'filter-undocable-forms))
+			(not (= x '*std-lib-syms-hash*))
 			(not (= x '*ns*))
 			(not (= x '*euid*))
 			(not (= x '*uid*))

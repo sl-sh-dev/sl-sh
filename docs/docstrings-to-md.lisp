@@ -212,7 +212,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 
 (defn make-md-file
 	  ;; TODO should be using get-error instead of do
-	(index-file sym-list) (do
+	(index-file sym-list)
 	(var docstrings-map (parse-docstrings-for-syms sym-list))
 	(create-header index-file)
 	;; explain format
@@ -229,13 +229,12 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		(var docstrings (hash-get docstrings-map key))
 		(write-md-table key docstrings index-file)))
 	(write-version index-file)
-	(do
-		(var uncat-syms (hash-get docstrings-map :uncategorized))
-		(when (not (empty-seq? uncat-syms)) (do
-			(println "Found :uncategorized symbols: ")
-			(for symbol in uncat-syms (println "symbol: " symbol))
-			nil))
-		 #t)))
+	(var uncat-syms (hash-get docstrings-map :uncategorized))
+	(when (not (empty-seq? uncat-syms)) (do
+		(println "Found :uncategorized symbols: ")
+		(for symbol in uncat-syms (println "symbol: " symbol))
+		nil))
+	 #t)
 
 (ns-export '(make-md-file))
 

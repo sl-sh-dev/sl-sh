@@ -298,6 +298,47 @@ Example:
 		(write-line new-file ""))
 	(when (not (nil? namespace))
 		(do
-		(write-line new-file "(ns-export '())")
+		(write-line new-file (str "(ns-auto-export '" namespace ")"))
 		(write-line new-file "(ns-pop)")))
 	(close new-file)))
+
+;;; *std-lib-syms-hash* and ns-auto-export must be the last two symbols defined
+;;; in the sl-sh standard library. In order to increase speed of ns-auto-export
+;;; a list of all symbols in the standard library is pre-computed by iterating
+;;; over each namespace in (ns-list), and calling it with (ns-symbols) and
+;;; adding that to a hash map, using it as a set to test for membership.
+;;; In order for this set of symbols to be complete the calls to (ns-list)
+;;; and (ns-symbols) must be done after all symbols and the namespaces they're
+;;; defined in have been called.
+
+(def *std-lib-syms-hash* (iterator::reduce
+                          (fn (fst nxt)
+                                (iterator::reduce (fn (fst x)
+                                            (hash-set! fst x nxt))
+                                        fst
+                                        (ns-symbols nxt)))
+                          (make-hash)
+                          (ns-list)))
+
+(defmacro ns-auto-export
+"Macro that takes a symbol, the symbol of the current namespace, and writes an
+ns-export statement that includes all symbols defined in the namespaces scope
+that do not begin with the '-' symbol. This is a convenience method that allows
+user to avoid enumerating all symbols while also introducing a mechanism to
+exclude symbols from being excluded. Note, if using ns-auto-export, it is
+not possible to export a symbol that is already defined in another namespace,
+if said functionality is desired the symbol must be manually exported with
+another ns-export statement; ns-auto-export can be used in conjunction with
+ns-export.
+
+Section: Namespace"
+  (symbol)
+  `(ns-export (let* ((curr-syms (filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
+         (public-syms
+           (filter
+             (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
+             curr-syms)))
+    (collect public-syms))))
+
+;; for completeness, add auto-export to map
+(hash-set! *std-lib-syms-hash* 'ns-auto-export "root")

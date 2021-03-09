@@ -77,6 +77,7 @@ t
 (load "iterator.lisp")
 (load "shell.lisp")
 (load "test.lisp"))
+;; load lib.lisp last so ns-auto-export is last exported symbol
 (load "lib.lisp")))
 
 (if (= :error (car result)) (prim-print-error result))
