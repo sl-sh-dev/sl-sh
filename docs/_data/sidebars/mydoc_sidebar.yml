@@ -55,24 +55,72 @@ entries:
         output: web
         subfolderitems:
 
-        - title: Core macros
+        - title: Threading macros
+          url: /mydoc_api.html#Threading-macros forms-body
+          output: web
+
+        - title: Char
+          url: /mydoc_api.html#Char forms-body
+          output: web
+
+        - title: Conditional
+          url: /mydoc_api.html#Conditional forms-body
+          output: web
+
+        - title: Core
           url: /mydoc_api.html#Core forms-body
+          output: web
+
+        - title: File
+          url: /mydoc_api.html#File forms-body
+          output: web
+
+        - title: Hashmap
+          url: /mydoc_api.html#Hashmap forms-body
+          output: web
+
+        - title: Iterator
+          url: /mydoc_api.html#iterator forms-body
+          output: web
+
+        - title: Math
+          url: /mydoc_api.html#Math forms-body
+          output: web
+
+        - title: Namespace
+          url: /mydoc_api.html#Namespace forms-body
           output: web
 
         - title: Pair
           url: /mydoc_api.html#Pair forms-body
           output: web
 
+        - title: Pair-ext
+          url: /mydoc_api.html#pair-ext forms-body
+          output: web
+
+        - title: Scripting
+          url: /mydoc_api.html#Scripting forms-body
+          output: web
+
         - title: Sequence
           url: /mydoc_api.html#Sequence forms-body
           output: web
 
-        - title: Vector
-          url: /mydoc_api.html#Vector forms-body
+        - title: Shell
+          url: /mydoc_api.html#Shell forms-body
           output: web
 
-        - title: Hash Maps
-          url: /mydoc_api.html#Hashmap forms-body
+        - title: Strings
+          url: /mydoc_api.html#String forms-body
+          output: web
+
+        - title: Struct
+          url: /mydoc_api.html#struct forms-body
+          output: web
+
+        - title: Vector
+          url: /mydoc_api.html#Vector forms-body
           output: web
 
   - title: Shell
