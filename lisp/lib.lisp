@@ -333,12 +333,12 @@ ns-export.
 
 Section: Namespace"
   (symbol)
-  `(ns-export (let* ((curr-syms (filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
+  `(ns-export (let* ((curr-syms (iterator::filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
          (public-syms
-           (filter
+           (iterator::filter
              (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
              curr-syms)))
-    (collect public-syms))))
+    (iterator::collect public-syms))))
 
 ;; for completeness, add auto-export to map
 (hash-set! *std-lib-syms-hash* 'ns-auto-export "root")

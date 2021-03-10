@@ -1,6 +1,7 @@
 ---
 layout: default
 title: namespaces
+permalink: sl-sh-namespaces.html
 categories: [namespaces]
 ---
 # namespaces usage and formatting library files properly
@@ -15,11 +16,10 @@ categories: [namespaces]
 ## An example
 
 add1.lisp
-{% comment %} (defq directive (make-hash (list (join :type :lib) (join :name "add1.lisp")))) {% endcomment %}
+{% comment %} (def directive (make-hash (list (join :type :lib) (join :name "add1.lisp")))) {% endcomment %}
 ```
-(if (ns-exists? 'add1) (ns-enter 'add1) (ns-create 'add1))
+(ns-push 'add1')
 
-(core::ns-import 'core)
 (ns-import 'shell)
 
 (defn add1 (x)
@@ -29,11 +29,10 @@ add1.lisp
 ```
 
 add2.lisp
-{% comment %} (defq directive (make-hash (list (join :type :lib) (join :name "add2.lisp")))) {% endcomment %}
+{% comment %} (def directive (make-hash (list (join :type :lib) (join :name "add2.lisp")))) {% endcomment %}
 ```
 (load "./add1.lisp")
-(if (ns-exists? 'add2) (ns-enter 'add2) (ns-create 'add2))
-(core::ns-import 'core)
+(ns-push 'add2)
 (ns-import 'shell)
 (ns-import 'add1)
 
@@ -50,13 +49,12 @@ add2.lisp
 ```
 
 ns-test.lisp
-{% comment %} (defq directive (make-hash (list (join :type :entrypoint) (join :name "ns-test.lisp")))) {% endcomment %}
+{% comment %} (def directive (make-hash (list (join :type :entrypoint) (join :name "ns-test.lisp")))) {% endcomment %}
 ```
 #!/bin/sl-sh
 
 (load "./add2.lisp")
-(if (ns-exists? 'ns-test) (ns-enter 'ns-test) (ns-create 'ns-test))
-(core::ns-import 'core)
+(ns-push 'ns-test)
 (ns-import 'shell)
 (ns-import 'add2)
 
@@ -69,7 +67,7 @@ ns-test.lisp
 result:
 ```
 ./ns-test.lisp
-{% comment %} (defq directive (make-hash (list (join :type :eval) (join :files (list "ns-test.lisp" "add1.lisp" "add2.lisp"))))) {% endcomment %}
+{% comment %} (def directive (make-hash (list (join :type :eval) (join :files (list "ns-test.lisp" "add1.lisp" "add2.lisp"))))) {% endcomment %}
 ```
 
 [<-- back to the docs]( {{ site.url }} )

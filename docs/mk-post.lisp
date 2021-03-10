@@ -1,8 +1,8 @@
 #!/usr/bin/env sl-sh
 
-;; "load" calls go above here but below interpreter directive.
-(ns-push 'mkpost)
-(ns-import 'shell) ;; imports from load calls & body below
+;;(ns-push 'mkpost)
+(ns-import 'shell)
+(ns-import 'iterator)
 
 (defn -make-jekyll-post-file
 	"execute in docs dir, create a jekyll style post. pass in a destination
@@ -56,10 +56,10 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	(do
 		(write-string dest-file line)
 		(if (and
-			(str-contains begin-comment (line))
-			(str-contains end-comment (line)))
+			(str-contains begin-comment line)
+			(str-contains end-comment line))
 		(do
-			(var directive-metadata (vec-nth 1 (str-split begin-comment (vec-nth 0 (str-split end-comment line)))))
+			(var directive-metadata (vec-nth (str-split begin-comment (vec-nth (str-split end-comment line) 0)) 1))
 			(eval (read directive-metadata))
 			(hash-set! directive :trigger-line line)
 			directive)
@@ -81,32 +81,32 @@ Section: post"
 	;; read code block into list of strings, store list in directive map as
 	;; contents and return.
 	(loop (src-file contents) (src-file contents) (do
-		(setq line (read-line src-file))
+		(set! line (read-line src-file))
 		(write-string dest-file line)
-		(setq line (str-trim line))
+		(set! line (str-trim line))
 		(println "code: " line)
 		(if (= line code-block-delim)
 			contents
-			(recur src-file (append! contents line)))))
+			(recur src-file (append contents line)))))
 	(hash-set! directive-map :contents contents)
 	(hash-set! code-snippets (hash-get directive-map :name) directive-map)
 	directive-map))
 
 ;;TODO better name
-(defn -eval-file (src-file dest-file directive-map code-snippets) (do
+(defn -eval-file (src-file dest-file directive-map code-snippets)
 	(var temp-dir (str-replace (str (mktemp -d)) "\n" ""))
 	(var entrypoint nil)
 	;; write all the files to a temp directory so the entrypoint(s) can be
 	;; evaled
-	(for file-name (hash-get directive-map :files) (do
+	(for file-name in (hash-get directive-map :files) (do
 		(var snippet (hash-get code-snippets file-name))
 		(var target-file-name (str temp-dir "/" file-name))
 		(println "target-file-name: " target-file-name)
 		(var target-file (open target-file-name :create :truncate))
-		(for line (hash-get snippet :contents) (do
+		(for line in (hash-get snippet :contents) (do
 			(write-line target-file line)))
 		(when (= :entrypoint (hash-get snippet :type)) (do
-			(setq entrypoint target-file-name)
+			(set! entrypoint target-file-name)
 			(chmod +x target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
@@ -114,7 +114,7 @@ Section: post"
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(var return-value (error-or-ok (out-err> temp-out (eval (entrypoint)))))
+	(var return-value (get-error (out-err> temp-out (eval (entrypoint)))))
 	;; write output in temp-out to the dest-file
 	(popd)
 	(loop (input-file) ((open temp-out :read)) (do
@@ -122,25 +122,33 @@ Section: post"
 			(when (not (nil? line)) (do
 				(write-string dest-file (str ";; " line))
 				(recur input-file)))))
-	(write-line dest-file (str "==> " return-value))
-	(println "output located: " temp-out)))
+	(if (= (car return-value) :ok)
+      (write-line dest-file (str "==> " (cdr return-value)))
+      (do
+        (write-line dest-file (str "==> Error!"))
+        (write-line dest-file (str "==> " (cdr return-value)))))
+	(println "output located: " temp-out))
 
 (defn -eval-post
 	"enumerate different directive and expectations
 	Section: scripting"
-	(src-file dest-file code-snippets) (let* ((directive-map (-get-directive-hash-map src-file dest-file)))
-			(when (not (nil? directive-map)) (do
-				(match (hash-get directive-map :type)
-					;; :entrypoint and :lib directives indicate that directly
-					;; below is a git flavored markdown (gfm) code block that
-					;; needs to be read into the code-snippets hashmap. The code
-					;; snippets hashmap is where all :entrypoint and :lib code
-					;; is stored.
-					(:entrypoint (-read-in-code-block src-file dest-file directive-map code-snippets))
-					(:lib (-read-in-code-block src-file dest-file directive-map code-snippets))
-					(:eval (-eval-file src-file dest-file directive-map code-snippets))
-					(nil (err "Unknown hash map found")))
-				(recur src-file dest-file code-snippets)))))
+	(src-file dest-file code-snippets)
+    (var directive-map (-get-directive-hash-map src-file dest-file))
+    ;;(println "src-file: " src-file)
+    ;;(println "dest-file: " dest-file)
+    ;;(println "code-snippets: " code-snippets)
+    (when (not (nil? directive-map)) (do
+        (match (hash-get directive-map :type)
+            ;; :entrypoint and :lib directives indicate that directly
+            ;; below is a git flavored markdown (gfm) code block that
+            ;; needs to be read into the code-snippets hashmap. The code
+            ;; snippets hashmap is where all :entrypoint and :lib code
+            ;; is stored.
+            (:entrypoint (-read-in-code-block src-file dest-file directive-map code-snippets))
+            (:lib (-read-in-code-block src-file dest-file directive-map code-snippets))
+            (:eval (-eval-file src-file dest-file directive-map code-snippets))
+            (nil (err "Unknown hash map found")))
+        (recur src-file dest-file code-snippets))))
 
 (defn eval-post
 	"enumerate different directive and expectations
@@ -153,5 +161,16 @@ Section: post"
 		(close src-file)
 		(close dest-file)))
 
-(ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
-(ns-pop) ;; must be after body
+(println "args " args)
+(eval-post (vec-nth args 0) (vec-nth args 1))
+
+;; TODO
+;;- could put all functions in glossary type datastructure, would make them searchable potentially?
+;;  would be cool if search feature of website worked for docs too.
+;;- get /news panel back!
+;; - write article about looping over files etc. to do stuff AND using fc.
+
+;;(ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
+;;(ns-pop) ;; must be after body
+#|
+|#
