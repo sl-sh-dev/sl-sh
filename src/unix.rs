@@ -1,4 +1,6 @@
+use std::fs::File;
 use std::io;
+use std::os::unix::io::FromRawFd;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -70,6 +72,16 @@ pub fn fork(
                     cvt(libc::close(stdout))?;
                 }
                 environment.run_background = false;
+                environment.jobs.borrow_mut().clear();
+                environment.stopped_procs.borrow_mut().clear();
+                environment.grab_proc_output = false;
+                environment.pipe_pgid = None;
+                environment.terminal_fd = if let Ok(fd) = cvt(libc::dup(0)) {
+                    fd
+                } else {
+                    0
+                };
+                environment.is_tty = false;
                 match eval(environment, exp) {
                     Ok(_) => libc::_exit(0),
                     Err(_) => libc::_exit(1),
@@ -89,14 +101,29 @@ pub fn fork(
     Ok(pid)
 }
 
-pub fn load_dup_stdin(new_stdin: i32) -> Result<i32, LispError> {
-    let old_stdin = unsafe {
-        let old = cvt(libc::dup(0))?;
-        cvt(libc::dup2(new_stdin, 0))?;
-        cvt(libc::close(new_stdin))?;
+pub fn dup_fd(fd: i32) -> Result<i32, LispError> {
+    Ok(unsafe { cvt(libc::dup(fd))? })
+}
+
+pub fn replace_fd(new_fd: i32, fd: i32) -> Result<i32, LispError> {
+    Ok(unsafe {
+        let old = cvt(libc::dup(fd))?;
+        cvt(libc::dup2(new_fd, fd))?;
+        cvt(libc::close(new_fd))?;
         old
-    };
-    Ok(old_stdin)
+    })
+}
+
+pub fn replace_stdin(new_stdin: i32) -> Result<i32, LispError> {
+    replace_fd(new_stdin, 0)
+}
+
+pub fn replace_stdout(new_stdout: i32) -> Result<i32, LispError> {
+    replace_fd(new_stdout, 1)
+}
+
+pub fn replace_stderr(new_stderr: i32) -> Result<i32, LispError> {
+    replace_fd(new_stderr, 2)
 }
 
 pub fn dup_stdin(new_stdin: i32) -> Result<(), LispError> {
@@ -105,4 +132,31 @@ pub fn dup_stdin(new_stdin: i32) -> Result<(), LispError> {
         cvt(libc::close(new_stdin))?;
     }
     Ok(())
+}
+
+pub fn dup_stdout(new_stdout: i32) -> Result<(), LispError> {
+    unsafe {
+        cvt(libc::dup2(new_stdout, 1))?;
+        cvt(libc::close(new_stdout))?;
+    }
+    Ok(())
+}
+
+pub fn dup_stderr(new_stderr: i32) -> Result<(), LispError> {
+    unsafe {
+        cvt(libc::dup2(new_stderr, 2))?;
+        cvt(libc::close(new_stderr))?;
+    }
+    Ok(())
+}
+
+pub fn close_fd(fd: i32) -> Result<(), LispError> {
+    unsafe {
+        cvt(libc::close(fd))?;
+    }
+    Ok(())
+}
+
+pub fn fd_to_file(fd: i32) -> File {
+    unsafe { File::from_raw_fd(fd) }
 }

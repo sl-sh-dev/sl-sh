@@ -46,36 +46,6 @@ impl Default for ReplSettings {
 }
 
 #[derive(Clone, Debug)]
-pub enum IOState {
-    Pipe,
-    Inherit,
-    Null,
-}
-
-#[derive(Clone, Debug)]
-pub struct EnvState {
-    pub recur_num_args: Option<usize>,
-    pub gensym_count: u32,
-    pub stdout_status: Option<IOState>,
-    pub stderr_status: Option<IOState>,
-    pub eval_level: u32,
-    pub pipe_pgid: Option<u32>,
-}
-
-impl Default for EnvState {
-    fn default() -> Self {
-        EnvState {
-            recur_num_args: None,
-            gensym_count: 0,
-            stdout_status: None,
-            stderr_status: None,
-            eval_level: 0,
-            pipe_pgid: None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct ReaderState {
     pub line: usize,
     pub column: usize,
@@ -118,9 +88,35 @@ pub struct StackFrame {
     pub symbols: Symbols,
 }
 
+pub struct GrabProcOutput<'a> {
+    pub old_grab_proc_output: bool,
+    pub environment: &'a mut Environment,
+}
+
+pub fn set_grab_proc_output(
+    environment: &mut Environment,
+    grab_proc_output: bool,
+) -> GrabProcOutput {
+    let old_grab_proc_output = environment.grab_proc_output;
+    environment.grab_proc_output = grab_proc_output;
+    GrabProcOutput {
+        old_grab_proc_output,
+        environment,
+    }
+}
+
+impl<'a> Drop for GrabProcOutput<'a> {
+    fn drop(&mut self) {
+        self.environment.grab_proc_output = self.old_grab_proc_output;
+    }
+}
+
 //#[derive(Clone, Debug)]
 pub struct Environment {
-    pub state: EnvState,
+    pub recur_num_args: Option<usize>,
+    pub gensym_count: u32,
+    pub eval_level: u32,
+    pub pipe_pgid: Option<u32>,
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
     pub stack_frame_base: usize,
@@ -161,6 +157,7 @@ pub struct Environment {
     pub next_lex_id: usize,
     pub supress_eval: bool, // XXX Hack for apply...
     pub terminal_fd: i32,
+    pub grab_proc_output: bool,
 }
 
 impl Environment {
@@ -184,7 +181,10 @@ pub fn build_default_environment() -> Environment {
     };
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
-        state: EnvState::default(),
+        recur_num_args: None,
+        gensym_count: 0,
+        eval_level: 0,
+        pipe_pgid: None,
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
         stack_frame_base: 0,
@@ -213,6 +213,7 @@ pub fn build_default_environment() -> Environment {
         next_lex_id: 1,
         supress_eval: false,
         terminal_fd,
+        grab_proc_output: false,
     }
 }
 

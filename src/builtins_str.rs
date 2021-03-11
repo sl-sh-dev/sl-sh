@@ -345,42 +345,56 @@ fn builtin_str_append(
     Err(LispError::new("str-append takes two strings"))
 }
 
+/*struct CaptureOutput<'a> {
+    pub reader: BufReader<File>,
+    old_stdout: i32,
+    old_stderr: i32,
+    pub environment: &'a mut Environment,
+}
+
+impl<'a> CaptureOutput<'a> {
+    pub fn cap(environment: &'a mut Environment) -> Result<CaptureOutput, LispError> {
+        println!("XXXX making cap!");
+        let (pipe_read, pipe_write) = anon_pipe()?;
+        let old_stdout = replace_stdout(dup_fd(pipe_write)?)?;
+        let old_stderr = replace_stderr(pipe_write)?;
+        let reader = BufReader::new(fd_to_file(pipe_read));
+        Ok(CaptureOutput {
+            reader,
+            old_stdout,
+            old_stderr,
+            environment,
+        })
+    }
+
+    fn shutdown(&mut self) -> Result<(), LispError> {
+        dup_stdout(self.old_stdout)?;
+        dup_stderr(self.old_stderr)?;
+        Ok(())
+    }
+}
+
+impl<'a> Drop for CaptureOutput<'a> {
+    fn drop(&mut self) {
+        if let Err(err) = self.shutdown() {
+            eprintln!("Error shutting down stdout/err capture, {}", err);
+        }
+        println!("Dropping CaptureOutput!");
+    }
+}
+*/
+
 fn builtin_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let old_out = environment.state.stdout_status.clone();
-    let old_err = environment.state.stderr_status.clone();
-    environment.state.stdout_status = Some(IOState::Pipe);
-    environment.state.stderr_status = Some(IOState::Pipe);
+    let gpo = set_grab_proc_output(environment, true);
 
-    let pipe_pgid = environment.state.pipe_pgid;
-    environment.state.pipe_pgid = None;
-
-    // Do not use ?, make sure to reset environment state even on error.
     let mut res = String::new();
     for a in args {
-        match eval(environment, a) {
-            Err(err) => {
-                environment.state.stdout_status = old_out;
-                environment.state.stderr_status = old_err;
-                return Err(err);
-            }
-            Ok(a) => {
-                match as_string(environment, &a) {
-                    Err(err) => {
-                        environment.state.stdout_status = old_out;
-                        environment.state.stderr_status = old_err;
-                        return Err(err);
-                    }
-                    Ok(s) => res.push_str(&s),
-                };
-            }
-        }
+        let a = eval(gpo.environment, a)?;
+        res.push_str(&a.as_string(gpo.environment)?);
     }
-    environment.state.stdout_status = old_out;
-    environment.state.stderr_status = old_err;
-    environment.state.pipe_pgid = pipe_pgid;
     Ok(Expression::alloc_data(ExpEnum::String(res.into(), None)))
 }
 

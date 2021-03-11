@@ -221,15 +221,17 @@ fn builtin_pipe(
         status: JobStatus::Running,
     };
     environment.jobs.borrow_mut().push(job);
+    let gpo = set_grab_proc_output(environment, false);
     while let Some(p) = pipe {
         let next_pipe = args.next();
         if next_pipe.is_none() {
             let old_stdin = if let Some(pipe1) = pipe1 {
-                Some(load_dup_stdin(pipe1)?)
+                Some(replace_stdin(pipe1)?)
             } else {
                 None
             };
-            res = eval(environment, p);
+            gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
+            res = eval(gpo.environment, p);
             if let Some(old_stdin) = old_stdin {
                 dup_stdin(old_stdin)?;
             }
@@ -237,9 +239,9 @@ fn builtin_pipe(
             let (p1, p2) = anon_pipe()?; // p1 is read
             pipe2 = Some(p2);
             pipe3 = Some(p1);
-            last_pid = Some(fork(environment, p, pipe1, pipe2)?);
-            if environment.state.pipe_pgid.is_none() {
-                environment.state.pipe_pgid = last_pid;
+            last_pid = Some(fork(gpo.environment, p, pipe1, pipe2)?);
+            if gpo.environment.pipe_pgid.is_none() {
+                gpo.environment.pipe_pgid = last_pid;
             }
             pipe1 = pipe3;
         }
@@ -249,14 +251,14 @@ fn builtin_pipe(
             Ok(res) => match &res.get().data {
                 ExpEnum::Process(ProcessState::Running(pid)) => {
                     last_pid = Some(*pid);
-                    if environment.state.pipe_pgid.is_none() {
-                        environment.state.pipe_pgid = Some(*pid);
+                    if environment.pipe_pgid.is_none() {
+                        environment.pipe_pgid = Some(*pid);
                     }
                 }
                 ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
                     last_pid = Some(*pid);
-                    if environment.state.pipe_pgid.is_none() {
-                        environment.state.pipe_pgid = Some(*pid);
+                    if environment.pipe_pgid.is_none() {
+                        environment.pipe_pgid = Some(*pid);
                     }
                 }
                 ExpEnum::File(file) => match &mut *file.borrow_mut() {
@@ -323,7 +325,7 @@ fn builtin_pipe(
         }*/
         pipe = next_pipe;
     }
-    environment.state.pipe_pgid = None;
+    gpo.environment.pipe_pgid = None;
     if res.is_err() {
         if let Some(pid) = last_pid {
             // Send a sigint to the feeding job so it does not hang on a full output buffer.
@@ -451,9 +453,12 @@ Example:
 (mkdir \"/tmp/tst-fs-cd\")
 (touch \"/tmp/tst-fs-cd/fs-cd-marker\")
 (test::assert-false (fs-exists? \"fs-cd-marker\"))
-(cd \"/tmp/tst-fs-cd\")
+(pushd \"/tmp/tst-fs-cd\")
+(root::cd \"/tmp\")
+(root::cd \"/tmp/tst-fs-cd\")
 (test::assert-true (fs-exists? \"fs-cd-marker\"))
 (rm \"/tmp/tst-fs-cd/fs-cd-marker\")
+(popd)
 (rmdir \"/tmp/tst-fs-cd\")
 ",
         ),

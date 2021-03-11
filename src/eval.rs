@@ -126,11 +126,11 @@ fn call_lambda_int(
                 }
             }
         };
-        looping = environment.state.recur_num_args.is_some() && environment.exit_code.is_none();
+        looping = environment.recur_num_args.is_some() && environment.exit_code.is_none();
         if looping {
             // This is a recur call, must be a tail call.
-            let recur_args = environment.state.recur_num_args.unwrap();
-            environment.state.recur_num_args = None;
+            let recur_args = environment.recur_num_args.unwrap();
+            environment.recur_num_args = None;
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
                     return Err(LispError::new("Called recur in a non-tail position."));
@@ -420,33 +420,18 @@ fn str_process(
                         Ok(ast) => {
                             let old_loose_symbols = environment.loose_symbols;
                             environment.loose_symbols = true;
-                            let old_out = environment.state.stdout_status.clone();
-                            let old_err = environment.state.stderr_status.clone();
-                            environment.state.stdout_status = Some(IOState::Pipe);
-                            environment.state.stderr_status = Some(IOState::Pipe);
+                            let gpo = set_grab_proc_output(environment, true);
 
                             // Get out of a pipe for the str call if in one...
-                            let pipe_pgid = environment.state.pipe_pgid;
-                            environment.state.pipe_pgid = None;
+                            let pipe_pgid = gpo.environment.pipe_pgid;
+                            gpo.environment.pipe_pgid = None;
                             new_string.push_str(
-                                eval(environment, ast)
-                                    .map_err(|e| {
-                                        environment.state.stdout_status = old_out.clone();
-                                        environment.state.stderr_status = old_err.clone();
-                                        e
-                                    })?
-                                    .as_string(environment)
-                                    .map_err(|e| {
-                                        environment.state.stdout_status = old_out.clone();
-                                        environment.state.stderr_status = old_err.clone();
-                                        e
-                                    })?
+                                eval(gpo.environment, ast)?
+                                    .as_string(gpo.environment)?
                                     .trim(),
                             );
-                            environment.state.stdout_status = old_out;
-                            environment.state.stderr_status = old_err;
-                            environment.state.pipe_pgid = pipe_pgid;
-                            environment.loose_symbols = old_loose_symbols;
+                            gpo.environment.pipe_pgid = pipe_pgid;
+                            gpo.environment.loose_symbols = old_loose_symbols;
                         }
                         Err(err) => return Err(LispError::new(err.reason)),
                     }
@@ -511,9 +496,9 @@ fn internal_eval(
     if environment.exit_code.is_some() {
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
-    let in_recur = environment.state.recur_num_args.is_some();
+    let in_recur = environment.recur_num_args.is_some();
     if in_recur {
-        environment.state.recur_num_args = None;
+        environment.recur_num_args = None;
         return Err(LispError::new("Called recur in a non-tail position."));
     }
     let exp_a = expression.get();
@@ -669,13 +654,13 @@ pub fn eval_nr(
     if environment.return_val.is_some() {
         return Ok(Expression::alloc_data(ExpEnum::Nil));
     }
-    if environment.state.eval_level > 500 {
+    if environment.eval_level > 500 {
         return Err(LispError::new("Eval calls to deep."));
     }
-    environment.state.eval_level += 1;
+    environment.eval_level += 1;
     analyze(environment, expression, &mut None)?;
     let tres = internal_eval(environment, &expression);
-    let mut result = if environment.state.eval_level == 1 && environment.return_val.is_some() {
+    let mut result = if environment.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
         Err(LispError::new("Return without matching block."))
     } else {
@@ -689,7 +674,7 @@ pub fn eval_nr(
             backtrace.push(expression.clone());
         }
     }
-    environment.state.eval_level -= 1;
+    environment.eval_level -= 1;
     environment.last_meta = None;
     result
 }

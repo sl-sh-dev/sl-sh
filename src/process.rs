@@ -94,6 +94,7 @@ pub fn wait_pid(
     if let Some(settings) = term_settings {
         if let Err(err) =
             termios::tcsetattr(environment.terminal_fd, termios::SetArg::TCSANOW, settings)
+        //termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, settings)
         {
             eprintln!("Error resetting shell terminal settings: {}", err);
         }
@@ -102,6 +103,7 @@ pub fn wait_pid(
     if environment.is_tty {
         let pid = unistd::getpid();
         if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
+            //if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
             eprintln!("Error making shell {} foreground: {}", pid, err);
         }
     }
@@ -132,7 +134,7 @@ fn run_command(
         .stdin(stdin)
         .stdout(stdout)
         .stderr(stderr);
-    let pgid = environment.state.pipe_pgid;
+    let pgid = environment.pipe_pgid;
     let do_job_control = environment.do_job_control;
 
     unsafe {
@@ -244,7 +246,8 @@ fn run_command(
             // If we were saved terminal settings restore them.
             if let Some(settings) = term_settings {
                 if let Err(err) =
-                    termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, &settings)
+                    termios::tcsetattr(environment.terminal_fd, termios::SetArg::TCSANOW, &settings)
+                // termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, &settings)
                 {
                     eprintln!("Error resetting shell terminal settings: {}", err);
                 }
@@ -253,6 +256,7 @@ fn run_command(
             if environment.is_tty {
                 let pid = unistd::getpid();
                 if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
+                    //if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
                     eprintln!("Error making shell {} foreground: {}", pid, err);
                 }
             }
@@ -295,23 +299,13 @@ fn get_std_io(environment: &Environment, is_out: bool) -> Result<Stdio, LispErro
     }
 }
 
-fn get_output(
-    environment: &Environment,
-    out_status: &Option<IOState>,
-    err_status: &Option<IOState>,
-) -> Result<(Stdio, Stdio), LispError> {
-    let out_res = match out_status {
-        Some(IOState::Null) => Stdio::null(),
-        Some(IOState::Inherit) => get_std_io(environment, true)?,
-        Some(IOState::Pipe) => Stdio::piped(),
-        None => get_std_io(environment, true)?,
+fn get_output(environment: &Environment) -> Result<(Stdio, Stdio), LispError> {
+    let out_res = if environment.grab_proc_output {
+        Stdio::piped()
+    } else {
+        get_std_io(environment, true)?
     };
-    let err_res = match err_status {
-        Some(IOState::Null) => Stdio::null(),
-        Some(IOState::Inherit) => get_std_io(environment, false)?,
-        Some(IOState::Pipe) => Stdio::piped(),
-        None => get_std_io(environment, false)?,
-    };
+    let err_res = get_std_io(environment, false)?;
     Ok((out_res, err_res))
 }
 
@@ -367,11 +361,7 @@ pub fn do_command(
     } else {
         Stdio::null()
     };
-    let (stdout, stderr) = get_output(
-        environment,
-        &environment.state.stdout_status,
-        &environment.state.stderr_status,
-    )?;
+    let (stdout, stderr) = get_output(environment)?;
     let old_loose_syms = environment.loose_symbols;
     environment.loose_symbols = true;
     let mut args = Vec::new();

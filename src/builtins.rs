@@ -467,12 +467,7 @@ fn print(
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> Result<Expression, LispError> {
-    match &environment.state.stdout_status {
-        Some(IOState::Null) => { /* Nothing to do... */ }
-        _ => {
-            print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
-        }
-    };
+    print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
     Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
@@ -481,12 +476,7 @@ pub fn eprint(
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> Result<Expression, LispError> {
-    match &environment.state.stderr_status {
-        Some(IOState::Null) => { /* Nothing to do... */ }
-        _ => {
-            print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
-        }
-    };
+    print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
     Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
@@ -805,7 +795,7 @@ fn builtin_recur(
         arg_list.push(a);
         arg_num += 1;
     }
-    environment.state.recur_num_args = Some(arg_num);
+    environment.recur_num_args = Some(arg_num);
     Ok(Expression::with_list(arg_list))
 }
 
@@ -816,7 +806,7 @@ fn builtin_gensym(
     if args.next().is_some() {
         Err(LispError::new("gensym takes to arguments"))
     } else {
-        let gensym_count = &mut environment.state.gensym_count;
+        let gensym_count = &mut environment.gensym_count;
         *gensym_count += 1;
         Ok(Expression::alloc_data(ExpEnum::Symbol(
             environment

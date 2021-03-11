@@ -445,6 +445,13 @@ pub struct TakeN<'a, T> {
     pid: u32,
 }
 
+//impl<'a T: Read> TakeN<'a T> {
+impl<'a, T> TakeN<'a, T> {
+    pub fn new(inner: &'a mut T, limit: u64, pid: u32) -> Self {
+        TakeN { inner, limit, pid }
+    }
+}
+
 impl<'a, T: Read> Read for TakeN<'a, T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // Don't call into inner reader at all at EOF because it may still block

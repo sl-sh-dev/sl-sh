@@ -143,7 +143,6 @@ pub fn read_stdin() -> i32 {
             Ok(0) => return 0,
             Ok(_n) => {
                 let input = input.trim();
-                environment.state.stdout_status = None;
                 let ast = read(&mut environment, input, None, true);
                 match ast {
                     Ok(ast) => {
@@ -166,7 +165,6 @@ pub fn read_stdin() -> i32 {
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }
-                environment.state.stderr_status = None;
             }
             Err(error) => {
                 eprintln!("ERROR reading stdin: {}", error);
