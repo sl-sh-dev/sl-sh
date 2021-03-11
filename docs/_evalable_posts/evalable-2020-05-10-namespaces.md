@@ -18,7 +18,7 @@ categories: [namespaces]
 add1.lisp
 {% comment %} (def directive (make-hash (list (join :type :lib) (join :name "add1.lisp")))) {% endcomment %}
 ```
-(ns-push 'add1')
+(ns-push 'add1)
 
 (ns-import 'shell)
 
@@ -51,7 +51,7 @@ add2.lisp
 ns-test.lisp
 {% comment %} (def directive (make-hash (list (join :type :entrypoint) (join :name "ns-test.lisp")))) {% endcomment %}
 ```
-#!/bin/sl-sh
+#!/usr/bin/env sl-sh
 
 (load "./add2.lisp")
 (ns-push 'ns-test)

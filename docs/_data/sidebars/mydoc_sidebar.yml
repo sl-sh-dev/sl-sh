@@ -139,6 +139,14 @@ entries:
       url: /mydoc_endfix.html
       output: web, pdf
 
+    - title: Macros
+      url: /mydoc_macros.html
+      output: web, pdf
+
+    - title: Pipes
+      url: /mydoc_pipes.html
+      output: web, pdf
+
   - title: Release Notes
     output: web, pdf
     folderitems:

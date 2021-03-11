@@ -1,6 +1,6 @@
 #!/usr/bin/env sl-sh
 
-;;(ns-push 'mkpost)
+(ns-push 'mkpost)
 (ns-import 'shell)
 (ns-import 'iterator)
 
@@ -87,12 +87,11 @@ Section: post"
 		(println "code: " line)
 		(if (= line code-block-delim)
 			contents
-			(recur src-file (append contents line)))))
+			(recur src-file (append-to! contents (list line))))))
 	(hash-set! directive-map :contents contents)
 	(hash-set! code-snippets (hash-get directive-map :name) directive-map)
 	directive-map))
 
-;;TODO better name
 (defn -eval-file (src-file dest-file directive-map code-snippets)
 	(var temp-dir (str-replace (str (mktemp -d)) "\n" ""))
 	(var entrypoint nil)
@@ -102,6 +101,7 @@ Section: post"
 		(var snippet (hash-get code-snippets file-name))
 		(var target-file-name (str temp-dir "/" file-name))
 		(println "target-file-name: " target-file-name)
+		(println "contents: " (hash-get snippet :contents))
 		(var target-file (open target-file-name :create :truncate))
 		(for line in (hash-get snippet :contents) (do
 			(write-line target-file line)))
@@ -122,17 +122,16 @@ Section: post"
 			(when (not (nil? line)) (do
 				(write-string dest-file (str ";; " line))
 				(recur input-file)))))
-	(if (= (car return-value) :ok)
-      (write-line dest-file (str "==> " (cdr return-value)))
+	(when (not (= (car return-value) :ok))
       (do
-        (write-line dest-file (str "==> Error!"))
+        (write-line dest-file (str "Error evaluating entrypoint!"))
         (write-line dest-file (str "==> " (cdr return-value)))))
-	(println "output located: " temp-out))
+    (println "codeblock lives: " temp-out))
 
 (defn -eval-post
-	"enumerate different directive and expectations
-	Section: scripting"
-	(src-file dest-file code-snippets)
+"TODO enumerate different directive and expectations
+Section: scripting"
+    (src-file dest-file code-snippets)
     (var directive-map (-get-directive-hash-map src-file dest-file))
     ;;(println "src-file: " src-file)
     ;;(println "dest-file: " dest-file)
@@ -164,11 +163,16 @@ Section: post"
 (println "args " args)
 (eval-post (vec-nth args 0) (vec-nth args 1))
 
-;; TODO
+;; TODO mk-post
+;; make this more general so it can be used for pages as well, either
+;; identify a pattern to use in a scrip that can be called manually or
+;; by github actions.
+;; TODO general
 ;;- could put all functions in glossary type datastructure, would make them searchable potentially?
 ;;  would be cool if search feature of website worked for docs too.
 ;;- get /news panel back!
 ;; - write article about looping over files etc. to do stuff AND using fc.
+;; - fix syntax highlighting in html output.
 
 ;;(ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
 ;;(ns-pop) ;; must be after body

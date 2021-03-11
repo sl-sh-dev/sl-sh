@@ -486,7 +486,7 @@ Section: user-shell"
             (if (> (length (get-dirs)) 0)
                 (collect-str (map smaller_path (reverse (get-dirs))))
                 "")
-            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": \x1b[34m" (str-trim (get_pwd)) "/ \x1b[37m" (parse_git_branch) "\n"
+            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": " shell::*fg-magenta* (str-trim (get_pwd)) "/ " shell::*fg-default* (parse_git_branch) "\n"
             (set_prompt_tail last-status))))
 
 ;; }}}
