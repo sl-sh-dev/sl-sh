@@ -518,8 +518,13 @@ Example:
      `(nsubstitute! ,new-item ,old-item (collect-copy ,lst) ,@mods))
 
 (defn *identity*
-"Identity function."
-      (x) x)
+"Identity function.
 
+Section: core
+
+Example:
+
+(assert-equal 0 (*identity* 0))"
+      (x) x)
 
 (load "collection.lisp")
