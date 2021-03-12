@@ -1,8 +1,10 @@
 ---
-layout: default
-title: namespaces
-permalink: sl-sh-namespaces.html
-categories: [namespaces]
+title: Namespaces
+tags: [documentation]
+last_updated: March 12, 2021
+sidebar: mydoc_sidebar
+keywords: namespaces
+permalink: mydoc_namespaces.html
 ---
 # namespaces usage and formatting library files properly
 <hr>

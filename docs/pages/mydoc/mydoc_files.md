@@ -34,4 +34,4 @@ cat /var/log/pacman.log out> /tmp/pacman.log
 
 maybe add in a tr in the native stdin-stdout pacman.log case and something equivalent for the pure sl-sh case
 <hr>
-[<-- back to the docs]( {{ site.url }} )
+[<-- back to the docs]({{ site.url }}{% link pages/mydoc/mydoc_api.md %})

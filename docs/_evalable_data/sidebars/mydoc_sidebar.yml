@@ -127,6 +127,10 @@ entries:
     output: web, pdf
     folderitems:
 
+    - title: Namespaces
+      url: /mydoc_namespaces.html
+      output: web, pdf
+
     - title: Slshrc config
       url: /mydoc_slsh_config.html
       output: web, pdf
