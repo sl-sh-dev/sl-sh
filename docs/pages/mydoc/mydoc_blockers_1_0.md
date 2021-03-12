@@ -1,11 +1,11 @@
 ---
-title: Release notes 1.0
-tags: [getting_started]
+title: Blockers 1.0
+tags: []
 keywords: announcements regarding 1.0
 last_updated: March 01, 2021
 summary: "Version 1.0 of sl-sh"
 sidebar: mydoc_sidebar
-permalink: mydoc_release_notes_10.html
+permalink: mydoc_blockers_1_0.html
 folder: mydoc
 ---
 
@@ -16,5 +16,3 @@ folder: mydoc
 -  better maths
 -  regular expressions
 -  add better documentation about some of the useful shell features implemented in sl-sh and goodies inherited from liner
-
-{% include links.html %}

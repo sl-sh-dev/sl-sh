@@ -60,6 +60,8 @@
 	(var sym-list (ns-symbols 'root))
 	(for a-ns in (filter (fn (x) (and
 						(not (= x "docmd"))
+						(not (= x "mkpost"))
+						(not (= x "moddocs"))
 						(not (= x "docparse"))
 						(not (= x "docify"))
 						(not (= x "root"))
@@ -77,11 +79,16 @@
 (defn make-md-file-with-docstrings (index-file docstrings)
 	(docmd::make-md-file index-file docstrings))
 
-(defn make-md-file (index-file target-doc-form)
+(defn make-md-file
+"Generate slsh standard library documentation md page."
+(index-file target-doc-form)
 	(docmd::make-md-file
 		index-file
 		(collect-vec (map (fn (x) (doc (sym x)))
 			  (get-doc-list-for target-doc-form)))))
+
+(when (> (length args) 0)
+  (println (get-doc-list-for (vec-nth args 1))))
 
 (ns-auto-export 'mkdocs)
 (ns-pop)

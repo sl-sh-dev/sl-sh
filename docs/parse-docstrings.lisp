@@ -28,7 +28,7 @@
 	(var type-doc (get-doc-section-if-exists key key-idx docstring))
 	(if (nil? type-doc)
 		(when required
-			(err (str "Every docstring must have: " key ", but " sym " does not.")))
+			(err (str "Every docstring must have: " key ", but " sym " does not. Docstring: " docstring)))
 		(cut-target-str second-keys second-key-idx type-doc)))
 
 (defn get-example-doc-section (key docstring)

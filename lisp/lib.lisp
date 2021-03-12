@@ -331,7 +331,7 @@ if said functionality is desired the symbol must be manually exported with
 another ns-export statement; ns-auto-export can be used in conjunction with
 ns-export.
 
-Section: Namespace"
+Section: namespace"
   (symbol)
   `(ns-export (let* ((curr-syms (iterator::filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
          (public-syms

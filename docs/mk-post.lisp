@@ -160,13 +160,13 @@ Section: scripting"
 		(close src-file)
 		(close dest-file)))
 
-(println "args " args)
-(eval-post (vec-nth args 0) (vec-nth args 1))
+(when (> (length args) 0)
+  (eval-post (vec-nth args 0) (vec-nth args 1)))
 
 ;; TODO mk-post
 ;; make this more general so it can be used for pages as well, either
 ;; identify a pattern to use in a scrip that can be called manually or
-;; by github actions.
+; by github actions.
 ;; TODO general
 ;;- could put all functions in glossary type datastructure, would make them searchable potentially?
 ;;  would be cool if search feature of website worked for docs too.
@@ -174,7 +174,5 @@ Section: scripting"
 ;; - write article about looping over files etc. to do stuff AND using fc.
 ;; - fix syntax highlighting in html output.
 
-;;(ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
-;;(ns-pop) ;; must be after body
-#|
-|#
+(ns-auto-export 'mkpost) ;; export any ns symbols that should be importable
+(ns-pop)
