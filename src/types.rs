@@ -445,7 +445,6 @@ pub struct TakeN<'a, T> {
     pid: u32,
 }
 
-//impl<'a T: Read> TakeN<'a T> {
 impl<'a, T> TakeN<'a, T> {
     pub fn new(inner: &'a mut T, limit: u64, pid: u32) -> Self {
         TakeN { inner, limit, pid }
@@ -745,11 +744,11 @@ impl Expression {
 
     fn pid_to_string(
         &self,
-        procs: Rc<RefCell<HashMap<u32, Child>>>,
+        procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
         pid: u32,
     ) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
-            Some(child) => {
+            Some(Some(child)) => {
                 if let Some(childout) = child.stdout.as_mut() {
                     let mut buffer = String::new();
                     let mut taken = TakeN {
@@ -763,6 +762,7 @@ impl Expression {
                     Ok("".to_string())
                 }
             }
+            Some(None) => Ok("".to_string()),
             None => Ok("".to_string()),
         }
     }
@@ -919,7 +919,7 @@ impl Expression {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
-                    Some(child) => {
+                    Some(Some(child)) => {
                         if child.stdout.is_some() {
                             let out = child.stdout.as_mut().unwrap();
                             let mut buf = [0; 1024];
@@ -933,6 +933,9 @@ impl Expression {
                         } else {
                             return Err(LispError::new("Failed to get process out to write to."));
                         }
+                    }
+                    Some(None) => {
+                        return Err(LispError::new("Failed to get process to write to."));
                     }
                     None => {
                         return Err(LispError::new("Failed to get process to write to."));

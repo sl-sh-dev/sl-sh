@@ -128,7 +128,7 @@ pub struct Environment {
     pub do_job_control: bool,
     pub loose_symbols: bool,
     pub str_ignore_expand: bool,
-    pub procs: Rc<RefCell<HashMap<u32, Child>>>,
+    pub procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
     pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
@@ -167,7 +167,7 @@ impl Environment {
 }
 
 pub fn build_default_environment() -> Environment {
-    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+    let procs: Rc<RefCell<HashMap<u32, Option<Child>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let namespace = root_scope.clone();
@@ -437,7 +437,7 @@ pub fn remove_job(environment: &Environment, pid: u32) {
 
 pub fn add_process(environment: &Environment, process: Child) -> u32 {
     let pid = process.id();
-    environment.procs.borrow_mut().insert(pid, process);
+    environment.procs.borrow_mut().insert(pid, Some(process));
     pid
 }
 
@@ -446,8 +446,8 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let keys: Vec<u32> = procs.keys().copied().collect();
     let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
-        if let Some(child) = procs.get_mut(&key) {
-            pids.push(child.id());
+        if let Some(_) = procs.get_mut(&key) {
+            pids.push(key);
         }
     }
     drop(procs);

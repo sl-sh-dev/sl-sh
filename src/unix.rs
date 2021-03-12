@@ -55,8 +55,8 @@ pub fn anon_pipe() -> Result<(i32, i32), LispError> {
 pub fn fork(
     environment: &mut Environment,
     exp: Expression,
-    stdin: Option<libc::c_int>,
-    stdout: Option<libc::c_int>,
+    stdin: Option<i32>,
+    stdout: Option<i32>,
 ) -> Result<u32, LispError> {
     let result = unsafe { cvt(libc::fork())? };
 
@@ -74,6 +74,7 @@ pub fn fork(
                 environment.run_background = false;
                 environment.jobs.borrow_mut().clear();
                 environment.stopped_procs.borrow_mut().clear();
+                environment.procs.borrow_mut().clear();
                 environment.grab_proc_output = false;
                 environment.pipe_pgid = None;
                 environment.terminal_fd = if let Ok(fd) = cvt(libc::dup(0)) {
@@ -82,14 +83,17 @@ pub fn fork(
                     0
                 };
                 environment.is_tty = false;
-                match eval(environment, exp) {
-                    Ok(_) => libc::_exit(0),
-                    Err(_) => libc::_exit(1),
-                }
+                let exit_code = match eval(environment, exp) {
+                    Ok(_) => 0,
+                    Err(_) => 1,
+                };
+                reap_procs(environment)?;
+                libc::_exit(exit_code);
             }
             n => n as u32,
         }
     };
+    environment.procs.borrow_mut().insert(pid, None);
     unsafe {
         if let Some(stdin) = stdin {
             cvt(libc::close(stdin))?;

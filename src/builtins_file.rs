@@ -163,48 +163,6 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-/*fn _pipe_write_file(
-    environment: &mut Environment,
-    writer: &mut dyn Write,
-) -> Result<(), LispError> {
-    let mut do_write = false;
-    if let Some(data_in) = environment.data_in.clone() {
-        match &data_in.get().data {
-            ExpEnum::True => do_write = true,
-            ExpEnum::String(_, _) => do_write = true,
-            ExpEnum::Symbol(_, _) => do_write = true,
-            ExpEnum::Float(_) => do_write = true,
-            ExpEnum::Int(_) => do_write = true,
-            ExpEnum::Char(_) => do_write = true,
-            ExpEnum::CodePoint(_) => do_write = true,
-            ExpEnum::Process(ProcessState::Running(_)) => {
-                do_write = true;
-            }
-            ExpEnum::File(file) => match &*file.borrow() {
-                FileState::Stdin => {
-                    do_write = true;
-                }
-                FileState::Read(_file, _) => {
-                    do_write = true;
-                }
-                FileState::ReadBinary(_file) => {
-                    do_write = true;
-                }
-                _ => {}
-            },
-            ExpEnum::Nil => {}
-            _ => {
-                return Err(LispError::new("Invalid expression state before file."));
-            }
-        }
-    }
-    if do_write {
-        let data_in = environment.data_in.as_ref().unwrap().clone();
-        data_in.writef(environment, writer)?;
-    }
-    Ok(())
-}*/
-
 fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,

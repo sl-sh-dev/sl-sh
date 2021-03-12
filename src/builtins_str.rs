@@ -345,45 +345,6 @@ fn builtin_str_append(
     Err(LispError::new("str-append takes two strings"))
 }
 
-/*struct CaptureOutput<'a> {
-    pub reader: BufReader<File>,
-    old_stdout: i32,
-    old_stderr: i32,
-    pub environment: &'a mut Environment,
-}
-
-impl<'a> CaptureOutput<'a> {
-    pub fn cap(environment: &'a mut Environment) -> Result<CaptureOutput, LispError> {
-        println!("XXXX making cap!");
-        let (pipe_read, pipe_write) = anon_pipe()?;
-        let old_stdout = replace_stdout(dup_fd(pipe_write)?)?;
-        let old_stderr = replace_stderr(pipe_write)?;
-        let reader = BufReader::new(fd_to_file(pipe_read));
-        Ok(CaptureOutput {
-            reader,
-            old_stdout,
-            old_stderr,
-            environment,
-        })
-    }
-
-    fn shutdown(&mut self) -> Result<(), LispError> {
-        dup_stdout(self.old_stdout)?;
-        dup_stderr(self.old_stderr)?;
-        Ok(())
-    }
-}
-
-impl<'a> Drop for CaptureOutput<'a> {
-    fn drop(&mut self) {
-        if let Err(err) = self.shutdown() {
-            eprintln!("Error shutting down stdout/err capture, {}", err);
-        }
-        println!("Dropping CaptureOutput!");
-    }
-}
-*/
-
 fn builtin_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
