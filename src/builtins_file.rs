@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-//use std::io::Write;
+use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 
 use glob::glob;
@@ -163,6 +163,15 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
+fn pipe_write_file(pipe_in: i32, writer: &mut dyn Write) -> Result<(), LispError> {
+    let mut inf = BufReader::new(fd_to_file(pipe_in));
+    let mut buf = [0; 10240];
+    while inf.read(&mut buf[..])? > 0 {
+        writer.write_all(&mut buf[..])?;
+    }
+    Ok(())
+}
+
 fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -183,6 +192,7 @@ fn builtin_pipe(
     while let Some(p) = pipe {
         let next_pipe = args.next();
         if next_pipe.is_none() {
+            // Last thing in the pipe so do not run in background.
             let old_stdin = if let Some(pipe1) = pipe1 {
                 Some(replace_stdin(pipe1)?)
             } else {
@@ -190,6 +200,39 @@ fn builtin_pipe(
             };
             gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
             res = eval(gpo.environment, p);
+            // If pipe ended in a file then dump final output into it.
+            match &res {
+                Ok(res_in) => {
+                    let res_d = res_in.get();
+                    match &res_d.data {
+                        ExpEnum::File(file) => {
+                            let mut file_b = file.borrow_mut();
+                            match &mut *file_b {
+                                FileState::Stdout => {
+                                    let stdout = io::stdout();
+                                    let mut handle = stdout.lock();
+                                    pipe_write_file(0, &mut handle)?;
+                                }
+                                FileState::Stderr => {
+                                    let stderr = io::stderr();
+                                    let mut handle = stderr.lock();
+                                    pipe_write_file(0, &mut handle)?;
+                                }
+                                FileState::Write(f) => {
+                                    pipe_write_file(0, f)?;
+                                }
+                                _ => {
+                                    drop(file_b);
+                                    drop(res_d);
+                                    res = Err(LispError::new("File at pipe end must be writable."));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Err(_err) => {}
+            }
             if let Some(old_stdin) = old_stdin {
                 dup_stdin(old_stdin)?;
             }
@@ -203,84 +246,6 @@ fn builtin_pipe(
             }
             pipe1 = pipe3;
         }
-        /*environment.data_in = Some(out.clone());
-        let res = eval(environment, p);
-        match &res {
-            Ok(res) => match &res.get().data {
-                ExpEnum::Process(ProcessState::Running(pid)) => {
-                    last_pid = Some(*pid);
-                    if environment.pipe_pgid.is_none() {
-                        environment.pipe_pgid = Some(*pid);
-                    }
-                }
-                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
-                    last_pid = Some(*pid);
-                    if environment.pipe_pgid.is_none() {
-                        environment.pipe_pgid = Some(*pid);
-                    }
-                }
-                ExpEnum::File(file) => match &mut *file.borrow_mut() {
-                    FileState::Stdout => {
-                        let stdout = io::stdout();
-                        let mut handle = stdout.lock();
-                        if let Err(err) = pipe_write_file(environment, &mut handle) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Stderr => {
-                        let stderr = io::stderr();
-                        let mut handle = stderr.lock();
-                        if let Err(err) = pipe_write_file(environment, &mut handle) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Write(f) => {
-                        if let Err(err) = pipe_write_file(environment, f) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Read(_, _) => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new(
-                                "Not a valid place for a read file (must be at start of pipe).",
-                            )));
-                            break;
-                        }
-                    }
-                    FileState::ReadBinary(_) => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new(
-                                "Not a valid place for a read file (must be at start of pipe).",
-                            )));
-                            break;
-                        }
-                    }
-                    FileState::Stdin => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new("Not a valid place for stdin.")));
-                            break;
-                        }
-                    }
-                    FileState::Closed => {
-                        error = Some(Err(LispError::new("Closed file not valid in pipe.")));
-                        break;
-                    }
-                },
-                _ => {
-                    error = Some(Err(LispError::new(
-                        "Invalid form in pipe (pipes are for system commands or files).",
-                    )));
-                    break;
-                }
-            },
-            Err(err) => {
-                error = Some(Err(LispError::new(err.to_string())));
-                break;
-            }
-        }*/
         pipe = next_pipe;
     }
     gpo.environment.pipe_pgid = None;

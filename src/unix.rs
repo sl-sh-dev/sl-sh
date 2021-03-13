@@ -1,6 +1,8 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::io;
 use std::os::unix::io::FromRawFd;
+use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -66,13 +68,30 @@ pub fn fork(
                 if let Some(stdin) = stdin {
                     cvt(libc::dup2(stdin, 0))?;
                     cvt(libc::close(stdin))?;
+                    environment.root_scope.borrow_mut().insert(
+                        "*stdin*",
+                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
+                    );
+                    if environment.dynamic_scope.contains_key("*stdin*") {
+                        environment.dynamic_scope.remove("*stdin*");
+                    }
                 }
                 if let Some(stdout) = stdout {
                     cvt(libc::dup2(stdout, 1))?;
                     cvt(libc::close(stdout))?;
+                    environment.root_scope.borrow_mut().insert(
+                        "*stdout*",
+                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
+                    );
+
+                    if environment.dynamic_scope.contains_key("*stdout*") {
+                        environment.dynamic_scope.remove("*stdout*");
+                    }
                 }
+                environment.eval_level = 0;
                 environment.run_background = false;
                 environment.jobs.borrow_mut().clear();
+                environment.do_job_control = false;
                 environment.stopped_procs.borrow_mut().clear();
                 environment.procs.borrow_mut().clear();
                 environment.grab_proc_output = false;
@@ -88,6 +107,9 @@ pub fn fork(
                     Err(_) => 1,
                 };
                 reap_procs(environment)?;
+                if let Some(ec) = environment.exit_code {
+                    libc::_exit(ec);
+                }
                 libc::_exit(exit_code);
             }
             n => n as u32,

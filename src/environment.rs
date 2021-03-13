@@ -442,13 +442,11 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
 }
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
-    let mut procs = environment.procs.borrow_mut();
+    let procs = environment.procs.borrow_mut();
     let keys: Vec<u32> = procs.keys().copied().collect();
     let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
     for key in keys {
-        if let Some(_) = procs.get_mut(&key) {
-            pids.push(key);
-        }
+        pids.push(key);
     }
     drop(procs);
     for pid in pids {
