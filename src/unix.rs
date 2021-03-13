@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::fs::File;
-use std::io;
+use std::io::{self, BufWriter, Read, Write};
 use std::os::unix::io::FromRawFd;
 use std::rc::Rc;
 
@@ -31,27 +31,33 @@ pub fn cvt<T: IsMinusOne>(t: T) -> Result<T, LispError> {
 }
 
 pub fn anon_pipe() -> Result<(i32, i32), LispError> {
+    // Adapted from sys/unix/pipe.rs in std lib.
     let mut fds = [0; 2];
 
-    /*#[cfg(any(
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "linux",
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "redox"
-    ))] {*/
-    cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) })?;
-    Ok((fds[0], fds[1]))
-    /*} else {
-        cvt(unsafe { libc::pipe(fds.as_mut_ptr()) })?;
+    // The only known way right now to create atomically set the CLOEXEC flag is
+    // to use the `pipe2` syscall. This was added to Linux in 2.6.27, glibc 2.9
+    // and musl 0.9.3, and some other targets also have it.
+    cfg_if::cfg_if! {
+        if #[cfg(any(
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "linux",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "redox"
+        ))] {
+            cvt(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) })?;
+            Ok((fds[0], fds[1]))
+        } else {
+            cvt(unsafe { libc::pipe(fds.as_mut_ptr()) })?;
 
-        let fd0 = FileDesc::new(fds[0]);
-        let fd1 = FileDesc::new(fds[1]);
-        fd0.set_cloexec()?;
-        fd1.set_cloexec()?;
-        Ok((AnonPipe(fd0), AnonPipe(fd1)))
-    }*/
+            let fd0 = FileDesc::new(fds[0]);
+            let fd1 = FileDesc::new(fds[1]);
+            fd0.set_cloexec()?;
+            fd1.set_cloexec()?;
+            Ok((AnonPipe(fd0), AnonPipe(fd1)))
+        }
+    }
 }
 
 pub fn fork(
@@ -66,8 +72,14 @@ pub fn fork(
         match result {
             0 => {
                 if let Some(stdin) = stdin {
-                    cvt(libc::dup2(stdin, 0))?;
-                    cvt(libc::close(stdin))?;
+                    if let Err(err) = cvt(libc::dup2(stdin, 0)) {
+                        eprintln!("Error setting up stdin (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stdin)) {
+                        eprintln!("Error setting up stdin (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
                     environment.root_scope.borrow_mut().insert(
                         "*stdin*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
@@ -77,8 +89,14 @@ pub fn fork(
                     }
                 }
                 if let Some(stdout) = stdout {
-                    cvt(libc::dup2(stdout, 1))?;
-                    cvt(libc::close(stdout))?;
+                    if let Err(err) = cvt(libc::dup2(stdout, 1)) {
+                        eprintln!("Error setting up stdout (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stdout)) {
+                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
                     environment.root_scope.borrow_mut().insert(
                         "*stdout*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
@@ -103,10 +121,57 @@ pub fn fork(
                 };
                 environment.is_tty = false;
                 let exit_code = match eval(environment, exp) {
+                    Ok(exp) if stdin.is_none() => {
+                        let mut outf = BufWriter::new(fd_to_file(1));
+                        if let ExpEnum::File(file) = &exp.get().data {
+                            let mut file_b = file.borrow_mut();
+                            match &mut *file_b {
+                                FileState::Read(Some(f_iter), _) => {
+                                    // XXX, maybe use the second item (fd) instead of the iterator?
+                                    for ch in f_iter {
+                                        if let Err(err) = outf.write_all(ch.as_bytes()) {
+                                            eprintln!("Error writing to next pipe: {}", err);
+                                            break;
+                                        }
+                                    }
+                                }
+                                FileState::ReadBinary(inf) => {
+                                    let mut buf = [0; 10240];
+                                    let mut n = match inf.read(&mut buf[..]) {
+                                        Ok(n) => n,
+                                        Err(err) => {
+                                            eprintln!("Error reading initial pipe input: {}", err);
+                                            0
+                                        }
+                                    };
+                                    while n > 0 {
+                                        if let Err(err) = outf.write_all(&buf[..n]) {
+                                            eprintln!("Error writing to next pipe: {}", err);
+                                            break;
+                                        }
+                                        n = match inf.read(&mut buf[..]) {
+                                            Ok(n) => n,
+                                            Err(err) => {
+                                                eprintln!(
+                                                    "Error reading initial pipe input: {}",
+                                                    err
+                                                );
+                                                0
+                                            }
+                                        };
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        0
+                    }
                     Ok(_) => 0,
                     Err(_) => 1,
                 };
-                reap_procs(environment)?;
+                if let Err(err) = reap_procs(environment) {
+                    eprintln!("Error reaping procs in a pipe process: {}", err);
+                }
                 if let Some(ec) = environment.exit_code {
                     libc::_exit(ec);
                 }

@@ -166,8 +166,10 @@ fn builtin_is_dir(
 fn pipe_write_file(pipe_in: i32, writer: &mut dyn Write) -> Result<(), LispError> {
     let mut inf = BufReader::new(fd_to_file(pipe_in));
     let mut buf = [0; 10240];
-    while inf.read(&mut buf[..])? > 0 {
-        writer.write_all(&mut buf[..])?;
+    let mut n = inf.read(&mut buf[..])?;
+    while n > 0 {
+        writer.write_all(&buf[..n])?;
+        n = inf.read(&mut buf[..])?;
     }
     Ok(())
 }
@@ -204,31 +206,28 @@ fn builtin_pipe(
             match &res {
                 Ok(res_in) => {
                     let res_d = res_in.get();
-                    match &res_d.data {
-                        ExpEnum::File(file) => {
-                            let mut file_b = file.borrow_mut();
-                            match &mut *file_b {
-                                FileState::Stdout => {
-                                    let stdout = io::stdout();
-                                    let mut handle = stdout.lock();
-                                    pipe_write_file(0, &mut handle)?;
-                                }
-                                FileState::Stderr => {
-                                    let stderr = io::stderr();
-                                    let mut handle = stderr.lock();
-                                    pipe_write_file(0, &mut handle)?;
-                                }
-                                FileState::Write(f) => {
-                                    pipe_write_file(0, f)?;
-                                }
-                                _ => {
-                                    drop(file_b);
-                                    drop(res_d);
-                                    res = Err(LispError::new("File at pipe end must be writable."));
-                                }
+                    if let ExpEnum::File(file) = &res_d.data {
+                        let mut file_b = file.borrow_mut();
+                        match &mut *file_b {
+                            FileState::Stdout => {
+                                let stdout = io::stdout();
+                                let mut handle = stdout.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Stderr => {
+                                let stderr = io::stderr();
+                                let mut handle = stderr.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Write(f) => {
+                                pipe_write_file(0, f)?;
+                            }
+                            _ => {
+                                drop(file_b);
+                                drop(res_d);
+                                res = Err(LispError::new("File at pipe end must be writable."));
                             }
                         }
-                        _ => {}
                     }
                 }
                 Err(_err) => {}
