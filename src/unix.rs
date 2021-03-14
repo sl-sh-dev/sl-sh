@@ -55,12 +55,7 @@ pub fn anon_pipe() -> Result<(i32, i32), LispError> {
             Ok((fds[0], fds[1]))
         } else {
             cvt(unsafe { libc::pipe(fds.as_mut_ptr()) })?;
-
-            let fd0 = FileDesc::new(fds[0]);
-            let fd1 = FileDesc::new(fds[1]);
-            fd0.set_cloexec()?;
-            fd1.set_cloexec()?;
-            Ok((AnonPipe(fd0), AnonPipe(fd1)))
+            Ok((fds[0], fds[1]))
         }
     }
 }
