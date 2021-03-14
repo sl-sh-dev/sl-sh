@@ -19,6 +19,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::signals::test_clear_sigint;
 use crate::types::*;
+use crate::unix::*;
 
 pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) {
     let mut opts = WaitPidFlag::WUNTRACED;
@@ -124,6 +125,18 @@ fn run_command(
         if let Some(c) = expand_tilde(command) {
             ncommand = c;
             command = &ncommand;
+        }
+    }
+    if environment.in_fork && environment.eval_level == 1 {
+        // We are the top level of a new fork so no need to fork again, just exec here.
+        // On success exec will not return.
+        if let Err(err) = reap_procs(environment) {
+            // Try to clean up in case any procs started in this fork.
+            eprintln!("Error reaping procs before exec: {}", err);
+        }
+        // If we still have procs running then maybe don't orphin them (at least not yet).
+        if environment.procs.borrow().is_empty() {
+            return Err(exec(&command, &args));
         }
     }
     let mut com_obj = Command::new(command);

@@ -158,6 +158,7 @@ pub struct Environment {
     pub supress_eval: bool, // XXX Hack for apply...
     pub terminal_fd: i32,
     pub grab_proc_output: bool,
+    pub in_fork: bool,
 }
 
 impl Environment {
@@ -214,6 +215,7 @@ pub fn build_default_environment() -> Environment {
         supress_eval: false,
         terminal_fd,
         grab_proc_output: false,
+        in_fork: false,
     }
 }
 
@@ -443,16 +445,18 @@ pub fn add_process(environment: &Environment, process: Child) -> u32 {
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
     let procs = environment.procs.borrow_mut();
-    let keys: Vec<u32> = procs.keys().copied().collect();
-    let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
-    for key in keys {
-        pids.push(key);
+    if !procs.is_empty() {
+        let keys: Vec<u32> = procs.keys().copied().collect();
+        let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
+        for key in keys {
+            pids.push(key);
+        }
+        drop(procs);
+        for pid in pids {
+            try_wait_pid(environment, pid);
+        }
+        // XXX remove them or better replace pid with exit status
     }
-    drop(procs);
-    for pid in pids {
-        try_wait_pid(environment, pid);
-    }
-    // XXX remove them or better replace pid with exit status
     Ok(())
 }
 

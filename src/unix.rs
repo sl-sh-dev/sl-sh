@@ -1,8 +1,13 @@
 use std::cell::RefCell;
+use std::ffi::{CString, OsStr};
 use std::fs::File;
 use std::io::{self, BufWriter, Read, Write};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::FromRawFd;
+use std::ptr;
 use std::rc::Rc;
+
+use nix::sys::signal::{self, SigHandler, Signal};
 
 use crate::environment::*;
 use crate::eval::*;
@@ -120,6 +125,7 @@ pub fn fork(
                     0
                 };
                 environment.is_tty = false;
+                environment.in_fork = true;
                 let exit_code = match eval(environment, exp) {
                     Ok(exp) if stdin.is_none() => {
                         let mut outf = BufWriter::new(fd_to_file(1));
@@ -250,4 +256,48 @@ pub fn close_fd(fd: i32) -> Result<(), LispError> {
 
 pub fn fd_to_file(fd: i32) -> File {
     unsafe { File::from_raw_fd(fd) }
+}
+
+fn os2c(s: &OsStr, saw_nul: &mut bool) -> CString {
+    CString::new(s.as_bytes()).unwrap_or_else(|_e| {
+        *saw_nul = true;
+        CString::new("<string-with-nul>").unwrap()
+    })
+}
+
+pub fn exec<I, S, P>(program: P, args: I) -> LispError
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+    P: AsRef<OsStr>,
+{
+    let mut saw_nul = false;
+    let program = os2c(program.as_ref(), &mut saw_nul);
+    let mut argv = vec![program.as_ptr(), ptr::null()];
+    let mut args_t = vec![program.clone()];
+    for arg in args {
+        // Overwrite the trailing NULL pointer in `argv` and then add a new null
+        // pointer.
+        let arg = os2c(arg.as_ref(), &mut saw_nul);
+        argv[args_t.len()] = arg.as_ptr();
+        argv.push(ptr::null());
+        // Also make sure we keep track of the owned value to schedule a
+        // destructor for this memory.
+        args_t.push(arg);
+    }
+
+    unsafe {
+        // XXX TODO, do better with these unwraps.
+        // Set the handling for job control signals back to the default.
+        signal::signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGHUP, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGQUIT, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGTSTP, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGTTIN, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGTTOU, SigHandler::SigDfl).unwrap();
+        signal::signal(Signal::SIGCHLD, SigHandler::SigDfl).unwrap();
+        libc::execvp(program.as_ptr(), argv.as_ptr());
+    }
+    io::Error::last_os_error().into()
 }
