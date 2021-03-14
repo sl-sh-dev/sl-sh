@@ -95,7 +95,6 @@ pub fn wait_pid(
     if let Some(settings) = term_settings {
         if let Err(err) =
             termios::tcsetattr(environment.terminal_fd, termios::SetArg::TCSANOW, settings)
-        //termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, settings)
         {
             eprintln!("Error resetting shell terminal settings: {}", err);
         }
@@ -104,7 +103,6 @@ pub fn wait_pid(
     if environment.is_tty {
         let pid = unistd::getpid();
         if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
-            //if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
             eprintln!("Error making shell {} foreground: {}", pid, err);
         }
     }
@@ -163,7 +161,7 @@ fn run_command(
                     //let msg = format!("Error setting pgid for {}: {}", pid, err);
                 }
                 if foreground {
-                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                    if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid) {
                         // Ignore, do in parent and child.
                         //let msg = format!("Error making {} foreground: {}", pid, err);
                     }
@@ -260,7 +258,6 @@ fn run_command(
             if let Some(settings) = term_settings {
                 if let Err(err) =
                     termios::tcsetattr(environment.terminal_fd, termios::SetArg::TCSANOW, &settings)
-                // termios::tcsetattr(nix::libc::STDIN_FILENO, termios::SetArg::TCSANOW, &settings)
                 {
                     eprintln!("Error resetting shell terminal settings: {}", err);
                 }
@@ -269,7 +266,6 @@ fn run_command(
             if environment.is_tty {
                 let pid = unistd::getpid();
                 if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
-                    //if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pid) {
                     eprintln!("Error making shell {} foreground: {}", pid, err);
                 }
             }

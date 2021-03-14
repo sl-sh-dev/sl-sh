@@ -288,6 +288,9 @@ pub fn run_one_script(command: &str, args: &[String]) -> i32 {
         .borrow_mut()
         .insert(environment.interner.intern("args"), data);
     load_user_env(&mut environment, &home, false, false);
+    if let Err(err) = reap_procs(&environment) {
+        eprintln!("Error reaping procs after running {}: {}", command, err);
+    }
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
     } else {
