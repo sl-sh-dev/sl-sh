@@ -452,15 +452,47 @@ Example:
         interner.intern("pipe"),
         Expression::make_function(
             builtin_pipe,
-            "Usage: (pipe (proc-whose-stdout) (is-inpup-here))
+            "Usage: (pipe [expression]+)
 
-Setup a pipe between processes.
+Setup a pipe between processes or expressions.  Pipe will take one or more
+expressions, each one but the last will be forked into a new process with it's
+stdin being the output of the last expression.  The first expression uses the
+current stdin and the last expression outputs to the current stdout.  Pipe works
+with system commands as well as sl-sh forms (lambdas, etc).  Note it connects
+the stdin/stdout of processes so if used with a lambda it should read stdin to
+get the previous output and write to stdout to pass to the next expression in
+the pipe (i.e. pipe will not interact with parameters or anything else).
+
+Pipes also support using a read file as the first expression (the file contents
+become stdin for the next form) and a write file as the last expression
+(previous output will be written to the file).  For instance pipe can be used
+to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
+this example does not close the files.
+
+Pipes can be nested including piping through a lambda that itself uses pipes.
 
 Section: shell
 
 Example:
 (def pipe-test (str (pipe (echo \"one\ntwo\nthree\")(grep two))))
 (test::assert-equal \"two\n\" pipe-test)
+(def pipe-test (str (pipe (pipe (echo \"one\ntwo\ntwotwo\nthree\")(grep two))(grep twotwo))))
+(test::assert-equal \"twotwo\n\" pipe-test)
+(mkdir \"/tmp/tst-pipe-dir\")
+(def tsync (open \"/tmp/tst-pipe-dir/test1\" :create))
+(pipe (print \"one\ntwo\ntwo2\nthree\") (grep two) tsync)
+(close tsync)
+(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
+(test::assert-equal \"two\n\" (read-line topen))
+(test::assert-equal \"two2\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
+(def pipe-test (str (pipe topen (grep two2))))
+(close topen)
+(test::assert-equal \"two2\n\" pipe-test)
+(rm \"/tmp/tst-pipe-dir/test1\")
+(rmdir \"/tmp/tst-pipe-dir\")
 ",
         ),
     );
