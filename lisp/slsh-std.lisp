@@ -76,9 +76,9 @@ t
 (load "struct.lisp")
 (load "iterator.lisp")
 (load "shell.lisp")
-(load "test.lisp"))
-;; load lib.lisp last so ns-auto-export is last exported symbol
-(load "lib.lisp")))
+(load "test.lisp")
+; XXX Move this up
+(load "lib.lisp"))))
 
 (if (= :error (car result)) (prim-print-error result))
 
@@ -102,7 +102,6 @@ t
 
 (if (def? *run-script*)
   (do
-    ;(def result (get-error (eval (read-all (str "load \"" *run-script* "\"")))))
     (def result (get-error (load *run-script*)))
     (if (= :error (car result))
       (shell::print-error result))))

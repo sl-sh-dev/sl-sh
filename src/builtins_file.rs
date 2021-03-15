@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::io::{self, Write};
+use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 
 use glob::glob;
@@ -12,6 +12,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
+use crate::unix::*;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -162,41 +163,13 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-fn pipe_write_file(environment: &mut Environment, writer: &mut dyn Write) -> Result<(), LispError> {
-    let mut do_write = false;
-    if let Some(data_in) = environment.data_in.clone() {
-        match &data_in.get().data {
-            ExpEnum::True => do_write = true,
-            ExpEnum::String(_, _) => do_write = true,
-            ExpEnum::Symbol(_, _) => do_write = true,
-            ExpEnum::Float(_) => do_write = true,
-            ExpEnum::Int(_) => do_write = true,
-            ExpEnum::Char(_) => do_write = true,
-            ExpEnum::CodePoint(_) => do_write = true,
-            ExpEnum::Process(ProcessState::Running(_)) => {
-                do_write = true;
-            }
-            ExpEnum::File(file) => match &*file.borrow() {
-                FileState::Stdin => {
-                    do_write = true;
-                }
-                FileState::Read(_file, _) => {
-                    do_write = true;
-                }
-                FileState::ReadBinary(_file) => {
-                    do_write = true;
-                }
-                _ => {}
-            },
-            ExpEnum::Nil => {}
-            _ => {
-                return Err(LispError::new("Invalid expression state before file."));
-            }
-        }
-    }
-    if do_write {
-        let data_in = environment.data_in.as_ref().unwrap().clone();
-        data_in.writef(environment, writer)?;
+fn pipe_write_file(pipe_in: i32, writer: &mut dyn Write) -> Result<(), LispError> {
+    let mut inf = BufReader::new(fd_to_file(pipe_in));
+    let mut buf = [0; 10240];
+    let mut n = inf.read(&mut buf[..])?;
+    while n > 0 {
+        writer.write_all(&buf[..n])?;
+        n = inf.read(&mut buf[..])?;
     }
     Ok(())
 }
@@ -205,116 +178,77 @@ fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if environment.in_pipe {
-        return Err(LispError::new("pipe within pipe, not valid"));
-    }
-    let old_out_status = environment.state.stdout_status.clone();
-    environment.in_pipe = true;
-    let mut out = Expression::make_nil();
-    environment.state.stdout_status = Some(IOState::Pipe);
-    let mut error: Option<Result<Expression, LispError>> = None;
-    let mut i = 1; // Meant 1 here.
     let mut pipe = args.next();
-    let mut last_pid = None;
+    let mut last_pid: Option<u32> = None;
+    let mut pipe1 = None;
+    let mut pipe2;
+    let mut pipe3;
+    let mut res = Ok(Expression::make_nil());
+    let job = Job {
+        pids: Vec::new(),
+        names: Vec::new(),
+        status: JobStatus::Running,
+    };
+    environment.jobs.borrow_mut().push(job);
+    let gpo = set_grab_proc_output(environment, false);
     while let Some(p) = pipe {
         let next_pipe = args.next();
         if next_pipe.is_none() {
-            environment.state.stdout_status = old_out_status.clone();
-            // End of the pipe and want to wait.
-            // Unless this is being piped to something itself (ie in a 'str' form) then do not wait.
-            environment.in_pipe = matches!(old_out_status, Some(IOState::Pipe));
-        }
-        environment.data_in = Some(out.clone());
-        let res = eval(environment, p);
-        match &res {
-            Ok(res) => match &res.get().data {
-                ExpEnum::Process(ProcessState::Running(pid)) => {
-                    last_pid = Some(*pid);
-                    if environment.state.pipe_pgid.is_none() {
-                        environment.state.pipe_pgid = Some(*pid);
+            // Last thing in the pipe so do not run in background.
+            let old_stdin = if let Some(pipe1) = pipe1 {
+                Some(replace_stdin(pipe1)?)
+            } else {
+                None
+            };
+            gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
+            res = eval(gpo.environment, p);
+            // If pipe ended in a file then dump final output into it.
+            match &res {
+                Ok(res_in) => {
+                    let res_d = res_in.get();
+                    if let ExpEnum::File(file) = &res_d.data {
+                        let mut file_b = file.borrow_mut();
+                        match &mut *file_b {
+                            FileState::Stdout => {
+                                let stdout = io::stdout();
+                                let mut handle = stdout.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Stderr => {
+                                let stderr = io::stderr();
+                                let mut handle = stderr.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Write(f) => {
+                                pipe_write_file(0, f)?;
+                            }
+                            _ => {
+                                drop(file_b);
+                                drop(res_d);
+                                res = Err(LispError::new("File at pipe end must be writable."));
+                            }
+                        }
                     }
                 }
-                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
-                    last_pid = Some(*pid);
-                    if environment.state.pipe_pgid.is_none() {
-                        environment.state.pipe_pgid = Some(*pid);
-                    }
-                }
-                ExpEnum::File(file) => match &mut *file.borrow_mut() {
-                    FileState::Stdout => {
-                        let stdout = io::stdout();
-                        let mut handle = stdout.lock();
-                        if let Err(err) = pipe_write_file(environment, &mut handle) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Stderr => {
-                        let stderr = io::stderr();
-                        let mut handle = stderr.lock();
-                        if let Err(err) = pipe_write_file(environment, &mut handle) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Write(f) => {
-                        if let Err(err) = pipe_write_file(environment, f) {
-                            error = Some(Err(err));
-                            break;
-                        }
-                    }
-                    FileState::Read(_, _) => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new(
-                                "Not a valid place for a read file (must be at start of pipe).",
-                            )));
-                            break;
-                        }
-                    }
-                    FileState::ReadBinary(_) => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new(
-                                "Not a valid place for a read file (must be at start of pipe).",
-                            )));
-                            break;
-                        }
-                    }
-                    FileState::Stdin => {
-                        if i > 1 {
-                            error = Some(Err(LispError::new("Not a valid place for stdin.")));
-                            break;
-                        }
-                    }
-                    FileState::Closed => {
-                        error = Some(Err(LispError::new("Closed file not valid in pipe.")));
-                        break;
-                    }
-                },
-                _ => {
-                    error = Some(Err(LispError::new(
-                        "Invalid form in pipe (pipes are for system commands or files).",
-                    )));
-                    break;
-                }
-            },
-            Err(err) => {
-                error = Some(Err(LispError::new(err.to_string())));
-                break;
+                Err(_err) => {}
             }
-        }
-        out = if let Ok(out) = res {
-            out.clone()
+            if let Some(old_stdin) = old_stdin {
+                dup_stdin(old_stdin)?;
+            }
         } else {
-            out.clone()
-        };
-        i += 1;
+            let (p1, p2) = anon_pipe()?; // p1 is read
+            pipe2 = Some(p2);
+            pipe3 = Some(p1);
+            last_pid = Some(fork(gpo.environment, p, pipe1, pipe2)?);
+            if gpo.environment.pipe_pgid.is_none() {
+                gpo.environment.pipe_pgid = last_pid;
+            }
+            pipe1 = pipe3;
+        }
         pipe = next_pipe;
     }
-    environment.data_in = None;
-    environment.in_pipe = false;
-    environment.state.pipe_pgid = None;
-    environment.state.stdout_status = old_out_status;
-    if let Some(error) = error {
+    gpo.environment.pipe_pgid = None;
+    if res.is_err() {
         if let Some(pid) = last_pid {
             // Send a sigint to the feeding job so it does not hang on a full output buffer.
             if let Err(err) = nix::sys::signal::kill(
@@ -324,10 +258,8 @@ fn builtin_pipe(
                 eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
             }
         }
-        error
-    } else {
-        Ok(out)
     }
+    res
 }
 
 fn builtin_wait(
@@ -443,9 +375,12 @@ Example:
 (mkdir \"/tmp/tst-fs-cd\")
 (touch \"/tmp/tst-fs-cd/fs-cd-marker\")
 (test::assert-false (fs-exists? \"fs-cd-marker\"))
-(cd \"/tmp/tst-fs-cd\")
+(pushd \"/tmp/tst-fs-cd\")
+(root::cd \"/tmp\")
+(root::cd \"/tmp/tst-fs-cd\")
 (test::assert-true (fs-exists? \"fs-cd-marker\"))
 (rm \"/tmp/tst-fs-cd/fs-cd-marker\")
+(popd)
 (rmdir \"/tmp/tst-fs-cd\")
 ",
         ),
@@ -517,15 +452,47 @@ Example:
         interner.intern("pipe"),
         Expression::make_function(
             builtin_pipe,
-            "Usage: (pipe (proc-whose-stdout) (is-inpup-here))
+            "Usage: (pipe [expression]+)
 
-Setup a pipe between processes.
+Setup a pipe between processes or expressions.  Pipe will take one or more
+expressions, each one but the last will be forked into a new process with it's
+stdin being the output of the last expression.  The first expression uses the
+current stdin and the last expression outputs to the current stdout.  Pipe works
+with system commands as well as sl-sh forms (lambdas, etc).  Note it connects
+the stdin/stdout of processes so if used with a lambda it should read stdin to
+get the previous output and write to stdout to pass to the next expression in
+the pipe (i.e. pipe will not interact with parameters or anything else).
+
+Pipes also support using a read file as the first expression (the file contents
+become stdin for the next form) and a write file as the last expression
+(previous output will be written to the file).  For instance pipe can be used
+to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
+this example does not close the files.
+
+Pipes can be nested including piping through a lambda that itself uses pipes.
 
 Section: shell
 
 Example:
 (def pipe-test (str (pipe (echo \"one\ntwo\nthree\")(grep two))))
 (test::assert-equal \"two\n\" pipe-test)
+(def pipe-test (str (pipe (pipe (echo \"one\ntwo\ntwotwo\nthree\")(grep two))(grep twotwo))))
+(test::assert-equal \"twotwo\n\" pipe-test)
+(mkdir \"/tmp/tst-pipe-dir\")
+(def tsync (open \"/tmp/tst-pipe-dir/test1\" :create))
+(pipe (print \"one\ntwo\ntwo2\nthree\") (grep two) tsync)
+(close tsync)
+(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
+(test::assert-equal \"two\n\" (read-line topen))
+(test::assert-equal \"two2\n\" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
+(def pipe-test (str (pipe topen (grep two2))))
+(close topen)
+(test::assert-equal \"two2\n\" pipe-test)
+(rm \"/tmp/tst-pipe-dir/test1\")
+(rmdir \"/tmp/tst-pipe-dir\")
 ",
         ),
     );

@@ -349,45 +349,13 @@ fn builtin_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let old_out = environment.state.stdout_status.clone();
-    let old_err = environment.state.stderr_status.clone();
-    environment.state.stdout_status = Some(IOState::Pipe);
-    environment.state.stderr_status = Some(IOState::Pipe);
+    let gpo = set_grab_proc_output(environment, true);
 
-    // Get out of a pipe for the str call if in one...
-    let data_in = environment.data_in.clone();
-    environment.data_in = None;
-    let in_pipe = environment.in_pipe;
-    environment.in_pipe = false;
-    let pipe_pgid = environment.state.pipe_pgid;
-    environment.state.pipe_pgid = None;
-
-    // Do not use ?, make sure to reset environment state even on error.
     let mut res = String::new();
     for a in args {
-        match eval(environment, a) {
-            Err(err) => {
-                environment.state.stdout_status = old_out;
-                environment.state.stderr_status = old_err;
-                return Err(err);
-            }
-            Ok(a) => {
-                match as_string(environment, &a) {
-                    Err(err) => {
-                        environment.state.stdout_status = old_out;
-                        environment.state.stderr_status = old_err;
-                        return Err(err);
-                    }
-                    Ok(s) => res.push_str(&s),
-                };
-            }
-        }
+        let a = eval(gpo.environment, a)?;
+        res.push_str(&a.as_string(gpo.environment)?);
     }
-    environment.state.stdout_status = old_out;
-    environment.state.stderr_status = old_err;
-    environment.data_in = data_in;
-    environment.in_pipe = in_pipe;
-    environment.state.pipe_pgid = pipe_pgid;
     Ok(Expression::alloc_data(ExpEnum::String(res.into(), None)))
 }
 

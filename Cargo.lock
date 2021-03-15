@@ -545,8 +545,9 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.17"
+version = "0.9.22"
 dependencies = [
+ "cfg-if 1.0.0",
  "chrono",
  "criterion",
  "glob",

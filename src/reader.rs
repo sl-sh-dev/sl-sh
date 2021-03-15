@@ -25,16 +25,6 @@ impl fmt::Display for ReadError {
     }
 }
 
-enum ListType {
-    Vector,
-    List,
-}
-
-struct List {
-    list_type: ListType,
-    vec: Vec<Expression>,
-}
-
 fn is_whitespace(ch: &str) -> bool {
     matches!(ch, " " | "\t" | "\n")
 }
@@ -81,40 +71,13 @@ fn escape_to_char(chars: &mut CharIter, reader_state: &mut ReaderState) -> Resul
     }
 }
 
-fn close_list(stack: &mut Vec<List>, exp_meta: Option<ExpMeta>) -> Result<(), ReadError> {
-    match stack.pop() {
-        Some(v) => match stack.pop() {
-            Some(mut v2) => {
-                match v.list_type {
-                    ListType::Vector => {
-                        v2.vec.push(Expression::with_list(v.vec));
-                    }
-                    ListType::List => {
-                        if v.vec.len() == 3 && v.vec[1].to_string() == "." {
-                            v2.vec.push(Expression::alloc(ExpObj {
-                                data: ExpEnum::Pair(v.vec[0].clone(), v.vec[2].clone()),
-                                meta: exp_meta,
-                                meta_tags: None,
-                                analyzed: RefCell::new(false),
-                            }));
-                        } else {
-                            v2.vec.push(Expression::cons_from_vec(&v.vec, exp_meta));
-                        }
-                    }
-                }
-                stack.push(v2);
-            }
-            None => {
-                stack.push(v);
-            }
-        },
-        None => {
-            return Err(ReadError {
-                reason: "Unexpected `)`".to_string(),
-            });
-        }
-    }
-    Ok(())
+fn make_exp(data: ExpEnum, meta: Option<ExpMeta>) -> Expression {
+    Expression::alloc(ExpObj {
+        data,
+        meta,
+        meta_tags: None,
+        analyzed: RefCell::new(false),
+    })
 }
 
 fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMeta> {
@@ -158,20 +121,11 @@ fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     }
 }
 
-fn end_symbol(ch: &str, in_back_quote: bool, reader_state: &mut ReaderState) -> bool {
+fn end_symbol(ch: &str, reader_state: &mut ReaderState) -> bool {
     if is_whitespace(ch) || (reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap()) {
         true
     } else {
-        match ch {
-            "(" => true,
-            ")" => true,
-            "#" => true,
-            "\"" => true,
-            "," if in_back_quote => true,
-            "'" => true,
-            "`" => true,
-            _ => false,
-        }
+        matches!(ch, "(" | ")" | "#" | "\"" | "," | "'" | "`")
     }
 }
 
@@ -182,7 +136,11 @@ fn is_digit(ch: &str) -> bool {
     )
 }
 
-fn do_char(environment: &mut Environment, symbol: &str) -> Result<Expression, ReadError> {
+fn do_char(
+    environment: &mut Environment,
+    symbol: &str,
+    meta: Option<ExpMeta>,
+) -> Result<Expression, ReadError> {
     match &symbol.to_lowercase()[..] {
         "space" => return Ok(Expression::alloc_data(ExpEnum::Char(" ".into()))),
         "tab" => return Ok(Expression::alloc_data(ExpEnum::Char("\t".into()))),
@@ -225,9 +183,10 @@ fn do_char(environment: &mut Environment, symbol: &str) -> Result<Expression, Re
                 }
             }
         }
-        Ok(Expression::alloc_data(ExpEnum::Char(
-            environment.interner.intern(&*ch).into(),
-        )))
+        Ok(make_exp(
+            ExpEnum::Char(environment.interner.intern(&*ch).into()),
+            meta,
+        ))
     } else {
         let reader_state = &mut environment.reader_state.as_mut().unwrap();
         let reason = format!(
@@ -315,6 +274,11 @@ fn read_string(
     symbol.clear();
     let mut last_ch = Cow::Borrowed(" ");
     let mut skip_last_ch = false;
+    let meta = get_meta(
+        reader_state.file_name,
+        reader_state.line,
+        reader_state.column,
+    );
 
     let mut out_ch = chars.next();
     while let Some(ch) = out_ch {
@@ -358,13 +322,15 @@ fn read_string(
         };
         out_ch = chars.next();
     }
-    Ok(Expression::alloc_data(ExpEnum::String(
-        symbol.clone().into(),
-        None,
-    )))
+    Ok(make_exp(ExpEnum::String(symbol.clone().into(), None), meta))
 }
 
-fn do_atom(environment: &mut Environment, symbol: &str, is_number: bool) -> Expression {
+fn do_atom(
+    environment: &mut Environment,
+    symbol: &str,
+    is_number: bool,
+    meta: Option<ExpMeta>,
+) -> Expression {
     if is_number {
         let mut num_str = symbol.to_string();
         num_str.retain(|ch| ch != '_');
@@ -374,49 +340,27 @@ fn do_atom(environment: &mut Environment, symbol: &str, is_number: bool) -> Expr
             Err(_) => {
                 let potential_float: Result<f64, ParseFloatError> = num_str.parse();
                 match potential_float {
-                    Ok(v) => Expression::alloc_data(ExpEnum::Float(v)),
-                    Err(_) => Expression::alloc_data(ExpEnum::Symbol(
-                        environment.interner.intern(symbol),
-                        SymLoc::None,
-                    )),
+                    Ok(v) => make_exp(ExpEnum::Float(v), meta),
+                    Err(_) => make_exp(
+                        ExpEnum::Symbol(environment.interner.intern(symbol), SymLoc::None),
+                        meta,
+                    ),
                 }
             }
         }
     } else {
         if symbol.is_empty() {
-            return Expression::alloc_data(ExpEnum::Nil);
+            return make_exp(ExpEnum::Nil, meta);
         }
         if symbol == "t" {
-            Expression::alloc_data(ExpEnum::True)
+            make_exp(ExpEnum::True, meta)
         } else if symbol == "nil" {
-            Expression::alloc_data(ExpEnum::Nil)
+            make_exp(ExpEnum::Nil, meta)
         } else {
-            Expression::alloc_data(ExpEnum::Symbol(
-                environment.interner.intern(symbol),
-                SymLoc::None,
-            ))
-        }
-    }
-}
-
-fn push_stack(
-    stack: &mut Vec<List>,
-    expression: Expression,
-    line: usize,
-    column: usize,
-) -> Result<(), ReadError> {
-    match stack.pop() {
-        Some(mut v) => {
-            v.vec.push(expression);
-            stack.push(v);
-            Ok(())
-        }
-        None => {
-            let reason = format!(
-                "Found symbol without containing list: line {}, col: {}",
-                line, column
-            );
-            Err(ReadError { reason })
+            make_exp(
+                ExpEnum::Symbol(environment.interner.intern(symbol), SymLoc::None),
+                meta,
+            )
         }
     }
 }
@@ -426,7 +370,6 @@ fn read_symbol(
     chars: &mut CharIter,
     reader_state: &mut ReaderState,
     for_ch: bool,
-    in_back_quote: bool,
     skip_underscore: bool,
 ) -> bool {
     fn maybe_number(ch: &str, has_e: &mut bool, last_e: &mut bool, has_decimal: &mut bool) -> bool {
@@ -458,7 +401,7 @@ fn read_symbol(
     let mut has_e = false;
     let mut last_e = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(&ch, in_back_quote, reader_state) && !for_ch {
+        if end_symbol(&ch, reader_state) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };
@@ -493,7 +436,7 @@ fn read_symbol(
             }
             buffer.push_str(&next_ch);
             push_next = false;
-        } else if end_symbol(peek_ch, in_back_quote, reader_state) {
+        } else if end_symbol(peek_ch, reader_state) {
             break;
         }
         next_ch = chars.next();
@@ -552,7 +495,15 @@ fn call_reader_macro(
         let old_end_ch = environment.reader_state.as_ref().unwrap().end_ch;
         environment.reader_state.as_mut().unwrap().end_ch = end_ch;
         let res = match eval(environment, exp) {
-            Ok(exp) => Ok(exp),
+            Ok(exp) => {
+                let meta = get_meta(
+                    environment.reader_state.as_ref().unwrap().file_name,
+                    environment.reader_state.as_ref().unwrap().line,
+                    environment.reader_state.as_ref().unwrap().column,
+                );
+                exp.get_mut().meta = meta;
+                Ok(exp)
+            }
             Err(err) => {
                 let reason = format!(
                     "Error in reader {}: {} ({} : line {}, col: {})",
@@ -592,11 +543,10 @@ fn call_reader_macro(
 fn prep_reader_macro(
     environment: &mut Environment,
     chars: CharIter, // Pass ownership in and out for reader macro support.
-    stack: &mut Vec<List>,
     name: &str,
     ch: &str,
     end_ch: Option<&'static str>,
-) -> Result<CharIter, (ReadError, CharIter)> {
+) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
         if let ExpEnum::String(_, chars_iter) = &mut exp_d.data {
@@ -623,25 +573,16 @@ fn prep_reader_macro(
             return Err((e, chars));
         }
     };
-    if let Err(e) = push_stack(
-        stack,
-        rm,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
-    ) {
-        let chars = recover_chars(&stream_exp);
-        return Err((e, chars));
-    }
     let res = recover_chars(&stream_exp);
     // Clear the stream expression in case the reader macro saved it for some dumb reason.
     let mut exp_d = stream_exp.get_mut();
     exp_d.data.replace(ExpEnum::Nil);
     exp_d.meta_tags = None;
-    Ok(res)
+    Ok((Some(rm), res))
 }
 
-fn consume_trailing_whitespace(environment: &mut Environment, chars: &mut CharIter) {
-    // Consume trailing whitespace.
+fn consume_whitespace(environment: &mut Environment, chars: &mut CharIter) {
+    // Consume whitespace.
     let mut ch = chars.peek();
     while ch.is_some() && is_whitespace(ch.unwrap()) {
         if let Some(ch) = ch {
@@ -660,56 +601,233 @@ fn consume_trailing_whitespace(environment: &mut Environment, chars: &mut CharIt
 fn read_num_radix(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
-    stack: &mut Vec<List>,
     buffer: &mut String,
-    in_back_quote: bool,
     radix: u32,
-) -> Result<CharIter, (ReadError, CharIter)> {
+    meta: Option<ExpMeta>,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     buffer.clear();
     read_symbol(
         buffer,
         &mut chars,
         &mut environment.reader_state.as_mut().unwrap(),
         true,
-        in_back_quote,
         true,
     );
-    let num = match i64::from_str_radix(buffer, radix) {
-        Ok(n) => Expression::alloc_data(ExpEnum::Int(n)),
-        Err(e) => {
-            return Err((
-                ReadError {
-                    reason: e.to_string(),
-                },
-                chars,
-            ))
-        }
-    };
-    if let Err(e) = push_stack(
-        stack,
-        num,
+    match i64::from_str_radix(buffer, radix) {
+        Ok(n) => Ok((make_exp(ExpEnum::Int(n), meta), chars)),
+        Err(e) => Err((
+            ReadError {
+                reason: e.to_string(),
+            },
+            chars,
+        )),
+    }
+}
+
+fn read_vector(
+    environment: &mut Environment,
+    mut chars: CharIter, // Pass ownership in and out for reader macro support.
+    buffer: &mut String,
+    in_back_quote: bool,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    let mut v: Vec<Expression> = Vec::new();
+    let meta = get_meta(
+        environment.reader_state.as_ref().unwrap().file_name,
         environment.reader_state.as_ref().unwrap().line,
         environment.reader_state.as_ref().unwrap().column,
-    ) {
-        return Err((e, chars));
+    );
+    let mut cont = true;
+
+    while cont {
+        let (exp, mut ichars) = match read_inner(environment, chars, buffer, in_back_quote, true) {
+            Ok((exp, ichars)) => {
+                if let Some(exp) = &exp {
+                    if let ExpEnum::Symbol(")", _) = exp.get().data {
+                        return Ok((make_exp(ExpEnum::Vector(v), meta), ichars));
+                    }
+                }
+                (exp, ichars)
+            }
+            Err((err, ichars)) => {
+                return Err((err, ichars));
+            }
+        };
+        let pch = ichars.peek();
+        if let Some(exp) = exp {
+            v.push(exp);
+        } else if pch.is_none() {
+            cont = false;
+        }
+        chars = ichars;
     }
-    Ok(chars)
+    Err((
+        ReadError {
+            reason: "Unclosed vector".to_string(),
+        },
+        chars,
+    ))
+}
+
+fn get_unquote_lst(exp: &Expression) -> Option<Expression> {
+    let exp_d = exp.get();
+    if let ExpEnum::Pair(car, cdr) = &exp_d.data {
+        if let ExpEnum::Symbol("unquote", _) = &car.get().data {
+            return Some(cdr.clone());
+        }
+    }
+    None
+}
+
+fn is_unquote_splice(exp: &Expression) -> bool {
+    fn is_splice(car: &Expression) -> bool {
+        if let ExpEnum::Symbol("unquote-splice", _) = car.get().data {
+            return true;
+        }
+        if let ExpEnum::Symbol("unquote-splice!", _) = car.get().data {
+            return true;
+        }
+        false
+    }
+    let exp_d = exp.get();
+    match &exp_d.data {
+        ExpEnum::Pair(car, _) => is_splice(car),
+        ExpEnum::Vector(v) => {
+            if let Some(car) = v.get(0) {
+                is_splice(car)
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
+}
+
+fn read_list(
+    environment: &mut Environment,
+    mut chars: CharIter, // Pass ownership in and out for reader macro support.
+    buffer: &mut String,
+    in_back_quote: bool,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    let mut head = ExpEnum::Nil;
+    let mut tail = ExpEnum::Nil;
+    let meta = get_meta(
+        environment.reader_state.as_ref().unwrap().file_name,
+        environment.reader_state.as_ref().unwrap().line,
+        environment.reader_state.as_ref().unwrap().column,
+    );
+    let mut cont = true;
+    let mut dot = false;
+    let mut dot_count = 0;
+
+    while cont {
+        let (exp, mut ichars) = match read_inner(environment, chars, buffer, in_back_quote, true) {
+            Ok((exp, ichars)) => {
+                if let Some(exp) = &exp {
+                    if let ExpEnum::Symbol(")", _) = exp.get().data {
+                        return Ok((make_exp(head, meta), ichars));
+                    } else if let ExpEnum::Symbol(".", _) = exp.get().data {
+                        dot = true;
+                        chars = ichars;
+                        continue;
+                    }
+                }
+                (exp, ichars)
+            }
+            Err((err, ichars)) => {
+                return Err((err, ichars));
+            }
+        };
+        let pch = ichars.peek();
+        if let Some(exp) = exp {
+            if let ExpEnum::Nil = head {
+                if dot {
+                    return Err((
+                        ReadError {
+                            reason: "Invalid dotted pair syntax (nothing before dot).".to_string(),
+                        },
+                        ichars,
+                    ));
+                }
+                head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                tail = head.clone();
+            } else if dot {
+                if is_unquote_splice(&exp) {
+                    return Err((
+                        ReadError {
+                            reason: "Invalid dotted pair syntax with unquote-splice (,@/,.)."
+                                .to_string(),
+                        },
+                        ichars,
+                    ));
+                }
+                let exp = if let Some(uqexp) = get_unquote_lst(&exp) {
+                    // Do this so `(x y . ,z) works
+                    let mut v = Vec::new();
+                    v.push(ExpEnum::Symbol("unquote", SymLoc::None).into());
+                    let mut i = 0;
+                    for e in uqexp.iter() {
+                        v.push(e);
+                        i += 1;
+                    }
+                    if i != 1 {
+                        return Err((
+                            ReadError {
+                                reason: "Invalid dotted pair syntax with unquote.".to_string(),
+                            },
+                            ichars,
+                        ));
+                    }
+                    Expression::with_list(v)
+                } else {
+                    exp
+                };
+                if let ExpEnum::Pair(_, cdr) = &tail {
+                    let mut cdr = cdr.get_mut();
+                    cdr.data = exp.get().data.clone();
+                    cdr.meta = exp.get().meta;
+                }
+            } else {
+                let new_tail = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                if let ExpEnum::Pair(_, cdr) = &tail {
+                    cdr.get_mut().data = new_tail.clone();
+                }
+                tail = new_tail;
+            }
+        } else if pch.is_none() {
+            cont = false;
+        }
+        chars = ichars;
+        if dot {
+            dot_count += 1;
+        }
+        if dot_count > 1 {
+            return Err((
+                ReadError {
+                    reason: "Invalid dotted pair syntax (more than object follows dot)."
+                        .to_string(),
+                },
+                chars,
+            ));
+        }
+    }
+    Err((
+        ReadError {
+            reason: "Unclosed list".to_string(),
+        },
+        chars,
+    ))
 }
 
 fn read_inner(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
-    stack: &mut Vec<List>,
     buffer: &mut String,
     in_back_quote: bool,
-) -> Result<(bool, CharIter), (ReadError, CharIter)> {
+    return_close_paren: bool,
+) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
     if environment.reader_state.is_none() {
         panic!("tried to read with no state!");
     }
-    let mut level = 0;
-    let mut line_stack: Vec<(usize, usize)> = Vec::new();
-    let mut next_chars = next2(&mut chars);
-    let mut read_next = false;
     let read_table = lookup_expression(&environment, "*read-table*");
     let mut read_table_chars: HashSet<&'static str> = HashSet::new();
     if let Some(read_table) = &read_table {
@@ -720,32 +838,10 @@ fn read_inner(
         }
     }
     let read_table_end_char = lookup_expression(&environment, "*read-table-end-char*");
-    while next_chars.is_some() {
-        let (mut ch, mut peek_ch) = next_chars.unwrap();
+    consume_whitespace(environment, &mut chars);
 
-        // Consume leading whitespace.
-        while is_whitespace(&ch) {
-            if ch == "\n" {
-                environment.reader_state.as_mut().unwrap().line += 1;
-                environment.reader_state.as_mut().unwrap().column = 0;
-            } else {
-                environment.reader_state.as_mut().unwrap().column += 1;
-            }
-            if let Some((tch, pch)) = next2(&mut chars) {
-                ch = tch;
-                peek_ch = pch;
-            } else {
-                return Ok((false, chars));
-            };
-        }
-
-        if ch == "\n" {
-            environment.reader_state.as_mut().unwrap().line += 1;
-            environment.reader_state.as_mut().unwrap().column = 0;
-        } else {
-            environment.reader_state.as_mut().unwrap().column += 1;
-        }
-        let mut do_match = true;
+    while let Some((ch, peek_ch)) = next2(&mut chars) {
+        environment.reader_state.as_mut().unwrap().column += 1;
         if read_table_chars.contains(&*ch) {
             let mut end_ch = None;
             if let Some(read_table_end_char) = &read_table_end_char {
@@ -761,341 +857,249 @@ fn read_inner(
                 if let ExpEnum::HashMap(map) = &read_table.get().data {
                     if map.contains_key(&*ch) {
                         if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
-                            chars = prep_reader_macro(environment, chars, stack, s, &ch, end_ch)?;
-                            do_match = false;
+                            let res = prep_reader_macro(environment, chars, s, &ch, end_ch);
+                            match res {
+                                Ok((None, ichars)) => {
+                                    chars = ichars;
+                                    continue;
+                                }
+                                _ => return res,
+                            }
                         }
                     }
                 }
             }
         }
-        if do_match {
-            match &*ch {
-                "\"" => {
-                    let read_str = match read_string(
-                        &mut chars,
-                        buffer,
-                        &mut environment.reader_state.as_mut().unwrap(),
-                    ) {
-                        Ok(s) => s,
-                        Err(e) => return Err((e, chars)),
-                    };
-                    if let Err(e) = push_stack(
-                        stack,
-                        read_str,
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
-                    ) {
-                        return Err((e, chars));
-                    }
-                }
-                "'" => {
-                    let mut quoted = Vec::<Expression>::new();
-                    quoted.push(Expression::alloc_data(ExpEnum::Symbol(
-                        environment.interner.intern("quote"),
-                        SymLoc::None,
-                    )));
-                    stack.push(List {
-                        list_type: ListType::List,
-                        vec: quoted,
-                    });
-                    let save_line = environment.reader_state.as_ref().unwrap().line;
-                    let save_col = environment.reader_state.as_ref().unwrap().column;
-                    let (_, ichars) = read_inner(environment, chars, stack, buffer, in_back_quote)?;
-                    chars = ichars;
-                    if let Err(e) = close_list(
-                        stack,
-                        get_meta(
-                            environment.reader_state.as_ref().unwrap().file_name,
-                            save_line,
-                            save_col,
-                        ),
-                    ) {
-                        return Err((e, chars));
-                    }
-                }
-                "`" => {
-                    let mut quoted = Vec::<Expression>::new();
-                    if in_back_quote {
-                        quoted.push(Expression::alloc_data(ExpEnum::Symbol(
-                            environment.interner.intern("quote"),
-                            SymLoc::None,
-                        )));
-                    } else {
-                        quoted.push(Expression::alloc_data(ExpEnum::Symbol(
-                            environment.interner.intern("back-quote"),
-                            SymLoc::None,
-                        )));
-                    }
-                    stack.push(List {
-                        list_type: ListType::List,
-                        vec: quoted,
-                    });
-                    let save_line = environment.reader_state.as_ref().unwrap().line;
-                    let save_col = environment.reader_state.as_ref().unwrap().column;
-                    let (_, ichars) = read_inner(environment, chars, stack, buffer, true)?;
-                    chars = ichars;
-                    if let Err(e) = close_list(
-                        stack,
-                        get_meta(
-                            environment.reader_state.as_ref().unwrap().file_name,
-                            save_line,
-                            save_col,
-                        ),
-                    ) {
-                        return Err((e, chars));
-                    }
-                }
-                "," if in_back_quote => {
-                    read_next = true; // , always needs the symbol after
-                    if peek_ch == "@" {
-                        chars.next();
-                        if let Err(e) = push_stack(
-                            stack,
+        let meta = get_meta(
+            environment.reader_state.as_ref().unwrap().file_name,
+            environment.reader_state.as_ref().unwrap().line,
+            environment.reader_state.as_ref().unwrap().column,
+        );
+        match &*ch {
+            "\"" => {
+                match read_string(
+                    &mut chars,
+                    buffer,
+                    &mut environment.reader_state.as_mut().unwrap(),
+                ) {
+                    Ok(s) => return Ok((Some(s), chars)),
+                    Err(e) => return Err((e, chars)),
+                };
+            }
+            "'" => match read_inner(environment, chars, buffer, in_back_quote, false) {
+                Ok((Some(exp), ichars)) => {
+                    let qlist = make_exp(
+                        ExpEnum::Pair(
                             Expression::alloc_data(ExpEnum::Symbol(
-                                environment.interner.intern(",@"),
+                                environment.interner.intern("quote"),
                                 SymLoc::None,
                             )),
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column,
-                        ) {
-                            return Err((e, chars));
-                        }
-                    } else if let Err(e) = push_stack(
-                        stack,
-                        Expression::alloc_data(ExpEnum::Symbol(
-                            environment.interner.intern(","),
-                            SymLoc::None,
-                        )),
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
-                    ) {
-                        return Err((e, chars));
-                    }
-                }
-                "#" => {
-                    chars.next();
-                    match &*peek_ch {
-                        "|" => consume_block_comment(
-                            &mut chars,
-                            &mut environment.reader_state.as_mut().unwrap(),
+                            make_exp(ExpEnum::Pair(exp, Expression::make_nil()), None),
                         ),
-                        "\\" => {
-                            buffer.clear();
-                            read_symbol(
-                                buffer,
-                                &mut chars,
-                                &mut environment.reader_state.as_mut().unwrap(),
-                                true,
-                                in_back_quote,
-                                false,
-                            );
-                            let do_ch = match do_char(environment, buffer) {
-                                Ok(ch) => ch,
-                                Err(e) => return Err((e, chars)),
-                            };
-                            if let Err(e) = push_stack(
-                                stack,
-                                do_ch,
-                                environment.reader_state.as_ref().unwrap().line,
-                                environment.reader_state.as_ref().unwrap().column,
-                            ) {
-                                return Err((e, chars));
-                            }
-                        }
-                        "<" => {
-                            let reason = format!(
-                                "Found an unreadable token: line {}, col: {}",
-                                environment.reader_state.as_ref().unwrap().line,
-                                environment.reader_state.as_ref().unwrap().column
-                            );
-                            return Err((ReadError { reason }, chars));
-                        }
-                        "(" => {
-                            level += 1;
-                            stack.push(List {
-                                list_type: ListType::Vector,
-                                vec: Vec::<Expression>::new(),
-                            });
-                        }
-                        "t" => {
-                            if let Err(e) = push_stack(
-                                stack,
-                                Expression::alloc_data(ExpEnum::True),
-                                environment.reader_state.as_ref().unwrap().line,
-                                environment.reader_state.as_ref().unwrap().column,
-                            ) {
-                                return Err((e, chars));
-                            }
-                        }
-                        "." => {
-                            chars = prep_reader_macro(
-                                environment,
-                                chars,
-                                stack,
-                                "reader-macro-dot",
-                                ".",
-                                None,
-                            )?;
-                        }
-                        // Read an octal int
-                        "o" => {
-                            chars =
-                                read_num_radix(environment, chars, stack, buffer, in_back_quote, 8)?
-                        }
-                        // Read a hex int
-                        "x" => {
-                            chars = read_num_radix(
-                                environment,
-                                chars,
-                                stack,
-                                buffer,
-                                in_back_quote,
-                                16,
-                            )?
-                        }
-                        // Read a binary int
-                        "b" => {
-                            chars =
-                                read_num_radix(environment, chars, stack, buffer, in_back_quote, 2)?
-                        }
-                        _ => {
-                            let reason = format!(
-                                "Found # with invalid char {}: line {}, col: {}",
-                                peek_ch,
-                                environment.reader_state.as_ref().unwrap().line,
-                                environment.reader_state.as_ref().unwrap().column
-                            );
-                            return Err((ReadError { reason }, chars));
-                        }
-                    }
+                        meta,
+                    );
+                    return Ok((Some(qlist), ichars));
                 }
-                "(" => {
-                    level += 1;
-                    line_stack.push((
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
+                Ok((None, ichars)) => {
+                    return Err((
+                        ReadError {
+                            reason: "Invalid quote".to_string(),
+                        },
+                        ichars,
                     ));
-                    stack.push(List {
-                        list_type: ListType::List,
-                        vec: Vec::<Expression>::new(),
-                    });
                 }
-                ")" => {
-                    if level <= 0 {
-                        return Err((
-                            ReadError {
-                                reason: "Unexpected `)`".to_string(),
-                            },
-                            chars,
+                Err((err, ichars)) => {
+                    return Err((err, ichars));
+                }
+            },
+            "`" => match read_inner(environment, chars, buffer, true, false) {
+                Ok((Some(exp), ichars)) => {
+                    let qlist = make_exp(
+                        ExpEnum::Pair(
+                            Expression::alloc_data(ExpEnum::Symbol(
+                                environment.interner.intern("back-quote"),
+                                SymLoc::None,
+                            )),
+                            make_exp(ExpEnum::Pair(exp, Expression::make_nil()), None),
+                        ),
+                        meta,
+                    );
+                    return Ok((Some(qlist), ichars));
+                }
+                Ok((None, ichars)) => {
+                    return Err((
+                        ReadError {
+                            reason: "Invalid back-quote".to_string(),
+                        },
+                        ichars,
+                    ));
+                }
+                Err((err, ichars)) => {
+                    return Err((err, ichars));
+                }
+            },
+            "," if in_back_quote => {
+                let sym = if peek_ch == "@" {
+                    chars.next();
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern("unquote-splice"),
+                        SymLoc::None,
+                    ))
+                } else if peek_ch == "." {
+                    chars.next();
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern("unquote-splice!"),
+                        SymLoc::None,
+                    ))
+                } else {
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern("unquote"),
+                        SymLoc::None,
+                    ))
+                };
+                match read_inner(environment, chars, buffer, in_back_quote, false) {
+                    Ok((Some(exp), ichars)) => {
+                        return Ok((
+                            Some(make_exp(
+                                ExpEnum::Pair(
+                                    sym,
+                                    make_exp(ExpEnum::Pair(exp, Expression::make_nil()), None),
+                                ),
+                                meta,
+                            )),
+                            ichars,
                         ));
                     }
-                    level -= 1;
-                    let (line, column) = line_stack.pop().unwrap_or((0, 0));
-                    if let Err(e) = close_list(
-                        stack,
-                        get_meta(
-                            environment.reader_state.as_ref().unwrap().file_name,
-                            line,
-                            column,
-                        ),
-                    ) {
-                        return Err((e, chars));
+                    Ok((None, ichars)) => {
+                        return Err((
+                            ReadError {
+                                reason: "Invalid back-quote".to_string(),
+                            },
+                            ichars,
+                        ));
                     }
-                }
-                ";" => {
-                    consume_line_comment(
-                        &mut chars,
-                        &mut environment.reader_state.as_mut().unwrap(),
-                    );
-                }
-                _ => {
-                    buffer.clear();
-                    buffer.push_str(&ch);
-                    let is_number = read_symbol(
-                        buffer,
-                        &mut chars,
-                        &mut environment.reader_state.as_mut().unwrap(),
-                        false,
-                        in_back_quote,
-                        false,
-                    );
-                    if let Err(e) = push_stack(
-                        stack,
-                        do_atom(environment, buffer, is_number),
-                        environment.reader_state.as_ref().unwrap().line,
-                        environment.reader_state.as_ref().unwrap().column,
-                    ) {
-                        return Err((e, chars));
+                    Err((err, ichars)) => {
+                        return Err((err, ichars));
                     }
                 }
             }
-        }
-        if level == 0 && !read_next {
-            consume_trailing_whitespace(environment, &mut chars);
-            return Ok((true, chars));
-        }
-        read_next = false;
-        next_chars = next2(&mut chars);
-    }
-    if level != 0 {
-        Err((
-            ReadError {
-                reason: "Unclosed list(s)".to_string(),
-            },
-            chars,
-        ))
-    } else {
-        consume_trailing_whitespace(environment, &mut chars);
-        Ok((false, chars))
-    }
-}
-
-fn stack_to_exp(
-    mut stack: &mut Vec<List>,
-    exp_meta: Option<ExpMeta>,
-    always_wrap: bool,
-    list_only: bool,
-) -> Result<Expression, ReadError> {
-    close_list(&mut stack, exp_meta)?;
-    if stack.len() > 1 {
-        Err(ReadError {
-            reason: "WTF?".to_string(),
-        })
-    } else {
-        match stack.pop() {
-            Some(mut v) => {
-                if v.vec.is_empty() {
-                    Err(ReadError {
-                        reason: "Empty results".to_string(),
-                    })
-                } else if v.vec.len() == 1 && !always_wrap {
-                    let exp: Expression = v.vec.pop().unwrap();
-                    if list_only {
-                        // If we only have one thing and it is a vector or list then
-                        // remove the outer list that was added (unless always_wrap
-                        // is set).
-                        let exp_d = &exp.get().data;
-                        match exp_d {
-                            ExpEnum::Vector(_) => Ok(exp.clone()),
-                            ExpEnum::Pair(_, _) => Ok(exp.clone()),
-                            ExpEnum::Nil => Ok(exp.clone()),
-                            _ => {
-                                v.vec.push(exp.clone());
-                                Ok(Expression::with_list_meta(v.vec, exp_meta))
-                            }
-                        }
-                    } else {
-                        Ok(exp)
+            "," => {
+                return Err((
+                    ReadError {
+                        reason: "Unquote outside of a back-quote".to_string(),
+                    },
+                    chars,
+                ))
+            }
+            "#" => {
+                chars.next();
+                match &*peek_ch {
+                    "|" => consume_block_comment(
+                        &mut chars,
+                        &mut environment.reader_state.as_mut().unwrap(),
+                    ),
+                    "\\" => {
+                        buffer.clear();
+                        read_symbol(
+                            buffer,
+                            &mut chars,
+                            &mut environment.reader_state.as_mut().unwrap(),
+                            true,
+                            false,
+                        );
+                        match do_char(environment, buffer, meta) {
+                            Ok(ch) => return Ok((Some(ch), chars)),
+                            Err(e) => return Err((e, chars)),
+                        };
                     }
+                    "<" => {
+                        let reason = format!(
+                            "Found an unreadable token: line {}, col: {}",
+                            environment.reader_state.as_ref().unwrap().line,
+                            environment.reader_state.as_ref().unwrap().column
+                        );
+                        return Err((ReadError { reason }, chars));
+                    }
+                    "(" => {
+                        let (exp, chars) = read_vector(environment, chars, buffer, in_back_quote)?;
+                        return Ok((Some(exp), chars));
+                    }
+                    "t" => {
+                        return Ok((Some(Expression::alloc_data(ExpEnum::True)), chars));
+                    }
+                    "." => {
+                        return prep_reader_macro(
+                            environment,
+                            chars,
+                            "reader-macro-dot",
+                            ".",
+                            None,
+                        );
+                    }
+                    // Read an octal int
+                    "o" => {
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 8, meta)?;
+                        return Ok((Some(exp), chars));
+                    }
+                    // Read a hex int
+                    "x" => {
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 16, meta)?;
+                        return Ok((Some(exp), chars));
+                    }
+                    // Read a binary int
+                    "b" => {
+                        let (exp, chars) = read_num_radix(environment, chars, buffer, 2, meta)?;
+                        return Ok((Some(exp), chars));
+                    }
+                    _ => {
+                        let reason = format!(
+                            "Found # with invalid char {}: line {}, col: {}",
+                            peek_ch,
+                            environment.reader_state.as_ref().unwrap().line,
+                            environment.reader_state.as_ref().unwrap().column
+                        );
+                        return Err((ReadError { reason }, chars));
+                    }
+                }
+            }
+            "(" => {
+                let (exp, chars) = read_list(environment, chars, buffer, in_back_quote)?;
+                return Ok((Some(exp), chars));
+            }
+            ")" => {
+                if return_close_paren {
+                    return Ok((
+                        Some(Expression::alloc_data(ExpEnum::Symbol(")", SymLoc::None))),
+                        chars,
+                    ));
                 } else {
-                    Ok(Expression::with_list_meta(v.vec, exp_meta))
+                    return Err((
+                        ReadError {
+                            reason: "Unexpected `)`".to_string(),
+                        },
+                        chars,
+                    ));
                 }
             }
-            None => Err(ReadError {
-                reason: "WTF, Empty results".to_string(),
-            }),
+            ";" => {
+                consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
+            }
+            _ => {
+                buffer.clear();
+                buffer.push_str(&ch);
+                let is_number = read_symbol(
+                    buffer,
+                    &mut chars,
+                    &mut environment.reader_state.as_mut().unwrap(),
+                    false,
+                    false,
+                );
+                return Ok((Some(do_atom(environment, buffer, is_number, meta)), chars));
+            }
         }
+        consume_whitespace(environment, &mut chars);
     }
+    Ok((None, chars))
 }
 
 fn read2(
@@ -1117,12 +1121,8 @@ fn read2(
         false
     };
     let mut buffer = String::new();
+    let mut exps = Vec::new();
 
-    let mut stack: Vec<List> = Vec::new();
-    stack.push(List {
-        list_type: ListType::Vector,
-        vec: Vec::<Expression>::new(),
-    });
     // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
     // reference and iterator go away at the end of this function.
     let ntext = unsafe { &*(text as *const str) };
@@ -1137,8 +1137,8 @@ fn read2(
     }
     let mut cont = true;
     while cont {
-        let (icont, ichars) = match read_inner(environment, chars, &mut stack, &mut buffer, false) {
-            Ok(icont) => icont,
+        let (exp, ichars) = match read_inner(environment, chars, &mut buffer, false, false) {
+            Ok(r) => r,
             Err((err, _)) => {
                 if clear_state {
                     environment.reader_state = None;
@@ -1146,7 +1146,11 @@ fn read2(
                 return Err(err);
             }
         };
-        cont = icont;
+        if let Some(exp) = exp {
+            exps.push(exp);
+        } else {
+            cont = false;
+        }
         chars = ichars;
     }
     if chars.next().is_some() {
@@ -1161,11 +1165,36 @@ fn read2(
         return Err(ReadError { reason });
     }
     let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
-    let res = stack_to_exp(&mut stack, exp_meta, always_wrap, list_only);
     if clear_state {
         environment.reader_state = None;
     }
-    res
+
+    if always_wrap {
+        Ok(Expression::with_list_meta(exps, exp_meta))
+    } else if list_only {
+        if exps.len() == 1 {
+            let exp_d = exps[0].get();
+            match &exp_d.data {
+                ExpEnum::Pair(_, _) => Ok(exps[0].clone()),
+                ExpEnum::Vector(_) => Ok(exps[0].clone()),
+                ExpEnum::Nil => Ok(exps[0].clone()),
+                _ => {
+                    drop(exp_d);
+                    Ok(Expression::with_list_meta(exps, exp_meta))
+                }
+            }
+        } else if exps.is_empty() {
+            Err(ReadError {
+                reason: "Empty value".to_string(),
+            })
+        } else {
+            Ok(Expression::with_list_meta(exps, exp_meta))
+        }
+    } else if exps.len() == 1 {
+        Ok(exps[0].clone())
+    } else {
+        Ok(Expression::with_list_meta(exps, exp_meta))
+    }
 }
 
 pub fn read_form(
@@ -1184,38 +1213,30 @@ pub fn read_form(
         false
     };
     let mut buffer = String::new();
-    let mut stack: Vec<List> = Vec::new();
-    stack.push(List {
-        list_type: ListType::Vector,
-        vec: Vec::<Expression>::new(),
-    });
-    let mut ichars = chars;
-    let mut icont = true;
-    while icont && stack.len() == 1 && stack[0].vec.is_empty() {
-        let (tcont, tchars) = match read_inner(environment, ichars, &mut stack, &mut buffer, false)
-        {
-            Ok((cont, ichars)) => (cont, ichars),
-            Err((e, ichars)) => {
-                if clear_state {
-                    environment.reader_state = None;
-                }
-                return Err((e, ichars));
+    match read_inner(environment, chars, &mut buffer, false, false) {
+        Ok((Some(exp), ichars)) => {
+            if clear_state {
+                environment.reader_state = None;
             }
-        };
-        icont = tcont;
-        ichars = tchars;
-    }
-    let exp_meta = get_meta(
-        environment.reader_state.as_ref().unwrap().file_name,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
-    );
-    if clear_state {
-        environment.reader_state = None;
-    }
-    match stack_to_exp(&mut stack, exp_meta, false, false) {
-        Ok(exp) => Ok((exp, ichars)),
-        Err(e) => Err((e, ichars)),
+            Ok((exp, ichars))
+        }
+        Ok((None, ichars)) => {
+            if clear_state {
+                environment.reader_state = None;
+            }
+            Err((
+                ReadError {
+                    reason: "Empty value".to_string(),
+                },
+                ichars,
+            ))
+        }
+        Err((err, ichars)) => {
+            if clear_state {
+                environment.reader_state = None;
+            }
+            Err((err, ichars))
+        }
     }
 }
 
@@ -1241,8 +1262,6 @@ pub fn read_list_wrap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     use crate::builtins_util::is_proper_list;
 
@@ -1325,7 +1344,7 @@ mod tests {
     }
 
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         environment.reader_state = Some(ReaderState {
             line: 0,
             column: 0,
@@ -1417,80 +1436,85 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        let tokens = tokenize(&mut environment, "'(1 2 ,3)", None);
-        assert!(tokens.len() == 8);
-        assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:quote");
-        assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,3");
-        assert!(tokens[6] == ")");
-        assert!(tokens[7] == ")");
-        let tokens = tokenize(&mut environment, "'(1 2 ,@3)", None);
-        assert!(tokens.len() == 8);
-        assert!(tokens[0] == "(");
-        assert!(tokens[1] == "Symbol:quote");
-        assert!(tokens[2] == "(");
-        assert!(tokens[3] == "Int:1");
-        assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,@3");
-        assert!(tokens[6] == ")");
-        assert!(tokens[7] == ")");
+        tokenize_err(&mut environment, "'(1 2 ,3)", None);
+        tokenize_err(&mut environment, "'(1 2 ,@3)", None);
         let tokens = tokenize(&mut environment, "`(1 2 ,3)", None);
-        assert!(tokens.len() == 9);
+        assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,");
-        assert!(tokens[6] == "Int:3");
-        assert!(tokens[7] == ")");
+        assert!(tokens[5] == "(");
+        assert!(tokens[6] == "Symbol:unquote");
+        assert!(tokens[7] == "Int:3");
         assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
+        assert!(tokens[10] == ")");
         let tokens = tokenize(&mut environment, "`(1 2 ,@3)", None);
-        assert!(tokens.len() == 9);
+        assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "Int:2");
-        assert!(tokens[5] == "Symbol:,@");
-        assert!(tokens[6] == "Int:3");
-        assert!(tokens[7] == ")");
+        assert!(tokens[5] == "(");
+        assert!(tokens[6] == "Symbol:unquote-splice");
+        assert!(tokens[7] == "Int:3");
         assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
+        assert!(tokens[10] == ")");
+        let tokens = tokenize(&mut environment, "`(1 2 ,.3)", None);
+        assert!(tokens.len() == 11);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:back-quote");
+        assert!(tokens[2] == "(");
+        assert!(tokens[3] == "Int:1");
+        assert!(tokens[4] == "Int:2");
+        assert!(tokens[5] == "(");
+        assert!(tokens[6] == "Symbol:unquote-splice!");
+        assert!(tokens[7] == "Int:3");
+        assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
+        assert!(tokens[10] == ")");
         let tokens = tokenize(&mut environment, "`(1 `2 ,@3)", None);
-        assert!(tokens.len() == 12);
+        assert!(tokens.len() == 14);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "(");
-        assert!(tokens[5] == "Symbol:quote");
+        assert!(tokens[5] == "Symbol:back-quote");
         assert!(tokens[6] == "Int:2");
         assert!(tokens[7] == ")");
-        assert!(tokens[8] == "Symbol:,@");
-        assert!(tokens[9] == "Int:3");
-        assert!(tokens[10] == ")");
+        assert!(tokens[8] == "(");
+        assert!(tokens[9] == "Symbol:unquote-splice");
+        assert!(tokens[10] == "Int:3");
         assert!(tokens[11] == ")");
+        assert!(tokens[12] == ")");
+        assert!(tokens[13] == ")");
         let tokens = tokenize(&mut environment, "`(1 `(2 ,x) ,@3)", None);
-        assert!(tokens.len() == 16);
+        assert!(tokens.len() == 20);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
         assert!(tokens[2] == "(");
         assert!(tokens[3] == "Int:1");
         assert!(tokens[4] == "(");
-        assert!(tokens[5] == "Symbol:quote");
+        assert!(tokens[5] == "Symbol:back-quote");
         assert!(tokens[6] == "(");
         assert!(tokens[7] == "Int:2");
-        assert!(tokens[8] == "Symbol:,");
-        assert!(tokens[9] == "Symbol:x");
-        assert!(tokens[10] == ")");
+        assert!(tokens[8] == "(");
+        assert!(tokens[9] == "Symbol:unquote");
+        assert!(tokens[10] == "Symbol:x");
         assert!(tokens[11] == ")");
-        assert!(tokens[12] == "Symbol:,@");
-        assert!(tokens[13] == "Int:3");
-        assert!(tokens[14] == ")");
-        assert!(tokens[15] == ")");
+        assert!(tokens[12] == ")");
+        assert!(tokens[13] == ")");
+        assert!(tokens[14] == "(");
+        assert!(tokens[15] == "Symbol:unquote-splice");
+        assert!(tokens[16] == "Int:3");
+        assert!(tokens[17] == ")");
+        assert!(tokens[18] == ")");
+        assert!(tokens[19] == ")");
     }
 
     #[test]

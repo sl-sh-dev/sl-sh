@@ -1,12 +1,13 @@
 [package]
 name = "sl-sh"
-version = "0.9.17"
+version = "0.9.22"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cfg-if = "1.0"
 redox_liner = { git = "https://github.com/sstanfield/liner.git" }
 #redox_liner = { path = "../liner" }
 glob = "0.3"

@@ -5,8 +5,6 @@ use std::fmt;
 use std::io;
 use std::process::Child;
 use std::rc::Rc;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use liner::Context;
 
@@ -14,6 +12,7 @@ use crate::interner::*;
 use crate::process::*;
 use crate::symbols::*;
 use crate::types::*;
+use crate::unix::cvt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keys {
@@ -42,38 +41,6 @@ impl Default for ReplSettings {
             vi_normal_prompt_suffix: None,
             vi_insert_prompt_prefix: None,
             vi_insert_prompt_suffix: None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum IOState {
-    Pipe,
-    Inherit,
-    Null,
-}
-
-#[derive(Clone, Debug)]
-pub struct EnvState {
-    pub recur_num_args: Option<usize>,
-    pub gensym_count: u32,
-    pub stdout_status: Option<IOState>,
-    pub stderr_status: Option<IOState>,
-    pub eval_level: u32,
-    pub is_spawn: bool,
-    pub pipe_pgid: Option<u32>,
-}
-
-impl Default for EnvState {
-    fn default() -> Self {
-        EnvState {
-            recur_num_args: None,
-            gensym_count: 0,
-            stdout_status: None,
-            stderr_status: None,
-            eval_level: 0,
-            is_spawn: false,
-            pipe_pgid: None,
         }
     }
 }
@@ -121,25 +88,47 @@ pub struct StackFrame {
     pub symbols: Symbols,
 }
 
+pub struct GrabProcOutput<'a> {
+    pub old_grab_proc_output: bool,
+    pub environment: &'a mut Environment,
+}
+
+pub fn set_grab_proc_output(
+    environment: &mut Environment,
+    grab_proc_output: bool,
+) -> GrabProcOutput {
+    let old_grab_proc_output = environment.grab_proc_output;
+    environment.grab_proc_output = grab_proc_output;
+    GrabProcOutput {
+        old_grab_proc_output,
+        environment,
+    }
+}
+
+impl<'a> Drop for GrabProcOutput<'a> {
+    fn drop(&mut self) {
+        self.environment.grab_proc_output = self.old_grab_proc_output;
+    }
+}
+
 //#[derive(Clone, Debug)]
 pub struct Environment {
-    // Set to true when a SIGINT (ctrl-c) was received, lets long running stuff die.
-    pub sig_int: Arc<AtomicBool>,
-    pub state: EnvState,
+    pub recur_num_args: Option<usize>,
+    pub gensym_count: u32,
+    pub eval_level: u32,
+    pub pipe_pgid: Option<u32>,
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
     pub stack_frame_base: usize,
     pub reader_state: Option<ReaderState>,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
-    pub in_pipe: bool,
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
     pub loose_symbols: bool,
     pub str_ignore_expand: bool,
-    pub procs: Rc<RefCell<HashMap<u32, Child>>>,
-    pub data_in: Option<Expression>,
+    pub procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
     pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
@@ -167,6 +156,9 @@ pub struct Environment {
     pub liners: HashMap<&'static str, Context>,
     pub next_lex_id: usize,
     pub supress_eval: bool, // XXX Hack for apply...
+    pub terminal_fd: i32,
+    pub grab_proc_output: bool,
+    pub in_fork: bool,
 }
 
 impl Environment {
@@ -175,30 +167,37 @@ impl Environment {
     }
 }
 
-pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
-    let procs: Rc<RefCell<HashMap<u32, Child>>> = Rc::new(RefCell::new(HashMap::new()));
+pub fn build_default_environment() -> Environment {
+    let procs: Rc<RefCell<HashMap<u32, Option<Child>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
+    let terminal_fd = unsafe {
+        if let Ok(fd) = cvt(libc::dup(0)) {
+            fd
+        } else {
+            0
+        }
+    };
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
-        sig_int,
-        state: EnvState::default(),
+        recur_num_args: None,
+        gensym_count: 0,
+        eval_level: 0,
+        pipe_pgid: None,
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
         stack_frame_base: 0,
         reader_state: None,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
-        in_pipe: false,
         run_background: false,
         is_tty: true,
         do_job_control: true,
         loose_symbols: false,
         str_ignore_expand: false,
         procs,
-        data_in: None,
         form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
@@ -214,6 +213,9 @@ pub fn build_default_environment(sig_int: Arc<AtomicBool>) -> Environment {
         liners: HashMap::new(),
         next_lex_id: 1,
         supress_eval: false,
+        terminal_fd,
+        grab_proc_output: false,
+        in_fork: false,
     }
 }
 
@@ -437,32 +439,30 @@ pub fn remove_job(environment: &Environment, pid: u32) {
 
 pub fn add_process(environment: &Environment, process: Child) -> u32 {
     let pid = process.id();
-    environment.procs.borrow_mut().insert(pid, process);
+    environment.procs.borrow_mut().insert(pid, Some(process));
     pid
 }
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
-    let mut procs = environment.procs.borrow_mut();
-    let keys: Vec<u32> = procs.keys().copied().collect();
-    let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
-    for key in keys {
-        if let Some(child) = procs.get_mut(&key) {
-            pids.push(child.id());
+    let procs = environment.procs.borrow_mut();
+    if !procs.is_empty() {
+        let keys: Vec<u32> = procs.keys().copied().collect();
+        let mut pids: Vec<u32> = Vec::with_capacity(keys.len());
+        for key in keys {
+            pids.push(key);
         }
+        drop(procs);
+        for pid in pids {
+            try_wait_pid(environment, pid);
+        }
+        // XXX remove them or better replace pid with exit status
     }
-    drop(procs);
-    for pid in pids {
-        try_wait_pid(environment, pid);
-    }
-    // XXX remove them or better replace pid with exit status
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     fn assert_lookup(environment: &Environment, key: &str, val: i64) {
         let xxx_i = if let Some(exp) = lookup_expression(environment, key) {
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_lookup_expression() -> Result<(), LispError> {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         assert!(lookup_expression(&mut environment, "XXX").is_none());
         environment
             .stack
@@ -679,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_get_expression() -> Result<(), LispError> {
-        let mut environment = build_default_environment(Arc::new(AtomicBool::new(false)));
+        let mut environment = build_default_environment();
         assert!(
             get_expression(&mut environment, ExpEnum::Symbol("NA", SymLoc::None).into()).is_none()
         );

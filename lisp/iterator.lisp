@@ -80,8 +80,6 @@ Example:
 (assert-equal 2 (tmap :next!))
 (assert-true (tmap :empty?))
 "
-  ;(:fn next! (s) ((iter s) :next!))
-  ;(:fn empty? (s) ((iter s) :empty?))
   (:fn collect
 "Collect all the values into a list.  This will consume the iterator and
 produce a new list.
@@ -252,7 +250,6 @@ Example:
 (assert-equal 1 (tmap :next-back!))
 (assert-true (tmap :empty?))
 "
-  ;(:fn next-back! (s) ((iter s) :next!))
   (:fn nth-back!
 "Consume the iterator until the nth element from the end and return it (0 based).
 Note that repeated called to nth-back! will return new data since it consumes the iterator.
@@ -513,11 +510,6 @@ Example:
                 (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
                 (set! tseq tcell)))
             (recur (rest rest-iters)))))rest-iters)
-    #|XXXX (iterator::for v in rest-iters (do
-        (if (and (not (null v))(or (and (iter? v)(not (v :empty?)))(not (iter? v)))) (do
-            (set! tcell (join (iterator::iter-or-single v) nil))
-            (if (null tseq) (set! iters tcell) (xdr! tseq tcell))
-            (set! tseq tcell)))))|#
     self))
   (:impl iterator::iterator))
 
@@ -741,7 +733,6 @@ Example:
   (if (iter? thing)
         thing
       (list? thing)
-        ;(do (println "XXXX listing") (var ret ((list-iter) :init thing)) (println "XXXX post listing") ret)
         ((list-iter) :init thing)
       (vec? thing)
         ((vec-iter) :init thing 0)

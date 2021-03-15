@@ -24,21 +24,13 @@ impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn list_out(res: &mut String, itr: &mut dyn Iterator<Item = Expression>) {
             let mut first = true;
-            let mut last_exp: Expression = Expression::make_nil();
             for p in itr {
                 if !first {
-                    if let ExpEnum::Symbol(sym, _) = &last_exp.get().data {
-                        if sym != &"," && sym != &",@" {
-                            res.push(' ');
-                        }
-                    } else {
-                        res.push(' ');
-                    }
+                    res.push(' ');
                 } else {
                     first = false;
                 }
                 res.push_str(&p.to_string());
-                last_exp = p;
             }
         }
         fn lambda_out(f: &mut fmt::Formatter, l: &Lambda) -> fmt::Result {
@@ -89,7 +81,7 @@ impl fmt::Display for Expression {
             ExpEnum::Pair(e1, e2) => {
                 if is_proper_list(&self) {
                     match &e1.get().data {
-                        ExpEnum::Quote => {
+                        ExpEnum::Symbol("quote", _) => {
                             f.write_str("'")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
@@ -98,8 +90,35 @@ impl fmt::Display for Expression {
                                 f.write_str(&e2.to_string())
                             }
                         }
-                        ExpEnum::BackQuote => {
+                        ExpEnum::Symbol("back-quote", _) => {
                             f.write_str("`")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = &e2.get().data {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        ExpEnum::Symbol("unquote", _) => {
+                            f.write_str(",")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = &e2.get().data {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        ExpEnum::Symbol("unquote-splice", _) => {
+                            f.write_str(",@")?;
+                            // This will be a two element list or something is wrong...
+                            if let ExpEnum::Pair(a2, _) = &e2.get().data {
+                                f.write_str(&a2.to_string())
+                            } else {
+                                f.write_str(&e2.to_string())
+                            }
+                        }
+                        ExpEnum::Symbol("unquote-splice!", _) => {
+                            f.write_str(",.")?;
                             // This will be a two element list or something is wrong...
                             if let ExpEnum::Pair(a2, _) = &e2.get().data {
                                 f.write_str(&a2.to_string())
@@ -210,21 +229,13 @@ fn pretty_print_int(
             } else if is_proper_list(&expression) {
                 writer.write_all(b"(")?;
                 let mut first = true;
-                let mut last_p: Expression = Expression::make_nil();
                 for p in expression.iter() {
                     if !first {
-                        if let ExpEnum::Symbol(sym, _) = &last_p.get().data {
-                            if sym != &"," && sym != &",@" {
-                                writer.write_all(b" ")?;
-                            }
-                        } else {
-                            writer.write_all(b" ")?;
-                        }
+                        writer.write_all(b" ")?;
                     } else {
                         first = false;
                     }
                     pretty_print_int(&p, environment, indent + 1, writer)?;
-                    last_p = p; //&p.get().data;
                 }
                 writer.write_all(b")")?;
             } else {

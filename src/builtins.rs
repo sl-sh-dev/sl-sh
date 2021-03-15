@@ -10,6 +10,7 @@ use std::str::from_utf8;
 
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::backquote::*;
 use crate::builtins_util::*;
 use crate::config::VERSION_STRING;
 use crate::environment::*;
@@ -466,12 +467,7 @@ fn print(
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> Result<Expression, LispError> {
-    match &environment.state.stdout_status {
-        Some(IOState::Null) => { /* Nothing to do... */ }
-        _ => {
-            print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
-        }
-    };
+    print_to_oe(environment, args, add_newline, true, false, "*stdout*")?;
     Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
@@ -480,12 +476,7 @@ pub fn eprint(
     args: &mut dyn Iterator<Item = Expression>,
     add_newline: bool,
 ) -> Result<Expression, LispError> {
-    match &environment.state.stderr_status {
-        Some(IOState::Null) => { /* Nothing to do... */ }
-        _ => {
-            print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
-        }
-    };
+    print_to_oe(environment, args, add_newline, true, true, "*stderr*")?;
     Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
@@ -554,121 +545,16 @@ pub fn builtin_quote(
     Err(LispError::new("quote: takes one form"))
 }
 
-fn replace_commas(
-    environment: &mut Environment,
-    list: &mut dyn Iterator<Item = Expression>,
-    is_vector: bool,
-    meta: Option<ExpMeta>,
-) -> Result<Expression, LispError> {
-    let mut output: Vec<Expression> = Vec::new();
-    let mut comma_next = false;
-    let mut amp_next = false;
-    for exp in list {
-        let meta = exp.meta();
-        let exp_d = exp.get();
-        let exp = match &exp_d.data {
-            ExpEnum::Vector(_) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
-            ExpEnum::Pair(_, _) => replace_commas(environment, &mut exp.iter(), is_vector, meta)?,
-            _ => exp.clone(),
-        };
-        if let ExpEnum::Symbol(symbol, _) = &exp_d.data {
-            if symbol == &"," {
-                comma_next = true;
-            } else if symbol == &",@" {
-                amp_next = true;
-            } else if comma_next {
-                drop(exp_d);
-                output.push(eval(environment, exp)?);
-                comma_next = false;
-            } else if amp_next {
-                drop(exp_d);
-                let nl = eval(environment, exp)?;
-                match &nl.get().data {
-                    ExpEnum::Vector(new_list) => {
-                        for item in new_list {
-                            output.push(item.clone());
-                        }
-                    }
-                    ExpEnum::Pair(_, _) => {
-                        for item in nl.iter() {
-                            output.push(item);
-                        }
-                    }
-                    ExpEnum::Nil => {}
-                    _ => {
-                        return Err(LispError::new(",@ must be applied to a list"));
-                    }
-                }
-                amp_next = false;
-            } else {
-                // Make a new symbol vs sharing structure- can be a problem for
-                // patched symbols later.
-                let exp2: Expression = ExpEnum::Symbol(symbol, SymLoc::None).into();
-                exp2.get_mut().meta = exp.get().meta;
-                exp2.get_mut().meta_tags = exp.get().meta_tags.clone();
-                output.push(exp2);
-            }
-        } else if comma_next {
-            drop(exp_d);
-            output.push(eval(environment, exp)?);
-            comma_next = false;
-        } else if amp_next {
-            drop(exp_d);
-            let nl = eval(environment, exp)?;
-            match &nl.get().data {
-                ExpEnum::Vector(new_list) => {
-                    for item in new_list {
-                        output.push(item.clone());
-                    }
-                }
-                ExpEnum::Pair(_, _) => {
-                    for item in nl.iter() {
-                        output.push(item);
-                    }
-                }
-                ExpEnum::Nil => {}
-                _ => {
-                    return Err(LispError::new(",@ must be applied to a list"));
-                }
-            }
-            amp_next = false;
-        } else {
-            output.push(exp);
-        }
-    }
-    if is_vector {
-        Ok(Expression::with_list_meta(output, meta))
-    } else {
-        Ok(Expression::cons_from_vec(&output, meta))
-    }
-}
-
 pub fn builtin_bquote(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let ret = if let Some(arg) = args.next() {
-        let meta = arg.meta();
-        match &arg.get().data {
-            ExpEnum::Symbol(s, _) if s == &"," => {
-                if let Some(exp) = args.next() {
-                    Ok(eval(environment, exp)?)
-                } else {
-                    Ok(Expression::alloc_data(ExpEnum::Nil))
-                }
-            }
-            ExpEnum::Vector(_) => replace_commas(environment, &mut arg.iter(), true, meta),
-            ExpEnum::Pair(_, _) => replace_commas(environment, &mut arg.iter(), false, meta),
-            _ => Ok(arg.clone()),
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            return bquote(environment, arg);
         }
-    } else {
-        Err(LispError::new("back-quote: takes one form"))
-    };
-    if args.next().is_some() {
-        Err(LispError::new("back-quote: takes one form"))
-    } else {
-        ret
     }
+    Err(LispError::new("back-quote: takes one form"))
 }
 
 fn builtin_and(
@@ -909,7 +795,7 @@ fn builtin_recur(
         arg_list.push(a);
         arg_num += 1;
     }
-    environment.state.recur_num_args = Some(arg_num);
+    environment.recur_num_args = Some(arg_num);
     Ok(Expression::with_list(arg_list))
 }
 
@@ -920,7 +806,7 @@ fn builtin_gensym(
     if args.next().is_some() {
         Err(LispError::new("gensym takes to arguments"))
     } else {
-        let gensym_count = &mut environment.state.gensym_count;
+        let gensym_count = &mut environment.gensym_count;
         *gensym_count += 1;
         Ok(Expression::alloc_data(ExpEnum::Symbol(
             environment

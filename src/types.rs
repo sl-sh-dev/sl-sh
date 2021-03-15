@@ -124,11 +124,19 @@ pub enum FileState {
 
 pub struct PairIter {
     current: Option<Expression>,
+    dotted: bool,
 }
 
 impl PairIter {
-    fn new(exp: Expression) -> PairIter {
-        PairIter { current: Some(exp) }
+    pub fn new(exp: Expression) -> PairIter {
+        PairIter {
+            current: Some(exp),
+            dotted: false,
+        }
+    }
+
+    pub fn is_dotted(&self) -> bool {
+        self.dotted
     }
 }
 
@@ -137,11 +145,20 @@ impl Iterator for PairIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.clone() {
-            if let ExpEnum::Pair(e1, e2) = &current.get().data {
-                self.current = Some(e2.clone());
-                Some(e1.clone())
-            } else {
-                None
+            let current_d = current.get();
+            match &current_d.data {
+                ExpEnum::Pair(e1, e2) => {
+                    self.current = Some(e2.clone());
+                    Some(e1.clone())
+                }
+                ExpEnum::Nil => None,
+                _ => {
+                    drop(current_d);
+                    let cur = Some(current);
+                    self.current = None;
+                    self.dotted = true;
+                    cur
+                }
             }
         } else {
             None
@@ -232,7 +249,7 @@ pub enum ExpEnum {
     Char(Cow<'static, str>),
     CodePoint(char),
 
-    // Lambda and macros and builtings
+    // Lambda and macros and builtins
     Lambda(Lambda),
     Macro(Lambda),
     Function(Callable),
@@ -428,6 +445,12 @@ pub struct TakeN<'a, T> {
     pid: u32,
 }
 
+impl<'a, T> TakeN<'a, T> {
+    pub fn new(inner: &'a mut T, limit: u64, pid: u32) -> Self {
+        TakeN { inner, limit, pid }
+    }
+}
+
 impl<'a, T: Read> Read for TakeN<'a, T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // Don't call into inner reader at all at EOF because it may still block
@@ -506,10 +529,6 @@ impl Expression {
             data: Rc::new(RefCell::new(self.data.borrow().copy())),
         }
     }
-
-    //pub fn new(obj: Expression) -> Expression {
-    //    Expression { data: obj.data }
-    //}
 
     pub fn alloc(obj: ExpObj) -> Expression {
         Expression {
@@ -725,11 +744,11 @@ impl Expression {
 
     fn pid_to_string(
         &self,
-        procs: Rc<RefCell<HashMap<u32, Child>>>,
+        procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
         pid: u32,
     ) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
-            Some(child) => {
+            Some(Some(child)) => {
                 if let Some(childout) = child.stdout.as_mut() {
                     let mut buffer = String::new();
                     let mut taken = TakeN {
@@ -743,6 +762,7 @@ impl Expression {
                     Ok("".to_string())
                 }
             }
+            Some(None) => Ok("".to_string()),
             None => Ok("".to_string()),
         }
     }
@@ -899,7 +919,7 @@ impl Expression {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
-                    Some(child) => {
+                    Some(Some(child)) => {
                         if child.stdout.is_some() {
                             let out = child.stdout.as_mut().unwrap();
                             let mut buf = [0; 1024];
@@ -913,6 +933,9 @@ impl Expression {
                         } else {
                             return Err(LispError::new("Failed to get process out to write to."));
                         }
+                    }
+                    Some(None) => {
+                        return Err(LispError::new("Failed to get process to write to."));
                     }
                     None => {
                         return Err(LispError::new("Failed to get process to write to."));

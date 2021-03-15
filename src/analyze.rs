@@ -48,7 +48,10 @@ pub fn make_fn(
                     }
                 }
             } else {
-                return Err(LispError::new("fn: parameters must be symbols"));
+                return Err(LispError::new(format!(
+                    "fn: parameters must be symbols, got {}",
+                    p
+                )));
             }
         }
         if has_rest && num_post_rest != 1 {
@@ -144,17 +147,11 @@ fn backquote_syms(
     args: &mut dyn Iterator<Item = Expression>,
     syms: &mut Option<Symbols>,
 ) {
-    let mut last_unquote = false;
     for exp in args {
         let mut arg_d = exp.get_mut();
         match &mut arg_d.data {
             ExpEnum::Symbol(s, loc) => {
-                if last_unquote {
-                    last_unquote = false;
-                    patch_symbol(environment, syms, s, loc);
-                } else if s == &"," || s == &",@" {
-                    last_unquote = true;
-                }
+                patch_symbol(environment, syms, s, loc);
             }
             ExpEnum::Vector(_) => {
                 drop(arg_d);
@@ -226,10 +223,8 @@ fn analyze_seq(
                             // Patch the 'quote' symbol so eval will work.
                             patch_symbol(environment, syms, name, loc);
                         }
-                        if let Some(_exp) = args.next() {
-                            if args.next().is_none() {
-                                return Ok((None, false));
-                            }
+                        if args.next().is_some() && args.next().is_none() {
+                            return Ok((None, false));
                         }
                         return Err(LispError::new("quote: Takes one form."));
                     }
@@ -239,22 +234,17 @@ fn analyze_seq(
                             patch_symbol(environment, syms, name, loc);
                         }
                         if let Some(arg) = args.next() {
-                            match &arg.get().data {
-                                ExpEnum::Symbol(s, _) if s == &"," => {
-                                    if let Some(exp) = args.next() {
-                                        if let ExpEnum::Symbol(s, loc) = &mut exp.get_mut().data {
-                                            patch_symbol(environment, syms, s, loc);
-                                        }
-                                    } else {
-                                        return Err(LispError::new(
-                                            "back-quote: unquote with no form",
-                                        ));
-                                    }
+                            let mut arg_d = arg.get_mut();
+                            match &mut arg_d.data {
+                                ExpEnum::Symbol(s, loc) => {
+                                    patch_symbol(environment, syms, s, loc);
                                 }
                                 ExpEnum::Vector(_) => {
+                                    drop(arg_d);
                                     backquote_syms(environment, &mut arg.iter(), syms);
                                 }
                                 ExpEnum::Pair(_, _) => {
+                                    drop(arg_d);
                                     backquote_syms(environment, &mut arg.iter(), syms);
                                 }
                                 _ => {}
