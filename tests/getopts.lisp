@@ -262,7 +262,7 @@
 (var fs-file-vec-bindings
 (hash-get
 (getopts (make-hash (list (join :-f (getopts-build-param 2 nil :fs-file?))))
-         '("-f" "/etc/groupx" "/etc/passwd"))
+         '("-f" "/etc/group" "/etc/passwd"))
            :-f))
 (for f in fs-file-vec-bindings (assert-true (fs-file? f) ". Return value should pass test fs-file?."))
 
@@ -276,7 +276,7 @@
 (var fs-exists-bindings
     (hash-get
       (getopts (make-hash (list (join :--exists (getopts-build-param 1 nil :fs-exists?))))
-               '("--exists" "/etc/groupx"))
+               '("--exists" "/etc/group"))
       :--exists))
 (assert-true (fs-exists? fs-exists-bindings) ". Return value should pass test fs-exists?.")
 
