@@ -91,7 +91,12 @@
 			"ERR: "
 			shell::*fg-default* shell::*bg-default*
 			" " test-name)))
-		(nil (err (str "Invalid test result status for test name " test-name "\n Error: " result)))))
+		(nil
+		 (println
+			(str shell::*fg-black* shell::*bg-red*
+			"UNK: "
+			shell::*fg-default* shell::*bg-default*
+			" " test-name)))))
 
 (defn report-test-results (tests test-report) (do
 	(var exit-status :passed)
@@ -113,7 +118,7 @@
 					(get-error
 						((hash-get fst :load-fcn))))
 				(when (= (car test-result) :error) (do
-					(set! exit-status (cdr test-result))
+					(set! exit-status :error)
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
 		(recur (rest tests) test-report)))))))
