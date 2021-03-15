@@ -43,16 +43,16 @@
 		(if (= sym "|") (str '\ sym) sym))
 	(hash-set! doc-map :type
 		(do
-		(var ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))
-		ms))
+			(var ms (get-mid-doc-section sym "Type" 1 0 docstring #t "Namespace"))
+			ms))
 	(hash-set! doc-map :namespace
 		(get-mid-doc-section sym "Namespace" 1 0 docstring #t "Usage" "Section" "Example"))
 	(hash-set! doc-map :usage
 		(get-mid-doc-section sym "Usage" 1 0 docstring #t "Section" "Example"))
 	(hash-set! doc-map :section
 		(do
-		(var sec (get-mid-doc-section sym "Section" 1 0 docstring nil "Example"))
-		(if (or (nil? sec) (str-empty? (str-trim sec))) :uncategorized sec)))
+			(var sec (get-mid-doc-section sym "Section" 1 0 docstring nil "Example"))
+			(if (or (nil? sec) (str-empty? (str-trim sec))) :uncategorized sec)))
 	(hash-set! doc-map :example
 		(get-example-doc-section "Example" docstring))
 	doc-map)
@@ -72,11 +72,13 @@ organization of docstrings.
 	(var section-builder (fn (docs)
 		(when (not (empty-seq? docs))
 			(do
-				(var doc-map (parse-doc (first docs)))
-				(var section-key (hash-get doc-map :section))
-				(if (hash-haskey docstring-sections section-key)
-					(append-to! (hash-get docstring-sections section-key) doc-map)
-					(hash-set! docstring-sections section-key (list doc-map)))
+                (var next-doc (first docs))
+                (when (and (string? next-doc) (not (str-empty? next-doc))) (do
+                    (var doc-map (parse-doc next-doc))
+                    (var section-key (hash-get doc-map :section))
+                    (if (hash-haskey docstring-sections section-key)
+                        (append-to! (hash-get docstring-sections section-key) doc-map)
+                        (hash-set! docstring-sections section-key (list doc-map)))))
 				(recur (rest docs))))))
 	(section-builder docstring-list)
 	docstring-sections)

@@ -91,6 +91,7 @@
 				(first (collect-vec (filter (fn (x) (and (if (= 1 (length args)) (str-contains (first args) (str x)) #t) (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir)))
 
+
 ;; stdin to clipboard
 (defmacro sc
 	"pipe things into this and they'll be in your clipboard.
@@ -131,9 +132,8 @@
 	Section: user-shell"
 	(&rest args)
 	(if (< (length args) 2)
-		(| (find . -iname (str (nth 0 args))))
+		(| (find $PWD -iname (str (nth 0 args))))
 		(err "Only accepts 0 or 1 arguments")))
-
 
 ;;results feed into vim
 (defn vimifind
@@ -209,6 +209,7 @@
 
 ;; }}}
 
+
 ;; quality of shell life {{{
 
 (alias dkc
@@ -260,7 +261,7 @@ Section: user-shell"
 	"print weather in terminal
 	Section: user-shell"
 		()
-		(curl wttr.in))
+		(curl "wttr.in"))
 ;; }}}
 
 ;; notification helpers {{{
@@ -368,6 +369,7 @@ Section: user-shell"
 	(date +%Y%m%d_%H%M%S))
 
 ;; }}}
+
 
 ;; prompt {{{
 
@@ -519,25 +521,24 @@ Section: user-shell"
 (when (or
         (not (fs-exists? "index.markdown"))
         (= "index.markdown" (str-trim (str (find index.markdown -type f -mmin "+1440")))))
-    (progn
+    (do
     (load "mk-docs.lisp")
-
-    (defn filter-non-user-forms (sym-list namespaces) (progn
+    (defn filter-non-user-forms (sym-list namespaces) (do
         (if (empty-seq? namespaces)
             sym-list
               (recur
-                  (collect-vec (filter (fn (x) (progn
+                  (collect-vec (filter (fn (x) (do
                                 (not (in? (ns-symbols (sym (first namespaces))) x))))
                       sym-list))
               (rest namespaces)))))
 
     (defn filter-user-undocable-forms (sym-list)
-        (var to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings))
+        (var to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings 'colorize-rand 'colorize-rand-cache 'smaller-path 'parse_git_branch 'sl-sh-open-paren 'sl-sh-title 'sl-sh-close-paren 'open-paren 'host-string 'close-paren))
           (filter (fn (x) (not (in? to-filter x))) sym-list))
 
     ;; TODO ideally this would live in mk-docs.lisp
     ;; and :user would be an option as param of mkdocs::get-doc-list-for
-    (defn list-of-user-slsh-syms () (progn
+    (defn list-of-user-slsh-syms () (do
         (var user-syms (list))
         (var all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
         (for a-ns in (filter
@@ -550,15 +551,24 @@ Section: user-shell"
         (collect-vec all-docable-user-forms)))
 
     (def all-user-slsh-syms (list-of-user-slsh-syms))
+    (println "user docstrings to be built: " (list-of-user-slsh-syms))
+    (def get-doc-pair (fn (x) (let ((result (get-error (doc (sym x)))))
+                                  (if (= :ok (car result))
+                                    (do
+                                      (list sym (car result))
+                                      (def new-result (car result))
+                                      new-result)
+                                    (println "Error: sym doc fail: " (cdr result))))))
     (def all-docstrings
-        (map (fn (x) (doc (sym x))) (filter (fn (x) (= :ok (car (get-error (doc (sym x)))))) all-user-slsh-syms)))
+        (map (fn (x) (doc (sym x))) (filter get-doc-pair all-user-slsh-syms))
+        (collect-vec (map (fn (x) (do
+                       (def adoc (doc (sym x)))
+                       adoc)) all-user-slsh-syms)))
     ;; check the last modified time of index.markdown and only do this if
-    ; has not been done in some amount of time.
+    ;; has not been done in some amount of time.
     (mkdocs::make-md-file-with-docstrings
         "index.markdown"
         (collect-vec all-docstrings))
     (println "Built docs!")))
-
 (popd)
-
 ;; }}}
