@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::convert::TryInto;
 use std::ffi::{CString, OsStr};
 use std::fs::File;
 use std::io::{self, BufWriter, Read, Write};
@@ -261,7 +262,7 @@ fn os2c(s: &OsStr, saw_nul: &mut bool) -> CString {
     })
 }
 
-pub fn exec<I, S, P>(program: P, args: I) -> LispError
+pub fn exec<I, S, P>(program: P, args: I) -> io::Error
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -295,13 +296,14 @@ where
         signal::signal(Signal::SIGCHLD, SigHandler::SigDfl).unwrap();
         libc::execvp(program.as_ptr(), argv.as_ptr());
     }
-    io::Error::last_os_error().into()
+    io::Error::last_os_error()
 }
 
 pub fn fork_exec<I, S, P>(
     environment: &mut Environment,
     stdin: Option<i32>,
     stdout: Option<i32>,
+    stderr: Option<i32>,
     program: P,
     args: I,
 ) -> Result<u32, LispError>
@@ -310,11 +312,14 @@ where
     S: AsRef<OsStr>,
     P: AsRef<OsStr>,
 {
+    const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
+    let (input, output) = anon_pipe()?;
     let result = unsafe { cvt(libc::fork())? };
 
     let pid = unsafe {
         match result {
             0 => {
+                libc::close(input);
                 if let Some(stdin) = stdin {
                     if let Err(err) = cvt(libc::dup2(stdin, 0)) {
                         eprintln!("Error setting up stdin (dup) in pipe: {}", err);
@@ -323,13 +328,6 @@ where
                     if let Err(err) = cvt(libc::close(stdin)) {
                         eprintln!("Error setting up stdin (close) in pipe: {}", err);
                         libc::_exit(10);
-                    }
-                    environment.root_scope.borrow_mut().insert(
-                        "*stdin*",
-                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
-                    );
-                    if environment.dynamic_scope.contains_key("*stdin*") {
-                        environment.dynamic_scope.remove("*stdin*");
                     }
                 }
                 if let Some(stdout) = stdout {
@@ -341,42 +339,57 @@ where
                         eprintln!("Error setting up stdout (close) in pipe: {}", err);
                         libc::_exit(10);
                     }
-                    environment.root_scope.borrow_mut().insert(
-                        "*stdout*",
-                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
-                    );
-
-                    if environment.dynamic_scope.contains_key("*stdout*") {
-                        environment.dynamic_scope.remove("*stdout*");
+                }
+                if let Some(stderr) = stderr {
+                    if let Err(err) = cvt(libc::dup2(stderr, 2)) {
+                        eprintln!("Error setting up stderr (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stderr)) {
+                        eprintln!("Error setting up stderr (close) in pipe: {}", err);
+                        libc::_exit(10);
                     }
                 }
-                let pgid = environment.pipe_pgid;
                 if environment.do_job_control {
                     let pid = unistd::getpid();
-                    let pgid = match pgid {
+                    let pgid = match environment.pipe_pgid {
                         Some(pgid) => Pid::from_raw(pgid as i32),
-                        None => unistd::getpid(),
+                        None => pid,
                     };
                     if let Err(_err) = unistd::setpgid(pid, pgid) {
                         // Ignore, do in parent and child.
-                        //let msg = format!("Error setting pgid for {}: {}", pid, err);
                     }
                     if !environment.run_background {
-                        if let Err(_err) = unistd::tcsetpgrp(environment.terminal_fd, pgid) {
+                        if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
                             // Ignore, do in parent and child.
-                            //let msg = format!("Error making {} foreground: {}", pid, err);
                         }
                     }
                 }
 
                 let err = exec(program, args);
-                eprintln!("Error executing, {}", err);
+                let errno = err.raw_os_error().unwrap_or(libc::EINVAL) as u32;
+                let errno = errno.to_be_bytes();
+                let bytes = [
+                    errno[0],
+                    errno[1],
+                    errno[2],
+                    errno[3],
+                    CLOEXEC_MSG_FOOTER[0],
+                    CLOEXEC_MSG_FOOTER[1],
+                    CLOEXEC_MSG_FOOTER[2],
+                    CLOEXEC_MSG_FOOTER[3],
+                ];
+                // pipe I/O up to PIPE_BUF bytes should be atomic, and then
+                // we want to be sure we *don't* run at_exit destructors as
+                // we're being torn down regardless
+                File::from_raw_fd(output).write_all(&bytes)?;
                 libc::_exit(1);
             }
             n => n as u32,
         }
     };
     unsafe {
+        libc::close(output);
         if let Some(stdin) = stdin {
             cvt(libc::close(stdin))?;
         }
@@ -384,5 +397,32 @@ where
             cvt(libc::close(stdout))?;
         }
     }
-    Ok(pid)
+    let mut bytes = [0; 8];
+
+    let mut input = unsafe { File::from_raw_fd(input) };
+    // loop to handle EINTR
+    loop {
+        match input.read(&mut bytes) {
+            Ok(0) => return Ok(pid),
+            Ok(8) => {
+                let (errno, footer) = bytes.split_at(4);
+                assert_eq!(
+                    CLOEXEC_MSG_FOOTER, footer,
+                    "Validation on the CLOEXEC pipe failed: {:?}",
+                    bytes
+                );
+                let errno = i32::from_be_bytes(errno.try_into().unwrap());
+                //assert!(p.wait().is_ok(), "wait() should either return Ok or panic");
+                return Err(io::Error::from_raw_os_error(errno).into());
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => {
+                panic!("the CLOEXEC pipe failed: {:?}", e)
+            }
+            Ok(..) => {
+                // pipe I/O up to PIPE_BUF bytes should be atomic
+                panic!("short read on the CLOEXEC pipe")
+            }
+        }
+    }
 }
