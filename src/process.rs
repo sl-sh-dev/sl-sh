@@ -139,7 +139,6 @@ fn run_command(
     }
     let mut com_obj = Command::new(command);
     let foreground = !environment.run_background;
-    let shell_terminal = environment.terminal_fd;
     com_obj
         .args(&args)
         .stdin(stdin)
@@ -154,14 +153,14 @@ fn run_command(
                 let pid = unistd::getpid();
                 let pgid = match pgid {
                     Some(pgid) => Pid::from_raw(pgid as i32),
-                    None => unistd::getpid(),
+                    None => pid,
                 };
                 if let Err(_err) = unistd::setpgid(pid, pgid) {
                     // Ignore, do in parent and child.
                     //let msg = format!("Error setting pgid for {}: {}", pid, err);
                 }
                 if foreground {
-                    if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid) {
+                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
                         // Ignore, do in parent and child.
                         //let msg = format!("Error making {} foreground: {}", pid, err);
                     }
@@ -184,7 +183,7 @@ fn run_command(
     }
 
     let term_settings = if environment.is_tty && environment.do_job_control {
-        Some(termios::tcgetattr(shell_terminal).unwrap())
+        Some(termios::tcgetattr(environment.terminal_fd).unwrap())
     } else {
         None
     };
@@ -224,7 +223,7 @@ fn run_command(
             let pid = proc.id();
             let result = if foreground {
                 if environment.do_job_control {
-                    if let Err(_err) = unistd::tcsetpgrp(shell_terminal, pgid_raw) {
+                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid_raw) {
                         // Ignore, do in parent and child.
                     }
                 }

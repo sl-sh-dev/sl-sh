@@ -8,6 +8,7 @@ use std::ptr;
 use std::rc::Rc;
 
 use nix::sys::signal::{self, SigHandler, Signal};
+use nix::unistd::{self, Pid};
 
 use crate::environment::*;
 use crate::eval::*;
@@ -295,4 +296,93 @@ where
         libc::execvp(program.as_ptr(), argv.as_ptr());
     }
     io::Error::last_os_error().into()
+}
+
+pub fn fork_exec<I, S, P>(
+    environment: &mut Environment,
+    stdin: Option<i32>,
+    stdout: Option<i32>,
+    program: P,
+    args: I,
+) -> Result<u32, LispError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+    P: AsRef<OsStr>,
+{
+    let result = unsafe { cvt(libc::fork())? };
+
+    let pid = unsafe {
+        match result {
+            0 => {
+                if let Some(stdin) = stdin {
+                    if let Err(err) = cvt(libc::dup2(stdin, 0)) {
+                        eprintln!("Error setting up stdin (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stdin)) {
+                        eprintln!("Error setting up stdin (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    environment.root_scope.borrow_mut().insert(
+                        "*stdin*",
+                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
+                    );
+                    if environment.dynamic_scope.contains_key("*stdin*") {
+                        environment.dynamic_scope.remove("*stdin*");
+                    }
+                }
+                if let Some(stdout) = stdout {
+                    if let Err(err) = cvt(libc::dup2(stdout, 1)) {
+                        eprintln!("Error setting up stdout (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stdout)) {
+                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    environment.root_scope.borrow_mut().insert(
+                        "*stdout*",
+                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
+                    );
+
+                    if environment.dynamic_scope.contains_key("*stdout*") {
+                        environment.dynamic_scope.remove("*stdout*");
+                    }
+                }
+                let pgid = environment.pipe_pgid;
+                if environment.do_job_control {
+                    let pid = unistd::getpid();
+                    let pgid = match pgid {
+                        Some(pgid) => Pid::from_raw(pgid as i32),
+                        None => unistd::getpid(),
+                    };
+                    if let Err(_err) = unistd::setpgid(pid, pgid) {
+                        // Ignore, do in parent and child.
+                        //let msg = format!("Error setting pgid for {}: {}", pid, err);
+                    }
+                    if !environment.run_background {
+                        if let Err(_err) = unistd::tcsetpgrp(environment.terminal_fd, pgid) {
+                            // Ignore, do in parent and child.
+                            //let msg = format!("Error making {} foreground: {}", pid, err);
+                        }
+                    }
+                }
+
+                let err = exec(program, args);
+                eprintln!("Error executing, {}", err);
+                libc::_exit(1);
+            }
+            n => n as u32,
+        }
+    };
+    unsafe {
+        if let Some(stdin) = stdin {
+            cvt(libc::close(stdin))?;
+        }
+        if let Some(stdout) = stdout {
+            cvt(libc::close(stdout))?;
+        }
+    }
+    Ok(pid)
 }
