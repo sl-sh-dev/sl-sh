@@ -569,9 +569,10 @@ fn str_map_inner(
 ) -> Result<String, LispError> {
     let mut res = String::new();
     for ch in UnicodeSegmentation::graphemes(string, true) {
-        let mut list = Vec::with_capacity(2);
-        list.push(Expression::alloc_data(ExpEnum::Lambda(func.clone())));
-        list.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
+        let list = vec![
+            Expression::alloc_data(ExpEnum::Lambda(func.clone())),
+            Expression::alloc_data(ExpEnum::Char(ch.to_string().into())),
+        ];
         let a = eval(environment, Expression::with_list(list))?;
         res.push_str(&as_string(environment, &a)?);
     }

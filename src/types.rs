@@ -491,15 +491,11 @@ pub struct ExpObj {
 
 impl ExpObj {
     pub fn copy(&self) -> Self {
-        let meta = if let Some(meta) = self.meta {
-            Some(ExpMeta {
-                file: meta.file,
-                line: meta.line,
-                col: meta.col,
-            })
-        } else {
-            None
-        };
+        let meta = self.meta.map(|meta| ExpMeta {
+            file: meta.file,
+            line: meta.line,
+            col: meta.col,
+        });
         let meta_tags = if let Some(tags) = &self.meta_tags {
             let mut ntags = HashSet::with_capacity(tags.len());
             for t in tags {

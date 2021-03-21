@@ -167,9 +167,9 @@ fn call_lambda_int(
         }
         llast_eval = Some(last_eval);
     }
-    Ok(llast_eval
+    llast_eval
         .unwrap_or_else(Expression::make_nil)
-        .resolve(environment)?)
+        .resolve(environment)
 }
 
 pub fn call_lambda(

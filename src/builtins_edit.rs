@@ -185,12 +185,10 @@ fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
         Some(Box::new(move |input: &str| -> String {
             let exp = match &fn_exp.get().data {
                 ExpEnum::Lambda(_) => {
-                    let mut v = Vec::with_capacity(1);
-                    v.push(fn_exp.clone());
-                    v.push(Expression::alloc_data(ExpEnum::String(
-                        input.to_string().into(),
-                        None,
-                    )));
+                    let v = vec![
+                        fn_exp.clone(),
+                        Expression::alloc_data(ExpEnum::String(input.to_string().into(), None)),
+                    ];
                     Expression::with_list(v)
                 }
                 _ => return input.to_string(),

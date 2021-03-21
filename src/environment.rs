@@ -301,10 +301,8 @@ fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) ->
     } else if let Some(reference) = environment.namespace.borrow().get_binding(key) {
         Some(reference)
     // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
-    } else if let Some(reference) = environment.root_scope.borrow().get_binding(key) {
-        Some(reference)
     } else {
-        None
+        environment.root_scope.borrow().get_binding(key)
     }
 }
 
@@ -316,10 +314,8 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Express
     } else if let Some(binding) = environment.dynamic_scope.get(key) {
         Some(binding.get())
     // Check for namespaced symbols.
-    } else if let Some(binding) = lookup_in_namespace(environment, key, true) {
-        Some(binding.get())
     } else {
-        None
+        lookup_in_namespace(environment, key, true).map(|binding| binding.get())
     }
 }
 
@@ -334,11 +330,10 @@ pub fn capture_expression(environment: &Environment, key: &str) -> Option<Bindin
 }
 
 pub fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
-    if let Some(r) = environment.stack.get(environment.stack_frame_base + idx) {
-        Some(r.get())
-    } else {
-        None
-    }
+    environment
+        .stack
+        .get(environment.stack_frame_base + idx)
+        .map(|r| r.get())
 }
 
 pub fn get_expression_look(

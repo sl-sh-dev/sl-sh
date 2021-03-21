@@ -81,11 +81,7 @@ fn make_exp(data: ExpEnum, meta: Option<ExpMeta>) -> Expression {
 }
 
 fn get_meta(name: Option<&'static str>, line: usize, col: usize) -> Option<ExpMeta> {
-    if let Some(file) = name {
-        Some(ExpMeta { file, line, col })
-    } else {
-        None
-    }
+    name.map(|file| ExpMeta { file, line, col })
 }
 
 fn consume_line_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
@@ -467,13 +463,14 @@ fn call_reader_macro(
     if let Some(exp) = lookup_expression(environment, name) {
         let exp = match &exp.get().data {
             ExpEnum::Lambda(_) => {
-                let mut v = Vec::with_capacity(1);
-                v.push(Expression::alloc_data(ExpEnum::Symbol(
-                    environment.interner.intern(name),
-                    SymLoc::None,
-                )));
-                v.push(stream);
-                v.push(Expression::alloc_data(ExpEnum::Char(ch.to_string().into())));
+                let v = vec![
+                    Expression::alloc_data(ExpEnum::Symbol(
+                        environment.interner.intern(name),
+                        SymLoc::None,
+                    )),
+                    stream,
+                    Expression::alloc_data(ExpEnum::Char(ch.to_string().into())),
+                ];
                 Expression::with_list(v)
             }
             _ => {
@@ -762,8 +759,7 @@ fn read_list(
                 }
                 let exp = if let Some(uqexp) = get_unquote_lst(&exp) {
                     // Do this so `(x y . ,z) works
-                    let mut v = Vec::new();
-                    v.push(ExpEnum::Symbol("unquote", SymLoc::None).into());
+                    let mut v = vec![ExpEnum::Symbol("unquote", SymLoc::None).into()];
                     let mut i = 0;
                     for e in uqexp.iter() {
                         v.push(e);

@@ -165,11 +165,7 @@ impl Symbols {
     }
 
     pub fn get(&self, key: &str) -> Option<usize> {
-        if let Some(idx) = self.data.borrow().syms.get(key) {
-            Some(*idx)
-        } else {
-            None
-        }
+        self.data.borrow().syms.get(key).copied()
     }
 
     pub fn clear(&mut self) {
@@ -395,11 +391,7 @@ t
 
     pub fn get(&self, key: &str) -> Option<Expression> {
         if let Some(idx) = self.map.get(key) {
-            if let Some(binding) = self.data.get(*idx) {
-                Some(binding.get())
-            } else {
-                None
-            }
+            self.data.get(*idx).map(|binding| binding.get())
         } else {
             None
         }
@@ -407,11 +399,7 @@ t
 
     pub fn get_binding(&self, key: &str) -> Option<Binding> {
         if let Some(idx) = self.map.get(key) {
-            if let Some(binding) = self.data.get(*idx) {
-                Some(binding.clone())
-            } else {
-                None
-            }
+            self.data.get(*idx).cloned()
         } else {
             None
         }
@@ -430,11 +418,7 @@ t
     }
 
     pub fn get_idx(&self, idx: usize) -> Option<Expression> {
-        if let Some(binding) = self.data.get(idx) {
-            Some(binding.get())
-        } else {
-            None
-        }
+        self.data.get(idx).map(|binding| binding.get())
     }
 
     pub fn clear(&mut self) {
