@@ -517,16 +517,15 @@ Section: user-shell"
 ;; }}}
 
 ;; user ns docs {{{
-#|
-(let* ((docs-made (get-error
-        (pushd "~/development/slsh/docs/")
+(pushd "~/development/slsh/docs/")
 (def api-page-name "mydoc_api.md")
-(def api-page "pages/mydoc/" api-page-name)
-(when (or
-        (not (fs-exists? api-page))
-        (= api-page (str-trim (str (find  -type f -mmin "+1440")))))
-    (do
+(def api-page (str "pages/mydoc/" api-page-name))
+(unwind-protect (when (or
+        (nil? (fs-exists? api-page))
+        (= api-page (str-trim (str (find api-page -type f -mmin "+1440"))))) (do
+    (load "docstrings-to-md.lisp")
     (load "mk-docs.lisp")
+    (load "docstruct.lisp")
     (defn filter-non-user-forms (sym-list namespaces) (do
         (if (empty-seq? namespaces)
             sym-list
@@ -563,20 +562,22 @@ Section: user-shell"
                                       (def new-result (car result))
                                       new-result)
                                     (println "Error: sym doc fail: " (cdr result))))))
+    #|
     (def all-docstrings
         (map (fn (x) (doc (sym x))) (filter get-doc-pair all-user-slsh-syms))
         (collect-vec (map (fn (x) (do
                        (def adoc (doc (sym x)))
                        adoc)) all-user-slsh-syms)))
+    |#
     ;; check the last modified time of api-page-name and only do this if
     ;; has not been done in some amount of time.
-    (mkdocs::make-md-file-with-docstrings
-        api-page
-        (collect-vec all-docstrings))
-    (println "Built docs!"))))))
-       (when (not (= :ok (car docs-made)))
-         (do (println "Failed to build docs."))
-             (println (cdr docs-made)))
-        (popd))
-|#
+    (def docs-by-section (make-hash))
+    (for doc-struct in (map docstruct::make-doc-struct all-user-slsh-syms)
+          (let ((section-key (doc-struct :section-key)))
+            (if (hash-haskey docs-by-section section-key)
+                (append-to! (hash-get docs-by-section section-key) doc-struct)
+            (hash-set! docs-by-section section-key (list doc-struct)))))
+    (docmd::make-md-file-with-sections api-page docs-by-section)
+    (println "Built docs!")))
+  (popd))
 ;; }}}

@@ -183,7 +183,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 			(var form (doc-struct :name))
 			(if (= "\|" form) "|" (sanitize-for-md-row form))))
 		(var doc-namespace (sanitize-for-md-row (doc-struct :namespace)))
-		(var doc-type (sanitize-for-md-row (doc-struct :type)))
+		(var doc-type (sanitize-for-md-row (doc-struct :sl-sh-type)))
 		(var doc-usage (str-replace (sanitize-for-md-row (doc-struct :usage)) "\n" "<br>"))
 		(var doc-example (doc-struct :example))
 		(write-line file "")
@@ -210,14 +210,12 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(close file)
 	file-name)
 
-(defn make-md-file
-    (index-file sym-list)
-    (var docs-by-section (make-hash))
-    (for doc-struct in (map make-doc-struct sym-list)
-        (let ((section-key (doc-struct :section-key)))
-            (if (hash-haskey docs-by-section section-key)
-                (append-to! (hash-get docs-by-section section-key) doc-struct)
-            (hash-set! docs-by-section section-key (list doc-struct)))))
+(defn make-md-file-with-sections
+"Create markdown file at given path and populate with documentation from
+provided hash-map of section-key to list of doc struct pairs. The structure
+was chosen becuase the markdown file is grouped by documentation sections.
+"
+    (index-file docs-by-section)
     (create-header index-file)
     (write-heading "Documentation structure for each form" index-file)
     (doc-structure index-file)
@@ -239,6 +237,19 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		nil))
 	 #t)
 
-(ns-export '(make-md-file))
+(defn make-md-file
+"Create markdown file at given path and populate with documentation from
+provided list of symbols.
+"
+    (index-file sym-list)
+    (var docs-by-section (make-hash))
+    (for doc-struct in (map make-doc-struct sym-list)
+          (let ((section-key (doc-struct :section-key)))
+            (if (hash-haskey docs-by-section section-key)
+                (append-to! (hash-get docs-by-section section-key) doc-struct)
+            (hash-set! docs-by-section section-key (list doc-struct)))))
+    (make-md-file-with-sections index-file docs-by-section))
+
+(ns-export '(make-md-file make-md-file-with-sections))
 
 (ns-pop)

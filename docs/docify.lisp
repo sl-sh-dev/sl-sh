@@ -22,6 +22,7 @@
 (let* ((result (get-error
    ;; set version number properly in sidebar yaml
   (set-version "_evalable_data/sidebars/mydoc_sidebar.yml" "_data/sidebars/mydoc_sidebar.yml")
+  ;; TODO last updated line frontmatter line should update automatically.
   ;; create std lib md file
   (make-md-file "pages/mydoc/mydoc_api.md" :lang)
   ;;  `

@@ -64,7 +64,7 @@
 						(not (= x "docstruct"))
 						(not (= x "docify"))
 						(not (= x "root"))
-						;;(not (= x "test"))
+						(not (= x "test"))
 						(not (= x "user")
                              ))) (ns-list)) (do
 		(append-to! sym-list (eval (sym (str a-ns "::*ns-exports*"))))))
@@ -79,10 +79,11 @@
 (defn make-md-file
 "Generate slsh standard library documentation md page."
 (index-file target-doc-form)
+	(var syms (collect-vec (map (fn (x) (sym x))
+			(get-doc-list-for target-doc-form))))
 	(docmd::make-md-file
 		index-file
-		(collect-vec (map (fn (x) (sym x))
-			  (get-doc-list-for target-doc-form)))))
+		syms))
 
 ;;(when (> (length args) 0)
 ;;;;  (println (get-doc-list-for (vec-nth args 1))))
