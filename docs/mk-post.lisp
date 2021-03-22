@@ -1,5 +1,3 @@
-#!/usr/bin/env sl-sh
-
 (ns-push 'mkpost)
 (ns-import 'shell)
 (ns-import 'iterator)
@@ -114,19 +112,19 @@ Section: post"
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(var return-value (get-error (out-err> temp-out (eval (entrypoint)))))
+	(let ((return-value (get-error (out-err> temp-out (entrypoint)))))
 	;; write output in temp-out to the dest-file
 	(popd)
 	(loop (input-file) ((open temp-out :read)) (do
 			(var line (read-line input-file))
 			(when (not (nil? line)) (do
-				(write-string dest-file (str ";; " line))
+                (write-string dest-file (str ";; " line))
 				(recur input-file)))))
 	(when (not (= (car return-value) :ok))
       (do
         (write-line dest-file (str "Error evaluating entrypoint!"))
         (write-line dest-file (str "==> " (cdr return-value)))))
-    (println "codeblock lives: " temp-out))
+    (println "codeblock lives: " temp-out)))
 
 (defn -eval-post
 "TODO enumerate different directive and expectations
@@ -159,9 +157,6 @@ Section: scripting"
 		(-eval-post src-file dest-file code-snippets)
 		(close src-file)
 		(close dest-file)))
-
-(when (> (length args) 0)
-  (eval-post (vec-nth args 0) (vec-nth args 1)))
 
 (ns-auto-export 'mkpost)
 (ns-pop)
