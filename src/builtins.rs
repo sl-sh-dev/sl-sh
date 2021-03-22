@@ -1372,7 +1372,7 @@ macro_rules! ensure_tonicity {
                 Some(x) => $check_fn(prev, x) && f(x, &xs[1..]),
                 None => true,
             }
-        };
+        }
         if f(first, rest) {
             Ok(Expression::alloc_data(ExpEnum::True))
         } else {

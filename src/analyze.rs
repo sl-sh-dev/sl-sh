@@ -14,9 +14,7 @@ pub fn make_fn(
             if let Some(second) = second {
                 // The copies below are important, otherwise you will get shared
                 // structure errors when analyzing and calling the lambda.
-                let mut body = Vec::new();
-                body.push(first.copy());
-                body.push(second.copy());
+                let mut body = vec![first.copy(), second.copy()];
                 for arg in args {
                     body.push(arg.copy());
                 }

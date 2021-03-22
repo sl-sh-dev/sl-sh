@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::env;
 use std::fmt;
 use std::io;
-use std::process::Child;
 use std::rc::Rc;
 
 use liner::Context;
@@ -128,7 +127,7 @@ pub struct Environment {
     pub do_job_control: bool,
     pub loose_symbols: bool,
     pub str_ignore_expand: bool,
-    pub procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
+    pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
     pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
@@ -168,7 +167,7 @@ impl Environment {
 }
 
 pub fn build_default_environment() -> Environment {
-    let procs: Rc<RefCell<HashMap<u32, Option<Child>>>> = Rc::new(RefCell::new(HashMap::new()));
+    let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let namespace = root_scope.clone();
@@ -302,10 +301,8 @@ fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) ->
     } else if let Some(reference) = environment.namespace.borrow().get_binding(key) {
         Some(reference)
     // Finally check root (this might be a duplicate if in root but in that case about give up anyway).
-    } else if let Some(reference) = environment.root_scope.borrow().get_binding(key) {
-        Some(reference)
     } else {
-        None
+        environment.root_scope.borrow().get_binding(key)
     }
 }
 
@@ -317,10 +314,8 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Express
     } else if let Some(binding) = environment.dynamic_scope.get(key) {
         Some(binding.get())
     // Check for namespaced symbols.
-    } else if let Some(binding) = lookup_in_namespace(environment, key, true) {
-        Some(binding.get())
     } else {
-        None
+        lookup_in_namespace(environment, key, true).map(|binding| binding.get())
     }
 }
 
@@ -335,11 +330,10 @@ pub fn capture_expression(environment: &Environment, key: &str) -> Option<Bindin
 }
 
 pub fn get_expression_stack(environment: &Environment, idx: usize) -> Option<Expression> {
-    if let Some(r) = environment.stack.get(environment.stack_frame_base + idx) {
-        Some(r.get())
-    } else {
-        None
-    }
+    environment
+        .stack
+        .get(environment.stack_frame_base + idx)
+        .map(|r| r.get())
 }
 
 pub fn get_expression_look(
@@ -437,9 +431,8 @@ pub fn remove_job(environment: &Environment, pid: u32) {
     }
 }
 
-pub fn add_process(environment: &Environment, process: Child) -> u32 {
-    let pid = process.id();
-    environment.procs.borrow_mut().insert(pid, Some(process));
+pub fn add_process(environment: &Environment, pid: u32, output_fd: Option<i32>) -> u32 {
+    environment.procs.borrow_mut().insert(pid, output_fd);
     pid
 }
 

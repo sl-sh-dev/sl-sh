@@ -7,13 +7,13 @@ use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::iter;
 use std::num::{ParseFloatError, ParseIntError};
-use std::process::Child;
 use std::rc::Rc;
 
 use crate::environment::*;
 use crate::eval::call_lambda;
 use crate::process::*;
 use crate::symbols::*;
+use crate::unix::fd_to_file;
 
 #[derive(Clone, Debug)]
 pub struct LispError {
@@ -491,15 +491,11 @@ pub struct ExpObj {
 
 impl ExpObj {
     pub fn copy(&self) -> Self {
-        let meta = if let Some(meta) = self.meta {
-            Some(ExpMeta {
-                file: meta.file,
-                line: meta.line,
-                col: meta.col,
-            })
-        } else {
-            None
-        };
+        let meta = self.meta.map(|meta| ExpMeta {
+            file: meta.file,
+            line: meta.line,
+            col: meta.col,
+        });
         let meta_tags = if let Some(tags) = &self.meta_tags {
             let mut ntags = HashSet::with_capacity(tags.len());
             for t in tags {
@@ -744,23 +740,20 @@ impl Expression {
 
     fn pid_to_string(
         &self,
-        procs: Rc<RefCell<HashMap<u32, Option<Child>>>>,
+        procs: Rc<RefCell<HashMap<u32, Option<i32>>>>,
         pid: u32,
     ) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
             Some(Some(child)) => {
-                if let Some(childout) = child.stdout.as_mut() {
-                    let mut buffer = String::new();
-                    let mut taken = TakeN {
-                        inner: childout,
-                        limit: 16_777_216, // 16M limit
-                        pid,
-                    };
-                    taken.read_to_string(&mut buffer)?;
-                    Ok(buffer)
-                } else {
-                    Ok("".to_string())
-                }
+                let mut childout = BufReader::new(fd_to_file(*child));
+                let mut buffer = String::new();
+                let mut taken = TakeN {
+                    inner: &mut childout,
+                    limit: 16_777_216, // 16M limit
+                    pid,
+                };
+                taken.read_to_string(&mut buffer)?;
+                Ok(buffer)
             }
             Some(None) => Ok("".to_string()),
             None => Ok("".to_string()),
@@ -919,19 +912,15 @@ impl Expression {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
-                    Some(Some(child)) => {
-                        if child.stdout.is_some() {
-                            let out = child.stdout.as_mut().unwrap();
-                            let mut buf = [0; 1024];
-                            loop {
-                                match out.read(&mut buf) {
-                                    Ok(0) => break,
-                                    Ok(n) => writer.write_all(&buf[..n])?,
-                                    Err(err) => return Err(err.into()),
-                                }
+                    Some(Some(read_fd)) => {
+                        let mut out = BufReader::new(fd_to_file(*read_fd));
+                        let mut buf = [0; 1024];
+                        loop {
+                            match out.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => writer.write_all(&buf[..n])?,
+                                Err(err) => return Err(err.into()),
                             }
-                        } else {
-                            return Err(LispError::new("Failed to get process out to write to."));
                         }
                     }
                     Some(None) => {

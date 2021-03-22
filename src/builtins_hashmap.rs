@@ -169,11 +169,7 @@ fn builtin_hash_get(
     }
     if let Some(map) = args.next() {
         if let Some(key) = args.next() {
-            let default = if let Some(default) = args.next() {
-                Some(default)
-            } else {
-                None
-            };
+            let default = args.next();
             if args.next().is_none() {
                 let map = eval(environment, map)?;
                 let key = eval(environment, key)?;

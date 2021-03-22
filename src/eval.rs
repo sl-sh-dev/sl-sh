@@ -167,9 +167,9 @@ fn call_lambda_int(
         }
         llast_eval = Some(last_eval);
     }
-    Ok(llast_eval
+    llast_eval
         .unwrap_or_else(Expression::make_nil)
-        .resolve(environment)?)
+        .resolve(environment)
 }
 
 pub fn call_lambda(
@@ -384,10 +384,27 @@ fn str_process(
     string: &str,
     expand: bool,
 ) -> Result<Expression, LispError> {
+    fn add_var(
+        environment: &mut Environment,
+        new_string: &mut String,
+        name: &str,
+    ) -> Result<(), LispError> {
+        match lookup_expression(environment, name) {
+            Some(exp) => {
+                new_string.push_str(&exp.as_string(environment)?);
+            }
+            None => match env::var(name) {
+                Ok(val) => new_string.push_str(&val),
+                Err(_) => new_string.push_str(""),
+            },
+        }
+        Ok(())
+    }
     if expand && !environment.str_ignore_expand && string.contains('$') {
         let mut new_string = String::new();
         let mut last_ch = '\0';
         let mut in_var = false;
+        let mut in_var_bracket = false;
         let mut in_command = false;
         let mut command_depth: i32 = 0;
         let mut var_start = 0;
@@ -397,17 +414,22 @@ fn str_process(
                     in_command = true;
                     in_var = false;
                     command_depth = 1;
+                } else if ch == '{' && var_start + 1 == i {
+                    in_var_bracket = true;
+                    in_var = false;
                 } else {
                     if ch == ' ' || ch == '"' || ch == ':' || (ch == '$' && last_ch != '\\') {
                         in_var = false;
-                        match env::var(&string[var_start + 1..i]) {
-                            Ok(val) => new_string.push_str(&val),
-                            Err(_) => new_string.push_str(""),
-                        }
+                        add_var(environment, &mut new_string, &string[var_start + 1..i])?;
                     }
                     if ch == ' ' || ch == '"' || ch == ':' {
                         new_string.push(ch);
                     }
+                }
+            } else if in_var_bracket {
+                if ch == '}' && last_ch != '\\' {
+                    in_var_bracket = false;
+                    add_var(environment, &mut new_string, &string[var_start + 2..i])?;
                 }
             } else if in_command {
                 if ch == ')' && last_ch != '\\' {
@@ -450,10 +472,7 @@ fn str_process(
             last_ch = ch;
         }
         if in_var {
-            match env::var(&string[var_start + 1..]) {
-                Ok(val) => new_string.push_str(&val),
-                Err(_) => new_string.push_str(""),
-            }
+            add_var(environment, &mut new_string, &string[var_start + 1..])?;
         }
         if in_command {
             return Err(LispError::new(

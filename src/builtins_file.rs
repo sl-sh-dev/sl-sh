@@ -178,11 +178,34 @@ fn builtin_pipe(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
+    pub struct GrabStdIn {
+        pub old_stdin: Option<i32>,
+    }
+
+    pub fn grab_stdin(new_stdin: Option<i32>) -> Result<GrabStdIn, LispError> {
+        let old_stdin = if let Some(new_stdin) = new_stdin {
+            Some(replace_stdin(new_stdin)?)
+        } else {
+            None
+        };
+        Ok(GrabStdIn { old_stdin })
+    }
+
+    impl Drop for GrabStdIn {
+        fn drop(&mut self) {
+            if let Some(old_stdin) = self.old_stdin {
+                if let Err(err) = dup_stdin(old_stdin) {
+                    eprintln!("Error restoring stdin after pipe: {}", err);
+                }
+            }
+        }
+    }
+
     let mut pipe = args.next();
     let mut last_pid: Option<u32> = None;
-    let mut pipe1 = None;
-    let mut pipe2;
-    let mut pipe3;
+    let mut read = None;
+    let mut write;
+    let mut next_read;
     let mut res = Ok(Expression::make_nil());
     let job = Job {
         pids: Vec::new(),
@@ -195,11 +218,7 @@ fn builtin_pipe(
         let next_pipe = args.next();
         if next_pipe.is_none() {
             // Last thing in the pipe so do not run in background.
-            let old_stdin = if let Some(pipe1) = pipe1 {
-                Some(replace_stdin(pipe1)?)
-            } else {
-                None
-            };
+            let _old_stdin = grab_stdin(read)?; // RAII guard for stdin
             gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
             res = eval(gpo.environment, p);
             // If pipe ended in a file then dump final output into it.
@@ -232,18 +251,15 @@ fn builtin_pipe(
                 }
                 Err(_err) => {}
             }
-            if let Some(old_stdin) = old_stdin {
-                dup_stdin(old_stdin)?;
-            }
         } else {
-            let (p1, p2) = anon_pipe()?; // p1 is read
-            pipe2 = Some(p2);
-            pipe3 = Some(p1);
-            last_pid = Some(fork(gpo.environment, p, pipe1, pipe2)?);
+            let (read_fd, write_fd) = anon_pipe()?;
+            write = Some(write_fd);
+            next_read = Some(read_fd);
+            last_pid = Some(fork(gpo.environment, p, read, write)?);
             if gpo.environment.pipe_pgid.is_none() {
                 gpo.environment.pipe_pgid = last_pid;
             }
-            pipe1 = pipe3;
+            read = next_read;
         }
         pipe = next_pipe;
     }

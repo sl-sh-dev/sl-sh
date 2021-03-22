@@ -269,7 +269,7 @@ fn builtin_read(
         let input = read_prompt(environment, "read> ", Some("read_history"), ":new")?;
         let input = unsafe { &*(input.as_ref() as *const str) };
         let chars = Box::new(
-            UnicodeSegmentation::graphemes(&input[..], true)
+            UnicodeSegmentation::graphemes(input, true)
                 .map(|s| Cow::Borrowed(s))
                 .peekable(),
         );
