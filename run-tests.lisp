@@ -1,6 +1,4 @@
 #!./target/debug/sl-sh
-(error-stack-on)
-(load "tests/test.lisp")
 
 (ns-import 'iterator)
 (ns-import 'shell)
