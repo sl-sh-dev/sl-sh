@@ -16,6 +16,7 @@
 		#
 
 		load_extra_completions_only() {
+            set -x
 			declare -i COMP_CWORD=0 COMP_POINT=0
 			declare -x completion="" COMP_LINE=""
 			declare -a COMP_WORDS COMPREPLY
@@ -82,10 +83,11 @@
 	(args)
 	(let ((arg-str (str-cat-list " " args)))
 		((fn (completions)
+             (println "meow")
 			(if (and
 					(= 1 (length completions))
 					(str-empty? (first completions)))
-				nil
+				:default
 				completions)) (get-bash-completion arg-str))))
 
 ;; Completion hooks, the match is for the command and then custom completions can be returned.
@@ -93,9 +95,6 @@
 	(match (first args)
 		("cd" :path)
 		("ls" :default)
-		(nil
-			(do
-				(def possible-completions (check-bash-completion args))
-				(if (= nil possible-completions) :default possible-completions)))))
+		(nil (check-bash-completion args))))
 
 ;; }}}

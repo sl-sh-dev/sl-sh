@@ -45,7 +45,6 @@
 			(not (= x 'internal-macro))
 			(not (= x 'get-doc-list-for))
 			(not (= x 'make-md-file))
-			(not (= x 'make-md-file-with-docstrings))
 			(not (= x '__completion_hook))
 			(not (= x '__line_handler))
 			(not (= x '__exec_hook))
@@ -62,11 +61,12 @@
 						(not (= x "docmd"))
 						(not (= x "mkpost"))
 						(not (= x "moddocs"))
-						(not (= x "docparse"))
+						(not (= x "docstruct"))
 						(not (= x "docify"))
 						(not (= x "root"))
-						(not (= x "test"))
-						(not (= x "user")))) (ns-list)) (do
+						;;(not (= x "test"))
+						(not (= x "user")
+                             ))) (ns-list)) (do
 		(append-to! sym-list (eval (sym (str a-ns "::*ns-exports*"))))))
 	(filter-undocable-forms (qsort sym-list)))
 
@@ -76,19 +76,16 @@
 			(:single (append '() (last (list-of-all-slsh-syms))))
 			(:lang (list-of-all-slsh-syms))))
 
-(defn make-md-file-with-docstrings (index-file docstrings)
-	(docmd::make-md-file index-file docstrings))
-
 (defn make-md-file
 "Generate slsh standard library documentation md page."
 (index-file target-doc-form)
 	(docmd::make-md-file
 		index-file
-		(collect-vec (map (fn (x) (doc (sym x)))
+		(collect-vec (map (fn (x) (sym x))
 			  (get-doc-list-for target-doc-form)))))
 
-(when (> (length args) 0)
-  (println (get-doc-list-for (vec-nth args 1))))
+;;(when (> (length args) 0)
+;;;;  (println (get-doc-list-for (vec-nth args 1))))
 
 (ns-auto-export 'mkdocs)
 (ns-pop)
