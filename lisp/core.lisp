@@ -524,7 +524,7 @@ Section: core
 
 Example:
 
-(assert-equal 0 (*identity* 0))"
+(assert-equal 0 (identity 0))"
       (x) x)
 
 (load "collection.lisp")
