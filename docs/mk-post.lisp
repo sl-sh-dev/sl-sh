@@ -108,7 +108,7 @@ Section: post"
 			(chmod +x target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
-	(var temp-out (str temp-dir "/output" ))
+	(var temp-out (str temp-dir "/output"))
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out

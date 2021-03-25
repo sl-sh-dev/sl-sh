@@ -400,7 +400,7 @@ Section: user-shell"
 	the prompt for greater visibility.
 	Section: prompt"
 	(last-status)
-	(if (= last-status 0) "\x1b[39m❄ >\x1b[39m " (str "\x1b[31m(" last-status ")❄ >\x1b[39m ")))
+	(if (= last-status 0) "\x1b[39mλ >\x1b[39m " (str "\x1b[31m(" last-status ")λ >\x1b[39m ")))
 
 (defn parse_git_branch
 	"if in git repo, get the name of the branch
