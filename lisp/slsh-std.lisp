@@ -75,10 +75,25 @@ t
 (load "seq.lisp")
 (load "struct.lisp")
 (load "iterator.lisp")
-(load "shell.lisp")
 (load "test.lisp")
-; XXX Move this up
-(load "lib.lisp"))))
+(load "lib.lisp")
+(load "shell.lisp")
+;;; *std-lib-syms-hash* must be the symbol defined
+;;; in the sl-sh standard library. In order to increase speed of ns-auto-export
+;;; a list of all symbols in the standard library is pre-computed by iterating
+;;; over each namespace in (ns-list), and calling it with (ns-symbols) and
+;;; adding that to a hash map, using it as a set to test for membership.
+;;; In order for this set of symbols to be complete the calls to (ns-list)
+;;; and (ns-symbols) must be done after all symbols and the namespaces they're
+;;; defined in have been called.
+(def *std-lib-syms-hash* (iterator::reduce
+                          (fn (fst nxt)
+                                (iterator::reduce (fn (fst x)
+                                            (hash-set! fst x nxt))
+                                        fst
+                                        (ns-symbols nxt)))
+                          (make-hash)
+                          (ns-list))))))
 
 (if (= :error (car result)) (prim-print-error result))
 

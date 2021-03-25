@@ -517,7 +517,7 @@ Example:
      (new-item old-item lst &rest mods)
      `(nsubstitute! ,new-item ,old-item (collect-copy ,lst) ,@mods))
 
-(defn *identity*
+(defn identity
 "Identity function.
 
 Section: core
