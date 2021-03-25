@@ -262,7 +262,7 @@ fn get_std_io(environment: &Environment, is_out: bool) -> Result<Option<i32>, Li
                             Ok(Some(io::stderr().as_raw_fd()))
                         }
                     }
-                    FileState::Write(f) => Ok(Some(f.get_ref().as_raw_fd())),
+                    FileState::Write(f) => Ok(Some(dup_fd(f.get_ref().as_raw_fd())?)),
                     _ => Err(LispError::new("Can not write to a non-writable file.")),
                 }
             } else {
