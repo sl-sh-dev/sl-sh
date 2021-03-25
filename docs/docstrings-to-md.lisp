@@ -1,16 +1,21 @@
-(load "parse-docstrings.lisp")
+(load "docstruct.lisp")
 
 (ns-push 'docmd)
 
 (ns-import 'iterator)
 (ns-import 'shell)
-(ns-import 'docparse)
+(ns-import 'docstruct)
 
 (defn create-header (index-file)
 	(var new-file (open index-file :create :truncate))
 	(write-string new-file "---
-layout: default
-title: Sl-sh form documentation
+title: Sl-sh Standard Library
+tags: [documentation]
+keywords: forms, sl-sh, examples, api, standard library
+last_updated: March 1, 2021
+sidebar: mydoc_sidebar
+permalink: mydoc_api.html
+toc: false
 ---
 
 # Sl-sh
@@ -98,11 +103,11 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(close file)
 	file-name)
 
-(defn get-anchor-link-id (doc-map)
+(defn get-anchor-link-id (doc-struct)
 	(var doc-form (do
-		(var form (hash-get doc-map :form))
+		(var form (doc-struct :name))
 		(if (= "\|" form) "pipe-shorthand" form)))
-	(var doc-namespace (hash-get doc-map :namespace))
+	(var doc-namespace (doc-struct :namespace))
 	(str doc-namespace "::" doc-form))
 
 (defn table-of-contents (key docstrings file-name)
@@ -114,18 +119,18 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(write-line file "")
 	(write-line file "")
 	(var is-first #t)
-	(for doc-map in docstrings (do
+	(for doc-struct in docstrings (do
 		(if is-first
 			(set! is-first nil)
 			(write-string file ", "))
 		(var doc-form (do
-			(var form (hash-get doc-map :form))
+			(var form (doc-struct :name))
 			(if (= "\|" form) "|" form)))
-		(var doc-namespace (hash-get doc-map :namespace))
+		(var doc-namespace (doc-struct :namespace))
 		(write-string file
 			(str
-				(create-anchor (str (get-anchor-link-id doc-map) "-contents"))
-				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-map)))))))
+				(create-anchor (str (get-anchor-link-id doc-struct) "-contents"))
+				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-struct)))))))
 	(write-line file "")
 	(close file)
 	file-name)
@@ -173,21 +178,21 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		 (if (nil? data)
 			""
 			data)))
-	(for doc-map in docstrings (do
+	(for doc-struct in docstrings (do
 		(var doc-form (do
-			(var form (hash-get doc-map :form))
+			(var form (doc-struct :name))
 			(if (= "\|" form) "|" (sanitize-for-md-row form))))
-		(var doc-namespace (sanitize-for-md-row (hash-get doc-map :namespace)))
-		(var doc-type (sanitize-for-md-row (hash-get doc-map :type)))
-		(var doc-usage (str-replace (sanitize-for-md-row (hash-get doc-map :usage)) "\n" "<br>"))
-		(var doc-example (hash-get doc-map :example))
+		(var doc-namespace (sanitize-for-md-row (doc-struct :namespace)))
+		(var doc-type (sanitize-for-md-row (doc-struct :sl-sh-type)))
+		(var doc-usage (str-replace (sanitize-for-md-row (doc-struct :usage)) "\n" "<br>"))
+		(var doc-example (doc-struct :example))
 		(write-line file "")
 		(write-line file "")
 		(write-line file
 			(str "| "
-					(create-anchor (str (get-anchor-link-id doc-map)))
+					(create-anchor (str (get-anchor-link-id doc-struct)))
 					(make-md-link-able (str "``" doc-form "``")
-					(str "#" (get-anchor-link-id doc-map) "-contents"))
+					(str "#" (get-anchor-link-id doc-struct) "-contents"))
 				" | " doc-type " |"))
 		(write-line file 
 			(str "| ``" doc-namespace "::" doc-form
@@ -205,33 +210,46 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(close file)
 	file-name)
 
-(defn make-md-file
-	  ;; TODO should be using get-error instead of do
-	(index-file sym-list) (do
-	(var docstrings-map (parse-docstrings-for-syms sym-list))
-	(create-header index-file)
-	;; explain format
-	(write-heading "Documentation structure for each form" index-file)
-	(doc-structure index-file)
+(defn make-md-file-with-sections
+"Create markdown file at given path and populate with documentation from
+provided hash-map of section-key to list of doc struct pairs. The structure
+was chosen becuase the markdown file is grouped by documentation sections.
+"
+    (index-file docs-by-section)
+    (create-header index-file)
+    (write-heading "Documentation structure for each form" index-file)
+    (doc-structure index-file)
 	;; generate table of contents
-	(write-heading "Table of Contents" index-file)
-	(for key in (qsort (hash-keys docstrings-map)) (do
-		(var docstrings (hash-get docstrings-map key))
+    (write-heading "Table of Contents" index-file)
+	(for key in (qsort (hash-keys docs-by-section)) (do
+		(var docstrings (hash-get docs-by-section key))
 		(table-of-contents key docstrings index-file)))
 	;; generate markdown body
 	(write-heading "Documentation" index-file)
-	(for key in (qsort (hash-keys docstrings-map)) (do
-		(var docstrings (hash-get docstrings-map key))
+	(for key in (qsort (hash-keys docs-by-section)) (do
+		(var docstrings (hash-get docs-by-section key))
 		(write-md-table key docstrings index-file)))
 	(write-version index-file)
-	(do
-		(var uncat-syms (hash-get docstrings-map :uncategorized))
-		(when (not (empty-seq? uncat-syms)) (do
-			(println "Found :uncategorized symbols: ")
-			(for symbol in uncat-syms (println "symbol: " symbol))
-			nil))
-		 #t)))
+	(var uncat-syms (hash-get docs-by-section :uncategorized))
+	(when (not (empty-seq? uncat-syms)) (do
+		(println "Found :uncategorized symbols: ")
+		(for symbol in uncat-syms (println "symbol: " symbol))
+		nil))
+	 #t)
 
-(ns-export '(make-md-file))
+(defn make-md-file
+"Create markdown file at given path and populate with documentation from
+provided list of symbols.
+"
+    (index-file sym-list)
+    (var docs-by-section (make-hash))
+    (for doc-struct in (map make-doc-struct sym-list)
+          (let ((section-key (doc-struct :section-key)))
+            (if (hash-haskey docs-by-section section-key)
+                (append-to! (hash-get docs-by-section section-key) doc-struct)
+            (hash-set! docs-by-section section-key (list doc-struct)))))
+    (make-md-file-with-sections index-file docs-by-section))
+
+(ns-export '(make-md-file make-md-file-with-sections))
 
 (ns-pop)

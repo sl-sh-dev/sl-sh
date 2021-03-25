@@ -8,10 +8,21 @@
 (ns-import 'struct)
 (ns-import 'test)
 
+(defn filter-user-undocable-forms (sym-list)
+	(filter (fn (x)
+		(and (not (= x 'custom-lisp-config))
+			(not (= x '*repl-settings*))
+			(not (= x '__completion_hook))
+			(not (= x '__line_handler))
+			(not (= x '__exec_hook))
+				(not (= x '__prompt))))
+			sym-list))
+
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and
 			(not (= x 'filter-undocable-forms))
+			(not (= x '*std-lib-syms-hash*))
 			(not (= x '*ns*))
 			(not (= x '*euid*))
 			(not (= x '*uid*))
@@ -34,11 +45,13 @@
 			(not (= x 'internal-macro))
 			(not (= x 'get-doc-list-for))
 			(not (= x 'make-md-file))
-			(not (= x 'make-md-file-with-docstrings))
 			(not (= x '__completion_hook))
 			(not (= x '__line_handler))
 			(not (= x '__exec_hook))
 			(not (= x '__prompt))
+			(not (= x 'list-of-all-slsh-syms))
+			(not (= x 'filter-user-undocable-forms))
+			(not (= x 'filter-undocable-forms))
 			(not (= x 'args))))
 		sym-list))
 
@@ -46,11 +59,14 @@
 	(var sym-list (ns-symbols 'root))
 	(for a-ns in (filter (fn (x) (and
 						(not (= x "docmd"))
-						(not (= x "docparse"))
+						(not (= x "mkpost"))
+						(not (= x "moddocs"))
+						(not (= x "docstruct"))
 						(not (= x "docify"))
 						(not (= x "root"))
 						(not (= x "test"))
-						(not (= x "user")))) (ns-list)) (do
+						(not (= x "user")
+                             ))) (ns-list)) (do
 		(append-to! sym-list (eval (sym (str a-ns "::*ns-exports*"))))))
 	(filter-undocable-forms (qsort sym-list)))
 
@@ -60,15 +76,17 @@
 			(:single (append '() (last (list-of-all-slsh-syms))))
 			(:lang (list-of-all-slsh-syms))))
 
-(defn make-md-file-with-docstrings (index-file docstrings)
-	(docmd::make-md-file index-file docstrings))
-
-(defn make-md-file (index-file target-doc-form)
+(defn make-md-file
+"Generate slsh standard library documentation md page."
+(index-file target-doc-form)
+	(var syms (collect-vec (map (fn (x) (sym x))
+			(get-doc-list-for target-doc-form))))
 	(docmd::make-md-file
 		index-file
-		(collect-vec (map (fn (x) (doc (sym x)))
-			  (get-doc-list-for target-doc-form)))))
+		syms))
 
-(ns-export '(make-md-file get-doc-list-for make-md-file-with-docstrings filter-undocable-forms))
+;;(when (> (length args) 0)
+;;;;  (println (get-doc-list-for (vec-nth args 1))))
 
+(ns-auto-export 'mkdocs)
 (ns-pop)

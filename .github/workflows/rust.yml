@@ -55,16 +55,16 @@ jobs:
           echo "$DOC_DEPLOY_KEY" | ssh-add -
           pushd docs
           log "Build docs"
-          ../sl-sh docify.lisp index.markdown :lang
+          ../sl-sh docify.lisp
           if [[ $? != "0" ]]; then
             elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
             elog "docstrings printed as hashmap literals above and or errors. Run"
-            elog "$ cd docs && sl-sh docify.lisp :lang index.markdown to get started."
+            elog "$ cd docs && sl-sh docify.lisp to get started."
             exit 1
           fi
 
-          if [[ ! -f index.markdown ]]; then
-            elog "index.markdown file was not generated, docs failed to build."
+          if [[ ! -f pages/mydoc/mydoc_api.md ]]; then
+            elog "pages/mydoc/mydoc_api.md file was not generated, docs failed to build."
             exit 1
           fi
 

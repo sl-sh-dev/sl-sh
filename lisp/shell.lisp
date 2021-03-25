@@ -884,6 +884,51 @@ Section: shell"
                         (handle-last-command (str-trim file-contents))
                         (eval (read-all (str (cat fc-file))))))))))
 
+(defn mkli
+	"Usage: (mkli filepath [namespace] [body])
+	\"make lisp\".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
+	to populate as the body (optional 3rd arg), make a canonincal blank sl-sh script
+	complete with all the relevant imports, and boilerplate namespace code taken
+	care of to speed up development.
+
+	It is recommended all calls to load are done at the top of the file (before
+	the calls to ns-enter or ns-create, in case a library sl-sh script calls a
+	library sl-sh script that created a namespace and forgot to call ns-pop.
+	This ensures the exported symbols for the first library's scripts
+	namespace are importable in the executing script's namespace.
+
+	All calls to ns-import happen after a ns is created and entered so the
+	current namespace is the namespace that houses all the imported symbols.
+
+	ns-export must be called before ns-pop so the appropriate symbols are
+	associated namespace, the one in which the symbols were created.
+
+	Section: scripting "
+	(&rest args) (let* ((filepath nil) (namespace nil) (script-body nil))
+	(when (= 0 (length args)) (err "Must have at least 1 argument, the path to the script to be created."))
+	(when (< 3 (length args)) (err (str "Too many arguments, see doc ")))
+	(when (< 2 (length args)) (set! script-body (vec-nth args 2)))
+	(when (< 1 (length args)) (set! namespace (vec-nth args 1)))
+	(when (< 0 (length args)) (set! filepath (vec-nth args 0)))
+	(var new-file (open filepath :create :append))
+	(chmod "+x" filepath)
+	(write-line new-file "#!/usr/bin/env sl-sh")
+	(write-line new-file "")
+	(when (not (nil? namespace))
+		(write-line new-file (str "(ns-push '" namespace ")")))
+	(write-line new-file "(ns-import 'shell)")
+	(if (not (nil? script-body))
+		(do
+			(write-line new-file "")
+			(write-line new-file script-body)
+			(write-line new-file ""))
+		(write-line new-file ""))
+	(when (not (nil? namespace))
+		(do
+		(write-line new-file (str "(ns-auto-export '" namespace ")"))
+		(write-line new-file "(ns-pop)")))
+	(close new-file)))
+
 (load "getopts.lisp")
 
 (ns-export '(
@@ -923,6 +968,7 @@ Section: shell"
 	endfix-on
 	fc
 	getopts
+	mkli
 	temp-dir))
 
 (ns-pop)

@@ -256,3 +256,23 @@ Example:
          (reducer (fn (fst nxt)
                      `((fn (_) (when _ ,fst)) ,nxt))))
         (iterator::reduce reducer first-rev rest-rev)))
+
+(defmacro ns-auto-export
+"Macro that takes a symbol, the symbol of the current namespace, and writes an
+ns-export statement that includes all symbols defined in the namespaces scope
+that do not begin with the '-' symbol. This is a convenience method that allows
+user to avoid enumerating all symbols while also introducing a mechanism to
+exclude symbols from being excluded. Note, if using ns-auto-export, it is
+not possible to export a symbol that is already defined in another namespace,
+if said functionality is desired the symbol must be manually exported with
+another ns-export statement; ns-auto-export can be used in conjunction with
+ns-export.
+
+Section: namespace"
+  (symbol)
+  `(ns-export (let* ((curr-syms (iterator::filter (fn (x) (nil? (hash-get *std-lib-syms-hash* x))) (ns-symbols ,symbol)))
+         (public-syms
+           (iterator::filter
+             (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
+             curr-syms)))
+    (iterator::collect public-syms))))
