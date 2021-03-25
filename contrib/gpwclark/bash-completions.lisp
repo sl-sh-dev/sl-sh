@@ -83,7 +83,6 @@
 	(args)
 	(let ((arg-str (str-cat-list " " args)))
 		((fn (completions)
-             (println "meow")
 			(if (and
 					(= 1 (length completions))
 					(str-empty? (first completions)))
