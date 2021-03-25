@@ -91,7 +91,18 @@ impl<'env> ShellCompleter<'env> {
         if self.args.is_empty() {
             return HookResult::Default;
         }
-        let ns = self.environment.namespace.borrow().name();
+        let ns = {
+            let ns_exp = lookup_expression(&self.environment, "*active-ns*");
+            if let Some(ns_exp) = ns_exp {
+                if let ExpEnum::String(s, _) = &ns_exp.get().data {
+                    s.to_string()
+                } else {
+                    "root".to_string()
+                }
+            } else {
+                "root".to_string()
+            }
+        };
         let hook_name = self
             .environment
             .interner
