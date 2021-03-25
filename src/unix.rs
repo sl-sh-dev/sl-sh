@@ -335,16 +335,27 @@ where
                         eprintln!("Error setting up stdout (dup) in pipe: {}", err);
                         libc::_exit(10);
                     }
-                    if let Err(err) = cvt(libc::close(stdout)) {
-                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
-                        libc::_exit(10);
-                    }
                 }
                 if let Some(stderr) = stderr {
                     if let Err(err) = cvt(libc::dup2(stderr, 2)) {
                         eprintln!("Error setting up stderr (dup) in pipe: {}", err);
                         libc::_exit(10);
                     }
+                }
+                if let Some(stdout) = stdout {
+                    if let Err(err) = cvt(libc::close(stdout)) {
+                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Some(stderr) = stderr {
+                        if stderr != stdout {
+                            if let Err(err) = cvt(libc::close(stderr)) {
+                                eprintln!("Error setting up stderr (close) in pipe: {}", err);
+                                libc::_exit(10);
+                            }
+                        }
+                    }
+                } else if let Some(stderr) = stderr {
                     if let Err(err) = cvt(libc::close(stderr)) {
                         eprintln!("Error setting up stderr (close) in pipe: {}", err);
                         libc::_exit(10);
