@@ -191,13 +191,10 @@ pub fn call_lambda(
     };
     let old_ns = environment.namespace.clone();
     environment.namespace = lambda.syms.namespace().clone();
-    let old_loose = environment.loose_symbols;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     let old_base = environment.stack_frame_base;
-    environment.loose_symbols = false;
     let ret = call_lambda_int(environment, lambda_exp, lambda, args, eval_args);
-    environment.loose_symbols = old_loose;
     environment.stack.truncate(stack_len);
     environment.stack_frames.truncate(stack_frames_len);
     environment.stack_frame_base = old_base;
@@ -437,11 +434,9 @@ fn str_process(
                 }
                 if command_depth == 0 {
                     in_command = false;
-                    let ast = read(environment, &string[var_start + 1..=i], None, false);
+                    let ast = read(environment, &string[var_start..=i], None, false);
                     match ast {
                         Ok(ast) => {
-                            let old_loose_symbols = environment.loose_symbols;
-                            environment.loose_symbols = true;
                             let gpo = set_grab_proc_output(environment, true);
 
                             // Get out of a pipe for the str call if in one...
@@ -453,7 +448,6 @@ fn str_process(
                                     .trim(),
                             );
                             gpo.environment.pipe_pgid = pipe_pgid;
-                            gpo.environment.loose_symbols = old_loose_symbols;
                         }
                         Err(err) => return Err(LispError::new(err.reason)),
                     }
@@ -588,8 +582,6 @@ fn internal_eval(
                     drop(exp_d);
                     Ok(exp)
                 }
-            } else if environment.loose_symbols {
-                str_process(environment, s, false)
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(LispError::new(msg))

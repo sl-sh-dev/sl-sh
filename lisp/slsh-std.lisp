@@ -102,11 +102,15 @@ t
 (undef prim-print-backtrace)
 (undef prim-print-error)
 
+(if (def? *read-table*)
+    (hash-set! *read-table* #\$ 'shell::shell-read)
+    (def *read-table* (make-hash '((#\$ . shell::shell-read)))))
+
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? *load-slshrc*)
   (do
-    (def config-file "$HOME$/.config/sl-sh/slshrc")
+    (def config-file "${HOME}/.config/sl-sh/slshrc")
     (if (not (fs-exists? config-file)) (write-string (open config-file :create) *slshrc-src*))
     (load "slshrc")))
 

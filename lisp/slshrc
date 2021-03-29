@@ -20,7 +20,7 @@
 
 (defn parse_git_branch () 
     (var branch "")
-    (if (sys-command? "git") (err>null (set! branch (str (git rev-parse --abbrev-ref HEAD)))))
+    (if (sys-command? "git") (err>null (set! branch (str $(git rev-parse --abbrev-ref HEAD)))))
     (if (= branch "")
         (format "")
         (format "(" (str-trim branch) ")")))
@@ -67,5 +67,4 @@
         (nil :default)))
 
 ; Turn on endfix processing (i.e. "normal" style pipes, etc).
-(endfix-on)
-
+;(endfix-on)

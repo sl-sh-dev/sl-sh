@@ -280,7 +280,7 @@ is thrown.
     Use this as a default if the given flag is not provided at execution time.
 - :type (optional)
     Specify a type for every provided argument for the given flag. Types can be
-any of: $(str (collect (map (fn (x) (var func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map))))
+any of: $((str (collect (map (fn (x) (var func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map)))))
 
 
 Rules for flags:

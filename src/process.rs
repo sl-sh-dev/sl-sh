@@ -319,8 +319,6 @@ pub fn do_command(
     command: &str,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let old_loose_syms = environment.loose_symbols;
-    environment.loose_symbols = true;
     let mut args = Vec::new();
     for a_exp in parts {
         let a_exp2 = a_exp.clone();
@@ -370,6 +368,5 @@ pub fn do_command(
             }
         }
     }
-    environment.loose_symbols = old_loose_syms;
     run_command(environment, command, args)
 }

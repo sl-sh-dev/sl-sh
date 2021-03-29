@@ -27,14 +27,13 @@ fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: 
     let data = Expression::alloc_data(ExpEnum::Int(uid_t::from(euid) as i64));
     environment.insert_into_root_scope(interned_sym, data);
 
-    let mut load_path = Vec::new();
-    load_path.push(Expression::alloc_data(ExpEnum::String(
+    let load_path = vec![Expression::alloc_data(ExpEnum::String(
         environment
             .interner
             .intern(&format!("{}/.config/sl-sh", home))
             .into(),
         None,
-    )));
+    ))];
     let data = Expression::with_list(load_path);
     environment.root_scope.borrow_mut().insert_with_doc(
         environment.interner.intern("*load-path*"),
@@ -146,7 +145,6 @@ pub fn read_stdin() -> i32 {
                 let ast = read(&mut environment, input, None, true);
                 match ast {
                     Ok(ast) => {
-                        environment.loose_symbols = true;
                         match eval(&mut environment, ast) {
                             Ok(exp) => {
                                 match &exp.get().data {
@@ -161,7 +159,6 @@ pub fn read_stdin() -> i32 {
                             }
                             Err(err) => eprintln!("{}", err),
                         }
-                        environment.loose_symbols = false;
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }
