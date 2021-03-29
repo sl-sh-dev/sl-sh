@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v2
     - name: Build
       run: |
           cargo version
@@ -79,20 +80,3 @@ jobs:
       with:
         name: linux-sl-sh
         path: ./sl-sh
-
-
-  build-macos:
-
-    runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: |
-          cargo version
-          rustc --version
-          cargo build --verbose
-    - name: Run Rust tests
-      run: cargo test --verbose
-    - name: Run Lisp tests
-      run: ./target/debug/sl-sh ./run-tests.lisp
