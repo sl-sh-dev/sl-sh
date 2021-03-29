@@ -27,75 +27,75 @@ example code if exists
 ### <a id="Threading-macros forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Threading-macros forms](#Threading-macros forms-body)
 
 
-<a id="Namespace: root::->-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->``](#Namespace: root::->), <a id="Namespace: root::->>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->>``](#Namespace: root::->>), <a id="Namespace: root::chain-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain``](#Namespace: root::chain), <a id="Namespace: root::chain-and-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-and``](#Namespace: root::chain-and), <a id="Namespace: root::chain-when-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-when``](#Namespace: root::chain-when)
+<a id="root::->-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->``](#root::->), <a id="root::->>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->>``](#root::->>), <a id="root::chain-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain``](#root::chain), <a id="root::chain-and-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-and``](#root::chain-and), <a id="root::chain-when-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-when``](#root::chain-when)
 ### <a id="Char forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Char forms](#Char forms-body)
 
 
-<a id="Namespace: root::char-lower-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-lower``](#Namespace: root::char-lower), <a id="Namespace: root::char-upper-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-upper``](#Namespace: root::char-upper), <a id="Namespace: root::char-whitespace?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-whitespace?``](#Namespace: root::char-whitespace?)
+<a id="root::char-lower-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-lower``](#root::char-lower), <a id="root::char-upper-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-upper``](#root::char-upper), <a id="root::char-whitespace?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-whitespace?``](#root::char-whitespace?)
 ### <a id="Conditional forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Conditional forms](#Conditional forms-body)
 
 
-<a id="Namespace: root::<-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<``](#Namespace: root::<), <a id="Namespace: root::<=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<=``](#Namespace: root::<=), <a id="Namespace: root::=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``=``](#Namespace: root::=), <a id="Namespace: root::>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>``](#Namespace: root::>), <a id="Namespace: root::>=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>=``](#Namespace: root::>=), <a id="Namespace: root::and-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and``](#Namespace: root::and), <a id="Namespace: root::cond-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cond``](#Namespace: root::cond), <a id="Namespace: root::if-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``if``](#Namespace: root::if), <a id="Namespace: root::match-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``match``](#Namespace: root::match), <a id="Namespace: root::not-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``not``](#Namespace: root::not), <a id="Namespace: root::null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``null``](#Namespace: root::null), <a id="Namespace: root::or-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``or``](#Namespace: root::or), <a id="Namespace: root::when-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``when``](#Namespace: root::when)
+<a id="root::<-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<``](#root::<), <a id="root::<=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<=``](#root::<=), <a id="root::=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``=``](#root::=), <a id="root::>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>``](#root::>), <a id="root::>=-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>=``](#root::>=), <a id="root::and-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and``](#root::and), <a id="root::cond-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cond``](#root::cond), <a id="root::if-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``if``](#root::if), <a id="root::match-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``match``](#root::match), <a id="root::not-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``not``](#root::not), <a id="root::null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``null``](#root::null), <a id="root::or-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``or``](#root::or), <a id="root::when-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``when``](#root::when)
 ### <a id="Core forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Core forms](#Core forms-body)
 
 
-<a id="Namespace: root::*collection-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*collection-src*``](#Namespace: root::*collection-src*), <a id="Namespace: root::*core-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*core-src*``](#Namespace: root::*core-src*), <a id="Namespace: root::*endfix-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*endfix-src*``](#Namespace: root::*endfix-src*), <a id="Namespace: root::*getopts-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*getopts-src*``](#Namespace: root::*getopts-src*), <a id="Namespace: root::*iterator-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*iterator-src*``](#Namespace: root::*iterator-src*), <a id="Namespace: root::*lib-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*lib-src*``](#Namespace: root::*lib-src*), <a id="Namespace: root::*seq-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*seq-src*``](#Namespace: root::*seq-src*), <a id="Namespace: root::*shell-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*shell-src*``](#Namespace: root::*shell-src*), <a id="Namespace: root::*slsh-std-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slsh-std-src*``](#Namespace: root::*slsh-std-src*), <a id="Namespace: root::*slshrc-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slshrc-src*``](#Namespace: root::*slshrc-src*), <a id="Namespace: root::*struct-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*struct-src*``](#Namespace: root::*struct-src*), <a id="Namespace: root::*test-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*test-src*``](#Namespace: root::*test-src*), <a id="Namespace: root::and-let*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and-let*``](#Namespace: root::and-let*), <a id="Namespace: root::apply-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``apply``](#Namespace: root::apply), <a id="Namespace: root::back-quote-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``back-quote``](#Namespace: root::back-quote), <a id="Namespace: root::block-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``block``](#Namespace: root::block), <a id="Namespace: root::def-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def``](#Namespace: root::def), <a id="Namespace: root::def?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def?``](#Namespace: root::def?), <a id="Namespace: root::defmacro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#Namespace: root::defmacro), <a id="Namespace: root::defn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defn``](#Namespace: root::defn), <a id="Namespace: root::do-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``do``](#Namespace: root::do), <a id="Namespace: root::doc-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc``](#Namespace: root::doc), <a id="Namespace: root::doc-raw-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc-raw``](#Namespace: root::doc-raw), <a id="Namespace: root::dotimes-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes``](#Namespace: root::dotimes), <a id="Namespace: root::dotimes-i-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes-i``](#Namespace: root::dotimes-i), <a id="Namespace: root::dyn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dyn``](#Namespace: root::dyn), <a id="Namespace: root::eprint-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprint``](#Namespace: root::eprint), <a id="Namespace: root::eprintln-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprintln``](#Namespace: root::eprintln), <a id="Namespace: root::err-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err``](#Namespace: root::err), <a id="Namespace: root::error-stack-off-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-off``](#Namespace: root::error-stack-off), <a id="Namespace: root::error-stack-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-on``](#Namespace: root::error-stack-on), <a id="Namespace: root::eval-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eval``](#Namespace: root::eval), <a id="Namespace: root::expand-macro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro``](#Namespace: root::expand-macro), <a id="Namespace: root::expand-macro-all-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro-all``](#Namespace: root::expand-macro-all), <a id="Namespace: root::expand-macro1-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro1``](#Namespace: root::expand-macro1), <a id="Namespace: root::fn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fn``](#Namespace: root::fn), <a id="Namespace: root::format-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``format``](#Namespace: root::format), <a id="Namespace: root::gensym-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``gensym``](#Namespace: root::gensym), <a id="Namespace: root::get-error-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-error``](#Namespace: root::get-error), <a id="Namespace: root::identity-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``identity``](#Namespace: root::identity), <a id="Namespace: root::intern-stats-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``intern-stats``](#Namespace: root::intern-stats), <a id="Namespace: root::length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``length``](#Namespace: root::length), <a id="Namespace: root::let-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#Namespace: root::let), <a id="Namespace: root::let*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let*``](#Namespace: root::let*), <a id="Namespace: root::lex-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lex``](#Namespace: root::lex), <a id="Namespace: root::loop-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loop``](#Namespace: root::loop), <a id="Namespace: root::macro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro``](#Namespace: root::macro), <a id="Namespace: root::meta-add-tags-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-add-tags``](#Namespace: root::meta-add-tags), <a id="Namespace: root::meta-column-no-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-column-no``](#Namespace: root::meta-column-no), <a id="Namespace: root::meta-file-name-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-file-name``](#Namespace: root::meta-file-name), <a id="Namespace: root::meta-line-no-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-line-no``](#Namespace: root::meta-line-no), <a id="Namespace: root::meta-tag?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-tag?``](#Namespace: root::meta-tag?), <a id="Namespace: root::nsubstitute!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nsubstitute!``](#Namespace: root::nsubstitute!), <a id="Namespace: root::occurs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``occurs``](#Namespace: root::occurs), <a id="Namespace: root::print-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``print``](#Namespace: root::print), <a id="Namespace: root::println-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``println``](#Namespace: root::println), <a id="Namespace: root::progn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``progn``](#Namespace: root::progn), <a id="Namespace: root::quote-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``quote``](#Namespace: root::quote), <a id="Namespace: root::reader-macro-dot-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reader-macro-dot``](#Namespace: root::reader-macro-dot), <a id="Namespace: root::recur-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``recur``](#Namespace: root::recur), <a id="Namespace: root::ref-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ref``](#Namespace: root::ref), <a id="Namespace: root::return-from-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``return-from``](#Namespace: root::return-from), <a id="Namespace: root::set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set!``](#Namespace: root::set!), <a id="Namespace: root::substitute-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``substitute``](#Namespace: root::substitute), <a id="Namespace: root::syscall-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syscall``](#Namespace: root::syscall), <a id="Namespace: root::undef-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``undef``](#Namespace: root::undef), <a id="Namespace: root::unwind-protect-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unwind-protect``](#Namespace: root::unwind-protect), <a id="Namespace: root::values-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values``](#Namespace: root::values), <a id="Namespace: root::values-length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-length``](#Namespace: root::values-length), <a id="Namespace: root::values-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-nth``](#Namespace: root::values-nth), <a id="Namespace: root::var-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``var``](#Namespace: root::var), <a id="Namespace: root::varfn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``varfn``](#Namespace: root::varfn)
+<a id="root::*collection-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*collection-src*``](#root::*collection-src*), <a id="root::*core-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*core-src*``](#root::*core-src*), <a id="root::*endfix-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*endfix-src*``](#root::*endfix-src*), <a id="root::*getopts-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*getopts-src*``](#root::*getopts-src*), <a id="root::*iterator-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*iterator-src*``](#root::*iterator-src*), <a id="root::*lib-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*lib-src*``](#root::*lib-src*), <a id="root::*seq-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*seq-src*``](#root::*seq-src*), <a id="root::*shell-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*shell-src*``](#root::*shell-src*), <a id="root::*slsh-std-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slsh-std-src*``](#root::*slsh-std-src*), <a id="root::*slshrc-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slshrc-src*``](#root::*slshrc-src*), <a id="root::*struct-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*struct-src*``](#root::*struct-src*), <a id="root::*test-src*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*test-src*``](#root::*test-src*), <a id="root::and-let*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and-let*``](#root::and-let*), <a id="root::apply-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``apply``](#root::apply), <a id="root::back-quote-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``back-quote``](#root::back-quote), <a id="root::block-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``block``](#root::block), <a id="root::def-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def``](#root::def), <a id="root::def?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def?``](#root::def?), <a id="root::defmacro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#root::defmacro), <a id="root::defn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defn``](#root::defn), <a id="root::do-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``do``](#root::do), <a id="root::doc-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc``](#root::doc), <a id="root::doc-raw-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc-raw``](#root::doc-raw), <a id="root::dotimes-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes``](#root::dotimes), <a id="root::dotimes-i-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes-i``](#root::dotimes-i), <a id="root::dyn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dyn``](#root::dyn), <a id="root::eprint-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprint``](#root::eprint), <a id="root::eprintln-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprintln``](#root::eprintln), <a id="root::err-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err``](#root::err), <a id="root::error-stack-off-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-off``](#root::error-stack-off), <a id="root::error-stack-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-on``](#root::error-stack-on), <a id="root::eval-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eval``](#root::eval), <a id="root::expand-macro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro``](#root::expand-macro), <a id="root::expand-macro-all-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro-all``](#root::expand-macro-all), <a id="root::expand-macro1-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro1``](#root::expand-macro1), <a id="root::fn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fn``](#root::fn), <a id="root::format-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``format``](#root::format), <a id="root::gensym-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``gensym``](#root::gensym), <a id="root::get-error-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-error``](#root::get-error), <a id="root::identity-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``identity``](#root::identity), <a id="root::intern-stats-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``intern-stats``](#root::intern-stats), <a id="root::length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``length``](#root::length), <a id="root::let-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#root::let), <a id="root::let*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let*``](#root::let*), <a id="root::lex-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lex``](#root::lex), <a id="root::loop-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loop``](#root::loop), <a id="root::macro-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro``](#root::macro), <a id="root::meta-add-tags-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-add-tags``](#root::meta-add-tags), <a id="root::meta-column-no-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-column-no``](#root::meta-column-no), <a id="root::meta-file-name-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-file-name``](#root::meta-file-name), <a id="root::meta-line-no-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-line-no``](#root::meta-line-no), <a id="root::meta-tag?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-tag?``](#root::meta-tag?), <a id="root::nsubstitute!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nsubstitute!``](#root::nsubstitute!), <a id="root::occurs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``occurs``](#root::occurs), <a id="root::print-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``print``](#root::print), <a id="root::println-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``println``](#root::println), <a id="root::progn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``progn``](#root::progn), <a id="root::quote-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``quote``](#root::quote), <a id="root::reader-macro-dot-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reader-macro-dot``](#root::reader-macro-dot), <a id="root::recur-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``recur``](#root::recur), <a id="root::ref-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ref``](#root::ref), <a id="root::return-from-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``return-from``](#root::return-from), <a id="root::set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set!``](#root::set!), <a id="root::substitute-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``substitute``](#root::substitute), <a id="root::syscall-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syscall``](#root::syscall), <a id="root::undef-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``undef``](#root::undef), <a id="root::unwind-protect-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unwind-protect``](#root::unwind-protect), <a id="root::values-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values``](#root::values), <a id="root::values-length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-length``](#root::values-length), <a id="root::values-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-nth``](#root::values-nth), <a id="root::var-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``var``](#root::var), <a id="root::varfn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``varfn``](#root::varfn)
 ### <a id="File forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[File forms](#File forms-body)
 
 
-<a id="Namespace: root::close-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``close``](#Namespace: root::close), <a id="Namespace: root::flush-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``flush``](#Namespace: root::flush), <a id="Namespace: root::open-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``open``](#Namespace: root::open), <a id="Namespace: root::read-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read``](#Namespace: root::read), <a id="Namespace: root::read-all-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-all``](#Namespace: root::read-all), <a id="Namespace: root::read-line-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-line``](#Namespace: root::read-line), <a id="Namespace: root::write-line-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-line``](#Namespace: root::write-line), <a id="Namespace: root::write-string-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-string``](#Namespace: root::write-string)
+<a id="root::close-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``close``](#root::close), <a id="root::flush-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``flush``](#root::flush), <a id="root::open-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``open``](#root::open), <a id="root::read-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read``](#root::read), <a id="root::read-all-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-all``](#root::read-all), <a id="root::read-line-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-line``](#root::read-line), <a id="root::write-line-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-line``](#root::write-line), <a id="root::write-string-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-string``](#root::write-string)
 ### <a id="Hashmap forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Hashmap forms](#Hashmap forms-body)
 
 
-<a id="Namespace: root::hash-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-clear!``](#Namespace: root::hash-clear!), <a id="Namespace: root::hash-get-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-get``](#Namespace: root::hash-get), <a id="Namespace: root::hash-haskey-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-haskey``](#Namespace: root::hash-haskey), <a id="Namespace: root::hash-keys-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-keys``](#Namespace: root::hash-keys), <a id="Namespace: root::hash-remove!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-remove!``](#Namespace: root::hash-remove!), <a id="Namespace: root::hash-set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-set!``](#Namespace: root::hash-set!), <a id="Namespace: root::make-hash-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-hash``](#Namespace: root::make-hash)
+<a id="root::hash-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-clear!``](#root::hash-clear!), <a id="root::hash-get-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-get``](#root::hash-get), <a id="root::hash-haskey-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-haskey``](#root::hash-haskey), <a id="root::hash-keys-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-keys``](#root::hash-keys), <a id="root::hash-remove!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-remove!``](#root::hash-remove!), <a id="root::hash-set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-set!``](#root::hash-set!), <a id="root::make-hash-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-hash``](#root::make-hash)
 ### <a id="iterator forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[iterator forms](#iterator forms-body)
 
 
-<a id="Namespace: iterator::append-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append``](#Namespace: iterator::append), <a id="Namespace: iterator::append-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-iter``](#Namespace: iterator::append-iter), <a id="Namespace: iterator::append-to!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-to!``](#Namespace: iterator::append-to!), <a id="Namespace: iterator::collect-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect``](#Namespace: iterator::collect), <a id="Namespace: iterator::collect-str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-str``](#Namespace: iterator::collect-str), <a id="Namespace: iterator::collect-vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-vec``](#Namespace: iterator::collect-vec), <a id="Namespace: iterator::double-ended-iter?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iter?``](#Namespace: iterator::double-ended-iter?), <a id="Namespace: iterator::double-ended-iterator-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iterator``](#Namespace: iterator::double-ended-iterator), <a id="Namespace: iterator::empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty?``](#Namespace: iterator::empty?), <a id="Namespace: iterator::file-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file-iter``](#Namespace: iterator::file-iter), <a id="Namespace: iterator::filter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter``](#Namespace: iterator::filter), <a id="Namespace: iterator::filter-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter-iter``](#Namespace: iterator::filter-iter), <a id="Namespace: iterator::for-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for``](#Namespace: iterator::for), <a id="Namespace: iterator::for-i-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for-i``](#Namespace: iterator::for-i), <a id="Namespace: iterator::iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter``](#Namespace: iterator::iter), <a id="Namespace: iterator::iter?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter?``](#Namespace: iterator::iter?), <a id="Namespace: iterator::iterator-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iterator``](#Namespace: iterator::iterator), <a id="Namespace: iterator::list-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list-iter``](#Namespace: iterator::list-iter), <a id="Namespace: iterator::map-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map``](#Namespace: iterator::map), <a id="Namespace: iterator::map-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map-iter``](#Namespace: iterator::map-iter), <a id="Namespace: iterator::next!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``next!``](#Namespace: iterator::next!), <a id="Namespace: iterator::nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nth``](#Namespace: iterator::nth), <a id="Namespace: iterator::range-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range``](#Namespace: iterator::range), <a id="Namespace: iterator::range-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range-iter``](#Namespace: iterator::range-iter), <a id="Namespace: iterator::reduce-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce``](#Namespace: iterator::reduce), <a id="Namespace: iterator::reduce-times-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce-times``](#Namespace: iterator::reduce-times), <a id="Namespace: iterator::reverse-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse``](#Namespace: iterator::reverse), <a id="Namespace: iterator::reverse-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse-iter``](#Namespace: iterator::reverse-iter), <a id="Namespace: iterator::slice-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice``](#Namespace: iterator::slice), <a id="Namespace: iterator::slice-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice-iter``](#Namespace: iterator::slice-iter), <a id="Namespace: iterator::string-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string-iter``](#Namespace: iterator::string-iter), <a id="Namespace: iterator::vec-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-iter``](#Namespace: iterator::vec-iter)
+<a id="iterator::append-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append``](#iterator::append), <a id="iterator::append-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-iter``](#iterator::append-iter), <a id="iterator::append-to!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-to!``](#iterator::append-to!), <a id="iterator::collect-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect``](#iterator::collect), <a id="iterator::collect-str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-str``](#iterator::collect-str), <a id="iterator::collect-vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-vec``](#iterator::collect-vec), <a id="iterator::double-ended-iter?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iter?``](#iterator::double-ended-iter?), <a id="iterator::double-ended-iterator-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iterator``](#iterator::double-ended-iterator), <a id="iterator::empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty?``](#iterator::empty?), <a id="iterator::file-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file-iter``](#iterator::file-iter), <a id="iterator::filter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter``](#iterator::filter), <a id="iterator::filter-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter-iter``](#iterator::filter-iter), <a id="iterator::for-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for``](#iterator::for), <a id="iterator::for-i-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for-i``](#iterator::for-i), <a id="iterator::iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter``](#iterator::iter), <a id="iterator::iter?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter?``](#iterator::iter?), <a id="iterator::iterator-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iterator``](#iterator::iterator), <a id="iterator::list-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list-iter``](#iterator::list-iter), <a id="iterator::map-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map``](#iterator::map), <a id="iterator::map-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map-iter``](#iterator::map-iter), <a id="iterator::next!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``next!``](#iterator::next!), <a id="iterator::nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nth``](#iterator::nth), <a id="iterator::range-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range``](#iterator::range), <a id="iterator::range-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range-iter``](#iterator::range-iter), <a id="iterator::reduce-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce``](#iterator::reduce), <a id="iterator::reduce-times-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce-times``](#iterator::reduce-times), <a id="iterator::reverse-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse``](#iterator::reverse), <a id="iterator::reverse-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse-iter``](#iterator::reverse-iter), <a id="iterator::slice-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice``](#iterator::slice), <a id="iterator::slice-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice-iter``](#iterator::slice-iter), <a id="iterator::string-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string-iter``](#iterator::string-iter), <a id="iterator::vec-iter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-iter``](#iterator::vec-iter)
 ### <a id="Math forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Math forms](#Math forms-body)
 
 
-<a id="Namespace: root::%-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``%``](#Namespace: root::%), <a id="Namespace: root::*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*``](#Namespace: root::*), <a id="Namespace: root::+-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``+``](#Namespace: root::+), <a id="Namespace: root::--contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``-``](#Namespace: root::-), <a id="Namespace: root::/-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``/``](#Namespace: root::/)
+<a id="root::%-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``%``](#root::%), <a id="root::*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*``](#root::*), <a id="root::+-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``+``](#root::+), <a id="root::--contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``-``](#root::-), <a id="root::/-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``/``](#root::/)
 ### <a id="Namespace forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Namespace forms](#Namespace forms-body)
 
 
-<a id="Namespace: root::ns-auto-export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-auto-export``](#Namespace: root::ns-auto-export), <a id="Namespace: root::ns-create-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-create``](#Namespace: root::ns-create), <a id="Namespace: root::ns-enter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-enter``](#Namespace: root::ns-enter), <a id="Namespace: root::ns-exists?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-exists?``](#Namespace: root::ns-exists?), <a id="Namespace: root::ns-export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-export``](#Namespace: root::ns-export), <a id="Namespace: root::ns-import-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-import``](#Namespace: root::ns-import), <a id="Namespace: root::ns-list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-list``](#Namespace: root::ns-list), <a id="Namespace: root::ns-pop-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-pop``](#Namespace: root::ns-pop), <a id="Namespace: root::ns-push-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-push``](#Namespace: root::ns-push), <a id="Namespace: root::ns-symbols-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-symbols``](#Namespace: root::ns-symbols)
+<a id="root::ns-auto-export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-auto-export``](#root::ns-auto-export), <a id="root::ns-create-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-create``](#root::ns-create), <a id="root::ns-enter-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-enter``](#root::ns-enter), <a id="root::ns-exists?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-exists?``](#root::ns-exists?), <a id="root::ns-export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-export``](#root::ns-export), <a id="root::ns-import-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-import``](#root::ns-import), <a id="root::ns-list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-list``](#root::ns-list), <a id="root::ns-pop-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-pop``](#root::ns-pop), <a id="root::ns-push-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-push``](#root::ns-push), <a id="root::ns-symbols-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-symbols``](#root::ns-symbols)
 ### <a id="Pair forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Pair forms](#Pair forms-body)
 
 
-<a id="Namespace: root::car-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#Namespace: root::car), <a id="Namespace: root::cdr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#Namespace: root::cdr), <a id="Namespace: root::join-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#Namespace: root::join), <a id="Namespace: root::list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#Namespace: root::list), <a id="Namespace: root::xar!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#Namespace: root::xar!), <a id="Namespace: root::xdr!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#Namespace: root::xdr!)
+<a id="root::car-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#root::car), <a id="root::cdr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#root::cdr), <a id="root::join-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#root::join), <a id="root::list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#root::list), <a id="root::xar!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#root::xar!), <a id="root::xdr!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#root::xdr!)
 ### <a id="pair-ext forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[pair-ext forms](#pair-ext forms-body)
 
 
-<a id="Namespace: root::caaar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caaar``](#Namespace: root::caaar), <a id="Namespace: root::caadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caadr``](#Namespace: root::caadr), <a id="Namespace: root::caar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caar``](#Namespace: root::caar), <a id="Namespace: root::cadar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadar``](#Namespace: root::cadar), <a id="Namespace: root::cadddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadddr``](#Namespace: root::cadddr), <a id="Namespace: root::caddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caddr``](#Namespace: root::caddr), <a id="Namespace: root::cadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadr``](#Namespace: root::cadr), <a id="Namespace: root::cdaar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdaar``](#Namespace: root::cdaar), <a id="Namespace: root::cdadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdadr``](#Namespace: root::cdadr), <a id="Namespace: root::cdar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdar``](#Namespace: root::cdar), <a id="Namespace: root::cddar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddar``](#Namespace: root::cddar), <a id="Namespace: root::cdddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdddr``](#Namespace: root::cdddr), <a id="Namespace: root::cddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddr``](#Namespace: root::cddr)
+<a id="root::caaar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caaar``](#root::caaar), <a id="root::caadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caadr``](#root::caadr), <a id="root::caar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caar``](#root::caar), <a id="root::cadar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadar``](#root::cadar), <a id="root::cadddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadddr``](#root::cadddr), <a id="root::caddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caddr``](#root::caddr), <a id="root::cadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadr``](#root::cadr), <a id="root::cdaar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdaar``](#root::cdaar), <a id="root::cdadr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdadr``](#root::cdadr), <a id="root::cdar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdar``](#root::cdar), <a id="root::cddar-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddar``](#root::cddar), <a id="root::cdddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdddr``](#root::cdddr), <a id="root::cddr-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddr``](#root::cddr)
 ### <a id="Scripting forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Scripting forms](#Scripting forms-body)
 
 
-<a id="Namespace: root::*load-path*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#Namespace: root::*load-path*), <a id="Namespace: root::load-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``load``](#Namespace: root::load), <a id="Namespace: shell::mkli-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``mkli``](#Namespace: shell::mkli)
+<a id="root::*load-path*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#root::*load-path*), <a id="root::load-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``load``](#root::load), <a id="shell::mkli-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``mkli``](#shell::mkli)
 ### <a id="Sequence forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Sequence forms](#Sequence forms-body)
 
 
-<a id="Namespace: root::butlast-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``butlast``](#Namespace: root::butlast), <a id="Namespace: root::collect-copy-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-copy``](#Namespace: root::collect-copy), <a id="Namespace: root::empty-seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty-seq?``](#Namespace: root::empty-seq?), <a id="Namespace: root::first-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``first``](#Namespace: root::first), <a id="Namespace: root::in?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``in?``](#Namespace: root::in?), <a id="Namespace: root::last-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``last``](#Namespace: root::last), <a id="Namespace: root::non-empty-seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``non-empty-seq?``](#Namespace: root::non-empty-seq?), <a id="Namespace: root::qsort-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``qsort``](#Namespace: root::qsort), <a id="Namespace: root::rest-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``rest``](#Namespace: root::rest), <a id="Namespace: root::seq-for-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq-for``](#Namespace: root::seq-for), <a id="Namespace: root::seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq?``](#Namespace: root::seq?), <a id="Namespace: root::setnth!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``setnth!``](#Namespace: root::setnth!)
+<a id="root::butlast-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``butlast``](#root::butlast), <a id="root::collect-copy-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-copy``](#root::collect-copy), <a id="root::empty-seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty-seq?``](#root::empty-seq?), <a id="root::first-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``first``](#root::first), <a id="root::in?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``in?``](#root::in?), <a id="root::last-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``last``](#root::last), <a id="root::non-empty-seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``non-empty-seq?``](#root::non-empty-seq?), <a id="root::qsort-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``qsort``](#root::qsort), <a id="root::rest-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``rest``](#root::rest), <a id="root::seq-for-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq-for``](#root::seq-for), <a id="root::seq?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq?``](#root::seq?), <a id="root::setnth!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``setnth!``](#root::setnth!)
 ### <a id="Shell forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Shell forms](#Shell forms-body)
 
 
-<a id="Namespace: root::*stderr*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stderr*``](#Namespace: root::*stderr*), <a id="Namespace: root::*stdin*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdin*``](#Namespace: root::*stdin*), <a id="Namespace: root::*stdout*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdout*``](#Namespace: root::*stdout*), <a id="Namespace: shell::alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias``](#Namespace: shell::alias), <a id="Namespace: shell::alias?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias?``](#Namespace: shell::alias?), <a id="Namespace: root::bg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg``](#Namespace: root::bg), <a id="Namespace: shell::bg-color-rgb-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg-color-rgb``](#Namespace: shell::bg-color-rgb), <a id="Namespace: root::cd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cd``](#Namespace: root::cd), <a id="Namespace: shell::clear-dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``clear-dirs``](#Namespace: shell::clear-dirs), <a id="Namespace: root::command-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``command``](#Namespace: root::command), <a id="Namespace: shell::dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dirs``](#Namespace: shell::dirs), <a id="Namespace: shell::endfix-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``endfix-on``](#Namespace: shell::endfix-on), <a id="Namespace: shell::err>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>``](#Namespace: shell::err>), <a id="Namespace: shell::err>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>>``](#Namespace: shell::err>>), <a id="Namespace: shell::err>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>null``](#Namespace: shell::err>null), <a id="Namespace: root::exit-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``exit``](#Namespace: root::exit), <a id="Namespace: root::export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``export``](#Namespace: root::export), <a id="Namespace: shell::fc-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fc``](#Namespace: shell::fc), <a id="Namespace: root::fg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg``](#Namespace: root::fg), <a id="Namespace: shell::fg-color-rgb-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg-color-rgb``](#Namespace: shell::fg-color-rgb), <a id="Namespace: root::form-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``form``](#Namespace: root::form), <a id="Namespace: root::fs-dir?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-dir?``](#Namespace: root::fs-dir?), <a id="Namespace: root::fs-exists?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-exists?``](#Namespace: root::fs-exists?), <a id="Namespace: root::fs-file?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-file?``](#Namespace: root::fs-file?), <a id="Namespace: shell::get-dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-dirs``](#Namespace: shell::get-dirs), <a id="Namespace: shell::getopts-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``getopts``](#Namespace: shell::getopts), <a id="Namespace: root::glob-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``glob``](#Namespace: root::glob), <a id="Namespace: root::history-context-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-context``](#Namespace: root::history-context), <a id="Namespace: root::history-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-empty?``](#Namespace: root::history-empty?), <a id="Namespace: root::history-length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-length``](#Namespace: root::history-length), <a id="Namespace: root::history-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-nth``](#Namespace: root::history-nth), <a id="Namespace: root::history-push-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push``](#Namespace: root::history-push), <a id="Namespace: root::history-push-throwaway-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push-throwaway``](#Namespace: root::history-push-throwaway), <a id="Namespace: root::jobs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``jobs``](#Namespace: root::jobs), <a id="Namespace: shell::let-env-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let-env``](#Namespace: shell::let-env), <a id="Namespace: root::loose-symbols-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loose-symbols``](#Namespace: root::loose-symbols), <a id="Namespace: shell::out-err>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>``](#Namespace: shell::out-err>), <a id="Namespace: shell::out-err>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>>``](#Namespace: shell::out-err>>), <a id="Namespace: shell::out-err>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>null``](#Namespace: shell::out-err>null), <a id="Namespace: shell::out>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>``](#Namespace: shell::out>), <a id="Namespace: shell::out>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>>``](#Namespace: shell::out>>), <a id="Namespace: shell::out>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>null``](#Namespace: shell::out>null), <a id="Namespace: root::pid-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pid``](#Namespace: root::pid), <a id="Namespace: root::pipe-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pipe``](#Namespace: root::pipe), <a id="Namespace: shell::popd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``popd``](#Namespace: shell::popd), <a id="Namespace: root::prompt-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``prompt``](#Namespace: root::prompt), <a id="Namespace: shell::pushd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pushd``](#Namespace: shell::pushd), <a id="Namespace: root::reap-jobs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reap-jobs``](#Namespace: root::reap-jobs), <a id="Namespace: shell::register-alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#Namespace: shell::register-alias), <a id="Namespace: root::run-bg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``run-bg``](#Namespace: root::run-bg), <a id="Namespace: shell::set-dirs-max-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set-dirs-max``](#Namespace: shell::set-dirs-max), <a id="Namespace: root::sleep-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sleep``](#Namespace: root::sleep), <a id="Namespace: shell::syntax-off-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-off``](#Namespace: shell::syntax-off), <a id="Namespace: shell::syntax-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-on``](#Namespace: shell::syntax-on), <a id="Namespace: shell::sys-command?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sys-command?``](#Namespace: shell::sys-command?), <a id="Namespace: shell::temp-dir-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``temp-dir``](#Namespace: shell::temp-dir), <a id="Namespace: root::time-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``time``](#Namespace: root::time), <a id="Namespace: root::unexport-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unexport``](#Namespace: root::unexport), <a id="Namespace: shell::unregister-alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unregister-alias``](#Namespace: shell::unregister-alias), <a id="Namespace: root::version-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``version``](#Namespace: root::version), <a id="Namespace: root::wait-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``wait``](#Namespace: root::wait), <a id="Namespace: shell::|-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``|``](#Namespace: shell::|)
+<a id="root::*stderr*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stderr*``](#root::*stderr*), <a id="root::*stdin*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdin*``](#root::*stdin*), <a id="root::*stdout*-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdout*``](#root::*stdout*), <a id="shell::alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias``](#shell::alias), <a id="shell::alias?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias?``](#shell::alias?), <a id="root::bg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg``](#root::bg), <a id="shell::bg-color-rgb-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg-color-rgb``](#shell::bg-color-rgb), <a id="root::cd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cd``](#root::cd), <a id="shell::clear-dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``clear-dirs``](#shell::clear-dirs), <a id="root::command-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``command``](#root::command), <a id="shell::dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dirs``](#shell::dirs), <a id="shell::endfix-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``endfix-on``](#shell::endfix-on), <a id="shell::err>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>``](#shell::err>), <a id="shell::err>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>>``](#shell::err>>), <a id="shell::err>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>null``](#shell::err>null), <a id="root::exit-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``exit``](#root::exit), <a id="root::export-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``export``](#root::export), <a id="shell::fc-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fc``](#shell::fc), <a id="root::fg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg``](#root::fg), <a id="shell::fg-color-rgb-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg-color-rgb``](#shell::fg-color-rgb), <a id="root::form-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``form``](#root::form), <a id="root::fs-dir?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-dir?``](#root::fs-dir?), <a id="root::fs-exists?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-exists?``](#root::fs-exists?), <a id="root::fs-file?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-file?``](#root::fs-file?), <a id="shell::get-dirs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-dirs``](#shell::get-dirs), <a id="shell::getopts-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``getopts``](#shell::getopts), <a id="root::glob-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``glob``](#root::glob), <a id="root::history-context-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-context``](#root::history-context), <a id="root::history-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-empty?``](#root::history-empty?), <a id="root::history-length-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-length``](#root::history-length), <a id="root::history-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-nth``](#root::history-nth), <a id="root::history-push-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push``](#root::history-push), <a id="root::history-push-throwaway-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push-throwaway``](#root::history-push-throwaway), <a id="root::jobs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``jobs``](#root::jobs), <a id="shell::let-env-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let-env``](#shell::let-env), <a id="root::loose-symbols-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loose-symbols``](#root::loose-symbols), <a id="shell::out-err>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>``](#shell::out-err>), <a id="shell::out-err>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>>``](#shell::out-err>>), <a id="shell::out-err>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>null``](#shell::out-err>null), <a id="shell::out>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>``](#shell::out>), <a id="shell::out>>-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>>``](#shell::out>>), <a id="shell::out>null-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>null``](#shell::out>null), <a id="root::pid-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pid``](#root::pid), <a id="root::pipe-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pipe``](#root::pipe), <a id="shell::popd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``popd``](#shell::popd), <a id="root::prompt-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``prompt``](#root::prompt), <a id="shell::pushd-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pushd``](#shell::pushd), <a id="root::reap-jobs-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reap-jobs``](#root::reap-jobs), <a id="shell::register-alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#shell::register-alias), <a id="root::run-bg-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``run-bg``](#root::run-bg), <a id="shell::set-dirs-max-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set-dirs-max``](#shell::set-dirs-max), <a id="root::sleep-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sleep``](#root::sleep), <a id="shell::syntax-off-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-off``](#shell::syntax-off), <a id="shell::syntax-on-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-on``](#shell::syntax-on), <a id="shell::sys-command?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sys-command?``](#shell::sys-command?), <a id="shell::temp-dir-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``temp-dir``](#shell::temp-dir), <a id="root::time-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``time``](#root::time), <a id="root::unexport-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unexport``](#root::unexport), <a id="shell::unregister-alias-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unregister-alias``](#shell::unregister-alias), <a id="root::version-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``version``](#root::version), <a id="root::wait-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``wait``](#root::wait), <a id="shell::|-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``|``](#shell::|)
 ### <a id="String forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[String forms](#String forms-body)
 
 
-<a id="Namespace: root::str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str``](#Namespace: root::str), <a id="Namespace: root::str-append-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-append``](#Namespace: root::str-append), <a id="Namespace: root::str-bytes-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-bytes``](#Namespace: root::str-bytes), <a id="Namespace: root::str-cat-list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-cat-list``](#Namespace: root::str-cat-list), <a id="Namespace: root::str-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-clear!``](#Namespace: root::str-clear!), <a id="Namespace: root::str-contains-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-contains``](#Namespace: root::str-contains), <a id="Namespace: root::str-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-empty?``](#Namespace: root::str-empty?), <a id="Namespace: root::str-ignore-expand-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ignore-expand``](#Namespace: root::str-ignore-expand), <a id="Namespace: root::str-iter-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-empty?``](#Namespace: root::str-iter-empty?), <a id="Namespace: root::str-iter-next!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-next!``](#Namespace: root::str-iter-next!), <a id="Namespace: root::str-iter-peek-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-peek``](#Namespace: root::str-iter-peek), <a id="Namespace: root::str-iter-start-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-start``](#Namespace: root::str-iter-start), <a id="Namespace: root::str-lower-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-lower``](#Namespace: root::str-lower), <a id="Namespace: root::str-ltrim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ltrim``](#Namespace: root::str-ltrim), <a id="Namespace: root::str-map-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-map``](#Namespace: root::str-map), <a id="Namespace: root::str-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-nth``](#Namespace: root::str-nth), <a id="Namespace: root::str-push!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-push!``](#Namespace: root::str-push!), <a id="Namespace: root::str-replace-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-replace``](#Namespace: root::str-replace), <a id="Namespace: root::str-rsplit-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplit``](#Namespace: root::str-rsplit), <a id="Namespace: root::str-rsplitn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplitn``](#Namespace: root::str-rsplitn), <a id="Namespace: root::str-rtrim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rtrim``](#Namespace: root::str-rtrim), <a id="Namespace: root::str-split-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-split``](#Namespace: root::str-split), <a id="Namespace: root::str-splitn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-splitn``](#Namespace: root::str-splitn), <a id="Namespace: root::str-starts-with-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-starts-with``](#Namespace: root::str-starts-with), <a id="Namespace: root::str-sub-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-sub``](#Namespace: root::str-sub), <a id="Namespace: root::str-trim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-trim``](#Namespace: root::str-trim), <a id="Namespace: root::str-upper-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-upper``](#Namespace: root::str-upper)
+<a id="root::str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str``](#root::str), <a id="root::str-append-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-append``](#root::str-append), <a id="root::str-bytes-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-bytes``](#root::str-bytes), <a id="root::str-cat-list-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-cat-list``](#root::str-cat-list), <a id="root::str-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-clear!``](#root::str-clear!), <a id="root::str-contains-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-contains``](#root::str-contains), <a id="root::str-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-empty?``](#root::str-empty?), <a id="root::str-ignore-expand-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ignore-expand``](#root::str-ignore-expand), <a id="root::str-iter-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-empty?``](#root::str-iter-empty?), <a id="root::str-iter-next!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-next!``](#root::str-iter-next!), <a id="root::str-iter-peek-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-peek``](#root::str-iter-peek), <a id="root::str-iter-start-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-start``](#root::str-iter-start), <a id="root::str-lower-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-lower``](#root::str-lower), <a id="root::str-ltrim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ltrim``](#root::str-ltrim), <a id="root::str-map-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-map``](#root::str-map), <a id="root::str-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-nth``](#root::str-nth), <a id="root::str-push!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-push!``](#root::str-push!), <a id="root::str-replace-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-replace``](#root::str-replace), <a id="root::str-rsplit-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplit``](#root::str-rsplit), <a id="root::str-rsplitn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplitn``](#root::str-rsplitn), <a id="root::str-rtrim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rtrim``](#root::str-rtrim), <a id="root::str-split-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-split``](#root::str-split), <a id="root::str-splitn-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-splitn``](#root::str-splitn), <a id="root::str-starts-with-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-starts-with``](#root::str-starts-with), <a id="root::str-sub-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-sub``](#root::str-sub), <a id="root::str-trim-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-trim``](#root::str-trim), <a id="root::str-upper-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-upper``](#root::str-upper)
 ### <a id="struct forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[struct forms](#struct forms-body)
 
 
-<a id="Namespace: struct::defstruct-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defstruct``](#Namespace: struct::defstruct), <a id="Namespace: struct::deftrait-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``deftrait``](#Namespace: struct::deftrait)
+<a id="struct::defstruct-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defstruct``](#struct::defstruct), <a id="struct::deftrait-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``deftrait``](#struct::deftrait)
 ### <a id="Type forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Type forms](#Type forms-body)
 
 
-<a id="Namespace: root::builtin?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``builtin?``](#Namespace: root::builtin?), <a id="Namespace: root::char?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char?``](#Namespace: root::char?), <a id="Namespace: root::file?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file?``](#Namespace: root::file?), <a id="Namespace: root::float->int-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float->int``](#Namespace: root::float->int), <a id="Namespace: root::float?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float?``](#Namespace: root::float?), <a id="Namespace: root::func?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``func?``](#Namespace: root::func?), <a id="Namespace: root::hash?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash?``](#Namespace: root::hash?), <a id="Namespace: root::int->float-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int->float``](#Namespace: root::int->float), <a id="Namespace: root::int?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int?``](#Namespace: root::int?), <a id="Namespace: root::lambda?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lambda?``](#Namespace: root::lambda?), <a id="Namespace: root::list?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list?``](#Namespace: root::list?), <a id="Namespace: root::macro?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro?``](#Namespace: root::macro?), <a id="Namespace: root::nil?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nil?``](#Namespace: root::nil?), <a id="Namespace: root::pair?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pair?``](#Namespace: root::pair?), <a id="Namespace: root::process?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``process?``](#Namespace: root::process?), <a id="Namespace: root::str->float-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->float``](#Namespace: root::str->float), <a id="Namespace: root::str->int-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->int``](#Namespace: root::str->int), <a id="Namespace: root::string?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string?``](#Namespace: root::string?), <a id="Namespace: root::sym-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym``](#Namespace: root::sym), <a id="Namespace: root::sym->str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym->str``](#Namespace: root::sym->str), <a id="Namespace: root::symbol?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``symbol?``](#Namespace: root::symbol?), <a id="Namespace: root::true?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``true?``](#Namespace: root::true?), <a id="Namespace: root::type-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``type``](#Namespace: root::type), <a id="Namespace: root::values?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values?``](#Namespace: root::values?), <a id="Namespace: root::vec?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec?``](#Namespace: root::vec?)
+<a id="root::builtin?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``builtin?``](#root::builtin?), <a id="root::char?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char?``](#root::char?), <a id="root::file?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file?``](#root::file?), <a id="root::float->int-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float->int``](#root::float->int), <a id="root::float?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float?``](#root::float?), <a id="root::func?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``func?``](#root::func?), <a id="root::hash?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash?``](#root::hash?), <a id="root::int->float-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int->float``](#root::int->float), <a id="root::int?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int?``](#root::int?), <a id="root::lambda?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lambda?``](#root::lambda?), <a id="root::list?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list?``](#root::list?), <a id="root::macro?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro?``](#root::macro?), <a id="root::nil?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nil?``](#root::nil?), <a id="root::pair?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pair?``](#root::pair?), <a id="root::process?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``process?``](#root::process?), <a id="root::str->float-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->float``](#root::str->float), <a id="root::str->int-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->int``](#root::str->int), <a id="root::string?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string?``](#root::string?), <a id="root::sym-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym``](#root::sym), <a id="root::sym->str-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym->str``](#root::sym->str), <a id="root::symbol?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``symbol?``](#root::symbol?), <a id="root::true?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``true?``](#root::true?), <a id="root::type-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``type``](#root::type), <a id="root::values?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values?``](#root::values?), <a id="root::vec?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec?``](#root::vec?)
 ### <a id="Vector forms-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Vector forms](#Vector forms-body)
 
 
-<a id="Namespace: root::make-vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-vec``](#Namespace: root::make-vec), <a id="Namespace: root::vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec``](#Namespace: root::vec), <a id="Namespace: root::vec-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-clear!``](#Namespace: root::vec-clear!), <a id="Namespace: root::vec-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-empty?``](#Namespace: root::vec-empty?), <a id="Namespace: root::vec-insert!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-insert!``](#Namespace: root::vec-insert!), <a id="Namespace: root::vec-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-nth``](#Namespace: root::vec-nth), <a id="Namespace: root::vec-pop!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-pop!``](#Namespace: root::vec-pop!), <a id="Namespace: root::vec-push!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-push!``](#Namespace: root::vec-push!), <a id="Namespace: root::vec-remove!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-remove!``](#Namespace: root::vec-remove!), <a id="Namespace: root::vec-set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-set!``](#Namespace: root::vec-set!), <a id="Namespace: root::vec-slice-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-slice``](#Namespace: root::vec-slice)
+<a id="root::make-vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-vec``](#root::make-vec), <a id="root::vec-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec``](#root::vec), <a id="root::vec-clear!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-clear!``](#root::vec-clear!), <a id="root::vec-empty?-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-empty?``](#root::vec-empty?), <a id="root::vec-insert!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-insert!``](#root::vec-insert!), <a id="root::vec-nth-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-nth``](#root::vec-nth), <a id="root::vec-pop!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-pop!``](#root::vec-pop!), <a id="root::vec-push!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-push!``](#root::vec-push!), <a id="root::vec-remove!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-remove!``](#root::vec-remove!), <a id="root::vec-set!-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-set!``](#root::vec-set!), <a id="root::vec-slice-contents" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-slice``](#root::vec-slice)
 
 ## Documentation
 
@@ -103,7 +103,7 @@ example code if exists
 
 
 
-| <a id="Namespace: root::->" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->``](#Namespace: root::->-contents) | Type: Macro |
+| <a id="root::->" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->``](#root::->-contents) | Type: Macro |
 | ``root::->`` | ``Usage: (-> &rest args)`` |
 
 <span style="padding-left: 5px">inserts result of previous expression as second argument to current expression.
@@ -123,7 +123,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::->>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->>``](#Namespace: root::->>-contents) | Type: Macro |
+| <a id="root::->>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->>``](#root::->>-contents) | Type: Macro |
 | ``root::->>`` | ``Usage: (->> &rest args)`` |
 
 <span style="padding-left: 5px">inserts result of previous expression as last argument to current expression.
@@ -143,7 +143,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::chain" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain``](#Namespace: root::chain-contents) | Type: Macro |
+| <a id="root::chain" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain``](#root::chain-contents) | Type: Macro |
 | ``root::chain`` | ``Usage: (chain init arg0 &rest args)`` |
 
 <span style="padding-left: 5px">Inserts result of previous expression into place indicated by the _ symbol
@@ -179,7 +179,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::chain-and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-and``](#Namespace: root::chain-and-contents) | Type: Macro |
+| <a id="root::chain-and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-and``](#root::chain-and-contents) | Type: Macro |
 | ``root::chain-and`` | ``Usage: (chain-and init arg0 &rest args)`` |
 
 <span style="padding-left: 5px">Evaluates each sexp, if true, inserts result of previous expression into place
@@ -233,7 +233,7 @@ nil)))))<br>
 </details>
 
 
-| <a id="Namespace: root::chain-when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-when``](#Namespace: root::chain-when-contents) | Type: Macro |
+| <a id="root::chain-when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-when``](#root::chain-when-contents) | Type: Macro |
 | ``root::chain-when`` | ``Usage: (chain-when init arg0 &rest args)`` |
 
 <span style="padding-left: 5px">Tests the car of each arg0/args pair. If true the cdr of the arg0/args pair
@@ -267,7 +267,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::char-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-lower``](#Namespace: root::char-lower-contents) | Type: Function |
+| <a id="root::char-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-lower``](#root::char-lower-contents) | Type: Function |
 | ``root::char-lower`` | ``Usage: (char-lower char) -> char`` |
 
 <span style="padding-left: 5px">Get lower case (utf) character for a character.
@@ -286,7 +286,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::char-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-upper``](#Namespace: root::char-upper-contents) | Type: Function |
+| <a id="root::char-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-upper``](#root::char-upper-contents) | Type: Function |
 | ``root::char-upper`` | ``Usage: (char-upper char) -> char`` |
 
 <span style="padding-left: 5px">Get upper case (utf) character for a character.
@@ -305,7 +305,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::char-whitespace?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-whitespace?``](#Namespace: root::char-whitespace?-contents) | Type: Function |
+| <a id="root::char-whitespace?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-whitespace?``](#root::char-whitespace?-contents) | Type: Function |
 | ``root::char-whitespace?`` | ``Usage: (char-whitespace? char) -> t/nil`` |
 
 <span style="padding-left: 5px">Returns true if a character is whitespace, false/nil otherwise.
@@ -324,7 +324,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::<" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<``](#Namespace: root::<-contents) | Type: Function |
+| <a id="root::<" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<``](#root::<-contents) | Type: Function |
 | ``root::<`` | ``Usage: (< val0 ... valN)`` |
 
 <span style="padding-left: 5px">Less than.  Works for int, float or string.
@@ -354,7 +354,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::<=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<=``](#Namespace: root::<=-contents) | Type: Function |
+| <a id="root::<=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<=``](#root::<=-contents) | Type: Function |
 | ``root::<=`` | ``Usage: (<= val0 ... valN)`` |
 
 <span style="padding-left: 5px">Less than or equal.  Works for int, float or string.
@@ -383,7 +383,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``=``](#Namespace: root::=-contents) | Type: Function |
+| <a id="root::=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``=``](#root::=-contents) | Type: Function |
 | ``root::=`` | ``Usage: (= val0 ... valN)`` |
 
 <span style="padding-left: 5px">Equals.  Works for int, float or string.
@@ -417,7 +417,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>``](#Namespace: root::>-contents) | Type: Function |
+| <a id="root::>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>``](#root::>-contents) | Type: Function |
 | ``root::>`` | ``Usage: (> val0 ... valN)`` |
 
 <span style="padding-left: 5px">Greater than.  Works for int, float or string.
@@ -448,7 +448,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::>=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>=``](#Namespace: root::>=-contents) | Type: Function |
+| <a id="root::>=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>=``](#root::>=-contents) | Type: Function |
 | ``root::>=`` | ``Usage: (>= val0 ... valN)`` |
 
 <span style="padding-left: 5px">Greater than or equal.  Works for int, float or string.
@@ -478,7 +478,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and``](#Namespace: root::and-contents) | Type: SpecialForm |
+| <a id="root::and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and``](#root::and-contents) | Type: SpecialForm |
 | ``root::and`` | ``Usage: (and exp0 ... expN) -> [nil or expN result]`` |
 
 <span style="padding-left: 5px">Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
@@ -498,7 +498,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cond" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cond``](#Namespace: root::cond-contents) | Type: Macro |
+| <a id="root::cond" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cond``](#root::cond-contents) | Type: Macro |
 | ``root::cond`` | ``Usage: (cond ((test form*)*) -> result`` |
 
 <span style="padding-left: 5px">Evaluate each test in order.  If it is true then evaluate the form(s) in an
@@ -534,7 +534,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::if" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``if``](#Namespace: root::if-contents) | Type: SpecialForm |
+| <a id="root::if" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``if``](#root::if-contents) | Type: SpecialForm |
 | ``root::if`` | ``Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]`` |
 
 <span style="padding-left: 5px">If conditional.  Will evaluate p1 and if true (i.e. not nil) then return the
@@ -574,7 +574,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::match" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``match``](#Namespace: root::match-contents) | Type: Macro |
+| <a id="root::match" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``match``](#root::match-contents) | Type: Macro |
 | ``root::match`` | ``Usage: (match condition (value form*)*) -> result`` |
 
 <span style="padding-left: 5px">Evaluate condition and look for matching value in each branch of type
@@ -610,7 +610,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::not" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``not``](#Namespace: root::not-contents) | Type: Function |
+| <a id="root::not" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``not``](#root::not-contents) | Type: Function |
 | ``root::not`` | ``Usage: (not expression)`` |
 
 <span style="padding-left: 5px">Return true if expression is nil.
@@ -628,7 +628,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``null``](#Namespace: root::null-contents) | Type: Function |
+| <a id="root::null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``null``](#root::null-contents) | Type: Function |
 | ``root::null`` | ``Usage: (null expression)`` |
 
 <span style="padding-left: 5px">Return true if expression is nil (null).
@@ -646,7 +646,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::or" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``or``](#Namespace: root::or-contents) | Type: SpecialForm |
+| <a id="root::or" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``or``](#root::or-contents) | Type: SpecialForm |
 | ``root::or`` | ``Usage: (or exp0 ... expN) -> [nil or first non nil expression]`` |
 
 <span style="padding-left: 5px">Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
@@ -667,7 +667,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``when``](#Namespace: root::when-contents) | Type: Macro |
+| <a id="root::when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``when``](#root::when-contents) | Type: Macro |
 | ``root::when`` | ``Usage: (when provided-condition if-true)`` |
 
 <span style="padding-left: 5px">when is a convenience function used to check a form, provided-condition,
@@ -687,7 +687,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::*collection-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*collection-src*``](#Namespace: root::*collection-src*-contents) | Type: String |
+| <a id="root::*collection-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*collection-src*``](#root::*collection-src*-contents) | Type: String |
 | ``root::*collection-src*`` | ``Usage: (print *collection-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for collection.lisp.
@@ -703,7 +703,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*core-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*core-src*``](#Namespace: root::*core-src*-contents) | Type: String |
+| <a id="root::*core-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*core-src*``](#root::*core-src*-contents) | Type: String |
 | ``root::*core-src*`` | ``Usage: (print *core-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for core.lisp.
@@ -719,7 +719,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*endfix-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*endfix-src*``](#Namespace: root::*endfix-src*-contents) | Type: String |
+| <a id="root::*endfix-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*endfix-src*``](#root::*endfix-src*-contents) | Type: String |
 | ``root::*endfix-src*`` | ``Usage: (print *endfix-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for endfix.lisp.
@@ -735,7 +735,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*getopts-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*getopts-src*``](#Namespace: root::*getopts-src*-contents) | Type: String |
+| <a id="root::*getopts-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*getopts-src*``](#root::*getopts-src*-contents) | Type: String |
 | ``root::*getopts-src*`` | ``Usage: (print *getopts-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for shell.lisp.
@@ -751,7 +751,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*iterator-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*iterator-src*``](#Namespace: root::*iterator-src*-contents) | Type: String |
+| <a id="root::*iterator-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*iterator-src*``](#root::*iterator-src*-contents) | Type: String |
 | ``root::*iterator-src*`` | ``Usage: (print *iterator-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for iterator.lisp.
@@ -767,7 +767,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*lib-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*lib-src*``](#Namespace: root::*lib-src*-contents) | Type: String |
+| <a id="root::*lib-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*lib-src*``](#root::*lib-src*-contents) | Type: String |
 | ``root::*lib-src*`` | ``Usage: (print *lib-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for lib.lisp.
@@ -783,7 +783,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*seq-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*seq-src*``](#Namespace: root::*seq-src*-contents) | Type: String |
+| <a id="root::*seq-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*seq-src*``](#root::*seq-src*-contents) | Type: String |
 | ``root::*seq-src*`` | ``Usage: (print *seq-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for seq.lisp.
@@ -799,7 +799,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*shell-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*shell-src*``](#Namespace: root::*shell-src*-contents) | Type: String |
+| <a id="root::*shell-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*shell-src*``](#root::*shell-src*-contents) | Type: String |
 | ``root::*shell-src*`` | ``Usage: (print *shell-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for shell.lisp.
@@ -815,7 +815,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*slsh-std-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slsh-std-src*``](#Namespace: root::*slsh-std-src*-contents) | Type: String |
+| <a id="root::*slsh-std-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slsh-std-src*``](#root::*slsh-std-src*-contents) | Type: String |
 | ``root::*slsh-std-src*`` | ``Usage: (print *slsh-std-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for slsh-std.lisp.
@@ -831,7 +831,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*slshrc-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slshrc-src*``](#Namespace: root::*slshrc-src*-contents) | Type: String |
+| <a id="root::*slshrc-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slshrc-src*``](#root::*slshrc-src*-contents) | Type: String |
 | ``root::*slshrc-src*`` | ``Usage: (print *slshrc-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for slshrc.
@@ -847,7 +847,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*struct-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*struct-src*``](#Namespace: root::*struct-src*-contents) | Type: String |
+| <a id="root::*struct-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*struct-src*``](#root::*struct-src*-contents) | Type: String |
 | ``root::*struct-src*`` | ``Usage: (print *struct-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for struct.lisp.
@@ -863,7 +863,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::*test-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*test-src*``](#Namespace: root::*test-src*-contents) | Type: String |
+| <a id="root::*test-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*test-src*``](#root::*test-src*-contents) | Type: String |
 | ``root::*test-src*`` | ``Usage: (print *test-src*)`` |
 
 <span style="padding-left: 5px">The builtin source code for test.lisp.
@@ -879,7 +879,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::and-let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and-let*``](#Namespace: root::and-let*-contents) | Type: Macro |
+| <a id="root::and-let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and-let*``](#root::and-let*-contents) | Type: Macro |
 | ``root::and-let*`` | ``Usage: (and-let* vals &rest let-body)`` |
 
 <span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) checking
@@ -914,7 +914,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::apply" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``apply``](#Namespace: root::apply-contents) | Type: Function |
+| <a id="root::apply" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``apply``](#root::apply-contents) | Type: Function |
 | ``root::apply`` | ``Usage: (apply function arg* list)`` |
 
 <span style="padding-left: 5px">Call the provided function with the suplied arguments, last is a list that will be expanded.
@@ -931,7 +931,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::back-quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``back-quote``](#Namespace: root::back-quote-contents) | Type: SpecialForm |
+| <a id="root::back-quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``back-quote``](#root::back-quote-contents) | Type: SpecialForm |
 | ``root::back-quote`` | ``Usage: `expression -> expression`` |
 
 <span style="padding-left: 5px">Return expression without evaluation.
@@ -954,7 +954,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::block" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``block``](#Namespace: root::block-contents) | Type: SpecialForm |
+| <a id="root::block" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``block``](#root::block-contents) | Type: SpecialForm |
 | ``root::block`` | ``Usage: (block name form*)`` |
 
 <span style="padding-left: 5px">Create a block with name (name is not evaluated), if no return-from encountered then
@@ -980,7 +980,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::def" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def``](#Namespace: root::def-contents) | Type: SpecialForm |
+| <a id="root::def" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def``](#root::def-contents) | Type: SpecialForm |
 | ``root::def`` | ``Usage: (def symbol doc_string? expression) -> expression`` |
 
 <span style="padding-left: 5px">Adds an expression to the current namespace.  Return the expression that was defined.
@@ -1018,7 +1018,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::def?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def?``](#Namespace: root::def?-contents) | Type: SpecialForm |
+| <a id="root::def?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def?``](#root::def?-contents) | Type: SpecialForm |
 | ``root::def?`` | ``Usage: (def? expression) -> t\|nil`` |
 
 <span style="padding-left: 5px">Return true if is a defined symbol (bound within the current scope). If expression
@@ -1041,7 +1041,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::defmacro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#Namespace: root::defmacro-contents) | Type: Macro |
+| <a id="root::defmacro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#root::defmacro-contents) | Type: Macro |
 | ``root::defmacro`` | ``Usage: (defmacro name doc_string? argument_list body)`` |
 
 <span style="padding-left: 5px">Create a macro and bind it to a symbol in the current scope.
@@ -1062,7 +1062,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::defn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defn``](#Namespace: root::defn-contents) | Type: Macro |
+| <a id="root::defn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defn``](#root::defn-contents) | Type: Macro |
 | ``root::defn`` | ``Usage: (defn name &rest args)`` |
 
 <span style="padding-left: 5px">Define a named function in the current namespace.
@@ -1084,7 +1084,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::do" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``do``](#Namespace: root::do-contents) | Type: SpecialForm |
+| <a id="root::do" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``do``](#root::do-contents) | Type: SpecialForm |
 | ``root::do`` | ``Usage: (do exp0 ... expN) -> expN`` |
 
 <span style="padding-left: 5px">Evaluatate each form and return the last.
@@ -1104,7 +1104,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::doc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc``](#Namespace: root::doc-contents) | Type: Function |
+| <a id="root::doc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc``](#root::doc-contents) | Type: Function |
 | ``root::doc`` | ``Usage: (doc symbol)`` |
 
 <span style="padding-left: 5px">Return the doc string for a symbol or nil if no string.
@@ -1120,7 +1120,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::doc-raw" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc-raw``](#Namespace: root::doc-raw-contents) | Type: Function |
+| <a id="root::doc-raw" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc-raw``](#root::doc-raw-contents) | Type: Function |
 | ``root::doc-raw`` | ``Usage: (doc-raw symbol)`` |
 
 <span style="padding-left: 5px">Return the raw (unexpanded) doc string for a symbol or nil if no string.
@@ -1136,7 +1136,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::dotimes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes``](#Namespace: root::dotimes-contents) | Type: Macro |
+| <a id="root::dotimes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes``](#root::dotimes-contents) | Type: Macro |
 | ``root::dotimes`` | ``Usage: (dotimes times body)`` |
 
 <span style="padding-left: 5px">Evaluate body a number of times equal to times' numerical value.
@@ -1153,7 +1153,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::dotimes-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes-i``](#Namespace: root::dotimes-i-contents) | Type: Macro |
+| <a id="root::dotimes-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes-i``](#root::dotimes-i-contents) | Type: Macro |
 | ``root::dotimes-i`` | ``Usage: (dotimes-i idx-bind times body)`` |
 
 <span style="padding-left: 5px">Evaluate body a number of times equal to times' numnrical value. Includes an
@@ -1173,7 +1173,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::dyn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dyn``](#Namespace: root::dyn-contents) | Type: SpecialForm |
+| <a id="root::dyn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dyn``](#root::dyn-contents) | Type: SpecialForm |
 | ``root::dyn`` | ``Usage: (dyn key value expression) -> result_of_expression`` |
 
 <span style="padding-left: 5px">Creates a dynamic binding for key, assigns value to it and evals expression under it.
@@ -1205,7 +1205,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::eprint" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprint``](#Namespace: root::eprint-contents) | Type: Function |
+| <a id="root::eprint" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprint``](#root::eprint-contents) | Type: Function |
 | ``root::eprint`` | ``Usage: (eprint arg0 ... argN) -> nil`` |
 
 <span style="padding-left: 5px">Print the arguments (as strings) to *stderr*.
@@ -1222,7 +1222,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::eprintln" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprintln``](#Namespace: root::eprintln-contents) | Type: Function |
+| <a id="root::eprintln" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprintln``](#root::eprintln-contents) | Type: Function |
 | ``root::eprintln`` | ``Usage: (eprintln arg0 ... argN) -> nil`` |
 
 <span style="padding-left: 5px">Print the arguments (as strings) to *stderr* and then a newline.
@@ -1243,7 +1243,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::err" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err``](#Namespace: root::err-contents) | Type: Function |
+| <a id="root::err" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err``](#root::err-contents) | Type: Function |
 | ``root::err`` | ``Usage: (err string) -> raises an error`` |
 
 <span style="padding-left: 5px">Raise an error with the supplied string.
@@ -1260,7 +1260,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::error-stack-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-off``](#Namespace: root::error-stack-off-contents) | Type: Lambda |
+| <a id="root::error-stack-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-off``](#root::error-stack-off-contents) | Type: Lambda |
 | ``root::error-stack-off`` | ``Usage: (error-stack-off)`` |
 
 <span style="padding-left: 5px">Currently a no-op, used to turn off error stacks.
@@ -1276,7 +1276,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::error-stack-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-on``](#Namespace: root::error-stack-on-contents) | Type: Lambda |
+| <a id="root::error-stack-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-on``](#root::error-stack-on-contents) | Type: Lambda |
 | ``root::error-stack-on`` | ``Usage: (error-stack-on)`` |
 
 <span style="padding-left: 5px">Currently a no-op, used to turn on error stacks.
@@ -1292,7 +1292,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::eval" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eval``](#Namespace: root::eval-contents) | Type: Function |
+| <a id="root::eval" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eval``](#root::eval-contents) | Type: Function |
 | ``root::eval`` | ``Usage: (eval expression)`` |
 
 <span style="padding-left: 5px">Evaluate the provided expression.
@@ -1314,7 +1314,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::expand-macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro``](#Namespace: root::expand-macro-contents) | Type: Function |
+| <a id="root::expand-macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro``](#root::expand-macro-contents) | Type: Function |
 | ``root::expand-macro`` | ``Usage: (expand-macro expression)`` |
 
 <span style="padding-left: 5px">Expands a macro expression.  If that expansion is also a macro then expand it recursively.
@@ -1354,7 +1354,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::expand-macro-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro-all``](#Namespace: root::expand-macro-all-contents) | Type: Function |
+| <a id="root::expand-macro-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro-all``](#root::expand-macro-all-contents) | Type: Function |
 | ``root::expand-macro-all`` | ``Usage: (expand-macro-all expression)`` |
 
 <span style="padding-left: 5px">Expands a macro expression like expand-macro but also expand any embedded macros.
@@ -1395,7 +1395,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::expand-macro1" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro1``](#Namespace: root::expand-macro1-contents) | Type: Function |
+| <a id="root::expand-macro1" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro1``](#root::expand-macro1-contents) | Type: Function |
 | ``root::expand-macro1`` | ``Usage: (expand-macro1 expression)`` |
 
 <span style="padding-left: 5px">Expands a macro expression.  Only expand the first macro.
@@ -1434,7 +1434,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::fn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fn``](#Namespace: root::fn-contents) | Type: SpecialForm |
+| <a id="root::fn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fn``](#root::fn-contents) | Type: SpecialForm |
 | ``root::fn`` | ``Usage: (fn (param*) expr*) -> exprN`` |
 
 <span style="padding-left: 5px">Create a function (lambda).
@@ -1467,7 +1467,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::format" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``format``](#Namespace: root::format-contents) | Type: Function |
+| <a id="root::format" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``format``](#root::format-contents) | Type: Function |
 | ``root::format`` | ``Usage: (format arg0 ... argN) -> string`` |
 
 <span style="padding-left: 5px">Build a formatted string from arguments.
@@ -1486,7 +1486,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::gensym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``gensym``](#Namespace: root::gensym-contents) | Type: Function |
+| <a id="root::gensym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``gensym``](#root::gensym-contents) | Type: Function |
 | ``root::gensym`` | ``Usage: (gensym) -> symbol`` |
 
 <span style="padding-left: 5px">Generate a unique symbol.
@@ -1512,7 +1512,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::get-error" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-error``](#Namespace: root::get-error-contents) | Type: Function |
+| <a id="root::get-error" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-error``](#root::get-error-contents) | Type: Function |
 | ``root::get-error`` | ``Usage: (get-error exp0 ... expN) -> pair`` |
 
 <span style="padding-left: 5px">Evaluate each form (like do) but on error return (:error msg backtrace) instead of aborting.
@@ -1535,7 +1535,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::identity" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``identity``](#Namespace: root::identity-contents) | Type: Lambda |
+| <a id="root::identity" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``identity``](#root::identity-contents) | Type: Lambda |
 | ``root::identity`` | ``Usage: (identity x)`` |
 
 <span style="padding-left: 5px">Identity function.
@@ -1550,7 +1550,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::intern-stats" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``intern-stats``](#Namespace: root::intern-stats-contents) | Type: SpecialForm |
+| <a id="root::intern-stats" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``intern-stats``](#root::intern-stats-contents) | Type: SpecialForm |
 | ``root::intern-stats`` | ``Usage: (intern-stats)`` |
 
 <span style="padding-left: 5px">Prints the stats for interned symbols.
@@ -1566,7 +1566,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``length``](#Namespace: root::length-contents) | Type: Function |
+| <a id="root::length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``length``](#root::length-contents) | Type: Function |
 | ``root::length`` | ``Usage: (length expression) -> int`` |
 
 <span style="padding-left: 5px">Return length of suplied expression.
@@ -1591,7 +1591,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::let" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#Namespace: root::let-contents) | Type: Macro |
+| <a id="root::let" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#root::let-contents) | Type: Macro |
 | ``root::let`` | ``Usage: (let vals &rest let-body)`` |
 
 <span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
@@ -1613,7 +1613,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let*``](#Namespace: root::let*-contents) | Type: Macro |
+| <a id="root::let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let*``](#root::let*-contents) | Type: Macro |
 | ``root::let*`` | ``Usage: (let* vals &rest let-body)`` |
 
 <span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
@@ -1634,7 +1634,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::lex" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lex``](#Namespace: root::lex-contents) | Type: Macro |
+| <a id="root::lex" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lex``](#root::lex-contents) | Type: Macro |
 | ``root::lex`` | ``Usage: (lex exp0 ... expN) -> expN`` |
 
 <span style="padding-left: 5px">Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
@@ -1656,7 +1656,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::loop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loop``](#Namespace: root::loop-contents) | Type: Macro |
+| <a id="root::loop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loop``](#root::loop-contents) | Type: Macro |
 | ``root::loop`` | ``Usage: (loop params bindings body)`` |
 
 <span style="padding-left: 5px">Binds bindings to parameters in body. Use recur with desired bindings for
@@ -1676,7 +1676,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro``](#Namespace: root::macro-contents) | Type: SpecialForm |
+| <a id="root::macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro``](#root::macro-contents) | Type: SpecialForm |
 | ``root::macro`` | ``Usage: (macro (args) `(apply + ,@args))`` |
 
 <span style="padding-left: 5px">Define an anonymous macro.
@@ -1702,7 +1702,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::meta-add-tags" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-add-tags``](#Namespace: root::meta-add-tags-contents) | Type: Function |
+| <a id="root::meta-add-tags" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-add-tags``](#root::meta-add-tags-contents) | Type: Function |
 | ``root::meta-add-tags`` | ``Usage: (meta-add-tags expression tag*)`` |
 
 <span style="padding-left: 5px">Adds multiple meta tags to an expression (see meta-add-tag).  It will work with
@@ -1730,7 +1730,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::meta-column-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-column-no``](#Namespace: root::meta-column-no-contents) | Type: SpecialForm |
+| <a id="root::meta-column-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-column-no``](#root::meta-column-no-contents) | Type: SpecialForm |
 | ``root::meta-column-no`` | ``Usage: (meta-column-no)`` |
 
 <span style="padding-left: 5px">Column number from the file this came from.
@@ -1746,7 +1746,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::meta-file-name" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-file-name``](#Namespace: root::meta-file-name-contents) | Type: SpecialForm |
+| <a id="root::meta-file-name" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-file-name``](#root::meta-file-name-contents) | Type: SpecialForm |
 | ``root::meta-file-name`` | ``Usage: (meta-file-name)`` |
 
 <span style="padding-left: 5px">File name of the file this came from.
@@ -1762,7 +1762,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::meta-line-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-line-no``](#Namespace: root::meta-line-no-contents) | Type: SpecialForm |
+| <a id="root::meta-line-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-line-no``](#root::meta-line-no-contents) | Type: SpecialForm |
 | ``root::meta-line-no`` | ``Usage: (meta-line-no)`` |
 
 <span style="padding-left: 5px">Line number from the file this came from.
@@ -1778,7 +1778,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::meta-tag?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-tag?``](#Namespace: root::meta-tag?-contents) | Type: Function |
+| <a id="root::meta-tag?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-tag?``](#root::meta-tag?-contents) | Type: Function |
 | ``root::meta-tag?`` | ``Usage: (meta-tag? expression tag)`` |
 
 <span style="padding-left: 5px">True if expression has the meta tag 'tag' set.  This is intended for helping
@@ -1797,7 +1797,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::nsubstitute!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nsubstitute!``](#Namespace: root::nsubstitute!-contents) | Type: Lambda |
+| <a id="root::nsubstitute!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nsubstitute!``](#root::nsubstitute!-contents) | Type: Lambda |
 | ``root::nsubstitute!`` | ``Usage: (nsubstitute! new-item old-item lst &rest mods)`` |
 
 <span style="padding-left: 5px">Replaces all instances of old-item in lst with new-item. If last argument
@@ -1816,7 +1816,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::occurs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``occurs``](#Namespace: root::occurs-contents) | Type: Lambda |
+| <a id="root::occurs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``occurs``](#root::occurs-contents) | Type: Lambda |
 | ``root::occurs`` | ``Usage: (occurs (list 1 2 ...) 7) (occurs (list 1 2 ...) 0 (fn (x) (% x 2)))`` |
 
 <span style="padding-left: 5px">Counts instances of item in sequence. Optional third argument is a function
@@ -1836,7 +1836,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::print" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``print``](#Namespace: root::print-contents) | Type: Function |
+| <a id="root::print" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``print``](#root::print-contents) | Type: Function |
 | ``root::print`` | ``Usage: (print arg0 ... argN) -> nil`` |
 
 <span style="padding-left: 5px">Print the arguments (as strings) to *stdout*.
@@ -1853,7 +1853,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::println" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``println``](#Namespace: root::println-contents) | Type: Function |
+| <a id="root::println" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``println``](#root::println-contents) | Type: Function |
 | ``root::println`` | ``Usage: (println arg0 ... argN) -> nil`` |
 
 <span style="padding-left: 5px">Print the arguments (as strings) to *stdout* and then a newline.
@@ -1874,7 +1874,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::progn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``progn``](#Namespace: root::progn-contents) | Type: Macro |
+| <a id="root::progn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``progn``](#root::progn-contents) | Type: Macro |
 | ``root::progn`` | ``Usage: (progn &rest args)`` |
 
 <span style="padding-left: 5px">Synonym for 'do', use it instead (this is depricated).
@@ -1890,7 +1890,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``quote``](#Namespace: root::quote-contents) | Type: SpecialForm |
+| <a id="root::quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``quote``](#root::quote-contents) | Type: SpecialForm |
 | ``root::quote`` | ``Usage: 'expression -> expression`` |
 
 <span style="padding-left: 5px">Return expression without evaluation.
@@ -1908,7 +1908,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::reader-macro-dot" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reader-macro-dot``](#Namespace: root::reader-macro-dot-contents) | Type: Lambda |
+| <a id="root::reader-macro-dot" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reader-macro-dot``](#root::reader-macro-dot-contents) | Type: Lambda |
 | ``root::reader-macro-dot`` | ``Usage: (reader-macro-dot stream ch)`` |
 
 <span style="padding-left: 5px">Reader macro for #.(...).  Do not call directly.
@@ -1924,7 +1924,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::recur" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``recur``](#Namespace: root::recur-contents) | Type: Function |
+| <a id="root::recur" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``recur``](#root::recur-contents) | Type: Function |
 | ``root::recur`` | ``Usage: (recur &rest)`` |
 
 <span style="padding-left: 5px">Recursively call the enclosing function with the given parameters.  Recur uses
@@ -1957,7 +1957,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::ref" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ref``](#Namespace: root::ref-contents) | Type: SpecialForm |
+| <a id="root::ref" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ref``](#root::ref-contents) | Type: SpecialForm |
 | ``root::ref`` | ``Usage: (ref symbol) -> expression`` |
 
 <span style="padding-left: 5px">Return the expression that is referenced by symbol.
@@ -1981,7 +1981,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::return-from" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``return-from``](#Namespace: root::return-from-contents) | Type: SpecialForm |
+| <a id="root::return-from" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``return-from``](#root::return-from-contents) | Type: SpecialForm |
 | ``root::return-from`` | ``Usage: (return-from name expression?)`` |
 
 <span style="padding-left: 5px">Causes enclosing block with name (name is not evaluated) to evaluate to expression.
@@ -2000,7 +2000,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set!``](#Namespace: root::set!-contents) | Type: SpecialForm |
+| <a id="root::set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set!``](#root::set!-contents) | Type: SpecialForm |
 | ``root::set!`` | ``Usage: (set! symbol expression) -> expression`` |
 
 <span style="padding-left: 5px">Sets an existing expression in the current scope(s).  Return the expression that was set.
@@ -2032,7 +2032,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::substitute" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``substitute``](#Namespace: root::substitute-contents) | Type: Macro |
+| <a id="root::substitute" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``substitute``](#root::substitute-contents) | Type: Macro |
 | ``root::substitute`` | ``Usage: (substitute new-item old-item lst &rest mods)`` |
 
 <span style="padding-left: 5px">Replaces all instances of old-item in copy of lst with new-item.  If last
@@ -2054,7 +2054,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::syscall" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syscall``](#Namespace: root::syscall-contents) | Type: Function |
+| <a id="root::syscall" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syscall``](#root::syscall-contents) | Type: Function |
 | ``root::syscall`` | ``Usage: (syscall system-command arg0 ... argN)`` |
 
 <span style="padding-left: 5px">Execute the provided system command with the supplied arguments.
@@ -2070,7 +2070,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::undef" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``undef``](#Namespace: root::undef-contents) | Type: SpecialForm |
+| <a id="root::undef" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``undef``](#root::undef-contents) | Type: SpecialForm |
 | ``root::undef`` | ``Usage: (undef symbol) -> expression`` |
 
 <span style="padding-left: 5px">Remove a symbol from the current namespace (if it exists).  Returns the expression
@@ -2094,7 +2094,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::unwind-protect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unwind-protect``](#Namespace: root::unwind-protect-contents) | Type: Function |
+| <a id="root::unwind-protect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unwind-protect``](#root::unwind-protect-contents) | Type: Function |
 | ``root::unwind-protect`` | ``Usage: (unwind-protect protected cleanup*) -> [protected result]`` |
 
 <span style="padding-left: 5px">After evaluation first form, make sure the following cleanup forms run (returns first form's result).
@@ -2128,7 +2128,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::values" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values``](#Namespace: root::values-contents) | Type: Function |
+| <a id="root::values" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values``](#root::values-contents) | Type: Function |
 | ``root::values`` | ``Usage: (values expression*)`` |
 
 <span style="padding-left: 5px">Produces a multi values object.  Useful for returning more then one value from
@@ -2148,7 +2148,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::values-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-length``](#Namespace: root::values-length-contents) | Type: Function |
+| <a id="root::values-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-length``](#root::values-length-contents) | Type: Function |
 | ``root::values-length`` | ``Usage: (values-length expression)`` |
 
 <span style="padding-left: 5px">If expression is a values object then return it's length (number of values).
@@ -2170,7 +2170,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::values-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-nth``](#Namespace: root::values-nth-contents) | Type: Function |
+| <a id="root::values-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-nth``](#root::values-nth-contents) | Type: Function |
 | ``root::values-nth`` | ``Usage: (values-nth idx expression)`` |
 
 <span style="padding-left: 5px">If expression is a values object then return the item at index idx.
@@ -2191,7 +2191,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::var" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``var``](#Namespace: root::var-contents) | Type: SpecialForm |
+| <a id="root::var" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``var``](#root::var-contents) | Type: SpecialForm |
 | ``root::var`` | ``Usage: (var symbol expression) -> expression`` |
 
 <span style="padding-left: 5px">Adds an expression to the current lexical scope.  Return the expression that was defined.
@@ -2226,7 +2226,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::varfn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``varfn``](#Namespace: root::varfn-contents) | Type: Macro |
+| <a id="root::varfn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``varfn``](#root::varfn-contents) | Type: Macro |
 | ``root::varfn`` | ``Usage: (varfn name &rest args)`` |
 
 <span style="padding-left: 5px">Binds name to function body in current lexical scope (not namespace- like var).
@@ -2269,7 +2269,7 @@ reference.  If a reference to a file is captured in a closure that can also keep
 it open (closures currently capture the entire scope not just used symbols).
 
 
-| <a id="Namespace: root::close" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``close``](#Namespace: root::close-contents) | Type: Function |
+| <a id="root::close" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``close``](#root::close-contents) | Type: Function |
 | ``root::close`` | ``Usage: (close file)`` |
 
 <span style="padding-left: 5px">Close a file.
@@ -2290,7 +2290,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::flush" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``flush``](#Namespace: root::flush-contents) | Type: Function |
+| <a id="root::flush" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``flush``](#root::flush-contents) | Type: Function |
 | ``root::flush`` | ``Usage: (flush file)`` |
 
 <span style="padding-left: 5px">Flush a file.
@@ -2311,7 +2311,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::open" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``open``](#Namespace: root::open-contents) | Type: Function |
+| <a id="root::open" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``open``](#root::open-contents) | Type: Function |
 | ``root::open`` | ``Usage: (open filename option*)`` |
 
 <span style="padding-left: 5px">Open a file.
@@ -2338,7 +2338,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::read" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read``](#Namespace: root::read-contents) | Type: Function |
+| <a id="root::read" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read``](#root::read-contents) | Type: Function |
 | ``root::read`` | ``Usage: (read [file\|string]? end-exp?) -> expression`` |
 
 <span style="padding-left: 5px">Read a file or string and return the next object (symbol, string, list, etc).
@@ -2381,7 +2381,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::read-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-all``](#Namespace: root::read-all-contents) | Type: Function |
+| <a id="root::read-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-all``](#root::read-all-contents) | Type: Function |
 | ``root::read-all`` | ``Usage: (read-all [file\|string]? empty-exp?) -> list\|vec\|empty-exp`` |
 
 <span style="padding-left: 5px">Read a file or string and return the list representation.  This reads the entire
@@ -2413,7 +2413,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::read-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-line``](#Namespace: root::read-line-contents) | Type: Function |
+| <a id="root::read-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-line``](#root::read-line-contents) | Type: Function |
 | ``root::read-line`` | ``Usage: (read-line file) -> string`` |
 
 <span style="padding-left: 5px">Read a line from a file.
@@ -2436,7 +2436,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::write-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-line``](#Namespace: root::write-line-contents) | Type: Function |
+| <a id="root::write-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-line``](#root::write-line-contents) | Type: Function |
 | ``root::write-line`` | ``Usage: (write-line file string)`` |
 
 <span style="padding-left: 5px">Write a line to a file.
@@ -2457,7 +2457,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::write-string" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-string``](#Namespace: root::write-string-contents) | Type: Function |
+| <a id="root::write-string" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-string``](#root::write-string-contents) | Type: Function |
 | ``root::write-string`` | ``Usage: (write-string file string)`` |
 
 <span style="padding-left: 5px">Write a string to a file.
@@ -2479,7 +2479,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::hash-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-clear!``](#Namespace: root::hash-clear!-contents) | Type: Function |
+| <a id="root::hash-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-clear!``](#root::hash-clear!-contents) | Type: Function |
 | ``root::hash-clear!`` | ``Usage: (hash-clear! hashmap)`` |
 
 <span style="padding-left: 5px">Clears a hashmap.  This is a destructive form!
@@ -2505,7 +2505,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash-get" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-get``](#Namespace: root::hash-get-contents) | Type: SpecialForm |
+| <a id="root::hash-get" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-get``](#root::hash-get-contents) | Type: SpecialForm |
 | ``root::hash-get`` | ``Usage: (hash-get hashmap key default?) -> value`` |
 
 <span style="padding-left: 5px">Get a value for a key from a hashmap.  If the optional default is provided and
@@ -2529,7 +2529,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash-haskey" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-haskey``](#Namespace: root::hash-haskey-contents) | Type: Function |
+| <a id="root::hash-haskey" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-haskey``](#root::hash-haskey-contents) | Type: Function |
 | ``root::hash-haskey`` | ``Usage: (hash-haskey hashmap key)`` |
 
 <span style="padding-left: 5px">Checks if a key is in a hashmap.
@@ -2556,7 +2556,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash-keys" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-keys``](#Namespace: root::hash-keys-contents) | Type: Function |
+| <a id="root::hash-keys" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-keys``](#root::hash-keys-contents) | Type: Function |
 | ``root::hash-keys`` | ``Usage: (hash-keys hashmap)`` |
 
 <span style="padding-left: 5px">Returns a vector of all the hashmaps keys.  The keys will be unordered.
@@ -2578,7 +2578,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-remove!``](#Namespace: root::hash-remove!-contents) | Type: Function |
+| <a id="root::hash-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-remove!``](#root::hash-remove!-contents) | Type: Function |
 | ``root::hash-remove!`` | ``Usage: (hash-remove! hashmap key)`` |
 
 <span style="padding-left: 5px">Remove a key from a hashmap.  This is a destructive form!
@@ -2612,7 +2612,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-set!``](#Namespace: root::hash-set!-contents) | Type: Function |
+| <a id="root::hash-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-set!``](#root::hash-set!-contents) | Type: Function |
 | ``root::hash-set!`` | ``Usage: (hash-set! hashmap key value)`` |
 
 <span style="padding-left: 5px">Add or update a hashmap key's value.  This is a destructive form!
@@ -2650,7 +2650,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::make-hash" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-hash``](#Namespace: root::make-hash-contents) | Type: Function |
+| <a id="root::make-hash" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-hash``](#root::make-hash-contents) | Type: Function |
 | ``root::make-hash`` | ``Usage: (make-hash associations?)`` |
 
 <span style="padding-left: 5px">Make a new hash map.
@@ -2692,7 +2692,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: iterator::append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append``](#Namespace: iterator::append-contents) | Type: Lambda |
+| <a id="iterator::append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append``](#iterator::append-contents) | Type: Lambda |
 | ``iterator::append`` | ``Usage: (append first-iter &rest rest-iters)`` |
 
 <span style="padding-left: 5px">Combine the provided items into a single iterator (calls iter on each parameter).
@@ -2737,7 +2737,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::append-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-iter``](#Namespace: iterator::append-iter-contents) | Type: Lambda |
+| <a id="iterator::append-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-iter``](#iterator::append-iter-contents) | Type: Lambda |
 | ``iterator::append-iter`` | ``Usage: (append-iter)`` |
 
 <span style="padding-left: 5px">Iterator that appends multiple iterators.  Append iter will consume
@@ -2793,7 +2793,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::append-to!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-to!``](#Namespace: iterator::append-to!-contents) | Type: Lambda |
+| <a id="iterator::append-to!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-to!``](#iterator::append-to!-contents) | Type: Lambda |
 | ``iterator::append-to!`` | ``Usage: (append-to! ret &rest others)`` |
 
 <span style="padding-left: 5px">Combine the provided items after the first (first must be a vector or list)
@@ -2860,7 +2860,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::collect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect``](#Namespace: iterator::collect-contents) | Type: Lambda |
+| <a id="iterator::collect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect``](#iterator::collect-contents) | Type: Lambda |
 | ``iterator::collect`` | ``Usage: (collect s)`` |
 
 <span style="padding-left: 5px">Collect all the values into a list.  This will consume the iterator and
@@ -2878,7 +2878,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::collect-str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-str``](#Namespace: iterator::collect-str-contents) | Type: Lambda |
+| <a id="iterator::collect-str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-str``](#iterator::collect-str-contents) | Type: Lambda |
 | ``iterator::collect-str`` | ``Usage: (collect-str s)`` |
 
 <span style="padding-left: 5px">Collect all the values into a string.  This will consume the iterator and
@@ -2896,7 +2896,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::collect-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-vec``](#Namespace: iterator::collect-vec-contents) | Type: Lambda |
+| <a id="iterator::collect-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-vec``](#iterator::collect-vec-contents) | Type: Lambda |
 | ``iterator::collect-vec`` | ``Usage: (collect-vec s)`` |
 
 <span style="padding-left: 5px">Collect all the values into a vector.  This will consume the iterator and
@@ -2914,7 +2914,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::double-ended-iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iter?``](#Namespace: iterator::double-ended-iter?-contents) | Type: Lambda |
+| <a id="iterator::double-ended-iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iter?``](#iterator::double-ended-iter?-contents) | Type: Lambda |
 | ``iterator::double-ended-iter?`` | ``Usage: (double-ended-iter? thing)`` |
 
 <span style="padding-left: 5px">Return true if thing is an iterator and double ended, nil otherwise.
@@ -2938,7 +2938,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::double-ended-iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iterator``](#Namespace: iterator::double-ended-iterator-contents) | Type: Lambda |
+| <a id="iterator::double-ended-iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iterator``](#iterator::double-ended-iterator-contents) | Type: Lambda |
 | ``iterator::double-ended-iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator::iterator iterator::double-ended-iterator))`` |
 
 <span style="padding-left: 5px">Trait that makes an iterator double ended (can get items from front and back.
@@ -3002,7 +3002,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty?``](#Namespace: iterator::empty?-contents) | Type: Lambda |
+| <a id="iterator::empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty?``](#iterator::empty?-contents) | Type: Lambda |
 | ``iterator::empty?`` | ``Usage: (empty? s)`` |
 
 <span style="padding-left: 5px">Is an iterator empty (no more items)?  Will call iter on input first.
@@ -3019,7 +3019,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::file-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file-iter``](#Namespace: iterator::file-iter-contents) | Type: Lambda |
+| <a id="iterator::file-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file-iter``](#iterator::file-iter-contents) | Type: Lambda |
 | ``iterator::file-iter`` | ``Usage: (file-iter)`` |
 
 <span style="padding-left: 5px">Iterator that wraps a file.  Each call to next! returns the next line (with
@@ -3053,7 +3053,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::filter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter``](#Namespace: iterator::filter-contents) | Type: Lambda |
+| <a id="iterator::filter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter``](#iterator::filter-contents) | Type: Lambda |
 | ``iterator::filter`` | ``Usage: (filter predicate items)`` |
 
 <span style="padding-left: 5px">Returns a filter-iter around items (will call iter on items).
@@ -3073,7 +3073,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::filter-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter-iter``](#Namespace: iterator::filter-iter-contents) | Type: Lambda |
+| <a id="iterator::filter-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter-iter``](#iterator::filter-iter-contents) | Type: Lambda |
 | ``iterator::filter-iter`` | ``Usage: (filter-iter)`` |
 
 <span style="padding-left: 5px">Iterator that applies a lambda to each element to determine if is returned- is lazy.
@@ -3101,7 +3101,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for``](#Namespace: iterator::for-contents) | Type: Macro |
+| <a id="iterator::for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for``](#iterator::for-contents) | Type: Macro |
 | ``iterator::for`` | ``Usage: (for bind in items body)`` |
 
 <span style="padding-left: 5px">Loops over each element in an iterator.  Will call iter on the input object.
@@ -3121,7 +3121,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::for-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for-i``](#Namespace: iterator::for-i-contents) | Type: Macro |
+| <a id="iterator::for-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for-i``](#iterator::for-i-contents) | Type: Macro |
 | ``iterator::for-i`` | ``Usage: (for-i idx-bind bind in items body)`` |
 
 <span style="padding-left: 5px">Loops over each element in an iterator.  Will call iter on the input object.
@@ -3144,7 +3144,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter``](#Namespace: iterator::iter-contents) | Type: Lambda |
+| <a id="iterator::iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter``](#iterator::iter-contents) | Type: Lambda |
 | ``iterator::iter`` | ``Usage: (iter thing)`` |
 
 <span style="padding-left: 5px">Return thing as an iterator if possible (if it is an iterator just return thing).
@@ -3162,7 +3162,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter?``](#Namespace: iterator::iter?-contents) | Type: Lambda |
+| <a id="iterator::iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter?``](#iterator::iter?-contents) | Type: Lambda |
 | ``iterator::iter?`` | ``Usage: (iter? thing)`` |
 
 <span style="padding-left: 5px">Return true if thing is an iterator, nil otherwise.
@@ -3178,7 +3178,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iterator``](#Namespace: iterator::iterator-contents) | Type: Lambda |
+| <a id="iterator::iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iterator``](#iterator::iterator-contents) | Type: Lambda |
 | ``iterator::iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))`` |
 
 <span style="padding-left: 5px">Trait that provides iterator methods.
@@ -3280,7 +3280,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::list-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list-iter``](#Namespace: iterator::list-iter-contents) | Type: Lambda |
+| <a id="iterator::list-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list-iter``](#iterator::list-iter-contents) | Type: Lambda |
 | ``iterator::list-iter`` | ``Usage: (list-iter)`` |
 
 <span style="padding-left: 5px">Iterator that wraps a list.
@@ -3322,7 +3322,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map``](#Namespace: iterator::map-contents) | Type: Lambda |
+| <a id="iterator::map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map``](#iterator::map-contents) | Type: Lambda |
 | ``iterator::map`` | ``Usage: (map map-fn items)`` |
 
 <span style="padding-left: 5px">Returns a map-iter around items (will call iter on items).
@@ -3349,7 +3349,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::map-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map-iter``](#Namespace: iterator::map-iter-contents) | Type: Lambda |
+| <a id="iterator::map-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map-iter``](#iterator::map-iter-contents) | Type: Lambda |
 | ``iterator::map-iter`` | ``Usage: (map-iter)`` |
 
 <span style="padding-left: 5px">Iterator that applies a lambda to each element of another iterator- is lazy.
@@ -3378,7 +3378,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``next!``](#Namespace: iterator::next!-contents) | Type: Lambda |
+| <a id="iterator::next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``next!``](#iterator::next!-contents) | Type: Lambda |
 | ``iterator::next!`` | ``Usage: (next! s)`` |
 
 <span style="padding-left: 5px">Calls iter on s and returns the next item.
@@ -3399,7 +3399,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nth``](#Namespace: iterator::nth-contents) | Type: Lambda |
+| <a id="iterator::nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nth``](#iterator::nth-contents) | Type: Lambda |
 | ``iterator::nth`` | ``Usage: (nth idx coll)`` |
 
 <span style="padding-left: 5px">Consume the iterator until the idx (nth) element and return it (0 based).
@@ -3420,7 +3420,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::range" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range``](#Namespace: iterator::range-contents) | Type: Lambda |
+| <a id="iterator::range" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range``](#iterator::range-contents) | Type: Lambda |
 | ``iterator::range`` | ``Usage: (range &rest i)`` |
 
 <span style="padding-left: 5px">Create an iterator that generates numbers within a range.
@@ -3449,7 +3449,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::range-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range-iter``](#Namespace: iterator::range-iter-contents) | Type: Lambda |
+| <a id="iterator::range-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range-iter``](#iterator::range-iter-contents) | Type: Lambda |
 | ``iterator::range-iter`` | ``Usage: (range-iter)`` |
 
 <span style="padding-left: 5px">Iterator that generates numbers within a range.
@@ -3486,7 +3486,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::reduce" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce``](#Namespace: iterator::reduce-contents) | Type: Lambda |
+| <a id="iterator::reduce" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce``](#iterator::reduce-contents) | Type: Lambda |
 | ``iterator::reduce`` | ``Usage: (reduce reducing-fcn init-val coll)`` |
 
 <span style="padding-left: 5px">reduce is used to amalgamate a provided iterator, coll, and an intitial value,
@@ -3512,7 +3512,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::reduce-times" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce-times``](#Namespace: iterator::reduce-times-contents) | Type: Lambda |
+| <a id="iterator::reduce-times" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce-times``](#iterator::reduce-times-contents) | Type: Lambda |
 | ``iterator::reduce-times`` | ``Usage: (reduce-times value wrapping-fcn times)`` |
 
 <span style="padding-left: 5px">Apply wrapping-fcn to value number of times. Function is recursive. Recursive
@@ -3529,7 +3529,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::reverse" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse``](#Namespace: iterator::reverse-contents) | Type: Lambda |
+| <a id="iterator::reverse" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse``](#iterator::reverse-contents) | Type: Lambda |
 | ``iterator::reverse`` | ``Usage: (reverse items)`` |
 
 <span style="padding-left: 5px">Produce an iterator the is the reverse of items.  Will call iter on items and
@@ -3551,7 +3551,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::reverse-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse-iter``](#Namespace: iterator::reverse-iter-contents) | Type: Lambda |
+| <a id="iterator::reverse-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse-iter``](#iterator::reverse-iter-contents) | Type: Lambda |
 | ``iterator::reverse-iter`` | ``Usage: (reverse-iter)`` |
 
 <span style="padding-left: 5px">Iterator that reverses another iterators direction.  Requires a double ended iterator.
@@ -3578,7 +3578,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice``](#Namespace: iterator::slice-contents) | Type: Lambda |
+| <a id="iterator::slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice``](#iterator::slice-contents) | Type: Lambda |
 | ``iterator::slice`` | ``Usage: (slice items start &rest end)`` |
 
 <span style="padding-left: 5px">Provides a slice of iterator.  Will call iter on items.  Slice iter will consume
@@ -3611,7 +3611,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::slice-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice-iter``](#Namespace: iterator::slice-iter-contents) | Type: Lambda |
+| <a id="iterator::slice-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice-iter``](#iterator::slice-iter-contents) | Type: Lambda |
 | ``iterator::slice-iter`` | ``Usage: (slice-iter)`` |
 
 <span style="padding-left: 5px">Iterator that provides a slice of the underlying iter.  Slice iter will consume
@@ -3652,7 +3652,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::string-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string-iter``](#Namespace: iterator::string-iter-contents) | Type: Lambda |
+| <a id="iterator::string-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string-iter``](#iterator::string-iter-contents) | Type: Lambda |
 | ``iterator::string-iter`` | ``Usage: (string-iter)`` |
 
 <span style="padding-left: 5px">Iterator that wraps a string.
@@ -3677,7 +3677,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: iterator::vec-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-iter``](#Namespace: iterator::vec-iter-contents) | Type: Lambda |
+| <a id="iterator::vec-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-iter``](#iterator::vec-iter-contents) | Type: Lambda |
 | ``iterator::vec-iter`` | ``Usage: (vec-iter)`` |
 
 <span style="padding-left: 5px">Iterator that wraps a vector.
@@ -3712,7 +3712,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::%" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``%``](#Namespace: root::%-contents) | Type: Function |
+| <a id="root::%" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``%``](#root::%-contents) | Type: Function |
 | ``root::%`` | ``Usage: (% int int)`` |
 
 <span style="padding-left: 5px">Remainder from dividing first int by the second.
@@ -3729,7 +3729,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*``](#Namespace: root::*-contents) | Type: Function |
+| <a id="root::*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*``](#root::*-contents) | Type: Function |
 | ``root::*`` | ``Usage: (* number+)`` |
 
 <span style="padding-left: 5px">Multiply a sequence of numbers.
@@ -3753,7 +3753,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::+" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``+``](#Namespace: root::+-contents) | Type: Function |
+| <a id="root::+" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``+``](#root::+-contents) | Type: Function |
 | ``root::+`` | ``Usage: (+ number+)`` |
 
 <span style="padding-left: 5px">Add a sequence of numbers.
@@ -3772,7 +3772,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::-" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``-``](#Namespace: root::--contents) | Type: Function |
+| <a id="root::-" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``-``](#root::--contents) | Type: Function |
 | ``root::-`` | ``Usage: (- number+)`` |
 
 <span style="padding-left: 5px">Subtract a sequence of numbers.
@@ -3792,7 +3792,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::/" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``/``](#Namespace: root::/-contents) | Type: Function |
+| <a id="root::/" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``/``](#root::/-contents) | Type: Function |
 | ``root::/`` | ``Usage: (/ number+)`` |
 
 <span style="padding-left: 5px">Divide a sequence of numbers.  Requires at least two numbers.
@@ -3816,7 +3816,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::ns-auto-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-auto-export``](#Namespace: root::ns-auto-export-contents) | Type: Macro |
+| <a id="root::ns-auto-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-auto-export``](#root::ns-auto-export-contents) | Type: Macro |
 | ``root::ns-auto-export`` | ``Usage: (ns-auto-export symbol)`` |
 
 <span style="padding-left: 5px">Macro that takes a symbol, the symbol of the current namespace, and writes an
@@ -3832,7 +3832,7 @@ ns-export.
 <br>
 
 
-| <a id="Namespace: root::ns-create" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-create``](#Namespace: root::ns-create-contents) | Type: Function |
+| <a id="root::ns-create" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-create``](#root::ns-create-contents) | Type: Function |
 | ``root::ns-create`` | ``Usage: (ns-create namespace)`` |
 
 <span style="padding-left: 5px">Creates and enters a new a namespace (must evaluate to a string or symbol).
@@ -3855,7 +3855,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::ns-enter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-enter``](#Namespace: root::ns-enter-contents) | Type: Function |
+| <a id="root::ns-enter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-enter``](#root::ns-enter-contents) | Type: Function |
 | ``root::ns-enter`` | ``Usage: (ns-enter namespace)`` |
 
 <span style="padding-left: 5px">Enters an existing namespace (must evaluate to a string or symbol).
@@ -3882,7 +3882,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::ns-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-exists?``](#Namespace: root::ns-exists?-contents) | Type: Function |
+| <a id="root::ns-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-exists?``](#root::ns-exists?-contents) | Type: Function |
 | ``root::ns-exists?`` | ``Usage: (ns-exists? namespace)`` |
 
 <span style="padding-left: 5px">True if the supplied namespace exists (must evaluate to a string or symbol).
@@ -3900,7 +3900,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::ns-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-export``](#Namespace: root::ns-export-contents) | Type: Macro |
+| <a id="root::ns-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-export``](#root::ns-export-contents) | Type: Macro |
 | ``root::ns-export`` | ``Usage: (ns-export symbol_or_sequence)`` |
 
 <span style="padding-left: 5px">Export a symbol or list of symbols to be imported into other namespaces.
@@ -3908,7 +3908,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: root::ns-import" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-import``](#Namespace: root::ns-import-contents) | Type: Macro |
+| <a id="root::ns-import" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-import``](#root::ns-import-contents) | Type: Macro |
 | ``root::ns-import`` | ``Usage: (ns-import namespace)`` |
 
 <span style="padding-left: 5px">Import any symbols exported from namespace into the current namespace.
@@ -3916,7 +3916,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: root::ns-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-list``](#Namespace: root::ns-list-contents) | Type: Function |
+| <a id="root::ns-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-list``](#root::ns-list-contents) | Type: Function |
 | ``root::ns-list`` | ``Usage: (ns-list)`` |
 
 <span style="padding-left: 5px">Returns a vector of all namespaces.
@@ -3935,7 +3935,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::ns-pop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-pop``](#Namespace: root::ns-pop-contents) | Type: Macro |
+| <a id="root::ns-pop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-pop``](#root::ns-pop-contents) | Type: Macro |
 | ``root::ns-pop`` | ``Usage: (ns-pop)`` |
 
 <span style="padding-left: 5px">Returns to the previous namespace saved in the last ns-push.
@@ -3954,7 +3954,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::ns-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-push``](#Namespace: root::ns-push-contents) | Type: Macro |
+| <a id="root::ns-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-push``](#root::ns-push-contents) | Type: Macro |
 | ``root::ns-push`` | ``Usage: (ns-push 'namespace)`` |
 
 <span style="padding-left: 5px">Pushes the current namespace on a stack for ns-pop and enters or creates namespace.
@@ -3978,7 +3978,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::ns-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-symbols``](#Namespace: root::ns-symbols-contents) | Type: Function |
+| <a id="root::ns-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-symbols``](#root::ns-symbols-contents) | Type: Function |
 | ``root::ns-symbols`` | ``Usage: (ns-symbols namespace)`` |
 
 <span style="padding-left: 5px">Returns the list of all symbols in namespace (must evaluate to a string or symbol).
@@ -4001,7 +4001,7 @@ are produced with bare parentheses in code. These lists can also be created by
 building them up with joins or with the list form.
 
 
-| <a id="Namespace: root::car" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#Namespace: root::car-contents) | Type: Function |
+| <a id="root::car" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#root::car-contents) | Type: Function |
 | ``root::car`` | ``Usage: (car pair)`` |
 
 <span style="padding-left: 5px">Return the car (first item) from a pair.  If used on a proper list this will be the first element.
@@ -4019,7 +4019,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cdr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#Namespace: root::cdr-contents) | Type: Function |
+| <a id="root::cdr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#root::cdr-contents) | Type: Function |
 | ``root::cdr`` | ``Usage: (cdr pair)`` |
 
 <span style="padding-left: 5px">Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
@@ -4038,7 +4038,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::join" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#Namespace: root::join-contents) | Type: Function |
+| <a id="root::join" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#root::join-contents) | Type: Function |
 | ``root::join`` | ``Usage: (join car cdr)`` |
 
 <span style="padding-left: 5px">Create a pair with the provided car and cdr.
@@ -4056,7 +4056,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#Namespace: root::list-contents) | Type: Function |
+| <a id="root::list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#root::list-contents) | Type: Function |
 | ``root::list`` | ``Usage: (list item0 item1 .. itemN)`` |
 
 <span style="padding-left: 5px">Create a proper list from pairs with items 0 - N.
@@ -4071,7 +4071,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::xar!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#Namespace: root::xar!-contents) | Type: Function |
+| <a id="root::xar!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#root::xar!-contents) | Type: Function |
 | ``root::xar!`` | ``Usage: (xar! pair expression)`` |
 
 <span style="padding-left: 5px">Destructive form that replaces the car (first item) in a pair with a new expression.
@@ -4095,7 +4095,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::xdr!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#Namespace: root::xdr!-contents) | Type: Function |
+| <a id="root::xdr!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#root::xdr!-contents) | Type: Function |
 | ``root::xdr!`` | ``Usage: (xdr! pair expression)`` |
 
 <span style="padding-left: 5px">Destructive form that replaces the cdr (second item) in a pair with a new expression.
@@ -4121,7 +4121,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::caaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caaar``](#Namespace: root::caaar-contents) | Type: Lambda |
+| <a id="root::caaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caaar``](#root::caaar-contents) | Type: Lambda |
 | ``root::caaar`` | ``Usage: (caaar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4136,7 +4136,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::caadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caadr``](#Namespace: root::caadr-contents) | Type: Lambda |
+| <a id="root::caadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caadr``](#root::caadr-contents) | Type: Lambda |
 | ``root::caadr`` | ``Usage: (caadr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4151,7 +4151,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::caar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caar``](#Namespace: root::caar-contents) | Type: Lambda |
+| <a id="root::caar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caar``](#root::caar-contents) | Type: Lambda |
 | ``root::caar`` | ``Usage: (caar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4166,7 +4166,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cadar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadar``](#Namespace: root::cadar-contents) | Type: Lambda |
+| <a id="root::cadar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadar``](#root::cadar-contents) | Type: Lambda |
 | ``root::cadar`` | ``Usage: (cadar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4181,7 +4181,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cadddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadddr``](#Namespace: root::cadddr-contents) | Type: Lambda |
+| <a id="root::cadddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadddr``](#root::cadddr-contents) | Type: Lambda |
 | ``root::cadddr`` | ``Usage: (cadddr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4196,7 +4196,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::caddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caddr``](#Namespace: root::caddr-contents) | Type: Lambda |
+| <a id="root::caddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caddr``](#root::caddr-contents) | Type: Lambda |
 | ``root::caddr`` | ``Usage: (caddr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4211,7 +4211,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadr``](#Namespace: root::cadr-contents) | Type: Lambda |
+| <a id="root::cadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadr``](#root::cadr-contents) | Type: Lambda |
 | ``root::cadr`` | ``Usage: (cadr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4226,7 +4226,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cdaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdaar``](#Namespace: root::cdaar-contents) | Type: Lambda |
+| <a id="root::cdaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdaar``](#root::cdaar-contents) | Type: Lambda |
 | ``root::cdaar`` | ``Usage: (cdaar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4241,7 +4241,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cdadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdadr``](#Namespace: root::cdadr-contents) | Type: Lambda |
+| <a id="root::cdadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdadr``](#root::cdadr-contents) | Type: Lambda |
 | ``root::cdadr`` | ``Usage: (cdadr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4256,7 +4256,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cdar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdar``](#Namespace: root::cdar-contents) | Type: Lambda |
+| <a id="root::cdar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdar``](#root::cdar-contents) | Type: Lambda |
 | ``root::cdar`` | ``Usage: (cdar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4271,7 +4271,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cddar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddar``](#Namespace: root::cddar-contents) | Type: Lambda |
+| <a id="root::cddar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddar``](#root::cddar-contents) | Type: Lambda |
 | ``root::cddar`` | ``Usage: (cddar lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4286,7 +4286,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cdddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdddr``](#Namespace: root::cdddr-contents) | Type: Lambda |
+| <a id="root::cdddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdddr``](#root::cdddr-contents) | Type: Lambda |
 | ``root::cdddr`` | ``Usage: (cdddr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4301,7 +4301,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddr``](#Namespace: root::cddr-contents) | Type: Lambda |
+| <a id="root::cddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddr``](#root::cddr-contents) | Type: Lambda |
 | ``root::cddr`` | ``Usage: (cddr lst)`` |
 
 <span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
@@ -4318,7 +4318,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: root::*load-path*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#Namespace: root::*load-path*-contents) | Type: Vector |
+| <a id="root::*load-path*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#root::*load-path*-contents) | Type: Vector |
 | ``root::*load-path*`` | ``Usage: (set '*load-path* '("/path/one" "/path/two"))`` |
 
 <span style="padding-left: 5px">Set the a list of paths to search for loading scripts with the load form.
@@ -4335,7 +4335,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::load" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``load``](#Namespace: root::load-contents) | Type: Function |
+| <a id="root::load" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``load``](#root::load-contents) | Type: Function |
 | ``root::load`` | ``Usage: (load path) -> [last form value]`` |
 
 <span style="padding-left: 5px">Read and eval a file (from path- a string).
@@ -4357,7 +4357,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::mkli" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``mkli``](#Namespace: shell::mkli-contents) | Type: Lambda |
+| <a id="shell::mkli" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``mkli``](#shell::mkli-contents) | Type: Lambda |
 | ``shell::mkli`` | ``Usage: (mkli filepath [namespace] [body])`` |
 
 <span style="padding-left: 5px">"make lisp".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
@@ -4382,7 +4382,7 @@ possible (i.e. first vs car).
 NOTE: list on this table can be a vector or a list.
 
 
-| <a id="Namespace: root::butlast" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``butlast``](#Namespace: root::butlast-contents) | Type: Lambda |
+| <a id="root::butlast" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``butlast``](#root::butlast-contents) | Type: Lambda |
 | ``root::butlast`` | ``Usage: (butlast obj)`` |
 
 <span style="padding-left: 5px">Produces the provided list minus the last element.  Nil if the list is empty or one element.
@@ -4403,7 +4403,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::collect-copy" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-copy``](#Namespace: root::collect-copy-contents) | Type: Lambda |
+| <a id="root::collect-copy" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-copy``](#root::collect-copy-contents) | Type: Lambda |
 | ``root::collect-copy`` | ``Usage: (collect-copy seq)`` |
 
 <span style="padding-left: 5px">Produces a copy of the provided list (copy has same type as the parameter).
@@ -4427,7 +4427,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty-seq?``](#Namespace: root::empty-seq?-contents) | Type: Lambda |
+| <a id="root::empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty-seq?``](#root::empty-seq?-contents) | Type: Lambda |
 | ``root::empty-seq?`` | ``Usage: (empty-seq? obj) -> t/nil`` |
 
 <span style="padding-left: 5px">`empty-seq?` returns true if a list or vector is empty and false/nil
@@ -4448,7 +4448,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::first" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``first``](#Namespace: root::first-contents) | Type: Lambda |
+| <a id="root::first" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``first``](#root::first-contents) | Type: Lambda |
 | ``root::first`` | ``Usage: (first obj)`` |
 
 <span style="padding-left: 5px">Produces the first element of the provided list or vector.  Nil if the
@@ -4469,7 +4469,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::in?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``in?``](#Namespace: root::in?-contents) | Type: Lambda |
+| <a id="root::in?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``in?``](#root::in?-contents) | Type: Lambda |
 | ``root::in?`` | ``Usage: (in? seq-to-search item-to-match)`` |
 
 <span style="padding-left: 5px">Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and
@@ -4489,7 +4489,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::last" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``last``](#Namespace: root::last-contents) | Type: Lambda |
+| <a id="root::last" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``last``](#root::last-contents) | Type: Lambda |
 | ``root::last`` | ``Usage: (last obj)`` |
 
 <span style="padding-left: 5px">Produces the last element in a list or vector.  Nil if the list/vector is empty.
@@ -4508,7 +4508,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::non-empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``non-empty-seq?``](#Namespace: root::non-empty-seq?-contents) | Type: Lambda |
+| <a id="root::non-empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``non-empty-seq?``](#root::non-empty-seq?-contents) | Type: Lambda |
 | ``root::non-empty-seq?`` | ``Usage: (non-empty-seq? obj) -> t/nil`` |
 
 <span style="padding-left: 5px">`non-empty-seq?` returns true if a list or vector is not empty and false/nil
@@ -4529,7 +4529,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::qsort" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``qsort``](#Namespace: root::qsort-contents) | Type: Lambda |
+| <a id="root::qsort" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``qsort``](#root::qsort-contents) | Type: Lambda |
 | ``root::qsort`` | ``Usage: (qsort sequence comp-lambda?) -> [sorted vector]`` |
 
 <span style="padding-left: 5px">Sort a sequence using the quick sort algorithm.  Returns a vector of the sorted sequence.
@@ -4564,7 +4564,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::rest" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``rest``](#Namespace: root::rest-contents) | Type: Lambda |
+| <a id="root::rest" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``rest``](#root::rest-contents) | Type: Lambda |
 | ``root::rest`` | ``Usage: (rest obj)`` |
 
 <span style="padding-left: 5px">Produces the provided list or vector minus the first element.  Nil if the
@@ -4588,7 +4588,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::seq-for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq-for``](#Namespace: root::seq-for-contents) | Type: Macro |
+| <a id="root::seq-for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq-for``](#root::seq-for-contents) | Type: Macro |
 | ``root::seq-for`` | ``Usage: (seq-for bind in items body)`` |
 
 <span style="padding-left: 5px">Loops over each element in a sequence.  Simple version that works with lists and
@@ -4606,7 +4606,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq?``](#Namespace: root::seq?-contents) | Type: Lambda |
+| <a id="root::seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq?``](#root::seq?-contents) | Type: Lambda |
 | ``root::seq?`` | ``Usage: (seq? expression) -> t/nil`` |
 
 <span style="padding-left: 5px">True if expression is a list or vector, nil otherwise.
@@ -4626,7 +4626,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::setnth!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``setnth!``](#Namespace: root::setnth!-contents) | Type: Lambda |
+| <a id="root::setnth!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``setnth!``](#root::setnth!-contents) | Type: Lambda |
 | ``root::setnth!`` | ``Usage: (setnth! idx obj sequence)`` |
 
 <span style="padding-left: 5px">Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
@@ -4675,7 +4675,7 @@ Example:<br>
 Forms to do shell operations like file tests, pipes, redirects, etc.
 
 
-| <a id="Namespace: root::*stderr*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stderr*``](#Namespace: root::*stderr*-contents) | Type: File |
+| <a id="root::*stderr*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stderr*``](#root::*stderr*-contents) | Type: File |
 | ``root::*stderr*`` | ``Usage: (write-line *stderr*)`` |
 
 <span style="padding-left: 5px">File that connects to standard error by default.
@@ -4695,7 +4695,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::*stdin*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdin*``](#Namespace: root::*stdin*-contents) | Type: File |
+| <a id="root::*stdin*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdin*``](#root::*stdin*-contents) | Type: File |
 | ``root::*stdin*`` | ``Usage: (read-line *stdin*)`` |
 
 <span style="padding-left: 5px">File that connects to standard in by default.
@@ -4716,7 +4716,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::*stdout*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdout*``](#Namespace: root::*stdout*-contents) | Type: File |
+| <a id="root::*stdout*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdout*``](#root::*stdout*-contents) | Type: File |
 | ``root::*stdout*`` | ``Usage: (write-line *stdout*)`` |
 
 <span style="padding-left: 5px">File that connects to standard out by default.
@@ -4736,7 +4736,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias``](#Namespace: shell::alias-contents) | Type: Macro |
+| <a id="shell::alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias``](#shell::alias-contents) | Type: Macro |
 | ``shell::alias`` | ``Usage: (alias name body) or (alias name docstring body).`` |
 
 <span style="padding-left: 5px">Create an alias, intended to be used with executables not lisp code (use defn
@@ -4745,7 +4745,7 @@ for that).
 <br>
 
 
-| <a id="Namespace: shell::alias?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias?``](#Namespace: shell::alias?-contents) | Type: Lambda |
+| <a id="shell::alias?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias?``](#shell::alias?-contents) | Type: Lambda |
 | ``shell::alias?`` | ``Usage: (alias? name)`` |
 
 <span style="padding-left: 5px">Provides boolean value confirming or denying given alias' presence
@@ -4754,7 +4754,7 @@ in set of registered aliases.
 <br>
 
 
-| <a id="Namespace: root::bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg``](#Namespace: root::bg-contents) | Type: Function |
+| <a id="root::bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg``](#root::bg-contents) | Type: Function |
 | ``root::bg`` | ``Usage: (bg job-id?)`` |
 
 <span style="padding-left: 5px">Put a job in the background.
@@ -4771,7 +4771,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::bg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg-color-rgb``](#Namespace: shell::bg-color-rgb-contents) | Type: Lambda |
+| <a id="shell::bg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg-color-rgb``](#shell::bg-color-rgb-contents) | Type: Lambda |
 | ``shell::bg-color-rgb`` | ``Usage: (bg-color-rgb red-val green-val blue-val)`` |
 
 <span style="padding-left: 5px">Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
@@ -4791,7 +4791,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::cd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cd``](#Namespace: root::cd-contents) | Type: Function |
+| <a id="root::cd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cd``](#root::cd-contents) | Type: Function |
 | ``root::cd`` | ``Usage: (cd dir-to-change-to)`` |
 
 <span style="padding-left: 5px">Change directory.
@@ -4815,7 +4815,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::clear-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``clear-dirs``](#Namespace: shell::clear-dirs-contents) | Type: Lambda |
+| <a id="shell::clear-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``clear-dirs``](#shell::clear-dirs-contents) | Type: Lambda |
 | ``shell::clear-dirs`` | ``Usage: (clear-dirs)`` |
 
 <span style="padding-left: 5px">Clears the directory stack.
@@ -4839,7 +4839,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::command" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``command``](#Namespace: root::command-contents) | Type: SpecialForm |
+| <a id="root::command" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``command``](#root::command-contents) | Type: SpecialForm |
 | ``root::command`` | ``Usage: (command exp0 ... expN)`` |
 
 <span style="padding-left: 5px">Only execute system commands not forms within this form.
@@ -4856,7 +4856,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dirs``](#Namespace: shell::dirs-contents) | Type: Lambda |
+| <a id="shell::dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dirs``](#shell::dirs-contents) | Type: Lambda |
 | ``shell::dirs`` | ``Usage: (dirs)`` |
 
 <span style="padding-left: 5px">List the directory stack.
@@ -4890,7 +4890,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::endfix-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``endfix-on``](#Namespace: shell::endfix-on-contents) | Type: Macro |
+| <a id="shell::endfix-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``endfix-on``](#shell::endfix-on-contents) | Type: Macro |
 | ``shell::endfix-on`` | ``Usage: (endfix-on)`` |
 
 <span style="padding-left: 5px">Allows use of infix notation for common shell forms. The following is the
@@ -4912,7 +4912,7 @@ the corresponding sl-sh function they map to:
 <br>
 
 
-| <a id="Namespace: shell::err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>``](#Namespace: shell::err>-contents) | Type: Macro |
+| <a id="shell::err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>``](#shell::err>-contents) | Type: Macro |
 | ``shell::err>`` | ``Usage: (err> file body)`` |
 
 <span style="padding-left: 5px">Redirect stderr to file, truncate the file first.
@@ -4938,7 +4938,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>>``](#Namespace: shell::err>>-contents) | Type: Macro |
+| <a id="shell::err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>>``](#shell::err>>-contents) | Type: Macro |
 | ``shell::err>>`` | ``Usage: (err>> file body)`` |
 
 <span style="padding-left: 5px">Redirect stderr to file, append the output.
@@ -4966,7 +4966,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>null``](#Namespace: shell::err>null-contents) | Type: Macro |
+| <a id="shell::err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>null``](#shell::err>null-contents) | Type: Macro |
 | ``shell::err>null`` | ``Usage: (err>null body)`` |
 
 <span style="padding-left: 5px">Redirect stderr to null (/dev/null equivelent).
@@ -4986,7 +4986,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::exit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``exit``](#Namespace: root::exit-contents) | Type: Function |
+| <a id="root::exit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``exit``](#root::exit-contents) | Type: Function |
 | ``root::exit`` | ``Usage: (exit code?)`` |
 
 <span style="padding-left: 5px">Exit shell with optional status code.
@@ -5003,7 +5003,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``export``](#Namespace: root::export-contents) | Type: Function |
+| <a id="root::export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``export``](#root::export-contents) | Type: Function |
 | ``root::export`` | ``Usage: (export symbol string) -> string`` |
 
 <span style="padding-left: 5px">Export a key and value to the shell environment.  Second arg will be made a string and returned.
@@ -5019,7 +5019,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::fc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fc``](#Namespace: shell::fc-contents) | Type: Lambda |
+| <a id="shell::fc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fc``](#shell::fc-contents) | Type: Lambda |
 | ``shell::fc`` | ``Usage: (fc)`` |
 
 <span style="padding-left: 5px">Put the contents of the last command into a temporary file
@@ -5031,7 +5031,7 @@ the temporary file are saved to the sl-sh history.
 <br>
 
 
-| <a id="Namespace: root::fg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg``](#Namespace: root::fg-contents) | Type: Function |
+| <a id="root::fg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg``](#root::fg-contents) | Type: Function |
 | ``root::fg`` | ``Usage: (fg job-id?)`` |
 
 <span style="padding-left: 5px">Put a job in the foreground.
@@ -5048,7 +5048,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::fg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg-color-rgb``](#Namespace: shell::fg-color-rgb-contents) | Type: Lambda |
+| <a id="shell::fg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg-color-rgb``](#shell::fg-color-rgb-contents) | Type: Lambda |
 | ``shell::fg-color-rgb`` | ``Usage: (fg-color-rgb red-val green-val blue-val)`` |
 
 <span style="padding-left: 5px">Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
@@ -5068,7 +5068,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::form" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``form``](#Namespace: root::form-contents) | Type: SpecialForm |
+| <a id="root::form" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``form``](#root::form-contents) | Type: SpecialForm |
 | ``root::form`` | ``Usage: (form exp0 ... expN)`` |
 
 <span style="padding-left: 5px">Like do but do not execute system commands within this form.
@@ -5084,7 +5084,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::fs-dir?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-dir?``](#Namespace: root::fs-dir?-contents) | Type: Function |
+| <a id="root::fs-dir?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-dir?``](#root::fs-dir?-contents) | Type: Function |
 | ``root::fs-dir?`` | ``Usage: (fs-dir? path-to-test)`` |
 
 <span style="padding-left: 5px">Is the given path a directory?
@@ -5105,7 +5105,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::fs-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-exists?``](#Namespace: root::fs-exists?-contents) | Type: Function |
+| <a id="root::fs-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-exists?``](#root::fs-exists?-contents) | Type: Function |
 | ``root::fs-exists?`` | ``Usage: (fs-exists? path-to-test)`` |
 
 <span style="padding-left: 5px">Does the given path exist?
@@ -5126,7 +5126,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::fs-file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-file?``](#Namespace: root::fs-file?-contents) | Type: Function |
+| <a id="root::fs-file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-file?``](#root::fs-file?-contents) | Type: Function |
 | ``root::fs-file?`` | ``Usage: (fs-file? path-to-test)`` |
 
 <span style="padding-left: 5px">Is the given path a file?
@@ -5147,7 +5147,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::get-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-dirs``](#Namespace: shell::get-dirs-contents) | Type: Lambda |
+| <a id="shell::get-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-dirs``](#shell::get-dirs-contents) | Type: Lambda |
 | ``shell::get-dirs`` | ``Usage: (get-dirs)`` |
 
 <span style="padding-left: 5px">Return the vector of directories.
@@ -5173,7 +5173,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::getopts" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``getopts``](#Namespace: shell::getopts-contents) | Type: Lambda |
+| <a id="shell::getopts" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``getopts``](#shell::getopts-contents) | Type: Lambda |
 | ``shell::getopts`` | ``Usage: (getopts options-map args)`` |
 
 <span style="padding-left: 5px">Getopts takes a hash map and a vector of args and returns a hash map with all
@@ -5224,7 +5224,7 @@ is thrown.
 Use this as a default if the given flag is not provided at execution time.
 - :type (optional)
 Specify a type for every provided argument for the given flag. Types can be
-any of: ("[fs-file?](#root::fs-file?)" "[hash?](#root::hash?)" "[float?](#root::float?)" "[nil?](#root::nil?)" "[list?](#root::list?)" "[fs-dir?](#root::fs-dir?)" "[fs-exists?](#root::fs-exists?)" "[vec?](#root::vec?)" "[lambda?](#root::lambda?)" "[int?](#root::int?)" "[string?](#root::string?)" "[symbol?](#root::symbol?)" "[char?](#root::char?)" "[macro?](#root::macro?)")
+any of: ("[fs-file?](#root::fs-file?)" "[string?](#root::string?)" "[list?](#root::list?)" "[vec?](#root::vec?)" "[macro?](#root::macro?)" "[nil?](#root::nil?)" "[lambda?](#root::lambda?)" "[float?](#root::float?)" "[fs-exists?](#root::fs-exists?)" "[hash?](#root::hash?)" "[fs-dir?](#root::fs-dir?)" "[int?](#root::int?)" "[char?](#root::char?)" "[symbol?](#root::symbol?)")
 Rules for flags:
 - Flags can be single character: -m -n -c etc.
 - Flags of a single single character with arity 0 can be adjacent without the
@@ -5244,7 +5244,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::glob" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``glob``](#Namespace: root::glob-contents) | Type: Function |
+| <a id="root::glob" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``glob``](#root::glob-contents) | Type: Function |
 | ``root::glob`` | ``Usage: (glob /path/with/*)`` |
 
 <span style="padding-left: 5px">Takes a list/varargs of globs and return the list of them expanded.
@@ -5267,7 +5267,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::history-context" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-context``](#Namespace: root::history-context-contents) | Type: Function |
+| <a id="root::history-context" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-context``](#root::history-context-contents) | Type: Function |
 | ``root::history-context`` | ``Usage: (history-context :context_id context-string) -> nil`` |
 
 <span style="padding-left: 5px">Sets the history context for searches.  Usually the current path but can be any
@@ -5284,7 +5284,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::history-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-empty?``](#Namespace: root::history-empty?-contents) | Type: Function |
+| <a id="root::history-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-empty?``](#root::history-empty?-contents) | Type: Function |
 | ``root::history-empty?`` | ``Usage: (history-empty? :context_id) -> t/nil`` |
 
 <span style="padding-left: 5px">Returns true if history for context_id is empty, nil otherwise.
@@ -5300,7 +5300,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::history-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-length``](#Namespace: root::history-length-contents) | Type: Function |
+| <a id="root::history-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-length``](#root::history-length-contents) | Type: Function |
 | ``root::history-length`` | ``Usage: (history-length :context_id) -> int`` |
 
 <span style="padding-left: 5px">Returns the number of history items for the given context.
@@ -5316,7 +5316,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::history-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-nth``](#Namespace: root::history-nth-contents) | Type: Function |
+| <a id="root::history-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-nth``](#root::history-nth-contents) | Type: Function |
 | ``root::history-nth`` | ``Usage: (history-nth :context_id nth) -> String`` |
 
 <span style="padding-left: 5px">Returns the history at index nth (the newest is 0).
@@ -5332,7 +5332,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::history-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push``](#Namespace: root::history-push-contents) | Type: Function |
+| <a id="root::history-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push``](#root::history-push-contents) | Type: Function |
 | ``root::history-push`` | ``Usage: (history-push :context_id string) -> nil/t`` |
 
 <span style="padding-left: 5px">Pushes string onto the history for the prompt context :context_id.
@@ -5349,7 +5349,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::history-push-throwaway" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push-throwaway``](#Namespace: root::history-push-throwaway-contents) | Type: Function |
+| <a id="root::history-push-throwaway" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push-throwaway``](#root::history-push-throwaway-contents) | Type: Function |
 | ``root::history-push-throwaway`` | ``Usage: (history-push-throwaway :context_id string) -> nil/t`` |
 
 <span style="padding-left: 5px">Pushes string onto the history for the prompt context :context_id.  A throwaway
@@ -5368,7 +5368,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: root::jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``jobs``](#Namespace: root::jobs-contents) | Type: Function |
+| <a id="root::jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``jobs``](#root::jobs-contents) | Type: Function |
 | ``root::jobs`` | ``Usage: (jobs)`` |
 
 <span style="padding-left: 5px">Print list of jobs with ids.
@@ -5384,7 +5384,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::let-env" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let-env``](#Namespace: shell::let-env-contents) | Type: Macro |
+| <a id="shell::let-env" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let-env``](#shell::let-env-contents) | Type: Macro |
 | ``shell::let-env`` | ``Usage: (let-env vals &rest let_body)`` |
 
 <span style="padding-left: 5px">Like let but sets environment variables that are reset after the macro finishes.
@@ -5402,7 +5402,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::loose-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loose-symbols``](#Namespace: root::loose-symbols-contents) | Type: SpecialForm |
+| <a id="root::loose-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loose-symbols``](#root::loose-symbols-contents) | Type: SpecialForm |
 | ``root::loose-symbols`` | ``Usage: (loose-symbols exp0 ... expN)`` |
 
 <span style="padding-left: 5px">Within this form any undefined symbols become strings.
@@ -5418,7 +5418,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out-err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>``](#Namespace: shell::out-err>-contents) | Type: Macro |
+| <a id="shell::out-err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>``](#shell::out-err>-contents) | Type: Macro |
 | ``shell::out-err>`` | ``Usage: (out-err> file body)`` |
 
 <span style="padding-left: 5px">Redirect both stdout and stderr to the same file, truncate the file first.
@@ -5456,7 +5456,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out-err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>>``](#Namespace: shell::out-err>>-contents) | Type: Macro |
+| <a id="shell::out-err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>>``](#shell::out-err>>-contents) | Type: Macro |
 | ``shell::out-err>>`` | ``Usage: (out-err>> file body)`` |
 
 <span style="padding-left: 5px">Redirect both stdout and stderr to the same file, append the output.
@@ -5490,7 +5490,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out-err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>null``](#Namespace: shell::out-err>null-contents) | Type: Macro |
+| <a id="shell::out-err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>null``](#shell::out-err>null-contents) | Type: Macro |
 | ``shell::out-err>null`` | ``Usage: (out-err>null body)`` |
 
 <span style="padding-left: 5px">Redirect both stdout and stderr to null (/dev/null equivelent).
@@ -5517,7 +5517,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>``](#Namespace: shell::out>-contents) | Type: Macro |
+| <a id="shell::out>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>``](#shell::out>-contents) | Type: Macro |
 | ``shell::out>`` | ``Usage: (out> file body)`` |
 
 <span style="padding-left: 5px">Redirect stdout to file, truncate the file first.
@@ -5543,7 +5543,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>>``](#Namespace: shell::out>>-contents) | Type: Macro |
+| <a id="shell::out>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>>``](#shell::out>>-contents) | Type: Macro |
 | ``shell::out>>`` | ``Usage: (out>> file body)`` |
 
 <span style="padding-left: 5px">Redirect stdout to file, append the output.
@@ -5571,7 +5571,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::out>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>null``](#Namespace: shell::out>null-contents) | Type: Macro |
+| <a id="shell::out>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>null``](#shell::out>null-contents) | Type: Macro |
 | ``shell::out>null`` | ``Usage: (out>null body)`` |
 
 <span style="padding-left: 5px">Redirect stdout to null (/dev/null equivelent).
@@ -5591,7 +5591,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::pid" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pid``](#Namespace: root::pid-contents) | Type: Function |
+| <a id="root::pid" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pid``](#root::pid-contents) | Type: Function |
 | ``root::pid`` | ``Usage: (pid proc)`` |
 
 <span style="padding-left: 5px">Return the pid of a process.
@@ -5608,7 +5608,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::pipe" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pipe``](#Namespace: root::pipe-contents) | Type: Function |
+| <a id="root::pipe" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pipe``](#root::pipe-contents) | Type: Function |
 | ``root::pipe`` | ``Usage: (pipe [expression]+)`` |
 
 <span style="padding-left: 5px">Setup a pipe between processes or expressions.  Pipe will take one or more
@@ -5667,7 +5667,7 @@ three") (grep two) tsync)<br>
 </details>
 
 
-| <a id="Namespace: shell::popd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``popd``](#Namespace: shell::popd-contents) | Type: Lambda |
+| <a id="shell::popd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``popd``](#shell::popd-contents) | Type: Lambda |
 | ``shell::popd`` | ``Usage: (popd)`` |
 
 <span style="padding-left: 5px">Pop first directory from directory stack and change to it.
@@ -5687,7 +5687,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::prompt" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``prompt``](#Namespace: root::prompt-contents) | Type: Function |
+| <a id="root::prompt" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``prompt``](#root::prompt-contents) | Type: Function |
 | ``root::prompt`` | ``Usage: (prompt string) -> string`` |
 
 <span style="padding-left: 5px">Starts an interactive prompt (like the repl prompt) with the supplied prompt and
@@ -5704,7 +5704,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::pushd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pushd``](#Namespace: shell::pushd-contents) | Type: Lambda |
+| <a id="shell::pushd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pushd``](#shell::pushd-contents) | Type: Lambda |
 | ``shell::pushd`` | ``Usage: (pushd dir)`` |
 
 <span style="padding-left: 5px">Push current directory on the directory stack and change to new directory.
@@ -5724,7 +5724,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::reap-jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reap-jobs``](#Namespace: root::reap-jobs-contents) | Type: Function |
+| <a id="root::reap-jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reap-jobs``](#root::reap-jobs-contents) | Type: Function |
 | ``root::reap-jobs`` | ``Usage: (reap-jobs) -> nil`` |
 
 <span style="padding-left: 5px">Reaps any completed jobs.  Only intended to be used by code implemeting the REPL
@@ -5741,7 +5741,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::register-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#Namespace: shell::register-alias-contents) | Type: Lambda |
+| <a id="shell::register-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#shell::register-alias-contents) | Type: Lambda |
 | ``shell::register-alias`` | ``Usage: (register-alias name)`` |
 
 <span style="padding-left: 5px">Registers an alias to the current scope. Useful if unregistering or
@@ -5750,7 +5750,7 @@ ability to know whether an alias has been registered is desirable.
 <br>
 
 
-| <a id="Namespace: root::run-bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``run-bg``](#Namespace: root::run-bg-contents) | Type: SpecialForm |
+| <a id="root::run-bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``run-bg``](#root::run-bg-contents) | Type: SpecialForm |
 | ``root::run-bg`` | ``Usage: (run-bg exp0 ... expN)`` |
 
 <span style="padding-left: 5px">Like do except any system commands started within form will be in the background.
@@ -5766,7 +5766,7 @@ t<br>
 </details>
 
 
-| <a id="Namespace: shell::set-dirs-max" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set-dirs-max``](#Namespace: shell::set-dirs-max-contents) | Type: Lambda |
+| <a id="shell::set-dirs-max" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set-dirs-max``](#shell::set-dirs-max-contents) | Type: Lambda |
 | ``shell::set-dirs-max`` | ``Usage: (set-dirs-max max)`` |
 
 <span style="padding-left: 5px">Sets the max number of directories to save in the stack.
@@ -5795,7 +5795,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::sleep" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sleep``](#Namespace: root::sleep-contents) | Type: Function |
+| <a id="root::sleep" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sleep``](#root::sleep-contents) | Type: Function |
 | ``root::sleep`` | ``Usage: (sleep milliseconds) -> nil`` |
 
 <span style="padding-left: 5px">Sleep for the provided milliseconds (must be a positive integer).
@@ -5811,7 +5811,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::syntax-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-off``](#Namespace: shell::syntax-off-contents) | Type: Macro |
+| <a id="shell::syntax-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-off``](#shell::syntax-off-contents) | Type: Macro |
 | ``shell::syntax-off`` | ``Usage: (syntax-off)`` |
 
 <span style="padding-left: 5px">Turn off syntax highlighting at the repl.
@@ -5819,7 +5819,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: shell::syntax-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-on``](#Namespace: shell::syntax-on-contents) | Type: Lambda |
+| <a id="shell::syntax-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-on``](#shell::syntax-on-contents) | Type: Lambda |
 | ``shell::syntax-on`` | ``Usage: (syntax-on)`` |
 
 <span style="padding-left: 5px">Turn on syntax highlighting at the repl.
@@ -5827,7 +5827,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: shell::sys-command?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sys-command?``](#Namespace: shell::sys-command?-contents) | Type: Lambda |
+| <a id="shell::sys-command?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sys-command?``](#shell::sys-command?-contents) | Type: Lambda |
 | ``shell::sys-command?`` | ``Usage: (sys-command? com)`` |
 
 <span style="padding-left: 5px">True if the supplied command is a system command.
@@ -5843,7 +5843,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::temp-dir" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``temp-dir``](#Namespace: shell::temp-dir-contents) | Type: Lambda |
+| <a id="shell::temp-dir" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``temp-dir``](#shell::temp-dir-contents) | Type: Lambda |
 | ``shell::temp-dir`` | ``Usage: (temp-dir)`` |
 
 <span style="padding-left: 5px">Returns  environment variable if set, otherwise returns "/tmp".
@@ -5851,7 +5851,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: root::time" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``time``](#Namespace: root::time-contents) | Type: Function |
+| <a id="root::time" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``time``](#root::time-contents) | Type: Function |
 | ``root::time`` | ``Usage: (time form) -> eval-time`` |
 
 <span style="padding-left: 5px">Evalutes the provided form and returns the seconds it ran for (as float with fractional part).
@@ -5867,7 +5867,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::unexport" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unexport``](#Namespace: root::unexport-contents) | Type: Function |
+| <a id="root::unexport" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unexport``](#root::unexport-contents) | Type: Function |
 | ``root::unexport`` | ``Usage: (unexport symbol)`` |
 
 <span style="padding-left: 5px">Remove a var from the current shell environment.
@@ -5885,7 +5885,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::unregister-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unregister-alias``](#Namespace: shell::unregister-alias-contents) | Type: Lambda |
+| <a id="shell::unregister-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unregister-alias``](#shell::unregister-alias-contents) | Type: Lambda |
 | ``shell::unregister-alias`` | ``Usage: (unregister-alias name)`` |
 
 <span style="padding-left: 5px">Unregisters an alias, removing it from scope.
@@ -5893,7 +5893,7 @@ Example:<br>
 <br>
 
 
-| <a id="Namespace: root::version" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``version``](#Namespace: root::version-contents) | Type: Function |
+| <a id="root::version" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``version``](#root::version-contents) | Type: Function |
 | ``root::version`` | ``Usage: (version)`` |
 
 <span style="padding-left: 5px">Produce executable version as string.
@@ -5908,7 +5908,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::wait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``wait``](#Namespace: root::wait-contents) | Type: Function |
+| <a id="root::wait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``wait``](#root::wait-contents) | Type: Function |
 | ``root::wait`` | ``Usage: (wait proc-to-wait-for)`` |
 
 <span style="padding-left: 5px">Wait for a process to end and return it's exit status.
@@ -5924,7 +5924,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: shell::|" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``\|``](#Namespace: shell::|-contents) | Type: Macro |
+| <a id="shell::|" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``\|``](#shell::|-contents) | Type: Macro |
 | ``shell::\|`` | ``Usage: (\| &rest body)`` |
 
 <span style="padding-left: 5px">Shorthand for pipe builtin.
@@ -5945,7 +5945,7 @@ three")(grep two))))<br>
 
 
 
-| <a id="Namespace: root::str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str``](#Namespace: root::str-contents) | Type: Function |
+| <a id="root::str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str``](#root::str-contents) | Type: Function |
 | ``root::str`` | ``Usage: (str arg0 ... argN) -> string`` |
 
 <span style="padding-left: 5px">Make a new string with it's arguments.
@@ -5966,7 +5966,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-append``](#Namespace: root::str-append-contents) | Type: Function |
+| <a id="root::str-append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-append``](#root::str-append-contents) | Type: Function |
 | ``root::str-append`` | ``Usage: (str-append string string) -> string`` |
 
 <span style="padding-left: 5px">Make a new string by appending two strings.
@@ -5983,7 +5983,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-bytes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-bytes``](#Namespace: root::str-bytes-contents) | Type: Function |
+| <a id="root::str-bytes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-bytes``](#root::str-bytes-contents) | Type: Function |
 | ``root::str-bytes`` | ``Usage: (str-bytes string) -> int`` |
 
 <span style="padding-left: 5px">Return number of bytes in a string (may be more then length).
@@ -6002,7 +6002,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-cat-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-cat-list``](#Namespace: root::str-cat-list-contents) | Type: Function |
+| <a id="root::str-cat-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-cat-list``](#root::str-cat-list-contents) | Type: Function |
 | ``root::str-cat-list`` | ``Usage: (str-cat-list join-pattern sequence) -> string`` |
 
 <span style="padding-left: 5px">Build a string by concatting a sequence with a join string.
@@ -6019,7 +6019,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-clear!``](#Namespace: root::str-clear!-contents) | Type: Function |
+| <a id="root::str-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-clear!``](#root::str-clear!-contents) | Type: Function |
 | ``root::str-clear!`` | ``Usage: (str-clear! string) -> string`` |
 
 <span style="padding-left: 5px">Clears a string.  This is a destructive form.
@@ -6038,7 +6038,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-contains" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-contains``](#Namespace: root::str-contains-contents) | Type: Function |
+| <a id="root::str-contains" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-contains``](#root::str-contains-contents) | Type: Function |
 | ``root::str-contains`` | ``Usage: (str-contains pattern string) -> t/nil`` |
 
 <span style="padding-left: 5px">True if string contains pattern (both strings).
@@ -6059,7 +6059,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-empty?``](#Namespace: root::str-empty?-contents) | Type: Function |
+| <a id="root::str-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-empty?``](#root::str-empty?-contents) | Type: Function |
 | ``root::str-empty?`` | ``Usage: (str-empty? string) -> t/nil`` |
 
 <span style="padding-left: 5px">Is a string empty?  Let's find out...
@@ -6077,7 +6077,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-ignore-expand" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ignore-expand``](#Namespace: root::str-ignore-expand-contents) | Type: Function |
+| <a id="root::str-ignore-expand" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ignore-expand``](#root::str-ignore-expand-contents) | Type: Function |
 | ``root::str-ignore-expand`` | ``Usage: (str-ignore-expand exp0 ... expN) -> [final expression]`` |
 
 <span style="padding-left: 5px">Like do but any strings in the form will not be expanded.
@@ -6094,7 +6094,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-iter-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-empty?``](#Namespace: root::str-iter-empty?-contents) | Type: Function |
+| <a id="root::str-iter-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-empty?``](#root::str-iter-empty?-contents) | Type: Function |
 | ``root::str-iter-empty?`` | ``Usage: (str-iter-empty? string) -> t/nil`` |
 
 <span style="padding-left: 5px">Returns true if the iterator for the string is empty or finished.
@@ -6129,7 +6129,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-iter-next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-next!``](#Namespace: root::str-iter-next!-contents) | Type: Function |
+| <a id="root::str-iter-next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-next!``](#root::str-iter-next!-contents) | Type: Function |
 | ``root::str-iter-next!`` | ``Usage: (str-iter-next! string) -> char`` |
 
 <span style="padding-left: 5px">Returns the next char in the iterator for string.  Returns nil if iteration
@@ -6156,7 +6156,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-iter-peek" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-peek``](#Namespace: root::str-iter-peek-contents) | Type: Function |
+| <a id="root::str-iter-peek" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-peek``](#root::str-iter-peek-contents) | Type: Function |
 | ``root::str-iter-peek`` | ``Usage: (str-iter-peek string) -> char`` |
 
 <span style="padding-left: 5px">Returns the char that next will return in the iterator for string.  Returns nil if iteration
@@ -6187,7 +6187,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-iter-start" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-start``](#Namespace: root::str-iter-start-contents) | Type: Function |
+| <a id="root::str-iter-start" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-start``](#root::str-iter-start-contents) | Type: Function |
 | ``root::str-iter-start`` | ``Usage: (str-iter-start string) -> string`` |
 
 <span style="padding-left: 5px">Starts or resets the iterator over a string.  Returns the input string with it's
@@ -6224,7 +6224,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-lower``](#Namespace: root::str-lower-contents) | Type: Function |
+| <a id="root::str-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-lower``](#root::str-lower-contents) | Type: Function |
 | ``root::str-lower`` | ``Usage: (str-lower string) -> string`` |
 
 <span style="padding-left: 5px">Get all lower case string from a string.
@@ -6243,7 +6243,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-ltrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ltrim``](#Namespace: root::str-ltrim-contents) | Type: Function |
+| <a id="root::str-ltrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ltrim``](#root::str-ltrim-contents) | Type: Function |
 | ``root::str-ltrim`` | ``Usage: (str-ltrim string) -> string`` |
 
 <span style="padding-left: 5px">Trim left whitspace from string.
@@ -6262,7 +6262,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-map``](#Namespace: root::str-map-contents) | Type: Function |
+| <a id="root::str-map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-map``](#root::str-map-contents) | Type: Function |
 | ``root::str-map`` | ``Usage: (str-map lambda string) -> string`` |
 
 <span style="padding-left: 5px">Make a new string by applying lambda to each char.
@@ -6283,7 +6283,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-nth``](#Namespace: root::str-nth-contents) | Type: Function |
+| <a id="root::str-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-nth``](#root::str-nth-contents) | Type: Function |
 | ``root::str-nth`` | ``Usage: (str-nth n string) -> char`` |
 
 <span style="padding-left: 5px">Get the nth char of a string.
@@ -6300,7 +6300,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-push!``](#Namespace: root::str-push!-contents) | Type: Function |
+| <a id="root::str-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-push!``](#root::str-push!-contents) | Type: Function |
 | ``root::str-push!`` | ``Usage: (str-push! string arg0 ... argN) -> string`` |
 
 <span style="padding-left: 5px">Push the args (as strings) onto the string.  This is a destructive form.
@@ -6319,7 +6319,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-replace" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-replace``](#Namespace: root::str-replace-contents) | Type: Function |
+| <a id="root::str-replace" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-replace``](#root::str-replace-contents) | Type: Function |
 | ``root::str-replace`` | ``Usage: (str-replace string old-pattern new-pattern) -> string`` |
 
 <span style="padding-left: 5px">Replace occurances of second string with third in the first string.
@@ -6336,7 +6336,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-rsplit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplit``](#Namespace: root::str-rsplit-contents) | Type: Function |
+| <a id="root::str-rsplit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplit``](#root::str-rsplit-contents) | Type: Function |
 | ``root::str-rsplit`` | ``Usage: (str-rsplit split-pattern string) -> vector`` |
 
 <span style="padding-left: 5px">Use a pattern to split a string into reverse order.
@@ -6355,7 +6355,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-rsplitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplitn``](#Namespace: root::str-rsplitn-contents) | Type: Function |
+| <a id="root::str-rsplitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplitn``](#root::str-rsplitn-contents) | Type: Function |
 | ``root::str-rsplitn`` | ``Usage: (str-rsplitn n split-pattern string) -> vector`` |
 
 <span style="padding-left: 5px">Use a pattern to split a string with at most n items returned in reverse order.
@@ -6374,7 +6374,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-rtrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rtrim``](#Namespace: root::str-rtrim-contents) | Type: Function |
+| <a id="root::str-rtrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rtrim``](#root::str-rtrim-contents) | Type: Function |
 | ``root::str-rtrim`` | ``Usage: (str-rtrim string) -> string`` |
 
 <span style="padding-left: 5px">Trim right whitespace from string.
@@ -6393,7 +6393,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-split" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-split``](#Namespace: root::str-split-contents) | Type: Function |
+| <a id="root::str-split" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-split``](#root::str-split-contents) | Type: Function |
 | ``root::str-split`` | ``Usage: (str-split split-pattern string) -> vector`` |
 
 <span style="padding-left: 5px">Use a pattern to split a string (:whitespace to split on whitespace).
@@ -6413,7 +6413,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-splitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-splitn``](#Namespace: root::str-splitn-contents) | Type: Function |
+| <a id="root::str-splitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-splitn``](#root::str-splitn-contents) | Type: Function |
 | ``root::str-splitn`` | ``Usage: (str-splitn n split-pattern string) -> vector`` |
 
 <span style="padding-left: 5px">Use a pattern to split a string with at most n items.
@@ -6432,7 +6432,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-starts-with" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-starts-with``](#Namespace: root::str-starts-with-contents) | Type: Function |
+| <a id="root::str-starts-with" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-starts-with``](#root::str-starts-with-contents) | Type: Function |
 | ``root::str-starts-with`` | ``Usage: (str-starts-with pattern string) -> t/nil`` |
 
 <span style="padding-left: 5px">True if string start with pattern (both strings).
@@ -6448,7 +6448,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-sub" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-sub``](#Namespace: root::str-sub-contents) | Type: Function |
+| <a id="root::str-sub" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-sub``](#root::str-sub-contents) | Type: Function |
 | ``root::str-sub`` | ``Usage: (str-sub start length string) -> string`` |
 
 <span style="padding-left: 5px">Return a substring from a string given start (0 based) and length.
@@ -6465,7 +6465,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-trim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-trim``](#Namespace: root::str-trim-contents) | Type: Function |
+| <a id="root::str-trim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-trim``](#root::str-trim-contents) | Type: Function |
 | ``root::str-trim`` | ``Usage: (str-trim string) -> string`` |
 
 <span style="padding-left: 5px">Trim right and left whitespace from string.
@@ -6484,7 +6484,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-upper``](#Namespace: root::str-upper-contents) | Type: Function |
+| <a id="root::str-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-upper``](#root::str-upper-contents) | Type: Function |
 | ``root::str-upper`` | ``Usage: (str-upper string) -> string`` |
 
 <span style="padding-left: 5px">Get all upper case string from a string.
@@ -6505,7 +6505,7 @@ Example:<br>
 
 
 
-| <a id="Namespace: struct::defstruct" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defstruct``](#Namespace: struct::defstruct-contents) | Type: Macro |
+| <a id="struct::defstruct" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defstruct``](#struct::defstruct-contents) | Type: Macro |
 | ``struct::defstruct`` | ``Usage: (defstruct name &rest fields)`` |
 
 <span style="padding-left: 5px">Define a structure.  This produces a lambda with name that will create an instance.
@@ -6542,7 +6542,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: struct::deftrait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``deftrait``](#Namespace: struct::deftrait-contents) | Type: Macro |
+| <a id="struct::deftrait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``deftrait``](#struct::deftrait-contents) | Type: Macro |
 | ``struct::deftrait`` | ``Usage: (deftrait name &rest fields)`` |
 
 <span style="padding-left: 5px">Define a trait.  Traits define methods that are added to structures (and usually require one or
@@ -6585,7 +6585,7 @@ Example:<br>
 These forms provide information/tests about an objects underlying type.
 
 
-| <a id="Namespace: root::builtin?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``builtin?``](#Namespace: root::builtin?-contents) | Type: Function |
+| <a id="root::builtin?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``builtin?``](#root::builtin?-contents) | Type: Function |
 | ``root::builtin?`` | ``Usage: (builtin? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a builtin function or special form, false otherwise.
@@ -6604,7 +6604,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::char?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char?``](#Namespace: root::char?-contents) | Type: Function |
+| <a id="root::char?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char?``](#root::char?-contents) | Type: Function |
 | ``root::char?`` | ``Usage: (char? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a char, false otherwise.
@@ -6621,7 +6621,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file?``](#Namespace: root::file?-contents) | Type: Function |
+| <a id="root::file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file?``](#root::file?-contents) | Type: Function |
 | ``root::file?`` | ``Usage: (file? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a file, false otherwise.
@@ -6639,7 +6639,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::float->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float->int``](#Namespace: root::float->int-contents) | Type: Function |
+| <a id="root::float->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float->int``](#root::float->int-contents) | Type: Function |
 | ``root::float->int`` | ``Usage: (float->int float) -> int`` |
 
 <span style="padding-left: 5px">Cast a float as an int.  Truncates.
@@ -6660,7 +6660,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::float?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float?``](#Namespace: root::float?-contents) | Type: Function |
+| <a id="root::float?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float?``](#root::float?-contents) | Type: Function |
 | ``root::float?`` | ``Usage: (float? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a float, false otherwise.
@@ -6676,7 +6676,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::func?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``func?``](#Namespace: root::func?-contents) | Type: Macro |
+| <a id="root::func?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``func?``](#root::func?-contents) | Type: Macro |
 | ``root::func?`` | ``Usage: (func? to-test)`` |
 
 <span style="padding-left: 5px">True if the expression is a [builtin?](#root::builtin?), a [lambda?](#root::lambda?), or a [macro?](#root::macro?)
@@ -6695,7 +6695,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::hash?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash?``](#Namespace: root::hash?-contents) | Type: Function |
+| <a id="root::hash?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash?``](#root::hash?-contents) | Type: Function |
 | ``root::hash?`` | ``Usage: (hash? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a hash map, false otherwise.
@@ -6714,7 +6714,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::int->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int->float``](#Namespace: root::int->float-contents) | Type: Function |
+| <a id="root::int->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int->float``](#root::int->float-contents) | Type: Function |
 | ``root::int->float`` | ``Usage: (int->float int) -> float`` |
 
 <span style="padding-left: 5px">Cast an int as a float.
@@ -6732,7 +6732,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::int?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int?``](#Namespace: root::int?-contents) | Type: Function |
+| <a id="root::int?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int?``](#root::int?-contents) | Type: Function |
 | ``root::int?`` | ``Usage: (int? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is an int, false otherwise.
@@ -6748,7 +6748,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::lambda?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lambda?``](#Namespace: root::lambda?-contents) | Type: Function |
+| <a id="root::lambda?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lambda?``](#root::lambda?-contents) | Type: Function |
 | ``root::lambda?`` | ``Usage: (lambda? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a lambda, false otherwise.
@@ -6766,7 +6766,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::list?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list?``](#Namespace: root::list?-contents) | Type: Function |
+| <a id="root::list?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list?``](#root::list?-contents) | Type: Function |
 | ``root::list?`` | ``Usage: (list? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a list, false otherwise.
@@ -6786,7 +6786,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::macro?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro?``](#Namespace: root::macro?-contents) | Type: Function |
+| <a id="root::macro?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro?``](#root::macro?-contents) | Type: Function |
 | ``root::macro?`` | ``Usage: (macro? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a macro, false otherwise.
@@ -6804,7 +6804,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::nil?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nil?``](#Namespace: root::nil?-contents) | Type: Function |
+| <a id="root::nil?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nil?``](#root::nil?-contents) | Type: Function |
 | ``root::nil?`` | ``Usage: (nil? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is nil, false otherwise.
@@ -6820,7 +6820,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::pair?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pair?``](#Namespace: root::pair?-contents) | Type: Function |
+| <a id="root::pair?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pair?``](#root::pair?-contents) | Type: Function |
 | ``root::pair?`` | ``Usage: (pair? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a pair, false otherwise.
@@ -6840,7 +6840,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::process?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``process?``](#Namespace: root::process?-contents) | Type: Function |
+| <a id="root::process?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``process?``](#root::process?-contents) | Type: Function |
 | ``root::process?`` | ``Usage: (process? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a process, false otherwise.
@@ -6858,7 +6858,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->float``](#Namespace: root::str->float-contents) | Type: Function |
+| <a id="root::str->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->float``](#root::str->float-contents) | Type: Function |
 | ``root::str->float`` | ``Usage: (str->float string) -> float`` |
 
 <span style="padding-left: 5px">If string is a valid representation of a float return that float.  Error if not.
@@ -6879,7 +6879,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::str->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->int``](#Namespace: root::str->int-contents) | Type: Function |
+| <a id="root::str->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->int``](#root::str->int-contents) | Type: Function |
 | ``root::str->int`` | ``Usage: (str->int string) -> int`` |
 
 <span style="padding-left: 5px">If string is a valid representation of an integer return that int.  Error if not.
@@ -6899,7 +6899,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::string?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string?``](#Namespace: root::string?-contents) | Type: Function |
+| <a id="root::string?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string?``](#root::string?-contents) | Type: Function |
 | ``root::string?`` | ``Usage: (string? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a string, false otherwise.
@@ -6915,7 +6915,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::sym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym``](#Namespace: root::sym-contents) | Type: Function |
+| <a id="root::sym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym``](#root::sym-contents) | Type: Function |
 | ``root::sym`` | ``Usage: (sym expression+) -> symbol`` |
 
 <span style="padding-left: 5px">Takes one or more forms, converts them to strings, concatonates them and returns
@@ -6939,7 +6939,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::sym->str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym->str``](#Namespace: root::sym->str-contents) | Type: Function |
+| <a id="root::sym->str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym->str``](#root::sym->str-contents) | Type: Function |
 | ``root::sym->str`` | ``Usage: (sym->str symbol) -> string`` |
 
 <span style="padding-left: 5px">Convert a symbol to the string representation representation of it's name.
@@ -6957,7 +6957,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::symbol?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``symbol?``](#Namespace: root::symbol?-contents) | Type: Function |
+| <a id="root::symbol?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``symbol?``](#root::symbol?-contents) | Type: Function |
 | ``root::symbol?`` | ``Usage: (symbol? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a symbol, false otherwise.
@@ -6973,7 +6973,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::true?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``true?``](#Namespace: root::true?-contents) | Type: Function |
+| <a id="root::true?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``true?``](#root::true?-contents) | Type: Function |
 | ``root::true?`` | ``Usage: (true? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is true (true type NOT non-null), false otherwise.
@@ -6991,7 +6991,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::type" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``type``](#Namespace: root::type-contents) | Type: Function |
+| <a id="root::type" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``type``](#root::type-contents) | Type: Function |
 | ``root::type`` | ``Usage: (type expression)`` |
 
 <span style="padding-left: 5px">Return the type of the given expression as a string.
@@ -7044,7 +7044,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::values?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values?``](#Namespace: root::values?-contents) | Type: Function |
+| <a id="root::values?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values?``](#root::values?-contents) | Type: Function |
 | ``root::values?`` | ``Usage: (values? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is multi values object, false otherwise.
@@ -7071,7 +7071,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec?``](#Namespace: root::vec?-contents) | Type: Function |
+| <a id="root::vec?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec?``](#root::vec?-contents) | Type: Function |
 | ``root::vec?`` | ``Usage: (vec? expression)`` |
 
 <span style="padding-left: 5px">True if the expression is a vector, false otherwise.
@@ -7097,7 +7097,7 @@ made from pairs but are vectors not linked lists).  Use #() to declare them in
 code (i.e. '#(1 2 3) or #(+ 1 2)).
 
 
-| <a id="Namespace: root::make-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-vec``](#Namespace: root::make-vec-contents) | Type: Function |
+| <a id="root::make-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-vec``](#root::make-vec-contents) | Type: Function |
 | ``root::make-vec`` | ``Usage: (make-vec capacity default)`` |
 
 <span style="padding-left: 5px">Make a new vector with capacity and default item(s).
@@ -7115,7 +7115,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec``](#Namespace: root::vec-contents) | Type: Function |
+| <a id="root::vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec``](#root::vec-contents) | Type: Function |
 | ``root::vec`` | ``Usage: (vec item1 item2 .. itemN)`` |
 
 <span style="padding-left: 5px">Make a new vector with items.
@@ -7131,7 +7131,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-clear!``](#Namespace: root::vec-clear!-contents) | Type: Function |
+| <a id="root::vec-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-clear!``](#root::vec-clear!-contents) | Type: Function |
 | ``root::vec-clear!`` | ``Usage: (vec-clear! vector)`` |
 
 <span style="padding-left: 5px">Clears a vector.  This is destructive!
@@ -7149,7 +7149,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-empty?``](#Namespace: root::vec-empty?-contents) | Type: Function |
+| <a id="root::vec-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-empty?``](#root::vec-empty?-contents) | Type: Function |
 | ``root::vec-empty?`` | ``Usage: (vec-empty? vector)`` |
 
 <span style="padding-left: 5px">True if the vector is empty.
@@ -7165,7 +7165,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-insert!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-insert!``](#Namespace: root::vec-insert!-contents) | Type: Function |
+| <a id="root::vec-insert!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-insert!``](#root::vec-insert!-contents) | Type: Function |
 | ``root::vec-insert!`` | ``Usage: (vec-insert! vector index new-element) -> vector`` |
 
 <span style="padding-left: 5px">Inserts new-element at index and moves following elements right in vector.  This is destructive!
@@ -7187,7 +7187,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-nth``](#Namespace: root::vec-nth-contents) | Type: Function |
+| <a id="root::vec-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-nth``](#root::vec-nth-contents) | Type: Function |
 | ``root::vec-nth`` | ``Usage: (vec-nth vector index) -> object`` |
 
 <span style="padding-left: 5px">Get the nth element (0 based) of a vector. If you need the equivalent operation
@@ -7206,7 +7206,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-pop!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-pop!``](#Namespace: root::vec-pop!-contents) | Type: Function |
+| <a id="root::vec-pop!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-pop!``](#root::vec-pop!-contents) | Type: Function |
 | ``root::vec-pop!`` | ``Usage: (vec-pop! vector) -> object`` |
 
 <span style="padding-left: 5px">Pops the last object off of the end of the vector.  This is destructive!
@@ -7227,7 +7227,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-push!``](#Namespace: root::vec-push!-contents) | Type: Function |
+| <a id="root::vec-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-push!``](#root::vec-push!-contents) | Type: Function |
 | ``root::vec-push!`` | ``Usage: (vec-push! vector object) -> vector`` |
 
 <span style="padding-left: 5px">Pushes the provided object onto the end of the vector.  This is destructive!
@@ -7248,7 +7248,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-remove!``](#Namespace: root::vec-remove!-contents) | Type: Function |
+| <a id="root::vec-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-remove!``](#root::vec-remove!-contents) | Type: Function |
 | ``root::vec-remove!`` | ``Usage: (vec-remove! vector index) -> vector`` |
 
 <span style="padding-left: 5px">Remove the element at index from vector, shifting all elements after it to the left.
@@ -7271,7 +7271,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-set!``](#Namespace: root::vec-set!-contents) | Type: Function |
+| <a id="root::vec-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-set!``](#root::vec-set!-contents) | Type: Function |
 | ``root::vec-set!`` | ``Usage: (vec-set! vector index value) -> vector`` |
 
 <span style="padding-left: 5px">Set the nth index (0 based) of a vector to value. This is destructive! If you
@@ -7290,7 +7290,7 @@ Example:<br>
 </details>
 
 
-| <a id="Namespace: root::vec-slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-slice``](#Namespace: root::vec-slice-contents) | Type: Function |
+| <a id="root::vec-slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-slice``](#root::vec-slice-contents) | Type: Function |
 | ``root::vec-slice`` | ``Usage: (vec-slice vector start end?)`` |
 
 <span style="padding-left: 5px">Returns a slice of a vector (0 based indexes, end is exclusive).

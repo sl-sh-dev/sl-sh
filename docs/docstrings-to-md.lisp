@@ -107,7 +107,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(var doc-form (do
 		(var form (doc-struct :name))
 		(if (= "\|" form) "pipe-shorthand" form)))
-	(var doc-namespace (doc-struct :namespace))
+	(var doc-namespace (doc-struct :namespace-only))
 	(str doc-namespace "::" doc-form))
 
 (defn table-of-contents (key docstrings file-name)
@@ -167,18 +167,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 (defn sanitize-for-md-row (to-sanitize)
 		(str-replace to-sanitize "|" "\|"))
 
-(defn write-md-table (key docstrings file-name)
-	(var file (open file-name :append))
-	(var name (section-metadata key :name))
-	(write-line file (str "### "
-				(create-anchor (str name "-body"))
-				(make-md-link-able name (str "#" name "-contents"))))
-	(write-line file (do
-		 (var data (section-metadata key :description))
-		 (if (nil? data)
-			""
-			data)))
-	(for doc-struct in docstrings (do
+(defn write-doc-struct-to-file (doc-struct file)
 		(var doc-form (do
 			(var form (doc-struct :name))
 			(if (= "\|" form) "|" (sanitize-for-md-row form))))
@@ -210,7 +199,20 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 				(for line in (str-split "\n" doc-example) (write-line file (str line "<br>")))
 				(write-line file "</code>")
 				(write-line file "</details>"))
-			(write-line file "<br>"))))
+			(write-line file "<br>")))
+
+(defn write-md-table (key docstrings file-name)
+	(var file (open file-name :append))
+	(var name (section-metadata key :name))
+	(write-line file (str "### "
+				(create-anchor (str name "-body"))
+				(make-md-link-able name (str "#" name "-contents"))))
+	(write-line file (do
+		 (var data (section-metadata key :description))
+		 (if (nil? data)
+			""
+			data)))
+	(for doc-struct in docstrings (write-doc-struct-to-file doc-struct file))
 	(close file)
 	file-name)
 
