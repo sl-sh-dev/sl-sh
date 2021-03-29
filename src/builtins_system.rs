@@ -40,6 +40,42 @@ fn builtin_syscall(
     }
 }
 
+fn builtin_get_env(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    fn get_var(environment: &mut Environment, key: &str) -> Result<Expression, LispError> {
+        if key.contains("=") || key.trim().is_empty() {
+            Err(LispError::new(
+                "get-env: invalid key, must not be empty or contain an '='",
+            ))
+        } else {
+            match env::var(key) {
+                Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern(&val).into(),
+                    None,
+                ))),
+                Err(err) => Err(LispError::new(format!(
+                    "get-env: error looking up {}: {}",
+                    key, err
+                ))),
+            }
+        }
+    }
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            return match &key.get().data {
+                ExpEnum::Symbol(s, _) => get_var(environment, s),
+                ExpEnum::String(s, _) => get_var(environment, s),
+                _ => Err(LispError::new("get-env: key must be a symbol or string")),
+            };
+        }
+    }
+    Err(LispError::new(
+        "get-env: takes one parameter, environment variable to lookup",
+    ))
+}
+
 fn builtin_export(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -356,6 +392,22 @@ Section: core
 Example:
 (def test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
 (test::assert-equal \"syscall-test\" test-syscall-one)
+",
+        ),
+    );
+    data.insert(
+        interner.intern("get-env"),
+        Expression::make_function(
+            builtin_get_env,
+            "Usage: (get_env key) -> string
+
+Export a key and value to the shell environment.  Second arg will be made a string and returned.
+
+Section: shell
+
+Example:
+(test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
+(test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
 ",
         ),
     );

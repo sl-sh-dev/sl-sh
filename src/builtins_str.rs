@@ -388,7 +388,6 @@ fn builtin_str_nth(
             if args.next().is_none() {
                 if let ExpEnum::Int(idx) = eval(environment, idx)?.get().data {
                     if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
-                        //for (i, ch) in string.chars().enumerate() {
                         for (i, ch) in
                             UnicodeSegmentation::graphemes(string.as_ref(), true).enumerate()
                         {
