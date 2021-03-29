@@ -35,6 +35,7 @@ jobs:
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
       run: |
+          export PATH="${PATH}:./target/release/sl-sh"
           function log() {
             echo -e "\033[33;7m$1\033[0m $2"
           }

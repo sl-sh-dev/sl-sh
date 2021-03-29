@@ -104,10 +104,13 @@ example code if exists
 
 
 | <a id="Namespace: root::->" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->``](#Namespace: root::->-contents) | Type: Macro |
-| ``Namespace: root::->`` | ``Usage: (-> &rest args)`` |
+| ``root::->`` | ``Usage: (-> &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">inserts result of previous expression as second argument to current expression.
+First argument is not evaluated.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal<br>
@@ -121,10 +124,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::->>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``->>``](#Namespace: root::->>-contents) | Type: Macro |
-| ``Namespace: root::->>`` | ``Usage: (->> &rest args)`` |
+| ``root::->>`` | ``Usage: (->> &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">inserts result of previous expression as last argument to current expression.
+First argument is not evaluated.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal<br>
@@ -138,10 +144,22 @@ Example:<br>
 
 
 | <a id="Namespace: root::chain" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain``](#Namespace: root::chain-contents) | Type: Macro |
-| ``Namespace: root::chain`` | ``Usage: (chain init arg0 &rest args)`` |
+| ``root::chain`` | ``Usage: (chain init arg0 &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Inserts result of previous expression into place indicated by the _ symbol
+in the next expression. This macro is useful when nested actions
+need to occur but when a more sequential enumeration of steps is preferable.
+To demonstrate a sequence of operations:
+(fn (x) (delta (charlie (bravo (alpha x)))))
+can be unwound, and more idiomatically stated with the chain macro:
+(fn (x) (chain x (alpha _) (bravo _) (charlie _) (delta _)))
+The flexibility of using the _ symbol as a placeholder means subsequent
+results can be "threaded" into any desired place in a clause which is an
+advantage over the thread first, [->](#root::->) and thread last,
+[->>](#root::->>), macros
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "Ordered sentence: I will become a properly worded statement."<br>
@@ -162,10 +180,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::chain-and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-and``](#Namespace: root::chain-and-contents) | Type: Macro |
-| ``Namespace: root::chain-and`` | ``Usage: (chain-and init arg0 &rest args)`` |
+| ``root::chain-and`` | ``Usage: (chain-and init arg0 &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluates each sexp, if true, inserts result of previous expression into place
+indicated by the _ symbol. This macro is useful when nested actions
+need to take place but the operations should stop and return nil if any step
+evaluates to false.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (chain-and "howdy" (string? _) (= _ "howdy")))<br>
@@ -211,10 +234,15 @@ nil)))))<br>
 
 
 | <a id="Namespace: root::chain-when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``chain-when``](#Namespace: root::chain-when-contents) | Type: Macro |
-| ``Namespace: root::chain-when`` | ``Usage: (chain-when init arg0 &rest args)`` |
+| ``root::chain-when`` | ``Usage: (chain-when init arg0 &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Tests the car of each arg0/args pair. If true the cdr of the arg0/args pair
+is evaluated. The chaining component of this macro works by threading init
+through the cdr of each pair whose car evaluates to true. Useful for building
+or modifying an object based on a set of boolean conditions.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defn add-number-attributes (n)<br>
@@ -240,10 +268,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::char-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-lower``](#Namespace: root::char-lower-contents) | Type: Function |
-| ``Namespace: root::char-lower`` | ``Usage: (char-lower char) -> char`` |
+| ``root::char-lower`` | ``Usage: (char-lower char) -> char`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get lower case (utf) character for a character.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal #\a (char-lower #\A))<br>
@@ -257,10 +287,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::char-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-upper``](#Namespace: root::char-upper-contents) | Type: Function |
-| ``Namespace: root::char-upper`` | ``Usage: (char-upper char) -> char`` |
+| ``root::char-upper`` | ``Usage: (char-upper char) -> char`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get upper case (utf) character for a character.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal #\A (char-upper #\A))<br>
@@ -274,10 +306,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::char-whitespace?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char-whitespace?``](#Namespace: root::char-whitespace?-contents) | Type: Function |
-| ``Namespace: root::char-whitespace?`` | ``Usage: (char-whitespace? char) -> t/nil`` |
+| ``root::char-whitespace?`` | ``Usage: (char-whitespace? char) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns true if a character is whitespace, false/nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (char-whitespace? #\ ))<br>
@@ -291,10 +325,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::<" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<``](#Namespace: root::<-contents) | Type: Function |
-| ``Namespace: root::<`` | ``Usage: (< val0 ... valN)`` |
+| ``root::<`` | ``Usage: (< val0 ... valN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Less than.  Works for int, float or string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (< 1 2))<br>
@@ -319,10 +355,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::<=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``<=``](#Namespace: root::<=-contents) | Type: Function |
-| ``Namespace: root::<=`` | ``Usage: (<= val0 ... valN)`` |
+| ``root::<=`` | ``Usage: (<= val0 ... valN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Less than or equal.  Works for int, float or string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (<= 1 2))<br>
@@ -346,10 +384,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``=``](#Namespace: root::=-contents) | Type: Function |
-| ``Namespace: root::=`` | ``Usage: (= val0 ... valN)`` |
+| ``root::=`` | ``Usage: (= val0 ... valN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Equals.  Works for int, float or string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (= 1 2))<br>
@@ -378,10 +418,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>``](#Namespace: root::>-contents) | Type: Function |
-| ``Namespace: root::>`` | ``Usage: (> val0 ... valN)`` |
+| ``root::>`` | ``Usage: (> val0 ... valN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Greater than.  Works for int, float or string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (> 1 2))<br>
@@ -407,10 +449,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::>=" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``>=``](#Namespace: root::>=-contents) | Type: Function |
-| ``Namespace: root::>=`` | ``Usage: (>= val0 ... valN)`` |
+| ``root::>=`` | ``Usage: (>= val0 ... valN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Greater than or equal.  Works for int, float or string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (>= 1 2))<br>
@@ -435,10 +479,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::and" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and``](#Namespace: root::and-contents) | Type: SpecialForm |
-| ``Namespace: root::and`` | ``Usage: (and exp0 ... expN) -> [nil or expN result]`` |
+| ``root::and`` | ``Usage: (and exp0 ... expN) -> [nil or expN result]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
+The and form will stop evaluating when the first expression produces nil.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (and nil (err "and- can not happen")))<br>
@@ -452,10 +499,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::cond" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cond``](#Namespace: root::cond-contents) | Type: Macro |
-| ``Namespace: root::cond`` | ``Usage: (cond ((test form*)*) -> result`` |
+| ``root::cond`` | ``Usage: (cond ((test form*)*) -> result`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate each test in order.  If it is true then evaluate the form(s) in an
+implicit do and return the result.  Stop evaluting at the first true test.
+Return nil if no conditions are true.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defn select-option (a)<br>
@@ -484,10 +535,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::if" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``if``](#Namespace: root::if-contents) | Type: SpecialForm |
-| ``Namespace: root::if`` | ``Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]`` |
+| ``root::if`` | ``Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">If conditional.  Will evaluate p1 and if true (i.e. not nil) then return the
+evaluation of a1, if nil evaluate p2 and so on.  On an odd number of arguments
+(an is missing) then evaluate and return pn.  Return nil if no predicate is
+true.  This degenerates into the traditional (if predicate then-form else-form).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-if-one<br>
@@ -519,10 +575,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::match" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``match``](#Namespace: root::match-contents) | Type: Macro |
-| ``Namespace: root::match`` | ``Usage: (match condition (value form*)*) -> result`` |
+| ``root::match`` | ``Usage: (match condition (value form*)*) -> result`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate condition and look for matching value in each branch of type
+(value form*). Form(s) will be wrapped in an implicit do. Use nil to take
+action if no match (encouraged!).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defn select-option (a)<br>
@@ -551,10 +611,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::not" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``not``](#Namespace: root::not-contents) | Type: Function |
-| ``Namespace: root::not`` | ``Usage: (not expression)`` |
+| ``root::not`` | ``Usage: (not expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return true if expression is nil.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (not nil))<br>
@@ -567,10 +629,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``null``](#Namespace: root::null-contents) | Type: Function |
-| ``Namespace: root::null`` | ``Usage: (null expression)`` |
+| ``root::null`` | ``Usage: (null expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return true if expression is nil (null).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (null nil))<br>
@@ -583,10 +647,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::or" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``or``](#Namespace: root::or-contents) | Type: SpecialForm |
-| ``Namespace: root::or`` | ``Usage: (or exp0 ... expN) -> [nil or first non nil expression]`` |
+| ``root::or`` | ``Usage: (or exp0 ... expN) -> [nil or first non nil expression]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
+The or form will stop evaluating when the first expression produces non-nil.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (or nil nil t (err "and- can not happen")))<br>
@@ -601,10 +668,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::when" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``when``](#Namespace: root::when-contents) | Type: Macro |
-| ``Namespace: root::when`` | ``Usage: (when provided-condition if-true)`` |
+| ``root::when`` | ``Usage: (when provided-condition if-true)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">when is a convenience function used to check a form, provided-condition,
+and run some form, if-true, if provided-condition evaluates to true.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (when #t #t))<br>
@@ -618,10 +688,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::*collection-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*collection-src*``](#Namespace: root::*collection-src*-contents) | Type: String |
-| ``Namespace: root::*collection-src*`` | ``Usage: (print *collection-src*)`` |
+| ``root::*collection-src*`` | ``Usage: (print *collection-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for collection.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *collection-src*)<br>
@@ -632,10 +704,12 @@ t<br>
 
 
 | <a id="Namespace: root::*core-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*core-src*``](#Namespace: root::*core-src*-contents) | Type: String |
-| ``Namespace: root::*core-src*`` | ``Usage: (print *core-src*)`` |
+| ``root::*core-src*`` | ``Usage: (print *core-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for core.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *core-src*)<br>
@@ -646,10 +720,12 @@ t<br>
 
 
 | <a id="Namespace: root::*endfix-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*endfix-src*``](#Namespace: root::*endfix-src*-contents) | Type: String |
-| ``Namespace: root::*endfix-src*`` | ``Usage: (print *endfix-src*)`` |
+| ``root::*endfix-src*`` | ``Usage: (print *endfix-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for endfix.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *endfix-src*)<br>
@@ -660,10 +736,12 @@ t<br>
 
 
 | <a id="Namespace: root::*getopts-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*getopts-src*``](#Namespace: root::*getopts-src*-contents) | Type: String |
-| ``Namespace: root::*getopts-src*`` | ``Usage: (print *getopts-src*)`` |
+| ``root::*getopts-src*`` | ``Usage: (print *getopts-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for shell.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *getopts-src*)<br>
@@ -674,10 +752,12 @@ t<br>
 
 
 | <a id="Namespace: root::*iterator-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*iterator-src*``](#Namespace: root::*iterator-src*-contents) | Type: String |
-| ``Namespace: root::*iterator-src*`` | ``Usage: (print *iterator-src*)`` |
+| ``root::*iterator-src*`` | ``Usage: (print *iterator-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for iterator.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *iterator-src*)<br>
@@ -688,10 +768,12 @@ t<br>
 
 
 | <a id="Namespace: root::*lib-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*lib-src*``](#Namespace: root::*lib-src*-contents) | Type: String |
-| ``Namespace: root::*lib-src*`` | ``Usage: (print *lib-src*)`` |
+| ``root::*lib-src*`` | ``Usage: (print *lib-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for lib.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *lib-src*)<br>
@@ -702,10 +784,12 @@ t<br>
 
 
 | <a id="Namespace: root::*seq-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*seq-src*``](#Namespace: root::*seq-src*-contents) | Type: String |
-| ``Namespace: root::*seq-src*`` | ``Usage: (print *seq-src*)`` |
+| ``root::*seq-src*`` | ``Usage: (print *seq-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for seq.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *seq-src*)<br>
@@ -716,10 +800,12 @@ t<br>
 
 
 | <a id="Namespace: root::*shell-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*shell-src*``](#Namespace: root::*shell-src*-contents) | Type: String |
-| ``Namespace: root::*shell-src*`` | ``Usage: (print *shell-src*)`` |
+| ``root::*shell-src*`` | ``Usage: (print *shell-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for shell.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *shell-src*)<br>
@@ -730,10 +816,12 @@ t<br>
 
 
 | <a id="Namespace: root::*slsh-std-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slsh-std-src*``](#Namespace: root::*slsh-std-src*-contents) | Type: String |
-| ``Namespace: root::*slsh-std-src*`` | ``Usage: (print *slsh-std-src*)`` |
+| ``root::*slsh-std-src*`` | ``Usage: (print *slsh-std-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for slsh-std.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *slsh-std-src*)<br>
@@ -744,10 +832,12 @@ t<br>
 
 
 | <a id="Namespace: root::*slshrc-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*slshrc-src*``](#Namespace: root::*slshrc-src*-contents) | Type: String |
-| ``Namespace: root::*slshrc-src*`` | ``Usage: (print *slshrc-src*)`` |
+| ``root::*slshrc-src*`` | ``Usage: (print *slshrc-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for slshrc.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *slshrc-src*)<br>
@@ -758,10 +848,12 @@ t<br>
 
 
 | <a id="Namespace: root::*struct-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*struct-src*``](#Namespace: root::*struct-src*-contents) | Type: String |
-| ``Namespace: root::*struct-src*`` | ``Usage: (print *struct-src*)`` |
+| ``root::*struct-src*`` | ``Usage: (print *struct-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for struct.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *struct-src*)<br>
@@ -772,10 +864,12 @@ t<br>
 
 
 | <a id="Namespace: root::*test-src*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*test-src*``](#Namespace: root::*test-src*-contents) | Type: String |
-| ``Namespace: root::*test-src*`` | ``Usage: (print *test-src*)`` |
+| ``root::*test-src*`` | ``Usage: (print *test-src*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">The builtin source code for test.lisp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(print *test-src*)<br>
@@ -786,10 +880,18 @@ t<br>
 
 
 | <a id="Namespace: root::and-let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``and-let*``](#Namespace: root::and-let*-contents) | Type: Macro |
-| ``Namespace: root::and-let*`` | ``Usage: (and-let* vals &rest let-body)`` |
+| ``root::and-let*`` | ``Usage: (and-let* vals &rest let-body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) checking
+if result of each sexp evaluates to false, short circuiting and returning nil
+if so. If all vals bindings evaluate to true, then the let-body is evaluated
+with all values of binding bound to the result of the evaluation of sexp.
+Sexps can reference
+bindings from previous items in the list of vals. If no let-body is supplied
+the last binding in the list of vals is returned.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "charlie bravo alpha."<br>
@@ -813,10 +915,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::apply" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``apply``](#Namespace: root::apply-contents) | Type: Function |
-| ``Namespace: root::apply`` | ``Usage: (apply function arg* list)`` |
+| ``root::apply`` | ``Usage: (apply function arg* list)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Call the provided function with the suplied arguments, last is a list that will be expanded.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-apply-one (apply str '("O" "NE")))<br>
@@ -828,10 +932,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::back-quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``back-quote``](#Namespace: root::back-quote-contents) | Type: SpecialForm |
-| ``Namespace: root::back-quote`` | ``Usage: `expression -> expression`` |
+| ``root::back-quote`` | ``Usage: `expression -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return expression without evaluation.
+Always use the ` reader macro or expansion will not work
+(i.e. (back-quote expression) will not do , expansion).
+Backquote (unlike quote) allows for symbol/form evaluation using , or ,@.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal (list 1 2 3) `(1 2 3))<br>
@@ -846,10 +955,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::block" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``block``](#Namespace: root::block-contents) | Type: SpecialForm |
-| ``Namespace: root::block`` | ``Usage: (block name form*)`` |
+| ``root::block`` | ``Usage: (block name form*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create a block with name (name is not evaluated), if no return-from encountered then
+return last expression (like do).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))<br>
@@ -869,10 +981,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::def" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def``](#Namespace: root::def-contents) | Type: SpecialForm |
-| ``Namespace: root::def`` | ``Usage: (def symbol doc_string? expression) -> expression`` |
+| ``root::def`` | ``Usage: (def symbol doc_string? expression) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Adds an expression to the current namespace.  Return the expression that was defined.
+Symbol is not evaluted.  Can take an option doc string (docstrings can only be
+set on namespaced (global) symbols).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-do-one nil)<br>
@@ -903,10 +1019,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::def?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``def?``](#Namespace: root::def?-contents) | Type: SpecialForm |
-| ``Namespace: root::def?`` | ``Usage: (def? expression) -> t\|nil`` |
+| ``root::def?`` | ``Usage: (def? expression) -> t\|nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return true if is a defined symbol (bound within the current scope). If expression
+is a symbol it is not evaluted and if a list it is evaluted to produce a symbol.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-is-def t)<br>
@@ -923,10 +1042,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::defmacro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defmacro``](#Namespace: root::defmacro-contents) | Type: Macro |
-| ``Namespace: root::defmacro`` | ``Usage: (defmacro name doc_string? argument_list body)`` |
+| ``root::defmacro`` | ``Usage: (defmacro name doc_string? argument_list body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create a macro and bind it to a symbol in the current scope.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defmacro test-mac (x) (var y (+ (ref (ref x)) 1)) `(set! ,x ,y))<br>
@@ -942,10 +1063,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::defn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defn``](#Namespace: root::defn-contents) | Type: Macro |
-| ``Namespace: root::defn`` | ``Usage: (defn name &rest args)`` |
+| ``root::defn`` | ``Usage: (defn name &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Define a named function in the current namespace.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defn defn-test (x y) (+ x y))<br>
@@ -962,10 +1085,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::do" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``do``](#Namespace: root::do-contents) | Type: SpecialForm |
-| ``Namespace: root::do`` | ``Usage: (do exp0 ... expN) -> expN`` |
+| ``root::do`` | ``Usage: (do exp0 ... expN) -> expN`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluatate each form and return the last.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-do-one nil)<br>
@@ -980,10 +1105,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::doc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc``](#Namespace: root::doc-contents) | Type: Function |
-| ``Namespace: root::doc`` | ``Usage: (doc symbol)`` |
+| ``root::doc`` | ``Usage: (doc symbol)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the doc string for a symbol or nil if no string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(doc 'car)<br>
@@ -994,10 +1121,12 @@ t<br>
 
 
 | <a id="Namespace: root::doc-raw" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``doc-raw``](#Namespace: root::doc-raw-contents) | Type: Function |
-| ``Namespace: root::doc-raw`` | ``Usage: (doc-raw symbol)`` |
+| ``root::doc-raw`` | ``Usage: (doc-raw symbol)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the raw (unexpanded) doc string for a symbol or nil if no string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(doc-raw 'car)<br>
@@ -1008,10 +1137,12 @@ t<br>
 
 
 | <a id="Namespace: root::dotimes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes``](#Namespace: root::dotimes-contents) | Type: Macro |
-| ``Namespace: root::dotimes`` | ``Usage: (dotimes times body)`` |
+| ``root::dotimes`` | ``Usage: (dotimes times body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate body a number of times equal to times' numerical value.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def i 0)<br>
@@ -1023,10 +1154,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::dotimes-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dotimes-i``](#Namespace: root::dotimes-i-contents) | Type: Macro |
-| ``Namespace: root::dotimes-i`` | ``Usage: (dotimes-i idx-bind times body)`` |
+| ``root::dotimes-i`` | ``Usage: (dotimes-i idx-bind times body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate body a number of times equal to times' numnrical value. Includes an
+incrementing reference binding, idx-bind, accesible in body.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def i 0)<br>
@@ -1040,10 +1174,21 @@ Example:<br>
 
 
 | <a id="Namespace: root::dyn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dyn``](#Namespace: root::dyn-contents) | Type: SpecialForm |
-| ``Namespace: root::dyn`` | ``Usage: (dyn key value expression) -> result_of_expression`` |
+| ``root::dyn`` | ``Usage: (dyn key value expression) -> result_of_expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Creates a dynamic binding for key, assigns value to it and evals expression under it.
+Note that if key is a symbol it is not evaluted and if a list it will be evaluted
+to provide a symbol (anything else is an error).
+The binding is gone once the dyn form ends. The binding will take precedence over
+any binding in any namespace with that name for any form that evaluates as a
+result of the dynamic binding (for instance creating a dynamic binding for
+*stdout* will cause all output to stdout to use the new binding in any print's
+used indirectly).  Calls to dyn can be nested and previous dynamic values will
+be restored as interior dyn's exit.
+In common lisp terms any symbol in a namespace is "special".
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (defn test-dyn-fn () (print "Print dyn out"))<br>
@@ -1061,10 +1206,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::eprint" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprint``](#Namespace: root::eprint-contents) | Type: Function |
-| ``Namespace: root::eprint`` | ``Usage: (eprint arg0 ... argN) -> nil`` |
+| ``root::eprint`` | ``Usage: (eprint arg0 ... argN) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Print the arguments (as strings) to *stderr*.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stderr for test.<br>
@@ -1076,10 +1223,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::eprintln" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eprintln``](#Namespace: root::eprintln-contents) | Type: Function |
-| ``Namespace: root::eprintln`` | ``Usage: (eprintln arg0 ... argN) -> nil`` |
+| ``root::eprintln`` | ``Usage: (eprintln arg0 ... argN) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Print the arguments (as strings) to *stderr* and then a newline.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stderr for test.<br>
@@ -1095,10 +1244,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::err" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err``](#Namespace: root::err-contents) | Type: Function |
-| ``Namespace: root::err`` | ``Usage: (err string) -> raises an error`` |
+| ``root::err`` | ``Usage: (err string) -> raises an error`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Raise an error with the supplied string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-err-err (get-error (err "Test Error")))<br>
@@ -1110,10 +1261,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::error-stack-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-off``](#Namespace: root::error-stack-off-contents) | Type: Lambda |
-| ``Namespace: root::error-stack-off`` | ``Usage: (error-stack-off)`` |
+| ``root::error-stack-off`` | ``Usage: (error-stack-off)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Currently a no-op, used to turn off error stacks.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; no-op<br>
@@ -1124,10 +1277,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::error-stack-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``error-stack-on``](#Namespace: root::error-stack-on-contents) | Type: Lambda |
-| ``Namespace: root::error-stack-on`` | ``Usage: (error-stack-on)`` |
+| ``root::error-stack-on`` | ``Usage: (error-stack-on)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Currently a no-op, used to turn on error stacks.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; no-op<br>
@@ -1138,10 +1293,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::eval" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``eval``](#Namespace: root::eval-contents) | Type: Function |
-| ``Namespace: root::eval`` | ``Usage: (eval expression)`` |
+| ``root::eval`` | ``Usage: (eval expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate the provided expression.
+If expression is a string read it to make an ast first to evaluate otherwise
+evaluate the expression (note eval is a function not a special form, the
+provided expression will be evaluated as part of call).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-eval-one nil)<br>
@@ -1155,10 +1315,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::expand-macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro``](#Namespace: root::expand-macro-contents) | Type: Function |
-| ``Namespace: root::expand-macro`` | ``Usage: (expand-macro expression)`` |
+| ``root::expand-macro`` | ``Usage: (expand-macro expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Expands a macro expression.  If that expansion is also a macro then expand it recursively.
+Just returns the expression if not a macro.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(def xx "value") (expand-macro '(def xx "value")))<br>
@@ -1192,10 +1355,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::expand-macro-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro-all``](#Namespace: root::expand-macro-all-contents) | Type: Function |
-| ``Namespace: root::expand-macro-all`` | ``Usage: (expand-macro-all expression)`` |
+| ``root::expand-macro-all`` | ``Usage: (expand-macro-all expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Expands a macro expression like expand-macro but also expand any embedded macros.
+Just returns the expression if not a macro.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(def xx "value") (expand-macro-all '(def xx "value")))<br>
@@ -1230,10 +1396,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::expand-macro1" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``expand-macro1``](#Namespace: root::expand-macro1-contents) | Type: Function |
-| ``Namespace: root::expand-macro1`` | ``Usage: (expand-macro1 expression)`` |
+| ``root::expand-macro1`` | ``Usage: (expand-macro1 expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Expands a macro expression.  Only expand the first macro.
+Just returns the expression if not a macro.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(def xx "value") (expand-macro1 '(def xx "value")))<br>
@@ -1266,10 +1435,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::fn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fn``](#Namespace: root::fn-contents) | Type: SpecialForm |
-| ``Namespace: root::fn`` | ``Usage: (fn (param*) expr*) -> exprN`` |
+| ``root::fn`` | ``Usage: (fn (param*) expr*) -> exprN`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create a function (lambda).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-fn1 nil)<br>
@@ -1297,10 +1468,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::format" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``format``](#Namespace: root::format-contents) | Type: Function |
-| ``Namespace: root::format`` | ``Usage: (format arg0 ... argN) -> string`` |
+| ``root::format`` | ``Usage: (format arg0 ... argN) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Build a formatted string from arguments.
+Arguments will be turned into strings.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stringsome" (format "string" "some"))<br>
@@ -1313,10 +1487,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::gensym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``gensym``](#Namespace: root::gensym-contents) | Type: Function |
-| ``Namespace: root::gensym`` | ``Usage: (gensym) -> symbol`` |
+| ``root::gensym`` | ``Usage: (gensym) -> symbol`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Generate a unique symbol.
+Gensym uses a prefix of gs@@ followed by an incrementing counter.
+It is useful to generate unique symbol names when writing macros (for instance).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-gensym-one (gensym))<br>
@@ -1335,10 +1513,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::get-error" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-error``](#Namespace: root::get-error-contents) | Type: Function |
-| ``Namespace: root::get-error`` | ``Usage: (get-error exp0 ... expN) -> pair`` |
+| ``root::get-error`` | ``Usage: (get-error exp0 ... expN) -> pair`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluate each form (like do) but on error return (:error msg backtrace) instead of aborting.
+On success return (:ok . expN-result).
+If there is no error will return the value of the last expression as the cdr of
+the pair.  Always returns a pair with the first value either being :ok or :error.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def get-error-t1 (get-error (err "Some Error")))<br>
@@ -1353,10 +1536,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::identity" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``identity``](#Namespace: root::identity-contents) | Type: Lambda |
-| ``Namespace: root::identity`` | ``Usage: (identity x)`` |
+| ``root::identity`` | ``Usage: (identity x)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Identity function.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 0 (*identity* 0))<br>
@@ -1366,10 +1551,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::intern-stats" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``intern-stats``](#Namespace: root::intern-stats-contents) | Type: SpecialForm |
-| ``Namespace: root::intern-stats`` | ``Usage: (intern-stats)`` |
+| ``root::intern-stats`` | ``Usage: (intern-stats)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Prints the stats for interned symbols.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(intern-stats)<br>
@@ -1380,10 +1567,12 @@ t<br>
 
 
 | <a id="Namespace: root::length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``length``](#Namespace: root::length-contents) | Type: Function |
-| ``Namespace: root::length`` | ``Usage: (length expression) -> int`` |
+| ``root::length`` | ``Usage: (length expression) -> int`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return length of suplied expression.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (length nil))<br>
@@ -1403,10 +1592,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::let" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let``](#Namespace: root::let-contents) | Type: Macro |
-| ``Namespace: root::let`` | ``Usage: (let vals &rest let-body)`` |
+| ``root::let`` | ``Usage: (let vals &rest let-body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-do-one "One1")<br>
@@ -1421,10 +1614,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::let*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let*``](#Namespace: root::let*-contents) | Type: Macro |
-| ``Namespace: root::let*`` | ``Usage: (let* vals &rest let-body)`` |
+| ``root::let*`` | ``Usage: (let* vals &rest let-body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp. Differs from let in that sexps can reference bindings from previous items
+in the list of vals.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (let* ((add-one (fn (x) (+ 1 x)))<br>
@@ -1437,10 +1635,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::lex" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lex``](#Namespace: root::lex-contents) | Type: Macro |
-| ``Namespace: root::lex`` | ``Usage: (lex exp0 ... expN) -> expN`` |
+| ``root::lex`` | ``Usage: (lex exp0 ... expN) -> expN`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
+This is basically like wrapping in a fn call but without the fn call or like a let
+without the initial bindings (you can use var to bind symbols in the new scope instead).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-do-one "One1")<br>
@@ -1455,10 +1657,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::loop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loop``](#Namespace: root::loop-contents) | Type: Macro |
-| ``Namespace: root::loop`` | ``Usage: (loop params bindings body)`` |
+| ``root::loop`` | ``Usage: (loop params bindings body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Binds bindings to parameters in body. Use recur with desired bindings for
+subsequent iteration.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tot 0)<br>
@@ -1472,10 +1677,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::macro" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro``](#Namespace: root::macro-contents) | Type: SpecialForm |
-| ``Namespace: root::macro`` | ``Usage: (macro (args) `(apply + ,@args))`` |
+| ``root::macro`` | ``Usage: (macro (args) `(apply + ,@args))`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Define an anonymous macro.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-macro1 nil)<br>
@@ -1496,10 +1703,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::meta-add-tags" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-add-tags``](#Namespace: root::meta-add-tags-contents) | Type: Function |
-| ``Namespace: root::meta-add-tags`` | ``Usage: (meta-add-tags expression tag*)`` |
+| ``root::meta-add-tags`` | ``Usage: (meta-add-tags expression tag*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Adds multiple meta tags to an expression (see meta-add-tag).  It will work with
+symbols or vectors or lists of symbols (or any combination).
+This is intended for helping with structs and interfaces in lisp, you probably
+do not want to use it.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def meta-add-tags-var '(1 2 3))<br>
@@ -1519,10 +1731,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::meta-column-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-column-no``](#Namespace: root::meta-column-no-contents) | Type: SpecialForm |
-| ``Namespace: root::meta-column-no`` | ``Usage: (meta-column-no)`` |
+| ``root::meta-column-no`` | ``Usage: (meta-column-no)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Column number from the file this came from.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(meta-column-no)<br>
@@ -1533,10 +1747,12 @@ t<br>
 
 
 | <a id="Namespace: root::meta-file-name" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-file-name``](#Namespace: root::meta-file-name-contents) | Type: SpecialForm |
-| ``Namespace: root::meta-file-name`` | ``Usage: (meta-file-name)`` |
+| ``root::meta-file-name`` | ``Usage: (meta-file-name)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">File name of the file this came from.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(meta-file-name)<br>
@@ -1547,10 +1763,12 @@ t<br>
 
 
 | <a id="Namespace: root::meta-line-no" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-line-no``](#Namespace: root::meta-line-no-contents) | Type: SpecialForm |
-| ``Namespace: root::meta-line-no`` | ``Usage: (meta-line-no)`` |
+| ``root::meta-line-no`` | ``Usage: (meta-line-no)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Line number from the file this came from.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(meta-line-no)<br>
@@ -1561,10 +1779,13 @@ t<br>
 
 
 | <a id="Namespace: root::meta-tag?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``meta-tag?``](#Namespace: root::meta-tag?-contents) | Type: Function |
-| ``Namespace: root::meta-tag?`` | ``Usage: (meta-tag? expression tag)`` |
+| ``root::meta-tag?`` | ``Usage: (meta-tag? expression tag)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if expression has the meta tag 'tag' set.  This is intended for helping
+with structs and interfaces in lisp, you probably do not want to use it.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def meta-add-tag-var '(1 2 3))<br>
@@ -1577,10 +1798,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::nsubstitute!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nsubstitute!``](#Namespace: root::nsubstitute!-contents) | Type: Lambda |
-| ``Namespace: root::nsubstitute!`` | ``Usage: (nsubstitute! new-item old-item lst &rest mods)`` |
+| ``root::nsubstitute!`` | ``Usage: (nsubstitute! new-item old-item lst &rest mods)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Replaces all instances of old-item in lst with new-item. If last argument
+passed in is keyword :first only the first instance of old-item will be
+replaced.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (let ((lst (list 1 2 3 4 5)))<br>
@@ -1592,10 +1817,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::occurs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``occurs``](#Namespace: root::occurs-contents) | Type: Lambda |
-| ``Namespace: root::occurs`` | ``Usage: (occurs (list 1 2 ...) 7) (occurs (list 1 2 ...) 0 (fn (x) (% x 2)))`` |
+| ``root::occurs`` | ``Usage: (occurs (list 1 2 ...) 7) (occurs (list 1 2 ...) 0 (fn (x) (% x 2)))`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Counts instances of item in sequence. Optional third argument is a function
+that can be applied to the specific element in the list before equality
+is tested with item.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 7 (occurs (list 1 3 5 2 4 10 2 4 88 2 1) 0 (fn (x) (% x 2))))<br>
@@ -1608,10 +1837,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::print" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``print``](#Namespace: root::print-contents) | Type: Function |
-| ``Namespace: root::print`` | ``Usage: (print arg0 ... argN) -> nil`` |
+| ``root::print`` | ``Usage: (print arg0 ... argN) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Print the arguments (as strings) to *stdout*.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stdout for test.<br>
@@ -1623,10 +1854,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::println" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``println``](#Namespace: root::println-contents) | Type: Function |
-| ``Namespace: root::println`` | ``Usage: (println arg0 ... argN) -> nil`` |
+| ``root::println`` | ``Usage: (println arg0 ... argN) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Print the arguments (as strings) to *stdout* and then a newline.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stdout for test.<br>
@@ -1642,10 +1875,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::progn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``progn``](#Namespace: root::progn-contents) | Type: Macro |
-| ``Namespace: root::progn`` | ``Usage: (progn &rest args)`` |
+| ``root::progn`` | ``Usage: (progn &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Synonym for 'do', use it instead (this is depricated).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;see do<br>
@@ -1656,10 +1891,13 @@ t<br>
 
 
 | <a id="Namespace: root::quote" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``quote``](#Namespace: root::quote-contents) | Type: SpecialForm |
-| ``Namespace: root::quote`` | ``Usage: 'expression -> expression`` |
+| ``root::quote`` | ``Usage: 'expression -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return expression without evaluation.
+The reader macro 'expression will expand to (quote expression).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal (list 1 2 3) (quote (1 2 3)))<br>
@@ -1671,10 +1909,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::reader-macro-dot" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reader-macro-dot``](#Namespace: root::reader-macro-dot-contents) | Type: Lambda |
-| ``Namespace: root::reader-macro-dot`` | ``Usage: (reader-macro-dot stream ch)`` |
+| ``root::reader-macro-dot`` | ``Usage: (reader-macro-dot stream ch)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Reader macro for #.(...).  Do not call directly.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def dot-test (read "(1 2 #.(* 3 10) #.(str "o" "ne"))))<br>
@@ -1685,10 +1925,21 @@ Example:<br>
 
 
 | <a id="Namespace: root::recur" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``recur``](#Namespace: root::recur-contents) | Type: Function |
-| ``Namespace: root::recur`` | ``Usage: (recur &rest)`` |
+| ``root::recur`` | ``Usage: (recur &rest)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Recursively call the enclosing function with the given parameters.  Recur uses
+tail call optimization and must be in the tail position or it is an error.  For
+a named function it would be equivalent to a normal recursive call in a tail
+position but it requires a tail position and does not need a name (a normal
+recursive call would work in a non-tail position but could blow the stack if
+it is to deep- unlike a recur or tail position recursive call).
+NOTE: potential footgun, the let macro expands to a lambda (fn) and a recur used
+inside the let would bind with the let not the enclosing lambda (this would
+apply to any macro that also expands to a lamda- this is by design with the
+loop macro but would be unexpected with let).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tot 0)<br>
@@ -1707,10 +1958,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::ref" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ref``](#Namespace: root::ref-contents) | Type: SpecialForm |
-| ``Namespace: root::ref`` | ``Usage: (ref symbol) -> expression`` |
+| ``root::ref`` | ``Usage: (ref symbol) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the expression that is referenced by symbol.
+Symbol is only evaluated if a list (that produces a symbol) and must be bound
+in the current scope or an error is raised.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-is-def t)<br>
@@ -1727,10 +1982,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::return-from" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``return-from``](#Namespace: root::return-from-contents) | Type: SpecialForm |
-| ``Namespace: root::return-from`` | ``Usage: (return-from name expression?)`` |
+| ``root::return-from`` | ``Usage: (return-from name expression?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Causes enclosing block with name (name is not evaluated) to evaluate to expression.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from xxx '(4 5)) '(a b) '(2 3)))<br>
@@ -1744,10 +2001,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set!``](#Namespace: root::set!-contents) | Type: SpecialForm |
-| ``Namespace: root::set!`` | ``Usage: (set! symbol expression) -> expression`` |
+| ``root::set!`` | ``Usage: (set! symbol expression) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sets an existing expression in the current scope(s).  Return the expression that was set.
+Symbol is not evaluted.
+Set will set the first binding it finds starting in the current scope and then
+trying enclosing scopes until exhausted.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-do-one nil)<br>
@@ -1771,10 +2033,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::substitute" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``substitute``](#Namespace: root::substitute-contents) | Type: Macro |
-| ``Namespace: root::substitute`` | ``Usage: (substitute new-item old-item lst &rest mods)`` |
+| ``root::substitute`` | ``Usage: (substitute new-item old-item lst &rest mods)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Replaces all instances of old-item in copy of lst with new-item.  If last
+argument passed in is keyword :first only the first instance of old-item will be
+replaced.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (let ((lst (list 1 2 3 4 5))<br>
@@ -1789,10 +2055,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::syscall" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syscall``](#Namespace: root::syscall-contents) | Type: Function |
-| ``Namespace: root::syscall`` | ``Usage: (syscall system-command arg0 ... argN)`` |
+| ``root::syscall`` | ``Usage: (syscall system-command arg0 ... argN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Execute the provided system command with the supplied arguments.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-syscall-one (str (syscall "echo" -n "syscall-test")))<br>
@@ -1803,10 +2071,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::undef" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``undef``](#Namespace: root::undef-contents) | Type: SpecialForm |
-| ``Namespace: root::undef`` | ``Usage: (undef symbol) -> expression`` |
+| ``root::undef`` | ``Usage: (undef symbol) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Remove a symbol from the current namespace (if it exists).  Returns the expression
+that was removed.  It is an error if symbol is not defined in the current namespace.
+Symbol is not evaluted.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-undef nil)<br>
@@ -1823,10 +2095,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::unwind-protect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unwind-protect``](#Namespace: root::unwind-protect-contents) | Type: Function |
-| ``Namespace: root::unwind-protect`` | ``Usage: (unwind-protect protected cleanup*) -> [protected result]`` |
+| ``root::unwind-protect`` | ``Usage: (unwind-protect protected cleanup*) -> [protected result]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">After evaluation first form, make sure the following cleanup forms run (returns first form's result).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-unwind-one nil)<br>
@@ -1855,10 +2129,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::values" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values``](#Namespace: root::values-contents) | Type: Function |
-| ``Namespace: root::values`` | ``Usage: (values expression*)`` |
+| ``root::values`` | ``Usage: (values expression*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces a multi values object.  Useful for returning more then one value from
+a function when most of time you only care about the first (primary) item.  When
+evaluting a muti values object it will evaluate as if it the first item only.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (values? (values 1 "str" 5.5)))<br>
@@ -1871,10 +2149,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::values-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-length``](#Namespace: root::values-length-contents) | Type: Function |
-| ``Namespace: root::values-length`` | ``Usage: (values-length expression)`` |
+| ``root::values-length`` | ``Usage: (values-length expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">If expression is a values object then return it's length (number of values).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 3 (values-length (values 1 "str" 5.5)))<br>
@@ -1891,10 +2171,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::values-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values-nth``](#Namespace: root::values-nth-contents) | Type: Function |
-| ``Namespace: root::values-nth`` | ``Usage: (values-nth idx expression)`` |
+| ``root::values-nth`` | ``Usage: (values-nth idx expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">If expression is a values object then return the item at index idx.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 1 (values-nth 0 (values 1 "str" 5.5)))<br>
@@ -1910,10 +2192,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::var" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``var``](#Namespace: root::var-contents) | Type: SpecialForm |
-| ``Namespace: root::var`` | ``Usage: (var symbol expression) -> expression`` |
+| ``root::var`` | ``Usage: (var symbol expression) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Adds an expression to the current lexical scope.  Return the expression that was defined.
+This will not add to a namespace (use def for that), use it within functions or
+lex forms to create local bindings.
+Symbol is not evaluted.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (lex<br>
@@ -1940,10 +2227,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::varfn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``varfn``](#Namespace: root::varfn-contents) | Type: Macro |
-| ``Namespace: root::varfn`` | ``Usage: (varfn name &rest args)`` |
+| ``root::varfn`` | ``Usage: (varfn name &rest args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Binds name to function body in current lexical scope (not namespace- like var).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (lex<br>
@@ -1981,10 +2270,12 @@ it open (closures currently capture the entire scope not just used symbols).
 
 
 | <a id="Namespace: root::close" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``close``](#Namespace: root::close-contents) | Type: Function |
-| ``Namespace: root::close`` | ``Usage: (close file)`` |
+| ``root::close`` | ``Usage: (close file)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Close a file.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2000,10 +2291,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::flush" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``flush``](#Namespace: root::flush-contents) | Type: Function |
-| ``Namespace: root::flush`` | ``Usage: (flush file)`` |
+| ``root::flush`` | ``Usage: (flush file)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Flush a file.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2019,10 +2312,20 @@ Example:<br>
 
 
 | <a id="Namespace: root::open" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``open``](#Namespace: root::open-contents) | Type: Function |
-| ``Namespace: root::open`` | ``Usage: (open filename option*)`` |
+| ``root::open`` | ``Usage: (open filename option*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Open a file.
+Options are:
+:read
+:write
+:append
+:truncate
+:create
+:create-new
+:on-error-nil
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-open-f (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2036,10 +2339,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::read" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read``](#Namespace: root::read-contents) | Type: Function |
-| ``Namespace: root::read`` | ``Usage: (read [file\|string]? end-exp?) -> expression`` |
+| ``root::read`` | ``Usage: (read [file\|string]? end-exp?) -> expression`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Read a file or string and return the next object (symbol, string, list, etc).
+Raises an error if the file or string has been read unless end-exp is provided
+then returns that on the end condition.
+If no parameters are provided then read stdin.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2074,10 +2382,20 @@ Example:<br>
 
 
 | <a id="Namespace: root::read-all" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-all``](#Namespace: root::read-all-contents) | Type: Function |
-| ``Namespace: root::read-all`` | ``Usage: (read-all [file\|string]? empty-exp?) -> list\|vec\|empty-exp`` |
+| ``root::read-all`` | ``Usage: (read-all [file\|string]? empty-exp?) -> list\|vec\|empty-exp`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Read a file or string and return the list representation.  This reads the entire
+file or string and will wrap in an outer vector if not a vector or list (always
+returns a vector or list).
+Unlike most lisp readers this one will put loose symbols in a list (i.e. you
+enter things at the repl without the enclosing parens).
+Note the file|string arg is optional, if not provided will read from stdin (or
+can provide stdin).
+If the read item is empty (including a comment) then raises an error or produces
+empty-exp if it is provided.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2096,10 +2414,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::read-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``read-line``](#Namespace: root::read-line-contents) | Type: Function |
-| ``Namespace: root::read-line`` | ``Usage: (read-line file) -> string`` |
+| ``root::read-line`` | ``Usage: (read-line file) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Read a line from a file.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2117,10 +2437,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::write-line" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-line``](#Namespace: root::write-line-contents) | Type: Function |
-| ``Namespace: root::write-line`` | ``Usage: (write-line file string)`` |
+| ``root::write-line`` | ``Usage: (write-line file string)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Write a line to a file.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2136,10 +2458,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::write-string" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``write-string``](#Namespace: root::write-string-contents) | Type: Function |
-| ``Namespace: root::write-string`` | ``Usage: (write-string file string)`` |
+| ``root::write-string`` | ``Usage: (write-string file string)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Write a string to a file.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/slsh-tst-open.txt" :create :truncate))<br>
@@ -2156,10 +2480,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-clear!``](#Namespace: root::hash-clear!-contents) | Type: Function |
-| ``Namespace: root::hash-clear!`` | ``Usage: (hash-clear! hashmap)`` |
+| ``root::hash-clear!`` | ``Usage: (hash-clear! hashmap)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Clears a hashmap.  This is a destructive form!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash '((:key1 . "val one")(key2 . "val two")("key3" . "val three")(#\S . "val S"))))<br>
@@ -2180,10 +2506,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-get" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-get``](#Namespace: root::hash-get-contents) | Type: SpecialForm |
-| ``Namespace: root::hash-get`` | ``Usage: (hash-get hashmap key default?) -> value`` |
+| ``root::hash-get`` | ``Usage: (hash-get hashmap key default?) -> value`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get a value for a key from a hashmap.  If the optional default is provided and
+the key is not in the hash then evaluate and return it.
+NOTE: default will only be evaluted if it is used.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash '((:key1 . "val one")(key2 . "val two")("key3" . "val three")(#\S . "val S"))))<br>
@@ -2200,10 +2530,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-haskey" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-haskey``](#Namespace: root::hash-haskey-contents) | Type: Function |
-| ``Namespace: root::hash-haskey`` | ``Usage: (hash-haskey hashmap key)`` |
+| ``root::hash-haskey`` | ``Usage: (hash-haskey hashmap key)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Checks if a key is in a hashmap.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash '((:key1 . "val one")(key2 . "val two")("key3" . "val three")(#\S . "val S"))))<br>
@@ -2225,10 +2557,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-keys" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-keys``](#Namespace: root::hash-keys-contents) | Type: Function |
-| ``Namespace: root::hash-keys`` | ``Usage: (hash-keys hashmap)`` |
+| ``root::hash-keys`` | ``Usage: (hash-keys hashmap)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns a vector of all the hashmaps keys.  The keys will be unordered.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash '((:key1 . "val one")(key2 . "val two")("key3" . "val three")(#\S . "val S"))))<br>
@@ -2245,10 +2579,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-remove!``](#Namespace: root::hash-remove!-contents) | Type: Function |
-| ``Namespace: root::hash-remove!`` | ``Usage: (hash-remove! hashmap key)`` |
+| ``root::hash-remove!`` | ``Usage: (hash-remove! hashmap key)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Remove a key from a hashmap.  This is a destructive form!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash '((:key1 . "val one")(key2 . "val two")("key3" . "val three")(#\S . "val S"))))<br>
@@ -2277,10 +2613,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash-set!``](#Namespace: root::hash-set!-contents) | Type: Function |
-| ``Namespace: root::hash-set!`` | ``Usage: (hash-set! hashmap key value)`` |
+| ``root::hash-set!`` | ``Usage: (hash-set! hashmap key value)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Add or update a hashmap key's value.  This is a destructive form!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash))<br>
@@ -2313,10 +2651,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::make-hash" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-hash``](#Namespace: root::make-hash-contents) | Type: Function |
-| ``Namespace: root::make-hash`` | ``Usage: (make-hash associations?)`` |
+| ``root::make-hash`` | ``Usage: (make-hash associations?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new hash map.
+If associations is provided (makes an empty map if not) then it is a list of
+pairs (key . value) that populate the intial map.  Neither key nor value in the
+associations will be evaluated.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-hash (make-hash))<br>
@@ -2350,10 +2693,14 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append``](#Namespace: iterator::append-contents) | Type: Lambda |
-| ``Namespace: iterator::append`` | ``Usage: (append first-iter &rest rest-iters)`` |
+| ``iterator::append`` | ``Usage: (append first-iter &rest rest-iters)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Combine the provided items into a single iterator (calls iter on each parameter).
+If non-list items are passed they are wrapped in a singleton iterator (i.e. will
+work with loose object).  Note that nil is an empty list not a "loose item".
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter (append '(0 1 2) '#(3 4 5) '(6 7 8 9)))<br>
@@ -2391,10 +2738,19 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::append-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-iter``](#Namespace: iterator::append-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::append-iter`` | ``Usage: (append-iter)`` |
+| ``iterator::append-iter`` | ``Usage: (append-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that appends multiple iterators.  Append iter will consume
+the iterators it is appending.  If non-list items are passed they are wrapped in
+a singleton iterator (i.e. will work with loose object).
+attribute: iters private
+method: :next!
+method: :empty?
+method: :init
+impl iterator::iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter ((iterator::append-iter) :init '(0 1 2) '#(3 4 5) '(6 7 8 9)))<br>
@@ -2438,10 +2794,15 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::append-to!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``append-to!``](#Namespace: iterator::append-to!-contents) | Type: Lambda |
-| ``Namespace: iterator::append-to!`` | ``Usage: (append-to! ret &rest others)`` |
+| ``iterator::append-to!`` | ``Usage: (append-to! ret &rest others)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Combine the provided items after the first (first must be a vector or list)
+into a single iterator.  These values are added the first argument destructively.
+If non-list items are passed they are wrapped in a singleton iterator (i.e. will
+work with loose object).  Note that nil is an empty list not a "loose item".
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter '(0 1 2))<br>
@@ -2500,10 +2861,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::collect" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect``](#Namespace: iterator::collect-contents) | Type: Lambda |
-| ``Namespace: iterator::collect`` | ``Usage: (collect s)`` |
+| ``iterator::collect`` | ``Usage: (collect s)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Collect all the values into a list.  This will consume the iterator and
+produce a new list.  Will call iter on input to turn a collection into an iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def collect-test (iterator::collect '#(1 2 3)))<br>
@@ -2515,10 +2879,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::collect-str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-str``](#Namespace: iterator::collect-str-contents) | Type: Lambda |
-| ``Namespace: iterator::collect-str`` | ``Usage: (collect-str s)`` |
+| ``iterator::collect-str`` | ``Usage: (collect-str s)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Collect all the values into a string.  This will consume the iterator and
+produce a new string.  Will call iter on input to turn a collection into an iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def collect-str-test (iterator::collect-str (iterator::map (fn (ch) (char-upper ch)) "λabc σ")))<br>
@@ -2530,10 +2897,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::collect-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-vec``](#Namespace: iterator::collect-vec-contents) | Type: Lambda |
-| ``Namespace: iterator::collect-vec`` | ``Usage: (collect-vec s)`` |
+| ``iterator::collect-vec`` | ``Usage: (collect-vec s)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Collect all the values into a vector.  This will consume the iterator and
+produce a new vector.  Will call iter on input to turn a collection into an iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def collect-vec-test (iterator::collect-vec '(1 2 3)))<br>
@@ -2545,10 +2915,12 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::double-ended-iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iter?``](#Namespace: iterator::double-ended-iter?-contents) | Type: Lambda |
-| ``Namespace: iterator::double-ended-iter?`` | ``Usage: (double-ended-iter? thing)`` |
+| ``iterator::double-ended-iter?`` | ``Usage: (double-ended-iter? thing)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return true if thing is an iterator and double ended, nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (struct::defstruct test-iter<br>
@@ -2567,10 +2939,19 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::double-ended-iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``double-ended-iterator``](#Namespace: iterator::double-ended-iterator-contents) | Type: Lambda |
-| ``Namespace: iterator::double-ended-iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator::iterator iterator::double-ended-iterator))`` |
+| ``iterator::double-ended-iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn next-back! (self)...)(:fn empty? (self)...)(:impl iterator::iterator iterator::double-ended-iterator))`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Trait that makes an iterator double ended (can get items from front and back.
+Requires a struct to define methods next-back! and implement iterator.
+Note that next! and next-back! can not cross, the iterator is empty when they meet.
+method: :nth-back!
+Consume the iterator until the nth element from the end and return it (0 based).
+Note that repeated called to nth-back! will return new data since it consumes the iterator.
+method: :reverse
+Produce an iterator that is the reverse of self.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (ns-import 'struct)<br>
@@ -2622,10 +3003,12 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty?``](#Namespace: iterator::empty?-contents) | Type: Lambda |
-| ``Namespace: iterator::empty?`` | ``Usage: (empty? s)`` |
+| ``iterator::empty?`` | ``Usage: (empty? s)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Is an iterator empty (no more items)?  Will call iter on input first.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (iterator::empty? nil))<br>
@@ -2637,10 +3020,19 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::file-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file-iter``](#Namespace: iterator::file-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::file-iter`` | ``Usage: (file-iter)`` |
+| ``iterator::file-iter`` | ``Usage: (file-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that wraps a file.  Each call to next! returns the next line (with
+trailing newline.
+attribute: file private
+attribute: next-line private
+method: :next!
+method: :empty?
+method: :init
+impl iterator::iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-file (open "/tmp/file-iter-test.txt" :create :truncate))<br>
@@ -2662,10 +3054,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::filter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter``](#Namespace: iterator::filter-contents) | Type: Lambda |
-| ``Namespace: iterator::filter`` | ``Usage: (filter predicate items)`` |
+| ``iterator::filter`` | ``Usage: (filter predicate items)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns a filter-iter around items (will call iter on items).
+Iterator that applies a lambda to each element to determine if is returned- is lazy.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter (iterator::filter (fn (x) (not (= x 2))) '(1 2 3)))<br>
@@ -2679,10 +3074,21 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::filter-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``filter-iter``](#Namespace: iterator::filter-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::filter-iter`` | ``Usage: (filter-iter)`` |
+| ``iterator::filter-iter`` | ``Usage: (filter-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that applies a lambda to each element to determine if is returned- is lazy.
+attribute: data private
+attribute: predicate private
+attribute: next private
+attribute: is-empty private
+method: :next!
+method: :empty?
+method: :advance-data!
+method: :init
+impl iterator::iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter (((iterator::list-iter) :init '(1 2 3)) :filter (fn (x) (not (= x 2)))))<br>
@@ -2696,10 +3102,15 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for``](#Namespace: iterator::for-contents) | Type: Macro |
-| ``Namespace: iterator::for`` | ``Usage: (for bind in items body)`` |
+| ``iterator::for`` | ``Usage: (for bind in items body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Loops over each element in an iterator.  Will call iter on the input object.
+bind is bound to the current element of items and is accesible
+in body. body is evaluated a number of times equal to the the number of items
+in in_list.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def i 0)<br>
@@ -2711,10 +3122,16 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::for-i" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``for-i``](#Namespace: iterator::for-i-contents) | Type: Macro |
-| ``Namespace: iterator::for-i`` | ``Usage: (for-i idx-bind bind in items body)`` |
+| ``iterator::for-i`` | ``Usage: (for-i idx-bind bind in items body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Loops over each element in an iterator.  Will call iter on the input object.
+idx-bind is bound to an incrementing number starting with 0.
+bind is bound to the current element of items and is accesible
+in body. body is evaluated a number of times equal to the the number of items
+in in_list.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def i 0)<br>
@@ -2728,10 +3145,12 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter``](#Namespace: iterator::iter-contents) | Type: Lambda |
-| ``Namespace: iterator::iter`` | ``Usage: (iter thing)`` |
+| ``iterator::iter`` | ``Usage: (iter thing)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return thing as an iterator if possible (if it is an iterator just return thing).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (iterator::iter? (iterator::iter '(1 2 3))))<br>
@@ -2744,10 +3163,12 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::iter?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iter?``](#Namespace: iterator::iter?-contents) | Type: Lambda |
-| ``Namespace: iterator::iter?`` | ``Usage: (iter? thing)`` |
+| ``iterator::iter?`` | ``Usage: (iter? thing)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return true if thing is an iterator, nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (iterator::iter? (iterator::iter '(1 2 3))))<br>
@@ -2758,10 +3179,34 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::iterator" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``iterator``](#Namespace: iterator::iterator-contents) | Type: Lambda |
-| ``Namespace: iterator::iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))`` |
+| ``iterator::iterator`` | ``Usage: (defstruct iter (:fn next! (self)...)(:fn empty? (self)...)(:impl iterator::iterator))`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Trait that provides iterator methods.
+Requires a struct to define methods next! and empty?
+method: :collect
+Collect all the values into a list.  This will consume the iterator and
+produce a new list.
+method: :collect-vec
+Collect all the values into a vector.  This will consume the iterator and
+produce a new list.
+method: :collect-str
+Collect all the values into a string.  This will consume the iterator and
+produce a new string.
+method: :map
+Apply the provided function to each element of the iterator.  Map is lazy.
+method: :filter
+Apply the provided predicate to the iterator producing only elements that are true.  Filter is lazy.
+method: :slice
+method: :count
+Consume the iterator and return the number of items.
+method: :nth!
+Consume the iterator until the nth! element and return it (0 based).
+Note that repeated called to nth! will return new data since it consumes the iterator.
+method: :double-ended?
+Return t if this iterator is double ended, nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (ns-import 'struct)<br>
@@ -2836,10 +3281,22 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::list-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list-iter``](#Namespace: iterator::list-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::list-iter`` | ``Usage: (list-iter)`` |
+| ``iterator::list-iter`` | ``Usage: (list-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that wraps a list.
+attribute: data private
+attribute: rev-data private
+attribute: elements private
+method: :next!
+method: :next-back!
+method: :empty?
+method: :init
+method: :make-rev
+impl iterator::iterator
+impl iterator::double-ended-iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-list-iter ((list-iter) :init '(1 2 3)))<br>
@@ -2866,10 +3323,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map``](#Namespace: iterator::map-contents) | Type: Lambda |
-| ``Namespace: iterator::map`` | ``Usage: (map map-fn items)`` |
+| ``iterator::map`` | ``Usage: (map map-fn items)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns a map-iter around items (will call iter on items).
+Apply the provided function to each element of the iterator.  Map is lazy.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tmap (iterator::map (fn (x) (+ 1 x)) '(0 1 2)))<br>
@@ -2890,10 +3350,21 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::map-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``map-iter``](#Namespace: iterator::map-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::map-iter`` | ``Usage: (map-iter)`` |
+| ``iterator::map-iter`` | ``Usage: (map-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that applies a lambda to each element of another iterator- is lazy.
+attribute: data private
+attribute: map-fn private
+method: :next!
+method: :next-back!
+method: :empty?
+method: :init
+method: :double-ended?
+impl iterator::iterator
+impl iterator::double-ended-iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-map-iter (((iterator::list-iter) :init '(1 2 3)) :map (fn (x) (* x 2))))<br>
@@ -2908,10 +3379,12 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``next!``](#Namespace: iterator::next!-contents) | Type: Lambda |
-| ``Namespace: iterator::next!`` | ``Usage: (next! s)`` |
+| ``iterator::next!`` | ``Usage: (next! s)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Calls iter on s and returns the next item.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 1 (iterator::next! '(1 2 3)))<br>
@@ -2927,10 +3400,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nth``](#Namespace: iterator::nth-contents) | Type: Lambda |
-| ``Namespace: iterator::nth`` | ``Usage: (nth idx coll)`` |
+| ``iterator::nth`` | ``Usage: (nth idx coll)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Consume the iterator until the idx (nth) element and return it (0 based).
+Note that repeated called to nth will return new data since it consumes the iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tmap ((list-iter) :init '(0 1 2 3 4)))<br>
@@ -2945,10 +3421,14 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::range" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range``](#Namespace: iterator::range-contents) | Type: Lambda |
-| ``Namespace: iterator::range`` | ``Usage: (range &rest i)`` |
+| ``iterator::range`` | ``Usage: (range &rest i)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create an iterator that generates numbers within a range.
+Can be called with one int (n) to produce 0..(n-1) or with two ints (m, n) to
+produce m..n.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter (iterator::range 3 6))<br>
@@ -2970,10 +3450,21 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::range-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``range-iter``](#Namespace: iterator::range-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::range-iter`` | ``Usage: (range-iter)`` |
+| ``iterator::range-iter`` | ``Usage: (range-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that generates numbers within a range.
+attribute: start private
+attribute: end private
+method: :next!
+method: :next-back!
+method: :empty?
+method: :init
+method: :count
+impl iterator::iterator
+impl iterator::double-ended-iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter ((range-iter) :init 3 6))<br>
@@ -2996,10 +3487,21 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::reduce" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce``](#Namespace: iterator::reduce-contents) | Type: Lambda |
-| ``Namespace: iterator::reduce`` | ``Usage: (reduce reducing-fcn init-val coll)`` |
+| ``iterator::reduce`` | ``Usage: (reduce reducing-fcn init-val coll)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">reduce is used to amalgamate a provided iterator, coll, and an intitial value,
+init-val, according to the reducing function, reducing-fcn, provided.  The
+iter function will be called on coll to make sure it is an iterator. The
+reducing-fcn should be a function of two arguments. In the first iteration of
+reduce, the init-val will be used as the first argument to the reducing-fcn and
+(next! coll) will be used as the second argument. For all subsequent iterations,
+The result from the previous application of the reducing-fcn will be used as the
+first argument to the reducing-fcn and the second argument will be the next item
+in the collection when the collection is empty reduce will return the
+amalgamated result.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (= 15 (reduce + 0 (list 1 2 3 4 5))))<br>
@@ -3011,10 +3513,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::reduce-times" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reduce-times``](#Namespace: iterator::reduce-times-contents) | Type: Lambda |
-| ``Namespace: iterator::reduce-times`` | ``Usage: (reduce-times value wrapping-fcn times)`` |
+| ``iterator::reduce-times`` | ``Usage: (reduce-times value wrapping-fcn times)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Apply wrapping-fcn to value number of times. Function is recursive. Recursive
+binding for value is previous application of wrapping function to value.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal (list (list 3)) (reduce-times 3 list 2))<br>
@@ -3025,10 +3530,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::reverse" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse``](#Namespace: iterator::reverse-contents) | Type: Lambda |
-| ``Namespace: iterator::reverse`` | ``Usage: (reverse items)`` |
+| ``iterator::reverse`` | ``Usage: (reverse items)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produce an iterator the is the reverse of items.  Will call iter on items and
+requires a double ended iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tmap (reverse ((vec-iter) :init '#(0 1 2) 0)))<br>
@@ -3044,10 +3552,19 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::reverse-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reverse-iter``](#Namespace: iterator::reverse-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::reverse-iter`` | ``Usage: (reverse-iter)`` |
+| ``iterator::reverse-iter`` | ``Usage: (reverse-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that reverses another iterators direction.  Requires a double ended iterator.
+attribute: wrapped private
+method: :next!
+method: :next-back!
+method: :empty?
+method: :init
+impl iterator::iterator
+impl iterator::double-ended-iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter (((vec-iter) :init '#(1 2 3) 0) :reverse))<br>
@@ -3062,10 +3579,13 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice``](#Namespace: iterator::slice-contents) | Type: Lambda |
-| ``Namespace: iterator::slice`` | ``Usage: (slice items start &rest end)`` |
+| ``iterator::slice`` | ``Usage: (slice items start &rest end)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Provides a slice of iterator.  Will call iter on items.  Slice iter will consume
+the iterator it is slicing.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-slice-iter (slice '(0 1 2 3 4 5 6 7 8 9) 3 6))<br>
@@ -3092,10 +3612,21 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::slice-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``slice-iter``](#Namespace: iterator::slice-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::slice-iter`` | ``Usage: (slice-iter)`` |
+| ``iterator::slice-iter`` | ``Usage: (slice-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that provides a slice of the underlying iter.  Slice iter will consume
+the iterator it is slicing.
+attribute: data private
+attribute: start private
+attribute: total private
+attribute: count private
+method: :next!
+method: :empty?
+method: :init
+impl iterator::iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-slice-iter (((iterator::list-iter) :init '(0 1 2 3 4 5 6 7 8 9)) :slice 3 6))<br>
@@ -3122,10 +3653,17 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::string-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string-iter``](#Namespace: iterator::string-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::string-iter`` | ``Usage: (string-iter)`` |
+| ``iterator::string-iter`` | ``Usage: (string-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that wraps a string.
+attribute: data private
+method: :next!
+method: :empty?
+method: :init
+impl iterator::iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-string-iter ((string-iter) :init "123"))<br>
@@ -3140,10 +3678,23 @@ Example:<br>
 
 
 | <a id="Namespace: iterator::vec-iter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-iter``](#Namespace: iterator::vec-iter-contents) | Type: Lambda |
-| ``Namespace: iterator::vec-iter`` | ``Usage: (vec-iter)`` |
+| ``iterator::vec-iter`` | ``Usage: (vec-iter)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Iterator that wraps a vector.
+attribute: data private
+attribute: start private
+attribute: end private
+method: :next!
+method: :next-back!
+method: :empty?
+method: :nth!
+method: :nth-back!
+method: :init
+impl iterator::iterator
+impl iterator::double-ended-iterator
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-vec-iter ((vec-iter) :init '#(1 2 3) 0))<br>
@@ -3162,10 +3713,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::%" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``%``](#Namespace: root::%-contents) | Type: Function |
-| ``Namespace: root::%`` | ``Usage: (% int int)`` |
+| ``root::%`` | ``Usage: (% int int)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Remainder from dividing first int by the second.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (% 50 10))<br>
@@ -3177,10 +3730,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*``](#Namespace: root::*-contents) | Type: Function |
-| ``Namespace: root::*`` | ``Usage: (* number+)`` |
+| ``root::*`` | ``Usage: (* number+)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Multiply a sequence of numbers.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 5 (* 5))<br>
@@ -3199,10 +3754,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::+" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``+``](#Namespace: root::+-contents) | Type: Function |
-| ``Namespace: root::+`` | ``Usage: (+ number+)`` |
+| ``root::+`` | ``Usage: (+ number+)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Add a sequence of numbers.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 5 (+ 5))<br>
@@ -3216,10 +3773,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::-" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``-``](#Namespace: root::--contents) | Type: Function |
-| ``Namespace: root::-`` | ``Usage: (- number+)`` |
+| ``root::-`` | ``Usage: (- number+)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Subtract a sequence of numbers.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 5 (- 5))<br>
@@ -3234,10 +3793,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::/" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``/``](#Namespace: root::/-contents) | Type: Function |
-| ``Namespace: root::/`` | ``Usage: (/ number+)`` |
+| ``root::/`` | ``Usage: (/ number+)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Divide a sequence of numbers.  Requires at least two numbers.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 5 (/ 50 10))<br>
@@ -3256,16 +3817,28 @@ Example:<br>
 
 
 | <a id="Namespace: root::ns-auto-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-auto-export``](#Namespace: root::ns-auto-export-contents) | Type: Macro |
-| ``Namespace: root::ns-auto-export`` | ``Usage: (ns-auto-export symbol)`` |
+| ``root::ns-auto-export`` | ``Usage: (ns-auto-export symbol)`` |
 
+<span style="padding-left: 5px">Macro that takes a symbol, the symbol of the current namespace, and writes an
+ns-export statement that includes all symbols defined in the namespaces scope
+that do not begin with the '-' symbol. This is a convenience method that allows
+user to avoid enumerating all symbols while also introducing a mechanism to
+exclude symbols from being excluded. Note, if using ns-auto-export, it is
+not possible to export a symbol that is already defined in another namespace,
+if said functionality is desired the symbol must be manually exported with
+another ns-export statement; ns-auto-export can be used in conjunction with
+ns-export.
+</span>
 <br>
 
 
 | <a id="Namespace: root::ns-create" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-create``](#Namespace: root::ns-create-contents) | Type: Function |
-| ``Namespace: root::ns-create`` | ``Usage: (ns-create namespace)`` |
+| ``root::ns-create`` | ``Usage: (ns-create namespace)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Creates and enters a new a namespace (must evaluate to a string or symbol).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (ns-push 'test-ns-create)<br>
@@ -3283,10 +3856,12 @@ t<br>
 
 
 | <a id="Namespace: root::ns-enter" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-enter``](#Namespace: root::ns-enter-contents) | Type: Function |
-| ``Namespace: root::ns-enter`` | ``Usage: (ns-enter namespace)`` |
+| ``root::ns-enter`` | ``Usage: (ns-enter namespace)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Enters an existing namespace (must evaluate to a string or symbol).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (ns-push 'test-ns-enter)<br>
@@ -3308,10 +3883,12 @@ t<br>
 
 
 | <a id="Namespace: root::ns-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-exists?``](#Namespace: root::ns-exists?-contents) | Type: Function |
-| ``Namespace: root::ns-exists?`` | ``Usage: (ns-exists? namespace)`` |
+| ``root::ns-exists?`` | ``Usage: (ns-exists? namespace)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the supplied namespace exists (must evaluate to a string or symbol).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (ns-exists? 'ns-exists-test-namespace))<br>
@@ -3324,22 +3901,28 @@ Example:<br>
 
 
 | <a id="Namespace: root::ns-export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-export``](#Namespace: root::ns-export-contents) | Type: Macro |
-| ``Namespace: root::ns-export`` | ``Usage: (ns-export symbol_or_sequence)`` |
+| ``root::ns-export`` | ``Usage: (ns-export symbol_or_sequence)`` |
 
+<span style="padding-left: 5px">Export a symbol or list of symbols to be imported into other namespaces.
+</span>
 <br>
 
 
 | <a id="Namespace: root::ns-import" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-import``](#Namespace: root::ns-import-contents) | Type: Macro |
-| ``Namespace: root::ns-import`` | ``Usage: (ns-import namespace)`` |
+| ``root::ns-import`` | ``Usage: (ns-import namespace)`` |
 
+<span style="padding-left: 5px">Import any symbols exported from namespace into the current namespace.
+</span>
 <br>
 
 
 | <a id="Namespace: root::ns-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-list``](#Namespace: root::ns-list-contents) | Type: Function |
-| ``Namespace: root::ns-list`` | ``Usage: (ns-list)`` |
+| ``root::ns-list`` | ``Usage: (ns-list)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns a vector of all namespaces.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-not-includes "ns-list-test-namespace" (ns-list))<br>
@@ -3353,10 +3936,12 @@ t<br>
 
 
 | <a id="Namespace: root::ns-pop" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-pop``](#Namespace: root::ns-pop-contents) | Type: Macro |
-| ``Namespace: root::ns-pop`` | ``Usage: (ns-pop)`` |
+| ``root::ns-pop`` | ``Usage: (ns-pop)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns to the previous namespace saved in the last ns-push.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-ns-pop *ns*)<br>
@@ -3370,10 +3955,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::ns-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-push``](#Namespace: root::ns-push-contents) | Type: Macro |
-| ``Namespace: root::ns-push`` | ``Usage: (ns-push 'namespace)`` |
+| ``root::ns-push`` | ``Usage: (ns-push 'namespace)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pushes the current namespace on a stack for ns-pop and enters or creates namespace.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-ns-push *ns*)<br>
@@ -3392,10 +3979,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::ns-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``ns-symbols``](#Namespace: root::ns-symbols-contents) | Type: Function |
-| ``Namespace: root::ns-symbols`` | ``Usage: (ns-symbols namespace)`` |
+| ``root::ns-symbols`` | ``Usage: (ns-symbols namespace)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns the list of all symbols in namespace (must evaluate to a string or symbol).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-includes 'loop (ns-symbols 'root))<br>
@@ -3413,10 +4002,12 @@ building them up with joins or with the list form.
 
 
 | <a id="Namespace: root::car" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``car``](#Namespace: root::car-contents) | Type: Function |
-| ``Namespace: root::car`` | ``Usage: (car pair)`` |
+| ``root::car`` | ``Usage: (car pair)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the car (first item) from a pair.  If used on a proper list this will be the first element.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-pairs-two (list 'x 'y 'z))<br>
@@ -3429,10 +4020,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cdr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdr``](#Namespace: root::cdr-contents) | Type: Function |
-| ``Namespace: root::cdr`` | ``Usage: (cdr pair)`` |
+| ``root::cdr`` | ``Usage: (cdr pair)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the cdr (second item) from a pair.  If used on a proper list this will be the list minus the first element.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-pairs-three (list 'x 'y 'z))<br>
@@ -3446,10 +4039,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::join" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``join``](#Namespace: root::join-contents) | Type: Function |
-| ``Namespace: root::join`` | ``Usage: (join car cdr)`` |
+| ``root::join`` | ``Usage: (join car cdr)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create a pair with the provided car and cdr.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-pair-one (join 1 2))<br>
@@ -3462,10 +4057,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list``](#Namespace: root::list-contents) | Type: Function |
-| ``Namespace: root::list`` | ``Usage: (list item0 item1 .. itemN)`` |
+| ``root::list`` | ``Usage: (list item0 item1 .. itemN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Create a proper list from pairs with items 0 - N.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(1 2 3) (list 1 2 3))<br>
@@ -3475,10 +4072,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::xar!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xar!``](#Namespace: root::xar!-contents) | Type: Function |
-| ``Namespace: root::xar!`` | ``Usage: (xar! pair expression)`` |
+| ``root::xar!`` | ``Usage: (xar! pair expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Destructive form that replaces the car (first item) in a pair with a new expression.
+If used on a proper list will replace the first item.  Can be used on nil to
+create a pair (expression . nil).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-pairs-three (list 'x 'y 'z))<br>
@@ -3495,10 +4096,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::xdr!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``xdr!``](#Namespace: root::xdr!-contents) | Type: Function |
-| ``Namespace: root::xdr!`` | ``Usage: (xdr! pair expression)`` |
+| ``root::xdr!`` | ``Usage: (xdr! pair expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Destructive form that replaces the cdr (second item) in a pair with a new expression.
+If used on a proper list will replace everthing after the first item.
+Can be used on nil to create a pair (nil . expression).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def tst-pairs-five (list 'a 'b 'c))<br>
@@ -3517,10 +4122,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::caaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caaar``](#Namespace: root::caaar-contents) | Type: Lambda |
-| ``Namespace: root::caaar`` | ``Usage: (caaar lst)`` |
+| ``root::caaar`` | ``Usage: (caaar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 1 (caaar '(((1 4) 5) (6 3) 2)))<br>
@@ -3530,10 +4137,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::caadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caadr``](#Namespace: root::caadr-contents) | Type: Lambda |
-| ``Namespace: root::caadr`` | ``Usage: (caadr lst)`` |
+| ``root::caadr`` | ``Usage: (caadr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 6 (caadr '((1 4 5) (6 3) 2)))<br>
@@ -3543,10 +4152,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::caar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caar``](#Namespace: root::caar-contents) | Type: Lambda |
-| ``Namespace: root::caar`` | ``Usage: (caar lst)`` |
+| ``root::caar`` | ``Usage: (caar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 1 (caar '((1) 2 3)))<br>
@@ -3556,10 +4167,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cadar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadar``](#Namespace: root::cadar-contents) | Type: Lambda |
-| ``Namespace: root::cadar`` | ``Usage: (cadar lst)`` |
+| ``root::cadar`` | ``Usage: (cadar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 4 (cadar '((1 4 5) (6 3) 2)))<br>
@@ -3569,10 +4182,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cadddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadddr``](#Namespace: root::cadddr-contents) | Type: Lambda |
-| ``Namespace: root::cadddr`` | ``Usage: (cadddr lst)`` |
+| ``root::cadddr`` | ``Usage: (cadddr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 6 (cadddr '((1 7 8) (4 5) 2 6 (3 9))))<br>
@@ -3582,10 +4197,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::caddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``caddr``](#Namespace: root::caddr-contents) | Type: Lambda |
-| ``Namespace: root::caddr`` | ``Usage: (caddr lst)`` |
+| ``root::caddr`` | ``Usage: (caddr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 6 (caddr '((1 4 5) 2 6)))<br>
@@ -3595,10 +4212,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cadr``](#Namespace: root::cadr-contents) | Type: Lambda |
-| ``Namespace: root::cadr`` | ``Usage: (cadr lst)`` |
+| ``root::cadr`` | ``Usage: (cadr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 2 (cadr '(1 2 3)))<br>
@@ -3608,10 +4227,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cdaar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdaar``](#Namespace: root::cdaar-contents) | Type: Lambda |
-| ``Namespace: root::cdaar`` | ``Usage: (cdaar lst)`` |
+| ``root::cdaar`` | ``Usage: (cdaar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(7 8) (cdaar '(((1 7 8) 4 5) 2 (6 3))))<br>
@@ -3621,10 +4242,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cdadr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdadr``](#Namespace: root::cdadr-contents) | Type: Lambda |
-| ``Namespace: root::cdadr`` | ``Usage: (cdadr lst)`` |
+| ``root::cdadr`` | ``Usage: (cdadr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(9) (cdadr '(((1 7 8) 4 5) (2 9) (6 3))))<br>
@@ -3634,10 +4257,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cdar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdar``](#Namespace: root::cdar-contents) | Type: Lambda |
-| ``Namespace: root::cdar`` | ``Usage: (cdar lst)`` |
+| ``root::cdar`` | ``Usage: (cdar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(4 5) (cdar '((1 4 5) 2 3)))<br>
@@ -3647,10 +4272,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cddar" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddar``](#Namespace: root::cddar-contents) | Type: Lambda |
-| ``Namespace: root::cddar`` | ``Usage: (cddar lst)`` |
+| ``root::cddar`` | ``Usage: (cddar lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(5) (cddar '(((1 7 8) 4 5) 2 (6 3))))<br>
@@ -3660,10 +4287,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cdddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cdddr``](#Namespace: root::cdddr-contents) | Type: Lambda |
-| ``Namespace: root::cdddr`` | ``Usage: (cdddr lst)`` |
+| ``root::cdddr`` | ``Usage: (cdddr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(3 9) (cdddr '(((1 7 8) 4 5) 2 6 3 9)))<br>
@@ -3673,10 +4302,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cddr" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cddr``](#Namespace: root::cddr-contents) | Type: Lambda |
-| ``Namespace: root::cddr`` | ``Usage: (cddr lst)`` |
+| ``root::cddr`` | ``Usage: (cddr lst)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for car/cdr calls (a is car, d is cdr)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(3) (cddr '((1 4 5) 2 3)))<br>
@@ -3688,10 +4319,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::*load-path*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*load-path*``](#Namespace: root::*load-path*-contents) | Type: Vector |
-| ``Namespace: root::*load-path*`` | ``Usage: (set '*load-path* '("/path/one" "/path/two"))`` |
+| ``root::*load-path*`` | ``Usage: (set '*load-path* '("/path/one" "/path/two"))`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Set the a list of paths to search for loading scripts with the load form.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(set '*load-path '("/path"))<br>
@@ -3703,10 +4336,12 @@ t<br>
 
 
 | <a id="Namespace: root::load" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``load``](#Namespace: root::load-contents) | Type: Function |
-| ``Namespace: root::load`` | ``Usage: (load path) -> [last form value]`` |
+| ``root::load`` | ``Usage: (load path) -> [last form value]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Read and eval a file (from path- a string).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-load-one nil)<br>
@@ -3723,8 +4358,22 @@ Example:<br>
 
 
 | <a id="Namespace: shell::mkli" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``mkli``](#Namespace: shell::mkli-contents) | Type: Lambda |
-| ``Namespace: shell::mkli`` | ``Usage: (mkli filepath [namespace] [body])`` |
+| ``shell::mkli`` | ``Usage: (mkli filepath [namespace] [body])`` |
 
+<span style="padding-left: 5px">"make lisp".creates a sl-sh shell script. given a file, a namespace (optional 2nd arg), and a string
+to populate as the body (optional 3rd arg), make a canonincal blank sl-sh script
+complete with all the relevant imports, and boilerplate namespace code taken
+care of to speed up development.
+It is recommended all calls to load are done at the top of the file (before
+the calls to ns-enter or ns-create, in case a library sl-sh script calls a
+library sl-sh script that created a namespace and forgot to call ns-pop.
+This ensures the exported symbols for the first library's scripts
+namespace are importable in the executing script's namespace.
+All calls to ns-import happen after a ns is created and entered so the
+current namespace is the namespace that houses all the imported symbols.
+ns-export must be called before ns-pop so the appropriate symbols are
+associated namespace, the one in which the symbols were created.
+</span>
 <br>
 ### <a id="Sequence forms-body" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[Sequence forms](#Sequence forms-contents)
 These macros will work on either a vector or a pair made into a proper list
@@ -3734,10 +4383,12 @@ NOTE: list on this table can be a vector or a list.
 
 
 | <a id="Namespace: root::butlast" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``butlast``](#Namespace: root::butlast-contents) | Type: Lambda |
-| ``Namespace: root::butlast`` | ``Usage: (butlast obj)`` |
+| ``root::butlast`` | ``Usage: (butlast obj)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces the provided list minus the last element.  Nil if the list is empty or one element.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(1 2) (butlast '(1 2 3)))<br>
@@ -3753,10 +4404,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::collect-copy" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``collect-copy``](#Namespace: root::collect-copy-contents) | Type: Lambda |
-| ``Namespace: root::collect-copy`` | ``Usage: (collect-copy seq)`` |
+| ``root::collect-copy`` | ``Usage: (collect-copy seq)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces a copy of the provided list (copy has same type as the parameter).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-colcl '(1 2 3))<br>
@@ -3775,10 +4428,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``empty-seq?``](#Namespace: root::empty-seq?-contents) | Type: Lambda |
-| ``Namespace: root::empty-seq?`` | ``Usage: (empty-seq? obj) -> t/nil`` |
+| ``root::empty-seq?`` | ``Usage: (empty-seq? obj) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">`empty-seq?` returns true if a list or vector is empty and false/nil
+otherwise. If a non list or non vector is passed in it returns nil.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (empty-seq? '(1 2 3)))<br>
@@ -3793,10 +4449,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::first" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``first``](#Namespace: root::first-contents) | Type: Lambda |
-| ``Namespace: root::first`` | ``Usage: (first obj)`` |
+| ``root::first`` | ``Usage: (first obj)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces the first element of the provided list or vector.  Nil if the
+list/vector is nil/empty.  Note this is like car that works for lists and
+vectors.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 1 (first '(1 2 3)))<br>
@@ -3810,10 +4470,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::in?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``in?``](#Namespace: root::in?-contents) | Type: Lambda |
-| ``Namespace: root::in?`` | ``Usage: (in? seq-to-search item-to-match)`` |
+| ``root::in?`` | ``Usage: (in? seq-to-search item-to-match)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and
+returns true if the second argument is is in list, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (let ((vowels-list (list 'a 'e 'i 'o 'u)))<br>
@@ -3827,10 +4490,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::last" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``last``](#Namespace: root::last-contents) | Type: Lambda |
-| ``Namespace: root::last`` | ``Usage: (last obj)`` |
+| ``root::last`` | ``Usage: (last obj)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces the last element in a list or vector.  Nil if the list/vector is empty.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal 3 (last '(1 2 3)))<br>
@@ -3844,10 +4509,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::non-empty-seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``non-empty-seq?``](#Namespace: root::non-empty-seq?-contents) | Type: Lambda |
-| ``Namespace: root::non-empty-seq?`` | ``Usage: (non-empty-seq? obj) -> t/nil`` |
+| ``root::non-empty-seq?`` | ``Usage: (non-empty-seq? obj) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">`non-empty-seq?` returns true if a list or vector is not empty and false/nil
+otherwise. If a non list or non vector is passed in it returns nil.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (non-empty-seq? '(1 2 3)))<br>
@@ -3862,10 +4530,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::qsort" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``qsort``](#Namespace: root::qsort-contents) | Type: Lambda |
-| ``Namespace: root::qsort`` | ``Usage: (qsort sequence comp-lambda?) -> [sorted vector]`` |
+| ``root::qsort`` | ``Usage: (qsort sequence comp-lambda?) -> [sorted vector]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sort a sequence using the quick sort algorithm.  Returns a vector of the sorted sequence.
+The comp-lambda argument is optional, if provided it should be a lambda or
+builtin that takes two arguments and return t or nil (it is the compare
+function for the sort).  Defaults to < if not provided.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(1 2 3) (qsort '(2 3 1)))<br>
@@ -3892,10 +4565,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::rest" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``rest``](#Namespace: root::rest-contents) | Type: Lambda |
-| ``Namespace: root::rest`` | ``Usage: (rest obj)`` |
+| ``root::rest`` | ``Usage: (rest obj)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produces the provided list or vector minus the first element.  Nil if the
+list/vector is nil/empty or one element.  Note this is like cdr that works for
+lists and vectors.  This calls vec-slice to create a new vector when called with
+a vector (i.e. is much more efficient with lists).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-equal '(2 3) (rest '(1 2 3)))<br>
@@ -3911,10 +4589,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::seq-for" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq-for``](#Namespace: root::seq-for-contents) | Type: Macro |
-| ``Namespace: root::seq-for`` | ``Usage: (seq-for bind in items body)`` |
+| ``root::seq-for`` | ``Usage: (seq-for bind in items body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Loops over each element in a sequence.  Simple version that works with lists and
+vectors, use iterator::for in general.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def i 0)<br>
@@ -3926,10 +4607,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::seq?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``seq?``](#Namespace: root::seq?-contents) | Type: Lambda |
-| ``Namespace: root::seq?`` | ``Usage: (seq? expression) -> t/nil`` |
+| ``root::seq?`` | ``Usage: (seq? expression) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if expression is a list or vector, nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (seq? '(1 2 3)))<br>
@@ -3944,10 +4627,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::setnth!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``setnth!``](#Namespace: root::setnth!-contents) | Type: Lambda |
-| ``Namespace: root::setnth!`` | ``Usage: (setnth! idx obj sequence)`` |
+| ``root::setnth!`` | ``Usage: (setnth! idx obj sequence)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
+This is destructive!  Because vectors support indexing and lists do not, this is
+a much faster operation for a vector (uses [builtin](root::builtin?) [vec-set!](root::vec-set!)
+on input of type vector).  Return the list or vector that was modified.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def vctr (vec 0 1 2 3))<br>
@@ -3988,10 +4676,14 @@ Forms to do shell operations like file tests, pipes, redirects, etc.
 
 
 | <a id="Namespace: root::*stderr*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stderr*``](#Namespace: root::*stderr*-contents) | Type: File |
-| ``Namespace: root::*stderr*`` | ``Usage: (write-line *stderr*)`` |
+| ``root::*stderr*`` | ``Usage: (write-line *stderr*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">File that connects to standard error by default.
+Can be used in place of a write file object in any form that takes one.  Used
+as the default for eprint and eprintln.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stderr for test.<br>
@@ -4004,10 +4696,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::*stdin*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdin*``](#Namespace: root::*stdin*-contents) | Type: File |
-| ``Namespace: root::*stdin*`` | ``Usage: (read-line *stdin*)`` |
+| ``root::*stdin*`` | ``Usage: (read-line *stdin*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">File that connects to standard in by default.
+Can be used in place of a read file object in any form that takes one.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def stdin-test (open "/tmp/sl-sh.stdin.test" :create :truncate))<br>
@@ -4022,10 +4717,14 @@ Example:<br>
 
 
 | <a id="Namespace: root::*stdout*" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``*stdout*``](#Namespace: root::*stdout*-contents) | Type: File |
-| ``Namespace: root::*stdout*`` | ``Usage: (write-line *stdout*)`` |
+| ``root::*stdout*`` | ``Usage: (write-line *stdout*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">File that connects to standard out by default.
+Can be used in place of a write file object in any form that takes one.  Used
+as the default for print and println.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ; Use a file for stdout for test.<br>
@@ -4038,22 +4737,31 @@ Example:<br>
 
 
 | <a id="Namespace: shell::alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias``](#Namespace: shell::alias-contents) | Type: Macro |
-| ``Namespace: shell::alias`` | ``Usage: (alias name body) or (alias name docstring body).`` |
+| ``shell::alias`` | ``Usage: (alias name body) or (alias name docstring body).`` |
 
+<span style="padding-left: 5px">Create an alias, intended to be used with executables not lisp code (use defn
+for that).
+</span>
 <br>
 
 
 | <a id="Namespace: shell::alias?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``alias?``](#Namespace: shell::alias?-contents) | Type: Lambda |
-| ``Namespace: shell::alias?`` | ``Usage: (alias? name)`` |
+| ``shell::alias?`` | ``Usage: (alias? name)`` |
 
+<span style="padding-left: 5px">Provides boolean value confirming or denying given alias' presence
+in set of registered aliases.
+</span>
 <br>
 
 
 | <a id="Namespace: root::bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg``](#Namespace: root::bg-contents) | Type: Function |
-| ``Namespace: root::bg`` | ``Usage: (bg job-id?)`` |
+| ``root::bg`` | ``Usage: (bg job-id?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Put a job in the background.
+If no job id is specified use the last job.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(bg)<br>
@@ -4064,10 +4772,12 @@ t<br>
 
 
 | <a id="Namespace: shell::bg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``bg-color-rgb``](#Namespace: shell::bg-color-rgb-contents) | Type: Lambda |
-| ``Namespace: shell::bg-color-rgb`` | ``Usage: (bg-color-rgb red-val green-val blue-val)`` |
+| ``shell::bg-color-rgb`` | ``Usage: (bg-color-rgb red-val green-val blue-val)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Set the background color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "[48;2;128;128;128m" (bg-color-rgb 128 128 128))<br>
@@ -4082,10 +4792,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::cd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``cd``](#Namespace: root::cd-contents) | Type: Function |
-| ``Namespace: root::cd`` | ``Usage: (cd dir-to-change-to)`` |
+| ``root::cd`` | ``Usage: (cd dir-to-change-to)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Change directory.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (mkdir "/tmp/tst-fs-cd")<br>
@@ -4104,10 +4816,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::clear-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``clear-dirs``](#Namespace: shell::clear-dirs-contents) | Type: Lambda |
-| ``Namespace: shell::clear-dirs`` | ``Usage: (clear-dirs)`` |
+| ``shell::clear-dirs`` | ``Usage: (clear-dirs)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Clears the directory stack.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (clear-dirs)<br>
@@ -4126,10 +4840,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::command" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``command``](#Namespace: root::command-contents) | Type: SpecialForm |
-| ``Namespace: root::command`` | ``Usage: (command exp0 ... expN)`` |
+| ``root::command`` | ``Usage: (command exp0 ... expN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Only execute system commands not forms within this form.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "Failed to execute [str string]: No such file or directory (os error 2)" (cadr (get-error (command (str "string")))))<br>
@@ -4141,10 +4857,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``dirs``](#Namespace: shell::dirs-contents) | Type: Lambda |
-| ``Namespace: shell::dirs`` | ``Usage: (dirs)`` |
+| ``shell::dirs`` | ``Usage: (dirs)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">List the directory stack.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (clear-dirs)<br>
@@ -4173,16 +4891,34 @@ Example:<br>
 
 
 | <a id="Namespace: shell::endfix-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``endfix-on``](#Namespace: shell::endfix-on-contents) | Type: Macro |
-| ``Namespace: shell::endfix-on`` | ``Usage: (endfix-on)`` |
+| ``shell::endfix-on`` | ``Usage: (endfix-on)`` |
 
+<span style="padding-left: 5px">Allows use of infix notation for common shell forms. The following is the
+complete mapping in lisp/endfix.lisp of all supported infix operators and
+the corresponding sl-sh function they map to:
+'|| 'or
+'| '|
+'@@ 'do (@@ is used instead of ; because ; is a comment in lisp)
+'&& 'and
+'out> 'out>
+'out>> 'out>>
+'err> 'err>
+'err>> 'err>>
+'out>null 'out>null
+'out-err> 'out-err>
+'out-err>> 'out-err>>
+'out-err>null 'out-err>null
+</span>
 <br>
 
 
 | <a id="Namespace: shell::err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>``](#Namespace: shell::err>-contents) | Type: Macro |
-| ``Namespace: shell::err>`` | ``Usage: (err> file body)`` |
+| ``shell::err>`` | ``Usage: (err> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stderr to file, truncate the file first.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (err> "/tmp/sl-sh.err>.test" (eprintln "stderr redir one"))<br>
@@ -4203,10 +4939,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>>``](#Namespace: shell::err>>-contents) | Type: Macro |
-| ``Namespace: shell::err>>`` | ``Usage: (err>> file body)`` |
+| ``shell::err>>`` | ``Usage: (err>> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stderr to file, append the output.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (err> "/tmp/sl-sh.err>>.test" (eprintln "stderr redir one"))<br>
@@ -4229,10 +4967,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``err>null``](#Namespace: shell::err>null-contents) | Type: Macro |
-| ``Namespace: shell::err>null`` | ``Usage: (err>null body)`` |
+| ``shell::err>null`` | ``Usage: (err>null body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stderr to null (/dev/null equivelent).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (err> "/tmp/sl-sh.err>null.test" (do (eprintln "stderr redir one")(err>null (eprintln "stdnull redir one"))))<br>
@@ -4247,10 +4987,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::exit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``exit``](#Namespace: root::exit-contents) | Type: Function |
-| ``Namespace: root::exit`` | ``Usage: (exit code?)`` |
+| ``root::exit`` | ``Usage: (exit code?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Exit shell with optional status code.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(exit)<br>
@@ -4262,10 +5004,12 @@ t<br>
 
 
 | <a id="Namespace: root::export" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``export``](#Namespace: root::export-contents) | Type: Function |
-| ``Namespace: root::export`` | ``Usage: (export symbol string) -> string`` |
+| ``root::export`` | ``Usage: (export symbol string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Export a key and value to the shell environment.  Second arg will be made a string and returned.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))<br>
@@ -4276,16 +5020,25 @@ Example:<br>
 
 
 | <a id="Namespace: shell::fc" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fc``](#Namespace: shell::fc-contents) | Type: Lambda |
-| ``Namespace: shell::fc`` | ``Usage: (fc)`` |
+| ``shell::fc`` | ``Usage: (fc)`` |
 
+<span style="padding-left: 5px">Put the contents of the last command into a temporary file
+([temp-dir](shell::temp-dir)), and open the temporary file in the text editor,
+If the editor returns with an error code of 0 the contents of the
+temporary file are executed. `fc` can be used in succession and the contents of
+the temporary file are saved to the sl-sh history.
+</span>
 <br>
 
 
 | <a id="Namespace: root::fg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg``](#Namespace: root::fg-contents) | Type: Function |
-| ``Namespace: root::fg`` | ``Usage: (fg job-id?)`` |
+| ``root::fg`` | ``Usage: (fg job-id?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Put a job in the foreground.
+If no job id is specified use the last job.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(fg)<br>
@@ -4296,10 +5049,12 @@ t<br>
 
 
 | <a id="Namespace: shell::fg-color-rgb" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fg-color-rgb``](#Namespace: shell::fg-color-rgb-contents) | Type: Lambda |
-| ``Namespace: shell::fg-color-rgb`` | ``Usage: (fg-color-rgb red-val green-val blue-val)`` |
+| ``shell::fg-color-rgb`` | ``Usage: (fg-color-rgb red-val green-val blue-val)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Set the foreground color to the desired rgb where each arg is an integer between 0 and 255 inclusive.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "[38;2;128;128;128m" (fg-color-rgb 128 128 128))<br>
@@ -4314,10 +5069,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::form" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``form``](#Namespace: root::form-contents) | Type: SpecialForm |
-| ``Namespace: root::form`` | ``Usage: (form exp0 ... expN)`` |
+| ``root::form`` | ``Usage: (form exp0 ... expN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Like do but do not execute system commands within this form.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "Not a valid form true, not found." (cadr (get-error (form (true)))))<br>
@@ -4328,10 +5085,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::fs-dir?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-dir?``](#Namespace: root::fs-dir?-contents) | Type: Function |
-| ``Namespace: root::fs-dir?`` | ``Usage: (fs-dir? path-to-test)`` |
+| ``root::fs-dir?`` | ``Usage: (fs-dir? path-to-test)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Is the given path a directory?
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (mkdir "/tmp/tst-fs-dir")<br>
@@ -4347,10 +5106,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::fs-exists?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-exists?``](#Namespace: root::fs-exists?-contents) | Type: Function |
-| ``Namespace: root::fs-exists?`` | ``Usage: (fs-exists? path-to-test)`` |
+| ``root::fs-exists?`` | ``Usage: (fs-exists? path-to-test)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Does the given path exist?
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (mkdir "/tmp/tst-fs-exists")<br>
@@ -4366,10 +5127,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::fs-file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``fs-file?``](#Namespace: root::fs-file?-contents) | Type: Function |
-| ``Namespace: root::fs-file?`` | ``Usage: (fs-file? path-to-test)`` |
+| ``root::fs-file?`` | ``Usage: (fs-file? path-to-test)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Is the given path a file?
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (mkdir "/tmp/tst-fs-file")<br>
@@ -4385,10 +5148,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::get-dirs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``get-dirs``](#Namespace: shell::get-dirs-contents) | Type: Lambda |
-| ``Namespace: shell::get-dirs`` | ``Usage: (get-dirs)`` |
+| ``shell::get-dirs`` | ``Usage: (get-dirs)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the vector of directories.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (clear-dirs)<br>
@@ -4409,10 +5174,67 @@ Example:<br>
 
 
 | <a id="Namespace: shell::getopts" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``getopts``](#Namespace: shell::getopts-contents) | Type: Lambda |
-| ``Namespace: shell::getopts`` | ``Usage: (getopts options-map args)`` |
+| ``shell::getopts`` | ``Usage: (getopts options-map args)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Getopts takes a hash map and a vector of args and returns a hash map with all
+the values extracted from the args and bound to the corresponding keys in the
+provided hash map.
+Take this example script:
+sample-getopts.lisp
+----------------
+#!/usr/bin/env sl-sh
+(println "Passing: " args " to getopts")
+;; getopts is given a hash map with one key, :-m, that corresponds to the flag,
+;; -m, that it configures.
+(var bindings
+(getopts
+(make-hash
+(list (join
+:-m
+(make-hash (list
+(join :arity 1)
+(:default 0)
+(:type :int?))))))
+args))
+(println "The binding for -m is: " (hash-get bindings :-m) "of type " (type (hash-get bindings :-m)))
+----------------
+Running the script with one argument to the -m flag yields:
+#<Function> ./sample-getopts.lisp -m 7
+=> Passing: #("-m" "7") to getopts
+=> The binding for -m is 7 of type Int
+The hash map for the key :-m showcases the configuration keys that exist for
+each flag: arity, :default, and :type. :arity specifies that the -m flag will
+take one argument. :default specifies the bindng for :-m should be 0 if the
+-m flag is not seen in args. :type :int? specifies that the binding should
+be of that type, in this case int?. Running the script again with no -m
+flag yields:
+#<Function> ./sample-getopts.lisp
+=> Passing: #() to getopts
+=> The binding for -m is 0 of type Int
+Demonstrating the :default binding of 0 for the symbol :-m since the -m flag
+was not provided as an argument to the script.
+Configuration keys for flags:
+- :arity (optional)
+Defaults to 0. If the arity is 0 the returned binding will be #t or nil.
+Can be any integer. The integer value for the :arity corresponds to the
+number of arguments getopts will enforce for this flag, if the number of
+arguments provided to the flag is not equal to the specified arity an error
+is thrown.
+- :default (optional)
+Use this as a default if the given flag is not provided at execution time.
+- :type (optional)
+Specify a type for every provided argument for the given flag. Types can be
+any of: ("[fs-file?](#root::fs-file?)" "[hash?](#root::hash?)" "[float?](#root::float?)" "[nil?](#root::nil?)" "[list?](#root::list?)" "[fs-dir?](#root::fs-dir?)" "[fs-exists?](#root::fs-exists?)" "[vec?](#root::vec?)" "[lambda?](#root::lambda?)" "[int?](#root::int?)" "[string?](#root::string?)" "[symbol?](#root::symbol?)" "[char?](#root::char?)" "[macro?](#root::macro?)")
+Rules for flags:
+- Flags can be single character: -m -n -c etc.
+- Flags of a single single character with arity 0 can be adjacent without the
+need for additional dashes: -mnc
+- Multiple flags of a single character with arity 0 can precede a flag of a
+single character with arity N as long as said character appears last: -mne "foo"
+- Flags can be multi-character as long as they are preceded by two dashes: --multi-char-arg
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;See tests/getopts.lisp<br>
@@ -4423,10 +5245,12 @@ t<br>
 
 
 | <a id="Namespace: root::glob" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``glob``](#Namespace: root::glob-contents) | Type: Function |
-| ``Namespace: root::glob`` | ``Usage: (glob /path/with/*)`` |
+| ``root::glob`` | ``Usage: (glob /path/with/*)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes a list/varargs of globs and return the list of them expanded.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (mkdir "/tmp/tst-fs-glob")<br>
@@ -4444,10 +5268,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::history-context" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-context``](#Namespace: root::history-context-contents) | Type: Function |
-| ``Namespace: root::history-context`` | ``Usage: (history-context :context_id context-string) -> nil`` |
+| ``root::history-context`` | ``Usage: (history-context :context_id context-string) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sets the history context for searches.  Usually the current path but can be any
+string.  Pass nil to set it to nothing.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-context :repl "/home")<br>
@@ -4458,10 +5285,12 @@ t<br>
 
 
 | <a id="Namespace: root::history-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-empty?``](#Namespace: root::history-empty?-contents) | Type: Function |
-| ``Namespace: root::history-empty?`` | ``Usage: (history-empty? :context_id) -> t/nil`` |
+| ``root::history-empty?`` | ``Usage: (history-empty? :context_id) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns true if history for context_id is empty, nil otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-empty? :repl)<br>
@@ -4472,10 +5301,12 @@ t<br>
 
 
 | <a id="Namespace: root::history-length" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-length``](#Namespace: root::history-length-contents) | Type: Function |
-| ``Namespace: root::history-length`` | ``Usage: (history-length :context_id) -> int`` |
+| ``root::history-length`` | ``Usage: (history-length :context_id) -> int`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns the number of history items for the given context.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-length :repl)<br>
@@ -4486,10 +5317,12 @@ t<br>
 
 
 | <a id="Namespace: root::history-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-nth``](#Namespace: root::history-nth-contents) | Type: Function |
-| ``Namespace: root::history-nth`` | ``Usage: (history-nth :context_id nth) -> String`` |
+| ``root::history-nth`` | ``Usage: (history-nth :context_id nth) -> String`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns the history at index nth (the newest is 0).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-nth :repl 0)<br>
@@ -4500,10 +5333,13 @@ t<br>
 
 
 | <a id="Namespace: root::history-push" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push``](#Namespace: root::history-push-contents) | Type: Function |
-| ``Namespace: root::history-push`` | ``Usage: (history-push :context_id string) -> nil/t`` |
+| ``root::history-push`` | ``Usage: (history-push :context_id string) -> nil/t`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pushes string onto the history for the prompt context :context_id.
+Returns true on success or nil on failure.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-push :repl "Some command")<br>
@@ -4514,10 +5350,15 @@ t<br>
 
 
 | <a id="Namespace: root::history-push-throwaway" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``history-push-throwaway``](#Namespace: root::history-push-throwaway-contents) | Type: Function |
-| ``Namespace: root::history-push-throwaway`` | ``Usage: (history-push-throwaway :context_id string) -> nil/t`` |
+| ``root::history-push-throwaway`` | ``Usage: (history-push-throwaway :context_id string) -> nil/t`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pushes string onto the history for the prompt context :context_id.  A throwaway
+item will will only persist until the next command is read (use it to allow
+editing of failed commands without them going into history).
+Returns true on success or nil on failure.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(history-push-throwaway :repl "Some broken command")<br>
@@ -4528,10 +5369,12 @@ t<br>
 
 
 | <a id="Namespace: root::jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``jobs``](#Namespace: root::jobs-contents) | Type: Function |
-| ``Namespace: root::jobs`` | ``Usage: (jobs)`` |
+| ``root::jobs`` | ``Usage: (jobs)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Print list of jobs with ids.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(jobs)<br>
@@ -4542,10 +5385,12 @@ t<br>
 
 
 | <a id="Namespace: shell::let-env" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``let-env``](#Namespace: shell::let-env-contents) | Type: Macro |
-| ``Namespace: shell::let-env`` | ``Usage: (let-env vals &rest let_body)`` |
+| ``shell::let-env`` | ``Usage: (let-env vals &rest let_body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Like let but sets environment variables that are reset after the macro finishes.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false $LET-ENV-TEST-VAR-NOT-HERE)<br>
@@ -4558,10 +5403,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::loose-symbols" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``loose-symbols``](#Namespace: root::loose-symbols-contents) | Type: SpecialForm |
-| ``Namespace: root::loose-symbols`` | ``Usage: (loose-symbols exp0 ... expN)`` |
+| ``root::loose-symbols`` | ``Usage: (loose-symbols exp0 ... expN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Within this form any undefined symbols become strings.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "Some_Result" (loose-symbols Some_Result))<br>
@@ -4572,10 +5419,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out-err>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>``](#Namespace: shell::out-err>-contents) | Type: Macro |
-| ``Namespace: shell::out-err>`` | ``Usage: (out-err> file body)`` |
+| ``shell::out-err>`` | ``Usage: (out-err> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect both stdout and stderr to the same file, truncate the file first.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out-err> "/tmp/sl-sh.out-err>.test" (do (println "stdout redir one")(eprintln "stderr redir one")))<br>
@@ -4608,10 +5457,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out-err>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>>``](#Namespace: shell::out-err>>-contents) | Type: Macro |
-| ``Namespace: shell::out-err>>`` | ``Usage: (out-err>> file body)`` |
+| ``shell::out-err>>`` | ``Usage: (out-err>> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect both stdout and stderr to the same file, append the output.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out-err> "/tmp/sl-sh.out-err>>.test" (do (println "stdout redir one")(eprintln "stderr redir one")))<br>
@@ -4640,10 +5491,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out-err>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out-err>null``](#Namespace: shell::out-err>null-contents) | Type: Macro |
-| ``Namespace: shell::out-err>null`` | ``Usage: (out-err>null body)`` |
+| ``shell::out-err>null`` | ``Usage: (out-err>null body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect both stdout and stderr to null (/dev/null equivelent).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out-err> "/tmp/sl-sh.out-err>null.test" (do<br>
@@ -4665,10 +5518,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>``](#Namespace: shell::out>-contents) | Type: Macro |
-| ``Namespace: shell::out>`` | ``Usage: (out> file body)`` |
+| ``shell::out>`` | ``Usage: (out> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stdout to file, truncate the file first.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out> "/tmp/sl-sh.out>.test" (echo "stdout redir one"))<br>
@@ -4689,10 +5544,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out>>" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>>``](#Namespace: shell::out>>-contents) | Type: Macro |
-| ``Namespace: shell::out>>`` | ``Usage: (out>> file body)`` |
+| ``shell::out>>`` | ``Usage: (out>> file body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stdout to file, append the output.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out> "/tmp/sl-sh.out>>.test" (echo "stdout redir one"))<br>
@@ -4715,10 +5572,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::out>null" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``out>null``](#Namespace: shell::out>null-contents) | Type: Macro |
-| ``Namespace: shell::out>null`` | ``Usage: (out>null body)`` |
+| ``shell::out>null`` | ``Usage: (out>null body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Redirect stdout to null (/dev/null equivelent).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (out> "/tmp/sl-sh.out>null.test" (do (println "stdout redir one")(out>null (println "stdnull redir one"))))<br>
@@ -4733,10 +5592,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::pid" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pid``](#Namespace: root::pid-contents) | Type: Function |
-| ``Namespace: root::pid`` | ``Usage: (pid proc)`` |
+| ``root::pid`` | ``Usage: (pid proc)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the pid of a process.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def pid-test (echo -n))<br>
@@ -4748,10 +5609,25 @@ Example:<br>
 
 
 | <a id="Namespace: root::pipe" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pipe``](#Namespace: root::pipe-contents) | Type: Function |
-| ``Namespace: root::pipe`` | ``Usage: (pipe [expression]+)`` |
+| ``root::pipe`` | ``Usage: (pipe [expression]+)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Setup a pipe between processes or expressions.  Pipe will take one or more
+expressions, each one but the last will be forked into a new process with it's
+stdin being the output of the last expression.  The first expression uses the
+current stdin and the last expression outputs to the current stdout.  Pipe works
+with system commands as well as sl-sh forms (lambdas, etc).  Note it connects
+the stdin/stdout of processes so if used with a lambda it should read stdin to
+get the previous output and write to stdout to pass to the next expression in
+the pipe (i.e. pipe will not interact with parameters or anything else).
+Pipes also support using a read file as the first expression (the file contents
+become stdin for the next form) and a write file as the last expression
+(previous output will be written to the file).  For instance pipe can be used
+to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
+this example does not close the files.
+Pipes can be nested including piping through a lambda that itself uses pipes.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def pipe-test (str (pipe (echo "one<br>
@@ -4792,10 +5668,12 @@ three") (grep two) tsync)<br>
 
 
 | <a id="Namespace: shell::popd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``popd``](#Namespace: shell::popd-contents) | Type: Lambda |
-| ``Namespace: shell::popd`` | ``Usage: (popd)`` |
+| ``shell::popd`` | ``Usage: (popd)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pop first directory from directory stack and change to it.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def cur-test-path (str (pwd)))<br>
@@ -4810,10 +5688,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::prompt" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``prompt``](#Namespace: root::prompt-contents) | Type: Function |
-| ``Namespace: root::prompt`` | ``Usage: (prompt string) -> string`` |
+| ``root::prompt`` | ``Usage: (prompt string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Starts an interactive prompt (like the repl prompt) with the supplied prompt and
+returns the input string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(def input-string (prompt "prompt> "))<br>
@@ -4824,10 +5705,12 @@ t<br>
 
 
 | <a id="Namespace: shell::pushd" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pushd``](#Namespace: shell::pushd-contents) | Type: Lambda |
-| ``Namespace: shell::pushd`` | ``Usage: (pushd dir)`` |
+| ``shell::pushd`` | ``Usage: (pushd dir)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Push current directory on the directory stack and change to new directory.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def cur-test-path (str (pwd)))<br>
@@ -4842,10 +5725,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::reap-jobs" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``reap-jobs``](#Namespace: root::reap-jobs-contents) | Type: Function |
-| ``Namespace: root::reap-jobs`` | ``Usage: (reap-jobs) -> nil`` |
+| ``root::reap-jobs`` | ``Usage: (reap-jobs) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Reaps any completed jobs.  Only intended to be used by code implemeting the REPL
+loop or something similiar, this is probably not the form you are searching for.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(reap-jobs)<br>
@@ -4856,16 +5742,21 @@ t<br>
 
 
 | <a id="Namespace: shell::register-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``register-alias``](#Namespace: shell::register-alias-contents) | Type: Lambda |
-| ``Namespace: shell::register-alias`` | ``Usage: (register-alias name)`` |
+| ``shell::register-alias`` | ``Usage: (register-alias name)`` |
 
+<span style="padding-left: 5px">Registers an alias to the current scope. Useful if unregistering or
+ability to know whether an alias has been registered is desirable.
+</span>
 <br>
 
 
 | <a id="Namespace: root::run-bg" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``run-bg``](#Namespace: root::run-bg-contents) | Type: SpecialForm |
-| ``Namespace: root::run-bg`` | ``Usage: (run-bg exp0 ... expN)`` |
+| ``root::run-bg`` | ``Usage: (run-bg exp0 ... expN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Like do except any system commands started within form will be in the background.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 ;(run-bg gitk)<br>
@@ -4876,10 +5767,12 @@ t<br>
 
 
 | <a id="Namespace: shell::set-dirs-max" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``set-dirs-max``](#Namespace: shell::set-dirs-max-contents) | Type: Lambda |
-| ``Namespace: shell::set-dirs-max`` | ``Usage: (set-dirs-max max)`` |
+| ``shell::set-dirs-max`` | ``Usage: (set-dirs-max max)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sets the max number of directories to save in the stack.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (clear-dirs)<br>
@@ -4903,10 +5796,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::sleep" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sleep``](#Namespace: root::sleep-contents) | Type: Function |
-| ``Namespace: root::sleep`` | ``Usage: (sleep milliseconds) -> nil`` |
+| ``root::sleep`` | ``Usage: (sleep milliseconds) -> nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Sleep for the provided milliseconds (must be a positive integer).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-sleep-var (time (sleep 1000)))<br>
@@ -4917,22 +5812,28 @@ Example:<br>
 
 
 | <a id="Namespace: shell::syntax-off" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-off``](#Namespace: shell::syntax-off-contents) | Type: Macro |
-| ``Namespace: shell::syntax-off`` | ``Usage: (syntax-off)`` |
+| ``shell::syntax-off`` | ``Usage: (syntax-off)`` |
 
+<span style="padding-left: 5px">Turn off syntax highlighting at the repl.
+</span>
 <br>
 
 
 | <a id="Namespace: shell::syntax-on" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``syntax-on``](#Namespace: shell::syntax-on-contents) | Type: Lambda |
-| ``Namespace: shell::syntax-on`` | ``Usage: (syntax-on)`` |
+| ``shell::syntax-on`` | ``Usage: (syntax-on)`` |
 
+<span style="padding-left: 5px">Turn on syntax highlighting at the repl.
+</span>
 <br>
 
 
 | <a id="Namespace: shell::sys-command?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sys-command?``](#Namespace: shell::sys-command?-contents) | Type: Lambda |
-| ``Namespace: shell::sys-command?`` | ``Usage: (sys-command? com)`` |
+| ``shell::sys-command?`` | ``Usage: (sys-command? com)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the supplied command is a system command.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (assert-true (sys-command? "ls"))<br>
@@ -4943,16 +5844,20 @@ Example:<br>
 
 
 | <a id="Namespace: shell::temp-dir" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``temp-dir``](#Namespace: shell::temp-dir-contents) | Type: Lambda |
-| ``Namespace: shell::temp-dir`` | ``Usage: (temp-dir)`` |
+| ``shell::temp-dir`` | ``Usage: (temp-dir)`` |
 
+<span style="padding-left: 5px">Returns  environment variable if set, otherwise returns "/tmp".
+</span>
 <br>
 
 
 | <a id="Namespace: root::time" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``time``](#Namespace: root::time-contents) | Type: Function |
-| ``Namespace: root::time`` | ``Usage: (time form) -> eval-time`` |
+| ``root::time`` | ``Usage: (time form) -> eval-time`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Evalutes the provided form and returns the seconds it ran for (as float with fractional part).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-sleep-var (time (sleep 1100)))<br>
@@ -4963,10 +5868,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::unexport" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unexport``](#Namespace: root::unexport-contents) | Type: Function |
-| ``Namespace: root::unexport`` | ``Usage: (unexport symbol)`` |
+| ``root::unexport`` | ``Usage: (unexport symbol)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Remove a var from the current shell environment.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))<br>
@@ -4979,16 +5886,20 @@ Example:<br>
 
 
 | <a id="Namespace: shell::unregister-alias" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``unregister-alias``](#Namespace: shell::unregister-alias-contents) | Type: Lambda |
-| ``Namespace: shell::unregister-alias`` | ``Usage: (unregister-alias name)`` |
+| ``shell::unregister-alias`` | ``Usage: (unregister-alias name)`` |
 
+<span style="padding-left: 5px">Unregisters an alias, removing it from scope.
+</span>
 <br>
 
 
 | <a id="Namespace: root::version" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``version``](#Namespace: root::version-contents) | Type: Function |
-| ``Namespace: root::version`` | ``Usage: (version)`` |
+| ``root::version`` | ``Usage: (version)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Produce executable version as string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (string? (version)))<br>
@@ -4998,10 +5909,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::wait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``wait``](#Namespace: root::wait-contents) | Type: Function |
-| ``Namespace: root::wait`` | ``Usage: (wait proc-to-wait-for)`` |
+| ``root::wait`` | ``Usage: (wait proc-to-wait-for)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Wait for a process to end and return it's exit status.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def wait-test (wait (err>null (ls /does/not/exist/123))))<br>
@@ -5012,10 +5925,12 @@ Example:<br>
 
 
 | <a id="Namespace: shell::|" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``\|``](#Namespace: shell::|-contents) | Type: Macro |
-| ``Namespace: shell::\|`` | ``Usage: (\| &rest body)`` |
+| ``shell::\|`` | ``Usage: (\| &rest body)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Shorthand for pipe builtin.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def pipe-test (str (| (echo "one<br>
@@ -5031,10 +5946,14 @@ three")(grep two))))<br>
 
 
 | <a id="Namespace: root::str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str``](#Namespace: root::str-contents) | Type: Function |
-| ``Namespace: root::str`` | ``Usage: (str arg0 ... argN) -> string`` |
+| ``root::str`` | ``Usage: (str arg0 ... argN) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new string with it's arguments.
+Arguments will be turned into strings.  If an argument is a process then the
+output of the process will be captured and put into the string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stringsome" (str "string" "some"))<br>
@@ -5048,10 +5967,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-append" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-append``](#Namespace: root::str-append-contents) | Type: Function |
-| ``Namespace: root::str-append`` | ``Usage: (str-append string string) -> string`` |
+| ``root::str-append`` | ``Usage: (str-append string string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new string by appending two strings.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stringsome" (str-append "string" "some"))<br>
@@ -5063,10 +5984,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-bytes" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-bytes``](#Namespace: root::str-bytes-contents) | Type: Function |
-| ``Namespace: root::str-bytes`` | ``Usage: (str-bytes string) -> int`` |
+| ``root::str-bytes`` | ``Usage: (str-bytes string) -> int`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return number of bytes in a string (may be more then length).
+Strings are utf8 so it chars and bytes may not be a one to one match.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 4 (str-bytes "Stau"))<br>
@@ -5079,10 +6003,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-cat-list" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-cat-list``](#Namespace: root::str-cat-list-contents) | Type: Function |
-| ``Namespace: root::str-cat-list`` | ``Usage: (str-cat-list join-pattern sequence) -> string`` |
+| ``root::str-cat-list`` | ``Usage: (str-cat-list join-pattern sequence) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Build a string by concatting a sequence with a join string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))<br>
@@ -5094,10 +6020,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-clear!``](#Namespace: root::str-clear!-contents) | Type: Function |
-| ``Namespace: root::str-clear!`` | ``Usage: (str-clear! string) -> string`` |
+| ``root::str-clear!`` | ``Usage: (str-clear! string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Clears a string.  This is a destructive form.
+Returns the string it was given.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "" (str-clear! (str "string")))<br>
@@ -5110,10 +6039,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-contains" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-contains``](#Namespace: root::str-contains-contents) | Type: Function |
-| ``Namespace: root::str-contains`` | ``Usage: (str-contains pattern string) -> t/nil`` |
+| ``root::str-contains`` | ``Usage: (str-contains pattern string) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if string contains pattern (both strings).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (str-contains "Stau" "Stausomething"))<br>
@@ -5129,10 +6060,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-empty?``](#Namespace: root::str-empty?-contents) | Type: Function |
-| ``Namespace: root::str-empty?`` | ``Usage: (str-empty? string) -> t/nil`` |
+| ``root::str-empty?`` | ``Usage: (str-empty? string) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Is a string empty?  Let's find out...
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (str-empty? ""))<br>
@@ -5145,10 +6078,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-ignore-expand" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ignore-expand``](#Namespace: root::str-ignore-expand-contents) | Type: Function |
-| ``Namespace: root::str-ignore-expand`` | ``Usage: (str-ignore-expand exp0 ... expN) -> [final expression]`` |
+| ``root::str-ignore-expand`` | ``Usage: (str-ignore-expand exp0 ... expN) -> [final expression]`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Like do but any strings in the form will not be expanded.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (export 'TST-IGNORE "TST")<br>
@@ -5160,10 +6095,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-iter-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-empty?``](#Namespace: root::str-iter-empty?-contents) | Type: Function |
-| ``Namespace: root::str-iter-empty?`` | ``Usage: (str-iter-empty? string) -> t/nil`` |
+| ``root::str-iter-empty?`` | ``Usage: (str-iter-empty? string) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns true if the iterator for the string is empty or finished.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter-start "test")<br>
@@ -5193,10 +6130,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-iter-next!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-next!``](#Namespace: root::str-iter-next!-contents) | Type: Function |
-| ``Namespace: root::str-iter-next!`` | ``Usage: (str-iter-next! string) -> char`` |
+| ``root::str-iter-next!`` | ``Usage: (str-iter-next! string) -> char`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns the next char in the iterator for string.  Returns nil if iteration
+is done.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter-start "y̆ΛλΣσ")<br>
@@ -5217,10 +6157,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-iter-peek" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-peek``](#Namespace: root::str-iter-peek-contents) | Type: Function |
-| ``Namespace: root::str-iter-peek`` | ``Usage: (str-iter-peek string) -> char`` |
+| ``root::str-iter-peek`` | ``Usage: (str-iter-peek string) -> char`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns the char that next will return in the iterator for string.  Returns nil if iteration
+is done.  Does not advance the iterator.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter-start "y̆ΛλΣσ")<br>
@@ -5245,10 +6188,15 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-iter-start" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-iter-start``](#Namespace: root::str-iter-start-contents) | Type: Function |
-| ``Namespace: root::str-iter-start`` | ``Usage: (str-iter-start string) -> string`` |
+| ``root::str-iter-start`` | ``Usage: (str-iter-start string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Starts or resets the iterator over a string.  Returns the input string with it's
+iteration start created and at the first position.  Using the str-iter-* functions
+is the proper way to get the chars of a string (since they are UTF a char is not
+a fixed size so direct indexing is very inefficient).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-iter-start "test")<br>
@@ -5277,10 +6225,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-lower" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-lower``](#Namespace: root::str-lower-contents) | Type: Function |
-| ``Namespace: root::str-lower`` | ``Usage: (str-lower string) -> string`` |
+| ``root::str-lower`` | ``Usage: (str-lower string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get all lower case string from a string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stau" (str-lower "STAU"))<br>
@@ -5294,10 +6244,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-ltrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-ltrim``](#Namespace: root::str-ltrim-contents) | Type: Function |
-| ``Namespace: root::str-ltrim`` | ``Usage: (str-ltrim string) -> string`` |
+| ``root::str-ltrim`` | ``Usage: (str-ltrim string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Trim left whitspace from string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "some string" (str-ltrim "   some string"))<br>
@@ -5311,10 +6263,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-map" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-map``](#Namespace: root::str-map-contents) | Type: Function |
-| ``Namespace: root::str-map`` | ``Usage: (str-map lambda string) -> string`` |
+| ``root::str-map`` | ``Usage: (str-map lambda string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new string by applying lambda to each char.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "XstringXstrX" (str-map (fn (ch) (if (= #\x ch) #\X ch)) "xstringxstrx"))<br>
@@ -5330,10 +6284,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-nth``](#Namespace: root::str-nth-contents) | Type: Function |
-| ``Namespace: root::str-nth`` | ``Usage: (str-nth n string) -> char`` |
+| ``root::str-nth`` | ``Usage: (str-nth n string) -> char`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get the nth char of a string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal #\a (str-nth 2 "stau"))<br>
@@ -5345,10 +6301,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-push!``](#Namespace: root::str-push!-contents) | Type: Function |
-| ``Namespace: root::str-push!`` | ``Usage: (str-push! string arg0 ... argN) -> string`` |
+| ``root::str-push!`` | ``Usage: (str-push! string arg0 ... argN) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Push the args (as strings) onto the string.  This is a destructive form.
+Arguments will be turned into strings.  Returns the string it was given.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "stringsome" (str-push! (str "string") "some"))<br>
@@ -5361,10 +6320,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-replace" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-replace``](#Namespace: root::str-replace-contents) | Type: Function |
-| ``Namespace: root::str-replace`` | ``Usage: (str-replace string old-pattern new-pattern) -> string`` |
+| ``root::str-replace`` | ``Usage: (str-replace string old-pattern new-pattern) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Replace occurances of second string with third in the first string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "some yyy string" (str-replace "some xxx string" "xxx" "yyy"))<br>
@@ -5376,10 +6337,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-rsplit" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplit``](#Namespace: root::str-rsplit-contents) | Type: Function |
-| ``Namespace: root::str-rsplit`` | ``Usage: (str-rsplit split-pattern string) -> vector`` |
+| ``root::str-rsplit`` | ``Usage: (str-rsplit split-pattern string) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Use a pattern to split a string into reverse order.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '("some" "yyy" "string") (str-rsplit "xxx" "stringxxxyyyxxxsome"))<br>
@@ -5393,10 +6356,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-rsplitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rsplitn``](#Namespace: root::str-rsplitn-contents) | Type: Function |
-| ``Namespace: root::str-rsplitn`` | ``Usage: (str-rsplitn n split-pattern string) -> vector`` |
+| ``root::str-rsplitn`` | ``Usage: (str-rsplitn n split-pattern string) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Use a pattern to split a string with at most n items returned in reverse order.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '("some" "yyy" "string") (str-rsplitn 3 "xxx" "stringxxxyyyxxxsome"))<br>
@@ -5410,10 +6375,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-rtrim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-rtrim``](#Namespace: root::str-rtrim-contents) | Type: Function |
-| ``Namespace: root::str-rtrim`` | ``Usage: (str-rtrim string) -> string`` |
+| ``root::str-rtrim`` | ``Usage: (str-rtrim string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Trim right whitespace from string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "   some string" (str-rtrim "   some string"))<br>
@@ -5427,10 +6394,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-split" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-split``](#Namespace: root::str-split-contents) | Type: Function |
-| ``Namespace: root::str-split`` | ``Usage: (str-split split-pattern string) -> vector`` |
+| ``root::str-split`` | ``Usage: (str-split split-pattern string) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Use a pattern to split a string (:whitespace to split on whitespace).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '("some" "yyy" "string") (str-split "xxx" "somexxxyyyxxxstring"))<br>
@@ -5445,10 +6414,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-splitn" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-splitn``](#Namespace: root::str-splitn-contents) | Type: Function |
-| ``Namespace: root::str-splitn`` | ``Usage: (str-splitn n split-pattern string) -> vector`` |
+| ``root::str-splitn`` | ``Usage: (str-splitn n split-pattern string) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Use a pattern to split a string with at most n items.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '("some" "yyy" "string") (str-splitn 3 "xxx" "somexxxyyyxxxstring"))<br>
@@ -5462,10 +6433,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-starts-with" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-starts-with``](#Namespace: root::str-starts-with-contents) | Type: Function |
-| ``Namespace: root::str-starts-with`` | ``Usage: (str-starts-with pattern string) -> t/nil`` |
+| ``root::str-starts-with`` | ``Usage: (str-starts-with pattern string) -> t/nil`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if string start with pattern (both strings).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (str-starts-with "Stau" "Stausomething"))<br>
@@ -5476,10 +6449,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-sub" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-sub``](#Namespace: root::str-sub-contents) | Type: Function |
-| ``Namespace: root::str-sub`` | ``Usage: (str-sub start length string) -> string`` |
+| ``root::str-sub`` | ``Usage: (str-sub start length string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return a substring from a string given start (0 based) and length.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "string" (str-sub 0 6 "stringxxxyyyxxxsome"))<br>
@@ -5491,10 +6466,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-trim" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-trim``](#Namespace: root::str-trim-contents) | Type: Function |
-| ``Namespace: root::str-trim`` | ``Usage: (str-trim string) -> string`` |
+| ``root::str-trim`` | ``Usage: (str-trim string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Trim right and left whitespace from string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "some string" (str-trim "   some string"))<br>
@@ -5508,10 +6485,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str-upper" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str-upper``](#Namespace: root::str-upper-contents) | Type: Function |
-| ``Namespace: root::str-upper`` | ``Usage: (str-upper string) -> string`` |
+| ``root::str-upper`` | ``Usage: (str-upper string) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get all upper case string from a string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "STAU" (str-upper "STAU"))<br>
@@ -5527,10 +6506,17 @@ Example:<br>
 
 
 | <a id="Namespace: struct::defstruct" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``defstruct``](#Namespace: struct::defstruct-contents) | Type: Macro |
-| ``Namespace: struct::defstruct`` | ``Usage: (defstruct name &rest fields)`` |
+| ``struct::defstruct`` | ``Usage: (defstruct name &rest fields)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Define a structure.  This produces a lambda with name that will create an instance.
+Each 'field' will add an attribute, method or trait.
+Use (attr-name doc-str? default? [:rw | :ro | :wo]?) if a final access modifier is not provided then it is private.
+NOTE: for attributes, if the default value is a string then doc-str is not optional (but can be empty).
+Use (:fn name doc-str? body) to add a method.
+Use (:impl trait) to add a trait.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (struct::defstruct test-struct<br>
@@ -5557,10 +6543,14 @@ Example:<br>
 
 
 | <a id="Namespace: struct::deftrait" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``deftrait``](#Namespace: struct::deftrait-contents) | Type: Macro |
-| ``Namespace: struct::deftrait`` | ``Usage: (deftrait name &rest fields)`` |
+| ``struct::deftrait`` | ``Usage: (deftrait name &rest fields)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Define a trait.  Traits define methods that are added to structures (and usually require one or
+more methods in the struct.  Use them to provide common functionality shared by different structures.
+Use (:fn name doc-str? body) to add a method.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (ns-push 'test-deftrait)<br>
@@ -5596,10 +6586,12 @@ These forms provide information/tests about an objects underlying type.
 
 
 | <a id="Namespace: root::builtin?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``builtin?``](#Namespace: root::builtin?-contents) | Type: Function |
-| ``Namespace: root::builtin?`` | ``Usage: (builtin? expression)`` |
+| ``root::builtin?`` | ``Usage: (builtin? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a builtin function or special form, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (builtin? type))<br>
@@ -5613,10 +6605,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::char?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``char?``](#Namespace: root::char?-contents) | Type: Function |
-| ``Namespace: root::char?`` | ``Usage: (char? expression)`` |
+| ``root::char?`` | ``Usage: (char? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a char, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (char? #\a))<br>
@@ -5628,10 +6622,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::file?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``file?``](#Namespace: root::file?-contents) | Type: Function |
-| ``Namespace: root::file?`` | ``Usage: (file? expression)`` |
+| ``root::file?`` | ``Usage: (file? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a file, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (file? (open :stdout)))<br>
@@ -5644,10 +6640,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::float->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float->int``](#Namespace: root::float->int-contents) | Type: Function |
-| ``Namespace: root::float->int`` | ``Usage: (float->int float) -> int`` |
+| ``root::float->int`` | ``Usage: (float->int float) -> int`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Cast a float as an int.  Truncates.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (float->int 0.0))<br>
@@ -5663,10 +6661,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::float?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``float?``](#Namespace: root::float?-contents) | Type: Function |
-| ``Namespace: root::float?`` | ``Usage: (float? expression)`` |
+| ``root::float?`` | ``Usage: (float? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a float, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (float? 1.5))<br>
@@ -5677,10 +6677,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::func?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``func?``](#Namespace: root::func?-contents) | Type: Macro |
-| ``Namespace: root::func?`` | ``Usage: (func? to-test)`` |
+| ``root::func?`` | ``Usage: (func? to-test)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a [builtin?](#root::builtin?), a [lambda?](#root::lambda?), or a [macro?](#root::macro?)
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def func?-test 1)<br>
@@ -5694,10 +6696,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::hash?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``hash?``](#Namespace: root::hash?-contents) | Type: Function |
-| ``Namespace: root::hash?`` | ``Usage: (hash? expression)`` |
+| ``root::hash?`` | ``Usage: (hash? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a hash map, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (hash? (make-hash)) "make-vec")<br>
@@ -5711,10 +6715,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::int->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int->float``](#Namespace: root::int->float-contents) | Type: Function |
-| ``Namespace: root::int->float`` | ``Usage: (int->float int) -> float`` |
+| ``root::int->float`` | ``Usage: (int->float int) -> float`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Cast an int as a float.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (int->float 0))<br>
@@ -5727,10 +6733,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::int?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``int?``](#Namespace: root::int?-contents) | Type: Function |
-| ``Namespace: root::int?`` | ``Usage: (int? expression)`` |
+| ``root::int?`` | ``Usage: (int? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is an int, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (int? 1))<br>
@@ -5741,10 +6749,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::lambda?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``lambda?``](#Namespace: root::lambda?-contents) | Type: Function |
-| ``Namespace: root::lambda?`` | ``Usage: (lambda? expression)`` |
+| ``root::lambda?`` | ``Usage: (lambda? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a lambda, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (lambda? (fn () ())))<br>
@@ -5757,10 +6767,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::list?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``list?``](#Namespace: root::list?-contents) | Type: Function |
-| ``Namespace: root::list?`` | ``Usage: (list? expression)`` |
+| ``root::list?`` | ``Usage: (list? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a list, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (list? '(1 2 3)) "reader macro")<br>
@@ -5775,10 +6787,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::macro?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``macro?``](#Namespace: root::macro?-contents) | Type: Function |
-| ``Namespace: root::macro?`` | ``Usage: (macro? expression)`` |
+| ``root::macro?`` | ``Usage: (macro? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a macro, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (macro? (macro () ())))<br>
@@ -5791,10 +6805,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::nil?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``nil?``](#Namespace: root::nil?-contents) | Type: Function |
-| ``Namespace: root::nil?`` | ``Usage: (nil? expression)`` |
+| ``root::nil?`` | ``Usage: (nil? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is nil, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (nil? nil))<br>
@@ -5805,10 +6821,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::pair?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``pair?``](#Namespace: root::pair?-contents) | Type: Function |
-| ``Namespace: root::pair?`` | ``Usage: (pair? expression)`` |
+| ``root::pair?`` | ``Usage: (pair? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a pair, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (pair? '(1 . 2)) "reader macro")<br>
@@ -5823,10 +6841,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::process?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``process?``](#Namespace: root::process?-contents) | Type: Function |
-| ``Namespace: root::process?`` | ``Usage: (process? expression)`` |
+| ``root::process?`` | ``Usage: (process? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a process, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (process? (true)))<br>
@@ -5839,10 +6859,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str->float" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->float``](#Namespace: root::str->float-contents) | Type: Function |
-| ``Namespace: root::str->float`` | ``Usage: (str->float string) -> float`` |
+| ``root::str->float`` | ``Usage: (str->float string) -> float`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">If string is a valid representation of a float return that float.  Error if not.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (str->float "0"))<br>
@@ -5858,10 +6880,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::str->int" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``str->int``](#Namespace: root::str->int-contents) | Type: Function |
-| ``Namespace: root::str->int`` | ``Usage: (str->int string) -> int`` |
+| ``root::str->int`` | ``Usage: (str->int string) -> int`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">If string is a valid representation of an integer return that int.  Error if not.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 0 (str->int "0"))<br>
@@ -5876,10 +6900,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::string?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``string?``](#Namespace: root::string?-contents) | Type: Function |
-| ``Namespace: root::string?`` | ``Usage: (string? expression)`` |
+| ``root::string?`` | ``Usage: (string? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a string, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (string? "string"))<br>
@@ -5890,10 +6916,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::sym" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym``](#Namespace: root::sym-contents) | Type: Function |
-| ``Namespace: root::sym`` | ``Usage: (sym expression+) -> symbol`` |
+| ``root::sym`` | ``Usage: (sym expression+) -> symbol`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Takes one or more forms, converts them to strings, concatonates them and returns
+a symbol with that name.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-to-symbol-sym nil)<br>
@@ -5911,10 +6940,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::sym->str" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``sym->str``](#Namespace: root::sym->str-contents) | Type: Function |
-| ``Namespace: root::sym->str`` | ``Usage: (sym->str symbol) -> string`` |
+| ``root::sym->str`` | ``Usage: (sym->str symbol) -> string`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Convert a symbol to the string representation representation of it's name.
+The string will be the symbol name as a string.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-sym->str-sym nil)<br>
@@ -5926,10 +6958,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::symbol?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``symbol?``](#Namespace: root::symbol?-contents) | Type: Function |
-| ``Namespace: root::symbol?`` | ``Usage: (symbol? expression)`` |
+| ``root::symbol?`` | ``Usage: (symbol? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a symbol, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (symbol? 'symbol))<br>
@@ -5940,10 +6974,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::true?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``true?``](#Namespace: root::true?-contents) | Type: Function |
-| ``Namespace: root::true?`` | ``Usage: (true? expression)`` |
+| ``root::true?`` | ``Usage: (true? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is true (true type NOT non-null), false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (true? t))<br>
@@ -5956,10 +6992,29 @@ Example:<br>
 
 
 | <a id="Namespace: root::type" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``type``](#Namespace: root::type-contents) | Type: Function |
-| ``Namespace: root::type`` | ``Usage: (type expression)`` |
+| ``root::type`` | ``Usage: (type expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Return the type of the given expression as a string.
+Types are:
+True
+Float
+Int
+Symbol
+String
+Char
+Lambda
+Macro
+Process
+SpecialForm
+Function
+Vector
+Pair
+Nil
+HashMap
+File
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal "True" (type t))<br>
@@ -5990,10 +7045,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::values?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``values?``](#Namespace: root::values?-contents) | Type: Function |
-| ``Namespace: root::values?`` | ``Usage: (values? expression)`` |
+| ``root::values?`` | ``Usage: (values? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is multi values object, false otherwise.
+NOTE: A values object will ALSO be the type of its first value.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (values? (values 1 "str" 5.5)))<br>
@@ -6014,10 +7072,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec?``](#Namespace: root::vec?-contents) | Type: Function |
-| ``Namespace: root::vec?`` | ``Usage: (vec? expression)`` |
+| ``root::vec?`` | ``Usage: (vec? expression)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the expression is a vector, false otherwise.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (vec? '#(1 2 3)) "reader macro")<br>
@@ -6038,10 +7098,12 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).
 
 
 | <a id="Namespace: root::make-vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``make-vec``](#Namespace: root::make-vec-contents) | Type: Function |
-| ``Namespace: root::make-vec`` | ``Usage: (make-vec capacity default)`` |
+| ``root::make-vec`` | ``Usage: (make-vec capacity default)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new vector with capacity and default item(s).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (make-vec))<br>
@@ -6054,10 +7116,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec``](#Namespace: root::vec-contents) | Type: Function |
-| ``Namespace: root::vec`` | ``Usage: (vec item1 item2 .. itemN)`` |
+| ``root::vec`` | ``Usage: (vec item1 item2 .. itemN)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Make a new vector with items.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-false (vec))<br>
@@ -6068,10 +7132,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-clear!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-clear!``](#Namespace: root::vec-clear!-contents) | Type: Function |
-| ``Namespace: root::vec-clear!`` | ``Usage: (vec-clear! vector)`` |
+| ``root::vec-clear!`` | ``Usage: (vec-clear! vector)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Clears a vector.  This is destructive!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-clear-vec (vec 1 2 3))<br>
@@ -6084,10 +7150,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-empty?" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-empty?``](#Namespace: root::vec-empty?-contents) | Type: Function |
-| ``Namespace: root::vec-empty?`` | ``Usage: (vec-empty? vector)`` |
+| ``root::vec-empty?`` | ``Usage: (vec-empty? vector)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">True if the vector is empty.
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-true (vec-empty? '#()))<br>
@@ -6098,10 +7166,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-insert!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-insert!``](#Namespace: root::vec-insert!-contents) | Type: Function |
-| ``Namespace: root::vec-insert!`` | ``Usage: (vec-insert! vector index new-element) -> vector`` |
+| ``root::vec-insert!`` | ``Usage: (vec-insert! vector index new-element) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Inserts new-element at index and moves following elements right in vector.  This is destructive!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-insert-nth-vec (vec 1 2 3))<br>
@@ -6118,10 +7188,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-nth" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-nth``](#Namespace: root::vec-nth-contents) | Type: Function |
-| ``Namespace: root::vec-nth`` | ``Usage: (vec-nth vector index) -> object`` |
+| ``root::vec-nth`` | ``Usage: (vec-nth vector index) -> object`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Get the nth element (0 based) of a vector. If you need the equivalent operation
+on a list use [nth](root::nth).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal 5 (vec-nth '#(1 2 3 4 5 6) 4))<br>
@@ -6134,10 +7207,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-pop!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-pop!``](#Namespace: root::vec-pop!-contents) | Type: Function |
-| ``Namespace: root::vec-pop!`` | ``Usage: (vec-pop! vector) -> object`` |
+| ``root::vec-pop!`` | ``Usage: (vec-pop! vector) -> object`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pops the last object off of the end of the vector.  This is destructive!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-pop-vec (vec 1 2 3))<br>
@@ -6153,10 +7228,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-push!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-push!``](#Namespace: root::vec-push!-contents) | Type: Function |
-| ``Namespace: root::vec-push!`` | ``Usage: (vec-push! vector object) -> vector`` |
+| ``root::vec-push!`` | ``Usage: (vec-push! vector object) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Pushes the provided object onto the end of the vector.  This is destructive!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-push-vec (vec))<br>
@@ -6172,10 +7249,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-remove!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-remove!``](#Namespace: root::vec-remove!-contents) | Type: Function |
-| ``Namespace: root::vec-remove!`` | ``Usage: (vec-remove! vector index) -> vector`` |
+| ``root::vec-remove!`` | ``Usage: (vec-remove! vector index) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Remove the element at index from vector, shifting all elements after it to the left.
+This is destructive!
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-remove-nth-vec (vec 1 2 3))<br>
@@ -6192,10 +7272,13 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-set!" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-set!``](#Namespace: root::vec-set!-contents) | Type: Function |
-| ``Namespace: root::vec-set!`` | ``Usage: (vec-set! vector index value) -> vector`` |
+| ``root::vec-set!`` | ``Usage: (vec-set! vector index value) -> vector`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Set the nth index (0 based) of a vector to value. This is destructive! If you
+need the equivalent operation on a list use [setnth!](root::setnth!).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (def test-setnth-vec (vec 1 2 3))<br>
@@ -6208,10 +7291,12 @@ Example:<br>
 
 
 | <a id="Namespace: root::vec-slice" class="anchor" aria-hidden="true" href="#sl-sh-form-documentation"></a>[``vec-slice``](#Namespace: root::vec-slice-contents) | Type: Function |
-| ``Namespace: root::vec-slice`` | ``Usage: (vec-slice vector start end?)`` |
+| ``root::vec-slice`` | ``Usage: (vec-slice vector start end?)`` |
 
-<details style="padding-bottom: 5px;">
-<summary>⮞</summary>
+<span style="padding-left: 5px">Returns a slice of a vector (0 based indexes, end is exclusive).
+</span>
+<details style="cursor: pointer; padding-bottom: 15px; padding-left: 10px">
+<summary>⮞ </summary>
 <code>
 Example:<br>
 (test::assert-equal '(5 6) (vec-slice '#(1 2 3 4 5 6) 4 6))<br>
