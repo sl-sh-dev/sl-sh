@@ -249,7 +249,7 @@ Shorthand for pipe builtin.
 Section: shell
 
 Example:
-(def pipe-test (str (| (echo \"one\ntwo\nthree\")(grep two))))
+(def pipe-test (str (| \$(echo \"one\ntwo\nthree\")\$(grep two))))
 (test::assert-equal \"two\n\" pipe-test)
 "
 	(&rest body)
@@ -404,10 +404,10 @@ Like let but sets environment variables that are reset after the macro finishes.
 Section: shell
 
 Example:
-(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-error \$LET-ENV-TEST-VAR-NOT-HERE)
 (let-env ((LET-ENV-TEST-VAR-NOT-HERE \"here\"))
     (test::assert-equal \"here\" \$LET-ENV-TEST-VAR-NOT-HERE))
-(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-error \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
 	((fn (params bindings olds)
@@ -841,7 +841,8 @@ Section: shell
           (if (def? (ref com))
               (do (set! com (eval (sym com)))
                   (or (builtin? com) (lambda? com) (macro? com)))
-              nil))
+              nil)
+        )
 
       (defmacro sys-apply (com &rest args)
           (if (callable? com)
@@ -902,10 +903,13 @@ Section: shell
                 ((and (not (= last-ch #\\))(= ch #\)) (> paren-level 0))
                     (set! paren-level (- paren-level 1))
                     (set! done #t))
-                ((and (not (= ch #\\))(or (= peek-ch #\")(= peek-ch #\$)))
-                    (do-read ch))
+                ((and (not (= ch #\\))(= peek-ch #\))(not in-paren))
+                    (str-push! token ch)
+                    (set! done #t))
                 ((and (char-whitespace? ch)(not in-paren))
                     (set! done #t))
+                ((and (not (= ch #\\))(or (= peek-ch #\")(= peek-ch #\$)))
+                    (do-read ch))
                 ((char-whitespace? ch)
                     (close-token))
                 ((str-push! token ch) nil))
@@ -922,10 +926,6 @@ Section: shell
         result)))
 
 (defn shell-read (stream ch_start) (shell-read-int stream nil))
-
-(if (def? *read-table*)
-    (hash-set! *read-table* #\$ 'shell-read)
-    (def *read-table* (make-hash '((#\$ . shell-read)))))
 
 (defn repl-line (line line-len)
     (export 'LAST_STATUS "0")
@@ -990,9 +990,6 @@ Section: shell
       ((fn ()
            (var result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(exit 1))))))
-
-(defn repl-lisp () (def repl-strict t))
-(defn repl-shell () (def repl-strict nil))
 
 (defn temp-dir
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
@@ -1064,6 +1061,12 @@ Section: shell"
 		(write-line new-file (str "(ns-auto-export '" namespace ")"))
 		(write-line new-file "(ns-pop)")))
 	(close new-file)))
+
+; This puts this in the shell userspace, also in slsh-std.lisp to get it in root.
+; Need this so getops.lisp can do string interpolation but this should be better.
+(if (def? *read-table*)
+    (hash-set! *read-table* #\$ 'shell::shell-read)
+    (def *read-table* (make-hash '((#\$ . shell::shell-read)))))
 
 (load "getopts.lisp")
 

@@ -490,13 +490,13 @@ Pipes can be nested including piping through a lambda that itself uses pipes.
 Section: shell
 
 Example:
-(def pipe-test (str (pipe (echo \"one\ntwo\nthree\")(grep two))))
+(def pipe-test (str (pipe $(echo \"one\ntwo\nthree\")$(grep two))))
 (test::assert-equal \"two\n\" pipe-test)
-(def pipe-test (str (pipe (pipe (echo \"one\ntwo\ntwotwo\nthree\")(grep two))(grep twotwo))))
+(def pipe-test (str (pipe (pipe $(echo \"one\ntwo\ntwotwo\nthree\")$(grep two))$(grep twotwo))))
 (test::assert-equal \"twotwo\n\" pipe-test)
 (mkdir \"/tmp/tst-pipe-dir\")
 (def tsync (open \"/tmp/tst-pipe-dir/test1\" :create))
-(pipe (print \"one\ntwo\ntwo2\nthree\") (grep two) tsync)
+(pipe (print \"one\ntwo\ntwo2\nthree\") $(grep two) tsync)
 (close tsync)
 (def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
 (test::assert-equal \"two\n\" (read-line topen))
@@ -504,7 +504,7 @@ Example:
 (test::assert-false (read-line topen))
 (close topen)
 (def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
-(def pipe-test (str (pipe topen (grep two2))))
+(def pipe-test (str (pipe topen $(grep two2))))
 (close topen)
 (test::assert-equal \"two2\n\" pipe-test)
 (rm \"/tmp/tst-pipe-dir/test1\")
@@ -523,7 +523,7 @@ Wait for a process to end and return it's exit status.
 Section: shell
 
 Example:
-(def wait-test (wait (err>null (ls /does/not/exist/123))))
+(def wait-test (wait (err>null $(ls /does/not/exist/123))))
 (test::assert-true (> wait-test 0))
 ",
         ),
@@ -539,7 +539,7 @@ Return the pid of a process.
 Section: shell
 
 Example:
-(def pid-test (echo -n))
+(def pid-test $(echo -n))
 (test::assert-true (int? (pid pid-test)))
 (test::assert-error (pid 1))
 ",

@@ -20,7 +20,7 @@
 			(do (eval exp) (recur)))))
 
 (defn all-items-by-whitespace (producer)
-	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
+	(str-trim (str (| (producer) $(tr "\n" " ") $(tr -s ":blank:")))))
 
 (defn make-test-list-from-symbols (symbols-list a-ns) (do
 	(var test-list (list))

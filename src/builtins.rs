@@ -247,9 +247,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     };
     match ast {
         Ok(ast) => {
-            let old_loose_syms = environment.loose_symbols;
-            // Do not use loose symbols in scripts even if loading from the repl.
-            environment.loose_symbols = false;
             let mut res: Option<Expression> = None;
             match &ast.get().data {
                 ExpEnum::Vector(list) => {
@@ -266,7 +263,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                     res = Some(eval(environment, &ast)?);
                 }
             }
-            environment.loose_symbols = old_loose_syms;
             Ok(res.unwrap_or_else(Expression::make_nil))
         }
         Err(err) => Err(LispError::new(err.reason)),
@@ -864,24 +860,6 @@ fn builtin_form(
         }
     }
     environment.form_type = old_form;
-    last_eval
-}
-
-fn builtin_loose_symbols(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_loose_syms = environment.loose_symbols;
-    environment.loose_symbols = true;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.loose_symbols = old_loose_syms;
-            return Err(err);
-        }
-    }
-    environment.loose_symbols = old_loose_syms;
     last_eval
 }
 
@@ -2155,22 +2133,6 @@ Section: shell
 Example:
 (test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
 (test::assert-equal \"Some String\" (form (str \"Some String\")))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("loose-symbols"),
-        Expression::make_special(
-            builtin_loose_symbols,
-            "Usage: (loose-symbols exp0 ... expN)
-
-Within this form any undefined symbols become strings.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
-(test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
 ",
         ),
     );

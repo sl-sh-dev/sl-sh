@@ -125,7 +125,6 @@ pub struct Environment {
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
-    pub loose_symbols: bool,
     pub str_ignore_expand: bool,
     pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
     pub form_type: FormType,
@@ -194,7 +193,6 @@ pub fn build_default_environment() -> Environment {
         run_background: false,
         is_tty: true,
         do_job_control: true,
-        loose_symbols: false,
         str_ignore_expand: false,
         procs,
         form_type: FormType::Any,
