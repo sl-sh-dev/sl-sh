@@ -15,11 +15,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Format
-      run: cargo fmt --verbose -- --check
-    - name: Clippy
-      run: cargo clippy --verbose -- -D warnings
     - name: Build
       run: |
           cargo version
@@ -27,10 +22,6 @@ jobs:
           cargo build --release --verbose
           cp ./target/release/sl-sh .
           strip sl-sh
-    - name: Run Rust tests
-      run: cargo test --verbose
-    - name: Run Lisp tests
-      run: ./sl-sh ./run-tests.lisp
     - name: Deploy Docs
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
