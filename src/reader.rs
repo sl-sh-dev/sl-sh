@@ -547,7 +547,18 @@ fn prep_reader_macro(
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
         if let ExpEnum::String(_, chars_iter) = &mut exp_d.data {
-            chars_iter.take().unwrap()
+            if let Some(ci) = chars_iter.take() {
+                ci
+            } else {
+                // Somehow the iterator was lost, make a new one since have to
+                // return one (empty).  XXX Maybe figure how this happens.
+                // Can be triggered by $(echo $((ls $xxx)
+                Box::new(
+                    UnicodeSegmentation::graphemes("", true)
+                        .map(|s| Cow::Borrowed(s))
+                        .peekable(),
+                )
+            }
         } else {
             panic!("read: something happened to char iterator in reader macro!");
         }

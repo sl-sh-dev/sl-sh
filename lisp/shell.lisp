@@ -797,7 +797,7 @@ Section: shell
     ;; Set global var *last-command*
     (set! *last-command* line))
 
-(defn repl-line (line line-len)
+#|(defn repl-line (line line-len)
     (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
     (var my-read (if strict? read read-all))
     (export 'LAST_STATUS "0")
@@ -833,7 +833,143 @@ Section: shell
         (set! *last-command* line)
         ; Save temp history
         (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
-        (print-error result))))
+                    (print-error result))))|#
+
+      (defn callable? (com)
+          ; Want the actual thing pointed to by the symbol in com for the test.
+          (set! com (shell::find-symbol com))
+          (if (def? (ref com))
+              (do (set! com (eval (sym com)))
+                  (or (builtin? com) (lambda? com) (macro? com)))
+              nil))
+
+      (defmacro sys-apply (com &rest args)
+          (if (callable? com)
+              `(,com ,@args)
+              `(syscall ,com ,@args)))
+
+(defmacro var-or-env (key)
+    (let ((key-new (shell::find-symbol key)))
+        (if (def? (ref key-new))
+            `,key-new
+            `(get-env ,key))))
+
+(let ((paren-level 0))
+
+(defn shell-read-int (stream in-paren)
+    (let ((in-quote nil)
+          (token (str ""))
+          (new-pair (list))
+          (last-pair (list))
+          (result (list))
+          (close-token)
+          (add-exp)
+          (do-read)
+          (first #t)
+          (first-sym #t)
+          (just-read nil)
+          (done nil))
+        (set! add-exp (fn (exp)
+            (set! new-pair (join exp nil))
+            (if (nil? last-pair) (set! result new-pair))
+            (xdr! last-pair new-pair)
+            (set! last-pair new-pair)))
+        (set! close-token (fn ()
+            (if (not (str-empty? token))
+                (if first-sym
+                    (do (add-exp (sym token)) (set! first-sym nil))
+                    (add-exp token)))
+            (set! token (str ""))))
+        (set! do-read (fn (ch)
+                    (if (not (char-whitespace? ch))
+                        (str-push! token ch))
+                    (close-token)
+                    (add-exp (read stream))
+                    (set! just-read #t)))
+        ((fn (last-ch ch peek-ch)
+            (cond
+                ((and (= ch #\() first (= peek-ch #\())
+                    (set! result (read stream))
+                    (set! ch (str-iter-next! stream))
+                    ((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
+                    (if (not (= #\) ch))
+                        (err "Unbalanced ) in '\$' shell read macro"))
+                    (set! done #t))
+                ((and (= ch #\() first)
+                    (set! paren-level (+ paren-level 1))
+                    (add-exp (sym "shell::sys-apply"))
+                    (set! in-paren #t))
+                ((and (not (= last-ch #\\))(= ch #\)) (> paren-level 0))
+                    (set! paren-level (- paren-level 1))
+                    (set! done #t))
+                ((and (not (= ch #\\))(or (= peek-ch #\")(= peek-ch #\$)))
+                    (do-read ch))
+                ((and (char-whitespace? ch)(not in-paren))
+                    (set! done #t))
+                ((char-whitespace? ch)
+                    (close-token))
+                ((str-push! token ch) nil))
+            (set! first nil)
+            (if (and (not done)(not (str-iter-empty? stream)))
+                (if just-read
+                    (do (set! just-read nil)(recur #\  #\  (str-iter-peek stream)))
+                    (recur ch (str-iter-next! stream)(str-iter-peek stream)))
+                (if (not (str-empty? token))
+                    (if in-paren
+                        (close-token)
+                        (do (add-exp (sym "shell::var-or-env"))(add-exp (sym token))))))
+             )#\ (str-iter-next! stream)(str-iter-peek stream))
+        result)))
+
+(defn shell-read (stream ch_start) (shell-read-int stream nil))
+
+(if (def? *read-table*)
+    (hash-set! *read-table* #\$ 'shell-read)
+    (def *read-table* (make-hash '((#\$ . shell-read)))))
+
+(defn repl-line (line line-len)
+    (export 'LAST_STATUS "0")
+    (set! *last-status* 0)
+    (let ((result nil)
+          (do-eval)
+          (prep-ast (fn (line)
+                        (if (string? line)
+                            (cond
+                              ((= #\$ (str-nth 0 line)) (read line))
+                              ((= #\( (str-nth 0 line)) (read line))
+                              (#t (shell-read-int (str-iter-start line) #t)))
+                            line))))
+
+    ; This next section is odd, it makes sure the eval happens in the active
+    ; namespace NOT shell since that is the namespace if repl-line is the last
+    ; function to be called.
+    (ns-push *active-ns*)
+    (set! do-eval (fn ()
+          (let* ((exec-hook (sym *active-ns* "::__exec_hook"))
+                 (ast (if (and (def? (ref exec-hook))(lambda? (eval exec-hook)))
+                          (prep-ast (apply exec-hook line nil))
+                          (prep-ast line))))
+            (eval ast))))
+    (ns-pop)
+    (set! result (get-error (do-eval)))
+    ; end weird namespace section
+
+    (if (= :ok (car result))
+      (do
+        (if (process? (cdr result)) nil
+          (nil? (cdr result)) nil
+          (file? (cdr result)) nil
+          (println (cdr result)))
+        (if (> line-len 0)
+          (do
+            (when (not (= "fc" (str-trim line)))
+              (handle-last-command line)))))
+      (do
+        (set! *last-command* line)
+        ; Save temp history
+        (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
+        ;(println (cadr result))))))
+        (print-error result)))))
 
 (defn repl ()
       (var get-prompt (fn ()
