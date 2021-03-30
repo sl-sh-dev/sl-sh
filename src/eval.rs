@@ -5,7 +5,6 @@ use crate::analyze::*;
 use crate::builtins::{builtin_bquote, builtin_quote};
 use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
-use crate::process::*;
 use crate::reader::read;
 use crate::signals::test_clear_sigint;
 use crate::symbols::*;
@@ -224,8 +223,6 @@ fn eval_command(
     com_exp: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let allow_sys_com =
-        environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
     let com_exp_d = com_exp.get();
     match &com_exp_d.data {
         ExpEnum::Lambda(_) => {
@@ -241,7 +238,6 @@ fn eval_command(
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
         ExpEnum::Quote => builtin_quote(environment, &mut *parts),
         ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
-        ExpEnum::String(s, _) if allow_sys_com => do_command(environment, s.trim(), parts),
         _ => {
             let msg = format!(
                 "Not a valid command {}, type {}.",
@@ -275,10 +271,6 @@ fn fn_eval_lazy(
     };
     let command = command.resolve(environment)?;
     let command_d = command.get();
-    let allow_sys_com =
-        environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
-    let allow_form =
-        environment.form_type == FormType::FormOnly || environment.form_type == FormType::Any;
     match &command_d.data {
         ExpEnum::Symbol(command_sym, _) => {
             if command_sym.is_empty() {
@@ -289,48 +281,22 @@ fn fn_eval_lazy(
             let form = get_expression(environment, command.clone());
             if let Some(exp) = form {
                 match &exp.get().data {
-                    ExpEnum::Function(c) if allow_form => (c.func)(environment, &mut parts),
-                    ExpEnum::DeclareDef if allow_form => builtin_def(environment, &mut parts),
-                    ExpEnum::DeclareVar if allow_form => builtin_var(environment, &mut parts),
-                    ExpEnum::Quote if allow_form => builtin_quote(environment, &mut *parts),
-                    ExpEnum::BackQuote if allow_form => builtin_bquote(environment, &mut *parts),
-                    ExpEnum::Lambda(_) if allow_form => {
+                    ExpEnum::Function(c) => (c.func)(environment, &mut parts),
+                    ExpEnum::DeclareDef => builtin_def(environment, &mut parts),
+                    ExpEnum::DeclareVar => builtin_var(environment, &mut parts),
+                    ExpEnum::Quote => builtin_quote(environment, &mut *parts),
+                    ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
+                    ExpEnum::Lambda(_) => {
                         if environment.allow_lazy_fn {
                             make_lazy(environment, exp.clone(), &mut parts)
                         } else {
                             call_lambda(environment, exp.clone(), &mut parts, true)
                         }
                     }
-                    ExpEnum::String(s, _) if allow_sys_com => {
-                        do_command(environment, s.trim(), &mut parts)
-                    }
                     _ => {
-                        if command_sym.starts_with('$') {
-                            if let ExpEnum::String(command_sym, _) =
-                                &str_process(environment, command_sym, true)?.get().data
-                            {
-                                do_command(environment, &command_sym, &mut parts)
-                            } else {
-                                let msg = format!("Not a valid form {}, not found.", command_sym);
-                                Err(LispError::new(msg))
-                            }
-                        } else {
-                            do_command(environment, command_sym, &mut parts)
-                        }
-                    }
-                }
-            } else if allow_sys_com {
-                if command_sym.starts_with('$') {
-                    if let ExpEnum::String(command_sym, _) =
-                        &str_process(environment, command_sym, true)?.get().data
-                    {
-                        do_command(environment, &command_sym, &mut parts)
-                    } else {
                         let msg = format!("Not a valid form {}, not found.", command_sym);
                         Err(LispError::new(msg))
                     }
-                } else {
-                    do_command(environment, command_sym, &mut parts)
                 }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command);
@@ -359,7 +325,6 @@ fn fn_eval_lazy(
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
         ExpEnum::Quote => builtin_quote(environment, &mut *parts),
         ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
-        ExpEnum::String(s, _) if allow_sys_com => do_command(environment, s.trim(), &mut parts),
         ExpEnum::Wrapper(_) => {
             drop(command_d); // Drop the lock on command.
             let com_exp = eval(environment, &command)?;

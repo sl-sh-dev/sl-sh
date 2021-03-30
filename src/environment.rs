@@ -52,13 +52,6 @@ pub struct ReaderState {
     pub end_ch: Option<&'static str>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FormType {
-    Any,
-    FormOnly,
-    ExternalOnly,
-}
-
 #[derive(Clone, Debug)]
 pub enum JobStatus {
     Running,
@@ -127,7 +120,6 @@ pub struct Environment {
     pub do_job_control: bool,
     pub str_ignore_expand: bool,
     pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
-    pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
@@ -195,7 +187,6 @@ pub fn build_default_environment() -> Environment {
         do_job_control: true,
         str_ignore_expand: false,
         procs,
-        form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
         dynamic_scope: HashMap::new(),
