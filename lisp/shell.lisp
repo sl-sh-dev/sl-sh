@@ -887,6 +887,7 @@ Section: shell
                     (close-token)
                     (add-exp (read stream))
                     (set! just-read #t)))
+        (if in-paren (add-exp (sym "shell::sys-apply")))
         ((fn (last-ch ch peek-ch)
             (cond
                 ((and (= ch #\() first (= peek-ch #\())

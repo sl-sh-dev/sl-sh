@@ -827,42 +827,6 @@ fn builtin_version(
     }
 }
 
-fn builtin_command(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_form = environment.form_type;
-    environment.form_type = FormType::ExternalOnly;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.form_type = old_form;
-            return Err(err);
-        }
-    }
-    environment.form_type = old_form;
-    last_eval
-}
-
-fn builtin_form(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_form = environment.form_type;
-    environment.form_type = FormType::FormOnly;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.form_type = old_form;
-            return Err(err);
-        }
-    }
-    environment.form_type = old_form;
-    last_eval
-}
-
 // Suppress this lint because we have to return a Result here since it is a builtin...
 #[allow(clippy::unnecessary_wraps)]
 fn builtin_get_error(
@@ -2101,38 +2065,6 @@ Section: shell
 
 Example:
 (test::assert-true (string? (version)))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("command"),
-        Expression::make_special(
-            builtin_command,
-            "Usage: (command exp0 ... expN)
-
-Only execute system commands not forms within this form.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Failed to execute [str string]: No such file or directory (os error 2)\" (cadr (get-error (command (str \"string\")))))
-(test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
-"
-        ),
-    );
-    data.insert(
-        interner.intern("form"),
-        Expression::make_special(
-            builtin_form,
-            "Usage: (form exp0 ... expN)
-
-Like do but do not execute system commands within this form.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
-(test::assert-equal \"Some String\" (form (str \"Some String\")))
 ",
         ),
     );

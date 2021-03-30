@@ -406,7 +406,7 @@ Example:
             builtin_get_env,
             r#"Usage: (get_env key) -> string
 
-Export a key and value to the shell environment.  Second arg will be made a string and returned.
+Lookup key in the system environment (env variable).  It is an error if key does not exist.
 
 Section: shell
 
