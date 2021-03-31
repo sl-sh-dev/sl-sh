@@ -345,29 +345,25 @@ fn builtin_glob(
             Some(p) => p,
             None => pat,
         };
-        match glob(&pat) {
-            Ok(paths) => {
-                for p in paths {
-                    match p {
-                        Ok(p) => {
-                            if let Some(p) = p.to_str() {
-                                files.push(Expression::alloc_data(ExpEnum::String(
-                                    p.to_string().into(),
-                                    None,
-                                )));
-                            }
+        if let Ok(paths) = glob(&pat) {
+            for p in paths {
+                match p {
+                    Ok(p) => {
+                        if let Some(p) = p.to_str() {
+                            files.push(Expression::alloc_data(ExpEnum::String(
+                                p.to_string().into(),
+                                None,
+                            )));
                         }
-                        Err(err) => {
-                            let msg = format!("glob error on while iterating {}, {}", pat, err);
-                            return Err(LispError::new(msg));
-                        }
+                    }
+                    Err(err) => {
+                        let msg = format!("glob error on while iterating {}, {}", pat, err);
+                        return Err(LispError::new(msg));
                     }
                 }
             }
-            Err(err) => {
-                let msg = format!("glob error on {}, {}", pat, err);
-                return Err(LispError::new(msg));
-            }
+        } else {
+            files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
         }
     }
     Ok(Expression::with_list(files))
