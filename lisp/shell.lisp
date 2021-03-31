@@ -43,12 +43,12 @@ Redirect stdout to file, append the output.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out>> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir two\"))
+(out>> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
@@ -67,12 +67,12 @@ Redirect stdout to file, truncate the file first.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir two\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
 (test::assert-false (read-line topen))
@@ -170,7 +170,7 @@ Example:
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out-err> \"/tmp/sl-sh.out-err>.test\" (do (echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
+(out-err> \"/tmp/sl-sh.out-err>.test\" (do (syscall echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
 (def topen (open \"/tmp/sl-sh.out-err>.test\" :read))
 (test::assert-equal \"stdout echo redir one\n\" (read-line topen))
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
@@ -256,9 +256,8 @@ Example:
 	`(pipe ,@body))
 
 ;; Scope to contain then pushd/popd/dirs functions.
-(lex
-  (var dir_stack (make-vec 20))
-  (var dir_stack_max 20)
+(let ((dir_stack (make-vec 20))
+      (dir_stack_max 20))
 
   (defn pushd
         "
@@ -267,14 +266,14 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path $PWD)
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
-        (assert-equal cur-test-path2 (str (pwd)))
+        (def cur-test-path2 $PWD)
+        (assert-equal cur-test-path2 $PWD)
         (popd)
-        (assert-equal cur-test-path (str (pwd)))
+        (assert-equal cur-test-path $PWD)
         "
-        (dir) (if (form (cd dir))
+        (dir) (if (root::cd dir)
                 (do
                   (vec-push! dir_stack $OLDPWD)
                   (if (> (length dir_stack) dir_stack_max) (vec-remove! dir_stack 0))
@@ -287,12 +286,12 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path $PWD)
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
-        (assert-equal cur-test-path2 (str (pwd)))
+        (def cur-test-path2 $PWD)
+        (assert-equal cur-test-path2 $PWD)
         (popd)
-        (assert-equal cur-test-path (str (pwd)))
+        (assert-equal cur-test-path $PWD)
         "
         () (if (> (length dir_stack) 0)
              (cd (vec-pop! dir_stack))
@@ -305,11 +304,11 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path $PWD)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
+        (def cur-test-path2 $PWD)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd (str-trim cur-test-path))
@@ -335,10 +334,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path $PWD)
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 $PWD)
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -356,10 +355,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path $PWD)
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 $PWD)
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -376,9 +375,9 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path $PWD)
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 $PWD)
         (pushd (str-trim cur-test-path))
         (pushd \"/tmp\")
         (pushd (str-trim cur-test-path))

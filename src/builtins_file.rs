@@ -381,94 +381,94 @@ pub fn add_file_builtins<S: BuildHasher>(
         interner.intern("cd"),
         Expression::make_function(
             builtin_cd,
-            "Usage: (cd dir-to-change-to)
+            r#"Usage: (cd dir-to-change-to)
 
 Change directory.
 
 Section: shell
 
 Example:
-(mkdir \"/tmp/tst-fs-cd\")
-(touch \"/tmp/tst-fs-cd/fs-cd-marker\")
-(test::assert-false (fs-exists? \"fs-cd-marker\"))
-(pushd \"/tmp/tst-fs-cd\")
-(root::cd \"/tmp\")
-(root::cd \"/tmp/tst-fs-cd\")
-(test::assert-true (fs-exists? \"fs-cd-marker\"))
-(rm \"/tmp/tst-fs-cd/fs-cd-marker\")
+(syscall mkdir "/tmp/tst-fs-cd")
+(syscall touch "/tmp/tst-fs-cd/fs-cd-marker")
+(test::assert-false (fs-exists? "fs-cd-marker"))
+(pushd "/tmp/tst-fs-cd")
+(root::cd "/tmp")
+(root::cd "/tmp/tst-fs-cd")
+(test::assert-true (fs-exists? "fs-cd-marker"))
+(syscall rm "/tmp/tst-fs-cd/fs-cd-marker")
 (popd)
-(rmdir \"/tmp/tst-fs-cd\")
-",
+(syscall rmdir "/tmp/tst-fs-cd")
+"#,
         ),
     );
     data.insert(
         interner.intern("fs-exists?"),
         Expression::make_function(
             builtin_path_exists,
-            "Usage: (fs-exists? path-to-test)
+            r#"Usage: (fs-exists? path-to-test)
 
 Does the given path exist?
 
 Section: shell
 
 Example:
-(mkdir \"/tmp/tst-fs-exists\")
-(touch \"/tmp/tst-fs-exists/fs-exists\")
-(test::assert-true (fs-exists? \"/tmp/tst-fs-exists/fs-exists\"))
-(test::assert-true (fs-exists? \"/tmp/tst-fs-exists\"))
-(test::assert-false (fs-exists? \"/tmp/tst-fs-exists/fs-exists-nope\"))
-(rm \"/tmp/tst-fs-exists/fs-exists\")
-(rmdir \"/tmp/tst-fs-exists\")
-",
+$(mkdir /tmp/tst-fs-exists)
+$(touch /tmp/tst-fs-exists/fs-exists)
+(test::assert-true (fs-exists? "/tmp/tst-fs-exists/fs-exists"))
+(test::assert-true (fs-exists? "/tmp/tst-fs-exists"))
+(test::assert-false (fs-exists? "/tmp/tst-fs-exists/fs-exists-nope"))
+$(rm /tmp/tst-fs-exists/fs-exists)
+$(rmdir /tmp/tst-fs-exists)
+"#,
         ),
     );
     data.insert(
         interner.intern("fs-file?"),
         Expression::make_function(
             builtin_is_file,
-            "Usage: (fs-file? path-to-test)
+            r#"Usage: (fs-file? path-to-test)
 
 Is the given path a file?
 
 Section: shell
 
 Example:
-(mkdir \"/tmp/tst-fs-file\")
-(touch \"/tmp/tst-fs-file/fs-file\")
-(test::assert-true (fs-file? \"/tmp/tst-fs-file/fs-file\"))
-(test::assert-false (fs-file? \"/tmp/tst-fs-file\"))
-(test::assert-false (fs-file? \"/tmp/tst-fs-file/fs-file-nope\"))
-(rm \"/tmp/tst-fs-file/fs-file\")
-(rmdir \"/tmp/tst-fs-file\")
-",
+$(mkdir /tmp/tst-fs-file)
+$(touch "/tmp/tst-fs-file/fs-file")
+(test::assert-true (fs-file? "/tmp/tst-fs-file/fs-file"))
+(test::assert-false (fs-file? "/tmp/tst-fs-file"))
+(test::assert-false (fs-file? "/tmp/tst-fs-file/fs-file-nope"))
+$(rm "/tmp/tst-fs-file/fs-file")
+$(rmdir /tmp/tst-fs-file)
+"#,
         ),
     );
     data.insert(
         interner.intern("fs-dir?"),
         Expression::make_function(
             builtin_is_dir,
-            "Usage: (fs-dir? path-to-test)
+            r#"Usage: (fs-dir? path-to-test)
 
 Is the given path a directory?
 
 Section: shell
 
 Example:
-(mkdir \"/tmp/tst-fs-dir\")
-(touch \"/tmp/tst-fs-dir/fs-dir-file\")
-(test::assert-false (fs-dir? \"/tmp/tst-fs-dir/fs-dir-file\"))
-(test::assert-true (fs-dir? \"/tmp/tst-fs-dir\"))
-(test::assert-false (fs-dir? \"/tmp/tst-fs-dir/fs-dir-nope\"))
-(rm \"/tmp/tst-fs-dir/fs-dir-file\")
-(rmdir \"/tmp/tst-fs-dir\")
-",
+$(mkdir /tmp/tst-fs-dir)
+$(touch /tmp/tst-fs-dir/fs-dir-file)
+(test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-file"))
+(test::assert-true (fs-dir? "/tmp/tst-fs-dir"))
+(test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-nope"))
+$(rm /tmp/tst-fs-dir/fs-dir-file)
+$(rmdir /tmp/tst-fs-dir)
+"#,
         ),
     );
     data.insert(
         interner.intern("pipe"),
         Expression::make_function(
             builtin_pipe,
-            "Usage: (pipe [expression]+)
+            r#"Usage: (pipe [expression]+)
 
 Setup a pipe between processes or expressions.  Pipe will take one or more
 expressions, each one but the last will be forked into a new process with it's
@@ -490,33 +490,46 @@ Pipes can be nested including piping through a lambda that itself uses pipes.
 Section: shell
 
 Example:
-(def pipe-test (str (pipe $(echo \"one\ntwo\nthree\")$(grep two))))
-(test::assert-equal \"two\n\" pipe-test)
-(def pipe-test (str (pipe (pipe $(echo \"one\ntwo\ntwotwo\nthree\")$(grep two))$(grep twotwo))))
-(test::assert-equal \"twotwo\n\" pipe-test)
-(mkdir \"/tmp/tst-pipe-dir\")
-(def tsync (open \"/tmp/tst-pipe-dir/test1\" :create))
-(pipe (print \"one\ntwo\ntwo2\nthree\") $(grep two) tsync)
+(def pipe-test (str (pipe $(echo "one
+two
+three")$(grep two))))
+(test::assert-equal "two
+" pipe-test)
+(def pipe-test (str (pipe (pipe $(echo "one
+two
+twotwo
+three")$(grep two))$(grep twotwo))))
+(test::assert-equal "twotwo
+" pipe-test)
+$(mkdir "/tmp/tst-pipe-dir")
+(def tsync (open "/tmp/tst-pipe-dir/test1" :create))
+(pipe (print "one
+two
+two2
+three") $(grep two) tsync)
 (close tsync)
-(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
-(test::assert-equal \"two\n\" (read-line topen))
-(test::assert-equal \"two2\n\" (read-line topen))
+(def topen (open "/tmp/tst-pipe-dir/test1" :read))
+(test::assert-equal "two
+" (read-line topen))
+(test::assert-equal "two2
+" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(def topen (open \"/tmp/tst-pipe-dir/test1\" :read))
+(def topen (open "/tmp/tst-pipe-dir/test1" :read))
 (def pipe-test (str (pipe topen $(grep two2))))
 (close topen)
-(test::assert-equal \"two2\n\" pipe-test)
-(rm \"/tmp/tst-pipe-dir/test1\")
-(rmdir \"/tmp/tst-pipe-dir\")
-",
+(test::assert-equal "two2
+" pipe-test)
+$(rm "/tmp/tst-pipe-dir/test1")
+$(rmdir "/tmp/tst-pipe-dir")
+"#,
         ),
     );
     data.insert(
         interner.intern("wait"),
         Expression::make_function(
             builtin_wait,
-            "Usage: (wait proc-to-wait-for)
+            r#"Usage: (wait proc-to-wait-for)
 
 Wait for a process to end and return it's exit status.
 
@@ -525,14 +538,14 @@ Section: shell
 Example:
 (def wait-test (wait (err>null $(ls /does/not/exist/123))))
 (test::assert-true (> wait-test 0))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("pid"),
         Expression::make_function(
             builtin_pid,
-            "Usage: (pid proc)
+            r#"Usage: (pid proc)
 
 Return the pid of a process.
 
@@ -542,30 +555,30 @@ Example:
 (def pid-test $(echo -n))
 (test::assert-true (int? (pid pid-test)))
 (test::assert-error (pid 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("glob"),
         Expression::make_function(
             builtin_glob,
-            "Usage: (glob /path/with/*)
+            r#"Usage: (glob /path/with/*)
 
 Takes a list/varargs of globs and return the list of them expanded.
 
 Section: shell
 
 Example:
-(mkdir \"/tmp/tst-fs-glob\")
-(touch \"/tmp/tst-fs-glob/g1\")
-(touch \"/tmp/tst-fs-glob/g2\")
-(touch \"/tmp/tst-fs-glob/g3\")
-(test::assert-equal '(\"/tmp/tst-fs-glob/g1\" \"/tmp/tst-fs-glob/g2\" \"/tmp/tst-fs-glob/g3\") (glob \"/tmp/tst-fs-glob/*\"))
-(rm \"/tmp/tst-fs-glob/g1\")
-(rm \"/tmp/tst-fs-glob/g2\")
-(rm \"/tmp/tst-fs-glob/g3\")
-(rmdir \"/tmp/tst-fs-glob\")
-",
+(syscall mkdir "/tmp/tst-fs-glob")
+(syscall touch "/tmp/tst-fs-glob/g1")
+(syscall touch "/tmp/tst-fs-glob/g2")
+(syscall touch "/tmp/tst-fs-glob/g3")
+(test::assert-equal '("/tmp/tst-fs-glob/g1" "/tmp/tst-fs-glob/g2" "/tmp/tst-fs-glob/g3") (glob "/tmp/tst-fs-glob/*"))
+(syscall rm "/tmp/tst-fs-glob/g1")
+(syscall rm "/tmp/tst-fs-glob/g2")
+(syscall rm "/tmp/tst-fs-glob/g3")
+(syscall rmdir "/tmp/tst-fs-glob")
+"#,
         ),
     );
 }

@@ -423,7 +423,7 @@ pub fn add_type_builtins<S: BuildHasher>(
         interner.intern("type"),
         Expression::make_function(
             builtin_type,
-            "Usage: (type expression)
+            r#"Usage: (type expression)
 
 Return the type of the given expression as a string.
 
@@ -448,36 +448,36 @@ Types are:
 Section: type
 
 Example:
-(test::assert-equal \"True\" (type t))
-(test::assert-equal \"Float\" (type 1.1))
-(test::assert-equal \"Int\" (type 1))
-(test::assert-equal \"Symbol\" (type 'symbol))
+(test::assert-equal "True" (type t))
+(test::assert-equal "Float" (type 1.1))
+(test::assert-equal "Int" (type 1))
+(test::assert-equal "Symbol" (type 'symbol))
 (def type-sym 'symbol)
-(test::assert-equal \"Symbol\" (type type-sym))
-(test::assert-equal \"String\" (type \"string\"))
-(test::assert-equal \"Char\" (type #\\a))
-(test::assert-equal \"Lambda\" (type (fn () ())))
-(test::assert-equal \"Macro\" (type (macro () ())))
-(test::assert-equal \"Process\" (type (true)))
-(test::assert-equal \"SpecialForm\" (type if))
-(test::assert-equal \"Function\" (type type))
-(test::assert-equal \"Vector\" (type '#(1 2 3)))
+(test::assert-equal "Symbol" (type type-sym))
+(test::assert-equal "String" (type "string"))
+(test::assert-equal "Char" (type #\a))
+(test::assert-equal "Lambda" (type (fn () ())))
+(test::assert-equal "Macro" (type (macro () ())))
+(test::assert-equal "Process" (type (syscall true)))
+(test::assert-equal "SpecialForm" (type if))
+(test::assert-equal "Function" (type type))
+(test::assert-equal "Vector" (type '#(1 2 3)))
 (def type-vec '#(4 5 6))
-(test::assert-equal \"Vector\" (type type-vec))
-(test::assert-equal \"Pair\" (type '(1 . 2)))
-(test::assert-equal \"Pair\" (type '(1 2 3)))
-(test::assert-equal \"Nil\" (type nil))
-(test::assert-equal \"Nil\" (type '()))
-(test::assert-equal \"HashMap\" (type (make-hash)))
-(test::assert-equal \"File\" (type (open :stdin)))
-",
+(test::assert-equal "Vector" (type type-vec))
+(test::assert-equal "Pair" (type '(1 . 2)))
+(test::assert-equal "Pair" (type '(1 2 3)))
+(test::assert-equal "Nil" (type nil))
+(test::assert-equal "Nil" (type '()))
+(test::assert-equal "HashMap" (type (make-hash)))
+(test::assert-equal "File" (type (open :stdin)))
+"#,
         ),
     );
     data.insert(
         interner.intern("values?"),
         Expression::make_function(
             builtin_is_values,
-            "Usage: (values? expression)
+            r#"Usage: (values? expression)
 
 True if the expression is multi values object, false otherwise.
 NOTE: A values object will ALSO be the type of its first value.
@@ -485,26 +485,26 @@ NOTE: A values object will ALSO be the type of its first value.
 Section: type
 
 Example:
-(test::assert-true (values? (values 1 \"str\" 5.5)))
+(test::assert-true (values? (values 1 "str" 5.5)))
 (test::assert-false (values? '(1 2 3)))
 (test::assert-false (values? '(1 . 3)))
 (test::assert-false (values? 1))
-(test::assert-true (int? (values 1 \"str\" 5.5)))
-(test::assert-false (string? (values 1 \"str\" 5.5)))
-(test::assert-false (float? (values 1 \"str\" 5.5)))
-(def test-is-values (values 1 2 3 \"string\" 1.5))
+(test::assert-true (int? (values 1 "str" 5.5)))
+(test::assert-false (string? (values 1 "str" 5.5)))
+(test::assert-false (float? (values 1 "str" 5.5)))
+(def test-is-values (values 1 2 3 "string" 1.5))
 (test::assert-true (values? test-is-values))
 (test::assert-true (int? test-is-values))
 (test::assert-false (string? test-is-values))
 (test::assert-false (float? test-is-values))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("nil?"),
         Expression::make_function(
             builtin_is_nil,
-            "Usage: (nil? expression)
+            r#"Usage: (nil? expression)
 
 True if the expression is nil, false otherwise.
 
@@ -513,14 +513,14 @@ Section: type
 Example:
 (test::assert-true (nil? nil))
 (test::assert-false (nil? t))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("true?"),
         Expression::make_function(
             builtin_is_true,
-            "Usage: (true? expression)
+            r#"Usage: (true? expression)
 
 True if the expression is true (true type NOT non-null), false otherwise.
 
@@ -530,15 +530,15 @@ Example:
 (test::assert-true (true? t))
 (test::assert-false (true? nil))
 (test::assert-false (true? 1))
-(test::assert-false (true? \"str\"))
-",
+(test::assert-false (true? "str"))
+"#,
         ),
     );
     data.insert(
         interner.intern("float?"),
         Expression::make_function(
             builtin_is_float,
-            "Usage: (float? expression)
+            r#"Usage: (float? expression)
 
 True if the expression is a float, false otherwise.
 
@@ -547,14 +547,14 @@ Section: type
 Example:
 (test::assert-true (float? 1.5))
 (test::assert-false (float? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("int?"),
         Expression::make_function(
             builtin_is_int,
-            "Usage: (int? expression)
+            r#"Usage: (int? expression)
 
 True if the expression is an int, false otherwise.
 
@@ -563,14 +563,14 @@ Section: type
 Example:
 (test::assert-true (int? 1))
 (test::assert-false (int? 1.5))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("symbol?"),
         Expression::make_function(
             builtin_is_symbol,
-            "Usage: (symbol? expression)
+            r#"Usage: (symbol? expression)
 
 True if the expression is a symbol, false otherwise.
 
@@ -579,47 +579,47 @@ Section: type
 Example:
 (test::assert-true (symbol? 'symbol))
 (test::assert-false (symbol? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("string?"),
         Expression::make_function(
             builtin_is_string,
-            "Usage: (string? expression)
+            r#"Usage: (string? expression)
 
 True if the expression is a string, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (string? \"string\"))
+(test::assert-true (string? "string"))
 (test::assert-false (string? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("char?"),
         Expression::make_function(
             builtin_is_char,
-            "Usage: (char? expression)
+            r#"Usage: (char? expression)
 
 True if the expression is a char, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (char? #\\a))
+(test::assert-true (char? #\a))
 (test::assert-false (char? 1))
-(test::assert-false (char? \"a\"))
-",
+(test::assert-false (char? "a"))
+"#,
         ),
     );
     data.insert(
         interner.intern("lambda?"),
         Expression::make_function(
             builtin_is_lambda,
-            "Usage: (lambda? expression)
+            r#"Usage: (lambda? expression)
 
 True if the expression is a lambda, false otherwise.
 
@@ -630,14 +630,14 @@ Example:
 (test::assert-true (lambda? caar))
 (test::assert-false (lambda? 1))
 (test::assert-false (lambda? if))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("macro?"),
         Expression::make_function(
             builtin_is_macro,
-            "Usage: (macro? expression)
+            r#"Usage: (macro? expression)
 
 True if the expression is a macro, false otherwise.
 
@@ -648,54 +648,54 @@ Example:
 (test::assert-true (macro? defn))
 (test::assert-false (macro? 1))
 (test::assert-false (macro? if))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("vec?"),
         Expression::make_function(
             builtin_is_vec,
-            "Usage: (vec? expression)
+            r#"Usage: (vec? expression)
 
 True if the expression is a vector, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (vec? '#(1 2 3)) \"reader macro\")
-(test::assert-true (vec? (make-vec)) \"make-vec\") 
-(test::assert-true (vec? (vec 1 2 3)) \"vec\") 
+(test::assert-true (vec? '#(1 2 3)) "reader macro")
+(test::assert-true (vec? (make-vec)) "make-vec")
+(test::assert-true (vec? (vec 1 2 3)) "vec")
 (test::assert-false (vec? 1))
 (test::assert-false (vec? '(1 2 3)))
 (test::assert-false (vec? (list)))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("pair?"),
         Expression::make_function(
             builtin_is_pair,
-            "Usage: (pair? expression)
+            r#"Usage: (pair? expression)
 
 True if the expression is a pair, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (pair? '(1 . 2)) \"reader macro\")
-(test::assert-true (pair? (join 1 2)) \"join\") 
+(test::assert-true (pair? '(1 . 2)) "reader macro")
+(test::assert-true (pair? (join 1 2)) "join")
 (test::assert-true (pair? '(1 2)))
 (test::assert-false (pair? 1))
 (test::assert-false (pair? '#(1 2 3)))
 (test::assert-false (pair? (vec)))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("builtin?"),
         Expression::make_function(
             builtin_is_builtin,
-            "Usage: (builtin? expression)
+            r#"Usage: (builtin? expression)
 
 True if the expression is a builtin function or special form, false otherwise.
 
@@ -707,32 +707,32 @@ Example:
 (test::assert-false (builtin? (fn () ())))
 (test::assert-false (builtin? caar))
 (test::assert-false (builtin? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("process?"),
         Expression::make_function(
             builtin_is_process,
-            "Usage: (process? expression)
+            r#"Usage: (process? expression)
 
 True if the expression is a process, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (process? (true)))
+(test::assert-true (process? $(true)))
 (test::assert-false (process? (fn () ())))
 (test::assert-false (process? caar))
 (test::assert-false (process? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("file?"),
         Expression::make_function(
             builtin_is_file,
-            "Usage: (file? expression)
+            r#"Usage: (file? expression)
 
 True if the expression is a file, false otherwise.
 
@@ -743,94 +743,94 @@ Example:
 (test::assert-false (file? (fn () ())))
 (test::assert-false (file? caar))
 (test::assert-false (file? 1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("hash?"),
         Expression::make_function(
             builtin_is_hash,
-            "Usage: (hash? expression)
+            r#"Usage: (hash? expression)
 
 True if the expression is a hash map, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (hash? (make-hash)) \"make-vec\") 
+(test::assert-true (hash? (make-hash)) "make-vec")
 (test::assert-false (hash? 1))
 (test::assert-false (hash? '(1 2 3)))
 (test::assert-false (hash? (list)))
 (test::assert-false (hash? (vec)))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("list?"),
         Expression::make_function(
             builtin_is_list,
-            "Usage: (list? expression)
+            r#"Usage: (list? expression)
 
 True if the expression is a list, false otherwise.
 
 Section: type
 
 Example:
-(test::assert-true (list? '(1 2 3)) \"reader macro\")
-(test::assert-true (list? (list 1 2 3)) \"list\") 
+(test::assert-true (list? '(1 2 3)) "reader macro")
+(test::assert-true (list? (list 1 2 3)) "list")
 (test::assert-false (list? 1))
 (test::assert-false (list? '#(1 2 3)))
 (test::assert-false (list? (vec)))
 (test::assert-false (list? '(1 . 2)))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("str->int"),
         Expression::make_function(
             builtin_str_to_int,
-            "Usage: (str->int string) -> int
+            r#"Usage: (str->int string) -> int
 
 If string is a valid representation of an integer return that int.  Error if not.
 
 Section: type
 
 Example:
-(test::assert-equal 0 (str->int \"0\"))
-(test::assert-equal 101 (str->int \"101\"))
-(test::assert-equal -101 (str->int \"-101\"))
-(test::assert-error (str->int \"not int\"))
-(test::assert-error (str->int \"10.0\"))
-(test::assert-error (str->int \"--10\"))
-",
+(test::assert-equal 0 (str->int "0"))
+(test::assert-equal 101 (str->int "101"))
+(test::assert-equal -101 (str->int "-101"))
+(test::assert-error (str->int "not int"))
+(test::assert-error (str->int "10.0"))
+(test::assert-error (str->int "--10"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str->float"),
         Expression::make_function(
             builtin_str_to_float,
-            "Usage: (str->float string) -> float
+            r#"Usage: (str->float string) -> float
 
 If string is a valid representation of a float return that float.  Error if not.
 
 Section: type
 
 Example:
-(test::assert-equal 0 (str->float \"0\"))
-(test::assert-equal 10.0 (str->float \"10.0\"))
-(test::assert-equal 10.5 (str->float \"10.5\"))
-(test::assert-equal 101 (str->float \"101\"))
-(test::assert-equal -101.95 (str->float \"-101.95\"))
-(test::assert-error (str->float \"not int\"))
-(test::assert-error (str->float \"--10\"))
-",
+(test::assert-equal 0 (str->float "0"))
+(test::assert-equal 10.0 (str->float "10.0"))
+(test::assert-equal 10.5 (str->float "10.5"))
+(test::assert-equal 101 (str->float "101"))
+(test::assert-equal -101.95 (str->float "-101.95"))
+(test::assert-error (str->float "not int"))
+(test::assert-error (str->float "--10"))
+"#,
         ),
     );
     data.insert(
         interner.intern("int->float"),
         Expression::make_function(
             builtin_int_to_float,
-            "Usage: (int->float int) -> float
+            r#"Usage: (int->float int) -> float
 
 Cast an int as a float.
 
@@ -840,15 +840,15 @@ Example:
 (test::assert-equal 0 (int->float 0))
 (test::assert-equal 10 (int->float 10))
 (test::assert-equal -101 (int->float -101))
-(test::assert-error (int->float \"not int\"))
-",
+(test::assert-error (int->float "not int"))
+"#,
         ),
     );
     data.insert(
         interner.intern("float->int"),
         Expression::make_function(
             builtin_float_to_int,
-            "Usage: (float->int float) -> int
+            r#"Usage: (float->int float) -> int
 
 Cast a float as an int.  Truncates.
 
@@ -861,15 +861,15 @@ Example:
 (test::assert-equal 10 (float->int 10.5))
 (test::assert-equal 10 (float->int 10.9))
 (test::assert-equal -101 (float->int -101.99))
-(test::assert-error (float->int \"not int\"))
-",
+(test::assert-error (float->int "not int"))
+"#,
         ),
     );
     data.insert(
         interner.intern("sym"),
         Expression::make_function(
             builtin_to_symbol,
-            "Usage: (sym expression+) -> symbol
+            r#"Usage: (sym expression+) -> symbol
 
 Takes one or more forms, converts them to strings, concatonates them and returns
 a symbol with that name.
@@ -880,20 +880,20 @@ Example:
 (def test-to-symbol-sym nil)
 (test::assert-true (symbol? (sym 55)))
 (test::assert-true (symbol? (sym 55.0)))
-(test::assert-true (symbol? (sym \"to-symbol-test-new-symbol\")))
-(test::assert-true (symbol? (sym (str \"to-symbol-test-new-symbol-buf\"))))
+(test::assert-true (symbol? (sym "to-symbol-test-new-symbol")))
+(test::assert-true (symbol? (sym (str "to-symbol-test-new-symbol-buf"))))
 (test::assert-true (symbol? (sym 'test-to-symbol-sym)))
-(set! test-to-symbol-sym \"testing-sym\")
-(test::assert-equal \"testing-sym\" (sym->str (sym test-to-symbol-sym)))
+(set! test-to-symbol-sym "testing-sym")
+(test::assert-equal "testing-sym" (sym->str (sym test-to-symbol-sym)))
 (test::assert-true (symbol? (sym (sym->str 'test-to-symbol-sym))))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("sym->str"),
         Expression::make_function(
             builtin_symbol_to_str,
-            "Usage: (sym->str symbol) -> string
+            r#"Usage: (sym->str symbol) -> string
 
 Convert a symbol to the string representation representation of it's name.
 
@@ -904,8 +904,8 @@ Section: type
 Example:
 (def test-sym->str-sym nil)
 (test::assert-true (string? (sym->str 'test-sym->str-sym)))
-(test::assert-equal \"test-sym->str-sym\" (sym->str 'test-sym->str-sym))
-",
+(test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
+"#,
         ),
     );
 }
