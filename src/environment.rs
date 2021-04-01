@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::env;
 use std::fmt;
 use std::io;
 use std::rc::Rc;
@@ -358,11 +357,7 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
-    if let Some(key) = key.strip_prefix('$') {
-        env::var(key).is_ok()
-    } else {
-        lookup_expression(environment, key).is_some()
-    }
+    lookup_expression(environment, key).is_some()
 }
 
 pub fn get_symbol_namespaces(environment: &Environment, key: &str) -> Vec<Rc<RefCell<Namespace>>> {

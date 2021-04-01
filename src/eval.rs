@@ -528,15 +528,7 @@ fn internal_eval(
             }
         }
         ExpEnum::Symbol(s, SymLoc::None) => {
-            if let Some(s) = s.strip_prefix('$') {
-                match env::var(s) {
-                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
-                        environment.interner.intern(&val).into(),
-                        None,
-                    ))),
-                    Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
-                }
-            } else if s.starts_with(':') {
+            if s.starts_with(':') {
                 // Got a keyword, so just be you...
                 Ok(Expression::alloc_data(ExpEnum::Symbol(s, SymLoc::None)))
             } else if let Some(exp) = get_expression(environment, expression.clone()) {
