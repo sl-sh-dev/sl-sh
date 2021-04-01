@@ -275,7 +275,7 @@ Example:
         "
         (dir) (if (root::cd dir)
                 (do
-                  (vec-push! dir_stack $OLDPWD)
+                  (vec-push! dir_stack (get-env OLDPWD))
                   (if (> (length dir_stack) dir_stack_max) (vec-remove! dir_stack 0))
                   t)
                 nil))
@@ -403,10 +403,10 @@ Like let but sets environment variables that are reset after the macro finishes.
 Section: shell
 
 Example:
-(test::assert-error \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal "" \$LET-ENV-TEST-VAR-NOT-HERE)
 (let-env ((LET-ENV-TEST-VAR-NOT-HERE \"here\"))
     (test::assert-equal \"here\" \$LET-ENV-TEST-VAR-NOT-HERE))
-(test::assert-error \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal "" \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
 	((fn (params bindings olds)
@@ -415,14 +415,14 @@ Example:
 				(do
 					(vec-insert! params idx (iterator::nth 0 el))
 					(vec-insert! bindings idx nil)
-					(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
+					(vec-insert! olds idx (eval `(get-env (iterator::nth 0 el)))))
 				(if (= 2 (length el))
 					(do
 						(var binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set! binding (eval binding)))
 						(vec-insert! params idx (iterator::nth 0 el))
 						(vec-insert! bindings idx binding)
-						(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
+						(vec-insert! olds idx (eval `(get-env ,(iterator::nth 0 el)))))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
@@ -542,9 +542,9 @@ Example:
 		(if (fs-exists? com) (set! ret t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
 			(set! ret t)
-			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
+			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" (get-env HOME) com)))
 				(set! ret t)
-				(for p in (str-split ":" $PATH) (do
+				(for p in (str-split ":" (get-env PATH)) (do
 					(var path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set! ret t)))))))
 	ret)
@@ -796,44 +796,6 @@ Section: shell
     ;; Set global var *last-command*
     (set! *last-command* line))
 
-#|(defn repl-line (line line-len)
-    (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
-    (var my-read (if strict? read read-all))
-    (export 'LAST_STATUS "0")
-    (set! *last-status* 0)
-    (var result nil)
-
-    ; This next section is odd, it makes sure the eval happens in the active
-    ; namespace NOT shell since that is the namespace if repl-line is the last
-    ; function to be called.
-    (ns-push *active-ns*)
-    (varfn do-eval fn ()
-        (var exec-hook (sym *active-ns* "::__exec_hook"))
-        (var ast (if (and (not strict?)(def? (ref exec-hook))(lambda? (eval exec-hook)))
-                    (apply exec-hook line nil)
-                    (my-read line)))
-        (set! ast (if (string? ast) (my-read ast) ast))
-        (if strict? (eval ast)(loose-symbols (eval ast))))
-    (ns-pop)
-    (set! result (get-error (do-eval)))
-    ; end weird namespace section
-
-    (if (= :ok (car result))
-      (do
-        (if (process? (cdr result)) nil
-          (and (not strict?)(nil? (cdr result))) nil
-          (file? (cdr result)) nil
-          (println (cdr result)))
-        (if (> line-len 0)
-          (do
-            (when (not (= "fc" (str-trim line)))
-              (handle-last-command line)))))
-      (do
-        (set! *last-command* line)
-        ; Save temp history
-        (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
-                    (print-error result))))|#
-
       (defn callable? (com)
           ; Want the actual thing pointed to by the symbol in com for the test.
           (set! com (shell::find-symbol com))
@@ -987,7 +949,7 @@ Section: shell
               (var ns-prompt (sym *active-ns* "::__prompt"))
               (if (def? (ref ns-prompt)) (apply ns-prompt nil) (__prompt))))
       (var repl-inner (fn ()
-              (if (not (def? *repl-std-only*)) (history-context :repl $PWD))
+              (if (not (def? *repl-std-only*)) (history-context :repl (get-env PWD)))
               (reap-jobs)
               (var save-last-status *last-status*)
               (var line (if (def? *repl-std-only*) 

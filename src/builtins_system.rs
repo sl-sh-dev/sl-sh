@@ -56,9 +56,9 @@ fn builtin_get_env(
                     environment.interner.intern(&val).into(),
                     None,
                 ))),
-                Err(err) => Err(LispError::new(format!(
-                    "get-env: error looking up {}: {}",
-                    key, err
+                Err(_err) => Ok(Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern("").into(),
+                    None,
                 ))),
             }
         }
@@ -68,7 +68,11 @@ fn builtin_get_env(
             return match &key.get().data {
                 ExpEnum::Symbol(s, _) => get_var(environment, s),
                 ExpEnum::String(s, _) => get_var(environment, s),
-                _ => Err(LispError::new("get-env: key must be a symbol or string")),
+                _ => Err(LispError::new(format!(
+                    "get-env: key must be a symbol or string, got {}/{}",
+                    key.display_type(),
+                    key
+                ))),
             };
         }
     }
@@ -402,19 +406,20 @@ Example:
     );
     data.insert(
         interner.intern("get-env"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_get_env,
             r#"Usage: (get_env key) -> string
 
-Lookup key in the system environment (env variable).  It is an error if key does not exist.
+Lookup key in the system environment (env variable).  Returns an empty sting if key does not exist.
+Note: key is not evaluated.
 
 Section: shell
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
-(test::assert-equal "ONE" $TEST_EXPORT_ONE)
-(test::assert-equal "ONE" (get-env TEST_EXPORT_ONE)
-(test::assert-error  (get-env TEST_EXPORT_ONE_NA)
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
+(test::assert-equal "ONE" (get-env TEST_EXPORT_ONE))
+(test::assert-equal "" (get-env TEST_EXPORT_ONE_NA))
 "#,
         ),
     );
@@ -430,7 +435,7 @@ Section: shell
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
-(test::assert-equal "ONE" $TEST_EXPORT_ONE)
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
 "#,
         ),
     );
@@ -446,9 +451,9 @@ Section: shell
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
-(test::assert-equal "ONE" $TEST_EXPORT_ONE)
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
 (unexport 'TEST_EXPORT_ONE)
-(test::assert-error $TEST_EXPORT_ONE)
+(test::assert-equal "" $TEST_EXPORT_ONE))
 "#,
         ),
     );
