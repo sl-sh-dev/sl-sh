@@ -123,7 +123,7 @@ Example:
 (assert-equal \"ΛABC Σ\" collect-str-test)
 "
     (self) (do
-    (var tseq "")
+    (var tseq (str))
     (for v in self (str-push! tseq v))
     tseq))
 
@@ -382,7 +382,8 @@ Example:
   (:fn next! (self) (str-iter-next! data))
   (:fn empty? (self) (not (str-iter-peek data)))
   (:fn init (self l) (do (if (string? l)
-                       (set! data (if (str-iter-empty? l) (str-iter-start l) l))
+                       ;(set! data (if (str-iter-empty? l) (str-iter-start l) l))
+                       (set! data (str-iter-start l))
                        (err "string-iter requires a string")) self))
   (:impl iterator::iterator))
 

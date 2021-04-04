@@ -405,12 +405,6 @@ mod tests {
 
     fn build_def_env() -> Environment {
         let mut environment = build_default_environment();
-        environment.reader_state = Some(ReaderState {
-            line: 0,
-            column: 0,
-            file_name: None,
-            end_ch: None,
-        });
         environment
     }
 

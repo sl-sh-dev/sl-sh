@@ -1,11 +1,9 @@
 use std::cell::RefCell;
-use std::env;
 
 use crate::analyze::*;
 use crate::builtins::{builtin_bquote, builtin_quote};
 use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
-use crate::reader::read;
 use crate::signals::test_clear_sigint;
 use crate::symbols::*;
 use crate::types::*;
@@ -341,127 +339,6 @@ fn fn_eval_lazy(
     }
 }
 
-fn str_process(
-    environment: &mut Environment,
-    string: &str,
-    expand: bool,
-) -> Result<Expression, LispError> {
-    fn add_var(
-        environment: &mut Environment,
-        new_string: &mut String,
-        name: &str,
-    ) -> Result<(), LispError> {
-        match lookup_expression(environment, name) {
-            Some(exp) => {
-                new_string.push_str(&exp.as_string(environment)?);
-            }
-            None => match env::var(name) {
-                Ok(val) => new_string.push_str(&val),
-                Err(_) => new_string.push_str(""),
-            },
-        }
-        Ok(())
-    }
-    if expand && !environment.str_ignore_expand && string.contains('$') {
-        let mut new_string = String::new();
-        let mut last_ch = '\0';
-        let mut in_var = false;
-        let mut in_var_bracket = false;
-        let mut in_command = false;
-        let mut command_depth: i32 = 0;
-        let mut var_start = 0;
-        for (i, ch) in string.chars().enumerate() {
-            if in_var {
-                if ch == '(' && var_start + 1 == i {
-                    in_command = true;
-                    in_var = false;
-                    command_depth = 1;
-                } else if ch == '{' && var_start + 1 == i {
-                    in_var_bracket = true;
-                    in_var = false;
-                } else {
-                    if ch == ' ' || ch == '"' || ch == ':' || (ch == '$' && last_ch != '\\') {
-                        in_var = false;
-                        add_var(environment, &mut new_string, &string[var_start + 1..i])?;
-                    }
-                    if ch == ' ' || ch == '"' || ch == ':' {
-                        new_string.push(ch);
-                    }
-                }
-            } else if in_var_bracket {
-                if ch == '}' && last_ch != '\\' {
-                    in_var_bracket = false;
-                    add_var(environment, &mut new_string, &string[var_start + 2..i])?;
-                }
-            } else if in_command {
-                if ch == ')' && last_ch != '\\' {
-                    command_depth -= 1;
-                }
-                if command_depth == 0 {
-                    in_command = false;
-                    let ast = read(environment, &string[var_start..=i], None, false);
-                    match ast {
-                        Ok(ast) => {
-                            let gpo = set_grab_proc_output(environment, true);
-
-                            // Get out of a pipe for the str call if in one...
-                            let pipe_pgid = gpo.environment.pipe_pgid;
-                            gpo.environment.pipe_pgid = None;
-                            new_string.push_str(
-                                eval(gpo.environment, ast)?
-                                    .as_string(gpo.environment)?
-                                    .trim(),
-                            );
-                            gpo.environment.pipe_pgid = pipe_pgid;
-                        }
-                        Err(err) => return Err(LispError::new(err.reason)),
-                    }
-                } else if ch == '(' && last_ch != '\\' {
-                    command_depth += 1;
-                }
-            } else if ch == '$' && last_ch != '\\' {
-                in_var = true;
-                var_start = i;
-            } else if ch != '\\' {
-                if last_ch == '\\' && ch != '$' {
-                    new_string.push('\\');
-                }
-                new_string.push(ch);
-            }
-            last_ch = ch;
-        }
-        if in_var {
-            add_var(environment, &mut new_string, &string[var_start + 1..])?;
-        }
-        if in_command {
-            return Err(LispError::new(
-                "Malformed command embedded in string (missing ')'?).",
-            ));
-        }
-        if environment.interner.contains(&new_string) {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(&new_string).into(),
-                None,
-            )))
-        } else {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                new_string.into(),
-                None,
-            )))
-        }
-    } else if environment.interner.contains(string) {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            environment.interner.intern(string).into(),
-            None,
-        )))
-    } else {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            string.to_string().into(),
-            None,
-        )))
-    }
-}
-
 fn internal_eval(
     environment: &mut Environment,
     expression_in: &Expression,
@@ -545,10 +422,7 @@ fn internal_eval(
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
-        // If we have an iterator on the string then assume it is already processed and being used.
-        // XXX TODO- verify this assumption is correct, maybe change when to process strings.
-        ExpEnum::String(_, Some(_)) => Ok(expression.clone()),
-        ExpEnum::String(string, _) => str_process(environment, &string, true),
+        ExpEnum::String(_, _) => Ok(expression.clone()),
         ExpEnum::True => Ok(expression.clone()),
         ExpEnum::Float(_) => Ok(expression.clone()),
         ExpEnum::Int(_) => Ok(expression.clone()),

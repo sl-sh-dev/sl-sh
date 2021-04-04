@@ -266,12 +266,12 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
-        (assert-equal cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
+        (assert-equal cur-test-path2 (get-env PWD))
         (popd)
-        (assert-equal cur-test-path $PWD)
+        (assert-equal cur-test-path (get-env PWD))
         "
         (dir) (if (root::cd dir)
                 (do
@@ -286,12 +286,12 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
-        (assert-equal cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
+        (assert-equal cur-test-path2 (get-env PWD))
         (popd)
-        (assert-equal cur-test-path $PWD)
+        (assert-equal cur-test-path (get-env PWD))
         "
         () (if (> (length dir_stack) 0)
              (cd (vec-pop! dir_stack))
@@ -304,22 +304,22 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (test::assert-equal cur-test-path (str-trim (read-line (open \"/tmp/sl-sh.dirs.test\" :read))))
         (pushd (str-trim cur-test-path))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (def test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
-        (test::assert-equal cur-test-path (read-line test-dirs-file))
-        (test::assert-equal cur-test-path2 (read-line test-dirs-file))
+        (test::assert-equal cur-test-path (str-trim (read-line test-dirs-file)))
+        (test::assert-equal cur-test-path2 (str-trim (read-line test-dirs-file)))
         (close test-dirs-file)
         (popd)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (test::assert-equal cur-test-path (str-trim (read-line (open \"/tmp/sl-sh.dirs.test\" :read))))
         (popd)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
@@ -334,10 +334,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -355,10 +355,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -375,9 +375,9 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path $PWD)
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 $PWD)
+        (def cur-test-path2 (get-env PWD))
         (pushd (str-trim cur-test-path))
         (pushd \"/tmp\")
         (pushd (str-trim cur-test-path))
@@ -796,110 +796,6 @@ Section: shell
     ;; Set global var *last-command*
     (set! *last-command* line))
 
-      (defn callable? (com)
-          ; Want the actual thing pointed to by the symbol in com for the test.
-          (set! com (shell::find-symbol com))
-          (if (def? (ref com))
-              (do (set! com (eval (sym com)))
-                  (or (builtin? com) (lambda? com) (macro? com)))
-              nil)
-        )
-
-      (defmacro sys-apply (com &rest args)
-          (if (callable? com)
-              `(,com ,@args)
-              `(syscall ,com ,@args)))
-
-(defmacro var-or-env (key)
-    (let ((key-new (shell::find-symbol key)))
-        (if (def? (ref key-new))
-            `,key-new
-            `(get-env ,key))))
-
-(let ((paren-level 0))
-
-(defn shell-read-int (stream in-paren)
-    (let ((in-quote nil)
-          (token (str ""))
-          (new-pair (list))
-          (last-pair (list))
-          (result (list))
-          (close-token)
-          (add-exp)
-          (do-read)
-          (maybe-glob?)
-          (first #t)
-          (first-sym #t)
-          (just-read nil)
-          (var-bracket nil)
-          (done nil))
-        (set! add-exp (fn (exp)
-            (set! new-pair (join exp nil))
-            (if (nil? last-pair) (set! result new-pair))
-            (xdr! last-pair new-pair)
-            (set! last-pair new-pair)))
-        (set! maybe-glob? (fn (token)
-              (or (str-contains "*" token)
-                  (str-contains "?" token)
-                  (str-contains "[" token)
-                  (str-contains "{" token))))
-        (set! close-token (fn ()
-            (if (not (str-empty? token))
-                (if first-sym (do (add-exp (sym token)) (set! first-sym nil))
-                    (maybe-glob? token) (add-exp (list 'glob token))
-                    (add-exp token)))
-            (set! token (str ""))))
-        (set! do-read (fn (ch)
-                    (if (not (char-whitespace? ch))
-                        (str-push! token ch))
-                    (close-token)
-                    (add-exp (read stream))
-                    (set! just-read #t)))
-        (if in-paren (add-exp (sym "shell::sys-apply")))
-        ((fn (last-ch ch peek-ch)
-            (cond
-                ((and (= ch #\() first (= peek-ch #\())
-                    (set! result (read stream))
-                    (set! ch (str-iter-next! stream))
-                    ((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
-                    (if (not (= #\) ch))
-                        (err "Unbalanced ) in '\$' shell read macro"))
-                    (set! done #t))
-                ((and (= ch #\() first)
-                    (set! paren-level (+ paren-level 1))
-                    (add-exp (sym "shell::sys-apply"))
-                    (set! in-paren #t))
-                ((and (= ch #\{) first)
-                    (set! var-bracket #t))
-                ((and (not (= last-ch #\\))(= ch #\)) (> paren-level 0))
-                    (set! paren-level (- paren-level 1))
-                    (set! done #t))
-                ((and (not (= ch #\\))(= peek-ch #\))(not in-paren))
-                    (if (not (= ch #\}))(str-push! token ch))
-                    (set! done #t))
-                ((and (char-whitespace? ch)(not in-paren)(not var-bracket))
-                    (set! done #t))
-                ((and (= ch #\}) var-bracket)
-                    (set! done #t))
-                ((and (not (= ch #\\))(or (= peek-ch #\")(= peek-ch #\$)))
-                    (do-read ch))
-                ((char-whitespace? ch)
-                    (close-token))
-                ((str-push! token ch) nil))
-            (set! first nil)
-            (if (and (not done)(not (str-iter-empty? stream)))
-                (if just-read
-                    (do (set! just-read nil)(recur #\  #\  (str-iter-peek stream)))
-                    (recur ch (str-iter-next! stream)(str-iter-peek stream)))
-                (if (not (str-empty? token))
-                    (if in-paren
-                        (close-token)
-                        (do (add-exp (sym "shell::var-or-env"))(add-exp (sym token))))))
-             )#\ (str-iter-next! stream)(str-iter-peek stream))
-        result)))
-
-(defn shell-read (stream ch_start) (shell-read-int stream nil))
-
 (defn repl-line (line line-len)
     (export 'LAST_STATUS "0")
     (set! *last-status* 0)
@@ -910,7 +806,7 @@ Section: shell
                             (cond
                               ((= #\$ (str-nth 0 line)) (read line))
                               ((= #\( (str-nth 0 line)) (read line))
-                              (#t (shell-read-int (str-iter-start line) #t)))
+                              (#t (shell-read::shell-read-int (str-iter-start line) #t)))
                             line))))
 
     ; This next section is odd, it makes sure the eval happens in the active
@@ -1034,12 +930,6 @@ Section: shell"
 		(write-line new-file (str "(ns-auto-export '" namespace ")"))
 		(write-line new-file "(ns-pop)")))
 	(close new-file)))
-
-; This puts this in the shell userspace, also in slsh-std.lisp to get it in root.
-; Need this so getops.lisp can do string interpolation but this should be better.
-(if (def? *read-table*)
-    (hash-set! *read-table* #\$ 'shell::shell-read)
-    (def *read-table* (make-hash '((#\$ . shell::shell-read)))))
 
 (load "getopts.lisp")
 

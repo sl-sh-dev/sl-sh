@@ -11,6 +11,7 @@
 (assert-equal "200" "${stri2}")
 
 (let ((stri1 "let1")(stri2 111))
+    (assert-equal "let1" $stri1)
     (assert-equal "let1" "$stri1")
     (assert-equal "111" "$stri2")
     (assert-equal "let1" "${stri1}")

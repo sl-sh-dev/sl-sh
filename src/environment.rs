@@ -8,6 +8,7 @@ use liner::Context;
 
 use crate::interner::*;
 use crate::process::*;
+use crate::reader::ReaderState;
 use crate::symbols::*;
 use crate::types::*;
 use crate::unix::cvt;
@@ -41,14 +42,6 @@ impl Default for ReplSettings {
             vi_insert_prompt_suffix: None,
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct ReaderState {
-    pub line: usize,
-    pub column: usize,
-    pub file_name: Option<&'static str>,
-    pub end_ch: Option<&'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -111,13 +104,12 @@ pub struct Environment {
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
     pub stack_frame_base: usize,
-    pub reader_state: Option<ReaderState>,
+    pub reader_state: ReaderState,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
-    pub str_ignore_expand: bool,
     pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
@@ -169,6 +161,7 @@ pub fn build_default_environment() -> Environment {
             0
         }
     };
+    let reader_state = ReaderState::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
         recur_num_args: None,
@@ -178,13 +171,12 @@ pub fn build_default_environment() -> Environment {
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
         stack_frame_base: 0,
-        reader_state: None,
+        reader_state,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
         run_background: false,
         is_tty: true,
         do_job_control: true,
-        str_ignore_expand: false,
         procs,
         save_exit_status: true,
         exit_code: None,
