@@ -1,5 +1,4 @@
-; core should be loaded into the root namespace (ie it does not set a namespace).
-(def prim-print-backtrace (fn (backtrace) 
+(def prim-print-backtrace (fn (backtrace)
 (def first (fn
     (obj)
     (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
@@ -26,12 +25,18 @@
             (prim-print-backtrace (car (cdr (cdr error)))))
         (err "Not an error!"))))
 
-(def result (get-error (do
-(load "core.lisp"))))
+(def load-std-file (fn (file)
+                       ((fn (result)
+                       (set! result (get-error (load file)))
+                       (if (= :error (car result))
+                           (do
+                            (println "Error reading " file ":")
+                            (prim-print-error result))))nil)))
 
-(if (= :error (car result)) (prim-print-error result))
+; core should be loaded into the root namespace (ie it does not set a namespace).
+(load-std-file "core.lisp")
 
-(def result (get-error (do
+
 (defn error-stack-on
 "Currently a no-op, used to turn on error stacks.
 
@@ -72,12 +77,15 @@ t
 (def *repl-settings* (make-hash))
 (hash-set! *repl-settings* :keybindings :emacs)
 
-(load "seq.lisp")
-(load "struct.lisp")
-(load "iterator.lisp")
-(load "test.lisp")
-(load "lib.lisp")
-(load "shell.lisp")
+(load-std-file "seq.lisp")
+(load-std-file "shell-read.lisp")
+(load-std-file "struct.lisp")
+(load-std-file "iterator.lisp")
+
+
+(load-std-file "test.lisp")
+(load-std-file "lib.lisp")
+(load-std-file "shell.lisp")
 ;;; *std-lib-syms-hash* must be the symbol defined
 ;;; in the sl-sh standard library. In order to increase speed of ns-auto-export
 ;;; a list of all symbols in the standard library is pre-computed by iterating
@@ -93,18 +101,11 @@ t
                                         fst
                                         (ns-symbols nxt)))
                           (make-hash)
-                          (ns-list))))))
-
-(if (= :error (car result)) (prim-print-error result))
+                          (ns-list)))
 
 ; Do not leave this stuff laying around the root scope.
-(undef result)
 (undef prim-print-backtrace)
 (undef prim-print-error)
-
-(if (def? *read-table*)
-    (hash-set! *read-table* #\$ 'shell::shell-read)
-    (def *read-table* (make-hash '((#\$ . shell::shell-read)))))
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 

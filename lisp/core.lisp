@@ -1,6 +1,16 @@
 ;;; These are core forms that are installed in the root namespace so they
 ;;; are always available.
 
+; XXX TODO- use a gensym in shell-reader so we can more consistently detect these.
+(def maybe-docstring? (fn (test-form)
+                          (or (string? test-form)
+                              (and (list? test-form)
+                                   (symbol? (car test-form))
+                                   (= (str (car test-form)) "str"))
+                              (and (vec? test-form)
+                                   (> (length test-form) 0)
+                                   (symbol? (vec-nth test-form 0))
+                                   (= (str (vec-nth test-form 0) "str"))))))
 (def defmacro
 "Usage: (defmacro name doc_string? argument_list body)
 
@@ -22,7 +32,7 @@ Example:
                 (var ars nil)
                 (var body nil)
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
-                (if (string? (vec-nth args 0))
+                (if (maybe-docstring? (vec-nth args 0))
                   (do
                     (var doc-str (vec-nth args 0))
                     (set! ars (vec-nth args 1))
@@ -93,7 +103,7 @@ t
          (if (< (length args) 1) (err (str "defn: Wrong number of args creating " name)))
          (var ars nil)
          (var body nil)
-         (if (string? (vec-nth args 0))
+         (if (maybe-docstring? (vec-nth args 0))
            (do
              (if (< (length args) 2) (err "defn: Wrong number of args."))
              (var doc-str (vec-nth args 0))

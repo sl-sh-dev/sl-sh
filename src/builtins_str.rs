@@ -624,7 +624,7 @@ fn builtin_str_iter_start(
             }
         }
     }
-    Err(LispError::new("str-iter takes a string"))
+    Err(LispError::new("str-iter-start takes a string"))
 }
 
 fn builtin_str_iter_next(
@@ -643,13 +643,11 @@ fn builtin_str_iter_next(
                     // If this is the reader text stream then advance line/column.
                     if let Some(tags) = &mut string_d.meta_tags {
                         if tags.contains("--reader-text-stream--") {
-                            if let Some(reader_state) = &mut environment.reader_state {
-                                if ch == "\n" {
-                                    reader_state.line += 1;
-                                    reader_state.column = 0;
-                                } else {
-                                    reader_state.column += 1;
-                                }
+                            if ch == "\n" {
+                                environment.reader_state.line += 1;
+                                environment.reader_state.column = 0;
+                            } else {
+                                environment.reader_state.column += 1;
                             }
                         }
                     }
@@ -707,23 +705,6 @@ fn builtin_str_iter_empty(
         }
     }
     Err(LispError::new("str-iter-empty takes a string"))
-}
-
-pub fn builtin_str_ignore_expand(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let save_ignore = environment.str_ignore_expand;
-    environment.str_ignore_expand = true;
-    let mut ret = Ok(Expression::make_nil());
-    for arg in args {
-        ret = eval(environment, arg);
-        if ret.is_err() {
-            break;
-        }
-    }
-    environment.str_ignore_expand = save_ignore;
-    ret
 }
 
 fn builtin_char_lower(
@@ -1329,23 +1310,6 @@ Example:
 (test::assert-false (str-iter-empty? test-iter-start))
 (str-clear! test-iter-start)
 (test::assert-true (str-iter-empty? test-iter-start))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str-ignore-expand"),
-        Expression::make_function(
-            builtin_str_ignore_expand,
-            r#"Usage: (str-ignore-expand exp0 ... expN) -> [final expression]
-
-Like do but any strings in the form will not be expanded.
-
-Section: string
-
-Example:
-(export 'TST-IGNORE "TST")
-(test::assert-equal "some TST stuff" "some $TST-IGNORE stuff")
-(test::assert-equal "some \$TST-IGNORE stuff" (str-ignore-expand "some $TST-IGNORE stuff"))
 "#,
         ),
     );

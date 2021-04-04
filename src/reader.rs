@@ -25,6 +25,44 @@ impl fmt::Display for ReadError {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ReaderState {
+    pub line: usize,
+    pub column: usize,
+    pub file_name: Option<&'static str>,
+    pub end_ch: Option<&'static str>,
+    pub str_int_ch: Option<&'static str>,
+    pub clear_state: bool,
+}
+
+impl ReaderState {
+    pub fn new() -> Self {
+        ReaderState::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.file_name = None;
+        self.column = 0;
+        self.line = 1;
+        self.end_ch = None;
+        self.str_int_ch = None;
+        self.clear_state = false;
+    }
+}
+
+impl Default for ReaderState {
+    fn default() -> Self {
+        ReaderState {
+            file_name: None,
+            column: 0,
+            line: 1,
+            end_ch: None,
+            str_int_ch: None,
+            clear_state: false,
+        }
+    }
+}
+
 fn is_whitespace(ch: &str) -> bool {
     matches!(ch, " " | "\t" | "\n")
 }
@@ -160,17 +198,21 @@ fn do_char(
         if chars.peek().is_some() {
             match &*ch {
                 "u" => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
-                    let char_str = format!("{}", read_utf_scalar(&mut chars, reader_state,)?);
+                    let char_str = format!(
+                        "{}",
+                        read_utf_scalar(&mut chars, &mut environment.reader_state)?
+                    );
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 "x" => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
-                    let char_str = format!("{}", escape_to_char(&mut chars, reader_state,)?);
+                    let char_str = format!(
+                        "{}",
+                        escape_to_char(&mut chars, &mut environment.reader_state)?
+                    );
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 _ => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
+                    let reader_state = &mut environment.reader_state;
                     let reason = format!(
                         "Not a valid char [{}]: line {}, col: {}",
                         symbol, reader_state.line, reader_state.column
@@ -184,7 +226,7 @@ fn do_char(
             meta,
         ))
     } else {
-        let reader_state = &mut environment.reader_state.as_mut().unwrap();
+        let reader_state = &mut environment.reader_state;
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",
             symbol, reader_state.line, reader_state.column
@@ -213,8 +255,7 @@ fn read_utf_scalar(
     let mut has_bracket = false;
     let mut char_u32 = 0;
     let mut nibbles = 0;
-    let mut out_ch = chars.next();
-    while let Some(ch) = out_ch {
+    while let Some(ch) = chars.next() {
         if ch == "\n" {
             reader_state.line += 1;
             reader_state.column = 0;
@@ -230,7 +271,6 @@ fn read_utf_scalar(
         }
         if first && ch == "{" {
             has_bracket = true;
-            out_ch = chars.next();
             first = false;
             continue;
         }
@@ -251,7 +291,6 @@ fn read_utf_scalar(
                 return finish(char_u32);
             }
         }
-        out_ch = chars.next();
     }
     if has_bracket {
         Err(ReadError {
@@ -262,63 +301,162 @@ fn read_utf_scalar(
     }
 }
 
+fn wrap_trim(exp: Expression) -> Expression {
+    let trim_list = vec![
+        make_exp(ExpEnum::Symbol("str-trim", SymLoc::None), None),
+        exp,
+    ];
+    Expression::with_list_meta(trim_list, None)
+}
+
 fn read_string(
-    chars: &mut CharIter,
+    environment: &mut Environment,
+    mut chars: CharIter,
     symbol: &mut String,
-    reader_state: &mut ReaderState,
-) -> Result<Expression, ReadError> {
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     symbol.clear();
-    let mut last_ch = Cow::Borrowed(" ");
-    let mut skip_last_ch = false;
+    let mut last_ch_escape = false;
+    let mut res_list: Option<Vec<Expression>> = None;
     let meta = get_meta(
-        reader_state.file_name,
-        reader_state.line,
-        reader_state.column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
 
-    let mut out_ch = chars.next();
-    while let Some(ch) = out_ch {
+    while let Some(ch) = chars.next() {
         if ch == "\n" {
-            reader_state.line += 1;
-            reader_state.column = 0;
+            environment.reader_state.line += 1;
+            environment.reader_state.column = 0;
         } else {
-            reader_state.column += 1;
+            environment.reader_state.column += 1;
         }
-        if last_ch == "\\" {
-            match &*ch {
-                "n" => symbol.push('\n'),
-                "r" => symbol.push('\r'),
-                "t" => symbol.push('\t'),
-                "\"" => symbol.push('"'),
-                "x" => symbol.push(escape_to_char(chars, reader_state)?),
-                "\\" => {
-                    skip_last_ch = true;
-                    symbol.push('\\');
-                }
-                "u" => symbol.push(read_utf_scalar(chars, reader_state)?),
-                _ => {
-                    symbol.push('\\');
-                    symbol.push_str(&ch);
+        if last_ch_escape {
+            let mut do_match = true;
+            if let Some(str_int_ch) = environment.reader_state.str_int_ch {
+                if ch == str_int_ch {
+                    do_match = false;
+                    symbol.push_str(str_int_ch);
                 }
             }
+            if do_match {
+                match &*ch {
+                    "n" => symbol.push('\n'),
+                    "r" => symbol.push('\r'),
+                    "t" => symbol.push('\t'),
+                    "\"" => symbol.push('"'),
+                    "x" => {
+                        let res = escape_to_char(&mut chars, &mut environment.reader_state);
+                        // ? seems to confuse the borrow the checker here.
+                        let res = if let Err(e) = res {
+                            return Err((e, chars));
+                        } else {
+                            res.unwrap()
+                        };
+                        symbol.push(res);
+                    }
+                    "\\" => {
+                        symbol.push('\\');
+                    }
+                    "u" => {
+                        let res = read_utf_scalar(&mut chars, &mut environment.reader_state);
+                        // ? seems to confuse the borrow the checker here.
+                        let res = if let Err(e) = res {
+                            return Err((e, chars));
+                        } else {
+                            res.unwrap()
+                        };
+                        symbol.push(res);
+                    }
+                    _ => {
+                        symbol.push('\\');
+                        symbol.push_str(&ch);
+                    }
+                }
+            }
+            last_ch_escape = false;
         } else {
             if ch == "\"" {
                 break;
             }
-            if ch != "\\" {
-                symbol.push_str(&ch);
+            let mut proc_ch = true;
+            if let Some(str_int_ch) = environment.reader_state.str_int_ch {
+                if ch == str_int_ch {
+                    proc_ch = false;
+                    let res = prep_reader_macro(
+                        environment,
+                        chars,
+                        "shell-read::shell-read",
+                        &ch,
+                        environment.reader_state.end_ch,
+                    );
+                    match res {
+                        Ok((None, ichars)) => {
+                            chars = ichars;
+                            continue;
+                        }
+                        Ok((Some(exp), ichars)) => {
+                            chars = ichars;
+                            let exp_d = exp.get();
+                            match &exp_d.data {
+                                ExpEnum::String(s, _) => symbol.push_str(s),
+                                ExpEnum::Char(s) => symbol.push_str(s),
+                                ExpEnum::CodePoint(c) => symbol.push(*c),
+                                _ => {
+                                    if let Some(l) = res_list.as_mut() {
+                                        drop(exp_d);
+                                        if !symbol.is_empty() {
+                                            l.push(make_exp(
+                                                ExpEnum::String(symbol.clone().into(), None),
+                                                meta,
+                                            ));
+                                        }
+                                        symbol.clear();
+                                        l.push(wrap_trim(exp));
+                                    } else {
+                                        drop(exp_d);
+                                        let mut list = vec![make_exp(
+                                            ExpEnum::Symbol("str", SymLoc::None),
+                                            meta,
+                                        )];
+                                        if !symbol.is_empty() {
+                                            list.push(make_exp(
+                                                ExpEnum::String(symbol.clone().into(), None),
+                                                meta,
+                                            ));
+                                        }
+                                        symbol.clear();
+                                        list.push(wrap_trim(exp));
+                                        res_list = Some(list);
+                                    }
+                                }
+                            }
+                        }
+                        Err((err, ichars)) => return Err((err, ichars)),
+                    }
+                }
+            }
+            if proc_ch {
+                if ch != "\\" {
+                    last_ch_escape = false;
+                    symbol.push_str(&ch);
+                } else {
+                    last_ch_escape = true;
+                }
             }
         }
-
-        last_ch = if skip_last_ch {
-            skip_last_ch = false;
-            Cow::Borrowed(" ")
-        } else {
-            ch
-        };
-        out_ch = chars.next();
     }
-    Ok(make_exp(ExpEnum::String(symbol.clone().into(), None), meta))
+    if let Some(mut list) = res_list.take() {
+        if !symbol.is_empty() {
+            list.push(make_exp(ExpEnum::String(symbol.clone().into(), None), meta));
+        }
+        let fl = Expression::with_list_meta(list, meta);
+        Ok((fl, chars))
+    } else {
+        Ok((
+            make_exp(ExpEnum::String(symbol.clone().into(), None), meta),
+            chars,
+        ))
+    }
 }
 
 fn do_atom(
@@ -477,26 +615,21 @@ fn call_reader_macro(
                 let reason = format!(
                     "Error calling reader macro (not a lambda) {}, {} : line {}, col: {}",
                     name,
-                    environment
-                        .reader_state
-                        .as_ref()
-                        .unwrap()
-                        .file_name
-                        .unwrap_or(""),
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column
+                    environment.reader_state.file_name.unwrap_or(""),
+                    environment.reader_state.line,
+                    environment.reader_state.column
                 );
                 return Err(ReadError { reason });
             }
         };
-        let old_end_ch = environment.reader_state.as_ref().unwrap().end_ch;
-        environment.reader_state.as_mut().unwrap().end_ch = end_ch;
+        let old_end_ch = environment.reader_state.end_ch;
+        environment.reader_state.end_ch = end_ch;
         let res = match eval(environment, exp) {
             Ok(exp) => {
                 let meta = get_meta(
-                    environment.reader_state.as_ref().unwrap().file_name,
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column,
+                    environment.reader_state.file_name,
+                    environment.reader_state.line,
+                    environment.reader_state.column,
                 );
                 exp.get_mut().meta = meta;
                 Ok(exp)
@@ -506,32 +639,22 @@ fn call_reader_macro(
                     "Error in reader {}: {} ({} : line {}, col: {})",
                     name,
                     err,
-                    environment
-                        .reader_state
-                        .as_ref()
-                        .unwrap()
-                        .file_name
-                        .unwrap_or(""),
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column
+                    environment.reader_state.file_name.unwrap_or(""),
+                    environment.reader_state.line,
+                    environment.reader_state.column
                 );
                 Err(ReadError { reason })
             }
         };
-        environment.reader_state.as_mut().unwrap().end_ch = old_end_ch;
+        environment.reader_state.end_ch = old_end_ch;
         res
     } else {
         let reason = format!(
             "Error calling reader macro (not found) {}, {} : line {}, col: {}",
             name,
-            environment
-                .reader_state
-                .as_ref()
-                .unwrap()
-                .file_name
-                .unwrap_or(""),
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column
+            environment.reader_state.file_name.unwrap_or(""),
+            environment.reader_state.line,
+            environment.reader_state.column
         );
         Err(ReadError { reason })
     }
@@ -595,10 +718,10 @@ fn consume_whitespace(environment: &mut Environment, chars: &mut CharIter) {
     while ch.is_some() && is_whitespace(ch.unwrap()) {
         if let Some(ch) = ch {
             if *ch == "\n" {
-                environment.reader_state.as_mut().unwrap().line += 1;
-                environment.reader_state.as_mut().unwrap().column = 0;
+                environment.reader_state.line += 1;
+                environment.reader_state.column = 0;
             } else {
-                environment.reader_state.as_mut().unwrap().column += 1;
+                environment.reader_state.column += 1;
             }
             chars.next();
         }
@@ -617,7 +740,7 @@ fn read_num_radix(
     read_symbol(
         buffer,
         &mut chars,
-        &mut environment.reader_state.as_mut().unwrap(),
+        &mut environment.reader_state,
         true,
         true,
     );
@@ -640,9 +763,9 @@ fn read_vector(
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     let mut v: Vec<Expression> = Vec::new();
     let meta = get_meta(
-        environment.reader_state.as_ref().unwrap().file_name,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
     let mut cont = true;
 
@@ -719,9 +842,9 @@ fn read_list(
     let mut head = ExpEnum::Nil;
     let mut tail = ExpEnum::Nil;
     let meta = get_meta(
-        environment.reader_state.as_ref().unwrap().file_name,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
     let mut cont = true;
     let mut dot = false;
@@ -832,9 +955,6 @@ fn read_inner(
     in_back_quote: bool,
     return_close_paren: bool,
 ) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
-    if environment.reader_state.is_none() {
-        panic!("tried to read with no state!");
-    }
     let read_table = lookup_expression(&environment, "*read-table*");
     let mut read_table_chars: HashSet<&'static str> = HashSet::new();
     if let Some(read_table) = &read_table {
@@ -846,9 +966,12 @@ fn read_inner(
     }
     let read_table_end_char = lookup_expression(&environment, "*read-table-end-char*");
     consume_whitespace(environment, &mut chars);
+    if read_table_chars.contains("$") {
+        environment.reader_state.str_int_ch = Some("$");
+    }
 
     while let Some((ch, peek_ch)) = next2(&mut chars) {
-        environment.reader_state.as_mut().unwrap().column += 1;
+        environment.reader_state.column += 1;
         if read_table_chars.contains(&*ch) {
             let mut end_ch = None;
             if let Some(read_table_end_char) = &read_table_end_char {
@@ -878,19 +1001,15 @@ fn read_inner(
             }
         }
         let meta = get_meta(
-            environment.reader_state.as_ref().unwrap().file_name,
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column,
+            environment.reader_state.file_name,
+            environment.reader_state.line,
+            environment.reader_state.column,
         );
         match &*ch {
             "\"" => {
-                match read_string(
-                    &mut chars,
-                    buffer,
-                    &mut environment.reader_state.as_mut().unwrap(),
-                ) {
-                    Ok(s) => return Ok((Some(s), chars)),
-                    Err(e) => return Err((e, chars)),
+                match read_string(environment, chars, buffer) {
+                    Ok((s, ichars)) => return Ok((Some(s), ichars)),
+                    Err((e, ichars)) => return Err((e, ichars)),
                 };
             }
             "'" => match read_inner(environment, chars, buffer, in_back_quote, false) {
@@ -1001,16 +1120,13 @@ fn read_inner(
             "#" => {
                 chars.next();
                 match &*peek_ch {
-                    "|" => consume_block_comment(
-                        &mut chars,
-                        &mut environment.reader_state.as_mut().unwrap(),
-                    ),
+                    "|" => consume_block_comment(&mut chars, &mut environment.reader_state),
                     "\\" => {
                         buffer.clear();
                         read_symbol(
                             buffer,
                             &mut chars,
-                            &mut environment.reader_state.as_mut().unwrap(),
+                            &mut environment.reader_state,
                             true,
                             false,
                         );
@@ -1022,8 +1138,7 @@ fn read_inner(
                     "<" => {
                         let reason = format!(
                             "Found an unreadable token: line {}, col: {}",
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column
+                            environment.reader_state.line, environment.reader_state.column
                         );
                         return Err((ReadError { reason }, chars));
                     }
@@ -1061,9 +1176,7 @@ fn read_inner(
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
-                            peek_ch,
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column
+                            peek_ch, environment.reader_state.line, environment.reader_state.column
                         );
                         return Err((ReadError { reason }, chars));
                     }
@@ -1089,7 +1202,7 @@ fn read_inner(
                 }
             }
             ";" => {
-                consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
+                consume_line_comment(&mut chars, &mut environment.reader_state);
             }
             _ => {
                 buffer.clear();
@@ -1097,7 +1210,7 @@ fn read_inner(
                 let is_number = read_symbol(
                     buffer,
                     &mut chars,
-                    &mut environment.reader_state.as_mut().unwrap(),
+                    &mut environment.reader_state,
                     false,
                     false,
                 );
@@ -1116,17 +1229,10 @@ fn read2(
     file_name: Option<&'static str>,
     list_only: bool,
 ) -> Result<Expression, ReadError> {
-    let clear_state = if environment.reader_state.is_none() {
-        environment.reader_state = Some(ReaderState {
-            file_name,
-            column: 0,
-            line: 1,
-            end_ch: None,
-        });
-        true
-    } else {
-        false
-    };
+    if environment.reader_state.clear_state {
+        environment.reader_state.clear();
+        environment.reader_state.file_name = file_name;
+    }
     let mut buffer = String::new();
     let mut exps = Vec::new();
 
@@ -1140,16 +1246,14 @@ fn read2(
     );
     if text.starts_with("#!") {
         // Work with shebanged scripts.
-        consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
+        consume_line_comment(&mut chars, &mut environment.reader_state);
     }
     let mut cont = true;
     while cont {
         let (exp, ichars) = match read_inner(environment, chars, &mut buffer, false, false) {
             Ok(r) => r,
             Err((err, _)) => {
-                if clear_state {
-                    environment.reader_state = None;
-                }
+                environment.reader_state.clear_state = true;
                 return Err(err);
             }
         };
@@ -1161,20 +1265,15 @@ fn read2(
         chars = ichars;
     }
     if chars.next().is_some() {
-        if clear_state {
-            environment.reader_state = None;
-        }
+        environment.reader_state.clear_state = true;
         let reason = format!(
             "Premature end (to many ')'?) line: {}, column: {}",
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column
+            environment.reader_state.line, environment.reader_state.column
         );
         return Err(ReadError { reason });
     }
-    let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
-    if clear_state {
-        environment.reader_state = None;
-    }
+    let exp_meta = get_meta(environment.reader_state.file_name, 0, 0);
+    environment.reader_state.clear_state = true;
 
     if always_wrap {
         Ok(Expression::with_list_meta(exps, exp_meta))
@@ -1208,29 +1307,17 @@ pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    let clear_state = if environment.reader_state.is_none() {
-        environment.reader_state = Some(ReaderState {
-            file_name: None,
-            column: 0,
-            line: 1,
-            end_ch: None,
-        });
-        true
-    } else {
-        false
-    };
+    if environment.reader_state.clear_state {
+        environment.reader_state.clear();
+    }
     let mut buffer = String::new();
     match read_inner(environment, chars, &mut buffer, false, false) {
         Ok((Some(exp), ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
+            environment.reader_state.clear_state = true;
             Ok((exp, ichars))
         }
         Ok((None, ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
+            environment.reader_state.clear_state = true;
             Err((
                 ReadError {
                     reason: "Empty value".to_string(),
@@ -1239,9 +1326,7 @@ pub fn read_form(
             ))
         }
         Err((err, ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
+            environment.reader_state.clear_state = true;
             Err((err, ichars))
         }
     }
@@ -1352,12 +1437,6 @@ mod tests {
 
     fn build_def_env() -> Environment {
         let mut environment = build_default_environment();
-        environment.reader_state = Some(ReaderState {
-            line: 0,
-            column: 0,
-            file_name: None,
-            end_ch: None,
-        });
         environment
     }
 

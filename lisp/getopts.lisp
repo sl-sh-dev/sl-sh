@@ -252,7 +252,7 @@ sample-getopts.lisp
 ----------------
 
 Running the script with one argument to the -m flag yields:
-$> ./sample-getopts.lisp -m 7
+\$> ./sample-getopts.lisp -m 7
 => Passing: #(\"-m\" \"7\") to getopts
 => The binding for -m is 7 of type Int
 
@@ -262,7 +262,7 @@ take one argument. :default specifies the bindng for :-m should be 0 if the
 -m flag is not seen in args. :type :int? specifies that the binding should
 be of that type, in this case int?. Running the script again with no -m
 flag yields:
-$> ./sample-getopts.lisp
+\$> ./sample-getopts.lisp
 => Passing: #() to getopts
 => The binding for -m is 0 of type Int
 
@@ -281,7 +281,7 @@ is thrown.
     Use this as a default if the given flag is not provided at execution time.
 - :type (optional)
     Specify a type for every provided argument for the given flag. Types can be
-any of: $((str (collect (map (fn (x) (var func (first (rest (str-split \":\" x)))) (str \"[\" func \"](#root::\" func \")\")) (hash-keys supported-types-map)))))
+any of: $((str (collect (map (fn (x) (var func (first (rest (str-split ":" x)))) (str "[" func "](#root::" func ")")) (hash-keys supported-types-map)))))
 
 
 Rules for flags:
