@@ -47,7 +47,7 @@ jobs:
           echo "$DOC_DEPLOY_KEY" | ssh-add -
           pushd docs
           log "Build docs"
-          PATH="${PATH}:../target/release/" ../sl-sh docify.lisp
+          PATH="${PATH}:../" ../sl-sh docify.lisp
           if [[ $? != "0" ]]; then
             elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
             elog "docstrings printed as hashmap literals above and or errors. Run"
