@@ -245,4 +245,202 @@ Example:
 ",
         ),
     );
+
+    data.insert(
+        interner.intern("pow"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 2 {
+                    Err(LispError::new("expected two numbers"))
+                } else {
+                    let base = floats.get(0).unwrap();
+                    let power = floats.get(1).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(base.powf(*power))))
+                }
+            },
+            "Usage: (pow base power)
+
+Raise first argument to power of second argument.
+
+Section: math
+
+Example:
+(test::assert-equal 4.0 (pow 2 2))
+(test::assert-equal 20736 (pow 144.0 2.0))
+(test::assert-equal 16 (pow 4 2))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("floor"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Int(arg1.floor() as i64)))
+                }
+            },
+            "Usage: (floor value)
+
+Returns largest integer less than or equal to value.
+
+Section: math
+
+Example:
+(test::assert-equal 2.0 (floor 2))
+(test::assert-equal 144 (floor 144.444444))
+(test::assert-equal 4 (floor 4.53))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("ceil"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Int(arg1.ceil() as i64)))
+                }
+            },
+            "Usage: (ceil value)
+
+Returns smallest integer greater than or equal to value.
+
+Section: math
+
+Example:
+(test::assert-equal 2.0 (ceil 2))
+(test::assert-equal 145 (ceil 144.444444))
+(test::assert-equal 5 (ceil 4.53))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("round"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Int(arg1.round() as i64)))
+                }
+            },
+            "Usage: (round arg)
+
+Round arg to nearest int value.
+
+Section: math
+
+Example:
+(test::assert-equal 2.0 (round 2))
+(test::assert-equal 144 (round 144.444444))
+(test::assert-equal 5 (round 4.53))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("sin"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.sin())))
+                }
+            },
+            "Usage: (sin num)
+
+Take sin of argument
+
+Section: math
+
+Example:
+(test::assert-equal 0.9893582466233818 (sin 8))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("cos"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.cos())))
+                }
+            },
+            "Usage: (cos num)
+
+Take cos of argument
+
+Section: math
+
+Example:
+(test::assert-equal -0.14550003380861354 (cos 8))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("tan"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.tan())))
+                }
+            },
+            "Usage: (tan num)
+
+Take tan of argument
+
+Section: math
+
+Example:
+(test::assert-equal -6.799711455220379 (tan 8))
+",
+        ),
+    );
 }
