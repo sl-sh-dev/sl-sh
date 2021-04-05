@@ -23,6 +23,7 @@ jobs:
           cargo build --release --verbose
           cp ./target/release/sl-sh .
           strip sl-sh
+          cp sl-sh /bin/
     - name: Deploy Docs
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
@@ -45,9 +46,11 @@ jobs:
           log "> Docs started"
           eval `ssh-agent -t 60 -s`
           echo "$DOC_DEPLOY_KEY" | ssh-add -
+          PATH="${PATH}:${PWD}/target/release/"
+          echo "PATH: ${PATH}"
           pushd docs
           log "Build docs"
-          PATH="${PATH}:../" ../sl-sh docify.lisp
+          ../sl-sh docify.lisp
           if [[ $? != "0" ]]; then
             elog "Error and/or uncategorized forms found, not pushing. Please edit appropriate"
             elog "docstrings printed as hashmap literals above and or errors. Run"
