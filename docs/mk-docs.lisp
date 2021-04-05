@@ -85,8 +85,5 @@
 		index-file
 		syms))
 
-;;(when (> (length args) 0)
-;;;;  (println (get-doc-list-for (vec-nth args 1))))
-
 (ns-auto-export 'mkdocs)
 (ns-pop)
