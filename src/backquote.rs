@@ -334,7 +334,7 @@ fn backquote(
         }
     } else if let Some(inexp) = get_backquote(&exp)? {
         let exp2 = backquote(environment, inexp, bq_level + 1)?;
-        let output2 = vec![
+        let output2: Vec<Expression> = vec![
             Expression::alloc_data(ExpEnum::Symbol(
                 environment.interner.intern("#<back-quote>"),
                 SymLoc::None,
@@ -404,7 +404,13 @@ mod tests {
     use crate::reader::read;
 
     fn build_def_env() -> Environment {
-        let environment = build_default_environment();
+        let mut environment = build_default_environment();
+        environment.reader_state = Some(ReaderState {
+            line: 0,
+            column: 0,
+            file_name: None,
+            end_ch: None,
+        });
         environment
     }
 
