@@ -342,6 +342,51 @@ t
                 .to_string(),
             ),
         );
+        data.insert(
+            interner.intern("*read-table*"),
+            (
+                ExpEnum::HashMap(HashMap::new()).into(),
+                "Usage: (print *read-table*)
+
+Symbol that contains the current read table.
+
+Example:
+;(hash-set! *read-table* #\\$ 'shell-read::shell-read)
+t
+"
+                .to_string(),
+            ),
+        );
+        data.insert(
+            interner.intern("*read-table-terminal*"),
+            (
+                ExpEnum::HashMap(HashMap::new()).into(),
+                "Usage: (print *read-table-terminal*)
+
+Symbol that contains the current terminal read table.
+
+Example:
+;(hash-set! *read-table-terminal* #\\] 'nop-read)
+t
+"
+                .to_string(),
+            ),
+        );
+        data.insert(
+            interner.intern("*string-read-table*"),
+            (
+                ExpEnum::HashMap(HashMap::new()).into(),
+                "Usage: (print *string-read-table*)
+
+Symbol that contains the current string read table.
+
+Example:
+;(hash-set! *string-read-table* #\\$ 'shell-read::shell-read)
+t
+"
+                .to_string(),
+            ),
+        );
         let mut vdata = Vec::with_capacity(data.len());
         let mut vdocs = Vec::with_capacity(data.len());
         let mut map = HashMap::new();
