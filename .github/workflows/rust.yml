@@ -23,7 +23,6 @@ jobs:
           cargo build --release --verbose
           cp ./target/release/sl-sh .
           strip sl-sh
-          cp sl-sh /bin/
     - name: Deploy Docs
       env:
           DOC_DEPLOY_KEY: ${{ secrets.DOC_DEPLOY_KEY }}
