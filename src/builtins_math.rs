@@ -277,6 +277,65 @@ Example:
     );
 
     data.insert(
+        interner.intern("*e*"),
+        (
+            Expression::from(ExpEnum::Float(std::f64::consts::E)),
+            "Usage: (print *e*)
+
+Float representing euler's number.
+
+Section: math
+
+Example:
+(test::assert-equal 2.718281828459045 *e*)
+".to_string(),
+        ));
+
+    data.insert(
+        interner.intern("*pi*"),
+        (
+            Expression::from(ExpEnum::Float(std::f64::consts::PI)),
+            "Usage: (print *pi*)
+
+Float representing pi.
+
+Section: math
+
+Example:
+(test::assert-equal 3.141592653589793 *pi*)
+".to_string(),
+        ));
+
+    data.insert(
+        interner.intern("abs"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.abs())))
+                }
+            },
+            "Usage: (abs arg)
+
+Returns absolute value of arg.
+
+Section: math
+
+Example:
+(test::assert-equal 2.0 (abs 2))
+(test::assert-equal 144 (abs -144))
+(test::assert-equal 4.53 (abs -4.53))
+",
+        ),
+    );
+
+    data.insert(
         interner.intern("floor"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -359,6 +418,99 @@ Example:
 (test::assert-equal 2.0 (round 2))
 (test::assert-equal 144 (round 144.444444))
 (test::assert-equal 5 (round 4.53))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("log"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 2 {
+                    Err(LispError::new("expected two numbers"))
+                } else {
+                    let num = floats.get(0).unwrap();
+                    let base = floats.get(1).unwrap();
+                    if *base == 2.0 {
+                        Ok(Expression::alloc_data(ExpEnum::Float(num.log2())))
+                    }
+                    else if *base == 10.0 {
+                        Ok(Expression::alloc_data(ExpEnum::Float(num.log10())))
+                    }
+                    else {
+                        Ok(Expression::alloc_data(ExpEnum::Float(num.log(*base))))
+                    }
+                }
+            },
+            "Usage: (log num base)
+
+Returns log of number given base.
+
+Section: math
+
+Example:
+(test::assert-equal 8 (log 256 2))
+(test::assert-equal 3 (log 1000 10))
+(test::assert-equal 3 (log 27 3))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("lne"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.ln())))
+                }
+            },
+            "Usage: (lne num)
+
+Returns natural logarithm of number
+
+Section: math
+
+Example:
+(test::assert-equal 1 (lne 2.718281828459))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("fract"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.fract())))
+                }
+            },
+            "Usage: (fract num)
+
+Returns fractional part of a number
+
+Section: math
+
+Example:
+(test::assert-equal 0.9893582466233818 (fract 1911.9893582466233818))
+(test::assert-equal 0.0 (fract 1911))
 ",
         ),
     );
