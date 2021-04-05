@@ -216,4 +216,33 @@ Example:
 ",
         ),
     );
+
+    data.insert(
+        interner.intern("sqrt"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one float"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.sqrt())))
+                }
+            },
+            "Usage: (sqrt num)
+
+Take square root of argument
+
+Section: math
+
+Example:
+(test::assert-equal 2.0 (sqrt 4))
+(test::assert-equal 2.04939015319192 (sqrt 4.2))
+(test::assert-equal 12 (sqrt 144))
+",
+        ),
+    );
 }
