@@ -404,7 +404,7 @@ mod tests {
     use crate::reader::read;
 
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment();
+        let environment = build_default_environment();
         environment
     }
 

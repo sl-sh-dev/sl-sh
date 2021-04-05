@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::builtins_hashmap::cow_to_ref;
 use crate::environment::*;
 use crate::eval::eval;
 use crate::types::*;
@@ -30,8 +29,6 @@ pub struct ReaderState {
     pub line: usize,
     pub column: usize,
     pub file_name: Option<&'static str>,
-    pub end_ch: Option<&'static str>,
-    pub str_int_ch: Option<&'static str>,
     pub clear_state: bool,
 }
 
@@ -44,8 +41,6 @@ impl ReaderState {
         self.file_name = None;
         self.column = 0;
         self.line = 1;
-        self.end_ch = None;
-        self.str_int_ch = None;
         self.clear_state = false;
     }
 }
@@ -56,8 +51,6 @@ impl Default for ReaderState {
             file_name: None,
             column: 0,
             line: 1,
-            end_ch: None,
-            str_int_ch: None,
             clear_state: false,
         }
     }
@@ -155,8 +148,8 @@ fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     }
 }
 
-fn end_symbol(ch: &str, reader_state: &mut ReaderState) -> bool {
-    if is_whitespace(ch) || (reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap()) {
+fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Expression>) -> bool {
+    if is_whitespace(ch) || read_table_term.contains_key(ch) {
         true
     } else {
         matches!(ch, "(" | ")" | "#" | "\"" | "," | "'" | "`")
@@ -313,6 +306,7 @@ fn read_string(
     environment: &mut Environment,
     mut chars: CharIter,
     symbol: &mut String,
+    read_table: &HashMap<&'static str, Expression>,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     symbol.clear();
     let mut last_ch_escape = false;
@@ -332,11 +326,9 @@ fn read_string(
         }
         if last_ch_escape {
             let mut do_match = true;
-            if let Some(str_int_ch) = environment.reader_state.str_int_ch {
-                if ch == str_int_ch {
-                    do_match = false;
-                    symbol.push_str(str_int_ch);
-                }
+            if read_table.contains_key(&*ch) {
+                do_match = false;
+                symbol.push_str(&ch);
             }
             if do_match {
                 match &*ch {
@@ -379,16 +371,10 @@ fn read_string(
                 break;
             }
             let mut proc_ch = true;
-            if let Some(str_int_ch) = environment.reader_state.str_int_ch {
-                if ch == str_int_ch {
-                    proc_ch = false;
-                    let res = prep_reader_macro(
-                        environment,
-                        chars,
-                        "shell-read::shell-read",
-                        &ch,
-                        environment.reader_state.end_ch,
-                    );
+            if read_table.contains_key(&*ch) {
+                proc_ch = false;
+                if let ExpEnum::Symbol(s, _) = read_table.get(&*ch).unwrap().get().data {
+                    let res = prep_reader_macro(environment, chars, s, &ch);
                     match res {
                         Ok((None, ichars)) => {
                             chars = ichars;
@@ -505,6 +491,7 @@ fn read_symbol(
     reader_state: &mut ReaderState,
     for_ch: bool,
     skip_underscore: bool,
+    read_table_term: &HashMap<&'static str, Expression>,
 ) -> bool {
     fn maybe_number(ch: &str, has_e: &mut bool, last_e: &mut bool, has_decimal: &mut bool) -> bool {
         if ch == "." {
@@ -535,7 +522,7 @@ fn read_symbol(
     let mut has_e = false;
     let mut last_e = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(&ch, reader_state) && !for_ch {
+        if end_symbol(&ch, read_table_term) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };
@@ -570,7 +557,7 @@ fn read_symbol(
             }
             buffer.push_str(&next_ch);
             push_next = false;
-        } else if end_symbol(peek_ch, reader_state) {
+        } else if end_symbol(peek_ch, read_table_term) {
             break;
         }
         next_ch = chars.next();
@@ -596,7 +583,6 @@ fn call_reader_macro(
     name: &str,
     stream: Expression,
     ch: &str,
-    end_ch: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
     if let Some(exp) = lookup_expression(environment, name) {
         let exp = match &exp.get().data {
@@ -622,8 +608,6 @@ fn call_reader_macro(
                 return Err(ReadError { reason });
             }
         };
-        let old_end_ch = environment.reader_state.end_ch;
-        environment.reader_state.end_ch = end_ch;
         let res = match eval(environment, exp) {
             Ok(exp) => {
                 let meta = get_meta(
@@ -646,7 +630,6 @@ fn call_reader_macro(
                 Err(ReadError { reason })
             }
         };
-        environment.reader_state.end_ch = old_end_ch;
         res
     } else {
         let reason = format!(
@@ -665,7 +648,6 @@ fn prep_reader_macro(
     chars: CharIter, // Pass ownership in and out for reader macro support.
     name: &str,
     ch: &str,
-    end_ch: Option<&'static str>,
 ) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
@@ -697,8 +679,18 @@ fn prep_reader_macro(
             exp_d.meta_tags = Some(tags);
         }
     }
-    let rm = match call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch) {
-        Ok(rm) => rm,
+    let rm = match call_reader_macro(environment, name, stream_exp.clone(), ch) {
+        Ok(rm) => {
+            if let ExpEnum::Values(vlist) = &rm.get().data {
+                if vlist.is_empty() {
+                    None
+                } else {
+                    Some(vlist[0].clone())
+                }
+            } else {
+                Some(rm.clone())
+            }
+        }
         Err(e) => {
             let chars = recover_chars(&stream_exp);
             return Err((e, chars));
@@ -709,7 +701,7 @@ fn prep_reader_macro(
     let mut exp_d = stream_exp.get_mut();
     exp_d.data.replace(ExpEnum::Nil);
     exp_d.meta_tags = None;
-    Ok((Some(rm), res))
+    Ok((rm, res))
 }
 
 fn consume_whitespace(environment: &mut Environment, chars: &mut CharIter) {
@@ -735,6 +727,7 @@ fn read_num_radix(
     buffer: &mut String,
     radix: u32,
     meta: Option<ExpMeta>,
+    read_table_term: &HashMap<&'static str, Expression>,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     buffer.clear();
     read_symbol(
@@ -743,6 +736,7 @@ fn read_num_radix(
         &mut environment.reader_state,
         true,
         true,
+        read_table_term,
     );
     match i64::from_str_radix(buffer, radix) {
         Ok(n) => Ok((make_exp(ExpEnum::Int(n), meta), chars)),
@@ -948,6 +942,26 @@ fn read_list(
     ))
 }
 
+macro_rules! get_read_table {
+    ($environment:expr, $name:expr, $table_out:expr, $table_d:expr, $empty_table:expr) => {{
+        $table_out = lookup_expression(&$environment, $name);
+        if let Some(read_table) = &$table_out {
+            $table_d = read_table.get();
+            if let ExpEnum::HashMap(map) = &$table_d.data {
+                map
+            } else {
+                // This should not happen unless the *read-table* was removed...
+                $empty_table = HashMap::new();
+                &$empty_table
+            }
+        } else {
+            // This should not happen unless *string-read-table* was removed...
+            $empty_table = HashMap::new();
+            &$empty_table
+        }
+    }};
+}
+
 fn read_inner(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
@@ -955,48 +969,60 @@ fn read_inner(
     in_back_quote: bool,
     return_close_paren: bool,
 ) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
-    let read_table = lookup_expression(&environment, "*read-table*");
-    let mut read_table_chars: HashSet<&'static str> = HashSet::new();
-    if let Some(read_table) = &read_table {
-        if let ExpEnum::HashMap(map) = &read_table.get().data {
-            for key in map.keys() {
-                read_table_chars.insert(key);
-            }
-        }
-    }
-    let read_table_end_char = lookup_expression(&environment, "*read-table-end-char*");
+    let read_table_out;
+    let read_table_d;
+    let empty_read_table;
+    let read_table = get_read_table!(
+        environment,
+        "*read-table*",
+        read_table_out,
+        read_table_d,
+        empty_read_table
+    );
+    let str_read_table_out;
+    let str_read_table_d;
+    let str_empty_read_table;
+    let str_read_table = get_read_table!(
+        environment,
+        "*string-read-table*",
+        str_read_table_out,
+        str_read_table_d,
+        str_empty_read_table
+    );
+    let term_read_table_out;
+    let term_read_table_d;
+    let term_empty_read_table;
+    let read_table_term = get_read_table!(
+        environment,
+        "*read-table-terminal*",
+        term_read_table_out,
+        term_read_table_d,
+        term_empty_read_table
+    );
     consume_whitespace(environment, &mut chars);
-    if read_table_chars.contains("$") {
-        environment.reader_state.str_int_ch = Some("$");
-    }
 
     while let Some((ch, peek_ch)) = next2(&mut chars) {
         environment.reader_state.column += 1;
-        if read_table_chars.contains(&*ch) {
-            let mut end_ch = None;
-            if let Some(read_table_end_char) = &read_table_end_char {
-                if let ExpEnum::HashMap(map) = &read_table_end_char.get().data {
-                    if map.contains_key(&*ch) {
-                        if let ExpEnum::Char(ch) = &map.get(&*ch).unwrap().get().data {
-                            end_ch = Some(cow_to_ref(environment, &ch));
-                        }
+        if read_table.contains_key(&*ch) {
+            if let ExpEnum::Symbol(s, _) = read_table.get(&*ch).unwrap().get().data {
+                let res = prep_reader_macro(environment, chars, s, &ch);
+                match res {
+                    Ok((None, ichars)) => {
+                        chars = ichars;
+                        continue;
                     }
+                    _ => return res,
                 }
             }
-            if let Some(read_table) = &read_table {
-                if let ExpEnum::HashMap(map) = &read_table.get().data {
-                    if map.contains_key(&*ch) {
-                        if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
-                            let res = prep_reader_macro(environment, chars, s, &ch, end_ch);
-                            match res {
-                                Ok((None, ichars)) => {
-                                    chars = ichars;
-                                    continue;
-                                }
-                                _ => return res,
-                            }
-                        }
+        } else if read_table_term.contains_key(&*ch) {
+            if let ExpEnum::Symbol(s, _) = read_table_term.get(&*ch).unwrap().get().data {
+                let res = prep_reader_macro(environment, chars, s, &ch);
+                match res {
+                    Ok((None, ichars)) => {
+                        chars = ichars;
+                        continue;
                     }
+                    _ => return res,
                 }
             }
         }
@@ -1007,7 +1033,7 @@ fn read_inner(
         );
         match &*ch {
             "\"" => {
-                match read_string(environment, chars, buffer) {
+                match read_string(environment, chars, buffer, str_read_table) {
                     Ok((s, ichars)) => return Ok((Some(s), ichars)),
                     Err((e, ichars)) => return Err((e, ichars)),
                 };
@@ -1129,6 +1155,7 @@ fn read_inner(
                             &mut environment.reader_state,
                             true,
                             false,
+                            read_table_term,
                         );
                         match do_char(environment, buffer, meta) {
                             Ok(ch) => return Ok((Some(ch), chars)),
@@ -1150,27 +1177,24 @@ fn read_inner(
                         return Ok((Some(Expression::alloc_data(ExpEnum::True)), chars));
                     }
                     "." => {
-                        return prep_reader_macro(
-                            environment,
-                            chars,
-                            "reader-macro-dot",
-                            ".",
-                            None,
-                        );
+                        return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
                     }
                     // Read an octal int
                     "o" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 8, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 8, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a hex int
                     "x" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 16, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 16, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a binary int
                     "b" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 2, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 2, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     _ => {
@@ -1213,6 +1237,7 @@ fn read_inner(
                     &mut environment.reader_state,
                     false,
                     false,
+                    read_table_term,
                 );
                 return Ok((Some(do_atom(environment, buffer, is_number, meta)), chars));
             }
@@ -1436,7 +1461,7 @@ mod tests {
     }
 
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment();
+        let environment = build_default_environment();
         environment
     }
 
