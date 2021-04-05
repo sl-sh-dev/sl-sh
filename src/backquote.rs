@@ -334,12 +334,13 @@ fn backquote(
         }
     } else if let Some(inexp) = get_backquote(&exp)? {
         let exp2 = backquote(environment, inexp, bq_level + 1)?;
-        let mut output2: Vec<Expression> = Vec::new();
-        output2.push(Expression::alloc_data(ExpEnum::Symbol(
-            environment.interner.intern("#<back-quote>"),
-            SymLoc::None,
-        )));
-        output2.push(backquote(environment, exp2, bq_level)?);
+        let output2: Vec<Expression> = vec![
+            Expression::alloc_data(ExpEnum::Symbol(
+                environment.interner.intern("#<back-quote>"),
+                SymLoc::None,
+            )),
+            backquote(environment, exp2, bq_level)?,
+        ];
         if let ExpEnum::Pair(_, _) = exp.get().data {
             Ok(Expression::cons_from_vec(&output2, meta))
         } else {
