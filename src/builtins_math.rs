@@ -234,7 +234,7 @@ Example:
             },
             "Usage: (sqrt num)
 
-Take square root of argument
+Take square root of argument.
 
 Section: math
 
@@ -242,6 +242,34 @@ Example:
 (test::assert-equal 2.0 (sqrt 4))
 (test::assert-equal 2.04939015319192 (sqrt 4.2))
 (test::assert-equal 12 (sqrt 144))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("2pow"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let base = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(base.exp2())))
+                }
+            },
+            "Usage: (2pow base)
+
+Raise 2 to power of argument.
+
+Section: math
+
+Example:
+(test::assert-equal 1024 (2pow 10))
+(test::assert-equal (2pow (* 10 2)) (pow (2pow 10) 2))
 ",
         ),
     );
@@ -269,15 +297,17 @@ Raise first argument to power of second argument.
 Section: math
 
 Example:
-(test::assert-equal 4.0 (pow 2 2))
-(test::assert-equal 20736 (pow 144.0 2.0))
 (test::assert-equal 16 (pow 4 2))
+(test::assert-equal 10 (log (pow 2 10) 2))
+(test::assert-equal (pow 8 15) (* (pow 8 10) (pow 8 5)))
+(test::assert-equal (pow 100 3) (/ (pow 100 5) (pow 100 2)))
+(test::assert-equal 1 (pow 85 0))
 ",
         ),
     );
 
     data.insert(
-        interner.intern("*e*"),
+        interner.intern("*euler*"),
         (
             Expression::from(ExpEnum::Float(std::f64::consts::E)),
             "Usage: (print *e*)
@@ -288,8 +318,10 @@ Section: math
 
 Example:
 (test::assert-equal 2.718281828459045 *e*)
-".to_string(),
-        ));
+"
+            .to_string(),
+        ),
+    );
 
     data.insert(
         interner.intern("*pi*"),
@@ -303,8 +335,10 @@ Section: math
 
 Example:
 (test::assert-equal 3.141592653589793 *pi*)
-".to_string(),
-        ));
+"
+            .to_string(),
+        ),
+    );
 
     data.insert(
         interner.intern("abs"),
@@ -423,6 +457,34 @@ Example:
     );
 
     data.insert(
+        interner.intern("log2"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.log2())))
+                }
+            },
+            "Usage: (log2 num)
+
+Returns log base 2 of input.
+
+Section: math
+
+Example:
+(test::assert-equal 7 (log2 128))
+(test::assert-equal (log 7 2) (/ 1.0 (log 2 7)))
+",
+        ),
+    );
+
+    data.insert(
         interner.intern("log"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -437,11 +499,9 @@ Example:
                     let base = floats.get(1).unwrap();
                     if *base == 2.0 {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log2())))
-                    }
-                    else if *base == 10.0 {
+                    } else if *base == 10.0 {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log10())))
-                    }
-                    else {
+                    } else {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log(*base))))
                     }
                 }
@@ -454,8 +514,40 @@ Section: math
 
 Example:
 (test::assert-equal 8 (log 256 2))
-(test::assert-equal 3 (log 1000 10))
 (test::assert-equal 3 (log 27 3))
+(test::assert-equal (log (pow 8 2) 10) (* 2 (log 8 10)))
+(test::assert-equal 1 (log 11 11))
+(test::assert-equal '-inf (log 0 11))
+(test::assert-equal (log 11 5) (/ (log 11 3) (log 5 3)))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("exp"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.exp())))
+                }
+            },
+            "Usage: (exp num)
+
+Returns e ^ num, the exponential function.
+
+Section: math
+
+Example:
+(test::assert-equal *euler* (exp 1))
+(test::assert-equal 1 (exp 0))
+(test::assert-equal 42 (exp (lne 42)))
 ",
         ),
     );
@@ -482,7 +574,13 @@ Returns natural logarithm of number
 Section: math
 
 Example:
-(test::assert-equal 1 (lne 2.718281828459))
+(def x 7.0)
+(def y 11.0)
+(test::assert-equal 1 (lne *euler*))
+(test::assert-equal 0 (lne 1))
+(test::assert-equal (lne (* x y)) (+ (lne x) (lne y)))
+(test::assert-equal (lne (/ x y)) (- (lne x) (lne y)))
+(test::assert-equal (lne (pow x y)) (* y (lne x)))
 ",
         ),
     );
@@ -538,6 +636,7 @@ Section: math
 
 Example:
 (test::assert-equal 0.9893582466233818 (sin 8))
+(test::assert-equal (sin 6) (* (tan 6) (cos 6)))
 ",
         ),
     );
@@ -565,6 +664,7 @@ Section: math
 
 Example:
 (test::assert-equal -0.14550003380861354 (cos 8))
+(test::assert-equal (cos 6) (/ (sin 6) (tan 6)))
 ",
         ),
     );
@@ -592,7 +692,66 @@ Section: math
 
 Example:
 (test::assert-equal -6.799711455220379 (tan 8))
+(test::assert-equal (tan 6) (/ (sin 6) (cos 6)))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("to-degrees"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.to_degrees())))
+                }
+            },
+            "Usage: (to-degrees num)
+
+Convert degrees to radians.
+
+Section: math
+
+Example:
+(test::assert-equal 0 (- (to-degrees *pi*) 180))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("to-radians"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.to_radians())))
+                }
+            },
+            "Usage: (to-radians num)
+
+Convert degrees to radians.
+
+Section: math
+
+Example:
+(test::assert-equal 0 (- *pi* (to-radians 180)))
 ",
         ),
     );
 }
+
+// TODO need some primitive rand support
+//  https://rust-lang-nursery.github.io/rust-cookbook/algorithms/randomness.html#generate-random-numbers
+//  radians
