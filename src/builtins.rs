@@ -257,6 +257,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             .map(|s| Cow::Borrowed(s))
             .peekable(),
     );
+    let old_reader_state = environment.reader_state.clone();
     environment.reader_state.clear();
     environment.reader_state.file_name = file_name;
     if shebanged {
@@ -277,6 +278,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                 res = Some(eval(environment, &ast)?);
             }
             Err((err, _ichars)) => {
+    environment.reader_state = old_reader_state;
                 if err.reason == "Empty value" {
                     return if let Some(res) = res {
                         Ok(res)
@@ -288,6 +290,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             }
         }
     }
+    environment.reader_state = old_reader_state;
     if let Some(res) = res {
         Ok(res)
     } else {

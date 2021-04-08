@@ -113,7 +113,13 @@ t
   (do
     (def config-file "${HOME}/.config/sl-sh/slshrc")
     (if (not (fs-exists? config-file)) (write-string (open config-file :create) *slshrc-src*))
-    (load "slshrc")))
+
+    ((fn (result)
+        (set! result (get-error (load "slshrc")))
+            (if (= :error (car result))
+                (do
+                    (println "Error loading config file: " file ":")
+                    (prim-print-error result))))nil)))
 
 (if (def? *interactive*)
   (do
