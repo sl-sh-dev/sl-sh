@@ -1332,17 +1332,17 @@ pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    if environment.reader_state.clear_state {
-        environment.reader_state.clear();
-    }
+    //if environment.reader_state.clear_state {
+    //    environment.reader_state.clear();
+    //}
     let mut buffer = String::new();
     match read_inner(environment, chars, &mut buffer, false, false) {
         Ok((Some(exp), ichars)) => {
-            environment.reader_state.clear_state = true;
+            //environment.reader_state.clear_state = true;
             Ok((exp, ichars))
         }
         Ok((None, ichars)) => {
-            environment.reader_state.clear_state = true;
+            //environment.reader_state.clear_state = true;
             Err((
                 ReadError {
                     reason: "Empty value".to_string(),
@@ -1351,7 +1351,7 @@ pub fn read_form(
             ))
         }
         Err((err, ichars)) => {
-            environment.reader_state.clear_state = true;
+            //environment.reader_state.clear_state = true;
             Err((err, ichars))
         }
     }

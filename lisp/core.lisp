@@ -372,7 +372,7 @@ Example:
             (if (= 1 (length el))
               (do
                 (vec-push! vars (car el))
-                (vec-push! binds nil))
+                (vec-push! binds (list)))
               (if (= 2 (length el))
                 (do
                   (vec-push! vars (car el))
