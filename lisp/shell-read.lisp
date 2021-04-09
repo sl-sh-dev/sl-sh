@@ -1,5 +1,9 @@
 (ns-push 'shell-read)
 
+(defn find-symbol (com)
+  (var val (sym *active-ns* "::" com))
+  (if (def? (ref val)) val (sym "root::" com)))
+
 (defn callable? (com)
   ; Want the actual thing pointed to by the symbol in com for the test.
   (set! com (shell-read::find-symbol com))
@@ -15,18 +19,25 @@
           `(syscall ,(vec-nth args 0) ,@(vec-slice args 1)))
       nil))
 
-(defn find-symbol (com)
-  (var val (sym *active-ns* "::" com))
-  (if (def? (ref val)) val (sym "root::" com)))
-
 (defmacro var-or-env (key)
   (let ((key-new (find-symbol key)))
     (if (def? (ref key-new))
         `,key
         `(get-env ,key))))
 
+;; This eleminates the trailing (shell-read::sys-apply) that will be on a
+;; run-bg-first call if the & was at the end.  Keeps the other endfix code
+;; simple and makes sure the $(... &) returns the process object not nil.
+(defn run-bg-prep-args (args)
+  (let ((args-len (length args)))
+    (if (> args-len 0)
+        (if (<= (length (vec-nth args (- args-len 1))) 1)
+            (vec-slice args 0 (- args-len 1))
+            args)
+        nil)))
+
 (defmacro run-bg-first (com &rest args)
-  `(do (run-bg ,com) ,@args))
+  `(do (run-bg ,com) ,@(run-bg-prep-args args)))
 
 (defmacro redir> (exp file) `(out> ,file ,exp))
 (defmacro redir>> (exp file) `(out>> ,file ,exp))
