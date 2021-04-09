@@ -278,7 +278,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                 res = Some(eval(environment, &ast)?);
             }
             Err((err, _ichars)) => {
-    environment.reader_state = old_reader_state;
+                environment.reader_state = old_reader_state;
                 if err.reason == "Empty value" {
                     return if let Some(res) = res {
                         Ok(res)
