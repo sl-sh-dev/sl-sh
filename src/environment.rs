@@ -325,6 +325,7 @@ pub fn get_expression_look(
         ExpEnum::Symbol(sym, location) => match location {
             SymLoc::None => {
                 if allow_lookup {
+                    // XXX TODO- only lookup in namespace not stack.
                     lookup_expression(environment, sym)
                 } else {
                     None

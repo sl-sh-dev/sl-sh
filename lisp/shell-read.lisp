@@ -8,10 +8,12 @@
           (or (builtin? com) (lambda? com) (macro? com)))
       nil))
 
-(defmacro sys-apply (com &rest args)
-  (if (callable? com)
-      `(,com ,@args)
-      `(syscall ,com ,@args)))
+(defmacro sys-apply (&rest args)
+  (if (> (length args) 0)
+      (if (callable? (vec-nth args 0))
+          `(,(vec-nth args 0) ,@(vec-slice args 1))
+          `(syscall ,(vec-nth args 0) ,@(vec-slice args 1)))
+      nil))
 
 (defn find-symbol (com)
   (var val (sym *active-ns* "::" com))
@@ -23,11 +25,15 @@
         `,key
         `(get-env ,key))))
 
-(defmacro redir> (exp file)
-  `(out> ,file ,exp))
+(defmacro run-bg-first (com &rest args)
+  `(do (run-bg ,com) ,@args))
 
-(defmacro redir>> (exp file)
-  `(out>> ,file ,exp))
+(defmacro redir> (exp file) `(out> ,file ,exp))
+(defmacro redir>> (exp file) `(out>> ,file ,exp))
+(defmacro redir2> (exp file) `(err> ,file ,exp))
+(defmacro redir2>> (exp file) `(err>> ,file ,exp))
+(defmacro redir&> (exp file) `(out-err> ,file ,exp))
+(defmacro redir&>> (exp file) `(out-err>> ,file ,exp))
 
 (defn handle-process (cmd-proc)
 	(if (process? cmd-proc) (= 0 (wait cmd-proc)) (not (not cmd-proc))))
@@ -35,36 +41,62 @@
 (defmacro proc-wait ()
 	(fn (cmd) `(handle-process ,cmd)))
 
+(defn consume-whitespace (stream)
+  (let ((ch (str-iter-peek stream)))
+    (if (and (char? ch)(char-whitespace? ch)) (do (str-iter-next! stream)(consume-whitespace stream)))))
+
+(defn read-string (stream last-ch token first quoted)
+  (consume-whitespace stream)
+  (let ((done)
+        (ch (str-iter-next! stream))
+        (peek-ch (str-iter-peek stream)))
+    (cond
+      ((and first (= ch #\"))
+       (set! quoted #t))
+      ((and (char-whitespace? ch)(not (= last-ch #\\)(not quoted)))
+       (set! done #t))
+      ((and (= ch #\")quoted)
+       (set! done #t))
+      ((and (not (= ch #\\))(or (= peek-ch #\))
+                                (= peek-ch #\$)
+                                (= peek-ch #\space)
+                                (and (= peek-ch #\")(not quoted))))
+       (str-push! token ch)
+       (set! done #t))
+      ((str-push! token ch) nil))
+    (if (and (not done)(not (str-iter-empty? stream)))
+        (read-string stream ch token nil quoted) ; recur
+        token)))
+
+(defn read-var (stream last-ch ch peek-ch var-bracket add-exp token)
+  (let ((done))
+    (cond
+      ((and (char-whitespace? ch)(not var-bracket))
+       (set! done #t))
+      ((and (not (= ch #\\))(or (= peek-ch #\))
+                                (= peek-ch #\$)
+                                (= peek-ch #\space)
+                                (= peek-ch #\"))
+            (not var-bracket))
+       (str-push! token ch)
+       (set! done #t))
+      ((and (= ch #\}) var-bracket)
+       (set! done #t))
+      ((str-push! token ch) nil))
+    (if (and (not done)(not (str-iter-empty? stream)))
+        (read-var stream ch (str-iter-next! stream)(str-iter-peek stream) var-bracket add-exp token) ;recur
+        (do
+         (if (str-empty? token) (err "Syntax error, floating '$'."))
+         (add-exp (sym "shell-read::var-or-env"))
+          (add-exp (sym token))))))
+
+(defn maybe-glob? (token)
+  (or (str-contains "*" token)
+      (str-contains "?" token)
+      (str-contains "[" token)
+      (str-contains "{" token)))
+
 (let ((paren-level 0))
-
-  (defn maybe-glob? (token)
-    (or (str-contains "*" token)
-        (str-contains "?" token)
-        (str-contains "[" token)
-        (str-contains "{" token)))
-
-  (defn read-var (last-ch ch peek-ch var-bracket add-exp token)
-    (let ((done))
-      (cond
-        ((and (char-whitespace? ch)(not var-bracket))
-         (set! done #t))
-        ((and (not (= ch #\\))(or (= peek-ch #\))
-                                  (= peek-ch #\$)
-                                  (= peek-ch #\space)
-                                  (= peek-ch #\"))
-              (not var-bracket))
-         (str-push! token ch)
-         (set! done #t))
-        ((and (= ch #\}) var-bracket)
-         (set! done #t))
-        ((str-push! token ch) nil))
-      (if (and (not done)(not (str-iter-empty? stream)))
-                                        ; recur
-          (read-var ch (str-iter-next! stream)(str-iter-peek stream) var-bracket add-exp token)
-          (do
-           (if (str-empty? token) (err "Syntax error, floating '$'."))
-           (add-exp (sym "shell-read::var-or-env"))
-            (add-exp (sym token))))))
 
   (defn read-list (last-ch ch peek-ch add-exp close-token do-read push-token get-result clear-result)
 
@@ -78,9 +110,11 @@
             (add-exp (list (sym wrapper) temp-result))
             (add-exp temp-result))
         (set! temp-result
-              (if (and (= peek-ch #\$)(= peek-ch #\"))
-                  (shell-read-int2 stream nil nil)
-                  (shell-read-int2 stream #t last-file)))
+              (if last-file
+                  (read-string stream #\space (str) #t nil)
+                  (if (and (= peek-ch #\$)(= peek-ch #\"))
+                      (shell-read-int stream nil)
+                      (shell-read-int stream #t))))
         (if wrapper
             (add-exp (list (sym wrapper) temp-result))
             (add-exp temp-result))))
@@ -111,14 +145,27 @@
         ((and (not (= last-ch #\\))(= ch #\|)) ; PIPE
          (setup-chainer "root::pipe" nil nil)
          (set! done #t))
-        #|((and (not (= last-ch #\\))(= ch #\>)(= peek-ch #\>)) ; out>>
+        ((and (not (= last-ch #\\))(= ch #\>)(= peek-ch #\>)) ; out>>
          (str-iter-next! stream)
-         (setup-chainer "shell-read::redir>>" nil #t)
-         (set! done #t))
+         (setup-chainer "shell-read::redir>>" nil #t))
         ((and (not (= last-ch #\\))(= ch #\>)) ; out>
-         (setup-chainer "shell-read::redir>" nil #t)
-         (set! done #t))|#
-        ((char-whitespace? ch)
+         (setup-chainer "shell-read::redir>" nil #t))
+        ((and (not (= last-ch #\\))(= ch #\&)(= peek-ch #\>)) ; out-err>(>)
+         (str-iter-next! stream)
+         (if (= (str-iter-peek stream) #\>)
+             (do (str-iter-next! stream)
+                 (setup-chainer "shell-read::redir&>>" nil #t))
+             (setup-chainer "shell-read::redir&>" nil #t)))
+        ((and (not (= last-ch #\\))(= ch #\2)(= peek-ch #\>)) ; err>(>)
+         (str-iter-next! stream)
+         (if (= (str-iter-peek stream) #\>)
+             (do (str-iter-next! stream)
+                 (setup-chainer "shell-read::redir2>>" nil #t))
+             (setup-chainer "shell-read::redir2>" nil #t)))
+        ((and (not (= last-ch #\\))(= ch #\&)) ; Background
+         (setup-chainer "shell-read::run-bg-first" nil nil)
+         (set! done #t))
+        ((or (not (char? ch))(char-whitespace? ch))
          (close-token))
         ((push-token ch) nil))
       (if (and (not done)(not (str-iter-empty? stream)))
@@ -129,7 +176,7 @@
               (read-list ch (str-iter-next! stream)(str-iter-peek stream) add-exp close-token do-read push-token get-result clear-result)) ;recur
           (close-token))))
 
-  (defn shell-read-int2 (stream in-paren one-string)
+  (defn shell-read-int (stream in-paren)
     (let ((result)
           (token)
           (var-bracket nil)
@@ -172,16 +219,14 @@
       (set! ch (str-iter-next! stream))
       (set! peek-ch (str-iter-peek stream))
       (cond
-        (one-string
-         ((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
-         (read-var #\space ch peek-ch nil add-exp token))
         (in-paren
          (add-exp (sym "shell-read::sys-apply"))
          (read-list #\space ch peek-ch add-exp close-token do-read push-token get-result clear-result))
         ((and (= ch #\()(= peek-ch #\())
          (set! result (read stream))
+         (consume-whitespace stream)
          (set! ch (str-iter-next! stream))
-         ((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
+         ;((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
          (if (not (= #\) ch))
              (err "Unbalanced ) in '\$' shell read macro"))
          result)
@@ -190,12 +235,10 @@
          (add-exp (sym "shell-read::sys-apply"))
          (read-list #\space (str-iter-next! stream)(str-iter-peek stream) add-exp close-token do-read push-token get-result clear-result))
         ((= ch #\{)
-         (read-var #\space (str-iter-next! stream)(str-iter-peek stream) #t add-exp token))
+         (read-var stream #\space (str-iter-next! stream)(str-iter-peek stream) #t add-exp token))
         (#t
-         (read-var #\space ch peek-ch nil add-exp token)))
+         (read-var stream #\space ch peek-ch nil add-exp token)))
       result)))
-
-(defn shell-read-int (stream in-paren) (shell-read-int2 stream in-paren nil))
 
 (defn shell-read (stream ch_start) (shell-read::shell-read-int stream nil))
 
