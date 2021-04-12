@@ -1459,18 +1459,22 @@ mod tests {
         }
     }
 
-    fn tokenize_wrap(
-        environment: &mut Environment,
-        input: &str,
-        name: Option<&'static str>,
-    ) -> Vec<String> {
-        let exp = read_list_wrap(environment, input, name);
+    fn tokenize_wrap(environment: &mut Environment, input: &str) -> Vec<String> {
+        // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
+        // reference and iterator go away at the end of this function.
+        let ntext = unsafe { &*(input as *const str) };
+        let mut chars: CharIter = Box::new(
+            UnicodeSegmentation::graphemes(ntext, true)
+                .map(|s| Cow::Borrowed(s))
+                .peekable(),
+        );
         let mut tokens = Vec::new();
-        if let Ok(exp) = exp {
-            to_strs(&mut tokens, &exp);
-        } else {
-            assert!(false);
+        let mut token_exps = Vec::new();
+        while let Ok((exp, ichars)) = read_form(environment, chars) {
+            chars = ichars;
+            token_exps.push(exp);
         }
+        to_strs(&mut tokens, &Expression::with_list(token_exps));
         tokens
     }
 
@@ -1710,7 +1714,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut environment, "(1 2 3)", None);
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3)");
         assert!(tokens.len() == 7);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1727,7 +1731,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut environment, "1 2 3", None);
+        let tokens = tokenize_wrap(&mut environment, "1 2 3");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "Int:1");
@@ -1749,7 +1753,7 @@ mod tests {
         assert!(tokens[9] == "Int:6");
         assert!(tokens[10] == ")");
         assert!(tokens[11] == ")");
-        let tokens = tokenize_wrap(&mut environment, "(1 2 3) (4 5 6)", None);
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1774,7 +1778,7 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        let tokens = tokenize_wrap(&mut environment, "'(1 2 3)", None);
+        let tokens = tokenize_wrap(&mut environment, "'(1 2 3)");
         assert!(tokens.len() == 10);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1793,12 +1797,12 @@ mod tests {
         let tokens = tokenize(&mut environment, "()", None);
         assert!(tokens.len() == 1);
         assert!(tokens[0] == "nil");
-        let tokens = tokenize_wrap(&mut environment, "nil", None);
+        let tokens = tokenize_wrap(&mut environment, "nil");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");
         assert!(tokens[2] == ")");
-        let tokens = tokenize_wrap(&mut environment, "()", None);
+        let tokens = tokenize_wrap(&mut environment, "()");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");
