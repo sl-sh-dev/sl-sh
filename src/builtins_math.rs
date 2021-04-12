@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -813,6 +814,100 @@ Section: math
 
 Example:
 (test::assert-equal 0 (- *pi* (to-radians 180)))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("random"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let mut rng = rand::thread_rng();
+                let ints = parse_list_of_ints(environment, &mut args)?;
+                match count {
+                    0 => Ok(Expression::alloc_data(ExpEnum::Float(rng.gen()))),
+                    1 => {
+                        let i = ints.get(0).unwrap();
+                        match *i {
+                            positive if *i > 0 => {
+                                Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
+                            }
+                            _ => Err(LispError::new("Expected positive integer")),
+                        }
+                    }
+                    _ => Err(LispError::new("Expected zero or one numbers")),
+                }
+            },
+            "Usage: (random), (random limit)
+
+If no arguments are given, generates a float between 0 and 1, otherwise takes a positive integer,
+limit, and returns positive integer between 0 and limit exclusive.
+
+Section: math
+
+Example:
+(def rand-int (random 100))
+(test::assert-true (and (> rand-int 0) (< rand-int 100))
+(def rand-float (random))
+(test::assert-true (and (> rand-float 0) (< rand-float 1)))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("probool"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let ints = parse_list_of_ints(environment, &mut args)?;
+                let count = ints.len();
+                let tup: Option<(u32, u32)> = match count {
+                    0 => Some((1, 2)),
+                    2 => {
+                        let i = *ints.get(0).unwrap() as u32;
+                        let j = *ints.get(1).unwrap() as u32;
+                        Some((i, j))
+                    }
+                    _ => None,
+                };
+                match tup {
+                    None => Err(LispError::new("Expected zero or two numbers")),
+                    Some((_, 0)) => Err(LispError::new("Denominator can not be zero")),
+                    Some((i, j)) => {
+                        if i > j {
+                            Ok(Expression::alloc_data(ExpEnum::True))
+                        } else {
+                            if rand::thread_rng().gen_ratio(i, j) {
+                                Ok(Expression::alloc_data(ExpEnum::True))
+                            } else {
+                                Ok(Expression::alloc_data(ExpEnum::Nil))
+                            }
+                        }
+                    }
+                }
+            },
+            "Usage: (probool), (probool numerator denominator)
+
+PRObability of a BOOLean.
+
+If no arguments are given, returns #t 1/2 of the time, otherwise takes two integers, numerator and
+denominator, and returns #t numerator/denominator of the time. Throws an error if denominator is 0.
+If numerator >= 1 probool always returns true. If numerator is 0 probool always returns false.
+
+Section: math
+
+Example:
+(def val0 (probool))
+(test::assert-true (or (= #t val0) (= nil val0)))
+(def val1 (probool 17 42))
+(test::assert-true (or (= #t val1) (= nil val1)))
+(test::assert-true (probool 1 1))
+(test::assert-false (probool 0 42))
 ",
         ),
     );

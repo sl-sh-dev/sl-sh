@@ -16,6 +16,7 @@ libc = "0.2"
 unicode-segmentation = "1.6.0"
 unicode_reader = "1"
 #jemallocator = "0.3.2"
+rand = { version = "0.8.3" }
 
 [build-dependencies]
 chrono = "0.4.7"
