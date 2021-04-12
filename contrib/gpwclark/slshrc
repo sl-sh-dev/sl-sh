@@ -463,7 +463,7 @@ Section: user-shell"
 (def host-string (colorize-rand-cache "host-string" $HOST $HOST))
 (def close-paren (colorize-rand-cache "close-paren" " ]}" (str $HOST "7")))
 (def prompt-left (colorize-rand-cache "prompt-left" "\u{03bb}\u{2e28}" (str $HOST "9")))
-(def prompt-cog (colorize-rand-cache "prompt-cog" "\u{2699}\u{2009} " (str $HOST "4")))
+(def prompt-cog (colorize-rand-cache "prompt-cog" "\u{2699}\u{2009}" (str $HOST "4")))
 (def prompt-right (colorize-rand-cache "prompt-right" "\u{2e29}\u{2009}\u{2192} " (str $HOST "9")))
 ;; "\u{03bb}\u{2e28}\u{2699}\u{2009}\u{2e29}\u{2009}\u{2192}"
 
@@ -528,6 +528,33 @@ Section: user-shell"
                 (cdr result)))
              (get-error (load custom-lisp-config)))
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
+;; }}}
+
+;; exec hook {{{
+
+;; entrypoint for all 1 arg commands... used to make filepaths cd commands
+;; to themselves.
+(defn change-dir-if-arg-is-dir (cmd orig-cmd-ast)
+	(let ((cmd-str (str cmd)))
+		(if (fs-dir? cmd-str)
+			(list root::cd cmd-str)
+			orig-cmd-ast)))
+
+#|
+(defn __exec-hook (cmd-str)
+	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
+	cmd-str
+	(do
+		(match (length cmd-ast)
+		;; if string is of length 0 either nothing was typed or
+		;; everything was a comment
+		(0 cmd-ast)
+		;; check to see if this single argument is a filepath
+		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
+		;; check for infix notation
+		(nil cmd-ast)))))
+#|
+
 ;; }}}
 
 ;; user ns docs {{{

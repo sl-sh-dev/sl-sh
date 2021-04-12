@@ -190,14 +190,14 @@ Example:
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
-                let mut len = 0.0;
-                let sum = parse_list_of_floats(environment, &mut args)?
-                     .iter().fold(0.0, |accum, elem | -> f64 {
-                         len = len + 1.0;
-                         accum + elem
-                     });
-                let avg = sum / len;
-                Ok(Expression::alloc_data(ExpEnum::Float(avg)))
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                let sum = floats.iter().sum::<f64>();
+                let count = floats.len() as f64;
+                let avg = match count {
+                    positive if positive > 0.0 => ExpEnum::Float(sum / count),
+                    _ => ExpEnum::Nil,
+                };
+                Ok(Expression::alloc_data(avg))
             },
             "Usage: (avg number+)
 
@@ -206,6 +206,7 @@ Average a sequence of numbers.
 Section: math
 
 Example:
+(test::assert-equal nil (avg))
 (test::assert-equal 5 (avg 5))
 (test::assert-equal 7.5 (avg 5 10))
 (test::assert-equal 5.5 (avg 1 2 3 4 5 6 7 8 9 10))
@@ -220,18 +221,20 @@ Example:
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
-                let mut len = 0.0;
                 let floats = parse_list_of_floats(environment, &mut args)?;
-                let sum = floats.iter().fold(0.0, |accum, elem | -> f64 {
-                         len = len + 1.0;
-                         accum + elem
-                     });
-                let avg = sum / len;
-                let sum_of_variance = floats.iter().fold(0.0, |accum, elem| -> f64 {
-                     accum + (avg - elem).powi(2)
-                });
-                let std_dev = (sum_of_variance / len).sqrt();
-                Ok(Expression::alloc_data(ExpEnum::Float(std_dev)))
+                let sum = floats.iter().sum::<f64>();
+                let count = floats.len() as f64;
+                let avg = sum / count;
+                let std_dev = match count {
+                    positive if positive > 0.0 => ExpEnum::Float(
+                        (floats.iter().fold(0.0, |accum: f64, elem: &f64| -> f64 {
+                            accum + (avg - elem).powf(2.0)
+                        }) / count)
+                            .sqrt(),
+                    ),
+                    _ => ExpEnum::Nil,
+                };
+                Ok(Expression::alloc_data(std_dev))
             },
             "Usage: (std-dev number+)
 
@@ -240,6 +243,7 @@ Returns standard deviation of a sequence of numbers.
 Section: math
 
 Example:
+(test::assert-equal nil (std-dev))
 (test::assert-equal 2.872281323269 (std-dev 1 2 3 4 5 6 7 8 9 10))
 ",
         ),
@@ -815,5 +819,6 @@ Example:
 }
 
 // TODO need some primitive rand support
+// TODO max and min values.
 //  https://rust-lang-nursery.github.io/rust-cookbook/algorithms/randomness.html#generate-random-numbers
 //  radians
