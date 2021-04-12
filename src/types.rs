@@ -541,6 +541,24 @@ impl Expression {
         })
     }
 
+    pub fn alloc_data_meta(environment: &Environment, data: ExpEnum) -> Expression {
+        let meta = if environment.reader_state.in_read {
+            environment.reader_state.file_name.map(|file| ExpMeta {
+                file,
+                line: environment.reader_state.line,
+                col: environment.reader_state.column,
+            })
+        } else {
+            None
+        };
+        Expression::alloc(ExpObj {
+            data,
+            meta,
+            meta_tags: None,
+            analyzed: RefCell::new(false),
+        })
+    }
+
     pub fn make_nil() -> Expression {
         Expression::alloc(ExpObj {
             data: ExpEnum::Nil,

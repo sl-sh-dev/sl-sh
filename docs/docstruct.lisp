@@ -92,7 +92,7 @@ values-nth 1 = accum lst to string.
         (:fn namespace-only (self)
                     (let* ((ns (self :namespace))
                            (ns-str (str-split ":" ns)))
-                      (if (not (nil? (vec-nth ns-str 1)))
+                      (if (> (length ns-str) 1)
                         (str-trim (vec-nth ns-str 1))
                         "")))
         (:fn to-str (self) (do

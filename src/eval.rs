@@ -500,7 +500,15 @@ pub fn eval_nr(
         return Err(LispError::new("Eval calls to deep."));
     }
     environment.eval_level += 1;
-    analyze(environment, expression, &mut None)?;
+    if let Err(mut err) = analyze(environment, expression, &mut None) {
+        if err.backtrace.is_none() {
+            err.backtrace = Some(Vec::new());
+        }
+        if let Some(backtrace) = &mut err.backtrace {
+            backtrace.push(expression.clone());
+        }
+        return Err(err);
+    }
     let tres = internal_eval(environment, &expression);
     let mut result = if environment.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
