@@ -20,10 +20,9 @@
       nil))
 
 (defmacro var-or-env (key)
-  (let ((key-new (find-symbol key)))
-    (if (def? (ref key-new))
-        `,key
-        `(get-env ,key))))
+    `(if (def? ,key)
+        ,key
+        (get-env ,key)))
 
 ;; This eleminates the trailing (shell-read::sys-apply) that will be on a
 ;; run-bg-first call if the & was at the end.  Keeps the other endfix code
@@ -133,6 +132,8 @@
     (let ((just-read)
           (done))
       (cond
+        ((and (not (= last-ch #\\))(= ch #\~))
+         (push-token (get-env "HOME")))
         ((and (not (= last-ch #\\))(= ch #\)) (> paren-level 0))
          (set! paren-level (- paren-level 1))
          (set! done #t))

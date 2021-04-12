@@ -30,6 +30,7 @@ pub struct ReaderState {
     pub column: usize,
     pub file_name: Option<&'static str>,
     pub clear_state: bool,
+    pub in_read: bool,
 }
 
 impl ReaderState {
@@ -42,6 +43,7 @@ impl ReaderState {
         self.column = 0;
         self.line = 1;
         self.clear_state = false;
+        self.in_read = false;
     }
 }
 
@@ -52,6 +54,7 @@ impl Default for ReaderState {
             column: 0,
             line: 1,
             clear_state: false,
+            in_read: false,
         }
     }
 }
@@ -294,9 +297,9 @@ fn read_utf_scalar(
     }
 }
 
-fn wrap_trim(exp: Expression) -> Expression {
+fn wrap_trim(exp: Expression, meta: Option<ExpMeta>) -> Expression {
     let trim_list = vec![
-        make_exp(ExpEnum::Symbol("str-trim", SymLoc::None), None),
+        make_exp(ExpEnum::Symbol("str-trim", SymLoc::None), meta),
         exp,
     ];
     Expression::with_list_meta(trim_list, None)
@@ -397,7 +400,7 @@ fn read_string(
                                             ));
                                         }
                                         symbol.clear();
-                                        l.push(wrap_trim(exp));
+                                        l.push(wrap_trim(exp, meta));
                                     } else {
                                         drop(exp_d);
                                         let mut list = vec![make_exp(
@@ -411,7 +414,7 @@ fn read_string(
                                             ));
                                         }
                                         symbol.clear();
-                                        list.push(wrap_trim(exp));
+                                        list.push(wrap_trim(exp, meta));
                                         res_list = Some(list);
                                     }
                                 }
@@ -873,7 +876,7 @@ fn read_list(
                         ichars,
                     ));
                 }
-                head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, meta));
                 tail = head.clone();
             } else if dot {
                 if is_unquote_splice(&exp) {
@@ -911,7 +914,7 @@ fn read_list(
                     cdr.meta = exp.get().meta;
                 }
             } else {
-                let new_tail = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                let new_tail = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, meta));
                 if let ExpEnum::Pair(_, cdr) = &tail {
                     cdr.get_mut().data = new_tail.clone();
                 }
@@ -1217,12 +1220,13 @@ fn read_inner(
                         chars,
                     ));
                 } else {
-                    return Err((
-                        ReadError {
-                            reason: "Unexpected `)`".to_string(),
-                        },
-                        chars,
-                    ));
+                    let reason = format!(
+                        "Unexpected ')': {} line {} col {}",
+                        environment.reader_state.file_name.unwrap_or(""),
+                        environment.reader_state.line,
+                        environment.reader_state.column
+                    );
+                    return Err((ReadError { reason }, chars));
                 }
             }
             ";" => {
@@ -1328,33 +1332,43 @@ fn read2(
     }
 }
 
+pub fn read_form_state(
+    environment: &mut Environment,
+    chars: CharIter,
+    clear_state: bool,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    let mut buffer = String::new();
+    let old_in_read = environment.reader_state.in_read;
+    let old_state = if clear_state {
+        let os = environment.reader_state.clone();
+        environment.reader_state.clear();
+        Some(os)
+    } else {
+        None
+    };
+    environment.reader_state.in_read = true;
+    let res = match read_inner(environment, chars, &mut buffer, false, false) {
+        Ok((Some(exp), ichars)) => Ok((exp, ichars)),
+        Ok((None, ichars)) => Err((
+            ReadError {
+                reason: "Empty value".to_string(),
+            },
+            ichars,
+        )),
+        Err((err, ichars)) => Err((err, ichars)),
+    };
+    environment.reader_state.in_read = old_in_read;
+    if let Some(old_state) = old_state {
+        environment.reader_state = old_state;
+    }
+    res
+}
+
 pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    //if environment.reader_state.clear_state {
-    //    environment.reader_state.clear();
-    //}
-    let mut buffer = String::new();
-    match read_inner(environment, chars, &mut buffer, false, false) {
-        Ok((Some(exp), ichars)) => {
-            //environment.reader_state.clear_state = true;
-            Ok((exp, ichars))
-        }
-        Ok((None, ichars)) => {
-            //environment.reader_state.clear_state = true;
-            Err((
-                ReadError {
-                    reason: "Empty value".to_string(),
-                },
-                ichars,
-            ))
-        }
-        Err((err, ichars)) => {
-            //environment.reader_state.clear_state = true;
-            Err((err, ichars))
-        }
-    }
+    read_form_state(environment, chars, false)
 }
 
 pub fn read(
@@ -1368,13 +1382,13 @@ pub fn read(
 
 // Read the text but always wrap in an outer list even if text is one list.
 // Useful for loading scripts.
-pub fn read_list_wrap(
+/*pub fn read_list_wrap(
     environment: &mut Environment,
     text: &str,
     name: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
     read2(environment, text, true, name, false)
-}
+}*/
 
 #[cfg(test)]
 mod tests {

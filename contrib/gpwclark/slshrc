@@ -16,16 +16,13 @@
 ;; bash-completions.lisp is located in `contrib/gpwclark`
 ;; (load "~/.config/sl-sh/bash-completions.lisp")
 
-;; overrides exec hook to use endfix notation
-(endfix-on)
-
 ;; shell helpers {{{
 
     (defmacro rsynccp
         "sane defaults for treating rsync like copy.
         Section: user-shell"
         (src target)
-        `(rsync -av ,src ,target --progress --inplace --no-compress))
+        `$(rsync -av ,src ,target --progress --inplace --no-compress))
 
 	(defn dsh
 		"With no arguments: alias for du ./* -sh
@@ -33,8 +30,8 @@
 		Section: user-shell"
 		(&rest paths)
 		(if (= 0 (length paths))
-			(| (du ./* -sh) (sort -h))
-			(for path in paths (| (du path -sh) (sort -h)))))
+			$(du ./* -sh | sort -h)
+			(for path in paths $(du path -sh | sort -h))))
 
 	(defn pgz
 		"Parallelized gzip.
@@ -50,27 +47,27 @@
 			(out>
 				target-name
 				(|
-					(eval (str "tar cf - " (str-cat-list " " dirs)))
-					(eval (str "pigz  -p " cores  " -" compression-ratio)))))
+					(eval (str "syscall tar cf - " (str-cat-list " " dirs)))
+					(eval (str "syscall pigz  -p " cores  " -" compression-ratio)))))
 	(defn dpgz
 	"Parallelized un gzip.
 	cores:
 		use lscpu to determine # of cores on box
 	Section: user-shell"
 			(target-name cores)
-				(pigz --keep --decompress --processes cores target-name))
+				$(pigz --keep --decompress --processes cores target-name))
 
 	(defn fullfp
 	"Give me a relative filepath and I'll give you an absolute filepath!
 	Section: user-shell"
 		(filepath)
-		(find $PWD -name filepath))
+		$(find $PWD -name filepath))
 
 	(defn mrf
 		"most recent files. return ordered list (oldest -> newest) of files in current working dir
 		Section: user-shell"
 		()
-		(str-split " " (str-trim (str (| (/sbin/ls -at) ( tr "\n" " ") (tr -s "[[:blank:]]"))))))
+		(str-split " " (str-trim (str $(/sbin/ls -at | tr "\n" " " | tr -s "[[:blank:]]")))))
 
 	(defn lftail
 		"Provide string to filter results of ls. Newest file that contains
@@ -100,7 +97,7 @@
 	Section: user-shell
 	"
 	()
-	`(xclip -selection c))
+	`$(xclip -selection c))
 
 (defmacro this
 	"
@@ -108,7 +105,7 @@
 	Section: user-shell
 	"
 	()
-	`(| (echo -n (str-trim (str (pwd)))) (sc)))
+	`$(echo -n $((str-trim (str $(pwd)))) | sc))
 
 (defn zh
 	"
@@ -117,7 +114,7 @@
 	"
 	()
 	(do
-		(var raw-zsh-str (str (| (cat ~/.zsh_history) (fzf-tmux))))
+		(var raw-zsh-str (str $(cat ~/.zsh_history | fzf-tmux)))
 		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
 
 (defn stripcolor
@@ -125,7 +122,7 @@
 	Section: user-shell"
 	(&rest args)
 	(if (< (length args) 2)
-		(perl -pe "s/\e\[?.*?[\@-~]//g']" (nth 0 ars))
+		$(perl -pe "s/\e\[?.*?[\@-~]//g']" $((nth 0 ars)))
 		(err "Only accepts 0 or 1 arguments")))
 
 ;; all find . -iname &rest
@@ -134,7 +131,7 @@
 	Section: user-shell"
 	(&rest args)
 	(if (< (length args) 2)
-		(| (find $PWD -iname (str (nth 0 args))))
+		(| $(find $PWD -iname $((str (nth 0 args)))))
 		(err "Only accepts 0 or 1 arguments")))
 
 ;;results feed into vim
@@ -146,9 +143,9 @@
 		(let
 			((vimargs (str-split
 				" "
-				(str-trim (str (| (find $PWD -iname (nth 0 args)) (tr "\n" " ")))))))
+				(str-trim (str (| $(find $PWD -iname $((nth 0 args))) $(tr "\n" " ")))))))
 			(do
-				(eval `(vim ,@vimargs))))
+				(eval `(syscall vim ,@vimargs))))
 		(err "Only accepts 0 or 1 arguments")))
 
 ;; }}}
@@ -165,11 +162,11 @@
 	(let ((log-out-file "last_build.log"))
 	(do
 		(|
-			(var gradle-proc (eval (append-to! (list "./gradlew") args)))
+			(var gradle-proc (eval (append-to! (list "syscall" "./gradlew") args)))
 			(tee log-out-file)
 		)
 		(var gradle-ret-code (wait gradle-proc))
-		(var log-out-txt (str "Build log in " log-out-file "\n" (| (cat log-out-file) (tail -n 2) (head -n 2))))
+		(var log-out-txt (str "Build log in " log-out-file "\n" (| $(cat $log-out-file) $(tail -n 2) $(head -n 2))))
 		(var proj-name (str (basename $PWD)))
 		(if (= 0 gradle-ret-code)
 			(nss-pass (str "PASS! - " proj-name) log-out-txt)
@@ -180,7 +177,7 @@
 	"Start the jvm in debug mode, will hang until a debugger connects to jvm on port 5005
 	Section: java"
 	(&rest args)
-		`(java "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005" ,@args))
+		`$(java "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005" ,@args))
 ;; }}}
 
 
@@ -217,7 +214,7 @@
 (alias dkc
 "Typing out docker-compose takes forever.
 Section: user-shell"
-	(docker-compose))
+	$(docker-compose))
 
 (alias :q
        ":q makes sense as an exit alias
@@ -227,13 +224,13 @@ Section: user-shell"
 (alias ls
 	"alias ls to a colorified version.
 	Section: user-shell"
-	(lsd))
+	$(lsd))
 
 ;; betterer ls
 (alias ll
 	"ls -haltr shorcut
 	Section: user-shell"
-	(lsd -haltr))
+	$(lsd -haltr))
 
 ;; Replace cd with a version that also runs ls after.
 ;; Macro to let un-expanded args go to root::cd.
@@ -244,7 +241,7 @@ Section: user-shell"
 		(if (= (length args) 0)
 			(and (root::cd) (ls .))
 			(if (= (length args) 1)
-				(and (root::cd (first args)) (ls .))
+				(and (root::cd (first args)) $(ls .))
 				(err "I take zero or one argument.")))
 		nil))
 	;; use register-alias to have better syntax highlighting for cd.
@@ -257,19 +254,19 @@ Section: user-shell"
 	Section: user-shell
 	"
 	(word)
-		(println (str (| (echo (str word)) (aspell -a)))))
+		(println (str (| (echo (str word)) $(aspell -a)))))
 
 (defn weather
 	"print weather in terminal
 	Section: user-shell"
 		()
-		(curl "wttr.in"))
+		$(curl "wttr.in"))
 ;; }}}
 
 ;; notification helpers {{{
 
 (defmacro nss (title msg icon)
-	`(notify-send -t 0 ,title ,msg -i ,icon))
+	`$(notify-send -t 0 ,title ,msg -i ,icon))
 
 (defn persist-nss
 	"provide persistent notification via notify-send and libnotify
@@ -313,19 +310,19 @@ Section: user-shell"
 	"list tmux sessions
 	Section: tmux "
 	()
-	(tmux list-sessions))
+	$(tmux list-sessions))
 
 (defn tmuxnew
 	"new named tmux session
 	Section: tmux"
 	()
-	(tmux new -s))
+	$(tmux new -s))
 
 (defn tmuxkill
 	"kill all tmux sessions
 	Section: tmux"
 	()
-	(tmux kill-session -t))
+	$(tmux kill-session -t))
 
 (defn tmuxopen
 	"open existing named tmux session or create named session if it does not exist
@@ -333,10 +330,10 @@ Section: user-shell"
 	(&rest args)
 		(if (= (length args) 1)
 			(do
-				(var tmux-ret-code (tmux a -t (first args)))
+				(var tmux-ret-code $(tmux a -t $((first args))))
 				(if (= 0 tmux-ret-code)
 					0
-					(tmuxnew (first args))))
+					$(tmuxnew $((first args)))))
 			(err "Takes one argument, name of tmux session to create.")))
 
 ;; }}}
@@ -348,27 +345,27 @@ Section: user-shell"
 	"epoch in milliseconds
 	Section: time"
 	()
-	(str-trim (| (date +%s%N) (cut -b1-13))))
+	(str-trim $(date +%s%N | cut -b1-13)))
 
 (defn datest
 	"human readable eastern time zone
 	Section: time"
 	()
 	(let-env ((TZ ":America/New_York"))
-	 (date)))
+	 $(date)))
 
 (defn fromepoch
 	"
 	takes epoch IN SECONDS and converts to nice date time
 	Section: time"
 	(time)
-	(date -d (str "@" time)))
+	$(date -d $((str "@" time))))
 
 (defn timestamp
 	"simple timestamp for use with naming
 	Section: time"
 	()
-	(date +%Y%m%d_%H%M%S))
+	$(date +%Y%m%d_%H%M%S))
 
 ;; }}}
 
@@ -416,7 +413,7 @@ Section: user-shell"
 	"if in git repo, get the name of the branch
 	Section: git"
 	() (let ((branch))
-	(err>null (set! branch (str (git rev-parse --abbrev-ref HEAD))))
+	(err>null (set! branch (str $(git rev-parse --abbrev-ref HEAD))))
 	(if (= branch "")
 		(str "")
 		(str "(" (str-trim branch) ")"))))
@@ -435,7 +432,7 @@ Section: user-shell"
                             shell::*fg-blue* shell::*fg-magenta*
                             shell::*fg-cyan* shell::*fg-white*))
            (ascii-to-int (fn (ascii-char)
-                        (str->int (str (bash -c (str "printf \"%d\" \'" ascii-char))))))
+                        (str->int (str $(bash -c $((str "printf \"%d\" \'" ascii-char)))))))
            (color (vec-nth
                     fg-color-vec
                     (% (reduce (fn (curr nxt)
@@ -449,11 +446,11 @@ Section: user-shell"
     (let* ((dir (str (temp-dir) "/sl-sh/"))
           (fp (str dir filename)))
       (if (and (fs-exists? fp) (not (fs-dir? fp)))
-        (str (str-trim (cat fp)))
+        (str (str-trim $(cat $fp)))
         (do
           (var color-val (colorize-rand color-str seed))
-          (mkdir -p dir)
-          (out> fp (echo color-val))
+          $(mkdir -p $dir)
+          (out> fp $(echo $color-val))
           color-val))))
 
 (def sl-sh-open-paren (colorize-rand-cache "sl-sh-open-paren" "[" (str $HOST "1")))
@@ -485,16 +482,16 @@ Section: user-shell"
                 (not (empty-seq? token-str)))
             (do
                 (set! token-str (collect (reverse (cdr ret))))
-                (if (= (first token-str) '$la)
-                  (export 'la $la)
+                (if (= (first token-str) '\$la)
+                  (export 'la \$la)
                   (export 'la (str (first token-str))))
                 (when (> (length token-str) 1)
-                  (if (= (nth 1 token-str) '$2la)
-                    (export '2la $2la)
+                  (if (= (nth 1 token-str) '\$2la)
+                    (export '2la \$2la)
                     (export '2la (str (nth 1 token-str)))))
                 (when (> (length token-str) 2)
-                  (if (= (nth 2 token-str) '$3la)
-                    (export '3la $3la)
+                  (if (= (nth 2 token-str) '\$3la)
+                    (export '3la \$3la)
                     (export '3la (str (nth 2 token-str)))))))
         (var last-status *last-status*)
         (str
@@ -513,14 +510,14 @@ Section: user-shell"
 (println "		We don't have to be mean because,")
 (println "		remember, no matter where you go,")
 (println "		there you are.")
-(println (str "			- Buckaroo Banzai (" (str-trim (| (cat ~/.local/share/sl-sh/history) (grep -v "<ctx>") (wc -l))) ")"))
+(println (str "			- Buckaroo Banzai (" (str-trim $(cat ~/.local/share/sl-sh/history | grep -v "<ctx>" | wc -l)) ")"))
 (intern-stats)
 
 ;; }}}
 
 ;; machine specific {{{
 
-    (def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str (cat /etc/hostname))) ".lisp"))
+    (def custom-lisp-config (str "~/.config/sl-sh/" (str-trim (str $(cat /etc/hostname))) ".lisp"))
     (if (fs-exists? custom-lisp-config)
         ((fn (result)
             (if (= :ok (car result))
@@ -564,7 +561,7 @@ Section: user-shell"
 (def docs-error-ret
     (get-error (when (or
         (nil? (fs-exists? api-page))
-        (= api-page (str-trim (str (find api-page -type f -mmin "+1440"))))) (do
+        (= api-page (str-trim (str $(find $api-page -type f -mmin "+1440"))))) (do
     (load "docstrings-to-md.lisp")
     (load "mk-docs.lisp")
     (load "docstruct.lisp")

@@ -403,10 +403,10 @@ Like let but sets environment variables that are reset after the macro finishes.
 Section: shell
 
 Example:
-(test::assert-equal "" \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal \"\" \$LET-ENV-TEST-VAR-NOT-HERE)
 (let-env ((LET-ENV-TEST-VAR-NOT-HERE \"here\"))
     (test::assert-equal \"here\" \$LET-ENV-TEST-VAR-NOT-HERE))
-(test::assert-equal "" \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal \"\" \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
 	((fn (params bindings olds)
@@ -728,38 +728,14 @@ Example:
   "
   () '(undef __line_handler))
 
-(load "endfix.lisp")
-
-(defmacro endfix-on "
-Allows use of infix notation for common shell forms. The following is the
-complete mapping in lisp/endfix.lisp of all supported infix operators and
-the corresponding sl-sh function they map to:
-	'|| 'or
-	'| '|
-	'@@ 'do (@@ is used instead of ; because ; is a comment in lisp)
-	'&& 'and
-	'out> 'out>
-	'out>> 'out>>
-	'err> 'err>
-	'err>> 'err>>
-	'out>null 'out>null
-	'out-err> 'out-err>
-	'out-err>> 'out-err>>
-	'out-err>null 'out-err>null
-
-
-Section: shell
-"
-	() '(def __exec_hook shell::endfix-hook))
-
 
 (defn print-backtrace (backtrace)
-    (println (first backtrace))
-    (for b in backtrace
+    (for b in backtrace (do
         (if (builtin? b)(print "BUILTIN")
           (print (if (var file (meta-file-name b)) file "NO FILE") ":\t"
                  "line " (if (var line (meta-line-no b)) line "XX") ":\t"
                  "column " (if (var col (meta-column-no b)) col "XX") "\n"))))
+  )
 
 (defn print-error (error)
     (if (= :error (car error))
@@ -838,7 +814,8 @@ Section: shell
         ; Save temp history
         (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
         ;(println (cadr result))))))
-        (print-error result)))))
+        (print-error result))))
+  )
 
 (defn repl ()
       (var get-prompt (fn ()
@@ -864,7 +841,7 @@ Section: shell
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
 Section: shell"
     ()
-    (if (def? $TMPDIR) (str $TMPDIR) "/tmp"))
+    (if (> (length $TMPDIR) 0) (str $TMPDIR) "/tmp"))
 
 (defn fc
 "Put the contents of the last command into a temporary file
@@ -967,7 +944,6 @@ Section: shell"
 	tok-invalid-color
 	fg-color-rgb
 	bg-color-rgb
-	endfix-on
 	fc
 	getopts
 	mkli

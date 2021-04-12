@@ -110,13 +110,16 @@ fn builtin_open(
         if !is_write {
             opts.read(true);
         }
-        let file = match opts.open(file_name) {
+        let file = match opts.open(&file_name) {
             Ok(file) => file,
             Err(err) => {
                 if error_nil {
                     return Ok(Expression::make_nil());
                 } else {
-                    return Err(err.into());
+                    return Err(LispError::new(format!(
+                        "open: Error opening {}: {}",
+                        file_name, err
+                    )));
                 }
             }
         };
@@ -273,7 +276,7 @@ fn builtin_read(
                 .map(|s| Cow::Borrowed(s))
                 .peekable(),
         );
-        match read_form(environment, chars) {
+        match read_form_state(environment, chars, true) {
             Ok((ast, _)) => Ok(ast),
             Err((err, _)) => {
                 if let Some(err_exp) = err_exp {
@@ -298,7 +301,7 @@ fn builtin_read(
                 ExpEnum::File(file) => match &mut *file.borrow_mut() {
                     FileState::Read(file_iter, _) => {
                         let iiter = file_iter.take().unwrap();
-                        match read_form(environment, iiter) {
+                        match read_form_state(environment, iiter, true) {
                             Ok((ast, i_iter)) => {
                                 file_iter.replace(i_iter);
                                 Ok(ast)
@@ -331,7 +334,7 @@ fn builtin_read(
                     }
                     if char_iter.is_some() {
                         let chars = char_iter.take().unwrap();
-                        match read_form(environment, chars) {
+                        match read_form_state(environment, chars, true) {
                             Ok((ast, ichars)) => {
                                 char_iter.replace(ichars);
                                 Ok(ast)

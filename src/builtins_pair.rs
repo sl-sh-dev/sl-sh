@@ -15,7 +15,10 @@ fn builtin_join(
             if args.next().is_none() {
                 let arg0 = eval(environment, arg0)?;
                 let arg1 = eval(environment, arg1)?;
-                return Ok(Expression::alloc_data(ExpEnum::Pair(arg0, arg1)));
+                return Ok(Expression::alloc_data_meta(
+                    environment,
+                    ExpEnum::Pair(arg0, arg1),
+                ));
             }
         }
     }
@@ -39,7 +42,10 @@ fn builtin_list(
             }
         } else {
             let nil = Expression::make_nil();
-            last = Some(Expression::alloc_data(ExpEnum::Pair(a.clone(), nil)));
+            last = Some(Expression::alloc_data_meta(
+                environment,
+                ExpEnum::Pair(a.clone(), nil),
+            ));
         }
         if head.is_none() {
             head = last.clone();

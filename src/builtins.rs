@@ -275,7 +275,13 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         match ast {
             Ok((ast, ichars)) => {
                 chars = ichars;
-                res = Some(eval(environment, &ast)?);
+                res = match eval(environment, &ast) {
+                    Ok(exp) => Some(exp),
+                    Err(err) => {
+                        environment.reader_state = old_reader_state;
+                        return Err(err);
+                    }
+                };
             }
             Err((err, _ichars)) => {
     environment.reader_state = old_reader_state;
