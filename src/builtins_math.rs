@@ -1,6 +1,8 @@
+use rand::distributions::Alphanumeric;
 use rand::Rng;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
+use std::iter;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -564,9 +566,9 @@ Example:
                 } else {
                     let num = floats.get(0).unwrap();
                     let base = floats.get(1).unwrap();
-                    if *base == 2.0 {
+                    if (*base - 2.0).abs() < f64::EPSILON {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log2())))
-                    } else if *base == 10.0 {
+                    } else if (*base - 10.0).abs() < f64::EPSILON {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log10())))
                     } else {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log(*base))))
@@ -827,18 +829,19 @@ Example:
                 let mut args = make_args(environment, args)?;
                 let mut rng = rand::thread_rng();
                 let ints = parse_list_of_ints(environment, &mut args)?;
+                let count = ints.len();
                 match count {
                     0 => Ok(Expression::alloc_data(ExpEnum::Float(rng.gen()))),
                     1 => {
                         let i = ints.get(0).unwrap();
-                        match *i {
-                            positive if *i > 0 => {
+                        match i {
+                            positive if positive > &0 => {
                                 Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
                             }
                             _ => Err(LispError::new("Expected positive integer")),
                         }
                     }
-                    _ => Err(LispError::new("Expected zero or one numbers")),
+                    _ => Err(LispError::new("Expected zero or one integers")),
                 }
             },
             "Usage: (random), (random limit)
@@ -853,6 +856,8 @@ Example:
 (test::assert-true (and (> rand-int 0) (< rand-int 100))
 (def rand-float (random))
 (test::assert-true (and (> rand-float 0) (< rand-float 1)))
+(test::assert-error-msg (random -1) \"Expected positive integer\")
+(test::assert-error-msg (random 1 2) \"Expected zero or one integers\")
 ",
         ),
     );
@@ -878,26 +883,23 @@ Example:
                 match tup {
                     None => Err(LispError::new("Expected zero or two numbers")),
                     Some((_, 0)) => Err(LispError::new("Denominator can not be zero")),
-                    Some((i, j)) => {
-                        if i > j {
-                            Ok(Expression::alloc_data(ExpEnum::True))
-                        } else {
-                            if rand::thread_rng().gen_ratio(i, j) {
-                                Ok(Expression::alloc_data(ExpEnum::True))
-                            } else {
-                                Ok(Expression::alloc_data(ExpEnum::Nil))
-                            }
-                        }
-                    }
+                    Some((i, j)) => match i / j {
+                        improper if improper > 1 => Ok(Expression::alloc_data(ExpEnum::True)),
+                        _ => match rand::thread_rng().gen_ratio(i, j) {
+                            true => Ok(Expression::alloc_data(ExpEnum::True)),
+                            false => Ok(Expression::alloc_data(ExpEnum::Nil)),
+                        },
+                    },
                 }
             },
             "Usage: (probool), (probool numerator denominator)
 
 PRObability of a BOOLean.
 
-If no arguments are given, returns #t 1/2 of the time, otherwise takes two integers, numerator and
-denominator, and returns #t numerator/denominator of the time. Throws an error if denominator is 0.
-If numerator >= 1 probool always returns true. If numerator is 0 probool always returns false.
+If no arguments are given, returns #t 1/2 of the time, otherwise takes two
+integers, numerator and denominator, and returns #t numerator/denominator of the
+time. Throws an error if denominator is 0. If numerator >= 1 probool always
+returns true. If numerator is 0 probool always returns false.
 
 Section: math
 
@@ -908,6 +910,47 @@ Example:
 (test::assert-true (or (= #t val1) (= nil val1)))
 (test::assert-true (probool 1 1))
 (test::assert-false (probool 0 42))
+(test::assert-error-msg (probool 0 0) \"Denominator can not be zero\")
+(test::assert-error-msg (probool 0 0 0) \"Expected zero or two numbers\")
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("random-str"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let ints = parse_list_of_ints(environment, &mut args)?;
+                if ints.len() != 1 {
+                    Err(LispError::new("Expected positive number"))
+                } else {
+                    let len = ints.get(0).unwrap();
+                    match len {
+                        positive if positive > &0 => Ok(Expression::alloc_data(ExpEnum::String(
+                            iter::repeat(())
+                                .map(|()| rand::thread_rng().sample(Alphanumeric))
+                                .map(char::from)
+                                .take(*len as usize)
+                                .collect(),
+                            None,
+                        ))),
+                        _ => Err(LispError::new("Expected positive number")),
+                    }
+                }
+            },
+            "Usage: (random-str str-length)
+
+Takes a positive integer and returns a string of random alphanumeric characters
+of provided lenth.
+
+Section: math
+
+Example:
+(test::assert-equal 10 (length (random-str 10)))
+(test::assert-error-msg (random-str -1) \"Expected positive number\")
 ",
         ),
     );
