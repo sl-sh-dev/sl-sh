@@ -563,9 +563,9 @@ Example:
                 } else {
                     let num = floats.get(0).unwrap();
                     let base = floats.get(1).unwrap();
-                    if *base == 2.0 {
+                    if (*base - 2.0).abs() < f64::EPSILON {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log2())))
-                    } else if *base == 10.0 {
+                    } else if (*base - 10.0).abs() < f64::EPSILON {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log10())))
                     } else {
                         Ok(Expression::alloc_data(ExpEnum::Float(num.log(*base))))

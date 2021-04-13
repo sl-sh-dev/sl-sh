@@ -243,10 +243,9 @@ sample-getopts.lisp
        (make-hash
          (list (join
                  :-m
-                 (make-hash (list
-                              (join :arity 1)
-                              (:default 0)
-                              (:type :int?))))))
+                 (make-hash '((:arity . 1)
+                              (:default . 0)
+                              (:type . :int?))))))
         args))
 (println \"The binding for -m is: \" (hash-get bindings :-m) \"of type \" (type (hash-get bindings :-m)))
 ----------------
