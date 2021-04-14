@@ -898,8 +898,8 @@ PRObability of a BOOLean.
 
 If no arguments are given, returns #t 1/2 of the time, otherwise takes two
 integers, numerator and denominator, and returns #t numerator/denominator of the
-time. Throws an error if denominator is 0. If numerator >= 1 probool always
-returns true. If numerator is 0 probool always returns false.
+time. Throws an error if denominator is 0. If (>= (/ numerator denominator) 1)
+probool always returns true. If numerator is 0 probool always returns false.
 
 Section: math
 
