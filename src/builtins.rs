@@ -950,8 +950,11 @@ fn get_doc(
             let key_d = &key.get().data;
             let key = match key_d {
                 ExpEnum::Symbol(s, _) => s,
+                ExpEnum::String(s, _) => s.as_ref(),
                 _ => {
-                    return Err(LispError::new("doc: first form must evaluate to a symbol"));
+                    return Err(LispError::new(
+                        "doc: first form must evaluate to a symbol or string",
+                    ));
                 }
             };
             if key.contains("::") {

@@ -98,14 +98,10 @@ values-nth 1 = accum lst to string.
         (:fn to-str (self) (do
             (println (self :full-doc)))))
        (def ds (doc-struct))
-       (ds :to-str)
        ds))))
         (if (= :ok (car ret))
           (cdr ret)
-          (do
-            (println (cdr ret))
-            nil))))
+          nil)))
 
 (ns-auto-export 'docstruct)
 (ns-pop)
-
