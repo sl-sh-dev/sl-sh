@@ -3,7 +3,7 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
-(def start-time (str (str-trim (| (date +%s%N) (cut -b1-13)))))
+(def start-time (str (str-trim $(date +%s%N | cut -b1-13))))
 
 ;; gpwclark TODOs
 ;; put in docs about how you call doc on the cmd line all the time!!
@@ -527,6 +527,7 @@ Section: user-shell"
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 ;; }}}
 
+
 ;; exec hook {{{
 
 ;; entrypoint for all 1 arg commands... used to make filepaths cd commands
@@ -550,10 +551,10 @@ Section: user-shell"
 		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
 		;; check for infix notation
 		(nil cmd-ast)))))
-#|
 
 ;; }}}
 
+#|
 ;; user ns docs {{{
 (def api-page-name "mydoc_api.md")
 (def api-page (str "pages/mydoc/" api-page-name))
@@ -613,16 +614,17 @@ Section: user-shell"
 (shell::popd)
 (if (not (= (car docs-error-ret) :ok))
     (println "Failed to build docs: " (cdr docs-error-ret)))
+;;(undef api-page-name)
+;;(undef api-page)
+;;(undef docs-error-ret)
 ;; }}}
+|#
 
-(def end-time (str (user::epochms)))
 
 ;; cleanup symbols I might use {{{
+(def end-time (str (user::epochms)))
 
 (println "Load time: " (- (str->int end-time) (str->int start-time)) "ms")
-(undef api-page-name)
-(undef api-page)
-(undef docs-error-ret)
 (undef start-time)
 (undef end-time)
 
