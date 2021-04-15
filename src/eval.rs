@@ -1,12 +1,9 @@
 use std::cell::RefCell;
-use std::env;
 
 use crate::analyze::*;
 use crate::builtins::{builtin_bquote, builtin_quote};
 use crate::builtins_bind::{builtin_def, builtin_var};
 use crate::environment::*;
-use crate::process::*;
-use crate::reader::read;
 use crate::signals::test_clear_sigint;
 use crate::symbols::*;
 use crate::types::*;
@@ -191,13 +188,10 @@ pub fn call_lambda(
     };
     let old_ns = environment.namespace.clone();
     environment.namespace = lambda.syms.namespace().clone();
-    let old_loose = environment.loose_symbols;
     let stack_len = environment.stack.len();
     let stack_frames_len = environment.stack_frames.len();
     let old_base = environment.stack_frame_base;
-    environment.loose_symbols = false;
     let ret = call_lambda_int(environment, lambda_exp, lambda, args, eval_args);
-    environment.loose_symbols = old_loose;
     environment.stack.truncate(stack_len);
     environment.stack_frames.truncate(stack_frames_len);
     environment.stack_frame_base = old_base;
@@ -227,8 +221,6 @@ fn eval_command(
     com_exp: &Expression,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let allow_sys_com =
-        environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
     let com_exp_d = com_exp.get();
     match &com_exp_d.data {
         ExpEnum::Lambda(_) => {
@@ -244,7 +236,6 @@ fn eval_command(
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
         ExpEnum::Quote => builtin_quote(environment, &mut *parts),
         ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
-        ExpEnum::String(s, _) if allow_sys_com => do_command(environment, s.trim(), parts),
         _ => {
             let msg = format!(
                 "Not a valid command {}, type {}.",
@@ -278,10 +269,6 @@ fn fn_eval_lazy(
     };
     let command = command.resolve(environment)?;
     let command_d = command.get();
-    let allow_sys_com =
-        environment.form_type == FormType::ExternalOnly || environment.form_type == FormType::Any;
-    let allow_form =
-        environment.form_type == FormType::FormOnly || environment.form_type == FormType::Any;
     match &command_d.data {
         ExpEnum::Symbol(command_sym, _) => {
             if command_sym.is_empty() {
@@ -292,48 +279,22 @@ fn fn_eval_lazy(
             let form = get_expression(environment, command.clone());
             if let Some(exp) = form {
                 match &exp.get().data {
-                    ExpEnum::Function(c) if allow_form => (c.func)(environment, &mut parts),
-                    ExpEnum::DeclareDef if allow_form => builtin_def(environment, &mut parts),
-                    ExpEnum::DeclareVar if allow_form => builtin_var(environment, &mut parts),
-                    ExpEnum::Quote if allow_form => builtin_quote(environment, &mut *parts),
-                    ExpEnum::BackQuote if allow_form => builtin_bquote(environment, &mut *parts),
-                    ExpEnum::Lambda(_) if allow_form => {
+                    ExpEnum::Function(c) => (c.func)(environment, &mut parts),
+                    ExpEnum::DeclareDef => builtin_def(environment, &mut parts),
+                    ExpEnum::DeclareVar => builtin_var(environment, &mut parts),
+                    ExpEnum::Quote => builtin_quote(environment, &mut *parts),
+                    ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
+                    ExpEnum::Lambda(_) => {
                         if environment.allow_lazy_fn {
                             make_lazy(environment, exp.clone(), &mut parts)
                         } else {
                             call_lambda(environment, exp.clone(), &mut parts, true)
                         }
                     }
-                    ExpEnum::String(s, _) if allow_sys_com => {
-                        do_command(environment, s.trim(), &mut parts)
-                    }
                     _ => {
-                        if command_sym.starts_with('$') {
-                            if let ExpEnum::String(command_sym, _) =
-                                &str_process(environment, command_sym, true)?.get().data
-                            {
-                                do_command(environment, &command_sym, &mut parts)
-                            } else {
-                                let msg = format!("Not a valid form {}, not found.", command_sym);
-                                Err(LispError::new(msg))
-                            }
-                        } else {
-                            do_command(environment, command_sym, &mut parts)
-                        }
-                    }
-                }
-            } else if allow_sys_com {
-                if command_sym.starts_with('$') {
-                    if let ExpEnum::String(command_sym, _) =
-                        &str_process(environment, command_sym, true)?.get().data
-                    {
-                        do_command(environment, &command_sym, &mut parts)
-                    } else {
                         let msg = format!("Not a valid form {}, not found.", command_sym);
                         Err(LispError::new(msg))
                     }
-                } else {
-                    do_command(environment, command_sym, &mut parts)
                 }
             } else {
                 let msg = format!("Not a valid form {}, not found.", command);
@@ -362,7 +323,6 @@ fn fn_eval_lazy(
         ExpEnum::DeclareVar => builtin_var(environment, &mut *parts),
         ExpEnum::Quote => builtin_quote(environment, &mut *parts),
         ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
-        ExpEnum::String(s, _) if allow_sys_com => do_command(environment, s.trim(), &mut parts),
         ExpEnum::Wrapper(_) => {
             drop(command_d); // Drop the lock on command.
             let com_exp = eval(environment, &command)?;
@@ -376,130 +336,6 @@ fn fn_eval_lazy(
             );
             Err(LispError::new(msg))
         }
-    }
-}
-
-fn str_process(
-    environment: &mut Environment,
-    string: &str,
-    expand: bool,
-) -> Result<Expression, LispError> {
-    fn add_var(
-        environment: &mut Environment,
-        new_string: &mut String,
-        name: &str,
-    ) -> Result<(), LispError> {
-        match lookup_expression(environment, name) {
-            Some(exp) => {
-                new_string.push_str(&exp.as_string(environment)?);
-            }
-            None => match env::var(name) {
-                Ok(val) => new_string.push_str(&val),
-                Err(_) => new_string.push_str(""),
-            },
-        }
-        Ok(())
-    }
-    if expand && !environment.str_ignore_expand && string.contains('$') {
-        let mut new_string = String::new();
-        let mut last_ch = '\0';
-        let mut in_var = false;
-        let mut in_var_bracket = false;
-        let mut in_command = false;
-        let mut command_depth: i32 = 0;
-        let mut var_start = 0;
-        for (i, ch) in string.chars().enumerate() {
-            if in_var {
-                if ch == '(' && var_start + 1 == i {
-                    in_command = true;
-                    in_var = false;
-                    command_depth = 1;
-                } else if ch == '{' && var_start + 1 == i {
-                    in_var_bracket = true;
-                    in_var = false;
-                } else {
-                    if ch == ' ' || ch == '"' || ch == ':' || (ch == '$' && last_ch != '\\') {
-                        in_var = false;
-                        add_var(environment, &mut new_string, &string[var_start + 1..i])?;
-                    }
-                    if ch == ' ' || ch == '"' || ch == ':' {
-                        new_string.push(ch);
-                    }
-                }
-            } else if in_var_bracket {
-                if ch == '}' && last_ch != '\\' {
-                    in_var_bracket = false;
-                    add_var(environment, &mut new_string, &string[var_start + 2..i])?;
-                }
-            } else if in_command {
-                if ch == ')' && last_ch != '\\' {
-                    command_depth -= 1;
-                }
-                if command_depth == 0 {
-                    in_command = false;
-                    let ast = read(environment, &string[var_start + 1..=i], None, false);
-                    match ast {
-                        Ok(ast) => {
-                            let old_loose_symbols = environment.loose_symbols;
-                            environment.loose_symbols = true;
-                            let gpo = set_grab_proc_output(environment, true);
-
-                            // Get out of a pipe for the str call if in one...
-                            let pipe_pgid = gpo.environment.pipe_pgid;
-                            gpo.environment.pipe_pgid = None;
-                            new_string.push_str(
-                                eval(gpo.environment, ast)?
-                                    .as_string(gpo.environment)?
-                                    .trim(),
-                            );
-                            gpo.environment.pipe_pgid = pipe_pgid;
-                            gpo.environment.loose_symbols = old_loose_symbols;
-                        }
-                        Err(err) => return Err(LispError::new(err.reason)),
-                    }
-                } else if ch == '(' && last_ch != '\\' {
-                    command_depth += 1;
-                }
-            } else if ch == '$' && last_ch != '\\' {
-                in_var = true;
-                var_start = i;
-            } else if ch != '\\' {
-                if last_ch == '\\' && ch != '$' {
-                    new_string.push('\\');
-                }
-                new_string.push(ch);
-            }
-            last_ch = ch;
-        }
-        if in_var {
-            add_var(environment, &mut new_string, &string[var_start + 1..])?;
-        }
-        if in_command {
-            return Err(LispError::new(
-                "Malformed command embedded in string (missing ')'?).",
-            ));
-        }
-        if environment.interner.contains(&new_string) {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(&new_string).into(),
-                None,
-            )))
-        } else {
-            Ok(Expression::alloc_data(ExpEnum::String(
-                new_string.into(),
-                None,
-            )))
-        }
-    } else if environment.interner.contains(string) {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            environment.interner.intern(string).into(),
-            None,
-        )))
-    } else {
-        Ok(Expression::alloc_data(ExpEnum::String(
-            string.to_string().into(),
-            None,
-        )))
     }
 }
 
@@ -569,15 +405,7 @@ fn internal_eval(
             }
         }
         ExpEnum::Symbol(s, SymLoc::None) => {
-            if let Some(s) = s.strip_prefix('$') {
-                match env::var(s) {
-                    Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
-                        environment.interner.intern(&val).into(),
-                        None,
-                    ))),
-                    Err(_) => Ok(Expression::alloc_data(ExpEnum::Nil)),
-                }
-            } else if s.starts_with(':') {
+            if s.starts_with(':') {
                 // Got a keyword, so just be you...
                 Ok(Expression::alloc_data(ExpEnum::Symbol(s, SymLoc::None)))
             } else if let Some(exp) = get_expression(environment, expression.clone()) {
@@ -588,18 +416,13 @@ fn internal_eval(
                     drop(exp_d);
                     Ok(exp)
                 }
-            } else if environment.loose_symbols {
-                str_process(environment, s, false)
             } else {
                 let msg = format!("Symbol {} not found.", s);
                 Err(LispError::new(msg))
             }
         }
         ExpEnum::HashMap(_) => Ok(expression.clone()),
-        // If we have an iterator on the string then assume it is already processed and being used.
-        // XXX TODO- verify this assumption is correct, maybe change when to process strings.
-        ExpEnum::String(_, Some(_)) => Ok(expression.clone()),
-        ExpEnum::String(string, _) => str_process(environment, &string, true),
+        ExpEnum::String(_, _) => Ok(expression.clone()),
         ExpEnum::True => Ok(expression.clone()),
         ExpEnum::Float(_) => Ok(expression.clone()),
         ExpEnum::Int(_) => Ok(expression.clone()),
@@ -677,7 +500,15 @@ pub fn eval_nr(
         return Err(LispError::new("Eval calls to deep."));
     }
     environment.eval_level += 1;
-    analyze(environment, expression, &mut None)?;
+    if let Err(mut err) = analyze(environment, expression, &mut None) {
+        if err.backtrace.is_none() {
+            err.backtrace = Some(Vec::new());
+        }
+        if let Some(backtrace) = &mut err.backtrace {
+            backtrace.push(expression.clone());
+        }
+        return Err(err);
+    }
     let tres = internal_eval(environment, &expression);
     let mut result = if environment.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;

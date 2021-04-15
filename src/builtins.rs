@@ -31,6 +31,7 @@ const ENDFIX_LISP: &[u8] = include_bytes!("../lisp/endfix.lisp");
 const GETOPTS_LISP: &[u8] = include_bytes!("../lisp/getopts.lisp");
 const TEST_LISP: &[u8] = include_bytes!("../lisp/test.lisp");
 const LIB_LISP: &[u8] = include_bytes!("../lisp/lib.lisp");
+const SHELL_READ_LISP: &[u8] = include_bytes!("../lisp/shell-read.lisp");
 const SLSH_STD_LISP: &[u8] = include_bytes!("../lisp/slsh-std.lisp");
 const SLSHRC: &[u8] = include_bytes!("../lisp/slshrc");
 
@@ -219,57 +220,87 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     };
     let path = Path::new(&file_path);
     let file_name = Some(environment.interner.intern(&file_path));
-    let ast = if path.exists() {
-        let contents = fs::read_to_string(file_path)?;
-        read_list_wrap(environment, &contents, file_name)
+    let contents_tmp;
+    let contents = if path.exists() {
+        contents_tmp = fs::read_to_string(file_path)?;
+        // Force contents to have static lifetime.  It is used for the chars
+        // iterator below and since contents_tmp and chars have he same lifetime
+        // should be ok (ownership of chars is passed and no refs should be held).
+        unsafe { &*(&contents_tmp[..] as *const str) }
     } else {
         fn to_str(input: &'static [u8]) -> &'static str {
             from_utf8(input).expect("Builtin file is not valid UTF8!")
         }
         match &file_path[..] {
-            "core.lisp" => read_list_wrap(environment, to_str(CORE_LISP), file_name),
-            "struct.lisp" => read_list_wrap(environment, to_str(STRUCT_LISP), file_name),
-            "iterator.lisp" => read_list_wrap(environment, to_str(ITERATOR_LISP), file_name),
-            "collection.lisp" => read_list_wrap(environment, to_str(COLLECTION_LISP), file_name),
-            "seq.lisp" => read_list_wrap(environment, to_str(SEQ_LISP), file_name),
-            "shell.lisp" => read_list_wrap(environment, to_str(SHELL_LISP), file_name),
-            "endfix.lisp" => read_list_wrap(environment, to_str(ENDFIX_LISP), file_name),
-            "getopts.lisp" => read_list_wrap(environment, to_str(GETOPTS_LISP), file_name),
-            "test.lisp" => read_list_wrap(environment, to_str(TEST_LISP), file_name),
-            "lib.lisp" => read_list_wrap(environment, to_str(LIB_LISP), file_name),
-            "slsh-std.lisp" => read_list_wrap(environment, to_str(SLSH_STD_LISP), file_name),
-            "slshrc" => read_list_wrap(environment, to_str(SLSHRC), file_name),
+            "core.lisp" => to_str(CORE_LISP),
+            "struct.lisp" => to_str(STRUCT_LISP),
+            "iterator.lisp" => to_str(ITERATOR_LISP),
+            "collection.lisp" => to_str(COLLECTION_LISP),
+            "seq.lisp" => to_str(SEQ_LISP),
+            "shell.lisp" => to_str(SHELL_LISP),
+            "endfix.lisp" => to_str(ENDFIX_LISP),
+            "getopts.lisp" => to_str(GETOPTS_LISP),
+            "test.lisp" => to_str(TEST_LISP),
+            "lib.lisp" => to_str(LIB_LISP),
+            "shell-read.lisp" => to_str(SHELL_READ_LISP),
+            "slsh-std.lisp" => to_str(SLSH_STD_LISP),
+            "slshrc" => to_str(SLSHRC),
             _ => {
                 let msg = format!("{} not found", file_path);
                 return Err(LispError::new(msg));
             }
         }
     };
-    match ast {
-        Ok(ast) => {
-            let old_loose_syms = environment.loose_symbols;
-            // Do not use loose symbols in scripts even if loading from the repl.
-            environment.loose_symbols = false;
-            let mut res: Option<Expression> = None;
-            match &ast.get().data {
-                ExpEnum::Vector(list) => {
-                    for l in list {
-                        res = Some(eval(environment, &l)?);
-                    }
-                }
-                ExpEnum::Pair(_, _) => {
-                    for l in ast.iter() {
-                        res = Some(eval(environment, l)?);
-                    }
-                }
-                _ => {
-                    res = Some(eval(environment, &ast)?);
-                }
+    let shebanged = contents.starts_with("#!");
+    let mut chars: CharIter = Box::new(
+        UnicodeSegmentation::graphemes(contents, true)
+            .map(|s| Cow::Borrowed(s))
+            .peekable(),
+    );
+    let old_reader_state = environment.reader_state.clone();
+    environment.reader_state.clear();
+    environment.reader_state.file_name = file_name;
+    if shebanged {
+        while let Some(ch) = chars.next() {
+            if ch == "\n" {
+                environment.reader_state.line += 1;
+                environment.reader_state.column = 0;
+                break;
             }
-            environment.loose_symbols = old_loose_syms;
-            Ok(res.unwrap_or_else(Expression::make_nil))
         }
-        Err(err) => Err(LispError::new(err.reason)),
+    }
+    let mut res: Option<Expression> = None;
+    while chars.peek().is_some() {
+        let ast = read_form(environment, chars);
+        match ast {
+            Ok((ast, ichars)) => {
+                chars = ichars;
+                res = match eval(environment, &ast) {
+                    Ok(exp) => Some(exp),
+                    Err(err) => {
+                        environment.reader_state = old_reader_state;
+                        return Err(err);
+                    }
+                };
+            }
+            Err((err, _ichars)) => {
+                environment.reader_state = old_reader_state;
+                if err.reason == "Empty value" {
+                    return if let Some(res) = res {
+                        Ok(res)
+                    } else {
+                        Err(LispError::new(err.reason))
+                    };
+                }
+                return Err(LispError::new(err.reason));
+            }
+        }
+    }
+    environment.reader_state = old_reader_state;
+    if let Some(res) = res {
+        Ok(res)
+    } else {
+        Err(LispError::new("Nothing to load!"))
     }
 }
 
@@ -831,60 +862,6 @@ fn builtin_version(
     }
 }
 
-fn builtin_command(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_form = environment.form_type;
-    environment.form_type = FormType::ExternalOnly;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.form_type = old_form;
-            return Err(err);
-        }
-    }
-    environment.form_type = old_form;
-    last_eval
-}
-
-fn builtin_form(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_form = environment.form_type;
-    environment.form_type = FormType::FormOnly;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.form_type = old_form;
-            return Err(err);
-        }
-    }
-    environment.form_type = old_form;
-    last_eval
-}
-
-fn builtin_loose_symbols(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let old_loose_syms = environment.loose_symbols;
-    environment.loose_symbols = true;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.loose_symbols = old_loose_syms;
-            return Err(err);
-        }
-    }
-    environment.loose_symbols = old_loose_syms;
-    last_eval
-}
-
 // Suppress this lint because we have to return a Result here since it is a builtin...
 #[allow(clippy::unnecessary_wraps)]
 fn builtin_get_error(
@@ -973,8 +950,11 @@ fn get_doc(
             let key_d = &key.get().data;
             let key = match key_d {
                 ExpEnum::Symbol(s, _) => s,
+                ExpEnum::String(s, _) => s.as_ref(),
                 _ => {
-                    return Err(LispError::new("doc: first form must evaluate to a symbol"));
+                    return Err(LispError::new(
+                        "doc: first form must evaluate to a symbol or string",
+                    ));
                 }
             };
             if key.contains("::") {
@@ -2127,54 +2107,6 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("command"),
-        Expression::make_special(
-            builtin_command,
-            "Usage: (command exp0 ... expN)
-
-Only execute system commands not forms within this form.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Failed to execute [str string]: No such file or directory (os error 2)\" (cadr (get-error (command (str \"string\")))))
-(test::assert-equal \"Some String\n\" (str (command (echo \"Some String\"))))
-"
-        ),
-    );
-    data.insert(
-        interner.intern("form"),
-        Expression::make_special(
-            builtin_form,
-            "Usage: (form exp0 ... expN)
-
-Like do but do not execute system commands within this form.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Not a valid form true, not found.\" (cadr (get-error (form (true)))))
-(test::assert-equal \"Some String\" (form (str \"Some String\")))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("loose-symbols"),
-        Expression::make_special(
-            builtin_loose_symbols,
-            "Usage: (loose-symbols exp0 ... expN)
-
-Within this form any undefined symbols become strings.
-
-Section: shell
-
-Example:
-(test::assert-equal \"Some_Result\" (loose-symbols Some_Result))
-(test::assert-equal \"Some Result\" (loose-symbols Some\\ Result))
-",
-        ),
-    );
-    data.insert(
         interner.intern("get-error"),
         Expression::make_function(
             builtin_get_error,
@@ -2717,6 +2649,23 @@ Section: core
 
 Example:
 ;(print *lib-src*)
+t
+"
+            .to_string(),
+        ),
+    );
+    data.insert(
+        interner.intern("*shell-read-src*"),
+        (
+            ExpEnum::String(to_cow(SHELL_READ_LISP), None).into(),
+            "Usage: (print *shell-read-src*)
+
+The builtin source code for shell-read.lisp.
+
+Section: core
+
+Example:
+;(print *shell-read-src*)
 t
 "
             .to_string(),

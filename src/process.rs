@@ -2,7 +2,6 @@ use std::env;
 use std::io;
 use std::os::unix::io::AsRawFd;
 
-use glob::glob;
 use nix::{
     sys::{
         signal::{kill, Signal},
@@ -273,103 +272,32 @@ fn get_std_io(environment: &Environment, is_out: bool) -> Result<Option<i32>, Li
     }
 }
 
-fn prep_string_arg(
-    _environment: &mut Environment,
-    s: &str,
-    nargs: &mut Vec<String>,
-) -> Result<(), LispError> {
-    let s = match expand_tilde(&s) {
-        Some(p) => p,
-        None => s.to_string(), // XXX not great.
-    };
-    if s.contains('*') || s.contains('?') || s.contains('[') || s.contains('{') {
-        match glob(&s) {
-            Ok(paths) => {
-                let mut i = 0;
-                for p in paths {
-                    match p {
-                        Ok(p) => {
-                            i += 1;
-                            if let Some(p) = p.to_str() {
-                                nargs.push(p.to_string());
-                            }
-                        }
-                        Err(err) => {
-                            let msg = format!("glob error on while iterating {}, {}", s, err);
-                            return Err(LispError::new(msg));
-                        }
-                    }
-                }
-                if i == 0 {
-                    nargs.push(s);
-                }
-            }
-            Err(_err) => {
-                nargs.push(s);
-            }
-        }
-    } else {
-        nargs.push(s);
-    }
-    Ok(())
-}
-
 pub fn do_command(
     environment: &mut Environment,
     command: &str,
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let old_loose_syms = environment.loose_symbols;
-    environment.loose_symbols = true;
+    fn add_arg_s(args: &mut Vec<String>, exp: Expression) -> Result<(), LispError> {
+        match &exp.get().data {
+            ExpEnum::String(s, _) => args.push(s.to_string()),
+            ExpEnum::Symbol(s, _) => args.push(s.to_string()),
+            ExpEnum::Pair(_, _) => {
+                for a in exp.iter() {
+                    add_arg_s(args, a)?;
+                }
+            }
+            ExpEnum::Vector(_) => {
+                for a in exp.iter() {
+                    add_arg_s(args, a)?;
+                }
+            }
+            _ => return Err(LispError::new("Sys command arguements need to be string (or symbols or lists that reduce so strings).")),
+        }
+        Ok(())
+    }
     let mut args = Vec::new();
     for a_exp in parts {
-        let a_exp2 = a_exp.clone();
-        let a_exp_a = a_exp.get();
-        if let ExpEnum::String(_, _) = a_exp_a.data {
-            drop(a_exp_a);
-            let new_a = eval(environment, a_exp2)?;
-            args.push(new_a.as_string(environment)?);
-        } else {
-            // Free standing callables in a process call do not make sense so filter them out...
-            // Eval the strings below to make sure any expansions happen.
-            let new_a = match a_exp_a.data {
-                ExpEnum::Symbol(s, _) => match get_expression(environment, a_exp.clone()) {
-                    Some(exp) => match &exp.get().data {
-                        ExpEnum::Function(_) => {
-                            drop(a_exp_a);
-                            eval_data(environment, ExpEnum::String(s.into(), None))?
-                        }
-                        ExpEnum::Lambda(_) => {
-                            drop(a_exp_a);
-                            eval_data(environment, ExpEnum::String(s.into(), None))?
-                        }
-                        ExpEnum::Macro(_) => {
-                            drop(a_exp_a);
-                            eval_data(environment, ExpEnum::String(s.into(), None))?
-                        }
-                        _ => {
-                            drop(a_exp_a);
-                            eval(environment, a_exp2)?
-                        }
-                    },
-                    _ => {
-                        drop(a_exp_a);
-                        eval(environment, a_exp2)?
-                    }
-                },
-                _ => {
-                    drop(a_exp_a);
-                    eval(environment, a_exp2)?
-                }
-            };
-            let new_a_a = new_a.get();
-            if let ExpEnum::String(s, _) = &new_a_a.data {
-                prep_string_arg(environment, &s, &mut args)?;
-            } else {
-                args.push(new_a.as_string(environment)?);
-            }
-        }
+        add_arg_s(&mut args, eval(environment, a_exp)?)?;
     }
-    environment.loose_symbols = old_loose_syms;
     run_command(environment, command, args)
 }

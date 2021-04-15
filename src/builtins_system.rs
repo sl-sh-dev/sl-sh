@@ -22,13 +22,14 @@ fn builtin_syscall(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(command) = args.next() {
-        let command = eval(environment, command)?;
+        //let command = eval(environment, command)?;
         let command_d = command.get();
         match &command_d.data {
+            ExpEnum::Symbol(s, _) => do_command(environment, s, args),
             ExpEnum::String(s, _) => do_command(environment, s, args),
             _ => {
                 let msg = format!(
-                    "syscall: first argument {} not a string, type {}",
+                    "syscall: first argument {} not a symbol or string, type {}",
                     command,
                     command.display_type()
                 );
@@ -38,6 +39,46 @@ fn builtin_syscall(
     } else {
         Err(LispError::new("syscall: empty call"))
     }
+}
+
+fn builtin_get_env(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    fn get_var(environment: &mut Environment, key: &str) -> Result<Expression, LispError> {
+        if key.contains('=') || key.trim().is_empty() {
+            Err(LispError::new(
+                "get-env: invalid key, must not be empty or contain an '='",
+            ))
+        } else {
+            match env::var(key) {
+                Ok(val) => Ok(Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern(&val).into(),
+                    None,
+                ))),
+                Err(_err) => Ok(Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern("").into(),
+                    None,
+                ))),
+            }
+        }
+    }
+    if let Some(key) = args.next() {
+        if args.next().is_none() {
+            return match &key.get().data {
+                ExpEnum::Symbol(s, _) => get_var(environment, s),
+                ExpEnum::String(s, _) => get_var(environment, s),
+                _ => Err(LispError::new(format!(
+                    "get-env: key must be a symbol or string, got {}/{}",
+                    key.display_type(),
+                    key
+                ))),
+            };
+        }
+    }
+    Err(LispError::new(
+        "get-env: takes one parameter, environment variable to lookup",
+    ))
 }
 
 fn builtin_export(
@@ -345,59 +386,82 @@ pub fn add_system_builtins<S: BuildHasher>(
 ) {
     data.insert(
         interner.intern("syscall"),
-        Expression::make_function(
+        Expression::make_special(
             builtin_syscall,
-            "Usage: (syscall system-command arg0 ... argN)
+            r#"Usage: (syscall system-command arg0 ... argN)
 
 Execute the provided system command with the supplied arguments.
+System-command can be a string or symbol (it is not evaluated).
+The args (0..n) are evaluated.
 
 Section: core
 
 Example:
-(def test-syscall-one (str (syscall \"echo\" -n \"syscall-test\")))
-(test::assert-equal \"syscall-test\" test-syscall-one)
-",
+(def test-syscall-one (str (syscall "echo" "-n" "syscall-test")))
+(test::assert-equal "syscall-test" test-syscall-one)
+(def test-syscall-one (str (syscall echo "-n" "syscall-test2")))
+(test::assert-equal "syscall-test2" test-syscall-one)
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("get-env"),
+        Expression::make_special(
+            builtin_get_env,
+            r#"Usage: (get_env key) -> string
+
+Lookup key in the system environment (env variable).  Returns an empty sting if key does not exist.
+Note: key is not evaluated.
+
+Section: shell
+
+Example:
+(test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
+(test::assert-equal "ONE" (get-env TEST_EXPORT_ONE))
+(test::assert-equal "" (get-env TEST_EXPORT_ONE_NA))
+"#,
         ),
     );
     data.insert(
         interner.intern("export"),
         Expression::make_function(
             builtin_export,
-            "Usage: (export symbol string) -> string
+            r#"Usage: (export symbol string) -> string
 
 Export a key and value to the shell environment.  Second arg will be made a string and returned.
 
 Section: shell
 
 Example:
-(test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
-(test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
-",
+(test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
+"#,
         ),
     );
     data.insert(
         interner.intern("unexport"),
         Expression::make_function(
             builtin_unexport,
-            "Usage: (unexport symbol)
+            r#"Usage: (unexport symbol)
 
 Remove a var from the current shell environment.
 
 Section: shell
 
 Example:
-(test::assert-equal \"ONE\" (export 'TEST_EXPORT_ONE \"ONE\"))
-(test::assert-equal \"ONE\" $TEST_EXPORT_ONE)
+(test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
+(test::assert-equal "ONE" $TEST_EXPORT_ONE))
 (unexport 'TEST_EXPORT_ONE)
-(test::assert-false $TEST_EXPORT_ONE)
-",
+(test::assert-equal "" $TEST_EXPORT_ONE))
+"#,
         ),
     );
     data.insert(
         interner.intern("jobs"),
         Expression::make_function(
             builtin_jobs,
-            "Usage: (jobs)
+            r#"Usage: (jobs)
 
 Print list of jobs with ids.
 
@@ -406,14 +470,14 @@ Section: shell
 Example:
 ;(jobs)
 t
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("bg"),
         Expression::make_function(
             builtin_bg,
-            "Usage: (bg job-id?)
+            r#"Usage: (bg job-id?)
 
 Put a job in the background.
 
@@ -424,14 +488,14 @@ Section: shell
 Example:
 ;(bg)
 t
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("fg"),
         Expression::make_function(
             builtin_fg,
-            "Usage: (fg job-id?)
+            r#"Usage: (fg job-id?)
 
 Put a job in the foreground.
 
@@ -442,14 +506,14 @@ Section: shell
 Example:
 ;(fg)
 t
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("run-bg"),
         Expression::make_special(
             builtin_run_bg,
-            "Usage: (run-bg exp0 ... expN)
+            r#"Usage: (run-bg exp0 ... expN)
 
 Like do except any system commands started within form will be in the background.
 
@@ -458,14 +522,14 @@ Section: shell
 Example:
 ;(run-bg gitk)
 t
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("exit"),
         Expression::make_function(
             builtin_exit,
-            "Usage: (exit code?)
+            r#"Usage: (exit code?)
 
 Exit shell with optional status code.
 
@@ -475,14 +539,14 @@ Example:
 ;(exit)
 ;(exit 0)
 t
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("sleep"),
         Expression::make_function(
             builtin_sleep,
-            "Usage: (sleep milliseconds) -> nil
+            r#"Usage: (sleep milliseconds) -> nil
 
 Sleep for the provided milliseconds (must be a positive integer).
 
@@ -491,14 +555,14 @@ Section: shell
 Example:
 (def test-sleep-var (time (sleep 1000)))
 (assert-true (> test-sleep-var 1.0))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("time"),
         Expression::make_function(
             builtin_time,
-            "Usage: (time form) -> eval-time
+            r#"Usage: (time form) -> eval-time
 
 Evalutes the provided form and returns the seconds it ran for (as float with fractional part).
 
@@ -507,14 +571,14 @@ Section: shell
 Example:
 (def test-sleep-var (time (sleep 1100)))
 (assert-true (> test-sleep-var 1.1))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("reap-jobs"),
         Expression::make_function(
             builtin_reap_jobs,
-            "Usage: (reap-jobs) -> nil
+            r#"Usage: (reap-jobs) -> nil
 
 Reaps any completed jobs.  Only intended to be used by code implemeting the REPL
 loop or something similiar, this is probably not the form you are searching for.
@@ -524,7 +588,7 @@ Section: shell
 Example:
 ;(reap-jobs)
 t
-",
+"#,
         ),
     );
 }

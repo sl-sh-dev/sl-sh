@@ -388,7 +388,6 @@ fn builtin_str_nth(
             if args.next().is_none() {
                 if let ExpEnum::Int(idx) = eval(environment, idx)?.get().data {
                     if let ExpEnum::String(string, _) = &eval(environment, string)?.get().data {
-                        //for (i, ch) in string.chars().enumerate() {
                         for (i, ch) in
                             UnicodeSegmentation::graphemes(string.as_ref(), true).enumerate()
                         {
@@ -625,7 +624,7 @@ fn builtin_str_iter_start(
             }
         }
     }
-    Err(LispError::new("str-iter takes a string"))
+    Err(LispError::new("str-iter-start takes a string"))
 }
 
 fn builtin_str_iter_next(
@@ -644,13 +643,11 @@ fn builtin_str_iter_next(
                     // If this is the reader text stream then advance line/column.
                     if let Some(tags) = &mut string_d.meta_tags {
                         if tags.contains("--reader-text-stream--") {
-                            if let Some(reader_state) = &mut environment.reader_state {
-                                if ch == "\n" {
-                                    reader_state.line += 1;
-                                    reader_state.column = 0;
-                                } else {
-                                    reader_state.column += 1;
-                                }
+                            if ch == "\n" {
+                                environment.reader_state.line += 1;
+                                environment.reader_state.column = 0;
+                            } else {
+                                environment.reader_state.column += 1;
                             }
                         }
                     }
@@ -708,23 +705,6 @@ fn builtin_str_iter_empty(
         }
     }
     Err(LispError::new("str-iter-empty takes a string"))
-}
-
-pub fn builtin_str_ignore_expand(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let save_ignore = environment.str_ignore_expand;
-    environment.str_ignore_expand = true;
-    let mut ret = Ok(Expression::make_nil());
-    for arg in args {
-        ret = eval(environment, arg);
-        if ret.is_err() {
-            break;
-        }
-    }
-    environment.str_ignore_expand = save_ignore;
-    ret
 }
 
 fn builtin_char_lower(
@@ -791,94 +771,94 @@ pub fn add_str_builtins<S: BuildHasher>(
         interner.intern("str-trim"),
         Expression::make_function(
             builtin_str_trim,
-            "Usage: (str-trim string) -> string
- 
+            r#"Usage: (str-trim string) -> string
+
 Trim right and left whitespace from string.
 
 Section: string
 
 Example:
-(test::assert-equal \"some string\" (str-trim \"   some string\"))
-(test::assert-equal \"some string\" (str-trim \"   some string   \"))
-(test::assert-equal \"some string\" (str-trim (str \"   some string   \")))
-(test::assert-equal \"some string\" (str-trim \"some string   \"))
-(test::assert-equal \"some string\" (str-trim \"some string\"))
-",
+(test::assert-equal "some string" (str-trim "   some string"))
+(test::assert-equal "some string" (str-trim "   some string   "))
+(test::assert-equal "some string" (str-trim (str "   some string   ")))
+(test::assert-equal "some string" (str-trim "some string   "))
+(test::assert-equal "some string" (str-trim "some string"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-ltrim"),
         Expression::make_function(
             builtin_str_ltrim,
-            "Usage: (str-ltrim string) -> string
- 
+            r#"Usage: (str-ltrim string) -> string
+
 Trim left whitspace from string.
 
 Section: string
 
 Example:
-(test::assert-equal \"some string\" (str-ltrim \"   some string\"))
-(test::assert-equal \"some string   \" (str-ltrim \"   some string   \"))
-(test::assert-equal \"some string   \" (str-ltrim (str \"   some string   \")))
-(test::assert-equal \"some string   \" (str-ltrim \"some string   \"))
-(test::assert-equal \"some string\" (str-ltrim \"some string\"))
-",
+(test::assert-equal "some string" (str-ltrim "   some string"))
+(test::assert-equal "some string   " (str-ltrim "   some string   "))
+(test::assert-equal "some string   " (str-ltrim (str "   some string   ")))
+(test::assert-equal "some string   " (str-ltrim "some string   "))
+(test::assert-equal "some string" (str-ltrim "some string"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-rtrim"),
         Expression::make_function(
             builtin_str_rtrim,
-            "Usage: (str-rtrim string) -> string
- 
+            r#"Usage: (str-rtrim string) -> string
+
 Trim right whitespace from string.
 
 Section: string
 
 Example:
-(test::assert-equal \"   some string\" (str-rtrim \"   some string\"))
-(test::assert-equal \"   some string\" (str-rtrim \"   some string   \"))
-(test::assert-equal \"   some string\" (str-rtrim (str \"   some string   \")))
-(test::assert-equal \"some string\" (str-rtrim \"some string   \"))
-(test::assert-equal \"some string\" (str-rtrim \"some string\"))
-",
+(test::assert-equal "   some string" (str-rtrim "   some string"))
+(test::assert-equal "   some string" (str-rtrim "   some string   "))
+(test::assert-equal "   some string" (str-rtrim (str "   some string   ")))
+(test::assert-equal "some string" (str-rtrim "some string   "))
+(test::assert-equal "some string" (str-rtrim "some string"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-replace"),
         Expression::make_function(
             builtin_str_replace,
-            "Usage: (str-replace string old-pattern new-pattern) -> string
- 
+            r#"Usage: (str-replace string old-pattern new-pattern) -> string
+
 Replace occurances of second string with third in the first string.
 
 Section: string
 
 Example:
-(test::assert-equal \"some yyy string\" (str-replace \"some xxx string\" \"xxx\" \"yyy\"))
-(test::assert-equal \"some yyy string yyy\" (str-replace \"some xxx string xxx\" \"xxx\" \"yyy\"))
-(test::assert-equal \"yyy some yyy string yyy\" (str-replace \"xxx some xxx string xxx\" \"xxx\" \"yyy\"))
-"
+(test::assert-equal "some yyy string" (str-replace "some xxx string" "xxx" "yyy"))
+(test::assert-equal "some yyy string yyy" (str-replace "some xxx string xxx" "xxx" "yyy"))
+(test::assert-equal "yyy some yyy string yyy" (str-replace "xxx some xxx string xxx" "xxx" "yyy"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-split"),
         Expression::make_function(
             builtin_str_split,
-            "Usage: (str-split split-pattern string) -> vector
- 
+            r#"Usage: (str-split split-pattern string) -> vector
+
 Use a pattern to split a string (:whitespace to split on whitespace).
 
 Section: string
 
 Example:
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-split \"xxx\" \"somexxxyyyxxxstring\"))
-(test::assert-equal '(\"some\" \"yyy\" \"string\" \"\") (str-split \"xxx\" \"somexxxyyyxxxstringxxx\"))
-(test::assert-equal '(\"\" \"some\" \"yyy\" \"string\" \"\") (str-split \"xxx\" \"xxxsomexxxyyyxxxstringxxx\"))
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-split :whitespace \"some yyy string\"))
-(test::assert-equal '(\"somexxxyyyxxxstring\") (str-split :whitespace \"somexxxyyyxxxstring\"))
-(test::assert-equal '(\"somexxxyyyxxxstring\") (str-split \"zzz\" \"somexxxyyyxxxstring\"))
-"
+(test::assert-equal '("some" "yyy" "string") (str-split "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal '("some" "yyy" "string" "") (str-split "xxx" "somexxxyyyxxxstringxxx"))
+(test::assert-equal '("" "some" "yyy" "string" "") (str-split "xxx" "xxxsomexxxyyyxxxstringxxx"))
+(test::assert-equal '("some" "yyy" "string") (str-split :whitespace "some yyy string"))
+(test::assert-equal '("somexxxyyyxxxstring") (str-split :whitespace "somexxxyyyxxxstring"))
+(test::assert-equal '("somexxxyyyxxxstring") (str-split "zzz" "somexxxyyyxxxstring"))
+"#,
         ),
     );
     data.insert(
@@ -904,96 +884,96 @@ Example:
         interner.intern("str-splitn"),
         Expression::make_function(
             builtin_str_splitn,
-            "Usage: (str-splitn n split-pattern string) -> vector
- 
+            r#"Usage: (str-splitn n split-pattern string) -> vector
+
 Use a pattern to split a string with at most n items.
 
 Section: string
 
 Example:
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-splitn 3 \"xxx\" \"somexxxyyyxxxstring\"))
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-splitn 4 \"xxx\" \"somexxxyyyxxxstring\"))
-(test::assert-equal '(\"some\" \"yyy\" \"stringxxxother\") (str-splitn 3 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
-(test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-splitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
-(test::assert-equal '() (str-splitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
-"
+(test::assert-equal '("some" "yyy" "string") (str-splitn 3 "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal '("some" "yyy" "string") (str-splitn 4 "xxx" "somexxxyyyxxxstring"))
+(test::assert-equal '("some" "yyy" "stringxxxother") (str-splitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+(test::assert-equal '("somexxxyyyxxxstringxxxother") (str-splitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+(test::assert-equal '() (str-splitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+"#
         ),
     );
     data.insert(
         interner.intern("str-rsplitn"),
         Expression::make_function(
             builtin_str_rsplitn,
-            "Usage: (str-rsplitn n split-pattern string) -> vector
- 
+            r#"Usage: (str-rsplitn n split-pattern string) -> vector
+
 Use a pattern to split a string with at most n items returned in reverse order.
 
 Section: string
 
 Example:
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplitn 3 \"xxx\" \"stringxxxyyyxxxsome\"))
-(test::assert-equal '(\"some\" \"yyy\" \"string\") (str-rsplitn 4 \"xxx\" \"stringxxxyyyxxxsome\"))
-(test::assert-equal '(\"other\" \"string\" \"somexxxyyy\") (str-rsplitn 3 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
-(test::assert-equal '(\"somexxxyyyxxxstringxxxother\") (str-rsplitn 1 \"xxx\" \"somexxxyyyxxxstringxxxother\"))
-(test::assert-equal '() (str-rsplitn 0 \"xxx\" \"somexxxyyyxxxstringxxxzero\"))
-"
+(test::assert-equal '("some" "yyy" "string") (str-rsplitn 3 "xxx" "stringxxxyyyxxxsome"))
+(test::assert-equal '("some" "yyy" "string") (str-rsplitn 4 "xxx" "stringxxxyyyxxxsome"))
+(test::assert-equal '("other" "string" "somexxxyyy") (str-rsplitn 3 "xxx" "somexxxyyyxxxstringxxxother"))
+(test::assert-equal '("somexxxyyyxxxstringxxxother") (str-rsplitn 1 "xxx" "somexxxyyyxxxstringxxxother"))
+(test::assert-equal '() (str-rsplitn 0 "xxx" "somexxxyyyxxxstringxxxzero"))
+"#
         ),
     );
     data.insert(
         interner.intern("str-cat-list"),
         Expression::make_function(
             builtin_str_cat_list,
-            "Usage: (str-cat-list join-pattern sequence) -> string
+            r#"Usage: (str-cat-list join-pattern sequence) -> string
 
 Build a string by concatting a sequence with a join string.
 
 Section: string
 
 Example:
-(test::assert-equal \"stringxxxyyyxxxsome\" (str-cat-list \"xxx\" '(\"string\" \"yyy\" \"some\")))
-(test::assert-equal \"string yyy some\" (str-cat-list \" \" '(\"string\" \"yyy\" \"some\")))
-(test::assert-equal \"stringyyysome\" (str-cat-list \"\" '(\"string\" \"yyy\" \"some\")))
-",
+(test::assert-equal "stringxxxyyyxxxsome" (str-cat-list "xxx" '("string" "yyy" "some")))
+(test::assert-equal "string yyy some" (str-cat-list " " '("string" "yyy" "some")))
+(test::assert-equal "stringyyysome" (str-cat-list "" '("string" "yyy" "some")))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-sub"),
         Expression::make_function(
             builtin_str_sub,
-            "Usage: (str-sub start length string) -> string
+            r#"Usage: (str-sub start length string) -> string
 
 Return a substring from a string given start (0 based) and length.
 
 Section: string
 
 Example:
-(test::assert-equal \"string\" (str-sub 0 6 \"stringxxxyyyxxxsome\"))
-(test::assert-equal \"some\" (str-sub 15 4 \"stringxxxyyyxxxsome\"))
-(test::assert-equal \"yyy\" (str-sub 9 3 \"stringxxxyyyxxxsome\"))
-",
+(test::assert-equal "string" (str-sub 0 6 "stringxxxyyyxxxsome"))
+(test::assert-equal "some" (str-sub 15 4 "stringxxxyyyxxxsome"))
+(test::assert-equal "yyy" (str-sub 9 3 "stringxxxyyyxxxsome"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-append"),
         Expression::make_function(
             builtin_str_append,
-            "Usage: (str-append string string) -> string
+            r#"Usage: (str-append string string) -> string
 
 Make a new string by appending two strings.
 
 Section: string
 
 Example:
-(test::assert-equal \"stringsome\" (str-append \"string\" \"some\"))
-(test::assert-equal \"string\" (str-append \"string\" \"\"))
-(test::assert-equal \"string \" (str-append \"string\" \" \"))
-",
+(test::assert-equal "stringsome" (str-append "string" "some"))
+(test::assert-equal "string" (str-append "string" ""))
+(test::assert-equal "string " (str-append "string" " "))
+"#,
         ),
     );
     data.insert(
         interner.intern("str"),
         Expression::make_function(
             builtin_str,
-            "Usage: (str arg0 ... argN) -> string
+            r#"Usage: (str arg0 ... argN) -> string
 
 Make a new string with it's arguments.
 
@@ -1003,91 +983,92 @@ output of the process will be captured and put into the string.
 Section: string
 
 Example:
-(test::assert-equal \"stringsome\" (str \"string\" \"some\"))
-(test::assert-equal \"string\" (str \"string\" \"\"))
-(test::assert-equal \"string 50\" (str \"string\" \" \" 50))
-(test::assert-equal \"string 50 test\n\" (str \"string\" \" \" 50 \" \" (echo \"test\")))
-",
+(test::assert-equal "stringsome" (str "string" "some"))
+(test::assert-equal "string" (str "string" ""))
+(test::assert-equal "string 50" (str "string" " " 50))
+(test::assert-equal "string 50 test
+" (str "string" " " 50 " " (syscall echo "test")))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-empty?"),
         Expression::make_function(
             builtin_str_empty,
-            "Usage: (str-empty? string) -> t/nil
+            r#"Usage: (str-empty? string) -> t/nil
 
 Is a string empty?  Let's find out...
 
 Section: string
 
 Example:
-(test::assert-true (str-empty? \"\"))
-(test::assert-true (str-empty? (str-trim \"   \")))
-(test::assert-false (str-empty? \" \"))
-(test::assert-false (str-empty? \"string\"))
-",
+(test::assert-true (str-empty? ""))
+(test::assert-true (str-empty? (str-trim "   ")))
+(test::assert-false (str-empty? " "))
+(test::assert-false (str-empty? "string"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-nth"),
         Expression::make_function(
             builtin_str_nth,
-            "Usage: (str-nth n string) -> char
+            r#"Usage: (str-nth n string) -> char
 
 Get the nth char of a string.
 
 Section: string
 
 Example:
-(test::assert-equal #\\a (str-nth 2 \"stau\"))
-(test::assert-equal #\\s (str-nth 0 \"stau\"))
-(test::assert-equal #\\u (str-nth 3 \"stau\"))
-",
+(test::assert-equal #\a (str-nth 2 "stau"))
+(test::assert-equal #\s (str-nth 0 "stau"))
+(test::assert-equal #\u (str-nth 3 "stau"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-lower"),
         Expression::make_function(
             builtin_str_lower,
-            "Usage: (str-lower string) -> string
+            r#"Usage: (str-lower string) -> string
 
 Get all lower case string from a string.
 
 Section: string
 
 Example:
-(test::assert-equal \"stau\" (str-lower \"STAU\"))
-(test::assert-equal \"stau\" (str-lower \"stau\"))
-(test::assert-equal \"stau\" (str-lower \"Stau\"))
-(test::assert-equal \"stau\" (str-lower \"StaU\"))
-(test::assert-equal \"stau\" (str-lower \"sTaU\"))
-",
+(test::assert-equal "stau" (str-lower "STAU"))
+(test::assert-equal "stau" (str-lower "stau"))
+(test::assert-equal "stau" (str-lower "Stau"))
+(test::assert-equal "stau" (str-lower "StaU"))
+(test::assert-equal "stau" (str-lower "sTaU"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-upper"),
         Expression::make_function(
             builtin_str_upper,
-            "Usage: (str-upper string) -> string
+            r#"Usage: (str-upper string) -> string
 
 Get all upper case string from a string.
 
 Section: string
 
 Example:
-(test::assert-equal \"STAU\" (str-upper \"STAU\"))
-(test::assert-equal \"STAU\" (str-upper \"stau\"))
-(test::assert-equal \"STAU\" (str-upper \"Stau\"))
-(test::assert-equal \"STAU\" (str-upper \"StaU\"))
-(test::assert-equal \"STAU\" (str-upper \"sTaU\"))
-",
+(test::assert-equal "STAU" (str-upper "STAU"))
+(test::assert-equal "STAU" (str-upper "stau"))
+(test::assert-equal "STAU" (str-upper "Stau"))
+(test::assert-equal "STAU" (str-upper "StaU"))
+(test::assert-equal "STAU" (str-upper "sTaU"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-bytes"),
         Expression::make_function(
             builtin_str_bytes,
-            "Usage: (str-bytes string) -> int
+            r#"Usage: (str-bytes string) -> int
 
 Return number of bytes in a string (may be more then length).
 
@@ -1096,55 +1077,55 @@ Strings are utf8 so it chars and bytes may not be a one to one match.
 Section: string
 
 Example:
-(test::assert-equal 4 (str-bytes \"Stau\"))
-(test::assert-equal 0 (str-bytes \"\"))
+(test::assert-equal 4 (str-bytes "Stau"))
+(test::assert-equal 0 (str-bytes ""))
 ; Note 5 chars and 6 bytes because of the final char.
-(test::assert-equal 6 (str-bytes \"StauΣ\"))
-",
+(test::assert-equal 6 (str-bytes "StauΣ"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-starts-with"),
         Expression::make_function(
             builtin_str_starts_with,
-            "Usage: (str-starts-with pattern string) -> t/nil
+            r#"Usage: (str-starts-with pattern string) -> t/nil
 
 True if string start with pattern (both strings).
 
 Section: string
 
 Example:
-(test::assert-true (str-starts-with \"Stau\" \"Stausomething\"))
-(test::assert-false (str-starts-with \"StaU\" \"Stausomething\"))
-",
+(test::assert-true (str-starts-with "Stau" "Stausomething"))
+(test::assert-false (str-starts-with "StaU" "Stausomething"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-contains"),
         Expression::make_function(
             builtin_str_contains,
-            "Usage: (str-contains pattern string) -> t/nil
+            r#"Usage: (str-contains pattern string) -> t/nil
 
 True if string contains pattern (both strings).
 
 Section: string
 
 Example:
-(test::assert-true (str-contains \"Stau\" \"Stausomething\"))
-(test::assert-false (str-contains \"StaU\" \"Stausomething\"))
-(test::assert-true (str-contains \"some\" \"Stausomething\"))
-(test::assert-false (str-contains \"Some\" \"Stausomething\"))
-(test::assert-true (str-contains \"thing\" \"Stausomething\"))
-(test::assert-false (str-contains \"Thing\" \"Stausomething\"))
-(test::assert-true (str-contains \"someΣ\" \"StausomeΣthing\"))
-",
+(test::assert-true (str-contains "Stau" "Stausomething"))
+(test::assert-false (str-contains "StaU" "Stausomething"))
+(test::assert-true (str-contains "some" "Stausomething"))
+(test::assert-false (str-contains "Some" "Stausomething"))
+(test::assert-true (str-contains "thing" "Stausomething"))
+(test::assert-false (str-contains "Thing" "Stausomething"))
+(test::assert-true (str-contains "someΣ" "StausomeΣthing"))
+"#,
         ),
     );
     data.insert(
         interner.intern("str-push!"),
         Expression::make_function(
             builtin_str_push,
-            "Usage: (str-push! string arg0 ... argN) -> string
+            r#"Usage: (str-push! string arg0 ... argN) -> string
 
 Push the args (as strings) onto the string.  This is a destructive form.
 
@@ -1153,18 +1134,18 @@ Arguments will be turned into strings.  Returns the string it was given.
 Section: string
 
 Example:
-(test::assert-equal \"stringsome\" (str-push! (str \"string\") \"some\"))
-(def test-str-push (str \"def-string\"))
-(test::assert-equal \"def-stringsome\" (str-push! test-str-push \"some\"))
-(test::assert-equal \"def-stringsome\" test-str-push)
-",
+(test::assert-equal "stringsome" (str-push! (str "string") "some"))
+(def test-str-push (str "def-string"))
+(test::assert-equal "def-stringsome" (str-push! test-str-push "some"))
+(test::assert-equal "def-stringsome" test-str-push)
+"#,
         ),
     );
     data.insert(
         interner.intern("str-clear!"),
         Expression::make_function(
             builtin_str_clear,
-            "Usage: (str-clear! string) -> string
+            r#"Usage: (str-clear! string) -> string
 
 Clears a string.  This is a destructive form.
 
@@ -1173,39 +1154,39 @@ Returns the string it was given.
 Section: string
 
 Example:
-(test::assert-equal \"\" (str-clear! (str \"string\")))
-(def test-str-clear (str \"def-string\"))
-(test::assert-equal \"\" (str-clear! test-str-clear))
-(test::assert-equal \"\" test-str-clear)
-",
+(test::assert-equal "" (str-clear! (str "string")))
+(def test-str-clear (str "def-string"))
+(test::assert-equal "" (str-clear! test-str-clear))
+(test::assert-equal "" test-str-clear)
+"#,
         ),
     );
     data.insert(
         interner.intern("str-map"),
         Expression::make_function(
             builtin_str_map,
-            "Usage: (str-map lambda string) -> string
+            r#"Usage: (str-map lambda string) -> string
 
 Make a new string by applying lambda to each char.
 
 Section: string
 
 Example:
-(test::assert-equal \"XstringXstrX\" (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) \"xstringxstrx\"))
-(def test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) \"xstringxstrx\"))
-(test::assert-equal \"XstringXstrX\" test-str-map)
+(test::assert-equal "XstringXstrX" (str-map (fn (ch) (if (= #\x ch) #\X ch)) "xstringxstrx"))
+(def test-str-map (str-map (fn (ch) (if (= #\x ch) #\X ch)) "xstringxstrx"))
+(test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
-(def test-str-map (str-map (fn (ch) (if (= #\\x ch) #\\X ch)) (str \"xstringxstrx\")))
-(test::assert-equal \"XstringXstrX\" test-str-map)
+(def test-str-map (str-map (fn (ch) (if (= #\x ch) #\X ch)) (str "xstringxstrx")))
+(test::assert-equal "XstringXstrX" test-str-map)
 (test::assert-true (string? test-str-map))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("str-iter-start"),
         Expression::make_function(
             builtin_str_iter_start,
-            "Usage: (str-iter-start string) -> string
+            r#"Usage: (str-iter-start string) -> string
 
 Starts or resets the iterator over a string.  Returns the input string with it's
 iteration start created and at the first position.  Using the str-iter-* functions
@@ -1215,34 +1196,34 @@ a fixed size so direct indexing is very inefficient).
 Section: string
 
 Example:
-(def test-iter-start \"test\")
+(def test-iter-start "test")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
-(test::assert-equal #\\e (str-iter-next! test-iter-start))
-(test::assert-equal #\\s (str-iter-next! test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
+(test::assert-equal #\e (str-iter-next! test-iter-start))
+(test::assert-equal #\s (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
-(test::assert-equal #\\e (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
+(test::assert-equal #\e (str-iter-next! test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
-(test::assert-equal #\\e (str-iter-next! test-iter-start))
-(test::assert-equal #\\s (str-iter-next! test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
+(test::assert-equal #\e (str-iter-next! test-iter-start))
+(test::assert-equal #\s (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("str-iter-next!"),
         Expression::make_function(
             builtin_str_iter_next,
-            "Usage: (str-iter-next! string) -> char
+            r#"Usage: (str-iter-next! string) -> char
 
 Returns the next char in the iterator for string.  Returns nil if iteration
 is done.
@@ -1250,26 +1231,26 @@ is done.
 Section: string
 
 Example:
-(def test-iter-start \"y̆ΛλΣσ\")
+(def test-iter-start "y̆ΛλΣσ")
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
 (def test-iter-one (str-iter-next! test-iter-start))
-(test::assert-equal #\\y̆ test-iter-one)
-(test::assert-true (= #\\y̆ test-iter-one))
-(test::assert-false (= #\\y test-iter-one))
-(test::assert-equal #\\Λ (str-iter-next! test-iter-start))
-(test::assert-equal #\\λ (str-iter-next! test-iter-start))
-(test::assert-equal #\\Σ (str-iter-next! test-iter-start))
-(test::assert-equal #\\σ (str-iter-next! test-iter-start))
+(test::assert-equal #\y̆ test-iter-one)
+(test::assert-true (= #\y̆ test-iter-one))
+(test::assert-false (= #\y test-iter-one))
+(test::assert-equal #\Λ (str-iter-next! test-iter-start))
+(test::assert-equal #\λ (str-iter-next! test-iter-start))
+(test::assert-equal #\Σ (str-iter-next! test-iter-start))
+(test::assert-equal #\σ (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("str-iter-peek"),
         Expression::make_function(
             builtin_str_iter_peek,
-            "Usage: (str-iter-peek string) -> char
+            r#"Usage: (str-iter-peek string) -> char
 
 Returns the char that next will return in the iterator for string.  Returns nil if iteration
 is done.  Does not advance the iterator.
@@ -1277,76 +1258,59 @@ is done.  Does not advance the iterator.
 Section: string
 
 Example:
-(def test-iter-start \"y̆ΛλΣσ\")
+(def test-iter-start "y̆ΛλΣσ")
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
 (def test-iter-one (str-iter-next! test-iter-start))
-(test::assert-equal #\\y̆ test-iter-one)
-(test::assert-true (= #\\y̆ test-iter-one))
-(test::assert-false (= #\\y test-iter-one))
-(test::assert-equal #\\Λ (str-iter-peek test-iter-start))
-(test::assert-equal #\\Λ (str-iter-next! test-iter-start))
-(test::assert-equal #\\λ (str-iter-peek test-iter-start))
-(test::assert-equal #\\λ (str-iter-next! test-iter-start))
-(test::assert-equal #\\Σ (str-iter-peek test-iter-start))
-(test::assert-equal #\\Σ (str-iter-next! test-iter-start))
-(test::assert-equal #\\σ (str-iter-peek test-iter-start))
-(test::assert-equal #\\σ (str-iter-next! test-iter-start))
+(test::assert-equal #\y̆ test-iter-one)
+(test::assert-true (= #\y̆ test-iter-one))
+(test::assert-false (= #\y test-iter-one))
+(test::assert-equal #\Λ (str-iter-peek test-iter-start))
+(test::assert-equal #\Λ (str-iter-next! test-iter-start))
+(test::assert-equal #\λ (str-iter-peek test-iter-start))
+(test::assert-equal #\λ (str-iter-next! test-iter-start))
+(test::assert-equal #\Σ (str-iter-peek test-iter-start))
+(test::assert-equal #\Σ (str-iter-next! test-iter-start))
+(test::assert-equal #\σ (str-iter-peek test-iter-start))
+(test::assert-equal #\σ (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
-",
+"#,
         ),
     );
     data.insert(
         interner.intern("str-iter-empty?"),
         Expression::make_function(
             builtin_str_iter_empty,
-            "Usage: (str-iter-empty? string) -> t/nil
+            r#"Usage: (str-iter-empty? string) -> t/nil
 
 Returns true if the iterator for the string is empty or finished.
 
 Section: string
 
 Example:
-(def test-iter-start \"test\")
+(def test-iter-start "test")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
-(test::assert-equal #\\e (str-iter-next! test-iter-start))
-(test::assert-equal #\\s (str-iter-next! test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
+(test::assert-equal #\e (str-iter-next! test-iter-start))
+(test::assert-equal #\s (str-iter-next! test-iter-start))
+(test::assert-equal #\t (str-iter-next! test-iter-start))
 (test::assert-true (str-iter-empty? test-iter-start))
 
-(def test-iter-start \"test\")
+(def test-iter-start "test")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
-(test::assert-equal #\\t (str-iter-next! test-iter-start))
-(test::assert-equal #\\e (str-iter-next! test-iter-start))
-(str-push! test-iter-start \"one\")
+(test::assert-equal #\t (str-iter-next! test-iter-start))
+(test::assert-equal #\e (str-iter-next! test-iter-start))
+(str-push! test-iter-start "one")
 (test::assert-true (str-iter-empty? test-iter-start))
 (str-iter-start test-iter-start)
 (test::assert-false (str-iter-empty? test-iter-start))
 (str-clear! test-iter-start)
 (test::assert-true (str-iter-empty? test-iter-start))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("str-ignore-expand"),
-        Expression::make_function(
-            builtin_str_ignore_expand,
-            "Usage: (str-ignore-expand exp0 ... expN) -> [final expression]
-
-Like do but any strings in the form will not be expanded.
-
-Section: string
-
-Example:
-(export 'TST-IGNORE \"TST\")
-(test::assert-equal \"some TST stuff\" \"some $TST-IGNORE stuff\")
-(test::assert-equal \"some \\$TST-IGNORE stuff\" (str-ignore-expand \"some $TST-IGNORE stuff\"))
-",
+"#,
         ),
     );
 
@@ -1354,55 +1318,55 @@ Example:
         interner.intern("char-lower"),
         Expression::make_function(
             builtin_char_lower,
-            "Usage: (char-lower char) -> char
+            r#"Usage: (char-lower char) -> char
 
 Get lower case (utf) character for a character.
 
 Section: char
 
 Example:
-(test::assert-equal #\\a (char-lower #\\A))
-(test::assert-equal #\\a (char-lower #\\a))
-(test::assert-not-equal #\\a (char-lower #\\Z))
-(test::assert-equal #\\λ (char-lower #\\Λ))
-(test::assert-equal #\\λ (char-lower #\\λ))
-",
+(test::assert-equal #\a (char-lower #\A))
+(test::assert-equal #\a (char-lower #\a))
+(test::assert-not-equal #\a (char-lower #\Z))
+(test::assert-equal #\λ (char-lower #\Λ))
+(test::assert-equal #\λ (char-lower #\λ))
+"#,
         ),
     );
     data.insert(
         interner.intern("char-upper"),
         Expression::make_function(
             builtin_char_upper,
-            "Usage: (char-upper char) -> char
+            r#"Usage: (char-upper char) -> char
 
 Get upper case (utf) character for a character.
 
 Section: char
 
 Example:
-(test::assert-equal #\\A (char-upper #\\A))
-(test::assert-equal #\\A (char-upper #\\a))
-(test::assert-not-equal #\\A (char-upper #\\Z))
-(test::assert-equal #\\Λ (char-upper #\\λ))
-(test::assert-equal #\\Λ (char-upper #\\Λ))
-",
+(test::assert-equal #\A (char-upper #\A))
+(test::assert-equal #\A (char-upper #\a))
+(test::assert-not-equal #\A (char-upper #\Z))
+(test::assert-equal #\Λ (char-upper #\λ))
+(test::assert-equal #\Λ (char-upper #\Λ))
+"#,
         ),
     );
     data.insert(
         interner.intern("char-whitespace?"),
         Expression::make_function(
             builtin_char_is_whitespace,
-            "Usage: (char-whitespace? char) -> t/nil
+            r#"Usage: (char-whitespace? char) -> t/nil
 
 Returns true if a character is whitespace, false/nil otherwise.
 
 Section: char
 
 Example:
-(test::assert-true (char-whitespace? #\\ ))
-(test::assert-true (char-whitespace? #\\tab))
-(test::assert-false (char-whitespace? #\\s))
-",
+(test::assert-true (char-whitespace? #\ ))
+(test::assert-true (char-whitespace? #\tab))
+(test::assert-false (char-whitespace? #\s))
+"#,
         ),
     );
 }

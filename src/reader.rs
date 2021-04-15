@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::builtins_hashmap::cow_to_ref;
 use crate::environment::*;
 use crate::eval::eval;
 use crate::types::*;
@@ -22,6 +21,41 @@ impl Error for ReadError {}
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.reason)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReaderState {
+    pub line: usize,
+    pub column: usize,
+    pub file_name: Option<&'static str>,
+    pub clear_state: bool,
+    pub in_read: bool,
+}
+
+impl ReaderState {
+    pub fn new() -> Self {
+        ReaderState::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.file_name = None;
+        self.column = 0;
+        self.line = 1;
+        self.clear_state = false;
+        self.in_read = false;
+    }
+}
+
+impl Default for ReaderState {
+    fn default() -> Self {
+        ReaderState {
+            file_name: None,
+            column: 0,
+            line: 1,
+            clear_state: false,
+            in_read: false,
+        }
     }
 }
 
@@ -117,8 +151,8 @@ fn consume_block_comment(chars: &mut CharIter, reader_state: &mut ReaderState) {
     }
 }
 
-fn end_symbol(ch: &str, reader_state: &mut ReaderState) -> bool {
-    if is_whitespace(ch) || (reader_state.end_ch.is_some() && ch == reader_state.end_ch.unwrap()) {
+fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Expression>) -> bool {
+    if is_whitespace(ch) || read_table_term.contains_key(ch) {
         true
     } else {
         matches!(ch, "(" | ")" | "#" | "\"" | "," | "'" | "`")
@@ -160,17 +194,21 @@ fn do_char(
         if chars.peek().is_some() {
             match &*ch {
                 "u" => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
-                    let char_str = format!("{}", read_utf_scalar(&mut chars, reader_state,)?);
+                    let char_str = format!(
+                        "{}",
+                        read_utf_scalar(&mut chars, &mut environment.reader_state)?
+                    );
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 "x" => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
-                    let char_str = format!("{}", escape_to_char(&mut chars, reader_state,)?);
+                    let char_str = format!(
+                        "{}",
+                        escape_to_char(&mut chars, &mut environment.reader_state)?
+                    );
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 _ => {
-                    let reader_state = &mut environment.reader_state.as_mut().unwrap();
+                    let reader_state = &mut environment.reader_state;
                     let reason = format!(
                         "Not a valid char [{}]: line {}, col: {}",
                         symbol, reader_state.line, reader_state.column
@@ -184,7 +222,7 @@ fn do_char(
             meta,
         ))
     } else {
-        let reader_state = &mut environment.reader_state.as_mut().unwrap();
+        let reader_state = &mut environment.reader_state;
         let reason = format!(
             "Not a valid char [{}]: line {}, col: {}",
             symbol, reader_state.line, reader_state.column
@@ -213,8 +251,7 @@ fn read_utf_scalar(
     let mut has_bracket = false;
     let mut char_u32 = 0;
     let mut nibbles = 0;
-    let mut out_ch = chars.next();
-    while let Some(ch) = out_ch {
+    while let Some(ch) = chars.next() {
         if ch == "\n" {
             reader_state.line += 1;
             reader_state.column = 0;
@@ -230,7 +267,6 @@ fn read_utf_scalar(
         }
         if first && ch == "{" {
             has_bracket = true;
-            out_ch = chars.next();
             first = false;
             continue;
         }
@@ -251,7 +287,6 @@ fn read_utf_scalar(
                 return finish(char_u32);
             }
         }
-        out_ch = chars.next();
     }
     if has_bracket {
         Err(ReadError {
@@ -262,63 +297,155 @@ fn read_utf_scalar(
     }
 }
 
+fn wrap_trim(exp: Expression, meta: Option<ExpMeta>) -> Expression {
+    let trim_list = vec![
+        make_exp(ExpEnum::Symbol("str-trim", SymLoc::None), meta),
+        exp,
+    ];
+    Expression::with_list_meta(trim_list, None)
+}
+
 fn read_string(
-    chars: &mut CharIter,
+    environment: &mut Environment,
+    mut chars: CharIter,
     symbol: &mut String,
-    reader_state: &mut ReaderState,
-) -> Result<Expression, ReadError> {
+    read_table: &HashMap<&'static str, Expression>,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     symbol.clear();
-    let mut last_ch = Cow::Borrowed(" ");
-    let mut skip_last_ch = false;
+    let mut last_ch_escape = false;
+    let mut res_list: Option<Vec<Expression>> = None;
     let meta = get_meta(
-        reader_state.file_name,
-        reader_state.line,
-        reader_state.column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
 
-    let mut out_ch = chars.next();
-    while let Some(ch) = out_ch {
+    while let Some(ch) = chars.next() {
         if ch == "\n" {
-            reader_state.line += 1;
-            reader_state.column = 0;
+            environment.reader_state.line += 1;
+            environment.reader_state.column = 0;
         } else {
-            reader_state.column += 1;
+            environment.reader_state.column += 1;
         }
-        if last_ch == "\\" {
-            match &*ch {
-                "n" => symbol.push('\n'),
-                "r" => symbol.push('\r'),
-                "t" => symbol.push('\t'),
-                "\"" => symbol.push('"'),
-                "x" => symbol.push(escape_to_char(chars, reader_state)?),
-                "\\" => {
-                    skip_last_ch = true;
-                    symbol.push('\\');
-                }
-                "u" => symbol.push(read_utf_scalar(chars, reader_state)?),
-                _ => {
-                    symbol.push('\\');
-                    symbol.push_str(&ch);
+        if last_ch_escape {
+            let mut do_match = true;
+            if read_table.contains_key(&*ch) {
+                do_match = false;
+                symbol.push_str(&ch);
+            }
+            if do_match {
+                match &*ch {
+                    "n" => symbol.push('\n'),
+                    "r" => symbol.push('\r'),
+                    "t" => symbol.push('\t'),
+                    "\"" => symbol.push('"'),
+                    "x" => {
+                        let res = escape_to_char(&mut chars, &mut environment.reader_state);
+                        // ? seems to confuse the borrow the checker here.
+                        let res = if let Err(e) = res {
+                            return Err((e, chars));
+                        } else {
+                            res.unwrap()
+                        };
+                        symbol.push(res);
+                    }
+                    "\\" => {
+                        symbol.push('\\');
+                    }
+                    "u" => {
+                        let res = read_utf_scalar(&mut chars, &mut environment.reader_state);
+                        // ? seems to confuse the borrow the checker here.
+                        let res = if let Err(e) = res {
+                            return Err((e, chars));
+                        } else {
+                            res.unwrap()
+                        };
+                        symbol.push(res);
+                    }
+                    _ => {
+                        symbol.push('\\');
+                        symbol.push_str(&ch);
+                    }
                 }
             }
+            last_ch_escape = false;
         } else {
             if ch == "\"" {
                 break;
             }
-            if ch != "\\" {
-                symbol.push_str(&ch);
+            let mut proc_ch = true;
+            if read_table.contains_key(&*ch) {
+                proc_ch = false;
+                if let ExpEnum::Symbol(s, _) = read_table.get(&*ch).unwrap().get().data {
+                    let res = prep_reader_macro(environment, chars, s, &ch);
+                    match res {
+                        Ok((None, ichars)) => {
+                            chars = ichars;
+                            continue;
+                        }
+                        Ok((Some(exp), ichars)) => {
+                            chars = ichars;
+                            let exp_d = exp.get();
+                            match &exp_d.data {
+                                ExpEnum::String(s, _) => symbol.push_str(s),
+                                ExpEnum::Char(s) => symbol.push_str(s),
+                                ExpEnum::CodePoint(c) => symbol.push(*c),
+                                _ => {
+                                    if let Some(l) = res_list.as_mut() {
+                                        drop(exp_d);
+                                        if !symbol.is_empty() {
+                                            l.push(make_exp(
+                                                ExpEnum::String(symbol.clone().into(), None),
+                                                meta,
+                                            ));
+                                        }
+                                        symbol.clear();
+                                        l.push(wrap_trim(exp, meta));
+                                    } else {
+                                        drop(exp_d);
+                                        let mut list = vec![make_exp(
+                                            ExpEnum::Symbol("str", SymLoc::None),
+                                            meta,
+                                        )];
+                                        if !symbol.is_empty() {
+                                            list.push(make_exp(
+                                                ExpEnum::String(symbol.clone().into(), None),
+                                                meta,
+                                            ));
+                                        }
+                                        symbol.clear();
+                                        list.push(wrap_trim(exp, meta));
+                                        res_list = Some(list);
+                                    }
+                                }
+                            }
+                        }
+                        Err((err, ichars)) => return Err((err, ichars)),
+                    }
+                }
+            }
+            if proc_ch {
+                if ch != "\\" {
+                    last_ch_escape = false;
+                    symbol.push_str(&ch);
+                } else {
+                    last_ch_escape = true;
+                }
             }
         }
-
-        last_ch = if skip_last_ch {
-            skip_last_ch = false;
-            Cow::Borrowed(" ")
-        } else {
-            ch
-        };
-        out_ch = chars.next();
     }
-    Ok(make_exp(ExpEnum::String(symbol.clone().into(), None), meta))
+    if let Some(mut list) = res_list.take() {
+        if !symbol.is_empty() {
+            list.push(make_exp(ExpEnum::String(symbol.clone().into(), None), meta));
+        }
+        let fl = Expression::with_list_meta(list, meta);
+        Ok((fl, chars))
+    } else {
+        Ok((
+            make_exp(ExpEnum::String(symbol.clone().into(), None), meta),
+            chars,
+        ))
+    }
 }
 
 fn do_atom(
@@ -367,6 +494,7 @@ fn read_symbol(
     reader_state: &mut ReaderState,
     for_ch: bool,
     skip_underscore: bool,
+    read_table_term: &HashMap<&'static str, Expression>,
 ) -> bool {
     fn maybe_number(ch: &str, has_e: &mut bool, last_e: &mut bool, has_decimal: &mut bool) -> bool {
         if ch == "." {
@@ -397,7 +525,7 @@ fn read_symbol(
     let mut has_e = false;
     let mut last_e = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(&ch, reader_state) && !for_ch {
+        if end_symbol(&ch, read_table_term) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };
@@ -432,7 +560,7 @@ fn read_symbol(
             }
             buffer.push_str(&next_ch);
             push_next = false;
-        } else if end_symbol(peek_ch, reader_state) {
+        } else if end_symbol(peek_ch, read_table_term) {
             break;
         }
         next_ch = chars.next();
@@ -458,7 +586,6 @@ fn call_reader_macro(
     name: &str,
     stream: Expression,
     ch: &str,
-    end_ch: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
     if let Some(exp) = lookup_expression(environment, name) {
         let exp = match &exp.get().data {
@@ -477,26 +604,19 @@ fn call_reader_macro(
                 let reason = format!(
                     "Error calling reader macro (not a lambda) {}, {} : line {}, col: {}",
                     name,
-                    environment
-                        .reader_state
-                        .as_ref()
-                        .unwrap()
-                        .file_name
-                        .unwrap_or(""),
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column
+                    environment.reader_state.file_name.unwrap_or(""),
+                    environment.reader_state.line,
+                    environment.reader_state.column
                 );
                 return Err(ReadError { reason });
             }
         };
-        let old_end_ch = environment.reader_state.as_ref().unwrap().end_ch;
-        environment.reader_state.as_mut().unwrap().end_ch = end_ch;
         let res = match eval(environment, exp) {
             Ok(exp) => {
                 let meta = get_meta(
-                    environment.reader_state.as_ref().unwrap().file_name,
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column,
+                    environment.reader_state.file_name,
+                    environment.reader_state.line,
+                    environment.reader_state.column,
                 );
                 exp.get_mut().meta = meta;
                 Ok(exp)
@@ -506,32 +626,21 @@ fn call_reader_macro(
                     "Error in reader {}: {} ({} : line {}, col: {})",
                     name,
                     err,
-                    environment
-                        .reader_state
-                        .as_ref()
-                        .unwrap()
-                        .file_name
-                        .unwrap_or(""),
-                    environment.reader_state.as_ref().unwrap().line,
-                    environment.reader_state.as_ref().unwrap().column
+                    environment.reader_state.file_name.unwrap_or(""),
+                    environment.reader_state.line,
+                    environment.reader_state.column
                 );
                 Err(ReadError { reason })
             }
         };
-        environment.reader_state.as_mut().unwrap().end_ch = old_end_ch;
         res
     } else {
         let reason = format!(
             "Error calling reader macro (not found) {}, {} : line {}, col: {}",
             name,
-            environment
-                .reader_state
-                .as_ref()
-                .unwrap()
-                .file_name
-                .unwrap_or(""),
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column
+            environment.reader_state.file_name.unwrap_or(""),
+            environment.reader_state.line,
+            environment.reader_state.column
         );
         Err(ReadError { reason })
     }
@@ -542,12 +651,22 @@ fn prep_reader_macro(
     chars: CharIter, // Pass ownership in and out for reader macro support.
     name: &str,
     ch: &str,
-    end_ch: Option<&'static str>,
 ) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
     fn recover_chars(stream_exp: &Expression) -> CharIter {
         let mut exp_d = stream_exp.get_mut();
         if let ExpEnum::String(_, chars_iter) = &mut exp_d.data {
-            chars_iter.take().unwrap()
+            if let Some(ci) = chars_iter.take() {
+                ci
+            } else {
+                // Somehow the iterator was lost, make a new one since have to
+                // return one (empty).  XXX Maybe figure how this happens.
+                // Can be triggered by $(echo $((ls $xxx)
+                Box::new(
+                    UnicodeSegmentation::graphemes("", true)
+                        .map(|s| Cow::Borrowed(s))
+                        .peekable(),
+                )
+            }
         } else {
             panic!("read: something happened to char iterator in reader macro!");
         }
@@ -563,8 +682,18 @@ fn prep_reader_macro(
             exp_d.meta_tags = Some(tags);
         }
     }
-    let rm = match call_reader_macro(environment, name, stream_exp.clone(), ch, end_ch) {
-        Ok(rm) => rm,
+    let rm = match call_reader_macro(environment, name, stream_exp.clone(), ch) {
+        Ok(rm) => {
+            if let ExpEnum::Values(vlist) = &rm.get().data {
+                if vlist.is_empty() {
+                    None
+                } else {
+                    Some(vlist[0].clone())
+                }
+            } else {
+                Some(rm.clone())
+            }
+        }
         Err(e) => {
             let chars = recover_chars(&stream_exp);
             return Err((e, chars));
@@ -575,7 +704,7 @@ fn prep_reader_macro(
     let mut exp_d = stream_exp.get_mut();
     exp_d.data.replace(ExpEnum::Nil);
     exp_d.meta_tags = None;
-    Ok((Some(rm), res))
+    Ok((rm, res))
 }
 
 fn consume_whitespace(environment: &mut Environment, chars: &mut CharIter) {
@@ -584,10 +713,10 @@ fn consume_whitespace(environment: &mut Environment, chars: &mut CharIter) {
     while ch.is_some() && is_whitespace(ch.unwrap()) {
         if let Some(ch) = ch {
             if *ch == "\n" {
-                environment.reader_state.as_mut().unwrap().line += 1;
-                environment.reader_state.as_mut().unwrap().column = 0;
+                environment.reader_state.line += 1;
+                environment.reader_state.column = 0;
             } else {
-                environment.reader_state.as_mut().unwrap().column += 1;
+                environment.reader_state.column += 1;
             }
             chars.next();
         }
@@ -601,14 +730,16 @@ fn read_num_radix(
     buffer: &mut String,
     radix: u32,
     meta: Option<ExpMeta>,
+    read_table_term: &HashMap<&'static str, Expression>,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     buffer.clear();
     read_symbol(
         buffer,
         &mut chars,
-        &mut environment.reader_state.as_mut().unwrap(),
+        &mut environment.reader_state,
         true,
         true,
+        read_table_term,
     );
     match i64::from_str_radix(buffer, radix) {
         Ok(n) => Ok((make_exp(ExpEnum::Int(n), meta), chars)),
@@ -629,9 +760,9 @@ fn read_vector(
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     let mut v: Vec<Expression> = Vec::new();
     let meta = get_meta(
-        environment.reader_state.as_ref().unwrap().file_name,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
     let mut cont = true;
 
@@ -708,9 +839,9 @@ fn read_list(
     let mut head = ExpEnum::Nil;
     let mut tail = ExpEnum::Nil;
     let meta = get_meta(
-        environment.reader_state.as_ref().unwrap().file_name,
-        environment.reader_state.as_ref().unwrap().line,
-        environment.reader_state.as_ref().unwrap().column,
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
     );
     let mut cont = true;
     let mut dot = false;
@@ -745,7 +876,7 @@ fn read_list(
                         ichars,
                     ));
                 }
-                head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                head = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, meta));
                 tail = head.clone();
             } else if dot {
                 if is_unquote_splice(&exp) {
@@ -783,7 +914,7 @@ fn read_list(
                     cdr.meta = exp.get().meta;
                 }
             } else {
-                let new_tail = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, None));
+                let new_tail = ExpEnum::Pair(exp.clone(), make_exp(ExpEnum::Nil, meta));
                 if let ExpEnum::Pair(_, cdr) = &tail {
                     cdr.get_mut().data = new_tail.clone();
                 }
@@ -814,6 +945,26 @@ fn read_list(
     ))
 }
 
+macro_rules! get_read_table {
+    ($environment:expr, $name:expr, $table_out:expr, $table_d:expr, $empty_table:expr) => {{
+        $table_out = lookup_expression(&$environment, $name);
+        if let Some(read_table) = &$table_out {
+            $table_d = read_table.get();
+            if let ExpEnum::HashMap(map) = &$table_d.data {
+                map
+            } else {
+                // This should not happen unless the *read-table* was removed...
+                $empty_table = HashMap::new();
+                &$empty_table
+            }
+        } else {
+            // This should not happen unless *string-read-table* was removed...
+            $empty_table = HashMap::new();
+            &$empty_table
+        }
+    }};
+}
+
 fn read_inner(
     environment: &mut Environment,
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
@@ -821,65 +972,73 @@ fn read_inner(
     in_back_quote: bool,
     return_close_paren: bool,
 ) -> Result<(Option<Expression>, CharIter), (ReadError, CharIter)> {
-    if environment.reader_state.is_none() {
-        panic!("tried to read with no state!");
-    }
-    let read_table = lookup_expression(&environment, "*read-table*");
-    let mut read_table_chars: HashSet<&'static str> = HashSet::new();
-    if let Some(read_table) = &read_table {
-        if let ExpEnum::HashMap(map) = &read_table.get().data {
-            for key in map.keys() {
-                read_table_chars.insert(key);
-            }
-        }
-    }
-    let read_table_end_char = lookup_expression(&environment, "*read-table-end-char*");
+    let read_table_out;
+    let read_table_d;
+    let empty_read_table;
+    let read_table = get_read_table!(
+        environment,
+        "*read-table*",
+        read_table_out,
+        read_table_d,
+        empty_read_table
+    );
+    let str_read_table_out;
+    let str_read_table_d;
+    let str_empty_read_table;
+    let str_read_table = get_read_table!(
+        environment,
+        "*string-read-table*",
+        str_read_table_out,
+        str_read_table_d,
+        str_empty_read_table
+    );
+    let term_read_table_out;
+    let term_read_table_d;
+    let term_empty_read_table;
+    let read_table_term = get_read_table!(
+        environment,
+        "*read-table-terminal*",
+        term_read_table_out,
+        term_read_table_d,
+        term_empty_read_table
+    );
     consume_whitespace(environment, &mut chars);
 
     while let Some((ch, peek_ch)) = next2(&mut chars) {
-        environment.reader_state.as_mut().unwrap().column += 1;
-        if read_table_chars.contains(&*ch) {
-            let mut end_ch = None;
-            if let Some(read_table_end_char) = &read_table_end_char {
-                if let ExpEnum::HashMap(map) = &read_table_end_char.get().data {
-                    if map.contains_key(&*ch) {
-                        if let ExpEnum::Char(ch) = &map.get(&*ch).unwrap().get().data {
-                            end_ch = Some(cow_to_ref(environment, &ch));
-                        }
+        environment.reader_state.column += 1;
+        if read_table.contains_key(&*ch) {
+            if let ExpEnum::Symbol(s, _) = read_table.get(&*ch).unwrap().get().data {
+                let res = prep_reader_macro(environment, chars, s, &ch);
+                match res {
+                    Ok((None, ichars)) => {
+                        chars = ichars;
+                        continue;
                     }
+                    _ => return res,
                 }
             }
-            if let Some(read_table) = &read_table {
-                if let ExpEnum::HashMap(map) = &read_table.get().data {
-                    if map.contains_key(&*ch) {
-                        if let ExpEnum::Symbol(s, _) = map.get(&*ch).unwrap().get().data {
-                            let res = prep_reader_macro(environment, chars, s, &ch, end_ch);
-                            match res {
-                                Ok((None, ichars)) => {
-                                    chars = ichars;
-                                    continue;
-                                }
-                                _ => return res,
-                            }
-                        }
+        } else if read_table_term.contains_key(&*ch) {
+            if let ExpEnum::Symbol(s, _) = read_table_term.get(&*ch).unwrap().get().data {
+                let res = prep_reader_macro(environment, chars, s, &ch);
+                match res {
+                    Ok((None, ichars)) => {
+                        chars = ichars;
+                        continue;
                     }
+                    _ => return res,
                 }
             }
         }
         let meta = get_meta(
-            environment.reader_state.as_ref().unwrap().file_name,
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column,
+            environment.reader_state.file_name,
+            environment.reader_state.line,
+            environment.reader_state.column,
         );
         match &*ch {
             "\"" => {
-                match read_string(
-                    &mut chars,
-                    buffer,
-                    &mut environment.reader_state.as_mut().unwrap(),
-                ) {
-                    Ok(s) => return Ok((Some(s), chars)),
-                    Err(e) => return Err((e, chars)),
+                match read_string(environment, chars, buffer, str_read_table) {
+                    Ok((s, ichars)) => return Ok((Some(s), ichars)),
+                    Err((e, ichars)) => return Err((e, ichars)),
                 };
             }
             "'" => match read_inner(environment, chars, buffer, in_back_quote, false) {
@@ -990,18 +1149,16 @@ fn read_inner(
             "#" => {
                 chars.next();
                 match &*peek_ch {
-                    "|" => consume_block_comment(
-                        &mut chars,
-                        &mut environment.reader_state.as_mut().unwrap(),
-                    ),
+                    "|" => consume_block_comment(&mut chars, &mut environment.reader_state),
                     "\\" => {
                         buffer.clear();
                         read_symbol(
                             buffer,
                             &mut chars,
-                            &mut environment.reader_state.as_mut().unwrap(),
+                            &mut environment.reader_state,
                             true,
                             false,
+                            read_table_term,
                         );
                         match do_char(environment, buffer, meta) {
                             Ok(ch) => return Ok((Some(ch), chars)),
@@ -1011,8 +1168,7 @@ fn read_inner(
                     "<" => {
                         let reason = format!(
                             "Found an unreadable token: line {}, col: {}",
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column
+                            environment.reader_state.line, environment.reader_state.column
                         );
                         return Err((ReadError { reason }, chars));
                     }
@@ -1024,35 +1180,30 @@ fn read_inner(
                         return Ok((Some(Expression::alloc_data(ExpEnum::True)), chars));
                     }
                     "." => {
-                        return prep_reader_macro(
-                            environment,
-                            chars,
-                            "reader-macro-dot",
-                            ".",
-                            None,
-                        );
+                        return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
                     }
                     // Read an octal int
                     "o" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 8, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 8, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a hex int
                     "x" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 16, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 16, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     // Read a binary int
                     "b" => {
-                        let (exp, chars) = read_num_radix(environment, chars, buffer, 2, meta)?;
+                        let (exp, chars) =
+                            read_num_radix(environment, chars, buffer, 2, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
-                            peek_ch,
-                            environment.reader_state.as_ref().unwrap().line,
-                            environment.reader_state.as_ref().unwrap().column
+                            peek_ch, environment.reader_state.line, environment.reader_state.column
                         );
                         return Err((ReadError { reason }, chars));
                     }
@@ -1069,16 +1220,17 @@ fn read_inner(
                         chars,
                     ));
                 } else {
-                    return Err((
-                        ReadError {
-                            reason: "Unexpected `)`".to_string(),
-                        },
-                        chars,
-                    ));
+                    let reason = format!(
+                        "Unexpected ')': {} line {} col {}",
+                        environment.reader_state.file_name.unwrap_or(""),
+                        environment.reader_state.line,
+                        environment.reader_state.column
+                    );
+                    return Err((ReadError { reason }, chars));
                 }
             }
             ";" => {
-                consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
+                consume_line_comment(&mut chars, &mut environment.reader_state);
             }
             _ => {
                 buffer.clear();
@@ -1086,9 +1238,10 @@ fn read_inner(
                 let is_number = read_symbol(
                     buffer,
                     &mut chars,
-                    &mut environment.reader_state.as_mut().unwrap(),
+                    &mut environment.reader_state,
                     false,
                     false,
+                    read_table_term,
                 );
                 return Ok((Some(do_atom(environment, buffer, is_number, meta)), chars));
             }
@@ -1105,17 +1258,10 @@ fn read2(
     file_name: Option<&'static str>,
     list_only: bool,
 ) -> Result<Expression, ReadError> {
-    let clear_state = if environment.reader_state.is_none() {
-        environment.reader_state = Some(ReaderState {
-            file_name,
-            column: 0,
-            line: 1,
-            end_ch: None,
-        });
-        true
-    } else {
-        false
-    };
+    if environment.reader_state.clear_state {
+        environment.reader_state.clear();
+        environment.reader_state.file_name = file_name;
+    }
     let mut buffer = String::new();
     let mut exps = Vec::new();
 
@@ -1129,16 +1275,14 @@ fn read2(
     );
     if text.starts_with("#!") {
         // Work with shebanged scripts.
-        consume_line_comment(&mut chars, &mut environment.reader_state.as_mut().unwrap());
+        consume_line_comment(&mut chars, &mut environment.reader_state);
     }
     let mut cont = true;
     while cont {
         let (exp, ichars) = match read_inner(environment, chars, &mut buffer, false, false) {
             Ok(r) => r,
             Err((err, _)) => {
-                if clear_state {
-                    environment.reader_state = None;
-                }
+                environment.reader_state.clear_state = true;
                 return Err(err);
             }
         };
@@ -1150,20 +1294,15 @@ fn read2(
         chars = ichars;
     }
     if chars.next().is_some() {
-        if clear_state {
-            environment.reader_state = None;
-        }
+        environment.reader_state.clear_state = true;
         let reason = format!(
             "Premature end (to many ')'?) line: {}, column: {}",
-            environment.reader_state.as_ref().unwrap().line,
-            environment.reader_state.as_ref().unwrap().column
+            environment.reader_state.line, environment.reader_state.column
         );
         return Err(ReadError { reason });
     }
-    let exp_meta = get_meta(environment.reader_state.as_ref().unwrap().file_name, 0, 0);
-    if clear_state {
-        environment.reader_state = None;
-    }
+    let exp_meta = get_meta(environment.reader_state.file_name, 0, 0);
+    environment.reader_state.clear_state = true;
 
     if always_wrap {
         Ok(Expression::with_list_meta(exps, exp_meta))
@@ -1193,47 +1332,43 @@ fn read2(
     }
 }
 
+pub fn read_form_state(
+    environment: &mut Environment,
+    chars: CharIter,
+    clear_state: bool,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    let mut buffer = String::new();
+    let old_in_read = environment.reader_state.in_read;
+    let old_state = if clear_state {
+        let os = environment.reader_state.clone();
+        environment.reader_state.clear();
+        Some(os)
+    } else {
+        None
+    };
+    environment.reader_state.in_read = true;
+    let res = match read_inner(environment, chars, &mut buffer, false, false) {
+        Ok((Some(exp), ichars)) => Ok((exp, ichars)),
+        Ok((None, ichars)) => Err((
+            ReadError {
+                reason: "Empty value".to_string(),
+            },
+            ichars,
+        )),
+        Err((err, ichars)) => Err((err, ichars)),
+    };
+    environment.reader_state.in_read = old_in_read;
+    if let Some(old_state) = old_state {
+        environment.reader_state = old_state;
+    }
+    res
+}
+
 pub fn read_form(
     environment: &mut Environment,
     chars: CharIter,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    let clear_state = if environment.reader_state.is_none() {
-        environment.reader_state = Some(ReaderState {
-            file_name: None,
-            column: 0,
-            line: 1,
-            end_ch: None,
-        });
-        true
-    } else {
-        false
-    };
-    let mut buffer = String::new();
-    match read_inner(environment, chars, &mut buffer, false, false) {
-        Ok((Some(exp), ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
-            Ok((exp, ichars))
-        }
-        Ok((None, ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
-            Err((
-                ReadError {
-                    reason: "Empty value".to_string(),
-                },
-                ichars,
-            ))
-        }
-        Err((err, ichars)) => {
-            if clear_state {
-                environment.reader_state = None;
-            }
-            Err((err, ichars))
-        }
-    }
+    read_form_state(environment, chars, false)
 }
 
 pub fn read(
@@ -1247,13 +1382,13 @@ pub fn read(
 
 // Read the text but always wrap in an outer list even if text is one list.
 // Useful for loading scripts.
-pub fn read_list_wrap(
+/*pub fn read_list_wrap(
     environment: &mut Environment,
     text: &str,
     name: Option<&'static str>,
 ) -> Result<Expression, ReadError> {
     read2(environment, text, true, name, false)
-}
+}*/
 
 #[cfg(test)]
 mod tests {
@@ -1324,29 +1459,27 @@ mod tests {
         }
     }
 
-    fn tokenize_wrap(
-        environment: &mut Environment,
-        input: &str,
-        name: Option<&'static str>,
-    ) -> Vec<String> {
-        let exp = read_list_wrap(environment, input, name);
+    fn tokenize_wrap(environment: &mut Environment, input: &str) -> Vec<String> {
+        // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
+        // reference and iterator go away at the end of this function.
+        let ntext = unsafe { &*(input as *const str) };
+        let mut chars: CharIter = Box::new(
+            UnicodeSegmentation::graphemes(ntext, true)
+                .map(|s| Cow::Borrowed(s))
+                .peekable(),
+        );
         let mut tokens = Vec::new();
-        if let Ok(exp) = exp {
-            to_strs(&mut tokens, &exp);
-        } else {
-            assert!(false);
+        let mut token_exps = Vec::new();
+        while let Ok((exp, ichars)) = read_form(environment, chars) {
+            chars = ichars;
+            token_exps.push(exp);
         }
+        to_strs(&mut tokens, &Expression::with_list(token_exps));
         tokens
     }
 
     fn build_def_env() -> Environment {
-        let mut environment = build_default_environment();
-        environment.reader_state = Some(ReaderState {
-            line: 0,
-            column: 0,
-            file_name: None,
-            end_ch: None,
-        });
+        let environment = build_default_environment();
         environment
     }
 
@@ -1581,7 +1714,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut environment, "(1 2 3)", None);
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3)");
         assert!(tokens.len() == 7);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1598,7 +1731,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut environment, "1 2 3", None);
+        let tokens = tokenize_wrap(&mut environment, "1 2 3");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "Int:1");
@@ -1620,7 +1753,7 @@ mod tests {
         assert!(tokens[9] == "Int:6");
         assert!(tokens[10] == ")");
         assert!(tokens[11] == ")");
-        let tokens = tokenize_wrap(&mut environment, "(1 2 3) (4 5 6)", None);
+        let tokens = tokenize_wrap(&mut environment, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1645,7 +1778,7 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        let tokens = tokenize_wrap(&mut environment, "'(1 2 3)", None);
+        let tokens = tokenize_wrap(&mut environment, "'(1 2 3)");
         assert!(tokens.len() == 10);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1664,12 +1797,12 @@ mod tests {
         let tokens = tokenize(&mut environment, "()", None);
         assert!(tokens.len() == 1);
         assert!(tokens[0] == "nil");
-        let tokens = tokenize_wrap(&mut environment, "nil", None);
+        let tokens = tokenize_wrap(&mut environment, "nil");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");
         assert!(tokens[2] == ")");
-        let tokens = tokenize_wrap(&mut environment, "()", None);
+        let tokens = tokenize_wrap(&mut environment, "()");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");

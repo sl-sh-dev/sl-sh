@@ -145,7 +145,6 @@ pub fn read_stdin() -> i32 {
                 let ast = read(&mut environment, input, None, true);
                 match ast {
                     Ok(ast) => {
-                        environment.loose_symbols = true;
                         match eval(&mut environment, ast) {
                             Ok(exp) => {
                                 match &exp.get().data {
@@ -160,7 +159,6 @@ pub fn read_stdin() -> i32 {
                             }
                             Err(err) => eprintln!("{}", err),
                         }
-                        environment.loose_symbols = false;
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }

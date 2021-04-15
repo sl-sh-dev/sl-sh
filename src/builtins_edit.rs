@@ -194,9 +194,7 @@ fn get_color_closure(environment: &mut Environment) -> Option<ColorClosure> {
                 _ => return input.to_string(),
             };
             environment.save_exit_status = false; // Do not overwrite last exit status with line_handler.
-            environment.str_ignore_expand = true;
             let res = eval(environment, exp);
-            environment.str_ignore_expand = false;
             environment.save_exit_status = true;
             res.unwrap_or_else(|e| {
                 Expression::alloc_data(ExpEnum::String(format!("ERROR: {}", e).into(), None))

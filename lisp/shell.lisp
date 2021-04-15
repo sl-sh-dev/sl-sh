@@ -43,12 +43,12 @@ Redirect stdout to file, append the output.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out>> \"/tmp/sl-sh.out>>.test\" (echo \"stdout redir two\"))
+(out>> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
@@ -67,12 +67,12 @@ Redirect stdout to file, truncate the file first.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out> \"/tmp/sl-sh.out>.test\" (echo \"stdout redir two\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
 (test::assert-false (read-line topen))
@@ -170,7 +170,7 @@ Example:
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out-err> \"/tmp/sl-sh.out-err>.test\" (do (echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
+(out-err> \"/tmp/sl-sh.out-err>.test\" (do (syscall echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
 (def topen (open \"/tmp/sl-sh.out-err>.test\" :read))
 (test::assert-equal \"stdout echo redir one\n\" (read-line topen))
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
@@ -249,16 +249,15 @@ Shorthand for pipe builtin.
 Section: shell
 
 Example:
-(def pipe-test (str (| (echo \"one\ntwo\nthree\")(grep two))))
+(def pipe-test (str (| \$(echo \"one\ntwo\nthree\")\$(grep two))))
 (test::assert-equal \"two\n\" pipe-test)
 "
 	(&rest body)
 	`(pipe ,@body))
 
 ;; Scope to contain then pushd/popd/dirs functions.
-(lex
-  (var dir_stack (make-vec 20))
-  (var dir_stack_max 20)
+(let ((dir_stack (make-vec 20))
+      (dir_stack_max 20))
 
   (defn pushd
         "
@@ -267,16 +266,16 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
-        (assert-equal cur-test-path2 (str (pwd)))
+        (def cur-test-path2 (get-env PWD))
+        (assert-equal cur-test-path2 (get-env PWD))
         (popd)
-        (assert-equal cur-test-path (str (pwd)))
+        (assert-equal cur-test-path (get-env PWD))
         "
-        (dir) (if (form (cd dir))
+        (dir) (if (root::cd dir)
                 (do
-                  (vec-push! dir_stack $OLDPWD)
+                  (vec-push! dir_stack (get-env OLDPWD))
                   (if (> (length dir_stack) dir_stack_max) (vec-remove! dir_stack 0))
                   t)
                 nil))
@@ -287,12 +286,12 @@ Example:
         Section: shell
 
         Example:
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
-        (assert-equal cur-test-path2 (str (pwd)))
+        (def cur-test-path2 (get-env PWD))
+        (assert-equal cur-test-path2 (get-env PWD))
         (popd)
-        (assert-equal cur-test-path (str (pwd)))
+        (assert-equal cur-test-path (get-env PWD))
         "
         () (if (> (length dir_stack) 0)
              (cd (vec-pop! dir_stack))
@@ -305,22 +304,22 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str (pwd)))
+        (def cur-test-path (get-env PWD))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str (pwd)))
+        (def cur-test-path2 (get-env PWD))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (test::assert-equal cur-test-path (str-trim (read-line (open \"/tmp/sl-sh.dirs.test\" :read))))
         (pushd (str-trim cur-test-path))
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (def test-dirs-file (open \"/tmp/sl-sh.dirs.test\" :read))
-        (test::assert-equal cur-test-path (read-line test-dirs-file))
-        (test::assert-equal cur-test-path2 (read-line test-dirs-file))
+        (test::assert-equal cur-test-path (str-trim (read-line test-dirs-file)))
+        (test::assert-equal cur-test-path2 (str-trim (read-line test-dirs-file)))
         (close test-dirs-file)
         (popd)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
-        (test::assert-equal cur-test-path (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
+        (test::assert-equal cur-test-path (str-trim (read-line (open \"/tmp/sl-sh.dirs.test\" :read))))
         (popd)
         (dyn *stdout* (open \"/tmp/sl-sh.dirs.test\" :create :truncate) (dirs))
         (test::assert-equal nil (read-line (open \"/tmp/sl-sh.dirs.test\" :read)))
@@ -335,10 +334,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path (get-env PWD))
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 (get-env PWD))
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -356,10 +355,10 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path (get-env PWD))
         (test::assert-equal '() (get-dirs))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 (get-env PWD))
         (test::assert-equal `(,cur-test-path) (get-dirs))
         (pushd (str-trim cur-test-path))
         (test::assert-equal `(,cur-test-path ,cur-test-path2) (get-dirs))
@@ -376,9 +375,9 @@ Example:
 
         Example:
         (clear-dirs)
-        (def cur-test-path (str-trim (str (pwd))))
+        (def cur-test-path (get-env PWD))
         (pushd \"/tmp\")
-        (def cur-test-path2 (str-trim (str (pwd))))
+        (def cur-test-path2 (get-env PWD))
         (pushd (str-trim cur-test-path))
         (pushd \"/tmp\")
         (pushd (str-trim cur-test-path))
@@ -404,10 +403,10 @@ Like let but sets environment variables that are reset after the macro finishes.
 Section: shell
 
 Example:
-(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal \"\" \$LET-ENV-TEST-VAR-NOT-HERE)
 (let-env ((LET-ENV-TEST-VAR-NOT-HERE \"here\"))
     (test::assert-equal \"here\" \$LET-ENV-TEST-VAR-NOT-HERE))
-(test::assert-false \$LET-ENV-TEST-VAR-NOT-HERE)
+(test::assert-equal \"\" \$LET-ENV-TEST-VAR-NOT-HERE)
 "
 	(vals &rest let_body)
 	((fn (params bindings olds)
@@ -416,14 +415,14 @@ Example:
 				(do
 					(vec-insert! params idx (iterator::nth 0 el))
 					(vec-insert! bindings idx nil)
-					(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
+					(vec-insert! olds idx (eval `(get-env (iterator::nth 0 el)))))
 				(if (= 2 (length el))
 					(do
 						(var binding (iterator::nth 1 el))
 						(if (or (list? binding)(vec? binding)) (set! binding (eval binding)))
 						(vec-insert! params idx (iterator::nth 0 el))
 						(vec-insert! bindings idx binding)
-						(vec-insert! olds idx (eval (sym "\$" (iterator::nth 0 el)))))
+						(vec-insert! olds idx (eval `(get-env ,(iterator::nth 0 el)))))
 					(err "ERROR: invalid bindings on let-env"))))
 		`((fn (params bindings olds)
 			(unwind-protect
@@ -543,9 +542,9 @@ Example:
 		(if (fs-exists? com) (set! ret t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
 			(set! ret t)
-			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" $HOME com)))
+			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" (get-env HOME) com)))
 				(set! ret t)
-				(for p in (str-split ":" $PATH) (do
+				(for p in (str-split ":" (get-env PATH)) (do
 					(var path (str p "/" com))
 					(if (and (fs-exists? path)(not ret)) (set! ret t)))))))
 	ret)
@@ -729,38 +728,14 @@ Example:
   "
   () '(undef __line_handler))
 
-(load "endfix.lisp")
-
-(defmacro endfix-on "
-Allows use of infix notation for common shell forms. The following is the
-complete mapping in lisp/endfix.lisp of all supported infix operators and
-the corresponding sl-sh function they map to:
-	'|| 'or
-	'| '|
-	'@@ 'do (@@ is used instead of ; because ; is a comment in lisp)
-	'&& 'and
-	'out> 'out>
-	'out>> 'out>>
-	'err> 'err>
-	'err>> 'err>>
-	'out>null 'out>null
-	'out-err> 'out-err>
-	'out-err>> 'out-err>>
-	'out-err>null 'out-err>null
-
-
-Section: shell
-"
-	() '(def __exec_hook shell::endfix-hook))
-
 
 (defn print-backtrace (backtrace)
-    (println (first backtrace))
-    (for b in backtrace
+    (for b in backtrace (do
         (if (builtin? b)(print "BUILTIN")
           (print (if (var file (meta-file-name b)) file "NO FILE") ":\t"
                  "line " (if (var line (meta-line-no b)) line "XX") ":\t"
                  "column " (if (var col (meta-column-no b)) col "XX") "\n"))))
+  )
 
 (defn print-error (error)
     (if (= :error (car error))
@@ -798,23 +773,28 @@ Section: shell
     (set! *last-command* line))
 
 (defn repl-line (line line-len)
-    (var strict? (and (def? (sym *active-ns* "::repl-strict"))(ref (sym *active-ns* "::repl-strict"))))
-    (var my-read (if strict? read read-all))
     (export 'LAST_STATUS "0")
     (set! *last-status* 0)
-    (var result nil)
+    (let ((result nil)
+          (do-eval)
+          (prep-ast (fn (line)
+                        (if (string? line)
+                            (cond
+                              ((= #\$ (str-nth 0 line)) (read line))
+                              ((= #\( (str-nth 0 line)) (read line))
+                              (#t (shell-read::shell-read-int (str-iter-start line) #t)))
+                            line))))
 
     ; This next section is odd, it makes sure the eval happens in the active
     ; namespace NOT shell since that is the namespace if repl-line is the last
     ; function to be called.
     (ns-push *active-ns*)
-    (varfn do-eval fn ()
-        (var exec-hook (sym *active-ns* "::__exec_hook"))
-        (var ast (if (and (not strict?)(def? (ref exec-hook))(lambda? (eval exec-hook)))
-                    (apply exec-hook line nil)
-                    (my-read line)))
-        (set! ast (if (string? ast) (my-read ast) ast))
-        (if strict? (eval ast)(loose-symbols (eval ast))))
+    (set! do-eval (fn ()
+          (let* ((exec-hook (sym *active-ns* "::__exec_hook"))
+                 (ast (if (and (def? (ref exec-hook))(lambda? (eval exec-hook)))
+                          (prep-ast (apply exec-hook line nil))
+                          (prep-ast line))))
+            (eval ast))))
     (ns-pop)
     (set! result (get-error (do-eval)))
     ; end weird namespace section
@@ -822,7 +802,7 @@ Section: shell
     (if (= :ok (car result))
       (do
         (if (process? (cdr result)) nil
-          (and (not strict?)(nil? (cdr result))) nil
+          (nil? (cdr result)) nil
           (file? (cdr result)) nil
           (println (cdr result)))
         (if (> line-len 0)
@@ -833,14 +813,16 @@ Section: shell
         (set! *last-command* line)
         ; Save temp history
         (if (and (> line-len 0)(not (def? *repl-std-only*))) (history-push-throwaway :repl line))
+        ;(println (cadr result))))))
         (print-error result))))
+  )
 
 (defn repl ()
       (var get-prompt (fn ()
               (var ns-prompt (sym *active-ns* "::__prompt"))
               (if (def? (ref ns-prompt)) (apply ns-prompt nil) (__prompt))))
       (var repl-inner (fn ()
-              (if (not (def? *repl-std-only*)) (history-context :repl $PWD))
+              (if (not (def? *repl-std-only*)) (history-context :repl (get-env PWD)))
               (reap-jobs)
               (var save-last-status *last-status*)
               (var line (if (def? *repl-std-only*) 
@@ -855,14 +837,11 @@ Section: shell
            (var result (get-error (repl-inner)))
            (if (= :error (car result)) (do (print-error result)(exit 1))))))
 
-(defn repl-lisp () (def repl-strict t))
-(defn repl-shell () (def repl-strict nil))
-
 (defn temp-dir
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
 Section: shell"
     ()
-    (if (def? $TMPDIR) (str $TMPDIR) "/tmp"))
+    (if (> (length $TMPDIR) 0) (str $TMPDIR) "/tmp"))
 
 (defn fc
 "Put the contents of the last command into a temporary file
@@ -965,7 +944,6 @@ Section: shell"
 	tok-invalid-color
 	fg-color-rgb
 	bg-color-rgb
-	endfix-on
 	fc
 	getopts
 	mkli

@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::env;
 use std::fmt;
 use std::io;
 use std::rc::Rc;
@@ -9,6 +8,7 @@ use liner::Context;
 
 use crate::interner::*;
 use crate::process::*;
+use crate::reader::ReaderState;
 use crate::symbols::*;
 use crate::types::*;
 use crate::unix::cvt;
@@ -42,21 +42,6 @@ impl Default for ReplSettings {
             vi_insert_prompt_suffix: None,
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct ReaderState {
-    pub line: usize,
-    pub column: usize,
-    pub file_name: Option<&'static str>,
-    pub end_ch: Option<&'static str>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FormType {
-    Any,
-    FormOnly,
-    ExternalOnly,
 }
 
 #[derive(Clone, Debug)]
@@ -119,16 +104,13 @@ pub struct Environment {
     pub stack: Vec<Binding>,
     pub stack_frames: Vec<StackFrame>,
     pub stack_frame_base: usize,
-    pub reader_state: Option<ReaderState>,
+    pub reader_state: ReaderState,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
-    pub loose_symbols: bool,
-    pub str_ignore_expand: bool,
     pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
-    pub form_type: FormType,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
@@ -179,6 +161,7 @@ pub fn build_default_environment() -> Environment {
             0
         }
     };
+    let reader_state = ReaderState::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
     Environment {
         recur_num_args: None,
@@ -188,16 +171,13 @@ pub fn build_default_environment() -> Environment {
         stack: Vec::with_capacity(1024),
         stack_frames: Vec::with_capacity(500),
         stack_frame_base: 0,
-        reader_state: None,
+        reader_state,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
         run_background: false,
         is_tty: true,
         do_job_control: true,
-        loose_symbols: false,
-        str_ignore_expand: false,
         procs,
-        form_type: FormType::Any,
         save_exit_status: true,
         exit_code: None,
         dynamic_scope: HashMap::new(),
@@ -345,6 +325,7 @@ pub fn get_expression_look(
         ExpEnum::Symbol(sym, location) => match location {
             SymLoc::None => {
                 if allow_lookup {
+                    // XXX TODO- only lookup in namespace not stack.
                     lookup_expression(environment, sym)
                 } else {
                     None
@@ -369,11 +350,7 @@ pub fn get_expression(environment: &Environment, expression: Expression) -> Opti
 }
 
 pub fn is_expression(environment: &Environment, key: &str) -> bool {
-    if let Some(key) = key.strip_prefix('$') {
-        env::var(key).is_ok()
-    } else {
-        lookup_expression(environment, key).is_some()
-    }
+    lookup_expression(environment, key).is_some()
 }
 
 pub fn get_symbol_namespaces(environment: &Environment, key: &str) -> Vec<Rc<RefCell<Namespace>>> {

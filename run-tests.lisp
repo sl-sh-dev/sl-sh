@@ -20,7 +20,7 @@
 			(do (eval exp) (recur)))))
 
 (defn all-items-by-whitespace (producer)
-	(str-trim (str (| (producer) (tr "\n" " ") (tr -s ":blank:")))))
+	(str-trim (str (| (producer) $(tr "\n" " ") $(tr -s ":blank:")))))
 
 (defn make-test-list-from-symbols (symbols-list a-ns) (do
 	(var test-list (list))
@@ -45,17 +45,14 @@
 
 (def file-test-list
 	(reduce
-		(fn (lst filename) (append-to! lst (do
-			(var name (str tests-dir "/" filename))
-			(var load-fcn (fn () (load name)))
-			(var test-set-item (make-hash))
+		(fn (lst name) (append-to! lst (do
+			(let ((load-fcn (fn () (load name)))
+			      (test-set-item (make-hash)))
 			(hash-set! test-set-item :name name)
 			(hash-set! test-set-item :load-fcn load-fcn)
-			test-set-item)))
+			test-set-item))))
 		'()
-		(filter
-		(fn (filename) (not (= filename "test.lisp")))
-			(str-split " " (all-items-by-whitespace (fn () (ls tests-dir)))))))
+		(glob "${tests-dir}/*")))
 
 (defn printer (output)
 	(println (str
