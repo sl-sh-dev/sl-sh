@@ -362,6 +362,10 @@ fn builtin_glob(
                     }
                 }
             }
+            if files.is_empty() {
+                // Got nothing so fall back on pattern.
+                files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
+            }
         } else {
             files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
         }
