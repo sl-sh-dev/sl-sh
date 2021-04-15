@@ -554,7 +554,6 @@ Section: user-shell"
 
 ;; }}}
 
-#|
 ;; user ns docs {{{
 (def api-page-name "mydoc_api.md")
 (def api-page (str "pages/mydoc/" api-page-name))
@@ -614,11 +613,10 @@ Section: user-shell"
 (shell::popd)
 (if (not (= (car docs-error-ret) :ok))
     (println "Failed to build docs: " (cdr docs-error-ret)))
-;;(undef api-page-name)
-;;(undef api-page)
-;;(undef docs-error-ret)
+(undef api-page-name)
+(undef api-page)
+(undef docs-error-ret)
 ;; }}}
-|#
 
 
 ;; cleanup symbols I might use {{{
