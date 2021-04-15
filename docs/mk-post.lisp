@@ -17,7 +17,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 <hr>
 [<-- back to the docs]( {{ site.url }} )
 "))
-	(var date (str-trim (str (date +%Y-%m-%d))))
+	(var date (str-trim (str $(date +%Y-%m-%d))))
 	(var post (open (str post-dir "/evalable-" date "-" (str-replace title " " "-") ".md") :create :append))
 	(write-line post post-body)
 	(close post)))
@@ -91,7 +91,7 @@ Section: post"
 	directive-map))
 
 (defn -eval-file (src-file dest-file directive-map code-snippets)
-	(var temp-dir (str-replace (str (mktemp -d)) "\n" ""))
+	(var temp-dir (str-replace (str $(mktemp -d)) "\n" ""))
 	(var entrypoint nil)
 	;; write all the files to a temp directory so the entrypoint(s) can be
 	;; evaled
@@ -105,7 +105,7 @@ Section: post"
 			(write-line target-file line)))
 		(when (= :entrypoint (hash-get snippet :type)) (do
 			(set! entrypoint target-file-name)
-			(chmod +x target-file-name)))
+			$(chmod +x target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
 	(var temp-out (str temp-dir "/output"))

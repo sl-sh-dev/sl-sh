@@ -333,6 +333,8 @@ Symbol that contains the name of the current namespace.
 
 Can be used anywhere a symbol pointing to a string is valid.
 
+Section: root
+
 Example:
 (ns-push 'root)
 ;XXX TODO- analyzer breaks this test by patching *ns* to the namespace before the push... (test::assert-equal \"root\" *ns*)
@@ -350,6 +352,8 @@ t
 
 Symbol that contains the current read table.
 
+Section: root
+
 Example:
 ;(hash-set! *read-table* #\\$ 'shell-read::shell-read)
 t
@@ -365,6 +369,8 @@ t
 
 Symbol that contains the current terminal read table.
 
+Section: root
+
 Example:
 ;(hash-set! *read-table-terminal* #\\] 'nop-read)
 t
@@ -379,6 +385,8 @@ t
                 "Usage: (print *string-read-table*)
 
 Symbol that contains the current string read table.
+
+Section: root
 
 Example:
 ;(hash-set! *string-read-table* #\\$ 'shell-read::shell-read)

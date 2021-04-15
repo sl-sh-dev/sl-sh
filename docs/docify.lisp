@@ -29,7 +29,4 @@
   (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md"))))
   (if (= (car result) :ok)
     (cdr result)
-    (do
-      (println (car result))
-      (println (cdr result)))))
-
+    (shell::print-error result)))
