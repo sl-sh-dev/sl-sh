@@ -184,6 +184,51 @@ Example:
     );
 
     data.insert(
+        interner.intern("median"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let mut floats = parse_list_of_floats(environment, &mut args)?;
+                let len = floats.len();
+                let median;
+                if len > 1 {
+                    floats.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    median = match len % 2 {
+                        1 => {
+                            let mid = (len - 1) / 2;
+                            ExpEnum::Float(floats[mid])
+                        }
+                        _ => {
+                            let mid = (len - 1) / 2;
+                            ExpEnum::Float((floats[mid] + floats[mid + 1]) / 2.0)
+                        }
+                    };
+                } else {
+                    median = match floats.pop() {
+                        Some(val) => ExpEnum::Float(val),
+                        None => ExpEnum::Nil,
+                    }
+                }
+                Ok(Expression::alloc_data(median))
+            },
+            "Usage: (median number+)
+
+Returns median of sequence of numbers.
+
+Section: math
+
+Example:
+(test::assert-equal nil (median))
+(test::assert-equal 5 (median 5))
+(test::assert-equal 7.5 (median 10 5))
+(test::assert-equal 5.5 (median 10 9 8 7 6 5 4 3 2 1))
+",
+        ),
+    );
+
+    data.insert(
         interner.intern("avg"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -819,6 +864,8 @@ Example:
 }
 
 // TODO need some primitive rand support
+// todo steve's idea about random-str taking strings,
+//  give it a list of chars. or string and it would pull from that, e.g. give it 0-9,a-f to gen hex.
 // TODO max and min values.
 //  https://rust-lang-nursery.github.io/rust-cookbook/algorithms/randomness.html#generate-random-numbers
 //  radians
