@@ -640,23 +640,29 @@ fn do_expansion(
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
     let com_d = command_in.get();
-    if let ExpEnum::Symbol(_, _) = &com_d.data {
-        drop(com_d);
-        if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
-            let exp_d = exp.get();
-            if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
-                drop(exp_d);
-                let expansion =
-                    call_lambda(environment, exp, parts, false)?.resolve(environment)?;
-                Ok(Some(expansion))
+    match &com_d.data {
+        ExpEnum::Symbol(_, _) => {
+            drop(com_d);
+            if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
+                let exp_d = exp.get();
+                if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
+                    drop(exp_d);
+                    let expansion =
+                        call_lambda(environment, exp, parts, false)?.resolve(environment)?;
+                    Ok(Some(expansion))
+                } else {
+                    Ok(None)
+                }
             } else {
                 Ok(None)
             }
-        } else {
-            Ok(None)
         }
-    } else {
-        Ok(None)
+        ExpEnum::Macro(_) => {
+            let expansion =
+                call_lambda(environment, command_in.clone(), parts, false)?.resolve(environment)?;
+            Ok(Some(expansion))
+        }
+        _ => Ok(None),
     }
 }
 
