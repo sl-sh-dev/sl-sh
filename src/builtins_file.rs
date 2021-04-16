@@ -335,6 +335,52 @@ fn builtin_glob(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
+    fn remove_escapes(pat: &str) -> String {
+        let mut ret = String::new();
+        let mut last_esc = false;
+        for ch in pat.chars() {
+            match ch {
+                '\\' if last_esc => {
+                    ret.push('\\');
+                    last_esc = false;
+                }
+                '\\' => last_esc = true,
+                '*' if last_esc => {
+                    ret.push('*');
+                    last_esc = false;
+                }
+                '?' if last_esc => {
+                    ret.push('?');
+                    last_esc = false;
+                }
+                '[' if last_esc => {
+                    ret.push('[');
+                    last_esc = false;
+                }
+                ']' if last_esc => {
+                    ret.push(']');
+                    last_esc = false;
+                }
+                '{' if last_esc => {
+                    ret.push('{');
+                    last_esc = false;
+                }
+                '}' if last_esc => {
+                    ret.push('}');
+                    last_esc = false;
+                }
+                _ => {
+                    if last_esc {
+                        ret.push('\\');
+                        ret.push(ch);
+                    } else {
+                        ret.push(ch);
+                    }
+                }
+            }
+        }
+        ret
+    }
     let mut files = Vec::new();
     for pat in args {
         let pat = match &eval(environment, pat)?.get().data {
@@ -364,8 +410,20 @@ fn builtin_glob(
             }
             if files.is_empty() {
                 // Got nothing so fall back on pattern.
-                files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
+                if pat.contains('\\') {
+                    files.push(Expression::alloc_data(ExpEnum::String(
+                        remove_escapes(&pat).into(),
+                        None,
+                    )));
+                } else {
+                    files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
+                }
             }
+        } else if pat.contains('\\') {
+            files.push(Expression::alloc_data(ExpEnum::String(
+                remove_escapes(&pat).into(),
+                None,
+            )));
         } else {
             files.push(Expression::alloc_data(ExpEnum::String(pat.into(), None)));
         }
