@@ -11,8 +11,6 @@ use nix::unistd::{gethostname, Uid};
 
 use crate::builtins::load;
 use crate::environment::*;
-use crate::eval::*;
-use crate::reader::*;
 use crate::types::*;
 
 fn load_user_env(environment: &mut Environment, home: &str, loadrc: bool, repl: bool) {
@@ -73,7 +71,7 @@ t
     }
 }
 
-pub fn start_interactive() -> i32 {
+pub fn start_interactive(is_tty: bool) -> i32 {
     // Initialize the HOST variable
     let mut hostname = [0_u8; 512];
     env::set_var(
@@ -108,70 +106,17 @@ pub fn start_interactive() -> i32 {
         );
     }
     let mut environment = build_default_environment();
-    load_user_env(&mut environment, &home, true, true);
-    if environment.exit_code.is_some() {
-        environment.exit_code.unwrap()
-    } else {
-        0
-    }
-}
-
-pub fn read_stdin() -> i32 {
-    let mut home = match env::var("HOME") {
-        Ok(val) => val,
-        Err(_) => ".".to_string(),
-    };
-    if home.ends_with('/') {
-        home = home[..home.len() - 1].to_string();
-    }
-    let share_dir = format!("{}/.local/share/sl-sh", home);
-    if let Err(err) = create_dir_all(&share_dir) {
-        eprintln!(
-            "WARNING: Unable to create share directory: {}- {}",
-            share_dir, err
+    if !is_tty {
+        // XXX TODO- maybe supresse printing the prompt in this case?
+        environment.is_tty = false;
+        // XXX- do we want this?  Probably not.
+        //environment.do_job_control = false;
+        environment.root_scope.borrow_mut().insert(
+            environment.interner.intern("*repl-std-only*"),
+            Expression::make_true(),
         );
     }
-    let mut environment = build_default_environment();
-    environment.do_job_control = false;
-    environment.is_tty = false;
-    load_user_env(&mut environment, &home, true, false);
-
-    let mut input = String::new();
-    loop {
-        match io::stdin().read_line(&mut input) {
-            Ok(0) => return 0,
-            Ok(_n) => {
-                let input = input.trim();
-                let ast = read(&mut environment, input, None, true);
-                match ast {
-                    Ok(ast) => {
-                        match eval(&mut environment, ast) {
-                            Ok(exp) => {
-                                match &exp.get().data {
-                                    ExpEnum::Nil => { /* don't print nil */ }
-                                    ExpEnum::Process(_) => { /* should have used stdout */ }
-                                    _ => {
-                                        if let Err(err) = exp.write(&mut environment) {
-                                            eprintln!("Error writing result: {}", err);
-                                        }
-                                    }
-                                }
-                            }
-                            Err(err) => eprintln!("{}", err),
-                        }
-                    }
-                    Err(err) => eprintln!("{:?}", err),
-                }
-            }
-            Err(error) => {
-                eprintln!("ERROR reading stdin: {}", error);
-                return 66;
-            }
-        }
-        if environment.exit_code.is_some() {
-            break;
-        }
-    }
+    load_user_env(&mut environment, &home, true, true);
     if environment.exit_code.is_some() {
         environment.exit_code.unwrap()
     } else {
@@ -256,7 +201,6 @@ pub fn run_one_command(command: &str, args: &[String]) -> Result<(), LispError> 
 pub fn run_one_script(command: &str, args: &[String]) -> i32 {
     let mut environment = build_default_environment();
     environment.do_job_control = false;
-
     let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),

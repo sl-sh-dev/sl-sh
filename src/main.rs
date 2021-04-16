@@ -52,11 +52,11 @@ fn main() -> Result<(), LispError> {
                     std::process::exit(1)
                 }
 
-                let code = start_interactive();
+                let code = start_interactive(true);
                 std::process::exit(code);
             } else {
                 // No tty, just read stdin and do something with it..
-                let code = read_stdin();
+                let code = start_interactive(false);
                 std::process::exit(code);
             }
         } else if config.command.is_some() {
