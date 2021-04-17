@@ -140,9 +140,8 @@
 	(run-tests-for (str a-ns " unit tests") sym-list final-test-report)))
 
 ;; run tests for root namespaces
-(lex
+(let ((sym-list (qsort (ns-symbols 'root))))
 (printer (str "Tests from root"))
-(var sym-list (qsort (ns-symbols 'root)));'root)))
 (set! sym-list (make-test-list-from-symbols sym-list "root"));"root"))
 (run-tests-for (str "root unit tests") sym-list final-test-report))
 

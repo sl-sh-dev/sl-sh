@@ -339,15 +339,16 @@ Example:
         Expression::make_special_var(
             "Usage: (var symbol expression) -> expression
 
+NOTE: var is deprecated, use let or let* to create local bindings.
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
-lex forms to create local bindings.
+let forms to create local bindings.
 Symbol is not evaluted.
 
 Section: core
 
 Example:
-(lex
+(let (())
 (var test-do-one nil)
 (var test-do-two nil)
 (var test-do-three (do (set! test-do-one \"One\")(set! test-do-two \"Two\")\"Three\"))

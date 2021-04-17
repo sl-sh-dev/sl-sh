@@ -235,7 +235,7 @@
   (getopts (make-hash (list (join :-c (getopts-build-param 1 nil :float?)))) '("-c" "#\a"))
   "str->float: string is not a valid float")
 
-(lex
+(let (())
 
 (assert-error-msg
   (getopts (make-hash (list (join :-i (getopts-build-param 1 nil :int?)))) '("-i" "1.23"))

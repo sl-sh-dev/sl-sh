@@ -27,7 +27,6 @@ const ITERATOR_LISP: &[u8] = include_bytes!("../lisp/iterator.lisp");
 const COLLECTION_LISP: &[u8] = include_bytes!("../lisp/collection.lisp");
 const SEQ_LISP: &[u8] = include_bytes!("../lisp/seq.lisp");
 const SHELL_LISP: &[u8] = include_bytes!("../lisp/shell.lisp");
-const ENDFIX_LISP: &[u8] = include_bytes!("../lisp/endfix.lisp");
 const GETOPTS_LISP: &[u8] = include_bytes!("../lisp/getopts.lisp");
 const TEST_LISP: &[u8] = include_bytes!("../lisp/test.lisp");
 const LIB_LISP: &[u8] = include_bytes!("../lisp/lib.lisp");
@@ -238,7 +237,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             "collection.lisp" => to_str(COLLECTION_LISP),
             "seq.lisp" => to_str(SEQ_LISP),
             "shell.lisp" => to_str(SHELL_LISP),
-            "endfix.lisp" => to_str(ENDFIX_LISP),
             "getopts.lisp" => to_str(GETOPTS_LISP),
             "test.lisp" => to_str(TEST_LISP),
             "lib.lisp" => to_str(LIB_LISP),
@@ -1903,8 +1901,7 @@ Example:
 (test::assert-false (test-macro-empty))
 (def test-mac nil)
 (def mac-var 2)
-(lex
-  (var mac-var 3)
+(let ((mac-var 3))
   (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
@@ -2611,23 +2608,6 @@ Section: core
 
 Example:
 ;(print *getopts-src*)
-t
-"
-            .to_string(),
-        ),
-    );
-    data.insert(
-        interner.intern("*endfix-src*"),
-        (
-            ExpEnum::String(to_cow(ENDFIX_LISP), None).into(),
-            "Usage: (print *endfix-src*)
-
-The builtin source code for endfix.lisp.
-
-Section: core
-
-Example:
-;(print *endfix-src*)
 t
 "
             .to_string(),
