@@ -116,7 +116,7 @@
 					(set! exit-status :error)
 					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
 		(report-pretty-printer exit-status (hash-get fst :name))
-		(recur (rest tests) test-report)))))))
+		(report-test-results (rest tests) test-report)))))))
 
 (def final-test-report '())
 

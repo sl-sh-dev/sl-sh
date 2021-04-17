@@ -379,13 +379,7 @@ fn internal_eval(
             Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(sym, SymLoc::Ref(binding)) => {
-            if let Some(reference) = environment.dynamic_scope.get(sym) {
-                Ok(reference.get())
-            } else {
-                Ok(binding.get())
-            }
-        }
+        ExpEnum::Symbol(_sym, SymLoc::Ref(binding)) => Ok(binding.get()),
         ExpEnum::Symbol(sym, SymLoc::Namespace(scope, idx)) => {
             if let Some(exp) = scope.borrow().get_idx(*idx) {
                 Ok(exp)

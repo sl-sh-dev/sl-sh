@@ -527,6 +527,36 @@ Example:
      (new-item old-item lst &rest mods)
      `(nsubstitute! ,new-item ,old-item (collect-copy ,lst) ,@mods))
 
+(defmacro dyn
+"Usage: (dyn key value expression) -> result_of_expression
+
+Creates a dynamic binding for key, assigns value to it and evals expression under it.
+Note that if key must be a symbol and is not evaluted.
+
+The binding is gone once the dyn form ends. This is basically a set! on the
+binding in an unwind protect to reset it when done.  When used on a global will
+set the first binding found and reset it when done.
+Calls to dyn can be nested and previous dynamic values will
+be restored as interior dyn's exit.
+
+Section: core
+
+Example:
+(defn test-dyn-fn () (print \"Print dyn out\"))
+(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+"
+; XXX this could be better and match the original builtin dyn closer but this version
+; is good enough for now (redirectiong stdout/err, etc).  Also if it sets a root
+; binding and then the name is used for the current namespace it might 'restore'
+; the wrong binding so look into that.
+  (key value expression)
+  (let ((old-val (gensym)))
+    `(let ((,old-val ,key))
+       (unwind-protect
+            (do (set! ,key ,value) ,expression)
+         (set! ,key ,old-val)))))
+
 (defn identity
 "Identity function.
 

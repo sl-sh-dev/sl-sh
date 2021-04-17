@@ -31,14 +31,17 @@
 (defn fncall (com &rest args)
   (let ((new-args (vec)))
     (flatten-args new-args args)
-    (if (macro? com) (eval (expand-macro-all `(,com ,@new-args)))
-        (apply com new-args))))
+    (ns-push *active-ns*)
+    (unwind-protect
+         (if (macro? com) (eval (expand-macro-all `(,com ,@new-args)))
+             (apply com new-args))
+      (ns-pop))))
 
 ; sys-apply needs to be able to handle no args to make the shell reader simpler.
 (defmacro sys-apply (&rest args)
   (if (> (length args) 0)
       (if (callable? (vec-nth args 0))
-          `(fncall ,(vec-nth args 0) ,@(vec-slice args 1))
+          `(shell-read::fncall ,(vec-nth args 0) ,@(vec-slice args 1))
           `(syscall ,(vec-nth args 0) ,@(vec-slice args 1)))
       nil))
 

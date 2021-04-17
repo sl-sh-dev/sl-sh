@@ -86,9 +86,6 @@ pub fn fork(
                         "*stdin*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdin))).into(),
                     );
-                    if environment.dynamic_scope.contains_key("*stdin*") {
-                        environment.dynamic_scope.remove("*stdin*");
-                    }
                 }
                 if let Some(stdout) = stdout {
                     if let Err(err) = cvt(libc::dup2(stdout, 1)) {
@@ -103,10 +100,6 @@ pub fn fork(
                         "*stdout*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
                     );
-
-                    if environment.dynamic_scope.contains_key("*stdout*") {
-                        environment.dynamic_scope.remove("*stdout*");
-                    }
                 }
                 environment.eval_level = 0;
                 environment.run_background = false;

@@ -260,6 +260,10 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     let old_reader_state = environment.reader_state.clone();
     environment.reader_state.clear();
     environment.reader_state.file_name = file_name;
+    let old_supress = environment.supress_eval;
+    // If load is called from apply then it needs to work.
+    // XXX- can we do better then this supress_eval hack?
+    environment.supress_eval = false;
     if shebanged {
         while let Some(ch) = chars.next() {
             if ch == "\n" {
@@ -279,12 +283,14 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                     Ok(exp) => Some(exp),
                     Err(err) => {
                         environment.reader_state = old_reader_state;
+                        environment.supress_eval = old_supress;
                         return Err(err);
                     }
                 };
             }
             Err((err, _ichars)) => {
                 environment.reader_state = old_reader_state;
+                environment.supress_eval = old_supress;
                 if err.reason == "Empty value" {
                     return if let Some(res) = res {
                         Ok(res)
@@ -297,6 +303,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         }
     }
     environment.reader_state = old_reader_state;
+    environment.supress_eval = old_supress;
     if let Some(res) = res {
         Ok(res)
     } else {
