@@ -6,6 +6,7 @@ use crate::environment::*;
 use crate::eval::eval;
 use crate::interner::*;
 use crate::types::*;
+use std::mem;
 
 fn make_args(
     environment: &mut Environment,
@@ -224,6 +225,45 @@ Example:
 (test::assert-equal 5 (median 5))
 (test::assert-equal 7.5 (median 10 5))
 (test::assert-equal 5.5 (median 10 9 8 7 6 5 4 3 2 1))
+(test::assert-equal 6 (median 10 4 8 7 6 5 9 3 2 1 11))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("mode"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                let mut counts: HashMap<u64, i32> = HashMap::new();
+                for f in floats {
+                    *counts.entry(unsafe { mem::transmute(f) }).or_insert(0) += 1;
+                }
+                let mode = counts
+                    .into_iter()
+                    .max_by_key(|&(_, count)| count)
+                    .map(|(value, _)| value);
+                match mode {
+                    Some(mode) => {
+                        let mode: f64 = unsafe { mem::transmute(mode) };
+                        Ok(Expression::alloc_data(ExpEnum::Float(mode)))
+                    }
+                    None => Ok(Expression::alloc_data(ExpEnum::Nil)),
+                }
+            },
+            "Usage: (avg number+)
+
+Average a sequence of numbers.
+
+Section: math
+
+Example:
+(test::assert-equal nil (mode))
+(test::assert-equal 5 (mode 5))
+(test::assert-equal 7.0 (mode 1 7 3 4 5 6 7.0 8 9 10))
 ",
         ),
     );
