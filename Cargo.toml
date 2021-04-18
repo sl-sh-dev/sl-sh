@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.9.28"
+version = "0.9.32"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
@@ -16,7 +16,9 @@ libc = "0.2"
 unicode-segmentation = "1.6.0"
 unicode_reader = "1"
 #jemallocator = "0.3.2"
-rand = { version = "0.8.3", default-features = false, features = ["libc", "rand_chacha"]}
+# TODO need help determining minimum set of dependencies
+#rand = {version = "0.8.3", default-features = false, features = ["libc", "rand_hc", "rand_chacha"]}
+rand = "0.8.3"
 
 [build-dependencies]
 chrono = "0.4.7"

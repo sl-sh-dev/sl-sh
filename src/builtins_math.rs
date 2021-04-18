@@ -1057,9 +1057,6 @@ Example:
     );
 }
 
-// TODO need some primitive rand support
 // todo steve's idea about random-str taking strings,
 //  give it a list of chars. or string and it would pull from that, e.g. give it 0-9,a-f to gen hex.
 // TODO max and min values.
-//  https://rust-lang-nursery.github.io/rust-cookbook/algorithms/randomness.html#generate-random-numbers
-//  radians
