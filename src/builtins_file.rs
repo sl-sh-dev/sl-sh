@@ -361,14 +361,6 @@ fn builtin_glob(
                     ret.push(']');
                     last_esc = false;
                 }
-                '{' if last_esc => {
-                    ret.push('{');
-                    last_esc = false;
-                }
-                '}' if last_esc => {
-                    ret.push('}');
-                    last_esc = false;
-                }
                 _ => {
                     if last_esc {
                         ret.push('\\');

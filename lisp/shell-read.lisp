@@ -129,8 +129,7 @@
 (defn maybe-glob? (token)
   (or (str-contains "*" token)
       (str-contains "?" token)
-      (str-contains "[" token)
-      (str-contains "{" token)))
+      (str-contains "[" token)))
 
 (let ((paren-level 0))
 
