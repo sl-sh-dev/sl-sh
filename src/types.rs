@@ -91,6 +91,7 @@ pub struct Lambda {
     pub body: MultiExpression,
     pub syms: Symbols,
     pub namespace: Rc<RefCell<Namespace>>,
+    pub no_recur: bool,
 }
 
 impl Lambda {
@@ -102,6 +103,7 @@ impl Lambda {
             body: self.body.copy(),
             syms: self.syms.clone(), // XXX TODO deep?
             namespace: self.namespace.clone(),
+            no_recur: false,
         }
     }
 }

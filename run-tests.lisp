@@ -93,30 +93,34 @@
 			shell::*fg-default* shell::*bg-default*
 			" " test-name)))))
 
-(defn report-test-results (tests test-report) (do
-	(var exit-status :passed)
-	(dyn exit (fn (x) (do
-				(when (not (= x "0"))
-					(do
-						(set! exit-status :failed)
-						(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))
-					x)) (do
-	(var fst (first tests))
-	(when fst (do
-		(hash-set! test-report :total (+ 1 (hash-get test-report :total)))
-		(if (= :no-test (hash-get fst :load-fcn))
-			(do
-				(hash-set! test-report :no-test (+ 1 (hash-get test-report :no-test)))
-				(set! exit-status :no-test))
-			(do
-				(var test-result
-					(get-error
-						((hash-get fst :load-fcn))))
-				(when (= (car test-result) :error) (do
-					(set! exit-status :error)
-					(hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
-		(report-pretty-printer exit-status (hash-get fst :name))
-		(report-test-results (rest tests) test-report)))))))
+(defn report-test-results (tests test-report)
+  (let ((exit-status :passed))
+    (dyn exit (fn (x)
+                  (when (not (= x "0"))
+                    (do
+                     (set! exit-status :failed)
+                     (hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))
+                  x)
+         ; Keep the recursion outside the dyn or will not have TCO.
+         ; Dyn is a macro around unwind-protect and this will act as
+         ; 'break' for recur and TCO (tail call optimization).
+         ((fn (tests test-report)
+              (set! exit-status :passed)
+              (let ((fst (first tests)))
+                (when fst
+                  (do
+                   (hash-set! test-report :total (+ 1 (hash-get test-report :total)))
+                   (if (= :no-test (hash-get fst :load-fcn))
+                       (do
+                        (hash-set! test-report :no-test (+ 1 (hash-get test-report :no-test)))
+                        (set! exit-status :no-test))
+                       (let ((test-result (get-error ((hash-get fst :load-fcn)))))
+                        (when (= (car test-result) :error)
+                          (do
+                           (set! exit-status :error)
+                           (hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
+                    (report-pretty-printer exit-status (hash-get fst :name))
+                    (recur (rest tests) test-report))) ))tests test-report))))
 
 (def final-test-report '())
 

@@ -217,6 +217,14 @@ Example:
 (test::assert-equal \"One1\" test-do-one)
 (test::assert-equal \"Two\" test-do-two)
 (test::assert-equal \"Three\" test-do-three)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (recur (+ idx 1)))))0)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (this-fn (+ idx 1)))))0)
 "
   (vals &rest let-body)
   ((fn (vars binds)
@@ -233,7 +241,7 @@ Example:
                       (vec-push! binds (car (cdr el))))
                      (err "ERROR: invalid bindings on let"))
                  (recur (car plist)(cdr plist)))))(car vals)(cdr vals))
-       `((fn ,vars ,@let-body) ,@binds))(make-vec (length vals))(make-vec (length vals))))
+       `((fn :no-recur ,vars ,@let-body) ,@binds))(make-vec (length vals))(make-vec (length vals))))
 
 (defmacro match
   "Usage: (match condition (value form*)*) -> result

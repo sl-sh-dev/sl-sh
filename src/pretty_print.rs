@@ -34,7 +34,11 @@ impl fmt::Display for Expression {
             }
         }
         fn lambda_out(f: &mut fmt::Formatter, l: &Lambda) -> fmt::Result {
-            write!(f, "(fn {}", params_to_string(&l.params),)?;
+            if l.no_recur {
+                write!(f, "(fn :no-recur {}", params_to_string(&l.params),)?;
+            } else {
+                write!(f, "(fn {}", params_to_string(&l.params),)?;
+            }
             match &l.body {
                 MultiExpression::None => {}
                 MultiExpression::Single(body) => write!(f, "{}", body.to_string())?,
@@ -267,7 +271,11 @@ fn pretty_print_int(
             write!(writer, "{}", expression.to_string())?;
         }
         ExpEnum::Lambda(l) => {
-            write!(writer, "(fn {}", params_to_string(&l.params))?;
+            if l.no_recur {
+                write!(writer, "(fn :no-recur {}", params_to_string(&l.params))?;
+            } else {
+                write!(writer, "(fn {}", params_to_string(&l.params))?;
+            }
             match &l.body {
                 MultiExpression::None => {}
                 MultiExpression::Single(body) => {

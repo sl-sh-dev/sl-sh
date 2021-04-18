@@ -244,17 +244,16 @@ Example:
 
                ((fn (idx)
                     (if (< idx fields-len)
-                        (do (let ((field (vec-nth fields idx)))
-                          ;(println "XXXX field " fields ", "idx", " field)
+                        (let ((field (vec-nth fields idx)))
                           (if (= (car field) :fn) (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
                               (= (car field) :impl) nil ; do impls last (struct methods take precident).
-                              (attrib field doc doc-exp)))
+                              (attrib field doc doc-exp))
                           (recur (+ idx 1)))))idx-start)
 
                ((fn (idx)
                     (if (< idx fields-len)
-                        (do (let ((field (vec-nth fields idx)))
-                          (if (= (car field) :impl) (impl (cdr field) doc)))
+                        (let ((field (vec-nth fields idx)))
+                          (if (= (car field) :impl) (impl (cdr field) doc))
                           (recur (+ idx 1)))))idx-start)
 
                (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))

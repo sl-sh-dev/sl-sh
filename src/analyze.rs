@@ -9,6 +9,19 @@ pub fn make_fn(
     outer_syms: &Option<Symbols>,
 ) -> Result<Lambda, LispError> {
     if let Some(params_exp) = args.next() {
+        let params_d = params_exp.get();
+        let (params_exp, no_recur) = if let ExpEnum::Symbol(":no-recur", _) = &params_d.data {
+            if let Some(params_exp) = args.next() {
+                (params_exp, true)
+            } else {
+                return Err(LispError::new(
+                    "fn: needs at least one form after :no-recur",
+                ));
+            }
+        } else {
+            drop(params_d);
+            (params_exp, false)
+        };
         let (first, second) = (args.next(), args.next());
         let body = if let Some(first) = first {
             if let Some(second) = second {
@@ -57,7 +70,9 @@ pub fn make_fn(
                 "fn: &rest must be before the last parameter",
             ));
         }
-        syms.insert("this-fn");
+        if !no_recur {
+            syms.insert("this-fn");
+        }
         match &body {
             MultiExpression::None => {}
             MultiExpression::Single(arg) => analyze(environment, &arg, &mut Some(syms.clone()))?,
@@ -74,6 +89,7 @@ pub fn make_fn(
             body,
             syms,
             namespace: environment.namespace.clone(),
+            no_recur,
         });
     }
     Err(LispError::new("fn: needs at least one form"))
