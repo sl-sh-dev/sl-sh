@@ -239,32 +239,46 @@ Example:
              -> Result<Expression, LispError> {
                 let mut args = make_args(environment, args)?;
                 let floats = parse_list_of_floats(environment, &mut args)?;
-                let mut counts: HashMap<u64, i32> = HashMap::new();
-                for f in floats {
-                    *counts.entry(unsafe { mem::transmute(f) }).or_insert(0) += 1;
+                let mut freqs: HashMap<u64, i32> = HashMap::new();
+                for float in floats {
+                    *freqs.entry(unsafe { mem::transmute(float) }).or_insert(0) += 1;
                 }
-                let mode = counts
-                    .into_iter()
-                    .max_by_key(|&(_, count)| count)
-                    .map(|(value, _)| value);
-                match mode {
-                    Some(mode) => {
-                        let mode: f64 = unsafe { mem::transmute(mode) };
-                        Ok(Expression::alloc_data(ExpEnum::Float(mode)))
+
+                let mut counts: HashMap<i32, Vec<f64>> = HashMap::new();
+                let mut max_count = 0;
+                for freq in freqs.iter() {
+                    let (float_as_int, count) = freq;
+                    let float: f64 = unsafe { mem::transmute(*float_as_int) };
+                    let count: i32 = *count;
+                    counts.entry(count).or_insert(Vec::new()).push(float);
+                    if count > max_count {
+                        max_count = count;
+                    }
+                }
+
+                match counts.get(&max_count) {
+                    Some(modes) => {
+                        let mut float_expr = Vec::with_capacity(modes.len());
+                        for m in modes {
+                            println!("mode: {}.", *m);
+                            float_expr.push(Expression::alloc_data(ExpEnum::Float(*m)));
+                        }
+                        Ok(Expression::alloc_data(ExpEnum::Vector(float_expr)))
                     }
                     None => Ok(Expression::alloc_data(ExpEnum::Nil)),
                 }
             },
             "Usage: (mode number+)
 
-Returns mode of a sequence of numbers. If multimodal any number could be returned.
+Returns mode of a sequence of numbers. Since distributions can be multimodal, mode returns a list.
 
 Section: math
 
 Example:
 (test::assert-equal nil (mode))
-(test::assert-equal 5 (mode 5))
-(test::assert-equal 7.0 (mode 1 7.0 3 4 5 6 7 8 9 10))
+(test::assert-equal (list 5) (mode 5))
+(test::assert-equal (list 1 3 4 5 6 7 8 9 10) (mode 1 3 4 5 6 7 8 9 10))
+(test::assert-equal (list 7.0) (mode 1 7.0 3 4 5 6 7 8 9 10))
 ",
         ),
     );
