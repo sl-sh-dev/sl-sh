@@ -10,6 +10,7 @@
 ;; - rewrite bash so we don't have gpl in here?
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - string interpolation sytnax includes $my-var and ${my-var} as well as $(println foo)
+;; - use this or make it: https://hg.stevelosh.com/t/
 
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
@@ -525,6 +526,7 @@ Section: user-shell"
                 (cdr result)))
              (get-error (load custom-lisp-config)))
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
+
 ;; }}}
 
 
@@ -538,7 +540,6 @@ Section: user-shell"
 			(list root::cd cmd-str)
 			orig-cmd-ast)))
 
-#|
 (defn __exec-hook (cmd-str)
 	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
 	cmd-str
