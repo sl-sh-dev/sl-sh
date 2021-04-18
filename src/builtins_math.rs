@@ -88,6 +88,7 @@ Example:
 (test::assert-equal 16 (* 2 2 4))
 (test::assert-equal 16.0 (* 2 2.0 4))
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
+(test::assert-equal 55.0000000001 (* 100 0.55))
 ",
         ),
     );
@@ -254,16 +255,16 @@ Example:
                     None => Ok(Expression::alloc_data(ExpEnum::Nil)),
                 }
             },
-            "Usage: (avg number+)
+            "Usage: (mode number+)
 
-Average a sequence of numbers.
+Returns mode of a sequence of numbers. If multimodal any number could be returned.
 
 Section: math
 
 Example:
 (test::assert-equal nil (mode))
 (test::assert-equal 5 (mode 5))
-(test::assert-equal 7.0 (mode 1 7 3 4 5 6 7.0 8 9 10))
+(test::assert-equal 7.0 (mode 1 7.0 3 4 5 6 7 8 9 10))
 ",
         ),
     );
