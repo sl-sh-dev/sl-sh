@@ -259,9 +259,10 @@ Example:
                 match counts.get(&max_count) {
                     Some(modes) => {
                         let mut float_expr = Vec::with_capacity(modes.len());
+                        let mut modes = modes.to_vec();
+                        modes.sort_by(|a, b| a.partial_cmp(b).unwrap());
                         for m in modes {
-                            println!("mode: {}.", *m);
-                            float_expr.push(Expression::alloc_data(ExpEnum::Float(*m)));
+                            float_expr.push(Expression::alloc_data(ExpEnum::Float(m)));
                         }
                         Ok(Expression::alloc_data(ExpEnum::Vector(float_expr)))
                     }
