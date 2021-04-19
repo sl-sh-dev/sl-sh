@@ -1,3 +1,10 @@
+; Mirror basic math into root so no need to import math everywhere.
+(def + (doc 'math::+) math::+)
+(def - (doc 'math::-) math::-)
+(def / (doc 'math::/) math::/)
+(def * (doc 'math::*) math::*)
+(def % (doc 'math::%) math::%)
+
 (def prim-print-backtrace (fn (backtrace)
 (def first (fn
     (obj)
@@ -11,12 +18,11 @@
         (err "Not a vector or list"))))
 
     (if (not (vec-empty? backtrace))
-        (do
-          (var b (first backtrace))
-          (print (if (var file (meta-file-name b)) file "??????") ":\t"
-               "line " (if (var line (meta-line-no b)) line "??") ":\t"
-               "column " (if (var col (meta-column-no b)) col "??") "\n")
-          (recur (rest backtrace))))))
+        ((fn :no-recur (b file line col)
+          (print (if (set! file (meta-file-name b)) file "??????") ":\t"
+               "line " (if (set! line (meta-line-no b)) line "??") ":\t"
+               "column " (if (set! col (meta-column-no b)) col "??") "\n")
+          (recur (rest backtrace)))(first backtrace) nil nil nil))))
 
 (def prim-print-error (fn (error)
     (if (= :error (car error))

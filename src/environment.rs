@@ -149,6 +149,7 @@ pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
+    let math_scope = Rc::new(RefCell::new(Namespace::new_math(&mut interner)));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
     let terminal_fd = unsafe {
@@ -160,6 +161,7 @@ pub fn build_default_environment() -> Environment {
     };
     let reader_state = ReaderState::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
+    namespaces.insert(interner.intern("math"), math_scope);
     Environment {
         recur_num_args: None,
         gensym_count: 0,

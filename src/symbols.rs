@@ -252,9 +252,10 @@ impl Namespace {
 
     pub fn new_root(interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
+        let mut math_data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         add_builtins(interner, &mut data);
         add_system_builtins(interner, &mut data);
-        add_math_builtins(interner, &mut data);
+        add_math_builtins(interner, &mut math_data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
         add_values_builtins(interner, &mut data);
@@ -413,6 +414,39 @@ t
             doc_strings: vdocs,
             outer: None,
             name: interner.intern("root"),
+            free_list: Vec::new(),
+        }
+    }
+
+    pub fn new_math(interner: &mut Interner) -> Self {
+        let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
+        add_math_builtins(interner, &mut data);
+        let mut exports = Vec::new();
+        for key in data.keys() {
+            exports.push(Expression::alloc_data(ExpEnum::Symbol(key, SymLoc::None)));
+        }
+        data.insert(
+            interner.intern("*ns-exports*"),
+            (Expression::with_list(exports), "".to_string()),
+        );
+        let mut vdata = Vec::with_capacity(data.len());
+        let mut vdocs = Vec::with_capacity(data.len());
+        let mut map = HashMap::new();
+        for (k, (exp, doc_str)) in data.drain() {
+            vdata.push(Binding::with_expression(exp));
+            if doc_str.is_empty() {
+                vdocs.push(None);
+            } else {
+                vdocs.push(Some(doc_str));
+            }
+            map.insert(k, vdata.len() - 1);
+        }
+        Namespace {
+            map,
+            data: vdata,
+            doc_strings: vdocs,
+            outer: None,
+            name: interner.intern("math"),
             free_list: Vec::new(),
         }
     }

@@ -263,7 +263,6 @@
          (set! result (read stream))
          (consume-whitespace stream)
          (set! ch (str-iter-next! stream))
-         ;((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
          (if (not (= #\) ch))
              (err "Unbalanced ) in '\$' shell read macro"))
          result)

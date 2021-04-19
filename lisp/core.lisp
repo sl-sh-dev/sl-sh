@@ -2,7 +2,19 @@
 ;;; are always available.
 
 ; XXX TODO- use a gensym in shell-reader so we can more consistently detect these.
-(def maybe-docstring? (fn (test-form)
+(def maybe-docstring?
+"Usage: (maybe-docstring? form)
+
+True if form might be a docstring, nil otherwise.
+
+Section: core
+
+Example:
+(test::assert-true (maybe-docstring? \"string\"))
+(test::assert-true (maybe-docstring? '(str 1 2 3)))
+(test::assert-false (maybe-docstring? '(1 2 3)))
+"
+    (fn (test-form)
                           (or (string? test-form)
                               (and (list? test-form)
                                    (symbol? (car test-form))
@@ -146,10 +158,52 @@ Example:
         (ns-enter (car ^ns-stack-xyz^))
         (set! ^ns-stack-xyz^ (cdr ^ns-stack-xyz^))));)
 
-(defmacro loop
+(defmacro let
+  "Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp.
+
+Section: core
+
+Example:
+(def test-do-one \"One1\")
+(def test-do-two \"Two1\")
+(def test-do-three (let ((test-do-one \"One\")) (set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(test::assert-equal \"One1\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (recur (+ idx 1)))))0)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (this-fn (+ idx 1)))))0)
 "
+  (vals &rest let-body)
+  ((fn (vars binds)
+       ((fn (el plist)
+            (if (not (null el))
+                (do
+                 (if (= 1 (length el))
+                     (do
+                      (vec-push! vars (car el))
+                      (vec-push! binds (list)))
+                     (= 2 (length el))
+                     (do
+                      (vec-push! vars (car el))
+                      (vec-push! binds (car (cdr el))))
+                     (err "ERROR: invalid bindings on let"))
+                 (recur (car plist)(cdr plist)))))(car vals)(cdr vals))
+       `((fn :no-recur ,vars ,@let-body) ,@binds))(make-vec (length vals))(make-vec (length vals))))
+
+(defmacro loop
+  "
 Binds bindings to parameters in body. Use recur with desired bindings for
 subsequent iteration.
+Within the loop the lambda 'break' will end the loop, break can take an option
+arguement that is what the loop produces (nil if no argument).t
 
 Section: core
 
@@ -159,9 +213,31 @@ Example:
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
+(def tot 0)
+(loop (idx) (0)
+    (set! tot (+ tot 1))
+    (if (= idx 2) (break))
+    (recur (+ idx 1)))
+(assert-equal 3 tot)
+(assert-equal 11 (loop (idx) (0)
+    (if (= idx 2) (break 11))
+    (recur (+ idx 1))))
+(assert-false (loop (idx) (0)
+    (if (= idx 2) (break))
+    (recur (+ idx 1))))
+(assert-error (loop (idx) (0)
+    (if (= idx 2) (break 1 3))
+    (recur (+ idx 1))))
 "
-    (params bindings body)
-        `((fn ,params ,body) ,@bindings))
+  (params bindings &rest body)
+  `(let ((break (fn (&rest ret)
+                    (if (= (length ret) 0)(return-from loop nil)
+                        (= (length ret) 1)(return-from loop (vec-nth ret 0))
+                        (err "break: requires 0 or 1 arguement"))))
+         (result))
+     (block loop
+       (set! result ((fn ,params ,@body) ,@bindings))
+       result)))
 
 (defmacro dotimes
 "
@@ -201,47 +277,6 @@ Example:
         (loop (,idx-bind ,stop-name) (0 (- ,times 1)) (do
             (,@body)
             (if (< ,idx-bind ,stop-name) (recur (+ ,idx-bind 1) ,stop-name))))))(gensym)))
-
-(defmacro let
-  "
-Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
-let-body with all values of binding bound to the result of the evaluation of
-sexp.
-
-Section: core
-
-Example:
-(def test-do-one \"One1\")
-(def test-do-two \"Two1\")
-(def test-do-three (let ((test-do-one \"One\")) (set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
-(test::assert-equal \"One1\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
-    (test::assert-equal (+ idx 2) v2)
-    (test::assert-equal (+ idx 3) v3)
-    (if (< idx 5) (recur (+ idx 1)))))0)
-((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
-    (test::assert-equal (+ idx 2) v2)
-    (test::assert-equal (+ idx 3) v3)
-    (if (< idx 5) (this-fn (+ idx 1)))))0)
-"
-  (vals &rest let-body)
-  ((fn (vars binds)
-       ((fn (el plist)
-            (if (not (null el))
-                (do
-                 (if (= 1 (length el))
-                     (do
-                      (vec-push! vars (car el))
-                      (vec-push! binds (list)))
-                     (= 2 (length el))
-                     (do
-                      (vec-push! vars (car el))
-                      (vec-push! binds (car (cdr el))))
-                     (err "ERROR: invalid bindings on let"))
-                 (recur (car plist)(cdr plist)))))(car vals)(cdr vals))
-       `((fn :no-recur ,vars ,@let-body) ,@binds))(make-vec (length vals))(make-vec (length vals))))
 
 (defmacro match
   "Usage: (match condition (value form*)*) -> result
@@ -452,7 +487,6 @@ Example:
     (test::assert-equal (list 1 2 10 4 5) lst))"
     (new-item old-item lst &rest mods)
     (let ((early-return (in? mods :first)))
-      (block search
       (loop (idx items) (0 lst)
         (if (empty-seq? items)
             lst
@@ -460,8 +494,8 @@ Example:
               (when (= (first items) old-item)
                   (do
                     (setnth! idx new-item lst)
-                    (when early-return (return-from search lst))))
-              (recur (+ 1 idx) (rest items)))))))
+                    (when early-return (return-from nsubstitute! lst))))
+              (recur (+ 1 idx) (rest items))))))
     lst)
 
 (defmacro substitute

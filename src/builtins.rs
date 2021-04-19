@@ -1117,11 +1117,11 @@ pub fn builtin_block(
                 break;
             }
         }
-        ret = if let Some(ret) = ret {
+        /*ret = if let Some(ret) = ret {
             Some(ret.resolve(environment)?)
         } else {
             None
-        };
+        };*/
         if let Some(ret) = check_return(environment, name) {
             return Ok(ret);
         }
@@ -2011,12 +2011,16 @@ Section: core
 Example:
 (test::assert-equal '(def xx \"value\") (expand-macro-all '(def xx \"value\")))
 
+(defmacro mac-test-loop
+    (params bindings body)
+        `((fn ,params ,body) ,@bindings))
+
 (defmacro mac-test-for
     (bind in in_list body) (do
 	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
     `((fn (,bind)
         (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (do
+            (mac-test-loop (plist) (,in_list) (do
                 (set! ,bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
@@ -2181,6 +2185,9 @@ t
 
 Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like do).
+Note: If the last expression in a block is a tail call then it can not use
+return-from since the tail call will leave the block and the return-from will
+not find it.
 
 Section: core
 
@@ -2195,7 +2202,8 @@ Example:
     (block forloop
         (for item in '(1 2 3)
             (when (= 2 item)
-              (return-from forloop item)))))
+              (return-from forloop item)))
+        nil)) ; This nil keeps the for loop from being a tail call.
 "
         ),
     );
