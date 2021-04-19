@@ -203,7 +203,7 @@ Example:
 Binds bindings to parameters in body. Use recur with desired bindings for
 subsequent iteration.
 Within the loop the lambda 'break' will end the loop, break can take an option
-arguement that is what the loop produces (nil if no argument).t
+argument that is what the loop produces (nil if no argument).
 
 Section: core
 
@@ -230,14 +230,16 @@ Example:
     (recur (+ idx 1))))
 "
   (params bindings &rest body)
-  `(let ((break (fn (&rest ret)
-                    (if (= (length ret) 0)(return-from loop nil)
-                        (= (length ret) 1)(return-from loop (vec-nth ret 0))
-                        (err "break: requires 0 or 1 arguement"))))
-         (result))
-     (block loop
-       (set! result ((fn ,params ,@body) ,@bindings))
-       result)))
+  (let ((loop-block (gensym))
+        (result-name (gensym)))
+    `(let ((break (fn (&rest ret)
+                      (if (= (length ret) 0)(return-from ,loop-block nil)
+                          (= (length ret) 1)(return-from ,loop-block (vec-nth ret 0))
+                          (err "break: requires 0 or 1 argument"))))
+           (,result-name))
+       (block ,loop-block
+         (set! ,result-name ((fn ,params ,@body) ,@bindings))
+         ,result-name))))
 
 (defmacro dotimes
 "
