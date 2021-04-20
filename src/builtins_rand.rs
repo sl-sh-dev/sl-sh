@@ -10,32 +10,34 @@ use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
 
-//TODO this does not match clhs spec
 fn builtin_random(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(next_arg) = eval_next(environment, args)? {
         let next_arg_d = next_arg.get();
-    }
-
-
-    let mut args = make_args(environment, args)?;
-    let mut rng = rand::thread_rng();
-    let ints = parse_list_of_ints(environment, &mut args)?;
-    let count = ints.len();
-    match count {
-        0 => Ok(Expression::alloc_data(ExpEnum::Float(rng.gen()))),
-        1 => {
-            let i = ints.get(0).unwrap();
-            match i {
-                positive if positive > &0 => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
+        let mut rng = rand::thread_rng();
+        match &next_arg_d.data {
+            ExpEnum::Int(i) => {
+                match i {
+                    positive if positive > &0 => {
+                        Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
+                    },
+                    _ => Err(LispError::new("Expected positive number")),
                 }
-                _ => Err(LispError::new("Expected positive integer")),
-            }
+            },
+            ExpEnum::Float(f) => {
+                match f {
+                    positive if positive > &0.0 => {
+                        Ok(Expression::alloc_data(ExpEnum::Float(rng.gen_range(0.0..*f))))
+                    },
+                    _ => Err(LispError::new("Expected positive number")),
+                }
+            },
+            _ => Err(LispError::new("Expected positive number, float or int")),
         }
-        _ => Err(LispError::new("Expected zero or one integers")),
+    } else {
+        Err(LispError::new("Expected positive number"))
     }
 }
 
@@ -63,13 +65,14 @@ fn builtin_get_random_str(
 fn get_random_str(environment: &mut Environment, args: &mut dyn Iterator<Item = Expression>, len: i64) -> Result<Expression, LispError> {
     if let Some(opt_arg) = eval_next(environment, args)? {
         let opt_arg_d = opt_arg.get();
+        let mut rng = rand::thread_rng();
         match &opt_arg_d.data {
             ExpEnum::Symbol(sym, _) => {
                 match sym {
                     &":ascii" => {
                         Ok(Expression::alloc_data(ExpEnum::String(
                             iter::repeat(())
-                                .map(|()| rand::thread_rng().sample(Ascii))
+                                .map(|()| rng.sample(Ascii))
                                 .map(char::from)
                                 .take(len as usize)
                                 .collect(),
@@ -78,7 +81,7 @@ fn get_random_str(environment: &mut Environment, args: &mut dyn Iterator<Item = 
                     &":alnum" => {
                         Ok(Expression::alloc_data(ExpEnum::String(
                             iter::repeat(())
-                                .map(|()| rand::thread_rng().sample(Alphanumeric))
+                                .map(|()| rng.sample(Alphanumeric))
                                 .map(char::from)
                                 .take(len as usize)
                                 .collect(),
@@ -87,7 +90,7 @@ fn get_random_str(environment: &mut Environment, args: &mut dyn Iterator<Item = 
                     &":hex" => {
                         Ok(Expression::alloc_data(ExpEnum::String(
                             iter::repeat(())
-                                .map(|()| rand::thread_rng().sample(Hex))
+                                .map(|()| rng.sample(Hex))
                                 .map(char::from)
                                 .take(len as usize)
                                 .collect(),
@@ -99,7 +102,7 @@ fn get_random_str(environment: &mut Environment, args: &mut dyn Iterator<Item = 
             ExpEnum::String(string, _) => {
                 Ok(Expression::alloc_data(ExpEnum::String(
                     iter::repeat(())
-                        .map(|()| rand::thread_rng().sample(UserProvidedGraphemes::new(string)))
+                        .map(|()| rng.sample(UserProvidedGraphemes::new(string)))
                         .take(len as usize)
                         .collect(),
                     None)))
@@ -273,15 +276,14 @@ Example:
             builtin_random,
             "Usage: (random), (random limit)
 
-If no arguments are given, generates a float between 0 and 1, otherwise takes a positive integer,
-limit, and returns positive integer between 0 and limit exclusive.
+Returns non-negative number less than limit and of the same type as limit.
 
 Section: math
 
 Example:
 (def rand-int (random 100))
 (test::assert-true (and (> rand-int 0) (< rand-int 100))
-(def rand-float (random))
+(def rand-float (random 1.0))
 (test::assert-true (and (> rand-float 0) (< rand-float 1)))
 (test::assert-error-msg (random -1) \"Expected positive integer\")
 (test::assert-error-msg (random 1 2) \"Expected zero or one integers\")
