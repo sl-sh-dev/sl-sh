@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::mem;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -230,16 +229,16 @@ Example:
                 let floats = parse_list_of_floats(environment, &mut args)?;
                 let mut freqs: HashMap<u64, i32> = HashMap::new();
                 for float in floats {
-                    *freqs.entry(unsafe { mem::transmute(float) }).or_insert(0) += 1;
+                    *freqs.entry(float.to_bits()).or_insert(0) += 1;
                 }
 
                 let mut counts: HashMap<i32, Vec<f64>> = HashMap::new();
                 let mut max_count = 0;
                 for freq in freqs.iter() {
                     let (float_as_int, count) = freq;
-                    let float: f64 = unsafe { mem::transmute(*float_as_int) };
+                    let float: f64 = f64::from_bits(*float_as_int);
                     let count: i32 = *count;
-                    counts.entry(count).or_insert(Vec::new()).push(float);
+                    counts.entry(count).or_insert_with(Vec::new).push(float);
                     if count > max_count {
                         max_count = count;
                     }
@@ -475,7 +474,7 @@ Section: math
 Example:
 (test::assert-equal 2.718281828459045 *e*)
 "
-                .to_string(),
+            .to_string(),
         ),
     );
 
@@ -492,7 +491,7 @@ Section: math
 Example:
 (test::assert-equal 3.141592653589793 *pi*)
 "
-                .to_string(),
+            .to_string(),
         ),
     );
 
@@ -908,8 +907,6 @@ Example:
     );
 }
 // TODO need sample-stats hash map with
+//  - should stats fcns take vectors as well?
 //  - mean, std-deviation, mode, min, max, 25%, median 75%
-//  - z-score?
-//  - t-test?
-//  - vec-sort!
-//  - vec-sort
+//  - vec-sort! and vec-sort

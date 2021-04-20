@@ -25,14 +25,9 @@ pub fn eval_next(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
     let arg = args.next();
-    if arg.is_none() {
-        Ok(None)
-    } else {
-        if let Some(arg) = arg {
-            Ok(Some(eval(environment, arg)?))
-        } else {
-            Ok(None)
-        }
+    match arg {
+        Some(arg) => Ok(Some(eval(environment, arg)?)),
+        None => Ok(None),
     }
 }
 

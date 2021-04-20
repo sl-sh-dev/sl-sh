@@ -1,9 +1,9 @@
 use rand::distributions::{Alphanumeric, Distribution};
 use rand::Rng;
-use unicode_segmentation::UnicodeSegmentation;
-use std::hash::BuildHasher;
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 use std::iter;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::builtins_util::*;
 use crate::environment::*;
@@ -18,21 +18,17 @@ fn builtin_random(
         let next_arg_d = next_arg.get();
         let mut rng = rand::thread_rng();
         match &next_arg_d.data {
-            ExpEnum::Int(i) => {
-                match i {
-                    positive if positive > &0 => {
-                        Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
-                    },
-                    _ => Err(LispError::new("Expected positive number")),
+            ExpEnum::Int(i) => match i {
+                positive if positive > &0 => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
                 }
+                _ => Err(LispError::new("Expected positive number")),
             },
-            ExpEnum::Float(f) => {
-                match f {
-                    positive if positive > &0.0 => {
-                        Ok(Expression::alloc_data(ExpEnum::Float(rng.gen_range(0.0..*f))))
-                    },
-                    _ => Err(LispError::new("Expected positive number")),
-                }
+            ExpEnum::Float(f) => match f {
+                positive if positive > &0.0 => Ok(Expression::alloc_data(ExpEnum::Float(
+                    rng.gen_range(0.0..*f),
+                ))),
+                _ => Err(LispError::new("Expected positive number")),
             },
             _ => Err(LispError::new("Expected positive number, float or int")),
         }
@@ -48,13 +44,10 @@ fn builtin_get_random_str(
     if let Some(next_arg) = eval_next(environment, args)? {
         if let ExpEnum::Int(i) = next_arg.get().data {
             match i {
-                positive if positive > 0 => {
-                    get_random_str(environment, args, positive)
-                },
+                positive if positive > 0 => get_random_str(environment, args, positive),
                 _ => Err(LispError::new("Expected positive number")),
             }
-        }
-        else {
+        } else {
             Err(LispError::new("Expected at least one number"))
         }
     } else {
@@ -62,55 +55,57 @@ fn builtin_get_random_str(
     }
 }
 
-fn get_random_str(environment: &mut Environment, args: &mut dyn Iterator<Item = Expression>, len: i64) -> Result<Expression, LispError> {
+fn get_random_str(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    len: i64,
+) -> Result<Expression, LispError> {
     if let Some(opt_arg) = eval_next(environment, args)? {
         let opt_arg_d = opt_arg.get();
         let mut rng = rand::thread_rng();
         match &opt_arg_d.data {
-            ExpEnum::Symbol(sym, _) => {
-                match sym {
-                    &":ascii" => {
-                        Ok(Expression::alloc_data(ExpEnum::String(
-                            iter::repeat(())
-                                .map(|()| rng.sample(Ascii))
-                                .map(char::from)
-                                .take(len as usize)
-                                .collect(),
-                            None)))
-                    },
-                    &":alnum" => {
-                        Ok(Expression::alloc_data(ExpEnum::String(
-                            iter::repeat(())
-                                .map(|()| rng.sample(Alphanumeric))
-                                .map(char::from)
-                                .take(len as usize)
-                                .collect(),
-                            None)))
-                    },
-                    &":hex" => {
-                        Ok(Expression::alloc_data(ExpEnum::String(
-                            iter::repeat(())
-                                .map(|()| rng.sample(Hex))
-                                .map(char::from)
-                                .take(len as usize)
-                                .collect(),
-                            None)))
-                    },
-                    _ => Err(LispError::new(format!("Unknown symbol {}", sym))),
-                }
-            },
-            ExpEnum::String(string, _) => {
-                Ok(Expression::alloc_data(ExpEnum::String(
+            ExpEnum::Symbol(sym, _) => match *sym {
+                ":ascii" => Ok(Expression::alloc_data(ExpEnum::String(
                     iter::repeat(())
-                        .map(|()| rng.sample(UserProvidedGraphemes::new(string)))
+                        .map(|()| rng.sample(Ascii))
+                        .map(char::from)
                         .take(len as usize)
                         .collect(),
-                    None)))
+                    None,
+                ))),
+                ":alnum" => Ok(Expression::alloc_data(ExpEnum::String(
+                    iter::repeat(())
+                        .map(|()| rng.sample(Alphanumeric))
+                        .map(char::from)
+                        .take(len as usize)
+                        .collect(),
+                    None,
+                ))),
+                ":hex" => Ok(Expression::alloc_data(ExpEnum::String(
+                    iter::repeat(())
+                        .map(|()| rng.sample(Hex))
+                        .map(char::from)
+                        .take(len as usize)
+                        .collect(),
+                    None,
+                ))),
+                _ => Err(LispError::new(format!("Unknown symbol {}", sym))),
             },
-            _ => Err(LispError::new("Expected Second argument must be keyword or string")),
+            ExpEnum::String(string, _) => Ok(Expression::alloc_data(ExpEnum::String(
+                iter::repeat(())
+                    .map(|()| rng.sample(UserProvidedGraphemes::new(string)))
+                    .take(len as usize)
+                    .collect(),
+                None,
+            ))),
+            _ => Err(LispError::new(
+                "Expected Second argument must be keyword or string",
+            )),
         }
     } else {
-        Err(LispError::new("Expected second argument to be a string, :hex, :ascii, or :alnum"))
+        Err(LispError::new(
+            "Expected second argument to be a string, :hex, :ascii, or :alnum",
+        ))
     }
 }
 
