@@ -9,6 +9,7 @@ use crate::builtins_file::add_file_builtins;
 use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
+use crate::builtins_rand::add_rand_builtins;
 use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_str::add_str_builtins;
@@ -255,6 +256,7 @@ impl Namespace {
         add_builtins(interner, &mut data);
         add_system_builtins(interner, &mut data);
         add_math_builtins(interner, &mut data);
+        add_rand_builtins(interner, &mut data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
         add_values_builtins(interner, &mut data);
