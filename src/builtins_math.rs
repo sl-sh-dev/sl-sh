@@ -1,4 +1,4 @@
-use rand::distributions::Alphanumeric;
+use rand::distributions::{Alphanumeric, Distribution};
 use rand::Rng;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -10,6 +10,7 @@ use crate::eval::eval;
 use crate::interner::*;
 use crate::types::*;
 use std::mem;
+use unicode_segmentation::UnicodeSegmentation;
 
 fn make_args(
     environment: &mut Environment,
@@ -234,6 +235,7 @@ Example:
         ),
     );
 
+    // TODO should return values object instead
     data.insert(
         interner.intern("mode"),
         Expression::make_function(
@@ -288,7 +290,7 @@ Example:
     );
 
     data.insert(
-        interner.intern("avg"),
+        interner.intern("mean"),
         Expression::make_function(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
@@ -297,23 +299,23 @@ Example:
                 let floats = parse_list_of_floats(environment, &mut args)?;
                 let sum = floats.iter().sum::<f64>();
                 let count = floats.len() as f64;
-                let avg = match count {
+                let mean = match count {
                     positive if positive > 0.0 => ExpEnum::Float(sum / count),
                     _ => ExpEnum::Nil,
                 };
-                Ok(Expression::alloc_data(avg))
+                Ok(Expression::alloc_data(mean))
             },
-            "Usage: (avg number+)
+            "Usage: (mean number+)
 
 Average a sequence of numbers.
 
 Section: math
 
 Example:
-(test::assert-equal nil (avg))
-(test::assert-equal 5 (avg 5))
-(test::assert-equal 7.5 (avg 5 10))
-(test::assert-equal 5.5 (avg 1 2 3 4 5 6 7 8 9 10))
+(test::assert-equal nil (mean))
+(test::assert-equal 5 (mean 5))
+(test::assert-equal 7.5 (mean 5 10))
+(test::assert-equal 5.5 (mean 1 2 3 4 5 6 7 8 9 10))
 ",
         ),
     );
@@ -328,11 +330,11 @@ Example:
                 let floats = parse_list_of_floats(environment, &mut args)?;
                 let sum = floats.iter().sum::<f64>();
                 let count = floats.len() as f64;
-                let avg = sum / count;
+                let mean = sum / count;
                 let std_dev = match count {
                     positive if positive > 0.0 => ExpEnum::Float(
                         (floats.iter().fold(0.0, |accum: f64, elem: &f64| -> f64 {
-                            accum + (avg - elem).powf(2.0)
+                            accum + (mean - elem).powf(2.0)
                         }) / count)
                             .sqrt(),
                     ),
@@ -489,7 +491,7 @@ Section: math
 Example:
 (test::assert-equal 2.718281828459045 *e*)
 "
-            .to_string(),
+                .to_string(),
         ),
     );
 
@@ -506,7 +508,7 @@ Section: math
 Example:
 (test::assert-equal 3.141592653589793 *pi*)
 "
-            .to_string(),
+                .to_string(),
         ),
     );
 
@@ -1023,29 +1025,88 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let ints = parse_list_of_ints(environment, &mut args)?;
-                if ints.len() != 1 {
-                    Err(LispError::new("Expected positive number"))
-                } else {
-                    let len = ints.get(0).unwrap();
-                    match len {
-                        positive if positive > &0 => Ok(Expression::alloc_data(ExpEnum::String(
-                            iter::repeat(())
-                                .map(|()| rand::thread_rng().sample(Alphanumeric))
-                                .map(char::from)
-                                .take(*len as usize)
-                                .collect(),
-                            None,
-                        ))),
-                        _ => Err(LispError::new("Expected positive number")),
+                if let Some(next_arg) = eval_next(environment, args)? {
+                    if let ExpEnum::Int(i) = next_arg.get().data {
+                        match i {
+                            positive if positive > 0 => {
+                                if let Some(opt_arg) = eval_next(environment, args)? {
+                                    let opt_arg_d = opt_arg.get();
+//                                    let distr: Distribution<T> = match &opt_arg_d.data {
+//                                        ExpEnum::Symbol(sym, _) => {
+//                                            match sym {
+//                                                &":hex" => HexGraphemes,
+//                                                &":ascii" => AsciiGraphemes,
+//                                                _ => Err(LispError::new(format!("Unknown symbol {}", sym))),
+//                                            }
+//                                        }
+//                                        ExpEnum::String(string, _) => UserProvidedGraphemes::new(string),
+//                                        _ => Err(LispError::new("Optional second argument must be keyword or string")),
+//                                    };
+//                                    Ok(Expression::alloc_data(ExpEnum::String(
+//                                        iter::repeat(())
+//                                            .map(|()| {
+//                                                rand::thread_rng().sample()
+//                                            })
+//                                            .take(*len as usize)
+//                                            .collect(),
+//                                        None,
+//                                    )))
+                                    Ok(Expression::alloc_data(ExpEnum::String(
+                                        iter::repeat(())
+                                            .map(|()| rand::thread_rng().sample(Alphanumeric))
+                                            .map(char::from)
+                                            .take(positive as usize)
+                                            .collect(),
+                                        None,
+                                    )))
+                                } else {
+                                    Ok(Expression::alloc_data(ExpEnum::String(
+                                        iter::repeat(())
+                                            .map(|()| rand::thread_rng().sample(Alphanumeric))
+                                            .map(char::from)
+                                            .take(positive as usize)
+                                            .collect(),
+                                        None,
+                                    )))
+                                }
+                            },
+                            _ => Err(LispError::new("Expected positive number")),
+                        }
                     }
+                    else {
+                        Err(LispError::new("Expected at least one number1"))
+                    }
+                } else {
+                    Err(LispError::new("Expected at least one number2"))
                 }
+//                match ExpEnum::Int(next_arg) = &next_arg.data {
+//                    Some(next_arg) => {
+//
+//                    },
+//                    _ => Err(LispError::new("Expected at least one number")),
+//                }
+//                if ints.len() != 1 {
+//                    Err(LispError::new("Expected positive number"))
+//                } else {
+//                    let len = ints.get(0).unwrap();
+//                    match len {
+//                        positive if positive > &0 =>
+// Ok(Expression::alloc_data(ExpEnum::String(
+//                            iter::repeat(())
+//                                .map(|()| rand::thread_rng().sample(Alphanumeric))
+//                                .map(char::from)
+//                                .take(*len as usize)
+//                                .collect(),
+//                            None,
+//                        ))),
+//                        _ => Err(LispError::new("Expected positive number")),
+//                    }
+//                }
             },
-            "Usage: (random-str str-length)
+            "Usage: (random-str str-length [char-set])
 
 Takes a positive integer and returns a string of random alphanumeric characters
-of provided lenth.
+of provided length.
 
 Section: math
 
@@ -1055,8 +1116,129 @@ Example:
 ",
         ),
     );
-}
 
-// todo steve's idea about random-str taking strings,
-//  give it a list of chars. or string and it would pull from that, e.g. give it 0-9,a-f to gen hex.
-// TODO max and min values.
+    #[derive(Debug)]
+    struct AsciiGraphemes;
+
+    impl Distribution<u8> for AsciiGraphemes {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u8 {
+            const RANGE: u32 = 26 + 26 + 10 + 32;
+            const ASCII_PRINTABLE_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                abcdefghijklmnopqrstuvwxyz\
+                0123456789\
+                !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+            // We can pick from 94 characters. This is so close to a power of 2, 128,
+            // that we can do better than `Uniform`. Use a simple bitshift and
+            // rejection sampling. We do not use a bitmask, because for small RNGs
+            // the most significant bits are usually of higher quality.
+            loop {
+                let var = rng.next_u32() >> (32 - 7);
+                if var < RANGE {
+                    return ASCII_PRINTABLE_CHARSET[var as usize];
+                }
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct HexGraphemes;
+
+    impl Distribution<u8> for HexGraphemes {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u8 {
+            const RANGE: u32 = 16;
+            const HEX_CHARSET: &[u8] = b"abcdef0123456789";
+            // We can pick from 16 characters. This is a power of 2. Use a
+            // simple bitshift and rejection sampling. We do not use a bitmask,
+            // because for small RNGs/ the most significant bits are usually
+            // of higher quality.
+            loop {
+                let var = rng.next_u32() >> (32 - 4);
+                if var < RANGE {
+                    return HEX_CHARSET[var as usize];
+                }
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct UserProvidedGraphemes {
+        sample_space: Vec<String>,
+        len: usize,
+    }
+
+    impl UserProvidedGraphemes {
+        pub fn new(s: &str) -> UserProvidedGraphemes {
+            let mut sample_space: Vec<String> = Vec::new();
+            for cluster in UnicodeSegmentation::graphemes(s, true) {
+                sample_space.push(cluster.to_string());
+            }
+            let len = sample_space.len();
+            UserProvidedGraphemes { sample_space, len }
+        }
+    }
+
+    impl Distribution<String> for UserProvidedGraphemes {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> String {
+            self.sample_space
+                .get(rng.gen_range(0..self.len))
+                .unwrap()
+                .to_owned()
+        }
+    }
+
+    data.insert(
+        interner.intern("random-str-sample"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let len = param_eval(environment, args, "random-str-sample")?;
+                let to_sample = param_eval(environment, args, "random-str-sample")?;
+                params_done(args, "random-str-sample")?;
+                let len_d = len.get();
+                if let ExpEnum::Int(len) = &len_d.data {
+                    match len {
+                        positive if positive > &0 => {
+                            let to_sample_d = to_sample.get();
+                            if let ExpEnum::String(string, _) = &to_sample_d.data {
+                                Ok(Expression::alloc_data(ExpEnum::String(
+                                    iter::repeat(())
+                                        .map(|()| {
+                                            rand::thread_rng().sample(UserProvidedGraphemes::new(string))
+                                        })
+                                        .take(*len as usize)
+                                        .collect(),
+                                    None,
+                                )))
+                            } else {
+                                Err(LispError::new("Second argument should be string."))
+                            }
+                        }
+                        _ => Err(LispError::new("First argument should be positive integer.")),
+                    }
+                } else {
+                    Err(LispError::new("First argument should be positive integer."))
+                }
+            },
+            "Usage: (random-str-sample str-length)
+
+Takes a positive integer and a string to sample from and returns a string of random characters
+of provided length from provided string.
+
+Section: math
+
+Example:
+(def hex-chars \"0123456789abcdef\")
+(random-str-sample)
+",
+        ),
+    );
+}
+// TODO need sample-stats hash map with
+//  - mean, std-deviation, mode, min, max, 25%, median 75%
+//  - z-score?
+//  - t-test?
+//  - vec-sort!
+//  - vec-sort
+//  - move rand functions to builtins_rand use more standard pattern that does not load all builtins
+// in one function.

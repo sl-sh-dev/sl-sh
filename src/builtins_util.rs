@@ -20,6 +20,22 @@ pub fn param_eval(
     }
 }
 
+pub fn eval_next(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Option<Expression>, LispError> {
+    let arg = args.next();
+    if arg.is_none() {
+        Ok(None)
+    } else {
+        if let Some(arg) = arg {
+            Ok(Some(eval(environment, arg)?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 pub fn params_done(
     args: &mut dyn Iterator<Item = Expression>,
     form: &str,
