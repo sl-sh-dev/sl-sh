@@ -27,6 +27,9 @@ pub use crate::reader::*;
 pub mod builtins_math;
 pub use crate::builtins_math::*;
 
+pub mod builtins_stats;
+pub use crate::builtins_stats::*;
+
 pub mod builtins_rand;
 pub use crate::builtins_rand::*;
 

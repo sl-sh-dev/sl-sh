@@ -6,42 +6,6 @@ use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
 
-pub fn mode(vec: &Vec<f64>) -> Result<Expression, LispError>{
-    let mut freqs: HashMap<u64, i32> = HashMap::new();
-    for float in vec {
-        *freqs.entry(float.to_bits()).or_insert(0) += 1;
-    }
-    let mut counts: HashMap<i32, Vec<f64>> = HashMap::new();
-    let mut max_count = 0;
-    for freq in freqs.iter() {
-        let (float_as_int, count) = freq;
-        let float: f64 = f64::from_bits(*float_as_int);
-        let count: i32 = *count;
-        counts.entry(count).or_insert_with(Vec::new).push(float);
-        if count > max_count {
-            max_count = count;
-        }
-    }
-    let modes = match counts.get(&max_count) {
-        Some(modes) => {
-            let mut modes = modes.to_vec();
-            modes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            Some(modes)
-        }
-        None => None,
-    };
-    match modes {
-        Some(modes) => {
-            let mut float_expr = Vec::with_capacity(modes.len());
-            for m in modes {
-                float_expr.push(Expression::alloc_data(ExpEnum::Float(m)));
-            }
-            Ok(Expression::alloc_data(ExpEnum::Vector(float_expr)))
-        }
-        None => Ok(Expression::alloc_data(ExpEnum::Nil)),
-    }
-}
-
 pub fn add_math_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -209,201 +173,6 @@ Example:
     );
 
     data.insert(
-        interner.intern("median"),
-        Expression::make_function(
-            |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = Expression>|
-             -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let mut floats = parse_list_of_floats(environment, &mut args)?;
-                if floats.len() > 0 {
-                    let len = floats.len();
-                    let median;
-                    if len > 0 {
-                        floats.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                        median = match len % 2 {
-                            1 => {
-                                let mid = (len - 1) / 2;
-                                ExpEnum::Float(floats[mid])
-                            }
-                            _ => {
-                                let mid = (len - 1) / 2;
-                                ExpEnum::Float((floats[mid] + floats[mid + 1]) / 2.0)
-                            }
-                        };
-                    } else {
-                        median = match floats.pop() {
-                            Some(val) => ExpEnum::Float(val),
-                            None => ExpEnum::Nil,
-                        }
-                    }
-                    Ok(Expression::alloc_data(median))
-                } else  {
-                    Err(LispError::new("expected at least one number"))
-                }
-            },
-            "Usage: (median number+)
-
-Returns median of sequence of numbers.
-
-Section: math
-
-Example:
-(test::assert-equal nil (median))
-(test::assert-equal 5 (median 5))
-(test::assert-equal 7.5 (median 10 5))
-(test::assert-equal 5.5 (median 10 9 8 7 6 5 4 3 2 1))
-(test::assert-equal 6 (median 10 4 8 7 6 5 9 3 2 1 11))
-",
-        ),
-    );
-
-    data.insert(
-        interner.intern("mode"),
-        Expression::make_function(
-            |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = Expression>|
-             -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let floats = parse_list_of_floats(environment, &mut args)?;
-                if floats.len() > 0 {
-                    mode(&floats)
-                } else {
-                    Err(LispError::new("expected at least one number"))
-                }
-            },
-            "Usage: (mode number+)
-
-Returns mode of a sequence of numbers. Since distributions can be multimodal, mode returns a list.
-
-Section: math
-
-Example:
-(test::assert-equal nil (mode))
-(test::assert-equal (list 5) (mode 5))
-(test::assert-equal (list 1 3 4 5 6 7 8 9 10) (mode 1 3 4 5 6 7 8 9 10))
-(test::assert-equal (list 7.0) (mode 1 7.0 3 4 5 6 7 8 9 10))
-",
-        ),
-    );
-
-    data.insert(
-        interner.intern("mean"),
-        Expression::make_function(
-            |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = Expression>|
-             -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let floats = parse_list_of_floats(environment, &mut args)?;
-                if floats.len() > 0 {
-                    let sum = floats.iter().sum::<f64>();
-                    let count = floats.len() as f64;
-                    let mean = match count {
-                        positive if positive > 0.0 => ExpEnum::Float(sum / count),
-                        _ => ExpEnum::Nil,
-                    };
-                    Ok(Expression::alloc_data(mean))
-                } else {
-                    Err(LispError::new("expected at least one number"))
-                }
-            },
-            "Usage: (mean number+)
-
-Average a sequence of numbers.
-
-Section: math
-
-Example:
-(test::assert-equal nil (mean))
-(test::assert-equal 5 (mean 5))
-(test::assert-equal 7.5 (mean 5 10))
-(test::assert-equal 5.5 (mean 1 2 3 4 5 6 7 8 9 10))
-",
-        ),
-    );
-
-    data.insert(
-        interner.intern("std-dev"),
-        Expression::make_function(
-            |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = Expression>|
-             -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let floats = parse_list_of_floats(environment, &mut args)?;
-                if floats.len() > 0 {
-                    let sum = floats.iter().sum::<f64>();
-                    let count = floats.len() as f64;
-                    let mean = sum / count;
-                    let std_dev = match count {
-                        positive if positive > 0.0 => ExpEnum::Float(
-                            (floats.iter().fold(0.0, |accum: f64, elem: &f64| -> f64 {
-                                accum + (mean - elem).powf(2.0)
-                            }) / count)
-                                .sqrt(),
-                        ),
-                        _ => ExpEnum::Nil,
-                    };
-                    Ok(Expression::alloc_data(std_dev))
-                } else {
-                    Err(LispError::new("expected at least one number"))
-                }
-            },
-            "Usage: (std-dev number+)
-
-Returns standard deviation of a sequence of numbers.
-
-Section: math
-
-Example:
-(test::assert-equal nil (std-dev))
-(test::assert-equal 2.872281323269 (std-dev 1 2 3 4 5 6 7 8 9 10))
-",
-        ),
-    );
-
-    data.insert(
-        interner.intern("summary-stats"),
-        Expression::make_function(
-            |environment: &mut Environment,
-             args: &mut dyn Iterator<Item = Expression>|
-             -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let floats = parse_list_of_floats(environment, &mut args)?;
-                let len = floats.len();
-                if len > 0 {
-                    let sum = floats.iter().sum::<f64>();
-                    let count = floats.len() as f64;
-                    let mean = sum / count;
-                    let std_dev = match count {
-                        positive if positive > 0.0 => ExpEnum::Float(
-                            (floats.iter().fold(0.0, |accum: f64, elem: &f64| -> f64 {
-                                accum + (mean - elem).powf(2.0)
-                            }) / count)
-                                .sqrt(),
-                        ),
-                        _ => ExpEnum::Nil,
-                    };
-                    let mode = mode(&floats);
-                    Ok(Expression::alloc_data(std_dev))
-                } else {
-                    Err(LispError::new("expected at least one number"))
-                }
-            },
-            "Usage: (std-dev number+)
-
-Returns standard deviation of a sequence of numbers.
-
-Section: math
-
-Example:
-(test::assert-equal nil (std-dev))
-(test::assert-equal 2.872281323269 (std-dev 1 2 3 4 5 6 7 8 9 10))
-",
-        ),
-    );
-
-
-    data.insert(
         interner.intern("%"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -539,7 +308,7 @@ Section: math
 Example:
 (test::assert-equal 2.718281828459045 *e*)
 "
-                .to_string(),
+            .to_string(),
         ),
     );
 
@@ -556,7 +325,7 @@ Section: math
 Example:
 (test::assert-equal 3.141592653589793 *pi*)
 "
-                .to_string(),
+            .to_string(),
         ),
     );
 
@@ -971,7 +740,3 @@ Example:
         ),
     );
 }
-// TODO need sample-stats hash map with
-//  - should stats fcns take vectors as well?
-//  - mean, std-deviation, mode, min, max, 25%, median 75%
-//  - vec-sort! and vec-sort
