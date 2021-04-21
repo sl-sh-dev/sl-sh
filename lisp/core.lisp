@@ -2,7 +2,19 @@
 ;;; are always available.
 
 ; XXX TODO- use a gensym in shell-reader so we can more consistently detect these.
-(def maybe-docstring? (fn (test-form)
+(def maybe-docstring?
+"Usage: (maybe-docstring? form)
+
+True if form might be a docstring, nil otherwise.
+
+Section: core
+
+Example:
+(test::assert-true (maybe-docstring? \"string\"))
+(test::assert-true (maybe-docstring? '(str 1 2 3)))
+(test::assert-false (maybe-docstring? '(1 2 3)))
+"
+    (fn (test-form)
                           (or (string? test-form)
                               (and (list? test-form)
                                    (symbol? (car test-form))
@@ -12,14 +24,14 @@
                                    (symbol? (vec-nth test-form 0))
                                    (= (str (vec-nth test-form 0) "str"))))))
 (def defmacro
-"Usage: (defmacro name doc_string? argument_list body)
+  "Usage: (defmacro name doc_string? argument_list body)
 
 Create a macro and bind it to a symbol in the current scope.
 
 Section: core
 
 Example:
-(defmacro test-mac (x) (var y (+ (ref (ref x)) 1)) `(set! ,x ,y))
+(defmacro test-mac (x) (let ((y (+ (ref (ref x)) 1))) `(set! ,x ,y)))
 (def test-mac-x 2)
 (test-mac test-mac-x)
 (test::assert-equal 3 test-mac-x)
@@ -27,40 +39,20 @@ Example:
 (test-mac test-mac-x)
 (test::assert-equal 15 test-mac-x)
 "
-    (macro (name &rest args) 
-           ((fn ()
-                (var ars nil)
-                (var body nil)
+  (macro (name &rest args)
+         ((fn ()
+              ((fn (ars body doc-str)
                 (if (< (length args) 2) (err "defmacro: Wrong number of args."))
                 (if (maybe-docstring? (vec-nth args 0))
-                  (do
-                    (var doc-str (vec-nth args 0))
-                    (set! ars (vec-nth args 1))
-                    (set! body (vec-slice args 2))
-                    `(do (def ,name ,doc-str (macro ,ars ,@body)) nil))
-                  (do
-                    (set! ars (vec-nth args 0))
-                    (set! body (vec-slice args 1))
-                    `(def ,name (macro ,ars ,@body))))))))
-
-(defmacro lex 
-            "Usage: (lex exp0 ... expN) -> expN
-
-Evaluatate each form and return the last like do but it creates a new lexical scope around the call.
-This is basically like wrapping in a fn call but without the fn call or like a let
-without the initial bindings (you can use var to bind symbols in the new scope instead).
-
-Section: core
-
-Example:
-(def test-do-one \"One1\")
-(def test-do-two \"Two1\")
-(def test-do-three (lex (var test-do-one \"One\")(set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
-(test::assert-equal \"One1\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-"
-  (&rest lex-body) `((fn () ,@lex-body)))
+                    (do
+                     (set! doc-str (vec-nth args 0))
+                     (set! ars (vec-nth args 1))
+                      (set! body (vec-slice args 2))
+                      `(do (def ,name ,doc-str (macro ,ars ,@body)) nil))
+                    (do
+                     (set! ars (vec-nth args 0))
+                     (set! body (vec-slice args 1))
+                      `(def ,name (macro ,ars ,@body)))))nil nil nil)))))
 
 (defmacro ns-export
 "Export a symbol or list of symbols to be imported into other namespaces.
@@ -87,34 +79,6 @@ Section: namespace"
                          (vec-set! import 2 (sym ,namespace "::" symbol))
                          (eval import))))))
 
-(defmacro internal-fn
-"
-Template for macros that define functions, can pass an 'op' like def or set.
-Intended for use by other core macros.
-
-Section: core
-
-Example:
-; tested in defn and varfn.
-t
-"
-    (op name &rest args)
-    ((fn ()
-         (if (< (length args) 1) (err (str "defn: Wrong number of args creating " name)))
-         (var ars nil)
-         (var body nil)
-         (if (maybe-docstring? (vec-nth args 0))
-           (do
-             (if (< (length args) 2) (err "defn: Wrong number of args."))
-             (var doc-str (vec-nth args 0))
-             (set! ars (vec-nth args 1))
-             (set! body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
-             `(,op ,name ,doc-str (fn ,ars (block ,name ,@body))))
-           (do
-             (set! ars (vec-nth args 0)) 
-             (set! body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
-             `(,op ,name (fn ,ars (block ,name ,@body))))))))
-
 (defmacro defn
 "
 Define a named function in the current namespace.
@@ -131,26 +95,21 @@ Example:
 (defn defn-test (x y) t)
 (test::assert-true (defn-test 2 3))
 "
-    (name &rest args) `(internal-fn def ,name ,@args)) 
-
-(defmacro varfn
-"
-Binds name to function body in current lexical scope (not namespace- like var).
-
-Section: core
-
-Example:
-(lex
-  (varfn varfn-test (x y) (+ x y))
-  (test::assert-equal 5 (varfn-test 2 3))
-  (varfn varfn-test2 (x y) (set! x (* x 2))(+ x y))
-  (test::assert-equal 7 (varfn-test2 2 3))
-  (test::assert-true (def? varfn-test))
-  (test::assert-true (def? varfn-test2)))
-(test::assert-false (def? varfn-test))
-(test::assert-false (def? varfn-test2))
-"
-    (name &rest args) `(internal-fn var ,name ,@args)) 
+    (name &rest args)
+    ((fn ()
+         (if (< (length args) 1) (err (str "defn: Wrong number of args creating " name)))
+         ((fn (ars body doc-str)
+         (if (maybe-docstring? (vec-nth args 0))
+           (do
+             (if (< (length args) 2) (err "defn: Wrong number of args."))
+             (set! doc-str (vec-nth args 0))
+             (set! ars (vec-nth args 1))
+             (set! body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
+             `(def ,name ,doc-str (fn ,ars (block ,name ,@body))))
+           (do
+             (set! ars (vec-nth args 0)) 
+             (set! body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
+             `(def ,name (fn ,ars (block ,name ,@body))))))nil nil nil))))
 
 ; Due to the way namespaces interact with lambdas this needs to be a symbol in
 ; root.
@@ -199,10 +158,52 @@ Example:
         (ns-enter (car ^ns-stack-xyz^))
         (set! ^ns-stack-xyz^ (cdr ^ns-stack-xyz^))));)
 
-(defmacro loop
+(defmacro let
+  "Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+let-body with all values of binding bound to the result of the evaluation of
+sexp.
+
+Section: core
+
+Example:
+(def test-do-one \"One1\")
+(def test-do-two \"Two1\")
+(def test-do-three (let ((test-do-one \"One\")) (set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
+(test::assert-equal \"One1\" test-do-one)
+(test::assert-equal \"Two\" test-do-two)
+(test::assert-equal \"Three\" test-do-three)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (recur (+ idx 1)))))0)
+((fn (idx) (let ((v2 (+ idx 2))(v3 (+ idx 3)))
+    (test::assert-equal (+ idx 2) v2)
+    (test::assert-equal (+ idx 3) v3)
+    (if (< idx 5) (this-fn (+ idx 1)))))0)
 "
+  (vals &rest let-body)
+  ((fn (vars binds)
+       ((fn (el plist)
+            (if (not (null el))
+                (do
+                 (if (= 1 (length el))
+                     (do
+                      (vec-push! vars (car el))
+                      (vec-push! binds (list)))
+                     (= 2 (length el))
+                     (do
+                      (vec-push! vars (car el))
+                      (vec-push! binds (car (cdr el))))
+                     (err "ERROR: invalid bindings on let"))
+                 (recur (car plist)(cdr plist)))))(car vals)(cdr vals))
+       `((fn :no-recur ,vars ,@let-body) ,@binds))(make-vec (length vals))(make-vec (length vals))))
+
+(defmacro loop
+  "
 Binds bindings to parameters in body. Use recur with desired bindings for
 subsequent iteration.
+Within the loop the lambda 'break' will end the loop, break can take an option
+argument that is what the loop produces (nil if no argument).
 
 Section: core
 
@@ -212,9 +213,33 @@ Example:
     (set! tot (+ tot 1))
     (if (> idx 1) (recur (- idx 1)))))
 (assert-equal 3 tot)
+(def tot 0)
+(loop (idx) (0)
+    (set! tot (+ tot 1))
+    (if (= idx 2) (break))
+    (recur (+ idx 1)))
+(assert-equal 3 tot)
+(assert-equal 11 (loop (idx) (0)
+    (if (= idx 2) (break 11))
+    (recur (+ idx 1))))
+(assert-false (loop (idx) (0)
+    (if (= idx 2) (break))
+    (recur (+ idx 1))))
+(assert-error (loop (idx) (0)
+    (if (= idx 2) (break 1 3))
+    (recur (+ idx 1))))
 "
-    (params bindings body)
-        `((fn ,params ,body) ,@bindings))
+  (params bindings &rest body)
+  (let ((loop-block (gensym))
+        (result-name (gensym)))
+    `(let ((break (fn (&rest ret)
+                      (if (= (length ret) 0)(return-from ,loop-block nil)
+                          (= (length ret) 1)(return-from ,loop-block (vec-nth ret 0))
+                          (err "break: requires 0 or 1 argument"))))
+           (,result-name))
+       (block ,loop-block
+         (set! ,result-name ((fn ,params ,@body) ,@bindings))
+         ,result-name))))
 
 (defmacro dotimes
 "
@@ -256,7 +281,7 @@ Example:
             (if (< ,idx-bind ,stop-name) (recur (+ ,idx-bind 1) ,stop-name))))))(gensym)))
 
 (defmacro match
-"Usage: (match condition (value form*)*) -> result
+  "Usage: (match condition (value form*)*) -> result
 
 Evaluate condition and look for matching value in each branch of type
 (value form*). Form(s) will be wrapped in an implicit do. Use nil to take
@@ -287,22 +312,22 @@ Example:
 (assert-equal \"opt-three\" (select-option-def 3))
 (assert-equal \"default\" (select-option-def 4))
 "
-    (condition &rest branches)
-    ((fn ()
-        (var out_list (list))
-        (var make-action (fn (action)
-            (if (seq? action)
-                `(do ,@action)
-                `action)))
-        (var make-cond (fn (condition val action others)
-            (if (null val) (make-action action)
-                (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
-                    `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (first (first others)) (rest (first others)) (rest others)))))))
-        (var cond-name condition)
-        `(if ,@(make-cond cond-name (first (first branches)) (rest (first branches)) (rest branches))))))
+  (condition &rest branches)
+  ((fn ()
+       (let ((out_list (list))
+             (make-action (fn (action)
+                              (if (seq? action)
+                                  `(do ,@action)
+                                  `action)))
+             (make-cond (fn (condition val action others)
+                            (if (null val) (make-action action)
+                                (if (empty-seq? others) `((= ,condition ,val) ,(make-action action))
+                                    `((= ,condition ,val) ,(make-action action) ,@(make-cond condition (first (first others)) (rest (first others)) (rest others)))))))
+             (cond-name condition))
+         `(if ,@(make-cond cond-name (first (first branches)) (rest (first branches)) (rest branches)))))))
 
 (defmacro cond
-"Usage: (cond ((test form*)*) -> result
+  "Usage: (cond ((test form*)*) -> result
 
 Evaluate each test in order.  If it is true then evaluate the form(s) in an
 implicit do and return the result.  Stop evaluting at the first true test.
@@ -333,53 +358,18 @@ Example:
 (assert-equal \"opt-three\" (select-option-def 3))
 (assert-equal \"default\" (select-option-def 4))
 "
-    (&rest branches)
-    ((fn ()
-        (var out_list (list))
-        (var make-action (fn (action)
-            (if (seq? action)
-                `(do ,@action)
-                `action)))
-        (var make-cond (fn (condition action others)
-            (if (empty-seq? others)
-                `(,condition ,(make-action action) nil)
-                `(,condition ,(make-action action) ,@(make-cond (first (first others)) (rest (first others)) (rest others))))))
-        `(if ,@(make-cond (first (first branches)) (rest (first branches)) (rest branches))))))
-
-(defmacro let
-"
-Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
-let-body with all values of binding bound to the result of the evaluation of
-sexp.
-
-Section: core
-
-Example:
-(def test-do-one \"One1\")
-(def test-do-two \"Two1\")
-(def test-do-three (let ((test-do-one \"One\")) (set! test-do-two \"Two\")(test::assert-equal \"One\" test-do-one)\"Three\"))
-(test::assert-equal \"One1\" test-do-one)
-(test::assert-equal \"Two\" test-do-two)
-(test::assert-equal \"Three\" test-do-three)
-"
-    (vals &rest let-body)
-    (var vars (make-vec (length vals)))
-    (var binds (make-vec (length vals)))
-      ((fn (plist)
-        (if (> (length plist) 0)
-          (do
-            (var el (car plist))
-            (if (= 1 (length el))
-              (do
-                (vec-push! vars (car el))
-                (vec-push! binds (list)))
-              (if (= 2 (length el))
-                (do
-                  (vec-push! vars (car el))
-                  (vec-push! binds (car (cdr el))))
-                (err "ERROR: invalid bindings on let")))
-            (recur (cdr plist)))))vals)
-      `((fn ,vars ,@let-body) ,@binds))
+  (&rest branches)
+  ((fn ()
+       (let ((out_list (list))
+             (make-action (fn (action)
+                              (if (seq? action)
+                                  `(do ,@action)
+                                  `action)))
+             (make-cond (fn (condition action others)
+                            (if (empty-seq? others)
+                                `(,condition ,(make-action action) nil)
+                                `(,condition ,(make-action action) ,@(make-cond (first (first others)) (rest (first others)) (rest others)))))))
+         `(if ,@(make-cond (first (first branches)) (rest (first branches)) (rest branches)))))))
 
 (defmacro func?
 "
@@ -429,18 +419,19 @@ Example:
 (&rest args)
     (if (< (length args) 2)
         (err "-> (thush operator) requires at least two arguments")
-        (do
-            (var fst (first args))
-            (loop (curr-form forms) (fst (rest args))
+        (let ((fst (first args))
+              (sexp)
+              (fcn))
+          (loop (curr-form forms) (fst (rest args))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                        (var sexp nil)
-                        (var fcn (first forms))
-                        (if (seq? fcn)
-                            (set! sexp `(,(first fcn) ,curr-form ,@(rest fcn)))
-                            (set! sexp (list fcn curr-form)))
-                        (recur sexp (rest forms))))))))
+                     (set! sexp nil)
+                     (set! fcn (first forms))
+                      (if (seq? fcn)
+                          (set! sexp `(,(first fcn) ,curr-form ,@(rest fcn)))
+                          (set! sexp (list fcn curr-form)))
+                      (recur sexp (rest forms))))))))
 
 (defmacro ->>
 "inserts result of previous expression as last argument to current expression.
@@ -458,17 +449,18 @@ Example:
 (&rest args)
     (if (< (length args) 2)
         (err "->> (thush operator) requires at least two arguments")
-        (do
-            (var fst (first args))
-            (loop (curr-form forms) (fst (rest args))
+        (let ((fst (first args))
+              (sexp)
+              (fcn))
+          (loop (curr-form forms) (fst (rest args))
                 (if (empty-seq? forms)
                     curr-form
                     (do
-                      (var sexp nil)
-                      (var fcn (first forms))
+                     (set! sexp nil)
+                     (set! fcn (first forms))
                       (if (seq? fcn)
-                        (set! sexp `(,@fcn ,curr-form))
-                        (set! sexp (list fcn curr-form)))
+                          (set! sexp `(,@fcn ,curr-form))
+                          (set! sexp (list fcn curr-form)))
                       (recur sexp (rest forms))))))))
 
 ; Reader macro for #.
@@ -497,7 +489,6 @@ Example:
     (test::assert-equal (list 1 2 10 4 5) lst))"
     (new-item old-item lst &rest mods)
     (let ((early-return (in? mods :first)))
-      (block search
       (loop (idx items) (0 lst)
         (if (empty-seq? items)
             lst
@@ -505,8 +496,8 @@ Example:
               (when (= (first items) old-item)
                   (do
                     (setnth! idx new-item lst)
-                    (when early-return (return-from search lst))))
-              (recur (+ 1 idx) (rest items)))))))
+                    (when early-return (return-from nsubstitute! lst))))
+              (recur (+ 1 idx) (rest items))))))
     lst)
 
 (defmacro substitute
@@ -526,6 +517,36 @@ Example:
     (test::assert-equal (list 1 2 4 3 3 4 5) (substitute 4 3 lst2 :first)))"
      (new-item old-item lst &rest mods)
      `(nsubstitute! ,new-item ,old-item (collect-copy ,lst) ,@mods))
+
+(defmacro dyn
+"Usage: (dyn key value expression) -> result_of_expression
+
+Creates a dynamic binding for key, assigns value to it and evals expression under it.
+Note that if key must be a symbol and is not evaluted.
+
+The binding is gone once the dyn form ends. This is basically a set! on the
+binding in an unwind protect to reset it when done.  When used on a global will
+set the first binding found and reset it when done.
+Calls to dyn can be nested and previous dynamic values will
+be restored as interior dyn's exit.
+
+Section: core
+
+Example:
+(defn test-dyn-fn () (print \"Print dyn out\"))
+(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
+(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
+"
+; XXX this could be better and match the original builtin dyn closer but this version
+; is good enough for now (redirectiong stdout/err, etc).  Also if it sets a root
+; binding and then the name is used for the current namespace it might 'restore'
+; the wrong binding so look into that.
+  (key value expression)
+  (let ((old-val (gensym)))
+    `(let ((,old-val ,key))
+       (unwind-protect
+            (do (set! ,key ,value) ,expression)
+         (set! ,key ,old-val)))))
 
 (defn identity
 "Identity function.

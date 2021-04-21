@@ -12,10 +12,36 @@
           (or (builtin? com) (lambda? com) (macro? com)))
       nil))
 
+(defn flatten-args (vars-vec from)
+  (if (list? from)
+      ((fn (data)
+           (if (pair? data)
+               (do (flatten-args vars-vec (car data))
+                   (recur (cdr data)))))
+       from)
+      (and (vec? from)(> (length from) 0))
+      ((fn (i arg args-max)
+           (flatten-args vars-vec arg)
+           (if (< i args-max)
+               (recur (+ i 1)(vec-nth from (+ i 1))args-max)))
+       0 (vec-nth from 0) (- (length from) 1))
+      (vec? from) nil
+      (vec-push! vars-vec (str from))))
+
+(defn fncall (com &rest args)
+  (let ((new-args (vec)))
+    (flatten-args new-args args)
+    (ns-push *active-ns*)
+    (unwind-protect
+         (if (macro? com) (eval (expand-macro-all `(,com ,@new-args)))
+             (apply com new-args))
+      (ns-pop))))
+
+; sys-apply needs to be able to handle no args to make the shell reader simpler.
 (defmacro sys-apply (&rest args)
   (if (> (length args) 0)
       (if (callable? (vec-nth args 0))
-          `(,(vec-nth args 0) ,@(vec-slice args 1))
+          `(shell-read::fncall ,(vec-nth args 0) ,@(vec-slice args 1))
           `(syscall ,(vec-nth args 0) ,@(vec-slice args 1)))
       nil))
 
@@ -103,8 +129,7 @@
 (defn maybe-glob? (token)
   (or (str-contains "*" token)
       (str-contains "?" token)
-      (str-contains "[" token)
-      (str-contains "{" token)))
+      (str-contains "[" token)))
 
 (let ((paren-level 0))
 
@@ -238,7 +263,6 @@
          (set! result (read stream))
          (consume-whitespace stream)
          (set! ch (str-iter-next! stream))
-         ;((fn () (if (and (char? ch)(char-whitespace? ch)) (do (set! ch (str-iter-next! stream))(recur)))))
          (if (not (= #\) ch))
              (err "Unbalanced ) in '\$' shell read macro"))
          result)

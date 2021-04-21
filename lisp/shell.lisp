@@ -500,11 +500,11 @@ Example:
 		(get-rgb-seq R G B :bkrd))
 
 (defn get-rgb-seq (R G B color-type)
-    (varfn make-color (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))
+  (let ((make-color (fn (color-code) (str "\x1b[" color-code ";2;" R ";" G ";" B "m"))))
     (match color-type
         (:font (make-color 38))
         (:bkrd (make-color 48))
-        (nil (make-color 38))))
+        (nil (make-color 38)))))
 
 (defn find-symbol (com)
 	(var val (sym *active-ns* "::" com))
@@ -586,139 +586,146 @@ Example:
 (def tok-string-color shell::*fg-magenta*)
 (def tok-invalid-color shell::*fg-red*)
 
-;(defmacro syntax-on
 (defn syntax-on
-  "
-  Turn on syntax highlighting at the repl.
+"Turn on syntax highlighting at the repl.
 
-  Section: shell
-  "
+Section: shell
+"
   ()
-  ;'(lex
-     (var plev 0)
-     (var ch nil)
-     (var bad-syms (make-hash))
-     (var sys-syms (make-hash))
-     (var out (str ""))
-     (var token (str ""))
-     (var in-sys-command nil)
-     (var tok-command t)
+  (let* ((plev 0)
+         (ch nil)
+         (bad-syms (make-hash))
+         (sys-syms (make-hash))
+         (out (str ""))
+         (token (str ""))
+         (in-sys-command nil)
+         (tok-command t)
 
-     (varfn syn-func? (com)
-            ; Want the actual thing pointed to by the symbol in com for the test.
-            (set! com (shell::find-symbol com))
-            (if (def? (ref com))
-              (do
-                (set! com (eval (sym com)))
-                (or (builtin? com) (lambda? com) (macro? com)))
-              nil))
+         ; Want the actual thing pointed to by the symbol in com for the test.
+         (syn-func?
+           (fn (com)
+               (set! com (shell::find-symbol com))
+               (if (def? (ref com))
+                   (do
+                    (set! com (eval (sym com)))
+                    (or (builtin? com) (lambda? com) (macro? com)))
+                   nil)))
 
-     (varfn paren-color (level)
-            (var col (% level 4))
-            (if (= col 0) shell::*fg-white*
-              (if (= col 1) shell::*fg-cyan*
-                (if (= col 2) shell::*fg-yellow*
-                  (if (= col 3) shell::*fg-blue*)))))
+         (paren-color
+           (fn (level)
+               (var col (% level 4))
+               (if (= col 0) shell::*fg-white*
+                   (if (= col 1) shell::*fg-cyan*
+                       (if (= col 2) shell::*fg-yellow*
+                           (if (= col 3) shell::*fg-blue*))))))
 
-     (varfn my-sys-command? (command)
-            (var ret nil)
-            (if (hash-haskey sys-syms command)
-              (set! ret t)
-              (if (not (hash-haskey bad-syms command))
-                (do
-                  (set! ret (shell::sys-command? command))
-                  (if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
-            ret)
+         (my-sys-command?
+           (fn (command)
+               (var ret nil)
+               (if (hash-haskey sys-syms command)
+                   (set! ret t)
+                   (if (not (hash-haskey bad-syms command))
+                       (do
+                        (set! ret (shell::sys-command? command))
+                        (if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
+               ret))
 
-     (varfn command-color (command)
-            (var ns-command (shell::find-symbol command))
-            (if (not tok-command)
-              (if (def? (ref ns-command))
-                (if (syn-func? command)
-                  (if in-sys-command
-                    (str shell::tok-default-color command shell::*fg-default*)
-                    (str shell::tok-slsh-fcn-color command shell::*fg-default*))
-                  (str shell::tok-slsh-form-color command shell::*fg-default*))
-                (str shell::tok-default-color command shell::*fg-default*))
-              (if (syn-func? command)
-                (if (or (shell::alias? command)(shell::sys-alias? command))
-                  (do
-                    (set! in-sys-command t)
-                    (str shell::tok-sys-alias-color command shell::*fg-default*))
-                  (str shell::tok-slsh-fcn-color command shell::*fg-default*))
-                (if (my-sys-command? command)
-                  (do
-                    (set! in-sys-command t)
-                    (str shell::tok-sys-command-color command shell::*fg-default*))
-                  (str shell::tok-invalid-color command shell::*fg-default*)))))
+         (command-color
+           (fn (command)
+               (var ns-command (shell::find-symbol command))
+               (if (not tok-command)
+                   (if (def? (ref ns-command))
+                       (if (syn-func? command)
+                           (if in-sys-command
+                               (str shell::tok-default-color command shell::*fg-default*)
+                               (str shell::tok-slsh-fcn-color command shell::*fg-default*))
+                           (str shell::tok-slsh-form-color command shell::*fg-default*))
+                       (str shell::tok-default-color command shell::*fg-default*))
+                   (if (syn-func? command)
+                       (if (or (shell::alias? command)(shell::sys-alias? command))
+                           (do
+                            (set! in-sys-command t)
+                            (str shell::tok-sys-alias-color command shell::*fg-default*))
+                           (str shell::tok-slsh-fcn-color command shell::*fg-default*))
+                       (if (my-sys-command? command)
+                           (do
+                            (set! in-sys-command t)
+                            (str shell::tok-sys-command-color command shell::*fg-default*))
+                           (str shell::tok-invalid-color command shell::*fg-default*))))))
 
-     (varfn prrawtoken ()
-            (var ttok token)
-            (set! token (str ""))
-            ttok)
-     (varfn prtoken ()
-            (var ttok token)
-            (set! token (str ""))
-            (command-color ttok))
-     (varfn paren-open ()
-            (var ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
-            (set! plev (+ plev 1))
-            (set! tok-command t)
-            ret)
-     (varfn paren-close ()
-            (set! in-sys-command nil)
-            (if (> plev 0)
-              (do
-                (set! plev (- plev 1))
-                (str (prtoken) (paren-color plev) #\) shell::*fg-default*))
-              (str (prtoken) shell::*fg-red* #\) shell::*fg-default*)))
+         (prrawtoken
+           (fn ()
+               (var ttok token)
+               (set! token (str ""))
+               ttok))
+         (prtoken
+           (fn ()
+               (var ttok token)
+               (set! token (str ""))
+               (command-color ttok)))
+         (paren-open
+           (fn ()
+               (var ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
+               (set! plev (+ plev 1))
+               (set! tok-command t)
+               ret))
+         (paren-close
+           (fn ()
+               (set! in-sys-command nil)
+               (if (> plev 0)
+                   (do
+                    (set! plev (- plev 1))
+                    (str (prtoken) (paren-color plev) #\) shell::*fg-default*))
+                   (str (prtoken) shell::*fg-red* #\) shell::*fg-default*))))
 
-     (varfn whitespace (ch)
-            (var ret (str (prtoken) ch))
-            (set! token (str ""))
-            (set! tok-command nil)
-            ret)
+         (whitespace
+           (fn (ch)
+               (var ret (str (prtoken) ch))
+               (set! token (str ""))
+               (set! tok-command nil)
+               ret))
 
-     (varfn line-handler (line)
-            (var in-quote nil)
-            (var last-ch #\ )
-            (set! plev 0)
-            (set! ch nil)
-            (set! token (str ""))
-            (set! tok-command t)
-            (set! in-sys-command nil)
-            (if (<= (length line) 1)
-              (do
-                (hash-clear! bad-syms)
-                (hash-clear! sys-syms)))
-            (set! out (str-map (fn (ch)
-                                   (var ret (if in-quote
-                                               (do
-                                                 (str-push! token ch)
-                                                 (if (and (not (= last-ch #\\))(= ch #\"))
-												   (do
-												     (set! in-quote nil)
-												     (str-push! token shell::*fg-default*)
-												     (prrawtoken))
-												   ""))
-                                               (if (and (not (= last-ch #\\))(= ch #\"))
-                                                 (do (str-push! token (str shell::tok-string-color ch))(set! in-quote t) "")
-                                                 (if (= ch #\()
-												   (paren-open)
-												   (if (= ch #\))
-												     (paren-close)
-												     (if (char-whitespace? ch)
-												       (whitespace ch)
-												       (do (str-push! token ch) "")))))))
-                                   (do (set! last-ch ch) ret)) line))
-            (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
-            (str out))
+         (line-handler
+           (fn (line)
+               (var in-quote nil)
+               (var last-ch #\ )
+               (set! plev 0)
+               (set! ch nil)
+               (set! token (str ""))
+               (set! tok-command t)
+               (set! in-sys-command nil)
+               (if (<= (length line) 1)
+                   (do
+                    (hash-clear! bad-syms)
+                    (hash-clear! sys-syms)))
+               (set! out (str-map (fn (ch)
+                                      (var ret (if in-quote
+                                                   (do
+                                                    (str-push! token ch)
+                                                    (if (and (not (= last-ch #\\))(= ch #\"))
+                                                        (do
+                                                         (set! in-quote nil)
+                                                         (str-push! token shell::*fg-default*)
+                                                          (prrawtoken))
+                                                        ""))
+                                                   (if (and (not (= last-ch #\\))(= ch #\"))
+                                                       (do (str-push! token (str shell::tok-string-color ch))(set! in-quote t) "")
+                                                       (if (= ch #\()
+                                                           (paren-open)
+                                                           (if (= ch #\))
+                                                               (paren-close)
+                                                               (if (char-whitespace? ch)
+                                                                   (whitespace ch)
+                                                                   (do (str-push! token ch) "")))))))
+                                      (do (set! last-ch ch) ret)) line))
+               (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
+               (str out))))
 
      (defn __line_handler (line)
            (var result (get-error (line-handler line)))
            (if (= :error (car result)) (shell::print-error result) (cdr result)))
 
-     nil);)
+     nil))
 
 (defmacro syntax-off
   "

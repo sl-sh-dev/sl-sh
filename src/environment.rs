@@ -114,9 +114,6 @@ pub struct Environment {
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
-    // This is the dynamic bindings.  These take precidence over the other
-    // bindings.
-    pub dynamic_scope: HashMap<&'static str, Binding>,
     // This is the environment's root (global namespace), it will also be part of
     // higher level namespaces.
     // It's special so keep a reference here as well for handy access.
@@ -152,6 +149,7 @@ pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
+    let math_scope = Rc::new(RefCell::new(Namespace::new_math(&mut interner)));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
     let terminal_fd = unsafe {
@@ -163,6 +161,7 @@ pub fn build_default_environment() -> Environment {
     };
     let reader_state = ReaderState::new();
     namespaces.insert(interner.intern("root"), root_scope.clone());
+    namespaces.insert(interner.intern("math"), math_scope);
     Environment {
         recur_num_args: None,
         gensym_count: 0,
@@ -180,7 +179,6 @@ pub fn build_default_environment() -> Environment {
         procs,
         save_exit_status: true,
         exit_code: None,
-        dynamic_scope: HashMap::new(),
         root_scope,
         namespace,
         namespaces,
@@ -255,7 +253,7 @@ fn lookup_in_stack(environment: &Environment, key: &str) -> Option<Binding> {
     None
 }
 
-fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) -> Option<Binding> {
+fn lookup_in_namespace(environment: &Environment, key: &str) -> Option<Binding> {
     // Check for namespaced symbols.
     if key.contains("::") {
         // namespace reference.
@@ -263,14 +261,7 @@ fn lookup_in_namespace(environment: &Environment, key: &str, allow_dyn: bool) ->
         if let Some(namespace) = key_i.next() {
             if let Some(scope) = environment.namespaces.get(namespace) {
                 if let Some(key) = key_i.next() {
-                    if allow_dyn {
-                        // Do not let it sneak past a dynamic binding!
-                        if let Some(reference) = environment.dynamic_scope.get(key) {
-                            return Some(reference.clone());
-                        } else if let Some(reference) = scope.borrow().get_binding(key) {
-                            return Some(reference);
-                        }
-                    } else if let Some(reference) = scope.borrow().get_binding(key) {
+                    if let Some(reference) = scope.borrow().get_binding(key) {
                         return Some(reference);
                     }
                 }
@@ -290,12 +281,9 @@ pub fn lookup_expression(environment: &Environment, key: &str) -> Option<Express
     // First check any "local" lexical scopes.
     if let Some(exp) = lookup_in_stack(environment, key) {
         Some(exp.get())
-    // Then check dynamic scope.
-    } else if let Some(binding) = environment.dynamic_scope.get(key) {
-        Some(binding.get())
     // Check for namespaced symbols.
     } else {
-        lookup_in_namespace(environment, key, true).map(|binding| binding.get())
+        lookup_in_namespace(environment, key).map(|binding| binding.get())
     }
 }
 
@@ -305,7 +293,7 @@ pub fn capture_expression(environment: &Environment, key: &str) -> Option<Bindin
         Some(exp)
     // Check for namespaced symbols.
     } else {
-        lookup_in_namespace(environment, key, false)
+        lookup_in_namespace(environment, key)
     }
 }
 
@@ -331,13 +319,7 @@ pub fn get_expression_look(
                     None
                 }
             }
-            SymLoc::Ref(binding) => {
-                if let Some(reference) = environment.dynamic_scope.get(sym) {
-                    Some(reference.get())
-                } else {
-                    Some(binding.get())
-                }
-            }
+            SymLoc::Ref(binding) => Some(binding.get()),
             SymLoc::Namespace(scope, idx) => scope.borrow().get_idx(*idx),
             SymLoc::Stack(idx) => get_expression_stack(environment, *idx),
         },
@@ -591,31 +573,9 @@ mod tests {
         assert!(lookup_expression(&mut environment, "a1").is_none());
         assert!(lookup_expression(&mut environment, "b1").is_none());
         assert_lookup(&environment, "ns-c::c1", 31);
-        environment
-            .dynamic_scope
-            .insert("a1", Binding::with_expression(ExpEnum::Int(111).into()));
-        environment
-            .dynamic_scope
-            .insert("b1", Binding::with_expression(ExpEnum::Int(211).into()));
-        environment
-            .dynamic_scope
-            .insert("c1", Binding::with_expression(ExpEnum::Int(311).into()));
-        assert_lookup(&environment, "ns-b::b1", 211);
-        assert_lookup(&environment, "b1", 211);
-        assert_lookup(&environment, "ns-c::c1", 311);
-        assert_lookup(&environment, "c1", 311);
-        assert_capture(&environment, "ns-b::b1", 21);
-        assert!(capture_expression(&mut environment, "b1").is_none());
         assert_capture(&environment, "ns-c::c1", 31);
         assert_capture(&environment, "c1", 31);
         environment.namespace = ns_b.clone();
-        assert_lookup(&environment, "ns-b::b1", 211);
-        assert_lookup(&environment, "b1", 211);
-        // Note that a dynamic var will be available even it's namespace is not.
-        // XXX TODO- Is this a good idea?
-        assert_lookup(&environment, "ns-c::c1", 311);
-        assert_lookup(&environment, "c1", 311);
-        environment.dynamic_scope.clear();
         assert_lookup(&environment, "ns-b::b1", 21);
         assert_lookup(&environment, "b1", 21);
         assert_lookup(&environment, "ns-c::c1", 31);

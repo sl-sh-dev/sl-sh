@@ -60,8 +60,10 @@ fn prep_stack(
     let index = environment.stack.len();
     setup_args(environment, lambda.num_params, lambda.has_rest, vars)?;
     let symbols = lambda.syms.clone();
-    // Push the 'this-fn' value.
-    environment.stack.push(Binding::with_expression(lambda_exp));
+    if !lambda.no_recur {
+        // Push the 'this-fn' value.
+        environment.stack.push(Binding::with_expression(lambda_exp));
+    }
     let mut i = 0;
     let extras = symbols.len() - (environment.stack.len() - index);
     while i < extras {
@@ -124,13 +126,15 @@ fn call_lambda_int(
             }
         };
         looping = environment.recur_num_args.is_some() && environment.exit_code.is_none();
-        if looping {
+        if lambda.no_recur {
+            looping = false;
+        } else if looping {
             // This is a recur call, must be a tail call.
             let recur_args = environment.recur_num_args.unwrap();
             environment.recur_num_args = None;
             if let ExpEnum::Vector(new_args) = &last_eval.get().data {
                 if recur_args != new_args.len() {
-                    return Err(LispError::new("Called recur in a non-tail position."));
+                    return Err(LispError::new("Called recur in a non-tail position 2."));
                 }
                 environment.stack.truncate(stack_len);
                 environment.stack_frames.truncate(stack_frames_len);
@@ -164,9 +168,13 @@ fn call_lambda_int(
         }
         llast_eval = Some(last_eval);
     }
-    llast_eval
-        .unwrap_or_else(Expression::make_nil)
-        .resolve(environment)
+    if lambda.no_recur {
+        Ok(llast_eval.unwrap_or_else(Expression::make_nil))
+    } else {
+        llast_eval
+            .unwrap_or_else(Expression::make_nil)
+            .resolve(environment)
+    }
 }
 
 pub fn call_lambda(
@@ -223,9 +231,10 @@ fn eval_command(
 ) -> Result<Expression, LispError> {
     let com_exp_d = com_exp.get();
     match &com_exp_d.data {
-        ExpEnum::Lambda(_) => {
+        ExpEnum::Lambda(l) => {
+            let no_recur = l.no_recur;
             drop(com_exp_d);
-            if environment.allow_lazy_fn {
+            if environment.allow_lazy_fn && !no_recur {
                 make_lazy(environment, com_exp.clone(), parts)
             } else {
                 call_lambda(environment, com_exp.clone(), parts, true)
@@ -284,8 +293,8 @@ fn fn_eval_lazy(
                     ExpEnum::DeclareVar => builtin_var(environment, &mut parts),
                     ExpEnum::Quote => builtin_quote(environment, &mut *parts),
                     ExpEnum::BackQuote => builtin_bquote(environment, &mut *parts),
-                    ExpEnum::Lambda(_) => {
-                        if environment.allow_lazy_fn {
+                    ExpEnum::Lambda(l) => {
+                        if environment.allow_lazy_fn && !l.no_recur {
                             make_lazy(environment, exp.clone(), &mut parts)
                         } else {
                             call_lambda(environment, exp.clone(), &mut parts, true)
@@ -311,8 +320,8 @@ fn fn_eval_lazy(
             let com_exp = eval(environment, &command)?;
             eval_command(environment, &com_exp, &mut parts)
         }
-        ExpEnum::Lambda(_) => {
-            if environment.allow_lazy_fn {
+        ExpEnum::Lambda(l) => {
+            if environment.allow_lazy_fn && !l.no_recur {
                 make_lazy(environment, command.clone(), &mut parts)
             } else {
                 call_lambda(environment, command.clone(), &mut parts, true)
@@ -379,13 +388,7 @@ fn internal_eval(
             Ok(ret)
         }
         ExpEnum::Nil => Ok(expression.clone()),
-        ExpEnum::Symbol(sym, SymLoc::Ref(binding)) => {
-            if let Some(reference) = environment.dynamic_scope.get(sym) {
-                Ok(reference.get())
-            } else {
-                Ok(binding.get())
-            }
-        }
+        ExpEnum::Symbol(_sym, SymLoc::Ref(binding)) => Ok(binding.get()),
         ExpEnum::Symbol(sym, SymLoc::Namespace(scope, idx)) => {
             if let Some(exp) = scope.borrow().get_idx(*idx) {
                 Ok(exp)
@@ -455,6 +458,7 @@ fn internal_eval(
                         body: l.body.clone(),
                         syms,
                         namespace: environment.namespace.clone(),
+                        no_recur: l.no_recur,
                     })))
                 }
                 ExpEnum::Macro(l) => {
@@ -468,6 +472,7 @@ fn internal_eval(
                         body: l.body.clone(),
                         syms,
                         namespace: environment.namespace.clone(),
+                        no_recur: l.no_recur,
                     })))
                 }
                 _ => {

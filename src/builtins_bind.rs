@@ -5,7 +5,6 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
-use crate::symbols::*;
 use crate::types::*;
 
 pub fn proc_set_vars<'a>(
@@ -184,65 +183,6 @@ fn builtin_undef(
     ))
 }
 
-fn builtin_dyn(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let (key, val) = if let Some(key) = args.next() {
-        let key_d = key.get();
-        let key = match &key_d.data {
-            ExpEnum::Symbol(_, _) => key.clone(),
-            ExpEnum::Pair(_, _) => {
-                drop(key_d);
-                eval(environment, key.clone())?
-            }
-            ExpEnum::Vector(_) => {
-                drop(key_d);
-                eval(environment, key.clone())?
-            }
-            _ => return Err(LispError::new("dyn: takes a symbol")),
-        };
-        if let Some(val) = args.next() {
-            let key = match key.get().data {
-                ExpEnum::Symbol(s, _) => s,
-                _ => {
-                    return Err(LispError::new(
-                        "dyn: first form (binding key) must be a symbol",
-                    ));
-                }
-            };
-            let val = eval(environment, val)?;
-            (key, val)
-        } else {
-            return Err(LispError::new("dyn: requires a key and value"));
-        }
-    } else {
-        return Err(LispError::new("dyn: requires a key and value"));
-    };
-    let old_val = if environment.dynamic_scope.contains_key(key) {
-        Some(environment.dynamic_scope.remove(key).unwrap())
-    } else {
-        None
-    };
-    if let Some(exp) = args.next() {
-        if args.next().is_none() {
-            environment
-                .dynamic_scope
-                .insert(key, Binding::with_expression(val));
-            let res = eval(environment, exp);
-            if let Some(old_val) = old_val {
-                environment.dynamic_scope.insert(key, old_val);
-            } else {
-                environment.dynamic_scope.remove(key);
-            }
-            return res;
-        }
-    }
-    Err(LispError::new(
-        "dyn: requires three expressions (symbol, value, form to evaluate)",
-    ))
-}
-
 fn builtin_is_def(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -399,15 +339,16 @@ Example:
         Expression::make_special_var(
             "Usage: (var symbol expression) -> expression
 
+NOTE: var is deprecated, use let or let* to create local bindings.
 Adds an expression to the current lexical scope.  Return the expression that was defined.
 This will not add to a namespace (use def for that), use it within functions or
-lex forms to create local bindings.
+let forms to create local bindings.
 Symbol is not evaluted.
 
 Section: core
 
 Example:
-(lex
+(let (())
 (var test-do-one nil)
 (var test-do-two nil)
 (var test-do-three (do (set! test-do-one \"One\")(set! test-do-two \"Two\")\"Three\"))
@@ -449,41 +390,6 @@ Example:
 (test::assert-equal \"undef\" (undef test-undef))
 (test::assert-false (def? test-undef))
 (test::assert-equal \"undef: symbol test-undef not defined in current scope (can only undef symbols in current scope).\" (cadr (get-error (undef test-undef))))
-",
-        ),
-    );
-    data.insert(
-        interner.intern("dyn"),
-        Expression::make_special(
-            builtin_dyn,
-            "Usage: (dyn key value expression) -> result_of_expression
-
-Creates a dynamic binding for key, assigns value to it and evals expression under it.
-Note that if key is a symbol it is not evaluted and if a list it will be evaluted
-to provide a symbol (anything else is an error).
-
-The binding is gone once the dyn form ends. The binding will take precedence over
-any binding in any namespace with that name for any form that evaluates as a
-result of the dynamic binding (for instance creating a dynamic binding for
-*stdout* will cause all output to stdout to use the new binding in any print's
-used indirectly).  Calls to dyn can be nested and previous dynamic values will
-be restored as interior dyn's exit.
-
-In common lisp terms any symbol in a namespace is \"special\".
-
-
-Section: core
-
-Example:
-(defn test-dyn-fn () (print \"Print dyn out\"))
-(defn test-dyn-fn2 () (print \"Print dyn out TWO\"))
-(dyn *stdout* (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn))
-(test::assert-equal \"Print dyn out\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
-(def test-dyn-indirect '*stdout*)
-(dyn (ref test-dyn-indirect) (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn2))
-(test::assert-equal \"Print dyn out TWO\" (read-line (open \"/tmp/sl-sh.dyn.test\" :read)))
-(def test-dyn-true t)
-(test::assert-error (dyn (ref test-dyn-true) (open \"/tmp/sl-sh.dyn.test\" :create :truncate) (test-dyn-fn2)))
 ",
         ),
     );

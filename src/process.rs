@@ -291,7 +291,7 @@ pub fn do_command(
                     add_arg_s(args, a)?;
                 }
             }
-            _ => return Err(LispError::new("Sys command arguements need to be string (or symbols or lists that reduce so strings).")),
+            _ => return Err(LispError::new("Sys command arguments need to be string (or symbols or lists that reduce so strings).")),
         }
         Ok(())
     }

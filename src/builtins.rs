@@ -27,7 +27,6 @@ const ITERATOR_LISP: &[u8] = include_bytes!("../lisp/iterator.lisp");
 const COLLECTION_LISP: &[u8] = include_bytes!("../lisp/collection.lisp");
 const SEQ_LISP: &[u8] = include_bytes!("../lisp/seq.lisp");
 const SHELL_LISP: &[u8] = include_bytes!("../lisp/shell.lisp");
-const ENDFIX_LISP: &[u8] = include_bytes!("../lisp/endfix.lisp");
 const GETOPTS_LISP: &[u8] = include_bytes!("../lisp/getopts.lisp");
 const TEST_LISP: &[u8] = include_bytes!("../lisp/test.lisp");
 const LIB_LISP: &[u8] = include_bytes!("../lisp/lib.lisp");
@@ -238,7 +237,6 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
             "collection.lisp" => to_str(COLLECTION_LISP),
             "seq.lisp" => to_str(SEQ_LISP),
             "shell.lisp" => to_str(SHELL_LISP),
-            "endfix.lisp" => to_str(ENDFIX_LISP),
             "getopts.lisp" => to_str(GETOPTS_LISP),
             "test.lisp" => to_str(TEST_LISP),
             "lib.lisp" => to_str(LIB_LISP),
@@ -260,6 +258,10 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     let old_reader_state = environment.reader_state.clone();
     environment.reader_state.clear();
     environment.reader_state.file_name = file_name;
+    let old_supress = environment.supress_eval;
+    // If load is called from apply then it needs to work.
+    // XXX- can we do better then this supress_eval hack?
+    environment.supress_eval = false;
     if shebanged {
         while let Some(ch) = chars.next() {
             if ch == "\n" {
@@ -279,12 +281,14 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
                     Ok(exp) => Some(exp),
                     Err(err) => {
                         environment.reader_state = old_reader_state;
+                        environment.supress_eval = old_supress;
                         return Err(err);
                     }
                 };
             }
             Err((err, _ichars)) => {
                 environment.reader_state = old_reader_state;
+                environment.supress_eval = old_supress;
                 if err.reason == "Empty value" {
                     return if let Some(res) = res {
                         Ok(res)
@@ -297,6 +301,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
         }
     }
     environment.reader_state = old_reader_state;
+    environment.supress_eval = old_supress;
     if let Some(res) = res {
         Ok(res)
     } else {
@@ -640,23 +645,29 @@ fn do_expansion(
     parts: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Option<Expression>, LispError> {
     let com_d = command_in.get();
-    if let ExpEnum::Symbol(_, _) = &com_d.data {
-        drop(com_d);
-        if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
-            let exp_d = exp.get();
-            if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
-                drop(exp_d);
-                let expansion =
-                    call_lambda(environment, exp, parts, false)?.resolve(environment)?;
-                Ok(Some(expansion))
+    match &com_d.data {
+        ExpEnum::Symbol(_, _) => {
+            drop(com_d);
+            if let Some(exp) = get_expression_look(environment, command_in.clone(), true) {
+                let exp_d = exp.get();
+                if let ExpEnum::Macro(_sh_macro) = &exp_d.data {
+                    drop(exp_d);
+                    let expansion =
+                        call_lambda(environment, exp, parts, false)?.resolve(environment)?;
+                    Ok(Some(expansion))
+                } else {
+                    Ok(None)
+                }
             } else {
                 Ok(None)
             }
-        } else {
-            Ok(None)
         }
-    } else {
-        Ok(None)
+        ExpEnum::Macro(_) => {
+            let expansion =
+                call_lambda(environment, command_in.clone(), parts, false)?.resolve(environment)?;
+            Ok(Some(expansion))
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1106,11 +1117,11 @@ pub fn builtin_block(
                 break;
             }
         }
-        ret = if let Some(ret) = ret {
+        /*ret = if let Some(ret) = ret {
             Some(ret.resolve(environment)?)
         } else {
             None
-        };
+        };*/
         if let Some(ret) = check_return(environment, name) {
             return Ok(ret);
         }
@@ -1890,8 +1901,7 @@ Example:
 (test::assert-false (test-macro-empty))
 (def test-mac nil)
 (def mac-var 2)
-(lex
-  (var mac-var 3)
+(let ((mac-var 3))
   (set! test-mac (macro (x) (set! test-macro2 100)(test::assert-equal 3 mac-var)`(* ,mac-var ,x))))
 (set! test-macro1 (test-mac 10))
 (test::assert-equal 30 test-macro1)
@@ -2001,12 +2011,16 @@ Section: core
 Example:
 (test::assert-equal '(def xx \"value\") (expand-macro-all '(def xx \"value\")))
 
+(defmacro mac-test-loop
+    (params bindings body)
+        `((fn ,params ,body) ,@bindings))
+
 (defmacro mac-test-for
     (bind in in_list body) (do
 	(if (not (= in 'in)) (err \"Invalid test-mac-for: (test-mac-for [v] in [iterator] (body))\"))
     `((fn (,bind)
         (if (> (length ,in_list) 0)
-            (root::loop (plist) (,in_list) (do
+            (mac-test-loop (plist) (,in_list) (do
                 (set! ,bind (root::first plist))
                 (,@body)
                 (if (> (length plist) 1) (recur (root::rest plist)))))))nil)))
@@ -2171,6 +2185,9 @@ t
 
 Create a block with name (name is not evaluated), if no return-from encountered then
 return last expression (like do).
+Note: If the last expression in a block is a tail call then it can not use
+return-from since the tail call will leave the block and the return-from will
+not find it.
 
 Section: core
 
@@ -2185,7 +2202,8 @@ Example:
     (block forloop
         (for item in '(1 2 3)
             (when (= 2 item)
-              (return-from forloop item)))))
+              (return-from forloop item)))
+        nil)) ; This nil keeps the for loop from being a tail call.
 "
         ),
     );
@@ -2604,23 +2622,6 @@ t
         ),
     );
     data.insert(
-        interner.intern("*endfix-src*"),
-        (
-            ExpEnum::String(to_cow(ENDFIX_LISP), None).into(),
-            "Usage: (print *endfix-src*)
-
-The builtin source code for endfix.lisp.
-
-Section: core
-
-Example:
-;(print *endfix-src*)
-t
-"
-            .to_string(),
-        ),
-    );
-    data.insert(
         interner.intern("*test-src*"),
         (
             ExpEnum::String(to_cow(TEST_LISP), None).into(),
@@ -2649,6 +2650,23 @@ Section: core
 
 Example:
 ;(print *lib-src*)
+t
+"
+            .to_string(),
+        ),
+    );
+    data.insert(
+        interner.intern("*shell-read-src*"),
+        (
+            ExpEnum::String(to_cow(SHELL_READ_LISP), None).into(),
+            "Usage: (print *shell-read-src*)
+
+The builtin source code for shell-read.lisp.
+
+Section: core
+
+Example:
+;(print *shell-read-src*)
 t
 "
             .to_string(),

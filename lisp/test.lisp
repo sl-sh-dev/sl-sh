@@ -47,14 +47,14 @@
       (apply assert-equal nil value args))
 
 (defn assert-includes (value seq)
-      (var found nil)
-      (for v in seq (if (= v value) (set! found t)))
-      (if (not found) (do (println (str value " not found in " seq))(exit 3))))
+  (let ((found nil))
+    (for v in seq (if (= v value) (set! found t)))
+    (if (not found) (do (println (str value " not found in " seq))(exit 3)))))
 
 (defn assert-not-includes (value seq)
-      (var found nil)
-      (for v in seq (if (= v value) (set! found t)))
-      (if found (do (println (str value " found in " seq))(exit 3))))
+  (let ((found nil))
+    (for v in seq (if (= v value) (set! found t)))
+    (if found (do (println (str value " found in " seq))(exit 3)))))
 
 (defmacro assert-error (form)
     `(test::assert-equal :error (car (get-error ,form)) ". Expected :error"))
@@ -69,8 +69,8 @@
     `(eval (read (str "(dyn exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))"))))
 
 (defmacro run-example (sym)
-    `(lex
-        (var doc-list (str-split "Example:" (str (doc ,sym))))
+    `(let
+        ((doc-list (str-split "Example:" (str (doc ,sym)))))
         (if (> (length doc-list) 1)
             (do
              (eval (read (str "(do " (println (vec-nth doc-list 1)) (str (vec-nth doc-list 1)) ")"))))

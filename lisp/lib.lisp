@@ -16,9 +16,9 @@ Example:
                 (var val (car nxt))
                 (var bind (cadr nxt))
                 (if (= 1 (length nxt))
-                  `(((fn (,val) ,@fst) nil))
+                  `(((fn :no-recur (,val) ,@fst) nil))
                   (if (= 2 (length nxt))
-                         `(((fn (,val) ,@fst) ,bind))
+                         `(((fn :no-recur (,val) ,@fst) ,bind))
                          (err "ERROR: invalid bindings on let*"))))))
       (car (iterator::reduce reducer let-body (iterator::reverse vals)))))
 
