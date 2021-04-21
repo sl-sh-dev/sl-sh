@@ -350,6 +350,7 @@ Returns median of sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (median) \"expected at least one number\")
 (test::assert-equal 5 (median 5))
 (test::assert-equal 7.5 (median 10 5))
@@ -369,6 +370,7 @@ Average a sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (mean) \"expected at least one number\")
 (test::assert-equal 5 (mean 5))
 (test::assert-equal 7.5 (mean 5 10))
@@ -387,6 +389,7 @@ Returns mode of a sequence of numbers. Since distributions can be multimodal, mo
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (mode) \"expected at least one number\")
 (test::assert-equal (list 5) (mode 5))
 (test::assert-equal (list 1 3 4 5 6 7 8 9 10) (mode 1 3 4 5 6 7 8 9 10))
@@ -405,6 +408,7 @@ Returns standard deviation of a sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (std-dev) \"expected at least one number\")
 (test::assert-equal 3.0276503540974917 (std-dev 1 2 3 4 5 6 7 8 9 10))",
         ),
@@ -421,6 +425,7 @@ Returns minimum of provided arguments.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (min) \"expected at least one number\")
 (test::assert-equal 1 (min 10 4 8 7 6 5 9 3 2 1 11))
             ",
@@ -438,6 +443,7 @@ Returns maximum of provided arguments.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (max) \"expected at least one number\")
 (test::assert-equal 11 (max 10 4 8 7 6 5 9 3 2 1 11))
             ",
@@ -455,6 +461,7 @@ Returns third quartile of distribution of provided arguments.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (third-quartile) \"expected at least one number\")
 (test::assert-equal 8 (third-quartile 10 4 8 7 6 5 9 3 2 1))
             ",
@@ -472,6 +479,7 @@ Returns first quartile of distribution of provided arguments.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (first-quartile) \"expected at least one number\")
 (test::assert-equal 2.5 (first-quartile 10 4 8 7 6 5 9 3 2 1))
             ",
@@ -489,6 +497,7 @@ Returns hash map containing summary statistics and sorted array.
 Section: math
 
 Example:
+(ns-import 'stats)
 (test::assert-error-msg (summary-stats) \"expected at least one number\")
 (def distr (summary-stats 10 2 9 4 6 5 7 8 3 1))
 (test::assert-equal '#(1 2 3 4 5 6 7 8 9 10) (hash-get distr :vec))
@@ -504,9 +513,3 @@ Example:
         ),
     );
 }
-// TODO need sample-stats hash map with
-//  - can stats fcns take vectors as well?
-//  - stats namespace
-//  - merge w/ master
-//  - tests for summary stats
-//  - add min/max/q1/q3 functions

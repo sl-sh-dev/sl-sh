@@ -255,10 +255,11 @@ impl Namespace {
     pub fn new_root(interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         let mut math_data: HashMap<&'static str, (Expression, String)> = HashMap::new();
+        let mut stats_data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         add_builtins(interner, &mut data);
         add_system_builtins(interner, &mut data);
         add_math_builtins(interner, &mut math_data);
-        add_stats_builtins(interner, &mut data);
+        add_stats_builtins(interner, &mut stats_data);
         add_rand_builtins(interner, &mut data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
@@ -422,9 +423,9 @@ t
         }
     }
 
-    pub fn new_math(interner: &mut Interner) -> Self {
+    pub fn new(interner: &mut Interner, ns: &str, add_builtin: Box<dyn Fn(&mut Interner, &mut HashMap<&'static str, (Expression, String)>) -> ()>) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
-        add_math_builtins(interner, &mut data);
+        (add_builtin)(interner, &mut data);
         let mut exports = Vec::new();
         for key in data.keys() {
             exports.push(Expression::alloc_data(ExpEnum::Symbol(key, SymLoc::None)));
@@ -450,7 +451,7 @@ t
             data: vdata,
             doc_strings: vdocs,
             outer: None,
-            name: interner.intern("math"),
+            name: interner.intern(ns),
             free_list: Vec::new(),
         }
     }

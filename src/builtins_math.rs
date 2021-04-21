@@ -32,6 +32,7 @@ Add a sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 5 (+ 5))
 (test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
@@ -65,6 +66,7 @@ Multiply a sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 5 (* 5))
 (test::assert-equal 5 (* 1 5))
 (test::assert-equal 5.0 (* 1.0 5))
@@ -111,6 +113,7 @@ Subtract a sequence of numbers.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 5 (- 5))
 (test::assert-equal 5 (- 5.0))
 (test::assert-equal -4 (- 1 5))
@@ -160,6 +163,7 @@ Divide a sequence of numbers.  Requires at least two numbers.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 5 (/ 50 10))
 (test::assert-equal 5 (/ 50.0 10.0))
 (test::assert-equal 0 (/ 1 5))
@@ -199,6 +203,7 @@ Remainder from dividing first int by the second.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 0 (% 50 10))
 (test::assert-equal 5 (% 55 10))
 (test::assert-equal 1 (% 1 2))
@@ -228,6 +233,7 @@ Take square root of argument.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.0 (sqrt 4))
 (test::assert-equal 2.04939015319192 (sqrt 4.2))
 (test::assert-equal 12 (sqrt 144))
@@ -257,6 +263,7 @@ Raise 2 to power of argument.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 1024 (2pow 10))
 (test::assert-equal (2pow (* 10 2)) (pow (2pow 10) 2))
 ",
@@ -286,6 +293,7 @@ Raise first argument to power of second argument.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 16 (pow 4 2))
 (test::assert-equal 10 (log (pow 2 10) 2))
 (test::assert-equal (pow 8 15) (* (pow 8 10) (pow 8 5)))
@@ -306,6 +314,7 @@ Float representing euler's number.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.718281828459045 *e*)
 "
             .to_string(),
@@ -323,6 +332,7 @@ Float representing pi.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 3.141592653589793 *pi*)
 "
             .to_string(),
@@ -351,6 +361,7 @@ Returns absolute value of arg.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.0 (abs 2))
 (test::assert-equal 144 (abs -144))
 (test::assert-equal 4.53 (abs -4.53))
@@ -380,6 +391,7 @@ Returns largest integer less than or equal to value.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.0 (floor 2))
 (test::assert-equal 144 (floor 144.444444))
 (test::assert-equal 4 (floor 4.53))
@@ -409,6 +421,7 @@ Returns smallest integer greater than or equal to value.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.0 (ceil 2))
 (test::assert-equal 145 (ceil 144.444444))
 (test::assert-equal 5 (ceil 4.53))
@@ -438,6 +451,7 @@ Round arg to nearest int value.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 2.0 (round 2))
 (test::assert-equal 144 (round 144.444444))
 (test::assert-equal 5 (round 4.53))
@@ -467,6 +481,7 @@ Returns log base 2 of input.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 7 (log2 128))
 (test::assert-equal (log 7 2) (/ 1.0 (log 2 7)))
 ",
@@ -502,6 +517,7 @@ Returns log of number given base.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 8 (log 256 2))
 (test::assert-equal 3 (log 27 3))
 (test::assert-equal (log (pow 8 2) 10) (* 2 (log 8 10)))
@@ -534,6 +550,7 @@ Returns e ^ num, the exponential function.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal *euler* (exp 1))
 (test::assert-equal 1 (exp 0))
 (test::assert-equal 42 (exp (lne 42)))
@@ -563,6 +580,7 @@ Returns natural logarithm of number
 Section: math
 
 Example:
+(ns-import 'math)
 (def x 7.0)
 (def y 11.0)
 (test::assert-equal 1 (lne *euler*))
@@ -596,6 +614,7 @@ Returns fractional part of a number
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 0.9893582466233818 (fract 1911.9893582466233818))
 (test::assert-equal 0.0 (fract 1911))
 ",
@@ -624,6 +643,7 @@ Take sin of argument
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 0.9893582466233818 (sin 8))
 (test::assert-equal (sin 6) (* (tan 6) (cos 6)))
 ",
@@ -652,6 +672,7 @@ Take cos of argument
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal -0.14550003380861354 (cos 8))
 (test::assert-equal (cos 6) (/ (sin 6) (tan 6)))
 ",
@@ -680,6 +701,7 @@ Take tan of argument
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal -6.799711455220379 (tan 8))
 (test::assert-equal (tan 6) (/ (sin 6) (cos 6)))
 ",
@@ -708,6 +730,7 @@ Convert degrees to radians.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 0 (- (to-degrees *pi*) 180))
 ",
         ),
@@ -735,6 +758,7 @@ Convert degrees to radians.
 Section: math
 
 Example:
+(ns-import 'math)
 (test::assert-equal 0 (- *pi* (to-radians 180)))
 ",
         ),

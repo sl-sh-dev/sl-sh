@@ -12,6 +12,11 @@ use crate::reader::ReaderState;
 use crate::symbols::*;
 use crate::types::*;
 use crate::unix::cvt;
+use crate::{add_math_builtins, add_stats_builtins};
+
+const ROOT_NS: &str = "root";
+const MATH_NS: &str = "math";
+const STATS_NS: &str = "stats";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keys {
@@ -149,7 +154,8 @@ pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
-    let math_scope = Rc::new(RefCell::new(Namespace::new_math(&mut interner)));
+    let math_scope = Rc::new(RefCell::new(Namespace::new(&mut interner, MATH_NS, Box::new(add_math_builtins))));
+    let stats_scope = Rc::new(RefCell::new(Namespace::new(&mut interner, STATS_NS, Box::new(add_stats_builtins))));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
     let terminal_fd = unsafe {
@@ -160,8 +166,9 @@ pub fn build_default_environment() -> Environment {
         }
     };
     let reader_state = ReaderState::new();
-    namespaces.insert(interner.intern("root"), root_scope.clone());
-    namespaces.insert(interner.intern("math"), math_scope);
+    namespaces.insert(interner.intern(ROOT_NS), root_scope.clone());
+    namespaces.insert(interner.intern(MATH_NS), math_scope);
+    namespaces.insert(interner.intern(STATS_NS), stats_scope);
     Environment {
         recur_num_args: None,
         gensym_count: 0,
