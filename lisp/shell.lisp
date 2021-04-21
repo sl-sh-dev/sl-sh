@@ -723,7 +723,7 @@ Section: shell
 
      (defn __line_handler (line)
            (var result (get-error (line-handler line)))
-           (if (= :error (car result)) (shell::print-error result) (cdr result)))
+           (if (= :error (car result)) (print-error result) (cdr result)))
 
      nil))
 
@@ -735,21 +735,6 @@ Section: shell
   "
   () '(undef __line_handler))
 
-
-(defn print-backtrace (backtrace)
-    (for b in backtrace (do
-        (if (builtin? b)(print "BUILTIN")
-          (print (if (var file (meta-file-name b)) file "NO FILE") ":\t"
-                 "line " (if (var line (meta-line-no b)) line "XX") ":\t"
-                 "column " (if (var col (meta-column-no b)) col "XX") "\n"))))
-  )
-
-(defn print-error (error)
-    (if (= :error (car error))
-        (do
-            (println (cadr error))
-            (print-backtrace (caddr error)))
-        (err "Not an error!")))
 
 (defn repl-eof (result)
       (do

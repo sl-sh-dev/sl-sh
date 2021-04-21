@@ -5,39 +5,35 @@
 (def * (doc 'math::*) math::*)
 (def % (doc 'math::%) math::%)
 
-(def prim-print-backtrace (fn (backtrace)
-(def first (fn
-    (obj)
-    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
-        (list? obj) (car obj)
-        (err "Not a vector or list"))))
-(def rest (fn
-    (obj)
-    (if (vec? obj) (vec-slice obj 1)  ; XXX deal with empty vector (don't make it nil).
-        (list? obj) (cdr obj)
-        (err "Not a vector or list"))))
+(def print-backtrace
+    (fn (backtrace)
+        ((fn (idx len)
+             (if (and (not (vec-empty? backtrace))(< idx len))
+                 ((fn :no-recur (b file line col)
+                      (if (builtin? b)(print "BUILTIN")
+                          (print (if (set! file (meta-file-name b)) file "NO FILE") ":\t"
+                                 "line " (if (set! line (meta-line-no b)) line "XX") ":\t"
+                                 "column " (if (set! col (meta-column-no b)) col "XX") "\n"))
+                      (recur (+ idx 1) len))
+                  (vec-nth backtrace idx) nil nil nil)))
+         0 (length backtrace))))
 
-    (if (not (vec-empty? backtrace))
-        ((fn :no-recur (b file line col)
-          (print (if (set! file (meta-file-name b)) file "??????") ":\t"
-               "line " (if (set! line (meta-line-no b)) line "??") ":\t"
-               "column " (if (set! col (meta-column-no b)) col "??") "\n")
-          (recur (rest backtrace)))(first backtrace) nil nil nil))))
+(def print-error
+    (fn (error)
+        (if (= :error (car error))
+            (do
+             (println (car (cdr error)))
+             (print-backtrace (car (cdr (cdr error)))))
+            (err "Not an error!"))))
 
-(def prim-print-error (fn (error)
-    (if (= :error (car error))
-        (do
-            (println (car (cdr error)))
-            (prim-print-backtrace (car (cdr (cdr error)))))
-        (err "Not an error!"))))
-
-(def load-std-file (fn (file)
-                       ((fn (result)
-                       (set! result (get-error (load file)))
-                       (if (= :error (car result))
-                           (do
-                            (println "Error reading " file ":")
-                            (prim-print-error result))))nil)))
+(def load-std-file
+    (fn (file)
+        ((fn (result)
+             (set! result (get-error (load file)))
+             (if (= :error (car result))
+                 (do
+                  (println "Error reading " file ":")
+                  (print-error result))))nil)))
 
 ; core should be loaded into the root namespace (ie it does not set a namespace).
 (load-std-file "core.lisp")
@@ -109,10 +105,6 @@ t
                           (make-hash)
                           (ns-list)))
 
-; Do not leave this stuff laying around the root scope.
-(undef prim-print-backtrace)
-(undef prim-print-error)
-
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
 (if (def? *load-slshrc*)
@@ -125,7 +117,7 @@ t
             (if (= :error (car result))
                 (do
                     (println "Error loading config file: " file ":")
-                    (prim-print-error result))))nil)))
+                    (print-error result))))nil)))
 
 (if (def? *interactive*)
   (do
@@ -136,5 +128,4 @@ t
   (do
     (def result (get-error (load *run-script*)))
     (if (= :error (car result))
-      (shell::print-error result))))
-
+      (print-error result))))
