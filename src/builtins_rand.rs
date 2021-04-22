@@ -14,26 +14,23 @@ fn builtin_random(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(next_arg) = eval_next(environment, args)? {
-        let next_arg_d = next_arg.get();
-        let mut rng = rand::thread_rng();
-        match &next_arg_d.data {
-            ExpEnum::Int(i) => match i {
-                positive if positive > &0 => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
-                }
-                _ => Err(LispError::new("Expected positive number")),
-            },
-            ExpEnum::Float(f) => match f {
-                positive if positive > &0.0 => Ok(Expression::alloc_data(ExpEnum::Float(
-                    rng.gen_range(0.0..*f),
-                ))),
-                _ => Err(LispError::new("Expected positive number")),
-            },
-            _ => Err(LispError::new("Expected positive number, float or int")),
-        }
-    } else {
-        Err(LispError::new("Expected positive number"))
+    let next_arg = param_eval(environment, args, "random")?;
+    let next_arg_d = next_arg.get();
+    let mut rng = rand::thread_rng();
+    match &next_arg_d.data {
+        ExpEnum::Int(i) => match i {
+            positive if positive > &0 => {
+                Ok(Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i))))
+            }
+            _ => Err(LispError::new("Expected positive number")),
+        },
+        ExpEnum::Float(f) => match f {
+            positive if positive > &0.0 => Ok(Expression::alloc_data(ExpEnum::Float(
+                rng.gen_range(0.0..*f),
+            ))),
+            _ => Err(LispError::new("Expected positive number")),
+        },
+        _ => Err(LispError::new("Expected positive number, float or int")),
     }
 }
 
@@ -41,7 +38,7 @@ fn builtin_get_random_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(next_arg) = eval_next(environment, args)? {
+    if let next_arg = param_eval(environment, args, "random-str")? {
         if let ExpEnum::Int(i) = next_arg.get().data {
             match i {
                 positive if positive > 0 => get_random_str(environment, args, positive),
@@ -60,7 +57,7 @@ fn get_random_str(
     args: &mut dyn Iterator<Item = Expression>,
     len: i64,
 ) -> Result<Expression, LispError> {
-    if let Some(opt_arg) = eval_next(environment, args)? {
+    if let opt_arg = param_eval(environment, args, "random-str")? {
         let opt_arg_d = opt_arg.get();
         let mut rng = rand::thread_rng();
         match &opt_arg_d.data {
@@ -98,9 +95,7 @@ fn get_random_str(
                     .collect(),
                 None,
             ))),
-            _ => Err(LispError::new(
-                "Expected Second argument must be keyword or string",
-            )),
+            _ => Err(LispError::new("Second argument must be keyword or string")),
         }
     } else {
         Err(LispError::new(
