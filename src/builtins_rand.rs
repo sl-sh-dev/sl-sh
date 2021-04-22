@@ -88,13 +88,16 @@ fn get_random_str(
             ))),
             _ => Err(LispError::new(format!("Unknown symbol {}", sym))),
         },
-        ExpEnum::String(string, _) => Ok(Expression::alloc_data(ExpEnum::String(
-            iter::repeat(())
-                .map(|()| rng.sample(UserProvidedGraphemes::new(string)))
-                .take(len as usize)
-                .collect(),
-            None,
-        ))),
+        ExpEnum::String(string, _) => {
+            let upg = UserProvidedGraphemes::new(string);
+            Ok(Expression::alloc_data(ExpEnum::String(
+                iter::repeat(())
+                    .map(|()| rng.sample(&upg))
+                    .take(len as usize)
+                    .collect(),
+                None,
+            )))
+        }
         _ => Err(LispError::new("Second argument must be keyword or string")),
     }
 }
