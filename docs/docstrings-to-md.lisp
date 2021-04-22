@@ -37,6 +37,9 @@ possible (i.e. first vs car).
 NOTE: list on this table can be a vector or a list.") idx))
 		("char" (vec-nth '#("Char forms" nil) idx))
 		("conditional" (vec-nth '#("Conditional forms" nil) idx))
+		("stats" (vec-nth '#("Stats forms" nil) idx))
+		("random" (vec-nth '#("Random forms" nil) idx))
+		("struct" (vec-nth '#("Struct forms" nil) idx))
 		("core" (vec-nth '#("Core forms" nil) idx))
 		("file" (vec-nth '#("File forms"
 " Options to open, one or more of these can be added to open after the filename.
@@ -79,7 +82,7 @@ list for purposes of lambda calls, parameters, etc (they work the same as a list
 made from pairs but are vectors not linked lists).  Use #() to declare them in
 code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		(":uncategorized" (vec-nth '#("Uncategorized forms" nil) idx))
-		(nil (if (= idx 0) (str key " forms") ""))))
+        (nil (if (= idx 0) (str key " forms") ""))))
 
 (defn create-anchor (id)
 	(str "<a id=\"" id "\" class=\"anchor\" aria-hidden=\"true\" href=\"#sl-sh-form-documentation\"></a>"))
@@ -194,7 +197,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		(if (not (nil? doc-example))
 			(do
 				(write-line file "<details style=\"cursor: pointer; padding-bottom: 15px; padding-left: 10px\">")
-				(write-line file "<summary>⮞ </summary>")
+				(write-line file "<p>&gt;</p>")
 				(write-line file "<code>")
 				(for line in (str-split "\n" doc-example) (write-line file (str line "<br>")))
 				(write-line file "</code>")
