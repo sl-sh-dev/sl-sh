@@ -347,7 +347,7 @@ pub fn add_stats_builtins<S: BuildHasher>(
 
 Returns median of sequence of numbers.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -367,7 +367,7 @@ Example:
 
 Average a sequence of numbers.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -386,7 +386,7 @@ Example:
 
 Returns mode of a sequence of numbers. Since distributions can be multimodal, mode returns a list.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -405,7 +405,7 @@ Example:
 
 Returns standard deviation of a sequence of numbers.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -422,7 +422,7 @@ Example:
 
 Returns minimum of provided arguments.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -440,7 +440,7 @@ Example:
 
 Returns maximum of provided arguments.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -458,7 +458,7 @@ Example:
 
 Returns third quartile of distribution of provided arguments.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -476,7 +476,7 @@ Example:
 
 Returns first quartile of distribution of provided arguments.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
@@ -494,7 +494,7 @@ Example:
 
 Returns hash map containing summary statistics and sorted array.
 
-Section: math
+Section: stats
 
 Example:
 (ns-import 'stats)
