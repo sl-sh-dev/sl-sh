@@ -21,6 +21,7 @@ use crate::builtins_vector::add_vec_builtins;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
+use std::collections::hash_map::RandomState;
 
 #[derive(Clone, Debug)]
 pub struct Binding {
@@ -240,6 +241,9 @@ pub struct Namespace {
     free_list: Vec<usize>,
 }
 
+type AddBuiltin =
+    fn(&mut Interner, &mut HashMap<&'static str, (Expression, String), RandomState>) -> ();
+
 impl Namespace {
     pub fn new_with_outer(name: &'static str, outer: Option<Rc<RefCell<Namespace>>>) -> Namespace {
         Namespace {
@@ -423,7 +427,7 @@ t
         }
     }
 
-    pub fn new(interner: &mut Interner, ns: &str, add_builtin: Box<dyn Fn(&mut Interner, &mut HashMap<&'static str, (Expression, String)>) -> ()>) -> Self {
+    pub fn new_ns(interner: &mut Interner, ns: &str, add_builtin: AddBuiltin) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         (add_builtin)(interner, &mut data);
         let mut exports = Vec::new();

@@ -154,8 +154,16 @@ pub fn build_default_environment() -> Environment {
     let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
-    let math_scope = Rc::new(RefCell::new(Namespace::new(&mut interner, MATH_NS, Box::new(add_math_builtins))));
-    let stats_scope = Rc::new(RefCell::new(Namespace::new(&mut interner, STATS_NS, Box::new(add_stats_builtins))));
+    let math_scope = Rc::new(RefCell::new(Namespace::new_ns(
+        &mut interner,
+        MATH_NS,
+        add_math_builtins,
+    )));
+    let stats_scope = Rc::new(RefCell::new(Namespace::new_ns(
+        &mut interner,
+        STATS_NS,
+        add_stats_builtins,
+    )));
     let namespace = root_scope.clone();
     let mut namespaces = HashMap::new();
     let terminal_fd = unsafe {
