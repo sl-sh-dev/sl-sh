@@ -11,6 +11,8 @@ use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::add_math_builtins;
 use crate::builtins_namespace::add_namespace_builtins;
 use crate::builtins_pair::add_pair_builtins;
+use crate::builtins_rand::add_rand_builtins;
+use crate::builtins_stats::add_stats_builtins;
 use crate::builtins_str::add_str_builtins;
 use crate::builtins_system::add_system_builtins;
 use crate::builtins_types::add_type_builtins;
@@ -19,6 +21,7 @@ use crate::builtins_vector::add_vec_builtins;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
+use std::collections::hash_map::RandomState;
 
 #[derive(Clone, Debug)]
 pub struct Binding {
@@ -238,6 +241,9 @@ pub struct Namespace {
     free_list: Vec<usize>,
 }
 
+type AddBuiltin =
+    fn(&mut Interner, &mut HashMap<&'static str, (Expression, String), RandomState>) -> ();
+
 impl Namespace {
     pub fn new_with_outer(name: &'static str, outer: Option<Rc<RefCell<Namespace>>>) -> Namespace {
         Namespace {
@@ -253,9 +259,12 @@ impl Namespace {
     pub fn new_root(interner: &mut Interner) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         let mut math_data: HashMap<&'static str, (Expression, String)> = HashMap::new();
+        let mut stats_data: HashMap<&'static str, (Expression, String)> = HashMap::new();
         add_builtins(interner, &mut data);
         add_system_builtins(interner, &mut data);
         add_math_builtins(interner, &mut math_data);
+        add_stats_builtins(interner, &mut stats_data);
+        add_rand_builtins(interner, &mut data);
         add_str_builtins(interner, &mut data);
         add_vec_builtins(interner, &mut data);
         add_values_builtins(interner, &mut data);
@@ -418,9 +427,9 @@ t
         }
     }
 
-    pub fn new_math(interner: &mut Interner) -> Self {
+    pub fn new_ns(interner: &mut Interner, ns: &str, add_builtin: AddBuiltin) -> Self {
         let mut data: HashMap<&'static str, (Expression, String)> = HashMap::new();
-        add_math_builtins(interner, &mut data);
+        (add_builtin)(interner, &mut data);
         let mut exports = Vec::new();
         for key in data.keys() {
             exports.push(Expression::alloc_data(ExpEnum::Symbol(key, SymLoc::None)));
@@ -446,7 +455,7 @@ t
             data: vdata,
             doc_strings: vdocs,
             outer: None,
-            name: interner.intern("math"),
+            name: interner.intern(ns),
             free_list: Vec::new(),
         }
     }

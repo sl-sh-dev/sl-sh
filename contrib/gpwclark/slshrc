@@ -3,11 +3,14 @@
 (ns-import 'shell)
 (ns-import 'iterator)
 
+(def start-time (str (str-trim $(date +%s%N | cut -b1-13))))
+
 ;; gpwclark TODOs
 ;; put in docs about how you call doc on the cmd line all the time!!
 ;; - rewrite bash so we don't have gpl in here?
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - string interpolation sytnax includes $my-var and ${my-var} as well as $(println foo)
+;; - use this or make it: https://hg.stevelosh.com/t/
 
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
@@ -398,7 +401,14 @@ Section: user-shell"
 	the prompt for greater visibility.
 	Section: prompt"
 	(last-status)
-	(if (= last-status 0) "\x1b[39m⚙ >\x1b[39m " (str "\x1b[31m(" last-status ")⚙ >\x1b[39m ")))
+	(let* ((last-status-success (= 0 last-status))
+		(prompt (if last-status-success
+                      (str prompt-left prompt-cog prompt-right)
+                      (str
+                        shell::*fg-red*
+                        "\u{03bb}\u{2e28}\u{2699}\u{2009}\u{2e29}\u{2009}\u{2192} "
+                        shell::*fg-default*))))
+      prompt))
 
 (defn parse_git_branch
 	"if in git repo, get the name of the branch
@@ -450,6 +460,10 @@ Section: user-shell"
 (def open-paren (colorize-rand-cache "open-paren" "{[ " (str $HOST "7")))
 (def host-string (colorize-rand-cache "host-string" $HOST $HOST))
 (def close-paren (colorize-rand-cache "close-paren" " ]}" (str $HOST "7")))
+(def prompt-left (colorize-rand-cache "prompt-left" "\u{03bb}\u{2e28}" (str $HOST "9")))
+(def prompt-cog (colorize-rand-cache "prompt-cog" "\u{2699}\u{2009}" (str $HOST "4")))
+(def prompt-right (colorize-rand-cache "prompt-right" "\u{2e29}\u{2009}\u{2192} " (str $HOST "9")))
+;; "\u{03bb}\u{2e28}\u{2699}\u{2009}\u{2e29}\u{2009}\u{2192}"
 
 ;; prompt ensures
 ;;	1. always a new line above prompt
@@ -509,17 +523,45 @@ Section: user-shell"
         ((fn (result)
             (if (= :ok (car result))
                 (cdr result)
-                (println (car result) " loading custom lisp config (" custom-lisp-config ")\n" (cdr result))))
+                (cdr result)))
              (get-error (load custom-lisp-config)))
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
+
+;; }}}
+
+
+;; exec hook {{{
+
+;; entrypoint for all 1 arg commands... used to make filepaths cd commands
+;; to themselves.
+(defn change-dir-if-arg-is-dir (cmd orig-cmd-ast)
+	(let ((cmd-str (str cmd)))
+		(if (fs-dir? cmd-str)
+			(list root::cd cmd-str)
+			orig-cmd-ast)))
+
+(defn __exec-hook (cmd-str)
+	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
+	cmd-str
+	(do
+		(match (length cmd-ast)
+		;; if string is of length 0 either nothing was typed or
+		;; everything was a comment
+		(0 cmd-ast)
+		;; check to see if this single argument is a filepath
+		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
+		;; check for infix notation
+		(nil cmd-ast)))))
+
 ;; }}}
 
 
 ;; user ns docs {{{
-(pushd "~/development/slsh/docs/")
 (def api-page-name "mydoc_api.md")
 (def api-page (str "pages/mydoc/" api-page-name))
-(unwind-protect (when (or
+(shell::pushd "/home/price/development/slsh/docs")
+(def docs-error-ret
+    (get-error (when (or
         (nil? (fs-exists? api-page))
         (= api-page (str-trim (str $(find $api-page -type f -mmin "+1440"))))) (do
     (load "docstrings-to-md.lisp")
@@ -553,7 +595,6 @@ Section: user-shell"
         (collect-vec all-docable-user-forms)))
 
     (def all-user-slsh-syms (list-of-user-slsh-syms))
-    (println "user docstrings to be built: " (list-of-user-slsh-syms))
     (def get-doc-pair (fn (x) (let ((result (get-error (doc (sym x)))))
                                   (if (= :ok (car result))
                                     (do
@@ -561,13 +602,6 @@ Section: user-shell"
                                       (def new-result (car result))
                                       new-result)
                                     (println "Error: sym doc fail: " (cdr result))))))
-    #|
-    (def all-docstrings
-        (map (fn (x) (doc (sym x))) (filter get-doc-pair all-user-slsh-syms))
-        (collect-vec (map (fn (x) (do
-                       (def adoc (doc (sym x)))
-                       adoc)) all-user-slsh-syms)))
-    |#
     ;; check the last modified time of api-page-name and only do this if
     ;; has not been done in some amount of time.
     (def docs-by-section (make-hash))
@@ -577,6 +611,21 @@ Section: user-shell"
                 (append-to! (hash-get docs-by-section section-key) doc-struct)
             (hash-set! docs-by-section section-key (list doc-struct)))))
     (docmd::make-md-file-with-sections api-page docs-by-section)
-    (println "Built docs!")))
-  (popd))
+    (println "Built docs!")))))
+(shell::popd)
+(if (not (= (car docs-error-ret) :ok))
+    (println "Failed to build docs: " (cdr docs-error-ret)))
+(undef api-page-name)
+(undef api-page)
+(undef docs-error-ret)
 ;; }}}
+
+
+;; cleanup symbols I might use {{{
+(def end-time (str (user::epochms)))
+
+(println "Load time: " (- (str->int end-time) (str->int start-time)) "ms")
+(undef start-time)
+(undef end-time)
+
+;; }}

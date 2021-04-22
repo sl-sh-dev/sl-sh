@@ -37,7 +37,7 @@ values-nth 1 = accum lst to string.
                       (append-to! accum (list (str (str-trim line) "\n")))))))
               (values 0 (-lst-to-doc-section accum))))))
 
-(defn make-doc-struct (a-sym) (let* ((ret (get-error (let (())
+(defn make-doc-struct (a-sym) (let* ((ret (get-error (let ()
     (def doc-str nil)
     (def sl-sh-type (values nil nil))
     (def namespace (values nil nil))
