@@ -651,6 +651,34 @@ Example:
     );
 
     data.insert(
+        interner.intern("arcsin"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.sin())))
+                }
+            },
+            "Usage: (arcsin num)
+
+Take arcsin of argument
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 0.01 (sin (arcsin 0.01)))
+",
+        ),
+    );
+
+    data.insert(
         interner.intern("cos"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -680,6 +708,34 @@ Example:
     );
 
     data.insert(
+        interner.intern("arccos"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.acos())))
+                }
+            },
+            "Usage: (arccos num)
+
+Take arccos of argument
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 0.01 (cos (arccos 0.01)))
+",
+        ),
+    );
+
+    data.insert(
         interner.intern("tan"),
         Expression::make_function(
             |environment: &mut Environment,
@@ -704,6 +760,34 @@ Example:
 (ns-import 'math)
 (test::assert-equal -6.799711455220379 (tan 8))
 (test::assert-equal (tan 6) (/ (sin 6) (cos 6)))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("arctan"),
+        Expression::make_function(
+            |environment: &mut Environment,
+             args: &mut dyn Iterator<Item = Expression>|
+             -> Result<Expression, LispError> {
+                let mut args = make_args(environment, args)?;
+                let floats = parse_list_of_floats(environment, &mut args)?;
+                if floats.len() != 1 {
+                    Err(LispError::new("expected one number"))
+                } else {
+                    let arg1 = floats.get(0).unwrap();
+                    Ok(Expression::alloc_data(ExpEnum::Float(arg1.tan())))
+                }
+            },
+            "Usage: (arctan num)
+
+Take arctan of argument
+
+Section: math
+
+Example:
+(ns-import 'math)
+(test::assert-equal 0.01 (tan (arctan 0.01)))
 ",
         ),
     );

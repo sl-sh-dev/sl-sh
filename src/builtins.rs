@@ -2673,23 +2673,6 @@ t
         ),
     );
     data.insert(
-        interner.intern("*shell-read-src*"),
-        (
-            ExpEnum::String(to_cow(SHELL_READ_LISP), None).into(),
-            "Usage: (print *shell-read-src*)
-
-The builtin source code for shell-read.lisp.
-
-Section: core
-
-Example:
-;(print *shell-read-src*)
-t
-"
-            .to_string(),
-        ),
-    );
-    data.insert(
         interner.intern("*slsh-std-src*"),
         (
             ExpEnum::String(to_cow(SLSH_STD_LISP), None).into(),
