@@ -7,6 +7,20 @@ use crate::eval::eval;
 use crate::interner::*;
 use crate::types::*;
 
+fn norm_value(arg: Expression) -> Expression {
+    let arg_d = arg.get();
+    if let ExpEnum::Values(v) = &arg_d.data {
+        if v.is_empty() {
+            Expression::make_nil()
+        } else {
+            v[0].clone()
+        }
+    } else {
+        drop(arg_d);
+        arg
+    }
+}
+
 pub fn add_root_math_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -20,8 +34,8 @@ pub fn add_root_math_builtins<S: BuildHasher>(
                 let mut sum = 0;
                 let mut sum_float = 0.0;
                 let mut is_float = false;
-                for a in args {
-                    let a = eval(environment, a)?;
+                for arg in args {
+                    let a = norm_value(eval(environment, arg)?);
                     let a_d = a.get();
                     match &a_d.data {
                         ExpEnum::Int(i) if is_float => sum_float += *i as f64,
@@ -31,7 +45,13 @@ pub fn add_root_math_builtins<S: BuildHasher>(
                             is_float = true;
                             sum_float = (sum as f64) + f;
                         }
-                        _ => return Err(LispError::new("Can only add numbers.")),
+                        _ => {
+                            return Err(LispError::new(format!(
+                                "Can only add numbers, got {}/{}.",
+                                a.display_type(),
+                                a
+                            )))
+                        }
                     }
                 }
                 if is_float {
@@ -50,6 +70,9 @@ Example:
 (ns-import 'math)
 (test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
+(test::assert-equal 5 (+ (values 5)))
+(test::assert-equal 5 (+ (values 5 6)))
+(test::assert-equal 10 (+ 5 (values 5 6)))
 (test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
@@ -69,7 +92,7 @@ Example:
                 let mut res_float = 0.0;
                 let mut is_float = false;
                 if let Ok(a) = param_eval(environment, args, "multiply") {
-                    match a.get().data {
+                    match norm_value(a).get().data {
                         ExpEnum::Int(i) => res = i,
                         ExpEnum::Float(f) => {
                             is_float = true;
@@ -82,7 +105,7 @@ Example:
                     return Ok(Expression::alloc_data(ExpEnum::Int(1)));
                 }
                 for a in args {
-                    let a = eval(environment, a)?;
+                    let a = norm_value(eval(environment, a)?);
                     let a_d = a.get();
                     match &a_d.data {
                         ExpEnum::Int(i) if is_float => res_float *= *i as f64,
@@ -136,7 +159,10 @@ Example:
                 let mut res_float = 0.0;
                 let mut is_float = false;
                 let mut has_two = false;
-                match param_eval(environment, args, "subtract")?.get().data {
+                match norm_value(param_eval(environment, args, "subtract")?)
+                    .get()
+                    .data
+                {
                     ExpEnum::Int(i) => res = i,
                     ExpEnum::Float(f) => {
                         is_float = true;
@@ -146,7 +172,7 @@ Example:
                 }
                 for a in args {
                     has_two = true;
-                    let a = eval(environment, a)?;
+                    let a = norm_value(eval(environment, a)?);
                     let a_d = a.get();
                     match &a_d.data {
                         ExpEnum::Int(i) if is_float => res_float -= *i as f64,
@@ -201,7 +227,10 @@ Example:
                 let mut res_float = 0.0;
                 let mut is_float = false;
                 let mut has_two = false;
-                match param_eval(environment, args, "divide")?.get().data {
+                match norm_value(param_eval(environment, args, "divide")?)
+                    .get()
+                    .data
+                {
                     ExpEnum::Int(i) => res = i,
                     ExpEnum::Float(f) => {
                         is_float = true;
@@ -211,7 +240,7 @@ Example:
                 }
                 for a in args {
                     has_two = true;
-                    let a = eval(environment, a)?;
+                    let a = norm_value(eval(environment, a)?);
                     let a_d = a.get();
                     match &a_d.data {
                         ExpEnum::Int(i) if *i == 0 => {
@@ -268,8 +297,10 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let arg1 = param_eval(environment, args, "modulo")?.make_int(environment)?;
-                let arg2 = param_eval(environment, args, "modulo")?.make_int(environment)?;
+                let arg1 =
+                    norm_value(param_eval(environment, args, "modulo")?).make_int(environment)?;
+                let arg2 =
+                    norm_value(param_eval(environment, args, "modulo")?).make_int(environment)?;
                 params_done(args, "modulo")?;
                 if arg2 == 0 {
                     Err(LispError::new(

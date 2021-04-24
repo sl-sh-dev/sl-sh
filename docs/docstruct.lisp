@@ -101,7 +101,7 @@ values-nth 1 = accum lst to string.
        ds))))
         (if (= :ok (car ret))
           (cdr ret)
-          nil)))
+          (print-error ret))))
 
 (ns-auto-export 'docstruct)
 (ns-pop)
