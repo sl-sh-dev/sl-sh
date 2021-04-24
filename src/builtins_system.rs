@@ -85,77 +85,76 @@ fn builtin_export(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(key) = args.next() {
-        if let Some(val) = args.next() {
-            if args.next().is_none() {
-                let key = eval(environment, key)?;
-                let val = eval(environment, val)?;
-                let key_d = &key.get().data;
-                let key = match key_d {
-                    ExpEnum::Symbol(s, _) => s,
-                    _ => {
-                        return Err(LispError::new(
-                            "export: first form must evaluate to a symbol",
-                        ));
-                    }
-                };
-                let val = match &val.get().data {
-                    ExpEnum::Symbol(s, _) => ExpEnum::String((*s).into(), None),
-                    ExpEnum::String(s, _) => ExpEnum::String(s.to_string().into(), None),
-                    ExpEnum::Int(i) => ExpEnum::String(format!("{}", i).into(), None),
-                    ExpEnum::Float(f) => ExpEnum::String(format!("{}", f).into(), None),
-                    ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::String(
-                        val.as_string(environment)
-                            .unwrap_or_else(|_| "PROCESS FAILED".to_string())
-                            .into(),
-                        None,
-                    ),
-                    ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => ExpEnum::String(
-                        val.as_string(environment)
-                            .unwrap_or_else(|_| "PROCESS FAILED".to_string())
-                            .into(),
-                        None,
-                    ),
-                    ExpEnum::File(file) => match &*file.borrow() {
-                        FileState::Stdin => ExpEnum::String(
-                            val.as_string(environment)
-                                .unwrap_or_else(|_| "STDIN FAILED".to_string())
-                                .into(),
-                            None,
-                        ),
-                        FileState::Read(_, _) => ExpEnum::String(
-                            val.as_string(environment)
-                                .unwrap_or_else(|_| "FILE READ FAILED".to_string())
-                                .into(),
-                            None,
-                        ),
-                        FileState::ReadBinary(_) => ExpEnum::String(
-                            val.as_string(environment)
-                                .unwrap_or_else(|_| "FILE READ FAILED".to_string())
-                                .into(),
-                            None,
-                        ),
-                        _ => return Err(LispError::new("export: value not valid")),
-                    },
-                    _ => {
-                        return Err(LispError::new("export: value not valid"));
-                    }
-                };
-                let val = Expression::alloc_data(val).as_string(environment)?;
-                let val = match expand_tilde(&val) {
-                    Some(v) => v,
-                    None => val,
-                };
-                if !val.is_empty() {
-                    env::set_var(key, val.clone());
-                } else {
-                    env::remove_var(key);
-                }
-                return Ok(Expression::alloc_data(ExpEnum::String(val.into(), None)));
-            }
+    let key = param_eval(environment, args, "export")?;
+    let val = param_eval(environment, args, "export")?;
+    params_done(args, "export")?;
+    let key_d = &key.get().data;
+    let key = match key_d {
+        ExpEnum::Symbol(s, _) => s,
+        ExpEnum::String(s, _) => s.as_ref(),
+        _ => {
+            return Err(LispError::new(
+                "export: first form must evaluate to a symbol or string",
+            ));
         }
+    };
+    let val = match &val.get().data {
+        ExpEnum::Symbol(s, _) => ExpEnum::String((*s).into(), None),
+        ExpEnum::String(s, _) => ExpEnum::String(s.to_string().into(), None),
+        ExpEnum::Int(i) => ExpEnum::String(format!("{}", i).into(), None),
+        ExpEnum::Float(f) => ExpEnum::String(format!("{}", f).into(), None),
+        ExpEnum::Process(ProcessState::Running(_pid)) => ExpEnum::String(
+            val.as_string(environment)
+                .unwrap_or_else(|_| "PROCESS FAILED".to_string())
+                .into(),
+            None,
+        ),
+        ExpEnum::Process(ProcessState::Over(_pid, _exit_status)) => ExpEnum::String(
+            val.as_string(environment)
+                .unwrap_or_else(|_| "PROCESS FAILED".to_string())
+                .into(),
+            None,
+        ),
+        ExpEnum::File(file) => match &*file.borrow() {
+            FileState::Stdin => ExpEnum::String(
+                val.as_string(environment)
+                    .unwrap_or_else(|_| "STDIN FAILED".to_string())
+                    .into(),
+                None,
+            ),
+            FileState::Read(_, _) => ExpEnum::String(
+                val.as_string(environment)
+                    .unwrap_or_else(|_| "FILE READ FAILED".to_string())
+                    .into(),
+                None,
+            ),
+            FileState::ReadBinary(_) => ExpEnum::String(
+                val.as_string(environment)
+                    .unwrap_or_else(|_| "FILE READ FAILED".to_string())
+                    .into(),
+                None,
+            ),
+            _ => return Err(LispError::new("export: value not valid")),
+        },
+        _ => {
+            return Err(LispError::new("export: value not valid"));
+        }
+    };
+    let val = Expression::alloc_data(val).as_string(environment)?;
+    let val = match expand_tilde(&val) {
+        Some(v) => v,
+        None => val,
+    };
+    if key.contains('=') {
+        Err(LispError::new("export: key can not contail '='"))
+    } else {
+        if !val.is_empty() {
+            env::set_var(key, val.clone());
+        } else {
+            env::remove_var(key);
+        }
+        Ok(Expression::alloc_data(ExpEnum::String(val.into(), None)))
     }
-    Err(LispError::new("export: can only have two expressions"))
 }
 
 fn builtin_unexport(
@@ -430,12 +429,23 @@ Example:
             r#"Usage: (export symbol string) -> string
 
 Export a key and value to the shell environment.  Second arg will be made a string and returned.
+Key can not contain the '=' character.
 
 Section: shell
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
 (test::assert-equal "ONE" $TEST_EXPORT_ONE))
+(test::assert-equal "ONE1" (export 'TEST_EXPORT_ONE ONE1))
+(test::assert-equal "ONE1" $TEST_EXPORT_ONE))
+(test::assert-equal "TWO" (export "TEST_EXPORT_TWO" "TWO"))
+(test::assert-equal "TWO" $TEST_EXPORT_TWO))
+(test::assert-equal "THREE" $(export TEST_EXPORT_THREE THREE))
+(test::assert-equal "THREE" $TEST_EXPORT_THREE))
+(test::assert-error (export '=TEST_EXPORT_THREE "THREE"))
+(test::assert-error (export 'TEST=EXPORT_THREE "THREE"))
+(test::assert-error (export 'TEST_EXPORT_THREE= "THREE"))
+(test::assert-error $(export TEST_EXPORT_THREE= THREE))
 "#,
         ),
     );
