@@ -116,7 +116,7 @@ t
         (set! result (get-error (load "slshrc")))
             (if (= :error (car result))
                 (do
-                    (println "Error loading config file: " file ":")
+                    (println "Error loading config file: ")
                     (print-error result))))nil)))
 
 (if (def? *interactive*)
