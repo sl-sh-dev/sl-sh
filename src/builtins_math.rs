@@ -3,10 +3,25 @@ use std::hash::BuildHasher;
 
 use crate::builtins_util::*;
 use crate::environment::*;
+use crate::eval::eval;
 use crate::interner::*;
 use crate::types::*;
 
-pub fn add_math_builtins<S: BuildHasher>(
+fn norm_value(arg: Expression) -> Expression {
+    let arg_d = arg.get();
+    if let ExpEnum::Values(v) = &arg_d.data {
+        if v.is_empty() {
+            Expression::make_nil()
+        } else {
+            v[0].clone()
+        }
+    } else {
+        drop(arg_d);
+        arg
+    }
+}
+
+pub fn add_root_math_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
 ) {
@@ -16,28 +31,53 @@ pub fn add_math_builtins<S: BuildHasher>(
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    let sum: i64 = ints.iter().sum();
-                    Ok(Expression::alloc_data(ExpEnum::Int(sum)))
+                let mut sum = 0;
+                let mut sum_float = 0.0;
+                let mut is_float = false;
+                for arg in args {
+                    let a = norm_value(eval(environment, arg)?);
+                    let a_d = a.get();
+                    match &a_d.data {
+                        ExpEnum::Int(i) if is_float => sum_float += *i as f64,
+                        ExpEnum::Int(i) => sum += i,
+                        ExpEnum::Float(f) if is_float => sum_float += f,
+                        ExpEnum::Float(f) => {
+                            is_float = true;
+                            sum_float = (sum as f64) + f;
+                        }
+                        _ => {
+                            return Err(LispError::new(format!(
+                                "Can only add numbers, got {}/{}.",
+                                a.display_type(),
+                                a
+                            )))
+                        }
+                    }
+                }
+                if is_float {
+                    Ok(Expression::alloc_data(ExpEnum::Float(sum_float)))
                 } else {
-                    let sum: f64 = parse_list_of_floats(environment, &mut args)?.iter().sum();
-                    Ok(Expression::alloc_data(ExpEnum::Float(sum)))
+                    Ok(Expression::alloc_data(ExpEnum::Int(sum)))
                 }
             },
-            "Usage: (+ number+)
+            "Usage: (+ number*)
 
-Add a sequence of numbers.
+Add a sequence of numbers.  (+) will return 0.
 
 Section: math
 
 Example:
 (ns-import 'math)
+(test::assert-equal 0 (+))
 (test::assert-equal 5 (+ 5))
+(test::assert-equal 5 (+ (values 5)))
+(test::assert-equal 5 (+ (values 5 6)))
+(test::assert-equal 10 (+ 5 (values 5 6)))
 (test::assert-equal 5 (+ 5.0))
 (test::assert-equal 6 (+ 1 5))
 (test::assert-equal 6.5 (+ 1 5.5))
 (test::assert-equal 7 (+ 1 2 4))
+(test::assert-error (+ 1 2 4 \"5\"))
 ",
         ),
     );
@@ -48,25 +88,51 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    let prod: i64 = ints.iter().product();
-                    Ok(Expression::alloc_data(ExpEnum::Int(prod)))
+                let mut res = 0;
+                let mut res_float = 0.0;
+                let mut is_float = false;
+                if let Ok(a) = param_eval(environment, args, "multiply") {
+                    match norm_value(a).get().data {
+                        ExpEnum::Int(i) => res = i,
+                        ExpEnum::Float(f) => {
+                            is_float = true;
+                            res_float = f;
+                        }
+                        _ => return Err(LispError::new("Can only multiply numbers.")),
+                    }
                 } else {
-                    let prod: f64 = parse_list_of_floats(environment, &mut args)?
-                        .iter()
-                        .product();
-                    Ok(Expression::alloc_data(ExpEnum::Float(prod)))
+                    // Missing args so return 1.
+                    return Ok(Expression::alloc_data(ExpEnum::Int(1)));
+                }
+                for a in args {
+                    let a = norm_value(eval(environment, a)?);
+                    let a_d = a.get();
+                    match &a_d.data {
+                        ExpEnum::Int(i) if is_float => res_float *= *i as f64,
+                        ExpEnum::Int(i) => res *= i,
+                        ExpEnum::Float(f) if is_float => res_float *= f,
+                        ExpEnum::Float(f) => {
+                            is_float = true;
+                            res_float = (res as f64) * f;
+                        }
+                        _ => return Err(LispError::new("Can only multiply numbers.")),
+                    }
+                }
+                if is_float {
+                    Ok(Expression::alloc_data(ExpEnum::Float(res_float)))
+                } else {
+                    Ok(Expression::alloc_data(ExpEnum::Int(res)))
                 }
             },
-            "Usage: (* number+)
+            "Usage: (* number*)
 
-Multiply a sequence of numbers.
+Multiply a sequence of numbers.  (*) will return 1.
 
 Section: math
 
 Example:
 (ns-import 'math)
+(test::assert-equal 1 (*))
 (test::assert-equal 5 (* 5))
 (test::assert-equal 5 (* 1 5))
 (test::assert-equal 5.0 (* 1.0 5))
@@ -78,6 +144,7 @@ Example:
 (test::assert-equal 16.0 (* 2 2.0 4))
 (test::assert-equal 16.0 (* 2.0 2.0 4.0))
 (test::assert-equal 55.0000000001 (* 100 0.55))
+(test::assert-error (* 1 2 4 \"5\"))
 ",
         ),
     );
@@ -88,34 +155,60 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    if let Some(first) = ints.first() {
-                        let sum_of_rest: i64 = ints[1..].iter().sum();
-                        Ok(Expression::alloc_data(ExpEnum::Int(first - sum_of_rest)))
-                    } else {
-                        Err(LispError::new("expected at least one number"))
+                let mut res = 0;
+                let mut res_float = 0.0;
+                let mut is_float = false;
+                let mut has_two = false;
+                match norm_value(param_eval(environment, args, "subtract")?)
+                    .get()
+                    .data
+                {
+                    ExpEnum::Int(i) => res = i,
+                    ExpEnum::Float(f) => {
+                        is_float = true;
+                        res_float = f;
                     }
+                    _ => return Err(LispError::new("Can only subtract numbers.")),
+                }
+                for a in args {
+                    has_two = true;
+                    let a = norm_value(eval(environment, a)?);
+                    let a_d = a.get();
+                    match &a_d.data {
+                        ExpEnum::Int(i) if is_float => res_float -= *i as f64,
+                        ExpEnum::Int(i) => res -= i,
+                        ExpEnum::Float(f) if is_float => res_float -= f,
+                        ExpEnum::Float(f) => {
+                            is_float = true;
+                            res_float = (res as f64) - f;
+                        }
+                        _ => return Err(LispError::new("Can only subtract numbers.")),
+                    }
+                }
+                if is_float {
+                    if has_two {
+                        Ok(Expression::alloc_data(ExpEnum::Float(res_float)))
+                    } else {
+                        Ok(Expression::alloc_data(ExpEnum::Float(-res_float)))
+                    }
+                } else if has_two {
+                    Ok(Expression::alloc_data(ExpEnum::Int(res)))
                 } else {
-                    let floats = parse_list_of_floats(environment, &mut args)?;
-                    if let Some(first) = floats.first() {
-                        let sum_of_rest: f64 = floats[1..].iter().sum();
-                        Ok(Expression::alloc_data(ExpEnum::Float(first - sum_of_rest)))
-                    } else {
-                        Err(LispError::new("expected at least one number"))
-                    }
+                    Ok(Expression::alloc_data(ExpEnum::Int(-res)))
                 }
             },
             "Usage: (- number+)
 
-Subtract a sequence of numbers.
+Subtract a sequence of numbers.  Requires at least one number (negate if only one number).
 
 Section: math
 
 Example:
 (ns-import 'math)
-(test::assert-equal 5 (- 5))
-(test::assert-equal 5 (- 5.0))
+(test::assert-error (-))
+(test::assert-error (- 5 \"2\"))
+(test::assert-equal -5 (- 5))
+(test::assert-equal -5.0 (- 5.0))
 (test::assert-equal -4 (- 1 5))
 (test::assert-equal -4.5 (- 1 5.5))
 (test::assert-equal 4 (- 10 2 4))
@@ -130,30 +223,48 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                if let Ok(ints) = parse_list_of_ints(environment, &mut args) {
-                    if ints[1..].iter().any(|&x| x == 0) {
-                        Err(LispError::new("can not divide by 0"))
-                    } else if ints.len() > 1 {
-                        let div: i64 = ints[1..]
-                            .iter()
-                            .fold(*ints.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::alloc_data(ExpEnum::Int(div)))
-                    } else {
-                        Err(LispError::new("expected at least two numbers"))
+                let mut res = 0;
+                let mut res_float = 0.0;
+                let mut is_float = false;
+                let mut has_two = false;
+                match norm_value(param_eval(environment, args, "divide")?)
+                    .get()
+                    .data
+                {
+                    ExpEnum::Int(i) => res = i,
+                    ExpEnum::Float(f) => {
+                        is_float = true;
+                        res_float = f;
                     }
+                    _ => return Err(LispError::new("Can only divide numbers.")),
+                }
+                for a in args {
+                    has_two = true;
+                    let a = norm_value(eval(environment, a)?);
+                    let a_d = a.get();
+                    match &a_d.data {
+                        ExpEnum::Int(i) if *i == 0 => {
+                            return Err(LispError::new("Can not divide by 0."))
+                        }
+                        ExpEnum::Int(i) if is_float => res_float /= *i as f64,
+                        ExpEnum::Int(i) => res /= i,
+                        ExpEnum::Float(f) if *f == 0.0 => {
+                            return Err(LispError::new("Can not divide by 0.0."))
+                        }
+                        ExpEnum::Float(f) if is_float => res_float /= f,
+                        ExpEnum::Float(f) => {
+                            is_float = true;
+                            res_float = (res as f64) / f;
+                        }
+                        _ => return Err(LispError::new("Can only divide numbers.")),
+                    }
+                }
+                if !has_two {
+                    Err(LispError::new("divide requires at least two numbers."))
+                } else if is_float {
+                    Ok(Expression::alloc_data(ExpEnum::Float(res_float)))
                 } else {
-                    let floats = parse_list_of_floats(environment, &mut args)?;
-                    if floats[1..].iter().any(|&x| x == 0.0) {
-                        Err(LispError::new("can not divide by 0"))
-                    } else if floats.len() > 1 {
-                        let div: f64 = floats[1..]
-                            .iter()
-                            .fold(*floats.first().unwrap(), |div, a| div / a);
-                        Ok(Expression::alloc_data(ExpEnum::Float(div)))
-                    } else {
-                        Err(LispError::new("expected at least two numbers"))
-                    }
+                    Ok(Expression::alloc_data(ExpEnum::Int(res)))
                 }
             },
             "Usage: (/ number+)
@@ -161,7 +272,6 @@ Example:
 Divide a sequence of numbers.  Requires at least two numbers.
 
 Section: math
-
 Example:
 (ns-import 'math)
 (test::assert-equal 5 (/ 50 10))
@@ -172,6 +282,11 @@ Example:
 (test::assert-equal 5.5 (/ 5.5 1))
 (test::assert-equal 2 (/ 16 2 4))
 (test::assert-equal 5 (/ 100 2 5 2))
+(test::assert-error (/))
+(test::assert-error (/ 1))
+(test::assert-error (/ 1 0))
+(test::assert-error (/ 10 5 0))
+(test::assert-error (/ 10 \"5\" 2))
 ",
         ),
     );
@@ -182,18 +297,17 @@ Example:
             |environment: &mut Environment,
              args: &mut dyn Iterator<Item = Expression>|
              -> Result<Expression, LispError> {
-                let mut args = make_args(environment, args)?;
-                let ints = parse_list_of_ints(environment, &mut args)?;
-                if ints.len() != 2 {
-                    Err(LispError::new("expected two ints"))
+                let arg1 =
+                    norm_value(param_eval(environment, args, "modulo")?).make_int(environment)?;
+                let arg2 =
+                    norm_value(param_eval(environment, args, "modulo")?).make_int(environment)?;
+                params_done(args, "modulo")?;
+                if arg2 == 0 {
+                    Err(LispError::new(
+                        "modulo: expected two ints, second can not be 0",
+                    ))
                 } else {
-                    let arg1 = ints.get(0).unwrap();
-                    let arg2 = ints.get(1).unwrap();
-                    if *arg2 == 0 {
-                        Err(LispError::new("expected two ints, second can not be 0"))
-                    } else {
-                        Ok(Expression::alloc_data(ExpEnum::Int(arg1 % arg2)))
-                    }
+                    Ok(Expression::alloc_data(ExpEnum::Int(arg1 % arg2)))
                 }
             },
             "Usage: (% int int)
@@ -207,10 +321,19 @@ Example:
 (test::assert-equal 0 (% 50 10))
 (test::assert-equal 5 (% 55 10))
 (test::assert-equal 1 (% 1 2))
+(test::assert-error (%))
+(test::assert-error (% 1))
+(test::assert-error (% 1 2 3))
+(test::assert-error (% 1 2.0))
 ",
         ),
     );
+}
 
+pub fn add_math_builtins<S: BuildHasher>(
+    interner: &mut Interner,
+    data: &mut HashMap<&'static str, (Expression, String), S>,
+) {
     data.insert(
         interner.intern("sqrt"),
         Expression::make_function(

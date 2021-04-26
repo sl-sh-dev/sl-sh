@@ -1,10 +1,3 @@
-; Mirror basic math into root so no need to import math everywhere.
-(def + (doc 'math::+) math::+)
-(def - (doc 'math::-) math::-)
-(def / (doc 'math::/) math::/)
-(def * (doc 'math::*) math::*)
-(def % (doc 'math::%) math::%)
-
 (def print-backtrace
     (fn (backtrace)
         ((fn (idx len)
