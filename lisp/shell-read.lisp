@@ -111,6 +111,7 @@
        (set! done #t))
       ((and (not (= ch #\\))(or (= peek-ch #\))
                                 (= peek-ch #\$)
+                                (= peek-ch #\:)
                                 (= peek-ch #\space)
                                 (= peek-ch #\"))
             (not var-bracket))
@@ -131,9 +132,56 @@
       (str-contains "?" token)
       (str-contains "[" token)))
 
+(defn get-home ()
+  (let ((home (get-env "HOME")))
+    (let ((last-idx (- (length home) 1)))
+      (if (= #\/ (str-nth last-idx home)) (str-sub 0 last-idx home)
+          home))))
+
+(defn expand-tilde (token first-only)
+  (let ((home (get-home)))
+    (if (str-starts-with "~" token)
+        (set! token (str home (str-sub 1 (- (length token) 1) token))))
+    (if (not first-only) (do
+                          (set! token (str-replace token ":~" (str ":" home)))
+                          (set! token (str-replace token "\\~" "~")))))
+  token)
+
+;; If we have a token with embedded $ then break it up and wrap in a str.
+(defn expand-dollar (token)
+  (if (str-contains #\$ token)
+      (let ((toks (vec))
+            (new-token (str)))
+        (str-iter-start token)
+        (if (= (str-iter-peek token) #\$) (vec-push! toks (read token)))
+        ((fn (last-ch ch peek-ch done)
+             (cond
+               ((str-iter-empty? token)
+                (if (char? ch) (str-push! new-token ch))
+                (if (not (str-empty? new-token))(vec-push! toks new-token))
+                (set! done #t))
+               ((and (= last-ch #\\)(= ch #\$))
+                (str-push! new-token ch))
+               ((= ch #\\)) ; skip \ for now.
+               ((and (not (= ch #\\))(= peek-ch #\$))
+                (str-push! new-token ch)
+                (vec-push! toks new-token)
+                (set! new-token (str))
+                (vec-push! toks (read token)))
+               (#t
+                (if (= last-ch #\\) (str-push! new-token last-ch))
+                (str-push! new-token ch)))
+             (if (not done) (recur ch (str-iter-next! token)(str-iter-peek token)done)
+                 (if (> (length toks) 1)
+                     (apply list (sym "str") toks)
+                     (if (> (length toks) 0) (vec-nth toks 0) new-token))))
+         #\space(str-iter-next! token)(str-iter-peek token)nil))
+      token))
+
 (let ((paren-level 0))
 
-  (defn read-list (last-ch ch peek-ch add-exp close-token do-read push-token get-result clear-result)
+  (defn read-list (last-ch ch peek-ch add-exp close-token do-read push-token
+                           get-result clear-result)
 
     (defn setup-chainer (outer-form wrapper last-file)
       (let ((temp-result))
@@ -157,14 +205,12 @@
     (let ((just-read)
           (done))
       (cond
-        ((and (not (= last-ch #\\))(= ch #\~))
-         (push-token (get-env "HOME")))
         ((and (not (= last-ch #\\))(= ch #\)) (> paren-level 0))
          (set! paren-level (- paren-level 1))
          (set! done #t))
         ((and (not (= last-ch #\\))(= ch #\)))
          (set! done #t))
-        ((and (not (= ch #\\))(or (= peek-ch #\")(= peek-ch #\$)))
+        ((and (not (= ch #\\))(= peek-ch #\"))
          (do-read stream ch)
          (set! just-read #t))
         ((and (not (= last-ch #\\))(= ch #\&)(= peek-ch #\&)) ; AND
@@ -209,8 +255,11 @@
           (if just-read
               (do
                (set! just-read nil)
-               (read-list #\space #\space (str-iter-peek stream) add-exp close-token do-read push-token get-result clear-result)) ;recur
-              (read-list ch (str-iter-next! stream)(str-iter-peek stream) add-exp close-token do-read push-token get-result clear-result)) ;recur
+               (read-list #\space #\space (str-iter-peek stream) add-exp
+                close-token do-read push-token get-result clear-result)) ;recur
+              (read-list ch (str-iter-next! stream)(str-iter-peek stream)
+                         add-exp close-token do-read push-token get-result
+                         clear-result)) ;recur
           (close-token))))
 
   (defn shell-read-int (stream in-paren)
@@ -237,9 +286,10 @@
 
       (set! close-token (fn ()
                             (if (not (str-empty? token))
-                                (if first-sym (do (add-exp (sym token)) (set! first-sym nil))
-                                    (maybe-glob? token) (add-exp (list 'glob token))
-                                    (add-exp token)))
+                                (if first-sym (do (add-exp (sym (expand-dollar (expand-tilde token #t)))) (set! first-sym nil))
+                                    (maybe-glob? token) (add-exp (list 'glob (expand-dollar (expand-tilde token))))
+                                    (str-contains "~" token) (add-exp (expand-dollar (expand-tilde token nil)))
+                                    (add-exp (expand-dollar token))))
                             (set! token (str))))
 
       (set! push-token (fn (ch) (str-push! token ch)))
@@ -258,7 +308,8 @@
       (cond
         (in-paren
          (add-exp (sym "shell-read::sys-apply"))
-         (read-list #\space ch peek-ch add-exp close-token do-read push-token get-result clear-result))
+         (read-list #\space ch peek-ch add-exp close-token do-read push-token
+                    get-result clear-result))
         ((and (= ch #\()(= peek-ch #\())
          (set! result (read stream))
          (consume-whitespace stream)
@@ -269,7 +320,9 @@
         ((= ch #\()
          (set! paren-level (+ paren-level 1))
          (add-exp (sym "shell-read::sys-apply"))
-         (read-list #\space (str-iter-next! stream)(str-iter-peek stream) add-exp close-token do-read push-token get-result clear-result))
+         (read-list #\space (str-iter-next! stream)(str-iter-peek stream)
+                    add-exp close-token do-read push-token get-result
+                    clear-result))
         ((= ch #\{)
          (read-var stream #\space (str-iter-next! stream)(str-iter-peek stream) #t add-exp token))
         (#t

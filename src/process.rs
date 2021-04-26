@@ -11,7 +11,6 @@ use nix::{
     unistd::{self, Pid},
 };
 
-use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::signals::test_clear_sigint;
@@ -111,14 +110,6 @@ fn run_command(
     command: &str,
     args: Vec<String>,
 ) -> Result<Expression, LispError> {
-    let mut command = command;
-    let ncommand;
-    if command.starts_with('~') {
-        if let Some(c) = expand_tilde(command) {
-            ncommand = c;
-            command = &ncommand;
-        }
-    }
     if environment.in_fork && environment.eval_level == 1 {
         // We are the top level of a new fork so no need to fork again, just exec here.
         // On success exec will not return.

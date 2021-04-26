@@ -141,12 +141,8 @@ fn builtin_export(
         }
     };
     let val = Expression::alloc_data(val).as_string(environment)?;
-    let val = match expand_tilde(&val) {
-        Some(v) => v,
-        None => val,
-    };
     if key.contains('=') {
-        Err(LispError::new("export: key can not contail '='"))
+        Err(LispError::new("export: key can not contain '='"))
     } else {
         if !val.is_empty() {
             env::set_var(key, val.clone());
