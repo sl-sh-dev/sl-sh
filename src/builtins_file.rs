@@ -1,15 +1,23 @@
+extern crate notify;
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use glob::glob;
 
+use notify::{watcher, RecursiveMode, Watcher};
+use std::sync::mpsc::channel;
+use std::time::Duration;
+
+use self::notify::DebouncedEvent;
+use self::notify::DebouncedEvent::*;
 use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use core::iter;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -158,6 +166,88 @@ fn builtin_is_dir(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
+}
+
+fn get_file(
+    environment: &mut Environment,
+    p: Expression,
+    fn_name: &str,
+) -> Result<PathBuf, LispError> {
+    let p = match &eval(environment, p)?.get().data {
+        ExpEnum::String(p, _) => {
+            match expand_tilde(&p) {
+                Some(p) => p,
+                None => p.to_string(), // XXX not great.
+            }
+        }
+        _ => {
+            let msg = format!("{} path must be a string", fn_name);
+            return Err(LispError::new(msg));
+        }
+    };
+    let p = Path::new(&p);
+    Ok((*p.to_path_buf()).to_owned())
+}
+
+fn builtin_notify(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let arg0 = param_eval(environment, args, "notify")?;
+    let file_or_dir = get_file(environment, arg0, "notify")?;
+    let lambda_exp = param_eval(environment, args, "notify")?;
+    let lambda_exp_d = &lambda_exp.get().data;
+    params_done(args, "notify")?;
+    match lambda_exp_d {
+        ExpEnum::Lambda(_) => {
+            let p = file_or_dir.as_path();
+            if p.exists() {
+                let (tx, rx) = channel();
+
+                // Create a watcher object, delivering debounced events.
+                // The notification back-end is selected based on the platform.
+                let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
+
+                // Add a path to be watched. All files and directories at that path and
+                // below will be monitored for changes.
+                watcher.watch(p, RecursiveMode::Recursive).unwrap();
+
+                loop {
+                    match rx.recv() {
+                        Ok(event) => {
+                            let event = match event {
+                                NoticeWrite(path) => Some((":notice-write", format!("{:?}", path))),
+                                NoticeRemove(path) => {
+                                    Some((":notice-write", format!("{:?}", path)))
+                                }
+                                Create(path) => Some((":notice-write", format!("{:?}", path))),
+                                Write(path) => Some((":notice-write", format!("{:?}", path))),
+                                Chmod(path) => Some((":notice-write", format!("{:?}", path))),
+                                Remove(path) => Some((":notice-write", format!("{:?}", path))),
+                                Rename(src, dest) => Some((":notice-write", format!("{:?}", dest))),
+                                _ => None,
+                            };
+                            if let Some(event) = event {
+                                let (event_type, path) = event;
+                                let event_type = Expression::alloc_data(ExpEnum::String(
+                                    environment.interner.intern(event_type).into(),
+                                    None,
+                                ));
+                                let mut args = iter::once(event_type);
+                                let val =
+                                    call_lambda(environment, lambda_exp.copy(), &mut args, true)?;
+                                println!("Expressoin!: {:?}.", val);
+                            }
+                        }
+                        Err(e) => println!("watch error: {:?}", e),
+                    }
+                }
+            } else {
+                Err(LispError::new("provided path does not exist"))
+            }
+        }
+        _ => Err(LispError::new("second argument must be function")),
+    }
 }
 
 fn builtin_glob(
@@ -361,6 +451,21 @@ Example:
 (syscall 'rm "/tmp/tst-fs-glob/g2")
 (syscall 'rm "/tmp/tst-fs-glob/g3")
 (syscall 'rmdir "/tmp/tst-fs-glob")
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("notify"),
+        Expression::make_function(
+            builtin_notify,
+            r#"Usage: (notify /path/to/file/or/dir fn)
+
+Takes a path to a file or a directory and a function to call. If changes occur in file or
+recursively in directory provided function is called with sequence of changed files.
+
+Section: shell
+
+Example:
 "#,
         ),
     );
