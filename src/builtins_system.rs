@@ -301,37 +301,6 @@ fn builtin_run_bg(
     last_eval
 }
 
-fn fork_name(exp: &Expression) -> String {
-    match &exp.get().data {
-        ExpEnum::Pair(car, cdr) => {
-            if car.to_string() == "syscall" {
-                fork_name(&cdr)
-            } else {
-                car.to_string()
-            }
-        }
-        ExpEnum::Vector(v) if v.len() > 0 => {
-            if v[0].to_string() == "syscall" {
-                if let Some(n) = v.get(1) {
-                    n.to_string()
-                } else {
-                    v[0].to_string()
-                }
-            } else {
-                v[0].to_string()
-            }
-        }
-        _ => {
-            let exp_name = exp.to_string();
-            if exp_name.len() > 30 {
-                exp_name[0..30].to_string()
-            } else {
-                exp_name
-            }
-        }
-    }
-}
-
 fn builtin_fork(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -339,20 +308,6 @@ fn builtin_fork(
     if let Some(exp) = args.next() {
         if args.next().is_none() {
             let pid = fork(environment, exp.clone(), None, None)?;
-            if environment.do_job_control {
-                let pid_raw = Pid::from_raw(pid as i32);
-                let mut job = Job {
-                    pids: Vec::new(),
-                    names: Vec::new(),
-                    status: JobStatus::Running,
-                };
-                job.pids.push(pid);
-                job.names.push(fork_name(&exp));
-                environment.jobs.borrow_mut().push(job);
-                if let Err(_err) = unistd::setpgid(pid_raw, pid_raw) {
-                    // Ignore, do in parent and child.
-                }
-            }
             let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
             add_process(environment, pid, (res_proc.clone(), None));
             return Ok(res_proc);

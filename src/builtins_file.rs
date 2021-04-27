@@ -207,12 +207,6 @@ fn builtin_pipe(
     let mut write;
     let mut next_read;
     let mut res = Ok(Expression::make_nil());
-    let job = Job {
-        pids: Vec::new(),
-        names: Vec::new(),
-        status: JobStatus::Running,
-    };
-    environment.jobs.borrow_mut().push(job);
     let gpo = set_grab_proc_output(environment, false);
     while let Some(p) = pipe {
         let next_pipe = args.next();

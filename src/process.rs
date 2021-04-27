@@ -133,7 +133,6 @@ fn run_command(
         }
     }
     let foreground = !environment.run_background;
-    let pgid = environment.pipe_pgid;
 
     let term_settings = if environment.is_tty && environment.do_job_control {
         Some(termios::tcgetattr(environment.terminal_fd).unwrap())
@@ -158,41 +157,7 @@ fn run_command(
 
     match proc {
         Ok(proc) => {
-            let pgid_raw = match pgid {
-                Some(pgid) => Pid::from_raw(pgid as i32),
-                None => Pid::from_raw(proc as i32),
-            };
-            if environment.do_job_control {
-                let pid = Pid::from_raw(proc as i32);
-                if pgid.is_none() {
-                    let mut job = Job {
-                        pids: Vec::new(),
-                        names: Vec::new(),
-                        status: JobStatus::Running,
-                    };
-                    job.pids.push(proc);
-                    job.names.push(command.to_string());
-                    environment.jobs.borrow_mut().push(job);
-                } else {
-                    let job = environment.jobs.borrow_mut().pop();
-                    if let Some(mut job) = job {
-                        job.pids.push(proc);
-                        job.names.push(command.to_string());
-                        environment.jobs.borrow_mut().push(job);
-                    } else {
-                        eprintln!("WARNING: Something in pipe is amiss, probably a command not part of pipe or a bug!");
-                    }
-                }
-                if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
-                    // Ignore, do in parent and child.
-                }
-            }
             let result = if foreground {
-                if environment.do_job_control {
-                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid_raw) {
-                        // Ignore, do in parent and child.
-                    }
-                }
                 let status = if let Some(term_settings) = term_settings {
                     wait_pid(environment, proc, Some(&term_settings))
                 } else {

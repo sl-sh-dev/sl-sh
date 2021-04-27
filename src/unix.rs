@@ -62,6 +62,73 @@ pub fn anon_pipe() -> Result<(i32, i32), LispError> {
     }
 }
 
+fn fork_job_name(exp: &Expression) -> String {
+    match &exp.get().data {
+        ExpEnum::Pair(car, cdr) => {
+            if car.to_string() == "syscall" {
+                fork_job_name(&cdr)
+            } else {
+                car.to_string()
+            }
+        }
+        ExpEnum::Vector(v) if v.len() > 0 => {
+            if v[0].to_string() == "syscall" {
+                if let Some(n) = v.get(1) {
+                    n.to_string()
+                } else {
+                    v[0].to_string()
+                }
+            } else {
+                v[0].to_string()
+            }
+        }
+        _ => {
+            let exp_name = exp.to_string();
+            if exp_name.len() > 30 {
+                exp_name[0..30].to_string()
+            } else {
+                exp_name
+            }
+        }
+    }
+}
+
+fn setup_job(environment: &mut Environment, proc: u32, command: &str) {
+    let pgid = environment.pipe_pgid;
+    if environment.do_job_control {
+        let pid = Pid::from_raw(proc as i32);
+        let pgid_raw = match pgid {
+            Some(pgid) => Pid::from_raw(pgid as i32),
+            None => Pid::from_raw(proc as i32),
+        };
+        if pgid.is_none() {
+            let mut job = Job {
+                pids: Vec::new(),
+                names: Vec::new(),
+                status: JobStatus::Running,
+            };
+            job.pids.push(proc);
+            job.names.push(command.to_string());
+            environment.jobs.borrow_mut().push(job);
+        } else {
+            let job = environment.jobs.borrow_mut().pop();
+            if let Some(mut job) = job {
+                job.pids.push(proc);
+                job.names.push(command.to_string());
+                environment.jobs.borrow_mut().push(job);
+            } else {
+                eprintln!("WARNING: Something in job control is amiss, probably a command not part of pipe or a bug!");
+            }
+        }
+        if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
+            // Ignore, do in parent and child.
+        }
+        if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid_raw) {
+            // Ignore, do in parent and child.
+        }
+    }
+}
+
 pub fn fork(
     environment: &mut Environment,
     exp: Expression,
@@ -100,6 +167,19 @@ pub fn fork(
                         "*stdout*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
                     );
+                }
+                if environment.do_job_control {
+                    let pid = unistd::getpid();
+                    let pgid = match environment.pipe_pgid {
+                        Some(pgid) => Pid::from_raw(pgid as i32),
+                        None => pid,
+                    };
+                    if let Err(_err) = unistd::setpgid(pid, pgid) {
+                        // Ignore, do in parent and child.
+                    }
+                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                        // Ignore, do in parent and child.
+                    }
                 }
                 environment.eval_level = 0;
                 environment.run_background = false;
@@ -184,7 +264,7 @@ pub fn fork(
                 }
                 libc::_exit(exit_code);
             }
-            n => n as u32,
+            n => n,
         }
     };
     unsafe {
@@ -195,6 +275,12 @@ pub fn fork(
             cvt(libc::close(stdout))?;
         }
     }
+    let pid = if pid < 0 {
+        return Err(LispError::new(format!("Invalid pid in fork {}", pid)));
+    } else {
+        pid as u32
+    };
+    setup_job(environment, pid, &fork_job_name(&exp));
     Ok(pid)
 }
 
@@ -302,18 +388,17 @@ where
     io::Error::last_os_error()
 }
 
-pub fn fork_exec<I, S, P>(
+pub fn fork_exec<I, S>(
     environment: &mut Environment,
     stdin: Option<i32>,
     stdout: Option<i32>,
     stderr: Option<i32>,
-    program: P,
+    program: &str,
     args: I,
 ) -> Result<u32, LispError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
-    P: AsRef<OsStr>,
 {
     const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
     let (input, output) = anon_pipe()?;
@@ -414,6 +499,7 @@ where
     let mut bytes = [0; 8];
 
     let mut input = unsafe { File::from_raw_fd(input) };
+    setup_job(environment, pid, program);
     // loop to handle EINTR
     loop {
         match input.read(&mut bytes) {

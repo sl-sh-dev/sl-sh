@@ -39,11 +39,13 @@
 
 ; sys-apply needs to be able to handle no args to make the shell reader simpler.
 (defmacro sys-apply (&rest args)
-  (if (> (length args) 0)
-      (if (callable? (vec-nth args 0))
-          `(shell-read::fncall ,(vec-nth args 0) ,@(vec-slice args 1))
-          `(syscall ,(vec-nth args 0) ,@(vec-slice args 1)))
-      nil))
+  (let ((first-arg (vec-nth args 0))
+        (args-len (length args)))
+    (if
+     (= args-len 0) nil
+     (and (= args-len 1)(or (vec? first-arg)(pair? first-arg))) first-arg
+     (callable? first-arg) `(shell-read::fncall ,first-arg ,@(vec-slice args 1))
+     #t `(syscall ,first-arg ,@(vec-slice args 1)))))
 
 (defmacro var-or-env (key)
     `(if (def? ,key)
@@ -62,7 +64,7 @@
         nil)))
 
 (defmacro run-bg-first (com &rest args)
-  `(do (run-bg ,com) ,@(run-bg-prep-args args)))
+  `(do (fork ,com) ,@(run-bg-prep-args args)))
 
 (defmacro redir> (exp file) `(out> ,file ,exp))
 (defmacro redir>> (exp file) `(out>> ,file ,exp))
@@ -148,7 +150,7 @@
   token)
 
 ;; If we have a token with embedded $ then break it up and wrap in a str.
-(defn expand-dollar (token)
+(defn expand-dollar (token first)
   (if (str-contains #\$ token)
       (let ((toks (vec))
             (new-token (str)))
@@ -171,8 +173,9 @@
                (#t
                 (if (= last-ch #\\) (str-push! new-token last-ch))
                 (str-push! new-token ch)))
-             (if (not done) (recur ch (str-iter-next! token)(str-iter-peek token)done)
-                 (apply list (sym "str") toks)))
+            (if (not done) (recur ch (str-iter-next! token)(str-iter-peek token)done)
+                (and (= (length toks) 1)first) (vec-nth toks 0)
+                (apply list (sym "str") toks)))
          #\space(str-iter-next! token)(str-iter-peek token)nil))
       token))
 
@@ -209,11 +212,14 @@
         ((and (not (= last-ch #\\))(= ch #\)))
          (set! done #t))
         ((and (= ch #\$)(= peek-ch #\())
-         ((fn (ch)
-              (if (not (char? ch)) (err "Missing ')'"))
+         (push-token ch)
+         ((fn (ch plevel)
+              (if (not (char? ch)) (err "Missing ')'")
+                  (= ch #\() (set! plevel (+ plevel 1))
+                  (= ch #\)) (set! plevel (- plevel 1)))
               (push-token ch)
-              (if (not (= ch #\))) (recur (str-iter-next! stream))))
-          ch))
+              (if (> plevel 0) (recur (str-iter-next! stream) plevel)))
+          (str-iter-next! stream) 0))
         ((and (not (= ch #\\))(= peek-ch #\"))
          (do-read stream ch)
          (set! just-read #t))
@@ -290,10 +296,14 @@
 
       (set! close-token (fn ()
                             (if (not (str-empty? token))
-                                (if first-sym (do (add-exp (sym (expand-dollar (expand-tilde token #t)))) (set! first-sym nil))
-                                    (maybe-glob? token) (add-exp (list 'glob (expand-dollar (expand-tilde token))))
-                                    (str-contains "~" token) (add-exp (expand-dollar (expand-tilde token nil)))
-                                    (add-exp (expand-dollar token))))
+                                (if first-sym (let ((tng (expand-dollar (expand-tilde token #t) #t)))
+                                                (if (string? tng) (add-exp (sym tng))
+                                                    ; XXX TODO- if this is a (str...) list then deal with that.
+                                                    (add-exp tng))
+                                                (set! first-sym nil))
+                                    (maybe-glob? token) (add-exp (list 'glob (expand-dollar (expand-tilde token) nil)))
+                                    (str-contains "~" token) (add-exp (expand-dollar (expand-tilde token nil) nil))
+                                    (add-exp (expand-dollar token nil))))
                             (set! token (str))))
 
       (set! push-token (fn (ch) (str-push! token ch)))
@@ -319,7 +329,7 @@
          (consume-whitespace stream)
          (set! ch (str-iter-next! stream))
          (if (not (= #\) ch))
-             (err "Unbalanced ) in '\$' shell read macro"))
+             (err (str "Unbalanced ) in '\$' shell read macro, got " ch)))
          result)
         ((= ch #\()
          (set! paren-level (+ paren-level 1))
