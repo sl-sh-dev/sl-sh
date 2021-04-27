@@ -116,7 +116,8 @@ pub fn fork(
                 };
                 environment.is_tty = false;
                 environment.in_fork = true;
-                let exit_code = match eval(environment, exp) {
+                let mut exit_code: i32 = 0;
+                match eval(environment, exp) {
                     Ok(exp) if stdin.is_none() => {
                         let mut outf = BufWriter::new(fd_to_file(1));
                         if let ExpEnum::File(file) = &exp.get().data {
@@ -160,10 +161,20 @@ pub fn fork(
                                 _ => {}
                             }
                         }
-                        0
+                        if let ExpEnum::Int(code) = &exp.get().data {
+                            if *code < i32::MAX as i64 {
+                                exit_code = *code as i32;
+                            }
+                        }
                     }
-                    Ok(_) => 0,
-                    Err(_) => 1,
+                    Ok(exp) => {
+                        if let ExpEnum::Int(code) = &exp.get().data {
+                            if *code < i32::MAX as i64 {
+                                exit_code = *code as i32;
+                            }
+                        }
+                    }
+                    Err(_) => exit_code = 1,
                 };
                 if let Err(err) = reap_procs(environment) {
                     eprintln!("Error reaping procs in a pipe process: {}", err);
@@ -176,7 +187,6 @@ pub fn fork(
             n => n as u32,
         }
     };
-    environment.procs.borrow_mut().insert(pid, None);
     unsafe {
         if let Some(stdin) = stdin {
             cvt(libc::close(stdin))?;

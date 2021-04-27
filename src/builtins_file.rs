@@ -255,7 +255,10 @@ fn builtin_pipe(
             let (read_fd, write_fd) = anon_pipe()?;
             write = Some(write_fd);
             next_read = Some(read_fd);
-            last_pid = Some(fork(gpo.environment, p, read, write)?);
+            let pid = fork(gpo.environment, p, read, write)?;
+            last_pid = Some(pid);
+            let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
+            add_process(gpo.environment, pid, (res_proc, None));
             if gpo.environment.pipe_pgid.is_none() {
                 gpo.environment.pipe_pgid = last_pid;
             }
@@ -285,9 +288,12 @@ fn builtin_wait(
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return match &arg0.get().data {
+            let arg0_d = arg0.get();
+            return match &arg0_d.data {
                 ExpEnum::Process(ProcessState::Running(pid)) => {
-                    match wait_pid(environment, *pid, None) {
+                    let pid = *pid;
+                    drop(arg0_d);
+                    match wait_pid(environment, pid, None) {
                         Some(exit_status) => {
                             Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
                         }
@@ -297,12 +303,16 @@ fn builtin_wait(
                 ExpEnum::Process(ProcessState::Over(_pid, exit_status)) => Ok(
                     Expression::alloc_data(ExpEnum::Int(i64::from(*exit_status))),
                 ),
-                ExpEnum::Int(pid) => match wait_pid(environment, *pid as u32, None) {
-                    Some(exit_status) => {
-                        Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                ExpEnum::Int(pid) => {
+                    let pid = *pid;
+                    drop(arg0_d);
+                    match wait_pid(environment, pid as u32, None) {
+                        Some(exit_status) => {
+                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                        }
+                        None => Ok(Expression::make_nil()),
                     }
-                    None => Ok(Expression::make_nil()),
-                },
+                }
                 _ => Err(LispError::new("wait error: not a pid")),
             };
         }
@@ -582,12 +592,18 @@ $(rmdir "/tmp/tst-pipe-dir")
             r#"Usage: (wait proc-to-wait-for)
 
 Wait for a process to end and return it's exit status.
+Wait can be called multiple times if it is given a process
+object (not just a numeric pid).
 
 Section: shell
 
 Example:
 (def wait-test (wait (err>null $(ls /does/not/exist/123))))
 (test::assert-true (> wait-test 0))
+(def wait-test2 (fork (* 11 5)))
+(test::assert-equal 55 (wait wait-test2))
+(test::assert-equal 55 (wait wait-test2))
+(test::assert-equal 55 (wait wait-test2))
 "#,
         ),
     );

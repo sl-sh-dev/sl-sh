@@ -758,13 +758,9 @@ impl Expression {
         }
     }
 
-    fn pid_to_string(
-        &self,
-        procs: Rc<RefCell<HashMap<u32, Option<i32>>>>,
-        pid: u32,
-    ) -> Result<String, LispError> {
+    fn pid_to_string(&self, procs: ProcessMap, pid: u32) -> Result<String, LispError> {
         match procs.borrow_mut().get_mut(&pid) {
-            Some(Some(child)) => {
+            Some((_, Some(child))) => {
                 let mut childout = BufReader::new(fd_to_file(*child));
                 let mut buffer = String::new();
                 let mut taken = TakeN {
@@ -775,7 +771,7 @@ impl Expression {
                 taken.read_to_string(&mut buffer)?;
                 Ok(buffer)
             }
-            Some(None) => Ok("".to_string()),
+            Some((_, None)) => Ok("".to_string()),
             None => Ok("".to_string()),
         }
     }
@@ -932,7 +928,7 @@ impl Expression {
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
                 match procs.get_mut(&pid) {
-                    Some(Some(read_fd)) => {
+                    Some((_, Some(read_fd))) => {
                         let mut out = BufReader::new(fd_to_file(*read_fd));
                         let mut buf = [0; 1024];
                         loop {
@@ -943,7 +939,7 @@ impl Expression {
                             }
                         }
                     }
-                    Some(None) => {
+                    Some((_, None)) => {
                         return Err(LispError::new("Failed to get process to write to."));
                     }
                     None => {

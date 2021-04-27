@@ -24,9 +24,14 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
     match wait::waitpid(Pid::from_raw(pid as i32), Some(opts)) {
         Err(nix::Error::Sys(nix::errno::Errno::ECHILD)) => {
             // Does not exist.
-            environment.procs.borrow_mut().remove(&pid);
+            let mut code = None;
+            if let Some(pval) = environment.procs.borrow_mut().remove(&pid) {
+                if let ExpEnum::Process(ProcessState::Over(_pid, status)) = pval.0.get().data {
+                    code = Some(status)
+                }
+            }
             remove_job(environment, pid);
-            (true, None)
+            (true, code)
         }
         Err(err) => {
             eprintln!("Error waiting for pid {}, {}", pid, err);
@@ -35,7 +40,12 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
             (true, None)
         }
         Ok(WaitStatus::Exited(_, status)) => {
-            environment.procs.borrow_mut().remove(&pid);
+            if let Some(pval) = environment.procs.borrow_mut().remove(&pid) {
+                pval.0
+                    .get_mut()
+                    .data
+                    .replace(ExpEnum::Process(ProcessState::Over(pid, status)));
+            }
             remove_job(environment, pid);
             (true, Some(status))
         }
@@ -198,7 +208,7 @@ fn run_command(
             } else {
                 Expression::alloc_data(ExpEnum::Process(ProcessState::Running(proc)))
             };
-            add_process(environment, proc, pipe_read);
+            add_process(environment, proc, (result.clone(), pipe_read));
             Ok(result)
         }
         Err(e) => {

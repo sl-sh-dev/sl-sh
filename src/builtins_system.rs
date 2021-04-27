@@ -16,6 +16,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
+use crate::unix::fork;
 
 fn builtin_syscall(
     environment: &mut Environment,
@@ -300,6 +301,68 @@ fn builtin_run_bg(
     last_eval
 }
 
+fn fork_name(exp: &Expression) -> String {
+    match &exp.get().data {
+        ExpEnum::Pair(car, cdr) => {
+            if car.to_string() == "syscall" {
+                fork_name(&cdr)
+            } else {
+                car.to_string()
+            }
+        }
+        ExpEnum::Vector(v) if v.len() > 0 => {
+            if v[0].to_string() == "syscall" {
+                if let Some(n) = v.get(1) {
+                    n.to_string()
+                } else {
+                    v[0].to_string()
+                }
+            } else {
+                v[0].to_string()
+            }
+        }
+        _ => {
+            let exp_name = exp.to_string();
+            if exp_name.len() > 30 {
+                exp_name[0..30].to_string()
+            } else {
+                exp_name
+            }
+        }
+    }
+}
+
+fn builtin_fork(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(exp) = args.next() {
+        if args.next().is_none() {
+            let pid = fork(environment, exp.clone(), None, None)?;
+            if environment.do_job_control {
+                let pid_raw = Pid::from_raw(pid as i32);
+                let mut job = Job {
+                    pids: Vec::new(),
+                    names: Vec::new(),
+                    status: JobStatus::Running,
+                };
+                job.pids.push(pid);
+                job.names.push(fork_name(&exp));
+                environment.jobs.borrow_mut().push(job);
+                if let Err(_err) = unistd::setpgid(pid_raw, pid_raw) {
+                    // Ignore, do in parent and child.
+                }
+            }
+            let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
+            add_process(environment, pid, (res_proc.clone(), None));
+            return Ok(res_proc);
+        }
+    }
+    Err(LispError::new(
+        "fork: requires one form to exectute in the background",
+    ))
+}
+
 fn builtin_sleep(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -313,9 +376,6 @@ fn builtin_sleep(
                     return Ok(Expression::make_nil());
                 }
             }
-            //let now = time::Instant::now();
-
-            // assert!(now.elapsed() >= ten_millis)
         }
     }
     Err(LispError::new(
@@ -532,6 +592,27 @@ t
         ),
     );
     data.insert(
+        interner.intern("fork"),
+        Expression::make_special(
+            builtin_fork,
+            r#"Usage: (fork exp) -> process
+
+Forks the provided expression in the background as a job and returns the process
+object.  If the expression that is forked returns an integer (that fits an i32)
+then it will become the exit code.  Calling exit explicitly will also set the
+exit code.  Otherwise exit code is 0 for success and 1 for an error.
+
+Section: shell
+
+Example:
+(def fork-test (fork (+ (* 11 5) 2)))
+(test::assert-equal 57 (wait fork-test))
+(def fork-time (time (wait (fork (sleep 1000)))))
+(test::assert-true (> fork-time 1.0))
+"#,
+        ),
+    );
+    data.insert(
         interner.intern("exit"),
         Expression::make_function(
             builtin_exit,
@@ -542,8 +623,10 @@ Exit shell with optional status code.
 Section: shell
 
 Example:
-;(exit)
-;(exit 0)
+; Exit is overridden in the test harness...
+;(test::assert-equal 10 (wait (fork (exit 10))))
+;(test::assert-equal 11 (wait (fork (exit 11))))
+;(test::assert-equal 12 (wait (fork (exit 12))))
 t
 "#,
         ),

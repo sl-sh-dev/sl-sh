@@ -100,6 +100,8 @@ impl<'a> Drop for GrabProcOutput<'a> {
     }
 }
 
+pub type ProcessMap = Rc<RefCell<HashMap<u32, (Expression, Option<i32>)>>>;
+
 //#[derive(Clone, Debug)]
 pub struct Environment {
     pub recur_num_args: Option<usize>,
@@ -115,7 +117,8 @@ pub struct Environment {
     pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
-    pub procs: Rc<RefCell<HashMap<u32, Option<i32>>>>, // key is pid, val is output fd
+    // key is pid, val is (process expression, output fd)
+    pub procs: ProcessMap,
     pub save_exit_status: bool,
     // If this is Some then need to unwind and exit with then provided code (exit was called).
     pub exit_code: Option<i32>,
@@ -151,7 +154,7 @@ impl Environment {
 }
 
 pub fn build_default_environment() -> Environment {
-    let procs: Rc<RefCell<HashMap<u32, Option<i32>>>> = Rc::new(RefCell::new(HashMap::new()));
+    let procs: ProcessMap = Rc::new(RefCell::new(HashMap::new()));
     let mut interner = Interner::with_capacity(8192);
     let root_scope = Rc::new(RefCell::new(Namespace::new_root(&mut interner)));
     let math_scope = Rc::new(RefCell::new(Namespace::new_ns(
@@ -405,9 +408,8 @@ pub fn remove_job(environment: &Environment, pid: u32) {
     }
 }
 
-pub fn add_process(environment: &Environment, pid: u32, output_fd: Option<i32>) -> u32 {
-    environment.procs.borrow_mut().insert(pid, output_fd);
-    pid
+pub fn add_process(environment: &Environment, pid: u32, val: (Expression, Option<i32>)) {
+    environment.procs.borrow_mut().insert(pid, val);
 }
 
 pub fn reap_procs(environment: &Environment) -> io::Result<()> {
@@ -420,9 +422,9 @@ pub fn reap_procs(environment: &Environment) -> io::Result<()> {
         }
         drop(procs);
         for pid in pids {
+            // try_wait_pid removes them and tracks exit status
             try_wait_pid(environment, pid);
         }
-        // XXX remove them or better replace pid with exit status
     }
     Ok(())
 }
