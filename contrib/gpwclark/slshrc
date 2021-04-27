@@ -511,6 +511,26 @@ Section: user-shell"
 ;; }}}
 
 ;; i'm fun {{{
+(println "                                           ██╗")
+(println "                                           ██║")
+(println "                                           ██║")
+(println "      ██████████████████████████████████╗  ██║")
+(println "      ██╔═════════════════════════════██║  ██║")
+(println "      ██║                             ██║  ██║")
+(println "███████╗██╗      ███████╗██╗  ██╗     ██║  ██║")
+(println "██╔════╝██║      ██╔════╝██║  ██║     ██║  ██║")
+(println "███████╗██║█████╗███████╗███████║     ██║  ██║")
+(println "╚════██║██║╚════╝╚════██║██╔══██║     ██║  ██║")
+(println "███████║███████╗ ███████║██║  ██║     ██║  ██║")
+(println "╚══════╝╚══════╝ ╚══════╝╚═╝  ╚═╝     ██║  ╚═╝")
+(println " ██╗  ██║                             ██║")
+(println " ██║  ██████████████████████████████████║")
+(println " ██║  ╚═════════════════════════════════╝")
+(println " ██║")
+(println " ██║  ████████████████████████████████████████████╗")
+(println " ██║  ╚═══════════════════════════════════════════╝")
+(println " ██║")
+(println " ╚═╝")
 
 (println "		Hey, hey, hey. Don't be mean.")
 (println "		We don't have to be mean because,")
@@ -545,18 +565,13 @@ Section: user-shell"
 			(list root::cd cmd-str)
 			orig-cmd-ast)))
 
-(defn __exec-hook (cmd-str)
-	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
-	cmd-str
-	(do
-		(match (length cmd-ast)
-		;; if string is of length 0 either nothing was typed or
-		;; everything was a comment
-		(0 cmd-ast)
-		;; check to see if this single argument is a filepath
-		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
-		;; check for infix notation
-		(nil cmd-ast)))))
+;; if direcotry input, treat it as if it was prefixed by cd,
+;; due to shell reader changes receive and return raw string,
+;; do not return a list.
+(defn __exec_hook (cmd-str)
+    (if (fs-dir? cmd-str)
+        (str "cd " cmd-str)
+        cmd-str))
 
 ;; }}}
 

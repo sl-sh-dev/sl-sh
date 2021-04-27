@@ -977,15 +977,14 @@ Example:
 (defn reduce
 "
 reduce is used to amalgamate a provided iterator, coll, and an intitial value,
-init-val, according to the reducing function, reducing-fcn, provided.  The
-iter function will be called on coll to make sure it is an iterator. The
-reducing-fcn should be a function of two arguments. In the first iteration of
-reduce, the init-val will be used as the first argument to the reducing-fcn and
-(next! coll) will be used as the second argument. For all subsequent iterations,
-The result from the previous application of the reducing-fcn will be used as the
-first argument to the reducing-fcn and the second argument will be the next item
-in the collection when the collection is empty reduce will return the
-amalgamated result.
+according to the reducing function provided. The iter function will be called
+on coll to make sure it is an iterator. The reducing-fcn should be a function
+of two arguments. In the first iteration of reduce, the init-val will be used as
+the first argument to the reducing-fcn and (next! coll) will be used as the
+second argument. For all subsequent iterations, The result from the previous
+application of the reducing-fcn will be used as the first argument to the
+reducing-fcn and the second argument will be the next item in the collection
+when the collection is empty reduce will return the amalgamated result.
 
 Section: iterator
 
@@ -995,12 +994,12 @@ Example:
 (assert-false (= 15 (reduce + 1 (list 1 2 3 4 5))))
 (assert-true (= \"one hoopy frood\" (reduce str \"\" (list \"one \" \"hoopy \" \"frood\"))))
 "
-    (reducing-fcn init-val coll) (do
+    (reducing-fcn init-val coll) (let
     ; Only call iter on coll once.
-    (var inner-reduce (fn (reducing-fcn init-val coll)
+    ((inner-reduce (fn (reducing-fcn init-val coll)
         (if (coll :empty?)
                 init-val
-                (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll))))
+                (recur reducing-fcn (reducing-fcn init-val (coll :next!)) coll)))))
     (inner-reduce reducing-fcn init-val (iter coll))))
 
 (defn reduce-times
@@ -1141,6 +1140,126 @@ Example:
         (err "append-to!: First element not a list or vector."))
     ret))
 
+;; TODO broken iter
+;; TODO scnd error when (apply str (collect (zip (repeat " " 3) (list 1 2 3))))
+;; you do not feed it an iterator!
+(defstruct broken-iter
+"
+Section: iterator
+"
+;; fields
+(flip-flop #t)
+;; methods
+(:fn nextt (self) "broken")
+(:fn emptyyy (self) nil)
+(:fn init (self) self)
+(:impl iterator::iterator iterator::double-ended-iterator))
+
+
+(defstruct zip-iter
+"create iterator that interleaves two iterators together. Resultant iter
+is same length as fst
+
+Section: iterator
+"
+;; fields
+(sncd nil)
+(fst nil)
+(flip-flop #t)
+;; methods
+(:fn next! (self) (do
+                   (set! flip-flop (not flip-flop))
+                   (if flip-flop (fst :next!) (sncd :next!))))
+(:fn empty? (self) (if flip-flop
+                     (fst :empty?)
+                     (sncd :empty?)))
+(:fn init (self in-fst in-scndd)
+     (do
+       (set! fst in-fst)
+       (set! sncd in-scndd)
+       self))
+(:impl iterator::iterator iterator::double-ended-iterator))
+
+(defn zip
+"interleaves two iterators together, like a zipper. Resultant iter
+is same length as fst
+
+Section: iterator
+Example:
+
+(test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4)))))
+(test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4 5)))))
+"
+    (fst scnd)
+      ((zip-iter) :init fst scnd))
+
+(defstruct repeat-iter
+"iterator that returns provided repeat with specified length.
+
+Section: iterator
+"
+;; fields
+(to-repeat nil)
+(len 0)
+(current 0)
+;;methods
+(:fn empty? (self) (>= current len))
+(:fn next! (self) (do
+    (set! current (+ current 1))
+    to-repeat))
+(:fn init (self in-to-repeat in-len)
+    (do
+        (set! to-repeat in-to-repeat)
+        (set! len in-len)
+        self))
+(:impl iterator::iterator))
+
+(defn repeat
+"repeat target n times
+
+Section: iterator
+
+Example:
+(test::assert-equal (list #\m #\m #\m #\m) (collect (repeat #\m 4)))
+
+"
+(target n)
+((repeat-iter) :init target n))
+
+(defstruct take-iter
+"
+take itertor
+
+Section: iterator
+"
+;; fields
+(provided-iter nil)
+(len 0)
+(current 0)
+;;methods
+(:fn empty? (self) (or (>= current len) (provided-iter :empty?)))
+(:fn next! (self) (do
+    (set! current (+ current 1))
+    (provided-iter :next!)))
+(:fn init (self in-to-repeat in-len)
+    (do
+        (set! provided-iter in-to-repeat)
+        (set! len in-len)
+        self))
+(:impl iterator::iterator))
+
+(defn take
+"return iterator with first n items of provided-iter. Returned iterator is the
+same as provided-iter if n is greater than the length of provided-iter.
+
+Section: iterator
+
+Example:
+(test::assert-equal (list #\m #\m) (collect (take (repeat #\m 4) 2)))
+"
+  (provided-iter n)
+  ((take-iter) :init provided-iter n))
+
 (ns-export '(
     iterator
     double-ended-iterator
@@ -1151,6 +1270,12 @@ Example:
     iter?
     double-ended-iter?
     iter
+    zip-iter
+    zip
+    repeat-iter
+    repeat
+    take-iter
+    take
     map-iter
     append-iter
     slice-iter

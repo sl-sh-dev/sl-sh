@@ -849,9 +849,10 @@ the temporary file are saved to the sl-sh history.
 Section: shell"
     ()
     (var fc-file (str (temp-dir) "/sl-sh-fc.txt"))
+    (println "fc-file: " fc-file)
     (do
         (out> fc-file (print *last-command*))
-        (when (= 0 (wait (eval (read (str "(" $EDITOR " " fc-file ")")))))
+        (when (= 0 (wait (eval (read (str "(syscall " $EDITOR " $(str " fc-file "))")))))
             (do
                 (var file-contents (str (cat fc-file)))
                 (when (not (= "" (str-trim file-contents)))
@@ -886,7 +887,7 @@ Section: shell"
 	(when (< 1 (length args)) (set! namespace (vec-nth args 1)))
 	(when (< 0 (length args)) (set! filepath (vec-nth args 0)))
 	(var new-file (open filepath :create :append))
-	(chmod "+x" filepath)
+	$(chmod +x $((str filepath)))
 	(write-line new-file "#!/usr/bin/env sl-sh")
 	(write-line new-file "")
 	(when (not (nil? namespace))
