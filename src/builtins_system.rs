@@ -284,23 +284,6 @@ fn builtin_fg(
     Ok(Expression::alloc_data(ExpEnum::Nil))
 }
 
-fn builtin_run_bg(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    environment.run_background = true;
-    let mut last_eval = Ok(Expression::alloc_data(ExpEnum::Nil));
-    for a in args {
-        last_eval = eval(environment, a);
-        if let Err(err) = last_eval {
-            environment.run_background = false;
-            return Err(err);
-        }
-    }
-    environment.run_background = false;
-    last_eval
-}
-
 fn builtin_fork(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -526,22 +509,6 @@ Section: shell
 
 Example:
 ;(fg)
-t
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("run-bg"),
-        Expression::make_special(
-            builtin_run_bg,
-            r#"Usage: (run-bg exp0 ... expN)
-
-Like do except any system commands started within form will be in the background.
-
-Section: shell
-
-Example:
-;(run-bg gitk)
 t
 "#,
         ),

@@ -182,7 +182,6 @@ pub fn fork(
                     }
                 }
                 environment.eval_level = 0;
-                environment.run_background = false;
                 environment.jobs.borrow_mut().clear();
                 environment.do_job_control = false;
                 environment.stopped_procs.borrow_mut().clear();
@@ -458,10 +457,8 @@ where
                     if let Err(_err) = unistd::setpgid(pid, pgid) {
                         // Ignore, do in parent and child.
                     }
-                    if !environment.run_background {
-                        if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
-                            // Ignore, do in parent and child.
-                        }
+                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                        // Ignore, do in parent and child.
                     }
                 }
 

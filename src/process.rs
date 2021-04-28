@@ -132,7 +132,6 @@ fn run_command(
             return Err(exec(&command, &args).into());
         }
     }
-    let foreground = !environment.run_background;
 
     let term_settings = if environment.is_tty && environment.do_job_control {
         Some(termios::tcgetattr(environment.terminal_fd).unwrap())
@@ -157,21 +156,16 @@ fn run_command(
 
     match proc {
         Ok(proc) => {
-            let result = if foreground {
-                let status = if let Some(term_settings) = term_settings {
-                    wait_pid(environment, proc, Some(&term_settings))
-                } else {
-                    wait_pid(environment, proc, None)
-                };
-                match status {
-                    Some(code) => Expression::alloc_data(ExpEnum::Process(ProcessState::Over(
-                        proc,
-                        code as i32,
-                    ))),
-                    None => Expression::alloc_data(ExpEnum::Nil),
-                }
+            let status = if let Some(term_settings) = term_settings {
+                wait_pid(environment, proc, Some(&term_settings))
             } else {
-                Expression::alloc_data(ExpEnum::Process(ProcessState::Running(proc)))
+                wait_pid(environment, proc, None)
+            };
+            let result = match status {
+                Some(code) => {
+                    Expression::alloc_data(ExpEnum::Process(ProcessState::Over(proc, code as i32)))
+                }
+                None => Expression::alloc_data(ExpEnum::Nil),
             };
             add_process(environment, proc, (result.clone(), pipe_read));
             Ok(result)

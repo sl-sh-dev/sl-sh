@@ -114,7 +114,6 @@ pub struct Environment {
     pub reader_state: ReaderState,
     pub stopped_procs: Rc<RefCell<Vec<u32>>>,
     pub jobs: Rc<RefCell<Vec<Job>>>,
-    pub run_background: bool,
     pub is_tty: bool,
     pub do_job_control: bool,
     // key is pid, val is (process expression, output fd)
@@ -191,7 +190,6 @@ pub fn build_default_environment() -> Environment {
         reader_state,
         stopped_procs: Rc::new(RefCell::new(Vec::new())),
         jobs: Rc::new(RefCell::new(Vec::new())),
-        run_background: false,
         is_tty: true,
         do_job_control: true,
         procs,
