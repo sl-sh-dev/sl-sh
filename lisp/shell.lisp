@@ -772,7 +772,9 @@ Section: shell
           (prep-ast (fn (line)
                         (if (string? line)
                             (cond
-                              ((= #\$ (str-nth 0 line)) (read line))
+                              ((and (> (length line) 1)
+                                    (= #\$ (str-nth 0 line))
+                                    (= #\( (str-nth 1 line))) (read line))
                               ((= #\( (str-nth 0 line)) (read line))
                               (#t (shell-read::shell-read-int (str-iter-start line) #t)))
                             line))))

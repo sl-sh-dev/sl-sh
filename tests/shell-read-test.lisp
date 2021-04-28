@@ -19,3 +19,9 @@ $(export YYY $(echo "1\n20\n10" | grep 1 | grep 0))
 (test::assert-equal "10\n" $YYY)
 (def yyy (str $(echo "1\n20\n10" | grep 1 | grep 0)))
 (test::assert-equal "10\n" $yyy)
+
+$(export ECHO $(which echo))
+$(export BIN "/bin")
+
+$(export YYY $($ECHO "1\n20\n10" | grep 1 | ${BIN}/grep 0))
+(test::assert-equal "10\n" $YYY)
