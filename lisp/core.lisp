@@ -558,4 +558,92 @@ Example:
 (assert-equal 0 (identity 0))"
       (x) x)
 
+(defmacro len0?
+"Is the length of thing 0?
+
+Section: core
+
+Example:
+(assert-true (len0? nil))
+(assert-true (len0? '()))
+(assert-true (len0? (vec)))
+(assert-true (len0? (str)))
+(assert-true (len0? \"\"))
+(assert-false (len0? '(1)))
+(assert-false (len0? (vec 1 2)))
+(assert-false (len0? \"string\"))
+"
+    (thing) `(= (length ,thing) 0))
+
+(defmacro len>0?
+"Is the length of thing greater than 0?
+
+Section: core
+
+Example:
+(assert-false (len>0? nil))
+(assert-false (len>0? '()))
+(assert-false (len>0? (vec)))
+(assert-false (len>0? (str)))
+(assert-false (len>0? \"\"))
+(assert-true (len>0? '(1)))
+(assert-true (len>0? (vec 1 2)))
+(assert-true (len>0? \"string\"))
+"
+    (thing) `(> (length ,thing) 0))
+
+(defmacro inc!
+"Usage: (inc! symbol [number]) -> new value
+
+Increment the value in symbol by one or the optional number
+
+Section: core
+
+Example:
+(def *inc-test* 1)
+(test::assert-equal 2 (inc! *inc-test*))
+(test::assert-equal 2 *inc-test*)
+(test::assert-equal 5 (inc! *inc-test* 3))
+(test::assert-error (inc! *inc-test* \"xxx\"))
+(test::assert-equal 5 *inc-test*)
+(def *inc-test* \"xxx\")
+(test::assert-error (inc! *inc-test*))
+(let ((inc-test 1))
+  (test::assert-equal 2 (inc! inc-test))
+  (test::assert-equal 2 inc-test)
+  (test::assert-equal 5 (inc! inc-test 3))
+  (test::assert-equal 5 inc-test))
+"
+    (s &rest args)
+  (if (len0? args) `(set! ,s (+ ,s 1))
+      (= (length args) 1) `(set! ,s (+ ,s ,(vec-nth args 0)))
+      (err "inc!: requires a symbol and optional number")))
+
+(defmacro dec!
+"Usage: (dec! symbol [number]) -> new value
+
+Decrement the value in symbol by one or the optional number
+
+Section: core
+
+Example:
+(def *dec-test* 5)
+(test::assert-equal 4 (dec! *dec-test*))
+(test::assert-equal 4 *dec-test*)
+(test::assert-error (dec! *dec-test* \"xxx\"))
+(test::assert-equal 1 (dec! *dec-test* 3))
+(test::assert-equal 1 *dec-test*)
+(def *dec-test* \"xxx\")
+(test::assert-error (dec! *dec-test*))
+(let ((dec-test 5))
+  (test::assert-equal 4 (dec! dec-test))
+  (test::assert-equal 4 dec-test)
+  (test::assert-equal 1 (dec! dec-test 3))
+  (test::assert-equal 1 dec-test))
+"
+    (s &rest args)
+  (if (len0? args) `(set! ,s (- ,s 1))
+      (= (length args) 1) `(set! ,s (- ,s ,(vec-nth args 0)))
+      (err "dec!: requires a symbol and optional number")))
+
 (load "collection.lisp")
