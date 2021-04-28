@@ -71,7 +71,7 @@ fn fork_job_name(exp: &Expression) -> String {
                 car.to_string()
             }
         }
-        ExpEnum::Vector(v) if v.len() > 0 => {
+        ExpEnum::Vector(v) if !v.is_empty() => {
             if v[0].to_string() == "syscall" {
                 if let Some(n) = v.get(1) {
                     n.to_string()

@@ -307,7 +307,7 @@ fn builtin_fork(
 ) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
-            let pid = fork(environment, exp.clone(), None, None)?;
+            let pid = fork(environment, exp, None, None)?;
             let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
             add_process(environment, pid, (res_proc.clone(), None));
             return Ok(res_proc);

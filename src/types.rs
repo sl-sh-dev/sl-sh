@@ -962,36 +962,44 @@ impl Expression {
             ExpEnum::Pair(_, _) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Nil => write!(writer, "{}", self.to_string())?,
             ExpEnum::HashMap(_map) => write!(writer, "{}", self.to_string())?,
-            ExpEnum::File(file) => match &mut *file.borrow_mut() {
-                FileState::Stdin => {
-                    let f = io::stdin();
-                    let mut f = f.lock();
-                    let mut buf = [0; 1024];
-                    loop {
-                        match f.read(&mut buf) {
-                            Ok(0) => break,
-                            Ok(n) => writer.write_all(&buf[..n])?,
-                            Err(err) => return Err(err.into()),
+            ExpEnum::File(file) => {
+                let mut file_d = file.try_borrow_mut().map_err(|_| {
+                    LispError::new("Invalid file, are you trying to read and write the same file?")
+                })?;
+                match &mut *file_d {
+                    FileState::Stdin => {
+                        let f = io::stdin();
+                        let mut f = f.lock();
+                        let mut buf = [0; 1024];
+                        loop {
+                            match f.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => writer.write_all(&buf[..n])?,
+                                Err(err) => return Err(err.into()),
+                            }
                         }
                     }
-                }
-                FileState::Read(f_iter, _) => {
-                    for ch in f_iter.as_mut().unwrap() {
-                        writer.write_all(ch.as_bytes())?;
-                    }
-                }
-                FileState::ReadBinary(f) => {
-                    let mut buf = [0; 1024];
-                    loop {
-                        match f.read(&mut buf) {
-                            Ok(0) => break,
-                            Ok(n) => writer.write_all(&buf[..n])?,
-                            Err(err) => return Err(err.into()),
+                    FileState::Read(f_iter, _) => {
+                        for ch in f_iter.as_mut().unwrap() {
+                            writer.write_all(ch.as_bytes())?;
                         }
                     }
+                    FileState::ReadBinary(f) => {
+                        let mut buf = [0; 1024];
+                        loop {
+                            match f.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => writer.write_all(&buf[..n])?,
+                                Err(err) => return Err(err.into()),
+                            }
+                        }
+                    }
+                    _ => {
+                        drop(file_d);
+                        write!(writer, "{}", self.to_string())?;
+                    }
                 }
-                _ => write!(writer, "{}", self.to_string())?,
-            },
+            }
             ExpEnum::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
             ExpEnum::Wrapper(exp) => {
                 let exp: Expression = exp.clone();

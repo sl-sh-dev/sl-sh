@@ -76,9 +76,6 @@
 (defn handle-process (cmd-proc)
 	(if (process? cmd-proc) (= 0 (wait cmd-proc)) (not (not cmd-proc))))
 
-(defmacro proc-wait ()
-	(fn (cmd) `(handle-process ,cmd)))
-
 (defn consume-whitespace (stream)
   (let ((ch (str-iter-peek stream)))
     (if (and (char? ch)(char-whitespace? ch)) (do (str-iter-next! stream)(consume-whitespace stream)))))
