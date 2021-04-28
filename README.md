@@ -1,6 +1,6 @@
 # Simple Lisp Shell
 
-![Rust](https://github.com/sstanfield/slsh/workflows/Rust/badge.svg?branch=master)
+![Rust](https://github.com/sstanfield/sl-sh/workflows/Rust/badge.svg?branch=master)
 
 This is a shell built around a simple version of lisp for scripting.  The prompt
 also follows this pattern (with the exception that you can leave out the outer
@@ -188,8 +188,8 @@ arguments to a sl-sh script, the parameters will be available as a vector,
 
 
 ## Documentation of available forms
-- [sl-sh documentation page](https://sstanfield.github.io/slsh)
-- notes on building the documentation are [here](https://github.com/sstanfield/slsh/wiki/Building-the-docs)
+- [sl-sh documentation page](https://sstanfield.github.io/sl-sh)
+- notes on building the documentation are [here](https://github.com/sstanfield/sl-sh/wiki/Building-the-docs)
 
 ## Cross Compiling
-- notes on cross compiling for various platforms are [here](https://github.com/sstanfield/slsh/wiki/Cross-Compiling)
+- notes on cross compiling for various platforms are [here](https://github.com/sstanfield/sl-sh/wiki/Cross-Compiling)
