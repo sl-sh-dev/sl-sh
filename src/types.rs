@@ -788,8 +788,7 @@ impl Expression {
                 if v.is_empty() {
                     Ok(self.to_string())
                 } else {
-                    let v: Expression = (&v[0]).clone();
-                    v.make_string(environment)
+                    v[0].make_string(environment)
                 }
             }
             ExpEnum::File(file) => {
@@ -831,6 +830,13 @@ impl Expression {
             ExpEnum::String(s, _) => Ok((*s).to_string()),
             ExpEnum::Char(c) => Ok((*c).to_string()),
             ExpEnum::CodePoint(c) => Ok(c.to_string()),
+            ExpEnum::Values(v) => {
+                if v.is_empty() {
+                    self.make_string(environment)
+                } else {
+                    v[0].as_string(environment)
+                }
+            }
             _ => self.make_string(environment),
         }
     }
@@ -1006,6 +1012,8 @@ impl Expression {
                 exp.writef(environment, writer)?;
             }
             ExpEnum::String(s, _) => write!(writer, "{}", s)?, // Do not quote strings.
+            ExpEnum::Char(c) => write!(writer, "{}", c)?,
+            ExpEnum::CodePoint(c) => write!(writer, "{}", c)?,
             _ => write!(writer, "{}", self.to_string())?,
         }
         writer.flush()?;

@@ -23,11 +23,11 @@ Section: shell
 			(set! docstring (vec-nth args 0))
 			(set! body (vec-nth args 1))
 			`(defmacro ,name ,docstring (&rest ars)
-				(iterator::collect (iterator::append (quote ,body) ars)))))
+				(iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
 		(1 (do
 			(set! body (vec-nth args 0))
 			`(defmacro ,name (&rest ars)
-				(iterator::collect (iterator::append (quote ,body) ars)))))
+				(iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
 		(0 (err usage))
 		(nil (err usage))))
 
@@ -43,12 +43,12 @@ Redirect stdout to file, append the output.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>>.test\" (syscall 'echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out>> \"/tmp/sl-sh.out>>.test\" (syscall echo \"stdout redir two\"))
+(out>> \"/tmp/sl-sh.out>>.test\" (syscall 'echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
@@ -57,8 +57,8 @@ Example:
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn *stdout* ,file ,body)
-		(dyn *stdout* (open ,file :create :append) ,body)))
+		(dyn *stdout* ,file (do-unstr ,body))
+		(dyn *stdout* (open ,file :create :append) (do-unstr ,body))))
 
 (defmacro out>
 "
@@ -67,12 +67,12 @@ Redirect stdout to file, truncate the file first.
 Section: shell
 
 Example:
-(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir one\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall 'echo \"stdout redir one\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out> \"/tmp/sl-sh.out>.test\" (syscall echo \"stdout redir two\"))
+(out> \"/tmp/sl-sh.out>.test\" (syscall 'echo \"stdout redir two\"))
 (def topen (open \"/tmp/sl-sh.out>.test\" :read))
 (test::assert-equal \"stdout redir two\n\" (read-line topen))
 (test::assert-false (read-line topen))
@@ -80,8 +80,8 @@ Example:
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn *stdout* ,file ,body)
-		(dyn *stdout* (open ,file :create :truncate) ,body)))
+		(dyn *stdout* ,file (do-unstr ,body))
+		(dyn *stdout* (open ,file :create :truncate) (do-unstr ,body))))
 
 (defmacro err>>
 "
@@ -154,8 +154,8 @@ Example:
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn *stdout* ,file (dyn *stderr* ,file ,body))
-		(dyn *stdout* (open ,file :create :append) (dyn *stderr* *stdout* ,body))))
+		(dyn *stdout* ,file (dyn *stderr* ,file (do-unstr ,body)))
+		(dyn *stdout* (open ,file :create :append) (dyn *stderr* *stdout* (do-unstr ,body)))))
 
 (defmacro out-err>
 "
@@ -170,7 +170,7 @@ Example:
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(out-err> \"/tmp/sl-sh.out-err>.test\" (do (syscall echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
+(out-err> \"/tmp/sl-sh.out-err>.test\" (do (syscall 'echo \"stdout echo redir one\")(eprintln \"stderr redir one\")))
 (def topen (open \"/tmp/sl-sh.out-err>.test\" :read))
 (test::assert-equal \"stdout echo redir one\n\" (read-line topen))
 (test::assert-equal \"stderr redir one\n\" (read-line topen))
@@ -185,8 +185,8 @@ Example:
 "
 	(file body)
 	`(if (file? ,file)
-		(dyn *stdout* ,file (dyn *stderr* ,file ,body))
-		(dyn *stdout* (open ,file :create :truncate) (dyn *stderr* *stdout* ,body))))
+		(dyn *stdout* ,file (dyn *stderr* ,file (do-unstr ,body)))
+		(dyn *stdout* (open ,file :create :truncate) (dyn *stderr* *stdout* (do-unstr ,body)))))
 
 (defmacro out>null
 "
@@ -202,7 +202,7 @@ Example:
 (close topen)
 "
 	(body)
-	`(dyn *stdout* (open "/dev/null" :write) ,body))
+	`(dyn *stdout* (open "/dev/null" :write) (do-unstr ,body)))
 
 (defmacro err>null
 "
@@ -240,20 +240,7 @@ Example:
 (close topen)
 "
 	(body)
-	`(dyn *stdout* (open "/dev/null" :write) (dyn *stderr* *stdout* ,body)))
-
-(defmacro |
-"
-Shorthand for pipe builtin.
-
-Section: shell
-
-Example:
-(def pipe-test (str (| \$(echo \"one\ntwo\nthree\")\$(grep two))))
-(test::assert-equal \"two\n\" pipe-test)
-"
-	(&rest body)
-	`(pipe ,@body))
+	`(dyn *stdout* (open "/dev/null" :write) (dyn *stderr* *stdout* (do-unstr ,body))))
 
 ;; Scope to contain then pushd/popd/dirs functions.
 (let ((dir_stack (make-vec 20))
@@ -918,7 +905,6 @@ Section: shell"
 	out>null
 	err>null
 	out-err>null
-	|
 	pushd
 	popd
 	dirs

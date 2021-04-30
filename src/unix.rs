@@ -62,11 +62,15 @@ pub fn anon_pipe() -> Result<(i32, i32), LispError> {
     }
 }
 
-fn fork_job_name(exp: &Expression) -> String {
-    match &exp.get().data {
+fn fork_job_name(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
+    let res = match &exp.get().data {
         ExpEnum::Pair(car, cdr) => {
             if car.to_string() == "syscall" {
-                fork_job_name(&cdr)
+                if let ExpEnum::Pair(cadr, _) = &cdr.get().data {
+                    eval(environment, cadr)?.to_string()
+                } else {
+                    fork_job_name(environment, &cdr)?
+                }
             } else {
                 car.to_string()
             }
@@ -74,7 +78,7 @@ fn fork_job_name(exp: &Expression) -> String {
         ExpEnum::Vector(v) if !v.is_empty() => {
             if v[0].to_string() == "syscall" {
                 if let Some(n) = v.get(1) {
-                    n.to_string()
+                    eval(environment, n)?.to_string()
                 } else {
                     v[0].to_string()
                 }
@@ -90,7 +94,8 @@ fn fork_job_name(exp: &Expression) -> String {
                 exp_name
             }
         }
-    }
+    };
+    Ok(res)
 }
 
 fn setup_job(environment: &mut Environment, proc: u32, command: &str) {
@@ -279,7 +284,8 @@ pub fn fork(
     } else {
         pid as u32
     };
-    setup_job(environment, pid, &fork_job_name(&exp));
+    let job_name = fork_job_name(environment, &exp)?;
+    setup_job(environment, pid, &job_name);
     Ok(pid)
 }
 

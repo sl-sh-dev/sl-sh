@@ -442,16 +442,16 @@ Change directory.
 Section: shell
 
 Example:
-(syscall mkdir "/tmp/tst-fs-cd")
-(syscall touch "/tmp/tst-fs-cd/fs-cd-marker")
+(syscall 'mkdir "/tmp/tst-fs-cd")
+(syscall 'touch "/tmp/tst-fs-cd/fs-cd-marker")
 (test::assert-false (fs-exists? "fs-cd-marker"))
 (pushd "/tmp/tst-fs-cd")
 (root::cd "/tmp")
 (root::cd "/tmp/tst-fs-cd")
 (test::assert-true (fs-exists? "fs-cd-marker"))
-(syscall rm "/tmp/tst-fs-cd/fs-cd-marker")
+(syscall 'rm "/tmp/tst-fs-cd/fs-cd-marker")
 (popd)
-(syscall rmdir "/tmp/tst-fs-cd")
+(syscall 'rmdir "/tmp/tst-fs-cd")
 "#,
         ),
     );
@@ -544,15 +544,15 @@ Pipes can be nested including piping through a lambda that itself uses pipes.
 Section: shell
 
 Example:
-(def pipe-test (str (pipe $(echo "one
+(def pipe-test (str (pipe (print "one
 two
-three")$(grep two))))
+three")(syscall 'grep "two"))))
 (test::assert-equal "two
 " pipe-test)
-(def pipe-test (str (pipe (pipe $(echo "one
+(def pipe-test (str (pipe (pipe (syscall 'echo "one
 two
 twotwo
-three")$(grep two))$(grep twotwo))))
+three")(syscall 'grep "two"))(syscall 'grep "twotwo"))))
 (test::assert-equal "twotwo
 " pipe-test)
 $(mkdir "/tmp/tst-pipe-dir")
@@ -560,7 +560,7 @@ $(mkdir "/tmp/tst-pipe-dir")
 (pipe (print "one
 two
 two2
-three") $(grep two) tsync)
+three") (syscall 'grep "two") tsync)
 (close tsync)
 (def topen (open "/tmp/tst-pipe-dir/test1" :read))
 (test::assert-equal "two
@@ -570,7 +570,7 @@ three") $(grep two) tsync)
 (test::assert-false (read-line topen))
 (close topen)
 (def topen (open "/tmp/tst-pipe-dir/test1" :read))
-(def pipe-test (str (pipe topen $(grep two2))))
+(def pipe-test (str (pipe topen (syscall 'grep "two2"))))
 (close topen)
 (test::assert-equal "two2
 " pipe-test)
@@ -592,7 +592,7 @@ object (not just a numeric pid).
 Section: shell
 
 Example:
-(def wait-test (wait (err>null $(ls /does/not/exist/123))))
+(def wait-test (wait (err>null (syscall 'ls "/does/not/exist/123"))))
 (test::assert-true (> wait-test 0))
 (def wait-test2 (fork (* 11 5)))
 (test::assert-equal 55 (wait wait-test2))
@@ -612,8 +612,9 @@ Return the pid of a process.
 Section: shell
 
 Example:
-(def pid-test $(echo -n))
+(def pid-test (syscall 'echo "-n"))
 (test::assert-true (int? (pid pid-test)))
+(test::assert-true (int? (pid (fork ((fn () nil))))))
 (test::assert-error (pid 1))
 "#,
         ),
@@ -629,15 +630,15 @@ Takes a list/varargs of globs and return the list of them expanded.
 Section: shell
 
 Example:
-(syscall mkdir "/tmp/tst-fs-glob")
-(syscall touch "/tmp/tst-fs-glob/g1")
-(syscall touch "/tmp/tst-fs-glob/g2")
-(syscall touch "/tmp/tst-fs-glob/g3")
+(syscall 'mkdir "/tmp/tst-fs-glob")
+(syscall 'touch "/tmp/tst-fs-glob/g1")
+(syscall 'touch "/tmp/tst-fs-glob/g2")
+(syscall 'touch "/tmp/tst-fs-glob/g3")
 (test::assert-equal '("/tmp/tst-fs-glob/g1" "/tmp/tst-fs-glob/g2" "/tmp/tst-fs-glob/g3") (glob "/tmp/tst-fs-glob/*"))
-(syscall rm "/tmp/tst-fs-glob/g1")
-(syscall rm "/tmp/tst-fs-glob/g2")
-(syscall rm "/tmp/tst-fs-glob/g3")
-(syscall rmdir "/tmp/tst-fs-glob")
+(syscall 'rm "/tmp/tst-fs-glob/g1")
+(syscall 'rm "/tmp/tst-fs-glob/g2")
+(syscall 'rm "/tmp/tst-fs-glob/g3")
+(syscall 'rmdir "/tmp/tst-fs-glob")
 "#,
         ),
     );

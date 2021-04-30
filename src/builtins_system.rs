@@ -23,14 +23,14 @@ fn builtin_syscall(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     if let Some(command) = args.next() {
-        //let command = eval(environment, command)?;
+        let command = eval(environment, command)?;
         let command_d = command.get();
         match &command_d.data {
             ExpEnum::Symbol(s, _) => do_command(environment, s, args),
             ExpEnum::String(s, _) => do_command(environment, s, args),
             _ => {
                 let msg = format!(
-                    "syscall: first argument {} not a symbol or string, type {}",
+                    "syscall: first argument {} does not eval to a symbol or string, type {}",
                     command,
                     command.display_type()
                 );
@@ -379,12 +379,12 @@ pub fn add_system_builtins<S: BuildHasher>(
 ) {
     data.insert(
         interner.intern("syscall"),
-        Expression::make_special(
+        Expression::make_function(
             builtin_syscall,
             r#"Usage: (syscall system-command arg0 ... argN)
 
 Execute the provided system command with the supplied arguments.
-System-command can be a string or symbol (it is not evaluated).
+System-command can evalute to a string or symbol.
 The args (0..n) are evaluated.
 
 Section: core
@@ -392,8 +392,11 @@ Section: core
 Example:
 (def test-syscall-one (str (syscall "echo" "-n" "syscall-test")))
 (test::assert-equal "syscall-test" test-syscall-one)
-(def test-syscall-one (str (syscall echo "-n" "syscall-test2")))
+(def test-syscall-one (str (syscall 'echo "-n" "syscall-test2")))
 (test::assert-equal "syscall-test2" test-syscall-one)
+(def test-syscall-echo "echo")
+(def test-syscall-one (str (syscall test-syscall-echo "-n" "syscall-test3")))
+(test::assert-equal "syscall-test3" test-syscall-one)
 "#,
         ),
     );

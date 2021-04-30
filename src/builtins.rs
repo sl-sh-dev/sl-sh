@@ -401,6 +401,22 @@ fn builtin_if(
     Err(LispError::new("if: requires expressions"))
 }
 
+fn check_pretty(aa: &Expression, pretty: bool) -> bool {
+    match &aa.get().data {
+        ExpEnum::String(_, _) => false,
+        ExpEnum::Char(_) => false,
+        ExpEnum::CodePoint(_) => false,
+        ExpEnum::Values(v) => {
+            if v.is_empty() {
+                pretty
+            } else {
+                check_pretty(&v[0], pretty)
+            }
+        }
+        _ => pretty,
+    }
+}
+
 fn args_out(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -411,10 +427,10 @@ fn args_out(
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
-        let pretty = match &aa.get().data {
-            ExpEnum::String(_, _) => false,
-            _ => pretty,
-        };
+        let pretty = check_pretty(&aa, pretty); //match &aa.get().data {
+                                                //ExpEnum::String(_, _) => false,
+                                                //_ => pretty,
+                                                //};
         if pretty {
             pretty_printf(&aa, environment, writer)?;
         } else {
@@ -458,10 +474,10 @@ fn print_to_oe(
                         for a in args {
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
-                            let pretty = match &aa.get().data {
-                                ExpEnum::String(_, _) => false,
-                                _ => pretty,
-                            };
+                            let pretty = check_pretty(&aa, pretty); //match &aa.get().data {
+                                                                    //ExpEnum::String(_, _) => false,
+                                                                    //_ => pretty,
+                                                                    //};
                             if pretty {
                                 pretty_printf(&aa, environment, f)?;
                             } else {

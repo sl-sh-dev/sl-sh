@@ -359,6 +359,14 @@ fn builtin_str(
     Ok(Expression::alloc_data(ExpEnum::String(res.into(), None)))
 }
 
+pub fn builtin_do_unstr(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let gpo = set_grab_proc_output(environment, false);
+    crate::builtins::builtin_do(gpo.environment, args)
+}
+
 fn builtin_str_empty(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -970,6 +978,30 @@ Example:
         ),
     );
     data.insert(
+        interner.intern("do-unstr"),
+        Expression::make_special(
+            builtin_do_unstr,
+            r#"Usage: (do-unstr arg0 ... argN) -> argN
+
+Like do except if in an 'str' form then any processes will send their output to
+*stdout* instead of being captured as a string ('undoes' a str for processes).
+Note: does not convert arguments into strings, works like do.
+
+Section: string
+
+Example:
+; out> uses do-unstr so use a simplified one for these tests.
+(defmacro tst-out> (file body) `(dyn *stdout* (open ,file :create :truncate) ,body))
+
+(test::assert-equal "string 50 test
+" (str "string" " " 50 " " (syscall 'echo "test")))
+(test::assert-equal "string 50 test2
+" (str "string" " " 50 " " (tst-out> "/tmp/test-str-echo" (syscall 'echo "test2"))))
+(test::assert-equal "string 50 " (str "string" " " 50 " " (do-unstr (tst-out> "/tmp/test-str-echo" (syscall 'echo "test"))))
+"#,
+        ),
+    );
+    data.insert(
         interner.intern("str"),
         Expression::make_function(
             builtin_str,
@@ -987,7 +1019,7 @@ Example:
 (test::assert-equal "string" (str "string" ""))
 (test::assert-equal "string 50" (str "string" " " 50))
 (test::assert-equal "string 50 test
-" (str "string" " " 50 " " (syscall echo "test")))
+" (str "string" " " 50 " " (syscall 'echo "test")))
 "#,
         ),
     );

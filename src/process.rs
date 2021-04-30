@@ -240,6 +240,8 @@ pub fn do_command(
     fn add_arg_s(args: &mut Vec<String>, exp: Expression) -> Result<(), LispError> {
         match &exp.get().data {
             ExpEnum::String(s, _) => args.push(s.to_string()),
+            ExpEnum::Char(c) => args.push(c.to_string()),
+            ExpEnum::CodePoint(c) => args.push(c.to_string()),
             ExpEnum::Symbol(s, _) => args.push(s.to_string()),
             ExpEnum::Pair(_, _) => {
                 for a in exp.iter() {
@@ -251,7 +253,7 @@ pub fn do_command(
                     add_arg_s(args, a)?;
                 }
             }
-            _ => return Err(LispError::new("Sys command arguments need to be string (or symbols or lists that reduce so strings).")),
+            _ => return Err(LispError::new("Sys command arguments need to be string (or symbols or lists that reduce to strings).")),
         }
         Ok(())
     }

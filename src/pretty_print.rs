@@ -77,7 +77,7 @@ impl fmt::Display for Expression {
             }
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    f.write_str("nil")
+                    f.write_str("#<EmptyValues>")
                 } else {
                     v[0].fmt(f)
                 }
@@ -220,7 +220,7 @@ fn pretty_print_int(
         }
         ExpEnum::Values(v) => {
             if v.is_empty() {
-                write!(writer, "nil")?;
+                write!(writer, "#<EmptyValues>")?;
             } else {
                 pretty_print_int(&v[0], environment, indent, writer)?;
             }

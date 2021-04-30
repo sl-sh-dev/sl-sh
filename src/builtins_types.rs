@@ -458,7 +458,7 @@ Example:
 (test::assert-equal "Char" (type #\a))
 (test::assert-equal "Lambda" (type (fn () ())))
 (test::assert-equal "Macro" (type (macro () ())))
-(test::assert-equal "Process" (type (syscall true)))
+(test::assert-equal "Process" (type (syscall 'true)))
 (test::assert-equal "SpecialForm" (type if))
 (test::assert-equal "Function" (type type))
 (test::assert-equal "Vector" (type '#(1 2 3)))
@@ -721,7 +721,8 @@ True if the expression is a process, false otherwise.
 Section: type
 
 Example:
-(test::assert-true (process? $(true)))
+(test::assert-true (process? (syscall 'true)))
+(test::assert-true (process? (fork ((fn () nil)))))
 (test::assert-false (process? (fn () ())))
 (test::assert-false (process? caar))
 (test::assert-false (process? 1))
