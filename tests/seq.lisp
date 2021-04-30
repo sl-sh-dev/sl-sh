@@ -77,14 +77,14 @@ Some stuff
 (let ((long-list (list "A" (list "B")))
     (short-list '("A" ("B")))
     (model-list (list "A" (list "B" "C"))))
-    (assert-equal model-list (progn (iterator::append-to! (last long-list) (list "C")) long-list) (str ". line number: " (meta-line-no)))
-    (assert-equal model-list (progn (iterator::append-to! (last short-list) (list "C")) short-list)) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (do (iterator::append-to! (last long-list) (list "C")) long-list) (str ". line number: " (meta-line-no)))
+    (assert-equal model-list (do (iterator::append-to! (last short-list) (list "C")) short-list)) (str ". line number: " (meta-line-no)))
 
 ;; check mutability of nested lists
 (let ((list-of-lists (list (list "1") (list "A")))
     (list-of-empty-lists (list (list) (list)))
     (add-to-front-and-back-list (fn (target to-first to-last)
-        (progn
+        (do
             (iterator::append-to! (first target) to-first)
             (iterator::append-to! (last target) to-last)
             target))))

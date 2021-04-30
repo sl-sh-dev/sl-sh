@@ -1,23 +1,39 @@
-(def print-backtrace
-    (fn (backtrace)
-        ((fn (idx len)
-             (if (and (not (vec-empty? backtrace))(< idx len))
-                 ((fn :no-recur (b file line col)
-                      (if (builtin? b)(print "BUILTIN")
-                          (print (if (set! file (meta-file-name b)) file "NO FILE") ":\t"
-                                 "line " (if (set! line (meta-line-no b)) line "XX") ":\t"
-                                 "column " (if (set! col (meta-column-no b)) col "XX") "\n"))
-                      (recur (+ idx 1) len))
-                  (vec-nth backtrace idx) nil nil nil)))
-         0 (length backtrace))))
-
 (def print-error
+"Prints out an error with a backtrace.  Used with the return of get-error
+when it produces an error
+
+Section: core
+
+Example:
+(let
+  ((print-error-test (get-error (err \"Oops!\")))
+   (file-name \"$(temp-dir)/print-error.test\")
+   (topen))
+(out> file-name (print-error print-error-test))
+(set! topen (open file-name :read))
+(test::assert-true (> (length (read-line topen)) 5))
+(close topen))
+"
     (fn (error)
-        (if (= :error (car error))
-            (do
-             (println (car (cdr error)))
-             (print-backtrace (car (cdr (cdr error)))))
-            (err "Not an error!"))))
+        ((fn (print-backtrace)
+             (set! print-backtrace
+                   (fn (backtrace)
+                       ((fn (idx len)
+                            (if (and (not (vec-empty? backtrace))(< idx len))
+                                ((fn :no-recur (b file line col)
+                                     (if (builtin? b)(print "BUILTIN")
+                                         (print (if (set! file (meta-file-name b)) file "NO FILE") ":\t"
+                                                "line " (if (set! line (meta-line-no b)) line "XX") ":\t"
+                                                "column " (if (set! col (meta-column-no b)) col "XX") "\n"))
+                                     (recur (+ idx 1) len))
+                                 (vec-nth backtrace idx) nil nil nil)))
+                        0 (length backtrace))))
+             (if (= :error (car error))
+                 (do
+                  (println (car (cdr error)))
+                  (print-backtrace (car (cdr (cdr error)))))
+                 (err "Not an error!")))
+         nil)))
 
 (def load-std-file
     (fn (file)
@@ -54,18 +70,6 @@ Example:
 "
       () nil)
 
-; For compat.
-(defmacro progn
-"Synonym for 'do', use it instead (this is depricated).
-
-Section: core
-
-Example:
-;see do
-t
-"
-  (&rest args) `(do ,@args))
-
 (def *last-status* 0)
 (def *last-command* "")
 
@@ -81,6 +85,9 @@ t
 (load-std-file "test.lisp")
 (load-std-file "lib.lisp")
 (load-std-file "shell.lisp")
+
+(undef load-std-file)
+
 ;;; *std-lib-syms-hash* must be the symbol defined
 ;;; in the sl-sh standard library. In order to increase speed of ns-auto-export
 ;;; a list of all symbols in the standard library is pre-computed by iterating

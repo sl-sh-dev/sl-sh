@@ -56,7 +56,7 @@ up until the next token delimeted option, -c.
       (loop (params) (possible-params)
           (if (or (empty-seq? params) (str-starts-with token-delim (first params)))
             potential-params
-            (progn
+            (do
                 (vec-push! potential-params (first params))
                 (recur (rest params)))))))
 
@@ -94,7 +94,7 @@ up until the next token delimeted option, -c.
              ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-single-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-multi-single-char-args cmd)
-                 (progn
+                 (do
                  ;; if the command in question looked like "-ab", de-multi-single-arged-str
                  ;; will be "-a -b" this way the new cmd-line-args list can
                  ;; be fed recursively to verify-all-options-valid
@@ -121,7 +121,7 @@ a vector whose only element is the desired binding."
       (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys bindings-map) bindings-map)
         (when (not (empty-seq? keys))
-            (progn
+            (do
              (var key (first keys))
              (var opt-config (hash-get options-map key))
              (var opt-arity (hash-get opt-config :arity))
@@ -133,7 +133,7 @@ a vector whose only element is the desired binding."
 (defn apply-defaults (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
-            (progn
+            (do
              (var key (first keys))
              (var opt-config (hash-get options-map key))
              (when (and (hash-haskey opt-config :default) (nil? (hash-get bindings-map key)))
@@ -192,7 +192,7 @@ otherwise the error message is thrown."
 (defn enforce-types (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
-            (progn
+            (do
              (var key (first keys))
              (var opt-config (hash-get options-map key))
              (var opt-type-arity (hash-get opt-config :arity))
@@ -201,12 +201,12 @@ otherwise the error message is thrown."
              (var binding (hash-get bindings-map key))
              (when (and (not (nil? opt-type-arity))
                         (not (nil? opt-type-fun)))
-               (progn
+               (do
                  (if (not (in? (hash-keys supported-types-map) opt-type-fun))
                    (err getopts-invalid-type-function)
-                   (progn
+                   (do
                      (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
-                       (progn
+                       (do
                          (debugln "look our binding is: " binding ", of type: " (type binding))
                          (var err-str (getopts-type-error-message key binding opt-type-fun))
                          (if (= 1 opt-type-arity)

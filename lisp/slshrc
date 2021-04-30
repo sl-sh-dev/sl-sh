@@ -48,14 +48,14 @@
 
 ; How to set aliases.
 ;(alias ls (/bin/ls --color=auto -F))
-;(alias ll (ls -al))
+;(alias ll (/bin/ls --color=auto -Fal))
 
 ; How to change your PATH.
-;(export 'PATH (str "/bin:/usr/local/bin:" '~/bin))
-;(if (fs-dir? "/home/sstanf/.cargo") (export 'PATH (str $PATH ":" '~/.cargo/bin)))
+;$(export PATH /bin:/usr/local/bin:~/bin)
+;(if (fs-dir? "/home/sstanf/.cargo") $(export PATH $PATH:~/.cargo/bin))
 
 ; Setting a general env variable.
-;(export 'LC_ALL 'en_US.UTF-8)
+;$(export LC_ALL en_US.UTF-8)
 
 ;; Completion hooks, the match is for the command and then custom completions can be returned.
 ;; This is a simple example, makes cd better by only using paths in completions.
@@ -65,6 +65,3 @@
         ("ls" :default)
         ("git" :default)
         (nil :default)))
-
-; Turn on endfix processing (i.e. "normal" style pipes, etc).
-;(endfix-on)

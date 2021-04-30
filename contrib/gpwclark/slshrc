@@ -215,9 +215,9 @@
 (alias dkc
 "Typing out docker-compose takes forever.
 Section: user-shell"
-	$(docker-compose))
+	(docker-compose))
 
-(alias :q
+(defn :q ()
        ":q makes sense as an exit alias
        Section: user-shell"
        (exit))
@@ -225,13 +225,13 @@ Section: user-shell"
 (alias ls
 	"alias ls to a colorified version.
 	Section: user-shell"
-	$(lsd))
+	(lsd))
 
 ;; betterer ls
 (alias ll
 	"ls -haltr shorcut
 	Section: user-shell"
-	$(lsd -haltr))
+	(lsd -haltr))
 
 ;; Replace cd with a version that also runs ls after.
 ;; Macro to let un-expanded args go to root::cd.
