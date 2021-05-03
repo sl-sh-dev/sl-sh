@@ -1155,7 +1155,6 @@ Section: iterator
 (:fn init (self) self)
 (:impl iterator::iterator iterator::double-ended-iterator))
 
-
 (defstruct zip-iter
 "create iterator that interleaves two iterators together. Resultant iter
 is same length as fst
@@ -1163,20 +1162,18 @@ is same length as fst
 Section: iterator
 "
 ;; fields
-(sncd nil)
-(fst nil)
+(fst ((iterator::single-iter) :init 0))
+(scnd ((iterator::single-iter) :init 0))
 (flip-flop #t)
 ;; methods
-(:fn next! (self) (do
+(:fn next! (self) (let ((val (if flip-flop (fst :next!) (scnd :next!))))
                    (set! flip-flop (not flip-flop))
-                   (if flip-flop (fst :next!) (sncd :next!))))
-(:fn empty? (self) (if flip-flop
-                     (fst :empty?)
-                     (sncd :empty?)))
-(:fn init (self in-fst in-scndd)
+                   val))
+(:fn empty? (self) (if flip-flop (fst :empty?) (scnd :empty?)))
+(:fn init (self in-fst in-scnd)
      (do
        (set! fst in-fst)
-       (set! sncd in-scndd)
+       (set! scnd in-scnd)
        self))
 (:impl iterator::iterator iterator::double-ended-iterator))
 
@@ -1186,7 +1183,7 @@ is same length as fst
 
 Section: iterator
 Example:
-
+(ns-import 'iterator)
 (test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4)))))
 (test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4 5)))))
 "
