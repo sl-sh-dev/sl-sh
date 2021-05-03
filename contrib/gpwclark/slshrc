@@ -155,24 +155,29 @@
 
 ;;gradle build
 (defn g
-	"gradle alias that writes all output to \"last_build.log\" and triggers a
-	notification letting you know if the command succeeded or failed.
+        "gradle alias that writes all output to \"last_build.log\" and triggers a
+        notification letting you know if the command succeeded or failed.
 
-	Section: java"
-	(&rest args)
-	(let ((log-out-file "last_build.log"))
-	(do
-		(|
-			(var gradle-proc (eval (append-to! (list "syscall" "./gradlew") args)))
-			(tee log-out-file)
-		)
-		(var gradle-ret-code (wait gradle-proc))
-		(var log-out-txt (str "Build log in " log-out-file "\n" (| $(cat $log-out-file) $(tail -n 2) $(head -n 2))))
-		(var proj-name (str (basename $PWD)))
-		(if (= 0 gradle-ret-code)
-			(nss-pass (str "PASS! - " proj-name) log-out-txt)
-			(nss-fail (str "FAIL! - " proj-name) log-out-txt))
-		(= 0 gradle-ret-code))))
+        Section: java"
+        (&rest args)
+        (let ((log-out-file "last_build.log")
+              (gradle-proc)
+              (gradle-ret-code)
+              (log-out-txt)
+              (proj-name)
+              (pipe-procs))
+                (set! pipe-procs
+                  (pipe
+                    (apply syscall "./gradlew" args)
+                    (syscall 'tee log-out-file)))
+                (set! gradle-proc (values-nth 1 pipe-procs))
+                (set! gradle-ret-code (wait gradle-proc))
+                (set! log-out-txt (str "Build log in " log-out-file "\n" $(cat $log-out-file | tail -n 2 | head -n 2)))
+                (set! proj-name $(basename $PWD))
+                (if (= 0 gradle-ret-code)
+                        (nss-pass (str "PASS! - " proj-name) log-out-txt)
+                        (nss-fail (str "FAIL! - " proj-name) log-out-txt))
+                (= 0 gradle-ret-code)))
 
 (defmacro javad
 	"Start the jvm in debug mode, will hang until a debugger connects to jvm on port 5005

@@ -207,6 +207,7 @@ fn builtin_pipe(
     let mut write;
     let mut next_read;
     let mut res = Ok(Expression::make_nil());
+    let mut procs = Vec::new();
     let gpo = set_grab_proc_output(environment, false);
     while let Some(p) = pipe {
         let next_pipe = args.next();
@@ -252,6 +253,7 @@ fn builtin_pipe(
             let pid = fork(gpo.environment, p, read, write)?;
             last_pid = Some(pid);
             let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
+            procs.push(res_proc.clone());
             add_process(gpo.environment, pid, (res_proc, None));
             if gpo.environment.pipe_pgid.is_none() {
                 gpo.environment.pipe_pgid = last_pid;
@@ -261,7 +263,10 @@ fn builtin_pipe(
         pipe = next_pipe;
     }
     gpo.environment.pipe_pgid = None;
-    if res.is_err() {
+    if let Ok(res) = res {
+        procs.insert(0, res);
+        Ok(Expression::alloc_data(ExpEnum::Values(procs)))
+    } else {
         if let Some(pid) = last_pid {
             // Send a sigint to the feeding job so it does not hang on a full output buffer.
             if let Err(err) = nix::sys::signal::kill(
@@ -271,8 +276,8 @@ fn builtin_pipe(
                 eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
             }
         }
+        res
     }
-    res
 }
 
 fn builtin_wait(
@@ -540,6 +545,10 @@ to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
 this example does not close the files.
 
 Pipes can be nested including piping through a lambda that itself uses pipes.
+
+Pipe will return a multiple values, the first/primary is the final form for the
+pipe and the process objects for each part of the pipe are next (first element
+can be found with (values-nth 1 return-val), etc).
 
 Section: shell
 
