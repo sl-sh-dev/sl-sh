@@ -78,7 +78,10 @@
 
 (defn consume-whitespace (stream)
   (let ((ch (str-iter-peek stream)))
-    (if (and (char? ch)(char-whitespace? ch)) (do (str-iter-next! stream)(consume-whitespace stream)))))
+    (if (and (char? ch)(char-whitespace? ch))
+        (do
+         (str-iter-next! stream)
+         (recur stream)))))
 
 (defn read-string (stream last-ch token first quoted)
   (consume-whitespace stream)
@@ -155,6 +158,114 @@
                           (set! token (str-replace token "\\~" "~")))))
   token)
 
+(defn rm-esc (token)
+  (str-iter-start token)
+  (let ((new-token (str)))
+    ((fn (last-ch ch)
+         (cond
+           ((= last-ch #\\)
+            (str-push! new-token ch))
+           ((= ch #\\))
+           ((str-push! new-token ch)))
+         (if (not (str-iter-empty? token))
+             (recur ch (str-iter-next! token))
+             new-token))#\space (str-iter-next! token))))
+
+(defn expand-brace (token)
+  (let ((toks (vec))
+        (prefix (str))
+        (brace (str))
+        (bterms (vec))
+        (eterm)
+        (next-ch)
+        (close-brace)
+        (lisp-ch? (fn (ch)
+                      (or (= ch #\()(= ch #\')(= ch #\"))))
+        (postfix (str)))
+
+    (set! close-brace (fn ()
+                          (set! brace (str-trim brace))
+                          (if (not (str-empty? brace))
+                              (vec-push! bterms (str-trim brace)))
+                          (set! brace (str))))
+
+    (str-iter-start token)
+    ((fn (done last-ch ch)
+         (cond
+           ((and (not (= last-ch #\\))(not (= last-ch #\$))(= ch #\{))
+            (set! done #t))
+           ((and (= last-ch #\\)(= ch #\{)) (str-push! prefix ch))
+           ((and (= last-ch #\\)(= ch #\})) (str-push! prefix ch))
+           ((str-push! prefix ch)))
+         (if (and (not done)(not (str-iter-empty? token)))
+             (recur done ch (str-iter-next! token))
+             (set! next-ch ch)))
+     nil #\space (str-iter-next! token))
+    (if (not (str-iter-empty? token))
+        ((fn (done last-ch ch peek-ch first)
+             (cond
+               ((and first (= ch #\{)(not (lisp-ch? peek-ch))))
+               ((= last-ch #\\)
+                (str-push! brace last-ch)
+                (str-push! brace ch))
+               ((= ch #\\))  ; skip '\'
+                                        ; read an inner bracket
+               ((and (not first)(= ch #\{))
+                (str-push! brace ch)
+                ((fn (ch blevel)
+                     (if (not (char? ch)) (err "Missing '}'")
+                         (= ch #\{) (inc! blevel)
+                         (= ch #\}) (dec! blevel))
+                     (str-push! brace ch)
+                     (if (> blevel 0) (recur (str-iter-next! token) blevel)))
+                 (str-iter-next! token) 1))
+               ((lisp-ch? peek-ch)
+                (close-brace)
+                (set! eterm (eval (read token)))
+                (cond
+                  ((list? eterm)
+                                        ; XXX, put t here to get an error with wrong top line number (not this)...
+                   ((fn (lst)
+                        (if (not (null lst))(do (vec-push! bterms (car lst))(recur (cdr lst)))))
+                    eterm))
+                  ((vec? eterm)
+                   ((fn (vlen i)
+                        (if (< i vlen)
+                            (do
+                             (vec-push! bterms (vec-nth eterm i))
+                             (recur vlen (+ i 1)))))(length eterm) 0))
+                  ((vec-push! bterms eterm)))
+                (consume-whitespace token)
+                (if (and (not (= (str-iter-peek token) #\,))(not (= (str-iter-peek token) #\})))
+                    (err (str "(..) in bracket must be followed by ',' or '}', got " (str-iter-peek token)))))
+               ((= ch #\})
+                (set! done #t))
+               ((= ch #\,)
+                (close-brace))
+               ((and (char-whitespace? ch)(str-empty? brace))) ; skip leading whitespace.
+               ((str-push! brace ch)))
+             (if (and (not done)(not (str-iter-empty? token)))
+                 (recur done ch (str-iter-next! token) (str-iter-peek token) nil)
+                 brace))
+         nil #\space next-ch (str-iter-peek token) #t))
+    (close-brace)
+    (if (not (str-iter-empty? token))
+        ((fn (ch)
+             (str-push! postfix ch)
+             (if (not (str-iter-empty? token))
+                 (recur (str-iter-next! token))))
+         (str-iter-next! token)))
+    (if (vec-empty? bterms)
+        (vec-push! toks token)
+        (let ((terms-len (length bterms)))
+              ((fn (i)
+                   (if (< i terms-len)
+                       (do
+                        (vec-push! toks (str prefix (vec-nth bterms i) postfix))
+                        (recur (+ i 1)))))
+                0)))
+    toks))
+
 ;; If we have a token with embedded $ then break it up and wrap in a str.
 (defn expand-dollar (token first)
   (if (str-contains #\$ token)
@@ -166,14 +277,14 @@
              (cond
                ((str-iter-empty? token)
                 (if (char? ch) (str-push! new-token ch))
-                (if (not (str-empty? new-token))(vec-push! toks new-token))
+                (if (not (str-empty? new-token))(vec-push! toks (rm-esc new-token)))
                 (set! done #t))
                ((and (= last-ch #\\)(= ch #\$))
                 (str-push! new-token ch))
                ((= ch #\\)) ; skip \ for now.
                ((and (not (= ch #\\))(= peek-ch #\$))
                 (str-push! new-token ch)
-                (vec-push! toks new-token)
+                (vec-push! toks (rm-esc new-token))
                 (set! new-token (str))
                 (vec-push! toks (read token)))
                (#t
@@ -185,7 +296,7 @@
                 (and (> (length toks) 1)first) (str-trim (eval (apply list (sym "str") toks)))
                 (apply list (sym "str") toks)))
          #\space(str-iter-next! token)(str-iter-peek token)nil))
-      token))
+      (rm-esc token)))
 
 (let ((paren-level 0))
 
@@ -215,8 +326,7 @@
           (done))
       (cond
         ((= last-ch #\\)
-         ; Keep $ escaped for when tokens are processed to str forms.
-         (if (= ch #\$) (push-token last-ch))
+         (push-token last-ch)
          (push-token ch))
         ((= ch #\\) nil)  ; skip '\'
         ((and (= ch #\)) (> paren-level 0))
@@ -224,15 +334,26 @@
          (set! done #t))
         ((and (= ch #\)))
          (set! done #t))
+        ; read a $(...)
         ((and (= ch #\$)(= peek-ch #\())
          (push-token ch)
          ((fn (ch plevel)
               (if (not (char? ch)) (err "Missing ')'")
-                  (= ch #\() (set! plevel (+ plevel 1))
-                  (= ch #\)) (set! plevel (- plevel 1)))
+                  (= ch #\() (inc! plevel)
+                  (= ch #\)) (dec! plevel))
               (push-token ch)
               (if (> plevel 0) (recur (str-iter-next! stream) plevel)))
           (str-iter-next! stream) 0))
+        ; read bracket expansion
+        ((= ch #\{)
+         (push-token ch)
+         ((fn (ch blevel)
+              (if (not (char? ch)) (err "Missing '}'")
+                  (= ch #\{) (inc! blevel)
+                  (= ch #\}) (dec! blevel))
+              (push-token ch)
+              (if (> blevel 0) (recur (str-iter-next! stream) blevel)))
+          (str-iter-next! stream) 1))
         ((and (not (= ch #\\))(= peek-ch #\"))
          (do-read stream ch)
          (set! just-read #t))
@@ -244,8 +365,7 @@
          (str-iter-next! stream)
          (setup-chainer "or" "shell-read::handle-process" nil)
          (set! done #t))
-        ((and (= ch #\@)(= peek-ch #\@)) ; DO
-         (str-iter-next! stream)
+        ((= ch #\;) ; DO
          (setup-chainer "do" nil nil)
          (set! done #t))
         ((= ch #\|) ; PIPE
@@ -291,6 +411,8 @@
           (var-bracket nil)
           (last-pair (list))
           (add-exp)
+          (add-token-arg)
+          (brace-expand-token)
           (close-token)
           (push-token)
           (do-read)
@@ -301,23 +423,45 @@
           (peek-ch))
 
       (set! token (str))
-      (set! add-exp (fn (exp)
-                        (let ((new-pair (join exp nil)))
-                          (if (nil? last-pair) (set! result new-pair))
-                          (xdr! last-pair new-pair)
-                          (set! last-pair new-pair))))
+      (set! add-exp
+            (fn (exp)
+                (let ((new-pair (join exp nil)))
+                  (if (nil? last-pair) (set! result new-pair))
+                  (xdr! last-pair new-pair)
+                  (set! last-pair new-pair))))
 
-      (set! close-token (fn ()
-                            (if (not (str-empty? token))
-                                (if first-sym (let ((tng (expand-dollar (expand-tilde token #t) #t)))
-                                                (if (string? tng) (add-exp (sym tng))
-                                                    ; XXX TODO- if this is a (str...) list then deal with that.
-                                                    (add-exp tng))
-                                                (set! first-sym nil))
-                                    (maybe-glob? token) (add-exp (list 'glob (expand-dollar (expand-tilde token nil) nil)))
-                                    (str-contains "~" token) (add-exp (expand-dollar (expand-tilde token nil) nil))
-                                    (add-exp (expand-dollar token nil))))
-                            (set! token (str))))
+      (set! add-token-arg
+            (fn (token)
+                (if
+                 (maybe-glob? token) (add-exp (list 'glob (expand-dollar (expand-tilde token nil) nil)))
+                 (str-contains "~" token) (add-exp (expand-dollar (expand-tilde token nil) nil))
+                 (add-exp (expand-dollar token nil)))))
+
+      (set! brace-expand-token
+            (fn (token)
+                (let ((toks)
+                      (toks-len))
+                  (if (str-contains "{" token)
+                      (do
+                       (set! toks (expand-brace token))
+                       (set! toks-len (length toks))
+                        (if (= toks-len 0) nil
+                            (= toks-len 1) (add-token-arg (vec-nth toks 0))
+                            ((fn (i) (if (< i toks-len)
+                                         (do (brace-expand-token (vec-nth toks i))
+                                             (recur (+ i 1)))))0)))
+                      (add-token-arg token)))))
+
+      (set! close-token
+            (fn ()
+                (if (not (str-empty? token))
+                    (if first-sym (let ((tng (expand-dollar (expand-tilde token #t) #t)))
+                                    (if (string? tng) (add-exp (sym (rm-esc tng)))
+                                        ; XXX TODO- if this is a (str...) list then deal with that.
+                                        (add-exp tng))
+                                    (set! first-sym nil))
+                        (brace-expand-token token)))
+                (set! token (str))))
 
       (set! push-token (fn (ch) (str-push! token ch)))
 
