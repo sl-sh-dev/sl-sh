@@ -427,10 +427,7 @@ fn args_out(
     for a in args {
         let aa = eval(environment, a)?;
         // If we have a standalone string do not quote it...
-        let pretty = check_pretty(&aa, pretty); //match &aa.get().data {
-                                                //ExpEnum::String(_, _) => false,
-                                                //_ => pretty,
-                                                //};
+        let pretty = check_pretty(&aa, pretty);
         if pretty {
             pretty_printf(&aa, environment, writer)?;
         } else {
@@ -474,10 +471,7 @@ fn print_to_oe(
                         for a in args {
                             let aa = eval(environment, a)?;
                             // If we have a standalone string do not quote it...
-                            let pretty = check_pretty(&aa, pretty); //match &aa.get().data {
-                                                                    //ExpEnum::String(_, _) => false,
-                                                                    //_ => pretty,
-                                                                    //};
+                            let pretty = check_pretty(&aa, pretty);
                             if pretty {
                                 pretty_printf(&aa, environment, f)?;
                             } else {

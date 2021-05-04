@@ -814,7 +814,10 @@ Section: shell
               (if (not (repl-eof line)) (recur))))
       ((fn ()
            (var result (get-error (repl-inner)))
-           (if (= :error (car result)) (do (print-error result)(exit 1))))))
+           (if (= :error (car result)) (do
+                                        (println "ERROR in REPL loop, restarting!")
+                                        (print-error result)
+                                         (recur))))))
 
 (defn temp-dir
 "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".

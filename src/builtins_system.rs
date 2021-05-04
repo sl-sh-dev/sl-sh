@@ -837,30 +837,30 @@ twotwo
 three")(syscall 'grep "two"))(syscall 'grep "twotwo"))))
 (test::assert-equal "twotwo
 " pipe-test)
-$(mkdir "/tmp/tst-pipe-dir")
-(def tsync (open "/tmp/tst-pipe-dir/test1" :create))
+(def pipe-test-dir (str (temp-dir)"/tst-pipe-dir"))
+$(mkdir $pipe-test-dir)
+(def tsync (open "${pipe-test-dir}/test1" :create))
 (pipe (print "one
 two
 two2
 three") (syscall 'grep "two") tsync)
 (close tsync)
-(def topen (open "/tmp/tst-pipe-dir/test1" :read))
+(def topen (open "${pipe-test-dir}/test1" :read))
 (test::assert-equal "two
 " (read-line topen))
 (test::assert-equal "two2
 " (read-line topen))
 (test::assert-false (read-line topen))
 (close topen)
-(def topen (open "/tmp/tst-pipe-dir/test1" :read))
+(def topen (open "${pipe-test-dir}/test1" :read))
 (def pipe-test (str (pipe topen (syscall 'grep "two2"))))
 (close topen)
 (test::assert-equal "two2
 " pipe-test)
-$(rm "/tmp/tst-pipe-dir/test1")
-$(rmdir "/tmp/tst-pipe-dir")
-(let ((file-name "/tmp/pipe-err.test")
+$(rm "${pipe-test-dir}/test1")
+(let ((file-name "${pipe-test-dir}/pipe-err.test")
       (fin))
-  (err> (open "/tmp/pipe-test.junk") (do
+  (err> (open "${pipe-test-dir}/pipe-test.junk" :create) (do
     (pipe (eprintln "error")(do (print *stdin*)(println "normal"))(open file-name :create :truncate))
     (set! fin (open file-name :read))
     (test::assert-equal "normal\n" (read-line fin))
@@ -870,7 +870,11 @@ $(rmdir "/tmp/tst-pipe-dir")
     (set! fin (open file-name :read))
     (test::assert-equal "error\n" (read-line fin))
     (test::assert-equal "normal\n" (read-line fin))
-    (close fin))))
+    (close fin)))
+  $(rm "${pipe-test-dir}/pipe-test.junk")
+  $(rm $file-name)
+)
+$(rmdir $pipe-test-dir)
 "#,
         ),
     );

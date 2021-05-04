@@ -109,7 +109,11 @@ pub fn wait_pid(
     if environment.is_tty {
         let pid = unistd::getpid();
         if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
-            eprintln!("Error making shell {} foreground: {}", pid, err);
+            eprintln!(
+                "Error making shell (stop pretending to be a tty?) {} foreground: {}",
+                pid, err
+            );
+            environment.is_tty = false;
         }
     }
     result
@@ -190,7 +194,11 @@ fn run_command(
             if environment.is_tty {
                 let pid = unistd::getpid();
                 if let Err(err) = unistd::tcsetpgrp(environment.terminal_fd, pid) {
-                    eprintln!("Error making shell {} foreground: {}", pid, err);
+                    eprintln!(
+                        "Error making shell (stop pretending to be a tty?) {} foreground: {}",
+                        pid, err
+                    );
+                    environment.is_tty = false;
                 }
             }
             Err(LispError::new(err_msg))
