@@ -8,6 +8,7 @@ use nix::{
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
+use std::io::{self, BufReader, Read, Write};
 use std::{thread, time};
 
 use crate::builtins_util::*;
@@ -16,7 +17,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
-use crate::unix::fork;
+use crate::unix::*;
 
 fn builtin_syscall(
     environment: &mut Environment,
@@ -290,7 +291,7 @@ fn builtin_fork(
 ) -> Result<Expression, LispError> {
     if let Some(exp) = args.next() {
         if args.next().is_none() {
-            let pid = fork(environment, exp, None, None)?;
+            let pid = fork(environment, exp, None, None, None)?;
             let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
             add_process(environment, pid, (res_proc.clone(), None));
             return Ok(res_proc);
@@ -373,6 +374,193 @@ fn builtin_reap_jobs(
     Ok(Expression::make_nil())
 }
 
+fn pipe_write_file(pipe_in: i32, writer: &mut dyn Write) -> Result<(), LispError> {
+    let mut inf = BufReader::new(fd_to_file(pipe_in));
+    let mut buf = [0; 10240];
+    let mut n = inf.read(&mut buf[..])?;
+    while n > 0 {
+        writer.write_all(&buf[..n])?;
+        n = inf.read(&mut buf[..])?;
+    }
+    Ok(())
+}
+
+fn builtin_pipe(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    pub struct GrabStdIn {
+        pub old_stdin: Option<i32>,
+    }
+
+    pub fn grab_stdin(new_stdin: Option<i32>) -> Result<GrabStdIn, LispError> {
+        let old_stdin = if let Some(new_stdin) = new_stdin {
+            Some(replace_stdin(new_stdin)?)
+        } else {
+            None
+        };
+        Ok(GrabStdIn { old_stdin })
+    }
+
+    impl Drop for GrabStdIn {
+        fn drop(&mut self) {
+            if let Some(old_stdin) = self.old_stdin {
+                if let Err(err) = dup_stdin(old_stdin) {
+                    eprintln!("Error restoring stdin after pipe: {}", err);
+                }
+            }
+        }
+    }
+
+    let mut pipe = args.next();
+    let mut do_error = false;
+    if let Some(p) = &pipe {
+        if let ExpEnum::Symbol(":err", _) = &p.get().data {
+            do_error = true;
+        }
+    }
+    if do_error {
+        pipe = args.next();
+    }
+    let mut last_pid: Option<u32> = None;
+    let mut read = None;
+    let mut write;
+    let mut next_read;
+    let mut res = Ok(Expression::make_nil());
+    let mut procs = Vec::new();
+    let gpo = set_grab_proc_output(environment, false);
+    while let Some(p) = pipe {
+        let next_pipe = args.next();
+        if next_pipe.is_none() {
+            // Last thing in the pipe so do not run in background.
+            let _old_stdin = grab_stdin(read)?; // RAII guard for stdin
+            gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
+            res = eval(gpo.environment, p);
+            // If pipe ended in a file then dump final output into it.
+            match &res {
+                Ok(res_in) => {
+                    let res_d = res_in.get();
+                    if let ExpEnum::File(file) = &res_d.data {
+                        let mut file_b = file.borrow_mut();
+                        match &mut *file_b {
+                            FileState::Stdout => {
+                                let stdout = io::stdout();
+                                let mut handle = stdout.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Stderr => {
+                                let stderr = io::stderr();
+                                let mut handle = stderr.lock();
+                                pipe_write_file(0, &mut handle)?;
+                            }
+                            FileState::Write(f) => {
+                                pipe_write_file(0, f)?;
+                            }
+                            _ => {
+                                drop(file_b);
+                                drop(res_d);
+                                res = Err(LispError::new("File at pipe end must be writable."));
+                            }
+                        }
+                    }
+                }
+                Err(_err) => {}
+            }
+        } else {
+            let (read_fd, write_fd) = anon_pipe()?;
+            write = Some(write_fd);
+            next_read = Some(read_fd);
+            let error = if do_error { write } else { None };
+            let pid = fork(gpo.environment, p, read, write, error)?;
+            last_pid = Some(pid);
+            let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
+            procs.push(res_proc.clone());
+            add_process(gpo.environment, pid, (res_proc, None));
+            if gpo.environment.pipe_pgid.is_none() {
+                gpo.environment.pipe_pgid = last_pid;
+            }
+            read = next_read;
+        }
+        pipe = next_pipe;
+    }
+    gpo.environment.pipe_pgid = None;
+    if let Ok(res) = res {
+        procs.insert(0, res);
+        Ok(Expression::alloc_data(ExpEnum::Values(procs)))
+    } else {
+        if let Some(pid) = last_pid {
+            // Send a sigint to the feeding job so it does not hang on a full output buffer.
+            if let Err(err) = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid as i32),
+                nix::sys::signal::Signal::SIGINT,
+            ) {
+                eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
+            }
+        }
+        res
+    }
+}
+
+fn builtin_wait(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            let arg0_d = arg0.get();
+            return match &arg0_d.data {
+                ExpEnum::Process(ProcessState::Running(pid)) => {
+                    let pid = *pid;
+                    drop(arg0_d);
+                    match wait_pid(environment, pid, None) {
+                        Some(exit_status) => {
+                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                        }
+                        None => Ok(Expression::make_nil()),
+                    }
+                }
+                ExpEnum::Process(ProcessState::Over(_pid, exit_status)) => Ok(
+                    Expression::alloc_data(ExpEnum::Int(i64::from(*exit_status))),
+                ),
+                ExpEnum::Int(pid) => {
+                    let pid = *pid;
+                    drop(arg0_d);
+                    match wait_pid(environment, pid as u32, None) {
+                        Some(exit_status) => {
+                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
+                        }
+                        None => Ok(Expression::make_nil()),
+                    }
+                }
+                _ => Err(LispError::new("wait error: not a pid")),
+            };
+        }
+    }
+    Err(LispError::new("wait takes one form (a pid to wait on)"))
+}
+
+fn builtin_pid(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg0) = args.next() {
+        if args.next().is_none() {
+            let arg0 = eval(environment, arg0)?;
+            return match arg0.get().data {
+                ExpEnum::Process(ProcessState::Running(pid)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
+                }
+                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
+                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
+                }
+                _ => Err(LispError::new("pid error: not a process")),
+            };
+        }
+    }
+    Err(LispError::new("pid takes one form (a process)"))
+}
+
 pub fn add_system_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -387,7 +575,7 @@ Execute the provided system command with the supplied arguments.
 System-command can evalute to a string or symbol.
 The args (0..n) are evaluated.
 
-Section: core
+Section: system
 
 Example:
 (def test-syscall-one (str (syscall "echo" "-n" "syscall-test")))
@@ -409,7 +597,7 @@ Example:
 Lookup key in the system environment (env variable).  Returns an empty sting if key does not exist.
 Note: key is not evaluated.
 
-Section: shell
+Section: system
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
@@ -428,7 +616,7 @@ Example:
 Export a key and value to the shell environment.  Second arg will be made a string and returned.
 Key can not contain the '=' character.
 
-Section: shell
+Section: system
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
@@ -454,7 +642,7 @@ Example:
 
 Remove a var from the current shell environment.
 
-Section: shell
+Section: system
 
 Example:
 (test::assert-equal "ONE" (export 'TEST_EXPORT_ONE "ONE"))
@@ -472,7 +660,7 @@ Example:
 
 Print list of jobs with ids.
 
-Section: shell
+Section: system
 
 Example:
 ;(jobs)
@@ -490,7 +678,7 @@ Put a job in the background.
 
 If no job id is specified use the last job.
 
-Section: shell
+Section: system
 
 Example:
 ;(bg)
@@ -508,7 +696,7 @@ Put a job in the foreground.
 
 If no job id is specified use the last job.
 
-Section: shell
+Section: system
 
 Example:
 ;(fg)
@@ -527,7 +715,7 @@ object.  If the expression that is forked returns an integer (that fits an i32)
 then it will become the exit code.  Calling exit explicitly will also set the
 exit code.  Otherwise exit code is 0 for success and 1 for an error.
 
-Section: shell
+Section: system
 
 Example:
 (def fork-test (fork (+ (* 11 5) 2)))
@@ -545,7 +733,7 @@ Example:
 
 Exit shell with optional status code.
 
-Section: shell
+Section: system
 
 Example:
 ; Exit is overridden in the test harness...
@@ -564,7 +752,7 @@ t
 
 Sleep for the provided milliseconds (must be a positive integer).
 
-Section: shell
+Section: system
 
 Example:
 (def test-sleep-var (time (sleep 1000)))
@@ -580,7 +768,7 @@ Example:
 
 Evalutes the provided form and returns the seconds it ran for (as float with fractional part).
 
-Section: shell
+Section: system
 
 Example:
 (def test-sleep-var (time (sleep 1100)))
@@ -597,11 +785,132 @@ Example:
 Reaps any completed jobs.  Only intended to be used by code implemeting the REPL
 loop or something similiar, this is probably not the form you are searching for.
 
-Section: shell
+Section: system
 
 Example:
 ;(reap-jobs)
 t
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("pipe"),
+        Expression::make_function(
+            builtin_pipe,
+            r#"Usage: (pipe [expression]+)
+
+Setup a pipe between processes or expressions.  Pipe will take one or more
+expressions, each one but the last will be forked into a new process with it's
+stdin being the output of the last expression.  The first expression uses the
+current stdin and the last expression outputs to the current stdout.  Pipe works
+with system commands as well as sl-sh forms (lambdas, etc).  Note it connects
+the stdin/stdout of processes so if used with a lambda it should read stdin to
+get the previous output and write to stdout to pass to the next expression in
+the pipe (i.e. pipe will not interact with parameters or anything else).
+
+If pipe starts with :err then stderr will also be piped into the output,
+ie (pipe :err (...)(...)...).
+
+Pipes also support using a read file as the first expression (the file contents
+become stdin for the next form) and a write file as the last expression
+(previous output will be written to the file).  For instance pipe can be used
+to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
+this example does not close the files.
+
+Pipes can be nested including piping through a lambda that itself uses pipes.
+
+Pipe will return a multiple values, the first/primary is the final form for the
+pipe and the process objects for each part of the pipe are next (first element
+can be found with (values-nth 1 return-val), etc).
+
+Section: system
+
+Example:
+(def pipe-test (str (pipe (print "one
+two
+three")(syscall 'grep "two"))))
+(test::assert-equal "two
+" pipe-test)
+(def pipe-test (str (pipe (pipe (syscall 'echo "one
+two
+twotwo
+three")(syscall 'grep "two"))(syscall 'grep "twotwo"))))
+(test::assert-equal "twotwo
+" pipe-test)
+$(mkdir "/tmp/tst-pipe-dir")
+(def tsync (open "/tmp/tst-pipe-dir/test1" :create))
+(pipe (print "one
+two
+two2
+three") (syscall 'grep "two") tsync)
+(close tsync)
+(def topen (open "/tmp/tst-pipe-dir/test1" :read))
+(test::assert-equal "two
+" (read-line topen))
+(test::assert-equal "two2
+" (read-line topen))
+(test::assert-false (read-line topen))
+(close topen)
+(def topen (open "/tmp/tst-pipe-dir/test1" :read))
+(def pipe-test (str (pipe topen (syscall 'grep "two2"))))
+(close topen)
+(test::assert-equal "two2
+" pipe-test)
+$(rm "/tmp/tst-pipe-dir/test1")
+$(rmdir "/tmp/tst-pipe-dir")
+(let ((file-name (str (temp-dir)"/pipe-err.test"))
+      (fin))
+  (err> (open (str (temp-dir)"/pipe-test.junk")) (do
+    (pipe (eprintln "error")(do (print *stdin*)(println "normal"))(open file-name :create :truncate))
+    (set! fin (open file-name :read))
+    (test::assert-equal "normal\n" (read-line fin))
+    (test::assert-equal nil (read-line fin))
+    (close fin)
+    (pipe :err (eprintln "error")(do (print *stdin*)(println "normal"))(open file-name :create :truncate))
+    (set! fin (open file-name :read))
+    (test::assert-equal "error\n" (read-line fin))
+    (test::assert-equal "normal\n" (read-line fin))
+    (close fin))))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("wait"),
+        Expression::make_function(
+            builtin_wait,
+            r#"Usage: (wait proc-to-wait-for)
+
+Wait for a process to end and return it's exit status.
+Wait can be called multiple times if it is given a process
+object (not just a numeric pid).
+
+Section: system
+
+Example:
+(def wait-test (wait (err>null (syscall 'ls "/does/not/exist/123"))))
+(test::assert-true (> wait-test 0))
+(def wait-test2 (fork (* 11 5)))
+(test::assert-equal 55 (wait wait-test2))
+(test::assert-equal 55 (wait wait-test2))
+(test::assert-equal 55 (wait wait-test2))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("pid"),
+        Expression::make_function(
+            builtin_pid,
+            r#"Usage: (pid proc)
+
+Return the pid of a process.
+
+Section: system
+
+Example:
+(def pid-test (syscall 'echo "-n"))
+(test::assert-true (int? (pid pid-test)))
+(test::assert-true (int? (pid (fork ((fn () nil))))))
+(test::assert-error (pid 1))
 "#,
         ),
     );

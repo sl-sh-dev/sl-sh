@@ -37,10 +37,14 @@
              (apply com new-args))
       (ns-pop))))
 
+(defmacro pipe-err (&rest args)
+  `(pipe :err ,@args))
+
 ; sys-apply needs to be able to handle no args to make the shell reader simpler.
 (defmacro sys-apply (&rest args)
-  (let ((first-arg (vec-nth args 0))
+  (let ((first-arg)
         (args-len (length args)))
+    (if (> args-len 0) (set! first-arg (vec-nth args 0)))
     (if
      (= args-len 0) nil
      (and (= args-len 1)(or (vec? first-arg)(pair? first-arg))) first-arg
@@ -367,6 +371,10 @@
          (set! done #t))
         ((= ch #\;) ; DO
          (setup-chainer "do" nil nil)
+         (set! done #t))
+        ((and (= ch #\|)(= peek-ch #\&)) ; PIPE with stderr
+         (str-iter-next! stream)
+         (setup-chainer "shell-read::pipe-err" nil nil)
          (set! done #t))
         ((= ch #\|) ; PIPE
          (setup-chainer "root::pipe" nil nil)

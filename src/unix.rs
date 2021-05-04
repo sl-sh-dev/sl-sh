@@ -139,6 +139,7 @@ pub fn fork(
     exp: Expression,
     stdin: Option<i32>,
     stdout: Option<i32>,
+    stderr: Option<i32>,
 ) -> Result<u32, LispError> {
     let result = unsafe { cvt(libc::fork())? };
 
@@ -164,13 +165,35 @@ pub fn fork(
                         eprintln!("Error setting up stdout (dup) in pipe: {}", err);
                         libc::_exit(10);
                     }
-                    if let Err(err) = cvt(libc::close(stdout)) {
-                        eprintln!("Error setting up stdout (close) in pipe: {}", err);
-                        libc::_exit(10);
+                    let mut close_out = true;
+                    if let Some(stderr) = stderr {
+                        if stdout == stderr {
+                            close_out = false;
+                        }
+                    }
+                    if close_out {
+                        if let Err(err) = cvt(libc::close(stdout)) {
+                            eprintln!("Error setting up stdout (close) in pipe: {}", err);
+                            libc::_exit(10);
+                        }
                     }
                     environment.root_scope.borrow_mut().insert(
                         "*stdout*",
                         ExpEnum::File(Rc::new(RefCell::new(FileState::Stdout))).into(),
+                    );
+                }
+                if let Some(stderr) = stderr {
+                    if let Err(err) = cvt(libc::dup2(stderr, 2)) {
+                        eprintln!("Error setting up stderr (dup) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    if let Err(err) = cvt(libc::close(stderr)) {
+                        eprintln!("Error setting up stderr (close) in pipe: {}", err);
+                        libc::_exit(10);
+                    }
+                    environment.root_scope.borrow_mut().insert(
+                        "*stderr*",
+                        ExpEnum::File(Rc::new(RefCell::new(FileState::Stderr))).into(),
                     );
                 }
                 if environment.do_job_control {

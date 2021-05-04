@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 
 use glob::glob;
@@ -10,9 +9,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
-use crate::process::*;
 use crate::types::*;
-use crate::unix::*;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -163,183 +160,6 @@ fn builtin_is_dir(
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
 }
 
-fn pipe_write_file(pipe_in: i32, writer: &mut dyn Write) -> Result<(), LispError> {
-    let mut inf = BufReader::new(fd_to_file(pipe_in));
-    let mut buf = [0; 10240];
-    let mut n = inf.read(&mut buf[..])?;
-    while n > 0 {
-        writer.write_all(&buf[..n])?;
-        n = inf.read(&mut buf[..])?;
-    }
-    Ok(())
-}
-
-fn builtin_pipe(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    pub struct GrabStdIn {
-        pub old_stdin: Option<i32>,
-    }
-
-    pub fn grab_stdin(new_stdin: Option<i32>) -> Result<GrabStdIn, LispError> {
-        let old_stdin = if let Some(new_stdin) = new_stdin {
-            Some(replace_stdin(new_stdin)?)
-        } else {
-            None
-        };
-        Ok(GrabStdIn { old_stdin })
-    }
-
-    impl Drop for GrabStdIn {
-        fn drop(&mut self) {
-            if let Some(old_stdin) = self.old_stdin {
-                if let Err(err) = dup_stdin(old_stdin) {
-                    eprintln!("Error restoring stdin after pipe: {}", err);
-                }
-            }
-        }
-    }
-
-    let mut pipe = args.next();
-    let mut last_pid: Option<u32> = None;
-    let mut read = None;
-    let mut write;
-    let mut next_read;
-    let mut res = Ok(Expression::make_nil());
-    let mut procs = Vec::new();
-    let gpo = set_grab_proc_output(environment, false);
-    while let Some(p) = pipe {
-        let next_pipe = args.next();
-        if next_pipe.is_none() {
-            // Last thing in the pipe so do not run in background.
-            let _old_stdin = grab_stdin(read)?; // RAII guard for stdin
-            gpo.environment.grab_proc_output = gpo.old_grab_proc_output;
-            res = eval(gpo.environment, p);
-            // If pipe ended in a file then dump final output into it.
-            match &res {
-                Ok(res_in) => {
-                    let res_d = res_in.get();
-                    if let ExpEnum::File(file) = &res_d.data {
-                        let mut file_b = file.borrow_mut();
-                        match &mut *file_b {
-                            FileState::Stdout => {
-                                let stdout = io::stdout();
-                                let mut handle = stdout.lock();
-                                pipe_write_file(0, &mut handle)?;
-                            }
-                            FileState::Stderr => {
-                                let stderr = io::stderr();
-                                let mut handle = stderr.lock();
-                                pipe_write_file(0, &mut handle)?;
-                            }
-                            FileState::Write(f) => {
-                                pipe_write_file(0, f)?;
-                            }
-                            _ => {
-                                drop(file_b);
-                                drop(res_d);
-                                res = Err(LispError::new("File at pipe end must be writable."));
-                            }
-                        }
-                    }
-                }
-                Err(_err) => {}
-            }
-        } else {
-            let (read_fd, write_fd) = anon_pipe()?;
-            write = Some(write_fd);
-            next_read = Some(read_fd);
-            let pid = fork(gpo.environment, p, read, write)?;
-            last_pid = Some(pid);
-            let res_proc = Expression::alloc_data(ExpEnum::Process(ProcessState::Running(pid)));
-            procs.push(res_proc.clone());
-            add_process(gpo.environment, pid, (res_proc, None));
-            if gpo.environment.pipe_pgid.is_none() {
-                gpo.environment.pipe_pgid = last_pid;
-            }
-            read = next_read;
-        }
-        pipe = next_pipe;
-    }
-    gpo.environment.pipe_pgid = None;
-    if let Ok(res) = res {
-        procs.insert(0, res);
-        Ok(Expression::alloc_data(ExpEnum::Values(procs)))
-    } else {
-        if let Some(pid) = last_pid {
-            // Send a sigint to the feeding job so it does not hang on a full output buffer.
-            if let Err(err) = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(pid as i32),
-                nix::sys::signal::Signal::SIGINT,
-            ) {
-                eprintln!("ERROR, sending SIGINT to pid {}: {}", pid, err);
-            }
-        }
-        res
-    }
-}
-
-fn builtin_wait(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            let arg0_d = arg0.get();
-            return match &arg0_d.data {
-                ExpEnum::Process(ProcessState::Running(pid)) => {
-                    let pid = *pid;
-                    drop(arg0_d);
-                    match wait_pid(environment, pid, None) {
-                        Some(exit_status) => {
-                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
-                        }
-                        None => Ok(Expression::make_nil()),
-                    }
-                }
-                ExpEnum::Process(ProcessState::Over(_pid, exit_status)) => Ok(
-                    Expression::alloc_data(ExpEnum::Int(i64::from(*exit_status))),
-                ),
-                ExpEnum::Int(pid) => {
-                    let pid = *pid;
-                    drop(arg0_d);
-                    match wait_pid(environment, pid as u32, None) {
-                        Some(exit_status) => {
-                            Ok(Expression::alloc_data(ExpEnum::Int(i64::from(exit_status))))
-                        }
-                        None => Ok(Expression::make_nil()),
-                    }
-                }
-                _ => Err(LispError::new("wait error: not a pid")),
-            };
-        }
-    }
-    Err(LispError::new("wait takes one form (a pid to wait on)"))
-}
-
-fn builtin_pid(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            return match arg0.get().data {
-                ExpEnum::Process(ProcessState::Running(pid)) => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
-                }
-                ExpEnum::Process(ProcessState::Over(pid, _exit_status)) => {
-                    Ok(Expression::alloc_data(ExpEnum::Int(i64::from(pid))))
-                }
-                _ => Err(LispError::new("pid error: not a process")),
-            };
-        }
-    }
-    Err(LispError::new("pid takes one form (a process)"))
-}
-
 fn builtin_glob(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -444,7 +264,7 @@ pub fn add_file_builtins<S: BuildHasher>(
 
 Change directory.
 
-Section: shell
+Section: file
 
 Example:
 (syscall 'mkdir "/tmp/tst-fs-cd")
@@ -468,7 +288,7 @@ Example:
 
 Does the given path exist?
 
-Section: shell
+Section: file
 
 Example:
 $(mkdir /tmp/tst-fs-exists)
@@ -489,7 +309,7 @@ $(rmdir /tmp/tst-fs-exists)
 
 Is the given path a file?
 
-Section: shell
+Section: file
 
 Example:
 $(mkdir /tmp/tst-fs-file)
@@ -510,7 +330,7 @@ $(rmdir /tmp/tst-fs-file)
 
 Is the given path a directory?
 
-Section: shell
+Section: file
 
 Example:
 $(mkdir /tmp/tst-fs-dir)
@@ -524,111 +344,6 @@ $(rmdir /tmp/tst-fs-dir)
         ),
     );
     data.insert(
-        interner.intern("pipe"),
-        Expression::make_function(
-            builtin_pipe,
-            r#"Usage: (pipe [expression]+)
-
-Setup a pipe between processes or expressions.  Pipe will take one or more
-expressions, each one but the last will be forked into a new process with it's
-stdin being the output of the last expression.  The first expression uses the
-current stdin and the last expression outputs to the current stdout.  Pipe works
-with system commands as well as sl-sh forms (lambdas, etc).  Note it connects
-the stdin/stdout of processes so if used with a lambda it should read stdin to
-get the previous output and write to stdout to pass to the next expression in
-the pipe (i.e. pipe will not interact with parameters or anything else).
-
-Pipes also support using a read file as the first expression (the file contents
-become stdin for the next form) and a write file as the last expression
-(previous output will be written to the file).  For instance pipe can be used
-to copy a file with (pipe (open IN_FILE :read)(open OUT_FILE :create)), note
-this example does not close the files.
-
-Pipes can be nested including piping through a lambda that itself uses pipes.
-
-Pipe will return a multiple values, the first/primary is the final form for the
-pipe and the process objects for each part of the pipe are next (first element
-can be found with (values-nth 1 return-val), etc).
-
-Section: shell
-
-Example:
-(def pipe-test (str (pipe (print "one
-two
-three")(syscall 'grep "two"))))
-(test::assert-equal "two
-" pipe-test)
-(def pipe-test (str (pipe (pipe (syscall 'echo "one
-two
-twotwo
-three")(syscall 'grep "two"))(syscall 'grep "twotwo"))))
-(test::assert-equal "twotwo
-" pipe-test)
-$(mkdir "/tmp/tst-pipe-dir")
-(def tsync (open "/tmp/tst-pipe-dir/test1" :create))
-(pipe (print "one
-two
-two2
-three") (syscall 'grep "two") tsync)
-(close tsync)
-(def topen (open "/tmp/tst-pipe-dir/test1" :read))
-(test::assert-equal "two
-" (read-line topen))
-(test::assert-equal "two2
-" (read-line topen))
-(test::assert-false (read-line topen))
-(close topen)
-(def topen (open "/tmp/tst-pipe-dir/test1" :read))
-(def pipe-test (str (pipe topen (syscall 'grep "two2"))))
-(close topen)
-(test::assert-equal "two2
-" pipe-test)
-$(rm "/tmp/tst-pipe-dir/test1")
-$(rmdir "/tmp/tst-pipe-dir")
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("wait"),
-        Expression::make_function(
-            builtin_wait,
-            r#"Usage: (wait proc-to-wait-for)
-
-Wait for a process to end and return it's exit status.
-Wait can be called multiple times if it is given a process
-object (not just a numeric pid).
-
-Section: shell
-
-Example:
-(def wait-test (wait (err>null (syscall 'ls "/does/not/exist/123"))))
-(test::assert-true (> wait-test 0))
-(def wait-test2 (fork (* 11 5)))
-(test::assert-equal 55 (wait wait-test2))
-(test::assert-equal 55 (wait wait-test2))
-(test::assert-equal 55 (wait wait-test2))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("pid"),
-        Expression::make_function(
-            builtin_pid,
-            r#"Usage: (pid proc)
-
-Return the pid of a process.
-
-Section: shell
-
-Example:
-(def pid-test (syscall 'echo "-n"))
-(test::assert-true (int? (pid pid-test)))
-(test::assert-true (int? (pid (fork ((fn () nil))))))
-(test::assert-error (pid 1))
-"#,
-        ),
-    );
-    data.insert(
         interner.intern("glob"),
         Expression::make_function(
             builtin_glob,
@@ -636,7 +351,7 @@ Example:
 
 Takes a list/varargs of globs and return the list of them expanded.
 
-Section: shell
+Section: file
 
 Example:
 (syscall 'mkdir "/tmp/tst-fs-glob")
