@@ -858,9 +858,9 @@ three") (syscall 'grep "two") tsync)
 " pipe-test)
 $(rm "/tmp/tst-pipe-dir/test1")
 $(rmdir "/tmp/tst-pipe-dir")
-(let ((file-name (str (temp-dir)"/pipe-err.test"))
+(let ((file-name "/tmp/pipe-err.test")
       (fin))
-  (err> (open (str (temp-dir)"/pipe-test.junk")) (do
+  (err> (open "/tmp/pipe-test.junk") (do
     (pipe (eprintln "error")(do (print *stdin*)(println "normal"))(open file-name :create :truncate))
     (set! fin (open file-name :read))
     (test::assert-equal "normal\n" (read-line fin))
