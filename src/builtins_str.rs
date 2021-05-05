@@ -7,8 +7,8 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
-use crate::{param_eval, params_done};
 use crate::types::*;
+use crate::{param_eval, params_done};
 use std::collections::hash_map::DefaultHasher;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
@@ -798,8 +798,8 @@ fn builtin_char_int(
     params_done(args, "char->int")?;
     let to_int = |s: &str| -> Result<Expression, LispError> {
         let mut count = 0;
-        for _s in <str as UnicodeSegmentation>::graphemes(s.as_ref(), true) {
-            count = count + 1;
+        for _s in <str as UnicodeSegmentation>::graphemes(s, true) {
+            count += 1;
         }
         match count {
             0 => Ok(Expression::alloc_data(ExpEnum::Int(0))),
@@ -812,7 +812,7 @@ fn builtin_char_int(
                         overflow = true;
                         break;
                     }
-                    int_val = int_val + add;
+                    int_val += add;
                 }
                 if overflow {
                     Err(LispError::new("error, overflow occurred adding unicode scalar values that compose provided grapheme interpreted as unsigned 32 byte integers: {:?}."))
@@ -826,13 +826,11 @@ fn builtin_char_int(
         }
     };
     match &next_arg_d.data {
-        ExpEnum::String(s, _) => {
-            to_int(s)
-        },
-        ExpEnum::Char(s) => {
-            to_int(s)
-        },
-        _ => Err(LispError::new("expected one argument of type Char or String")),
+        ExpEnum::String(s, _) => to_int(s),
+        ExpEnum::Char(s) => to_int(s),
+        _ => Err(LispError::new(
+            "expected one argument of type Char or String",
+        )),
     }
 }
 
@@ -861,7 +859,9 @@ fn builtin_unicode_scalars(
     match &next_arg_d.data {
         ExpEnum::String(s, _) => with_str(s),
         ExpEnum::Char(s) => with_str(s),
-        _ => Err(LispError::new("expected one argument of type Char or String")),
+        _ => Err(LispError::new(
+            "expected one argument of type Char or String",
+        )),
     }
 }
 
@@ -881,7 +881,9 @@ fn builtin_str_hash(
     match &next_arg_d.data {
         ExpEnum::String(s, _) => with_str(s),
         ExpEnum::Char(s) => with_str(s),
-        _ => Err(LispError::new("expected one argument of type Char or String")),
+        _ => Err(LispError::new(
+            "expected one argument of type Char or String",
+        )),
     }
 }
 

@@ -12,5 +12,5 @@ docker run --rm -it -p 4000:4000 -v $PWD:/tmp jekyll
 in browser visit localhost:4000
 
 # to auto reload when certain files change.
-(loop () () (do $(inotifywait -e close_write <TARGET-FILE1> <TARGET-FILE2>) $(sl-sh docify.lisp) (recur)))
+(loop () () (do $(inotifywait -e close_write <TARGET-FILE1> <TARGET-FILE2> ...) $(sl-sh docify.lisp) (recur)))
 
