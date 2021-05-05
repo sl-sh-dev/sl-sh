@@ -391,7 +391,7 @@ Section: user-shell"
 	(plist)
 		(if (> (length plist) 1)
 			(if (> (length (first plist)) 0)
-				(vec-insert! (path_list_trunc (rest plist)) 0 (str-sub 0 1 (first plist)))
+				(vec-insert! (path_list_trunc (rest plist)) 0 (str-sub (first plist) 0 1))
 				(path_list_trunc (rest plist)))
 			plist))
 

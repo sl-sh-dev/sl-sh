@@ -275,42 +275,58 @@ fn builtin_str_sub(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if let Some(arg1) = args.next() {
-            if let Some(arg2) = args.next() {
-                if args.next().is_none() {
-                    let arg0 = eval(environment, arg0)?;
-                    let arg1 = eval(environment, arg1)?;
-                    let arg2 = eval(environment, arg2)?;
-                    let start = if let ExpEnum::Int(i) = arg0.get().data {
+    if let Some(string) = args.next() {
+        if let Some(start) = args.next() {
+            let length = args.next();
+            if args.next().is_none() {
+                let string = eval(environment, string)?;
+                let start = eval(environment, start)?;
+                let length = if let Some(length) = length {
+                    Some(eval(environment, length)?)
+                } else {
+                    None
+                };
+                let start = if let ExpEnum::Int(i) = start.get().data {
+                    i as usize
+                } else {
+                    return Err(LispError::new("str-sub second form (start) must be an int"));
+                };
+                let len = if let Some(length) = length {
+                    if let ExpEnum::Int(i) = length.get().data {
                         i as usize
                     } else {
-                        return Err(LispError::new("str-sub first form must be an int"));
-                    };
-                    let len = if let ExpEnum::Int(i) = arg1.get().data {
-                        i as usize
-                    } else {
-                        return Err(LispError::new("str-sub second form must be an int"));
-                    };
-                    let arg2_d = arg2.get();
-                    if let ExpEnum::String(s, _) = &arg2_d.data {
-                        if (start + len) <= s.len() {
+                        return Err(LispError::new(
+                            "str-sub third form (length) must be an int if provided",
+                        ));
+                    }
+                } else {
+                    0
+                };
+                let string_d = string.get();
+                if let ExpEnum::String(s, _) = &string_d.data {
+                    if (start + len) <= s.len() {
+                        if len > 0 {
                             return Ok(Expression::alloc_data(ExpEnum::String(
                                 s[start..(start + len)].to_string().into(),
                                 None,
                             )));
                         } else {
-                            return Err(LispError::new("str-sub index out of range"));
+                            return Ok(Expression::alloc_data(ExpEnum::String(
+                                s[start..].to_string().into(),
+                                None,
+                            )));
                         }
                     } else {
-                        return Err(LispError::new("str-sub third form must be an String"));
+                        return Err(LispError::new("str-sub index out of range"));
                     }
+                } else {
+                    return Err(LispError::new("str-sub first form must be an String"));
                 }
             }
         }
     }
     Err(LispError::new(
-        "str-sub takes three forms (int, int String)",
+        "str-sub takes three forms (String start-index [length])",
     ))
 }
 
@@ -947,16 +963,19 @@ Example:
         interner.intern("str-sub"),
         Expression::make_function(
             builtin_str_sub,
-            r#"Usage: (str-sub start length string) -> string
+            r#"Usage: (str-sub string start [length]) -> string
 
-Return a substring from a string given start (0 based) and length.
+Return a substring from a string given start (0 based) and optional length.
+If length is 0 or not provided produces the rest of the string from start to
+string end.
 
 Section: string
 
 Example:
-(test::assert-equal "string" (str-sub 0 6 "stringxxxyyyxxxsome"))
-(test::assert-equal "some" (str-sub 15 4 "stringxxxyyyxxxsome"))
-(test::assert-equal "yyy" (str-sub 9 3 "stringxxxyyyxxxsome"))
+(test::assert-equal "string" (str-sub "stringxxxyyyxxxsome" 0 6))
+(test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15 4))
+(test::assert-equal "yyy" (str-sub "stringxxxyyyxxxsome" 9 3))
+(test::assert-equal "some" (str-sub "stringxxxyyyxxxsome" 15))
 "#,
         ),
     );

@@ -23,7 +23,7 @@ $(export YYY $(echo "1\n20\n10" | grep 1 | grep 0))
 $(export ECHO $(which echo))
 $(export GREP $(which grep))
 ; sub 6 because there is a newline and a / to remove.
-$(export BIN $((str-sub 0 (- (length $GREP) 6) $GREP)))
+$(export BIN $((str-sub $GREP 0 (- (length $GREP) 6))))
 
 $(export YYY $($ECHO "1\n20\n10" | grep 1 | ${BIN}/grep 0))
 (test::assert-equal "10\n" $YYY)

@@ -209,7 +209,7 @@ Example:
                      (fn (orig-string)
                      (let ((result (get-error
                          (chain orig-string
-                            (str-sub start (- end start) _)
+                            (str-sub _ start (- end start))
                             (str->int _)
                             (tst _)))))
                      (if (= :ok (car result))
@@ -221,7 +221,7 @@ Example:
            (valid-hour? (do-fst (fn (x) (and (> x 0) (< x 24))) 9 11))
            (valid-minute? (do-fst (fn (x) (and (> x -1) (< x 60))) 11 13))
            (valid-second? (do-fst (fn (x) (and (> x -1) (< x 60))) 13 15))
-           (is-zulu? (fn (orig-string) (= \"Z\" (str-sub 15 1 orig-string)))))
+           (is-zulu? (fn (orig-string) (= \"Z\" (str-sub orig-string 15 1)))))
       (chain-and alleged-time-str
             (valid-year? _)
             (valid-month? _)

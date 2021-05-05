@@ -153,13 +153,13 @@
 (defn get-home ()
   (let ((home (get-env "HOME")))
     (let ((last-idx (- (length home) 1)))
-      (if (= #\/ (str-nth last-idx home)) (str-sub 0 last-idx home)
+      (if (= #\/ (str-nth last-idx home)) (str-sub home 0 last-idx)
           home))))
 
 (defn expand-tilde (token first-only)
   (let ((home (get-home)))
     (if (str-starts-with "~" token)
-        (set! token (str home (str-sub 1 (- (length token) 1) token))))
+        (set! token (str home (str-sub token 1))))
     (if (not first-only) (do
                           (set! token (str-replace token ":~" (str ":" home)))
                           (set! token (str-replace token "\\~" "~")))))
