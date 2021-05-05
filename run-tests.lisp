@@ -9,6 +9,13 @@
 
 (def tests-dir "tests")
 
+(def padding 42)
+
+(defn print-with-padding (to-print)
+      (if (>= (length to-print) padding)
+        (print to-print)
+        (print to-print (apply str (collect (repeat "." (- padding (length to-print))))))))
+
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
 
@@ -65,31 +72,24 @@
 		(:no-test
 		 (println
 			(str shell::*fg-black* shell::*bg-yellow*
-			"NONE:"
-			shell::*fg-default* shell::*bg-default*
-			" " test-name)))
+			"NONE"
+			shell::*fg-default* shell::*bg-default*)))
 		(:passed
 		 (println
 			(str shell::*fg-black* shell::*bg-green*
-			"PASS:"
-			shell::*fg-default* shell::*bg-default*
-			" " test-name)))
+			"PASS"
+			shell::*fg-default* shell::*bg-default*)))
 		(:failed
 		 (println
 			(str shell::*fg-black* shell::*bg-red*
-			"FAIL:"
-			shell::*fg-default* shell::*bg-default*
-			" " test-name)))
-        (:error
-		 (println
-			(str shell::*fg-black* shell::*bg-red*
-			"ERR: "
-			shell::*fg-default* shell::*bg-default*
-			" " test-name)))
+			"FAIL"
+			shell::*fg-default* shell::*bg-default*)))
+		(:error
+		 (println ""))
 		(nil
 		 (println
 			(str shell::*fg-black* shell::*bg-red*
-			"UNK: "
+			"WTF?"
 			shell::*fg-default* shell::*bg-default*
 			" " test-name)))))
 
@@ -109,6 +109,7 @@
               (let ((fst (first tests)))
                 (when fst
                   (do
+                (print-with-padding (hash-get (first tests) :name))
                    (hash-set! test-report :total (+ 1 (hash-get test-report :total)))
                    (if (= :no-test (hash-get fst :load-fcn))
                        (do
@@ -117,6 +118,11 @@
                        (let ((test-result (get-error ((hash-get fst :load-fcn)))))
                         (when (= (car test-result) :error)
                           (do
+                           (print (str shell::*fg-black* shell::*bg-red*
+                                       "ERR!"
+                                       shell::*fg-default* shell::*bg-default*))
+                           (println "")
+                           (println (cdr test-result))
                            (set! exit-status :error)
                            (hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
                     (report-pretty-printer exit-status (hash-get fst :name))
@@ -163,6 +169,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "*ns*")
 	(if (test::run-ns-example 'root::*ns*)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -173,6 +180,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-create")
 	(if (test::run-ns-example 'ns-create)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -183,6 +191,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-enter")
 	(if (test::run-ns-example 'ns-enter)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -193,6 +202,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-exists")
 	(if (test::run-ns-example 'ns-exists?)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -203,6 +213,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-list")
 	(if (test::run-ns-example 'ns-list)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -213,6 +224,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-pop")
 	(if (test::run-ns-example 'ns-pop)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -223,6 +235,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-push")
 	(if (test::run-ns-example 'ns-push)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))
@@ -233,6 +246,7 @@
 
 (do
 	(hash-set! ns-test-set-item :total (+ 1 (hash-get ns-test-set-item :total)))
+	(print-with-padding "ns-symbols")
 	(if (test::run-ns-example 'ns-symbols)
 		(do
 			(hash-set! ns-test-set-item :passed (+ 1 (hash-get ns-test-set-item :passed)))

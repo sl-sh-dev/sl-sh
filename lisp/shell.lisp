@@ -994,6 +994,6 @@ Example:
 	getopts
 	mkli
 	temp-dir
-    timer))
+	timer))
 
 (ns-pop)

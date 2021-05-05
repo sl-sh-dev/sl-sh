@@ -1,13 +1,15 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::hash::BuildHasher;
+use std::hash::{BuildHasher, Hash, Hasher};
 
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
+use crate::{param_eval, params_done};
 use crate::types::*;
+use std::collections::hash_map::DefaultHasher;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
     exp.as_string(environment)
@@ -787,6 +789,102 @@ fn builtin_char_is_whitespace(
     ))
 }
 
+fn builtin_char_int(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "char->int")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "char->int")?;
+    let to_int = |s: &str| -> Result<Expression, LispError> {
+        let mut count = 0;
+        for _s in <str as UnicodeSegmentation>::graphemes(s.as_ref(), true) {
+            count = count + 1;
+        }
+        match count {
+            0 => Ok(Expression::alloc_data(ExpEnum::Int(0))),
+            1 => {
+                let mut int_val: u32 = 0;
+                let mut overflow = false;
+                for c in s.chars() {
+                    let (add, overflowed) = int_val.overflowing_add(c as u32);
+                    if overflowed {
+                        overflow = true;
+                        break;
+                    }
+                    int_val = int_val + add;
+                }
+                if overflow {
+                    Err(LispError::new("error, overflow occurred adding unicode scalar values that compose provided grapheme interpreted as unsigned 32 byte integers: {:?}."))
+                } else {
+                    Ok(Expression::alloc_data(ExpEnum::Int(int_val as i64)))
+                }
+            }
+            _ => Err(LispError::new(
+                "function takes one grapheme, multiple were provided.",
+            )),
+        }
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => {
+            to_int(s)
+        },
+        ExpEnum::Char(s) => {
+            to_int(s)
+        },
+        _ => Err(LispError::new("expected one argument of type Char or String")),
+    }
+}
+
+fn builtin_unicode_scalars(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "unicode-scalars")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "unicode-scalars")?;
+    let with_str = |s: &str| {
+        let mut unicode_scalars: Vec<String> = Vec::new();
+        for c in s.chars() {
+            unicode_scalars.push(format!("{}", c.escape_unicode()));
+        }
+
+        let mut strings = Vec::with_capacity(unicode_scalars.len());
+        for s in unicode_scalars {
+            strings.push(Expression::alloc_data(ExpEnum::String(
+                s.to_string().into(),
+                None,
+            )));
+        }
+        Ok(Expression::alloc_data(ExpEnum::Vector(strings)))
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => with_str(s),
+        ExpEnum::Char(s) => with_str(s),
+        _ => Err(LispError::new("expected one argument of type Char or String")),
+    }
+}
+
+fn builtin_str_hash(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "str-hash")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "str-hash")?;
+    let with_str = |s: &str| {
+        let mut h = DefaultHasher::new();
+        s.hash(&mut h);
+        let hash: u64 = h.finish();
+        Ok(Expression::alloc_data(ExpEnum::Float(hash as f64)))
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => with_str(s),
+        ExpEnum::Char(s) => with_str(s),
+        _ => Err(LispError::new("expected one argument of type Char or String")),
+    }
+}
+
 pub fn add_str_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -1418,6 +1516,82 @@ Example:
 (test::assert-true (char-whitespace? #\tab))
 (test::assert-false (char-whitespace? #\s))
 "#,
+        ),
+    );
+
+    data.insert(
+        interner.intern("char->int"),
+        Expression::make_function(
+            builtin_char_int,
+            "Usage: (char->int a-char)
+
+Reads a char or string, which may be composed of one or more unicode scalar values,
+(see (doc 'unicode-scalars) for more information) and returns a sum of the values.
+This is not a hashing function, and only accepts one grapheme in the form of a
+string or character. Graphemes composed of the same unicode scalar values will
+result in the same integer value.'
+
+Section: string
+
+Example:
+(test::assert-error-msg (unicode-scalars (make-vec)) \"expected one argument of type Char or String\")
+(test::assert-error-msg (char->int) \"char->int: Missing required argument, see (doc 'char->int) for usage.\")
+(test::assert-error-msg (char->int \"a\" \"b\") \"char->int: Too many arguments, see (doc 'char->int) for usage.\")
+(test::assert-error-msg (char->int \"ab\") \"function takes one grapheme, multiple were provided.\")
+(test::assert-error-msg (char->int \"λ⚙\") \"function takes one grapheme, multiple were provided.\")
+(test::assert-equal 97 (char->int \"a\"))
+(test::assert-equal 97 (char->int #\\a))
+(test::assert-equal 7101 (char->int #\\स्))
+(test::assert-equal 9881 (char->int (str \"\\\" \"u{2699}\")))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("unicode-scalars"),
+        Expression::make_function(
+            builtin_unicode_scalars,
+            "Usage: (unicode-scalars string)
+
+Returns array of unicode scalars for each char in string. Note, a char
+is not a grapheme. The hindi word namaste (\"न\" \"म\" \"स्\" \"ते\")
+written in Devanagari script is 4 graphemes, but 6 unicode scalar values,
+(\"u{928}\" \"u{92e}\" \"u{938}\" \"u{94d}\" \"u{924}\" \"u{947}\");
+[reference](https://doc.rust-lang.org/book/ch08-02-strings.html#bytes-and-scalar-values-and-grapheme-clusters-oh-my).
+
+Section: string
+
+Example:
+(test::assert-error-msg (unicode-scalars) \"unicode-scalars: Missing required argument, see (doc 'unicode-scalars) for usage.\")
+(test::assert-error-msg (unicode-scalars (make-vec)) \"expected one argument of type Char or String\")
+(test::assert-error-msg (unicode-scalars \"a\" \"b\") \"unicode-scalars: Too many arguments, see (doc 'unicode-scalars) for usage.\")
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (unicode-scalars \"⚙\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (unicode-scalars \"स्\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (unicode-scalars #\\स्))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (unicode-scalars \"a\"))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (unicode-scalars #\\a))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("str-hash"),
+        Expression::make_function(
+            builtin_str_hash,
+            "Usage: (str-hash s)
+
+Accepts values of type String or Char and returns hash of value. Hash is not cryptographically secure.
+
+Section: string
+
+Example:
+(test::assert-error-msg (str-hash) \"str-hash: Missing required argument, see (doc 'str-hash) for usage.\")
+(test::assert-error-msg (str-hash (make-vec)) \"expected one argument of type Char or String\")
+(test::assert-error-msg (str-hash \"a\" \"b\") \"str-hash: Too many arguments, see (doc 'str-hash) for usage.\")
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (unicode-scalars \"⚙\"))
+(test::assert-equal 8186225505942432000 (str-hash \"a\"))
+(test::assert-equal 8186225505942432000 (str-hash #\\a))
+",
         ),
     );
 }

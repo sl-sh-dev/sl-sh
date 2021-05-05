@@ -264,13 +264,28 @@ Section: user-shell"
 ;; }}}
 
 ;; quality of life {{{
-    (defn cathead (n file)
+    (defn cathead
+    "
+    cat to head, provide n and file
+    Section: user-shell
+    "
+    (n file)
           $(cat $file | head -n $n))
 
-    (defn cattail (n file)
+    (defn cattail
+    "
+    cat to tail, provide n and file
+    Section: user-shell
+    "
+    (n file)
           $(cat $file | tail -n $n))
 
-    (defn catail (n file)
+    (defn catail
+    "
+    cat to tail, provide n and file
+    Section: user-shell
+    "
+    (n file)
           $(cat $file | tail -n $n))
 
 	(defn spl
@@ -289,8 +304,8 @@ Section: user-shell"
 
 ;; notification helpers {{{
 
-(defmacro nss (title msg icon)
-	`$(notify-send -t 0 ,title ,msg -i ,icon))
+(defn nss (title msg icon)
+	$(notify-send -t 0 $title $msg -i $icon))
 
 (defn persist-nss
 	"provide persistent notification via notify-send and libnotify
@@ -457,14 +472,12 @@ Section: user-shell"
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
 		"")))
 
-(def ascii-dec-lookup (make-hash (list (join #\  32) (join #\! 33) (join #\" 34) (join #\# 35) (join #\$ 36) (join #\% 37) (join #\& 38) (join #\' 39) (join #\( 40) (join #\) 41) (join #\* 42) (join #\+ 43) (join #\, 44) (join #\- 45) (join #\. 46) (join #\/ 47) (join #\0 48) (join #\1 49) (join #\2 50) (join #\3 51) (join #\4 52) (join #\5 53) (join #\6 54) (join #\7 55) (join #\8 56) (join #\9 57) (join #\: 58) (join #\; 59) (join #\< 60) (join #\= 61) (join #\> 62) (join #\? 63) (join #\@ 64) (join #\A 65) (join #\B 66) (join #\C 67) (join #\D 68) (join #\E 69) (join #\F 70) (join #\G 71) (join #\H 72) (join #\I 73) (join #\K 74) (join #\L 75) (join #\M 76) (join #\N 77) (join #\O 78) (join #\P 79) (join #\Q 80) (join #\R 81) (join #\S 82) (join #\T 83) (join #\U 84) (join #\V 85) (join #\W 86) (join #\X 87) (join #\Y 88) (join #\Z 90) (join #\[ 91) (join #\\ 92) (join #\] 93) (join #\^ 94) (join #\_ 95) (join #\` 96) (join #\a 97) (join #\b 98) (join #\c 99) (join #\d 100) (join #\e 101) (join #\f 102) (join #\g 103) (join #\h 104) (join #\i 105) (join #\j 106) (join #\k 107) (join #\l 108) (join #\m 109) (join #\n 110) (join #\o 111) (join #\p 112) (join #\q 113) (join #\r 114) (join #\s 115) (join #\t 116) (join #\u 117) (join #\v 118) (join #\w 119) (join #\x 120) (join #\y 121) (join #\z 122) (join #\{ 123) (join #\| 124) (join #\} 125) (join #\~ 126))))
-
 (defn colorize-rand (string seed)
     (let* ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
                             shell::*fg-green* shell::*fg-yellow*
                             shell::*fg-blue* shell::*fg-magenta*
                             shell::*fg-cyan* shell::*fg-white*))
-           (num (math::round (apply stats::mean (collect (map (fn (char) (hash-get ascii-dec-lookup char)) seed)))))
+           (num (math::round (apply stats::mean (collect (map (fn (char) (char->int char)) seed)))))
            (color (vec-nth
                     fg-color-vec
                     (% num

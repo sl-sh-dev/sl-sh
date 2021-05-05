@@ -28,7 +28,7 @@ pub fn params_done(
         Ok(())
     } else {
         let msg = format!(
-            "{}: To many arguments, see (doc '{}) for usage.",
+            "{}: Too many arguments, see (doc '{}) for usage.",
             form, form
         );
         Err(LispError::new(msg))

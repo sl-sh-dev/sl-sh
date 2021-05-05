@@ -1009,7 +1009,6 @@ binding for value is previous application of wrapping function to value.
 Section: iterator
 
 Example:
-
 (assert-equal (list (list 3)) (reduce-times 3 list 2))
 (assert-equal 5 (reduce-times (reduce-times 5 list 5) first 5))
 "
@@ -1140,24 +1139,53 @@ Example:
         (err "append-to!: First element not a list or vector."))
     ret))
 
-;; TODO broken iter
-;; TODO scnd error when (apply str (collect (zip (repeat " " 3) (list 1 2 3))))
-;; you do not feed it an iterator!
-(defstruct broken-iter
-"
+(defstruct zip-iter
+"create iterator that zips two iterators together. Resultant iter
+is composed of pairs (fst, scnd) for each value of next! in each provided
+iterator.
+
 Section: iterator
 "
 ;; fields
+(fst ((iterator::single-iter) :init 0))
+(scnd ((iterator::single-iter) :init 0))
 (flip-flop #t)
 ;; methods
-(:fn nextt (self) "broken")
-(:fn emptyyy (self) nil)
-(:fn init (self) self)
+(:fn next! (self) (join (fst :next!) (scnd :next!)))
+(:fn empty? (self) (or (fst :empty?) (scnd :empty?)))
+(:fn init (self in-fst in-scnd)
+     (do
+       (if (iter? in-fst)
+           (set! fst in-fst)
+           (if (seq? in-fst))
+            (set! fst (iter in-fst))
+            (err "first argument to zip must be iterator or vector"))
+       (if (iter? in-scnd)
+           (set! scnd in-scnd)
+           (if (seq? in-scnd))
+            (set! scnd (iter in-scnd))
+            (err "second argument to zip must be iterator or vector"))
+       self))
 (:impl iterator::iterator iterator::double-ended-iterator))
 
-(defstruct zip-iter
+(defn zip
+"zips two iterators together. Resultant iter is composed of pairs (fst, scnd)
+for each value of next! in each provided iterator.
+
+Section: iterator
+
+Example:
+(ns-import 'iterator)
+(test::assert-equal (list (join 'string 'bean) (join 'monte 'carlo)) (collect (zip (iter (list 'string 'monte)) (iter (list 'bean 'carlo)))))
+(test::assert-equal (list (join 1 2) (join 3 4)) (collect (zip (iter (list 1 3)) (iter (list 2 4 5)))))
+"
+    (fst scnd)
+      ((zip-iter) :init fst scnd))
+
+(defstruct interleave-iter
 "create iterator that interleaves two iterators together. Resultant iter
-is same length as fst
+is double length as fst if fst has more items, or double length of scnd if
+scnd has more items.
 
 Section: iterator
 "
@@ -1176,30 +1204,32 @@ Section: iterator
            (set! fst in-fst)
            (if (seq? in-fst))
             (set! fst (iter in-fst))
-            (err "first argument to zip must be iterator or vector"))
+            (err "first argument to interleave must be iterator or vector"))
        (if (iter? in-scnd)
            (set! scnd in-scnd)
            (if (seq? in-scnd))
             (set! scnd (iter in-scnd))
-            (err "second argument to zip must be iterator or vector"))
+            (err "second argument to interleave must be iterator or vector"))
        self))
 (:impl iterator::iterator iterator::double-ended-iterator))
 
-(defn zip
-"interleaves two iterators together, like a zipper. Resultant iter
-is same length as fst
+(defn interleave
+"interleaves two iterators together. Resultant iter
+is double length of fst unless scnd has less items. Then iter is double length
+of scnd.
 
 Section: iterator
 Example:
 (ns-import 'iterator)
-(test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4)))))
-(test::assert-equal (list 1 2 3 4) (collect (zip (iter (list 1 3)) (iter (list 2 4 5)))))
+(test::assert-equal (list 1 2 3 4) (collect (interleave (iter (list 1 3)) (iter (list 2 4)))))
+(test::assert-equal (list 1 2 3 4) (collect (interleave (iter (list 1 3)) (iter (list 2 4 5)))))
 "
     (fst scnd)
-      ((zip-iter) :init fst scnd))
+      ((interleave-iter) :init fst scnd))
 
 (defstruct repeat-iter
-"iterator that returns provided repeat with specified length.
+"iterator that returns provided repeat with specified length. if length is
+negative returns infinite iterator.
 
 Section: iterator
 "
@@ -1208,7 +1238,7 @@ Section: iterator
 (len 0)
 (current 0)
 ;;methods
-(:fn empty? (self) (>= current len))
+(:fn empty? (self) (if (>= len 0) (>= current len) nil))
 (:fn next! (self) (do
     (set! current (+ current 1))
     to-repeat))
@@ -1220,16 +1250,20 @@ Section: iterator
 (:impl iterator::iterator))
 
 (defn repeat
-"repeat target n times
+"repeat target n times. if n is not provided returns infinite iterator.
 
 Section: iterator
 
 Example:
 (test::assert-equal (list #\m #\m #\m #\m) (collect (repeat #\m 4)))
-
+(test::assert-equal (list #\m #\m #\m #\m) (collect (take (repeat #\m) 4)))
 "
-(target n)
-((repeat-iter) :init target n))
+(target &rest n)
+(if (= 1 (length n))
+     ((repeat-iter) :init target (vec-nth n 0))
+     (if (= 0 (length n))
+        ((repeat-iter) :init target -1)
+        (err "repeat takes 0 or 1 args."))))
 
 (defstruct take-iter
 "
@@ -1281,6 +1315,8 @@ Example:
     iter
     zip-iter
     zip
+    interleave-iter
+    interleave
     repeat-iter
     repeat
     take-iter
