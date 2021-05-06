@@ -421,7 +421,7 @@ Section: user-shell"
       (if (> (length target) 4)
         (let* ((vowels (list "a" "e" "i" "o" "u"))
              (first-char (str-nth 0 target))
-             (mid-chars (str-sub 1 (- (length target) 2) target))
+             (mid-chars (str-sub target 1 (- (length target) 2)))
              (last-char (str-nth (- (length target) 1) target)))
         (str first-char (apply str (collect (filter (fn (y) (not (in? vowels (str y)))) mid-chars))) last-char))
         target))
@@ -594,7 +594,7 @@ Section: user-shell"
 			(list root::cd cmd-str)
 			orig-cmd-ast)))
 
-;; if direcotry input, treat it as if it was prefixed by cd,
+;; if directory input, treat it as if it was prefixed by cd,
 ;; due to shell reader changes receive and return raw string,
 ;; do not return a list.
 (defn __exec_hook (cmd-str)

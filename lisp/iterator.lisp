@@ -1142,7 +1142,7 @@ Example:
 (defstruct zip-iter
 "create iterator that zips two iterators together. Resultant iter
 is composed of pairs (fst, scnd) for each value of next! in each provided
-iterator.
+iterator. Length of zip-iter is equal to length of shorter iterator.
 
 Section: iterator
 "
@@ -1170,7 +1170,8 @@ Section: iterator
 
 (defn zip
 "zips two iterators together. Resultant iter is composed of pairs (fst, scnd)
-for each value of next! in each provided iterator.
+for each value of next! in each provided iterator. Length of returned
+iter is equal to length of the shortest provided iterator.
 
 Section: iterator
 
@@ -1184,8 +1185,8 @@ Example:
 
 (defstruct interleave-iter
 "create iterator that interleaves two iterators together. Resultant iter
-is double length as fst if fst has more items, or double length of scnd if
-scnd has more items.
+is double length of fst if fst has less items, or double length of scnd if
+scnd has less items.
 
 Section: iterator
 "

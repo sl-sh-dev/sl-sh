@@ -197,7 +197,7 @@ fn builtin_jobs(
     }
 }
 
-fn builtin_sys_time(
+fn builtin_epoch(
     _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -672,7 +672,7 @@ Example:
     data.insert(
         interner.intern("epoch"),
         Expression::make_function(
-            builtin_sys_time,
+            builtin_epoch,
             r#"Usage: (epoch)
 
 Prints system time in milliseconds.

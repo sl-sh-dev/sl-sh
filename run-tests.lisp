@@ -7,14 +7,14 @@
 ;;TODO gpwclark remove this error stack on call when "(error-stack-on)" becomes an environment variable
 (error-stack-on)
 
-(def tests-dir "tests")
+(def *tests-dir* "tests")
 
-(def padding 42)
+(def *padding* 42)
 
 (defn print-with-padding (to-print)
-      (if (>= (length to-print) padding)
+      (if (>= (length to-print) *padding*)
         (print to-print)
-        (print to-print (apply str (collect (repeat "." (- padding (length to-print))))))))
+        (print to-print (apply str (collect (repeat "." (- *padding* (length to-print))))))))
 
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))
@@ -59,7 +59,7 @@
 			(hash-set! test-set-item :load-fcn load-fcn)
 			test-set-item))))
 		'()
-		(glob "${tests-dir}/*")))
+		(glob "${*tests-dir*}/*")))
 
 (defn printer (output)
 	(println (str

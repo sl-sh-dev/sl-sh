@@ -804,10 +804,10 @@ fn builtin_char_int(
         match count {
             0 => Ok(Expression::alloc_data(ExpEnum::Int(0))),
             1 => {
-                let mut int_val: u32 = 0;
+                let mut int_val: i64 = 0;
                 let mut overflow = false;
                 for c in s.chars() {
-                    let (add, overflowed) = int_val.overflowing_add(c as u32);
+                    let (add, overflowed) = int_val.overflowing_add(c as i64);
                     if overflowed {
                         overflow = true;
                         break;
@@ -815,57 +815,51 @@ fn builtin_char_int(
                     int_val += add;
                 }
                 if overflow {
-                    Err(LispError::new("error, overflow occurred adding unicode scalar values that compose provided grapheme interpreted as unsigned 32 byte integers: {:?}."))
+                    Err(LispError::new("overflow occurred in char->in tadding unicode scalar values that compose provided grapheme interpreted as unsigned 32 byte integers: {:?}."))
                 } else {
-                    Ok(Expression::alloc_data(ExpEnum::Int(int_val as i64)))
+                    Ok(Expression::alloc_data(ExpEnum::Int(int_val)))
                 }
             }
             _ => Err(LispError::new(
-                "function takes one grapheme, multiple were provided.",
+                "char->int takes one grapheme, multiple were provided.",
             )),
         }
     };
     match &next_arg_d.data {
         ExpEnum::String(s, _) => to_int(s),
         ExpEnum::Char(s) => to_int(s),
+        ExpEnum::CodePoint(c) => to_int(&*format!("{}", c)),
         _ => Err(LispError::new(
-            "expected one argument of type Char or String",
+            "char->int expects one argument of type Char or String",
         )),
     }
 }
 
-fn builtin_unicode_scalars(
+fn builtin_codepoints(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let next_arg = param_eval(environment, args, "unicode-scalars")?;
+    let next_arg = param_eval(environment, args, "codepoints")?;
     let next_arg_d = next_arg.get();
-    params_done(args, "unicode-scalars")?;
+    params_done(args, "codepoints")?;
     let with_str = |s: &str| {
-        let mut unicode_scalars: Vec<String> = Vec::new();
+        let mut codepoints: Vec<Expression> = Vec::new();
         for c in s.chars() {
-            unicode_scalars.push(format!("{}", c.escape_unicode()));
+            codepoints.push(Expression::alloc_data(ExpEnum::CodePoint(c)));
         }
-
-        let mut strings = Vec::with_capacity(unicode_scalars.len());
-        for s in unicode_scalars {
-            strings.push(Expression::alloc_data(ExpEnum::String(
-                s.to_string().into(),
-                None,
-            )));
-        }
-        Ok(Expression::alloc_data(ExpEnum::Vector(strings)))
+        Ok(Expression::alloc_data(ExpEnum::Vector(codepoints)))
     };
     match &next_arg_d.data {
         ExpEnum::String(s, _) => with_str(s),
         ExpEnum::Char(s) => with_str(s),
+        ExpEnum::CodePoint(c) => with_str(&*format!("{}", c)),
         _ => Err(LispError::new(
-            "expected one argument of type Char or String",
+            "codepoints expects one argument of type Char or String",
         )),
     }
 }
 
-fn builtin_str_hash(
+fn builtin_str_float(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -882,7 +876,7 @@ fn builtin_str_hash(
         ExpEnum::String(s, _) => with_str(s),
         ExpEnum::Char(s) => with_str(s),
         _ => Err(LispError::new(
-            "expected one argument of type Char or String",
+            "str->float expects one argument of type Char or String",
         )),
     }
 }
@@ -1528,7 +1522,7 @@ Example:
             "Usage: (char->int a-char)
 
 Reads a char or string, which may be composed of one or more unicode scalar values,
-(see (doc 'unicode-scalars) for more information) and returns a sum of the values.
+(see (doc 'codepoints) for more information) and returns a sum of the values.
 This is not a hashing function, and only accepts one grapheme in the form of a
 string or character. Graphemes composed of the same unicode scalar values will
 result in the same integer value.'
@@ -1536,11 +1530,11 @@ result in the same integer value.'
 Section: string
 
 Example:
-(test::assert-error-msg (unicode-scalars (make-vec)) \"expected one argument of type Char or String\")
+(test::assert-error-msg (char->int (make-vec)) \"char->int expects one argument of type Char or String\")
 (test::assert-error-msg (char->int) \"char->int: Missing required argument, see (doc 'char->int) for usage.\")
 (test::assert-error-msg (char->int \"a\" \"b\") \"char->int: Too many arguments, see (doc 'char->int) for usage.\")
-(test::assert-error-msg (char->int \"ab\") \"function takes one grapheme, multiple were provided.\")
-(test::assert-error-msg (char->int \"λ⚙\") \"function takes one grapheme, multiple were provided.\")
+(test::assert-error-msg (char->int \"ab\") \"char->int takes one grapheme, multiple were provided.\")
+(test::assert-error-msg (char->int \"λ⚙\") \"char->int takes one grapheme, multiple were provided.\")
 (test::assert-equal 97 (char->int \"a\"))
 (test::assert-equal 97 (char->int #\\a))
 (test::assert-equal 7101 (char->int #\\स्))
@@ -1550,10 +1544,10 @@ Example:
     );
 
     data.insert(
-        interner.intern("unicode-scalars"),
+        interner.intern("codepoints"),
         Expression::make_function(
-            builtin_unicode_scalars,
-            "Usage: (unicode-scalars string)
+            builtin_codepoints,
+            "Usage: (codepoints string)
 
 Returns array of unicode scalars for each char in string. Note, a char
 is not a grapheme. The hindi word namaste (\"न\" \"म\" \"स्\" \"ते\")
@@ -1564,33 +1558,33 @@ written in Devanagari script is 4 graphemes, but 6 unicode scalar values,
 Section: string
 
 Example:
-(test::assert-error-msg (unicode-scalars) \"unicode-scalars: Missing required argument, see (doc 'unicode-scalars) for usage.\")
-(test::assert-error-msg (unicode-scalars (make-vec)) \"expected one argument of type Char or String\")
-(test::assert-error-msg (unicode-scalars \"a\" \"b\") \"unicode-scalars: Too many arguments, see (doc 'unicode-scalars) for usage.\")
-(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (unicode-scalars \"⚙\"))
-(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (unicode-scalars \"स्\"))
-(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (unicode-scalars #\\स्))
-(test::assert-equal (vec (str \"\\\" \"u{61}\")) (unicode-scalars \"a\"))
-(test::assert-equal (vec (str \"\\\" \"u{61}\")) (unicode-scalars #\\a))
+(test::assert-error-msg (codepoints) \"codepoints: Missing required argument, see (doc 'codepoints) for usage.\")
+(test::assert-error-msg (codepoints (make-vec)) \"codepoints expects one argument of type Char or String\")
+(test::assert-error-msg (codepoints \"a\" \"b\") \"codepoints: Too many arguments, see (doc 'codepoints) for usage.\")
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (codepoints \"⚙\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (codepoints \"स्\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (codepoints #\\स्))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints \"a\"))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints #\\a))
 ",
         ),
     );
 
     data.insert(
-        interner.intern("str-hash"),
+        interner.intern("str->float"),
         Expression::make_function(
-            builtin_str_hash,
-            "Usage: (str-hash s)
+            builtin_str_float,
+            "Usage: (str->float s)
 
-Accepts values of type String or Char and returns hash of value. Hash is not cryptographically secure.
+Accepts values of type String or Char and returns hash of value as Float. Hash is not cryptographically secure.
 
 Section: string
 
 Example:
 (test::assert-error-msg (str-hash) \"str-hash: Missing required argument, see (doc 'str-hash) for usage.\")
-(test::assert-error-msg (str-hash (make-vec)) \"expected one argument of type Char or String\")
+(test::assert-error-msg (str-hash (make-vec)) \"str->float expects one argument of type Char or String\")
 (test::assert-error-msg (str-hash \"a\" \"b\") \"str-hash: Too many arguments, see (doc 'str-hash) for usage.\")
-(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (unicode-scalars \"⚙\"))
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (codepoints \"⚙\"))
 (test::assert-equal 8186225505942432000 (str-hash \"a\"))
 (test::assert-equal 8186225505942432000 (str-hash #\\a))
 ",
