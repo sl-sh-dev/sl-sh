@@ -198,6 +198,7 @@ fn do_char(
                         "{}",
                         read_utf_scalar(&mut chars, &mut environment.reader_state)?
                     );
+                    // XXX TODO- codepoint here?
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 "x" => {

@@ -90,6 +90,10 @@
          (str-iter-next! stream)
          (recur stream)))))
 
+(defn consume-comment (stream)
+  (let ((ch (str-iter-next! stream)))
+    (if (and (char? ch)(not (= ch #\newline))) (recur stream))))
+
 (defn read-string (stream last-ch token first quoted)
   (consume-whitespace stream)
   (if (= (str-iter-peek stream) #\")
@@ -122,24 +126,39 @@
            (set! token (expand-dollar token nil)))
        token)))
 
-(defn read-var (stream last-ch ch peek-ch var-bracket add-exp token)
+(defn read-var-bracket (stream last-ch ch peek-ch add-exp token)
   (let ((done))
     (cond
-      ((and (char-whitespace? ch)(not var-bracket))
-       (set! done #t))
-      ((and (not (= ch #\\))(or (= peek-ch #\))
-                                (= peek-ch #\$)
-                                (= peek-ch #\:)
-                                (= peek-ch #\space)
-                                (= peek-ch #\"))
-            (not var-bracket))
-       (str-push! token ch)
-       (set! done #t))
-      ((and (= ch #\}) var-bracket)
+      ((= ch #\})
        (set! done #t))
       ((str-push! token ch) nil))
     (if (and (not done)(not (str-iter-empty? stream)))
-        (read-var stream ch (str-iter-next! stream)(str-iter-peek stream) var-bracket add-exp token) ;recur
+        (recur stream ch (str-iter-next! stream)(str-iter-peek stream) add-exp token)
+        (do
+         (if (str-empty? token) (err "Syntax error, floating '$'."))
+         (add-exp (sym "shell-read::var-or-env"))
+          (add-exp (sym token))))))
+
+(defn read-var (stream last-ch ch peek-ch add-exp token)
+  (let ((done))
+    (cond
+      ((not (char? peek-ch))
+       (str-push! token ch)
+       (set! done #t))
+      ((or (char-whitespace? peek-ch)
+           (= peek-ch #\:)
+           (= peek-ch #\/)
+           (= peek-ch #\))
+           (= peek-ch #\()
+           (= peek-ch #\,)
+           (= peek-ch #\\)
+           (= peek-ch #\$)
+           (= peek-ch #\"))
+       (str-push! token ch)
+       (set! done #t))
+      ((str-push! token ch) nil))
+    (if (and (not done)(not (str-iter-empty? stream)))
+        (recur stream ch (str-iter-next! stream)(str-iter-peek stream) add-exp token)
         (do
          (if (str-empty? token) (err "Syntax error, floating '$'."))
          (add-exp (sym "shell-read::var-or-env"))
@@ -336,6 +355,8 @@
          (push-token last-ch)
          (push-token ch))
         ((= ch #\\) nil)  ; skip '\'
+        ((= ch #\#)
+         (consume-comment stream))
         ((and (= ch #\)) (> paren-level 0))
          (set! paren-level (- paren-level 1))
          (set! done #t))
@@ -488,31 +509,35 @@
       (set! ch (str-iter-next! stream))
       (set! peek-ch (str-iter-peek stream))
       (cond
-        (in-paren
+        (in-paren  ; Force expression to $(expression)
          (add-exp (sym "shell-read::sys-apply"))
          (read-list #\space ch peek-ch add-exp close-token do-read push-token
                     get-result clear-result))
-        ((and (= ch #\()(= peek-ch #\())
+        ((and (= ch #\()(= peek-ch #\())  ;; $((...)) read as with the normal lisp reader
          (set! result (read stream))
          (consume-whitespace stream)
          (set! ch (str-iter-next! stream))
          (if (not (= #\) ch))
              (err (str "Unbalanced ) in '\$' shell read macro, got " ch)))
          result)
-        ((= ch #\()
+        ((= ch #\()  ; $(...) read a shell dsl list and make a call.
          (set! paren-level (+ paren-level 1))
          (add-exp (sym "shell-read::sys-apply"))
          (read-list #\space (str-iter-next! stream)(str-iter-peek stream)
                     add-exp close-token do-read push-token get-result
                     clear-result))
-        ((= ch #\{)
-         (read-var stream #\space (str-iter-next! stream)(str-iter-peek stream) #t add-exp token))
-        (#t
-         (read-var stream #\space ch peek-ch nil add-exp token)))
+        ((= ch #\{)  ; ${NAME} variable form
+         (read-var-bracket stream #\space (str-iter-next! stream)(str-iter-peek stream) add-exp token))
+        (#t  ;; $NAME variable form
+         (read-var stream #\space ch peek-ch add-exp token)))
       result)))
 
 (defn shell-read (stream ch_start)
-                (list 'str (shell-read::shell-read-int stream nil)))
+  (if (= (str-iter-peek stream) #\%)
+      (do
+       (str-iter-next! stream)
+       (shell-read::shell-read-int stream nil))
+      (list 'str (shell-read::shell-read-int stream nil))))
 
 (def *ns-exports* nil)
 
