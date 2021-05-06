@@ -828,7 +828,7 @@ fn builtin_char_int(
     match &next_arg_d.data {
         ExpEnum::String(s, _) => to_int(s),
         ExpEnum::Char(s) => to_int(s),
-        ExpEnum::CodePoint(c) => to_int(&*format!("{}", c)),
+        ExpEnum::CodePoint(c) => Ok(Expression::alloc_data(ExpEnum::Int(*c as i64))),
         _ => Err(LispError::new(
             "char->int expects one argument of type Char or String",
         )),
