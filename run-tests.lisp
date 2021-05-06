@@ -262,7 +262,7 @@
 
 (def *global-failed* 0)
 (defn pprint-final-test-report (report-list) (do
-	(println (str shell::*fg-black* shell::*bg-white*))
+	(println (str shell::*fg-default* shell::*bg-default*))
 	(var global-total 0)
 	(var global-notest 0)
 	(var global-passed 0)
