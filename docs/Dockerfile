@@ -13,7 +13,6 @@ RUN apt-get install -y \
 RUN gem update system
 
 COPY Gemfile /tmp/
-ADD Gemfile.lock /tmp/
 RUN bundle config local.ghpages /tmp/ && NOKOGIRI_USE_SYSTEM_LIBRARIES=true bundle install --gemfile=/tmp/Gemfile
 
 RUN echo "en_US UTF-8" > /etc/locale.gen && locale-gen en-US.UTF-8

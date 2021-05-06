@@ -127,6 +127,10 @@ entries:
     output: web, pdf
     folderitems:
 
+    - title: Shell Reader
+      url: /mydoc_shellreader.html
+      output: web, pdf
+
     - title: Namespaces
       url: /mydoc_namespaces.html
       output: web, pdf
