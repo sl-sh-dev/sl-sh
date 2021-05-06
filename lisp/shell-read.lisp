@@ -38,10 +38,10 @@
       (ns-pop))))
 
 (defmacro pipe (&rest args)
-  `(str (pipe ,@args)))
+  `(pipe ,@args))
 
 (defmacro pipe-err (&rest args)
-  `(str (pipe :err ,@args)))
+  `(pipe :err ,@args))
 
 ; sys-apply needs to be able to handle no args to make the shell reader simpler.
 (defmacro sys-apply (&rest args)

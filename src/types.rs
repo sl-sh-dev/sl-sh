@@ -946,10 +946,10 @@ impl Expression {
                         }
                     }
                     Some((_, None)) => {
-                        return Err(LispError::new("Failed to get process to write to."));
+                        // Got a process with no grabbed output so nothing to write...
                     }
                     None => {
-                        return Err(LispError::new("Failed to get process to write to."));
+                        // Appear to have a stale process, nothing to write.
                     }
                 }
                 drop(procs);
