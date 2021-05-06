@@ -848,16 +848,16 @@ the temporary file are saved to the sl-sh history.
 
 Section: shell"
     ()
-    (var fc-file (str (temp-dir) "/sl-sh-fc.txt"))
-    (do
+    (let ((fc-file (str (temp-dir) "/sl-sh-fc.txt")))
+      (do
         (out> fc-file (print *last-command*))
-        (when (= 0 (wait (eval (read (str "(" $EDITOR " " fc-file ")")))))
+        (when (= 0 (wait (eval (read (str "(syscall " $EDITOR " $(str " fc-file "))")))))
             (do
                 (var file-contents (str (cat fc-file)))
                 (when (not (= "" (str-trim file-contents)))
                     (do
                         (handle-last-command (str-trim file-contents))
-                        (eval (read-all (str (cat fc-file))))))))))
+                        (eval (read-all (str (cat fc-file)))))))))))
 
 (defn mkli
 	"Usage: (mkli filepath [namespace] [body])
@@ -886,7 +886,7 @@ Section: shell"
 	(when (< 1 (length args)) (set! namespace (vec-nth args 1)))
 	(when (< 0 (length args)) (set! filepath (vec-nth args 0)))
 	(var new-file (open filepath :create :append))
-	(chmod "+x" filepath)
+	$(chmod +x $filepath)
 	(write-line new-file "#!/usr/bin/env sl-sh")
 	(write-line new-file "")
 	(when (not (nil? namespace))
@@ -903,6 +903,56 @@ Section: shell"
 		(write-line new-file (str "(ns-auto-export '" namespace ")"))
 		(write-line new-file "(ns-pop)")))
 	(close new-file)))
+
+(struct::defstruct timer
+"timer struct
+
+Initialize a timer object that can be called repeatedely with :pr-next to
+return relative time passed since instantiation and time since last called or
+first instantiated.
+
+Section: shell
+
+Example:
+(def test-timer ((timer) :init \"test-timer\" nil))
+(def timer-str (test-timer :get-next \"event0\"))
+(def timer-str-vec (str-split :whitespace timer-str))
+(test::assert-equal  \"{0}[test-timer-event0]:\" (vec-nth timer-str-vec 0))
+(test::assert-true (int? (str->int (vec-nth timer-str-vec 1))))
+(test::assert-true (int? (str->int (vec-nth timer-str-vec 4))))
+(def elapsed (vec-nth timer-str-vec 1))
+(def difference (vec-nth timer-str-vec 4))
+(test::assert-equal elapsed difference)
+"
+;; fields
+(start-time 0)
+(noop nil)
+(cnt 0)
+(prev-time 0)
+(curr-time 0)
+(timer-name 0)
+(:fn get-next (self timer-tag)
+    (when (not noop)
+      (do
+        (set! curr-time (epoch))
+        (let ((time-str (str
+            "{" cnt "}[" timer-name "-" timer-tag "]: "
+            (- curr-time start-time)
+            " ms, diff " (- curr-time prev-time) " ms")))
+        (set! prev-time curr-time)
+        (set! cnt (+ 1 cnt))
+        time-str))))
+(:fn pr-next (self timer-tag)
+        (let ((time-str (self :get-next timer-tag)))
+          (when (not (nil? time-str))
+            (println time-str))))
+(:fn init (self in-timer-name in-noop) (do
+    (set! noop in-noop)
+    (set! timer-name in-timer-name)
+    (set! start-time (epoch))
+    (set! prev-time start-time)
+    (set! curr-time prev-time)
+    self)))
 
 (load "getopts.lisp")
 
@@ -942,6 +992,7 @@ Section: shell"
 	fc
 	getopts
 	mkli
-	temp-dir))
+	temp-dir
+	timer))
 
 (ns-pop)

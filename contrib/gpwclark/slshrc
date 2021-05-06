@@ -2,20 +2,30 @@
 
 (ns-import 'shell)
 (ns-import 'iterator)
+(ns-import 'struct)
 
-(def start-time (str (str-trim $(date +%s%N | cut -b1-13))))
+
+(def slshrc-timer ((timer) :init "slshrc" #t))
+
+(def slshrc-total-timer ((timer) :init "slshrc" nil))
+
 
 ;; gpwclark TODOs
-;; put in docs about how you call doc on the cmd line all the time!!
-;; - rewrite bash so we don't have gpl in here?
+;; - put in docs about how you call doc on the cmd line all the time with custom stuff!!
+;; - rewrite bash-completions so we don't have gpl in here?
+;; - tab cmpletion for paths with ~ does not work when bash-completions is on
+;; - chain completion hooks
 ;; - track bkrd processes in PS1? could be helpful?
 ;; - string interpolation sytnax includes $my-var and ${my-var} as well as $(println foo)
 ;; - use this or make it: https://hg.stevelosh.com/t/
+;; - maybe list bkrd processes as well in prompt.
+;; - once implemented replace use of find with sl-sh builtins. to check for elapsed time
+;; - maybe a version of this that strips out all non first/last char consononants
 
 (def default-namespaces (collect-vec (filter (fn (x) (not (= x "user"))) (ns-list))))
 
 ;; bash-completions.lisp is located in `contrib/gpwclark`
-;; (load "~/.config/sl-sh/bash-completions.lisp")
+;;(load "~/.config/sl-sh/bash-completions.lisp")
 
 ;; shell helpers {{{
 
@@ -45,18 +55,16 @@
 
 		Section: user-shell"
 		(target-name cores compression-ratio &rest dirs)
-			(out>
-				target-name
-				(|
-					(eval (str "syscall tar cf - " (str-cat-list " " dirs)))
-					(eval (str "syscall pigz  -p " cores  " -" compression-ratio)))))
+			$(tar cf - $((str-cat-list " " dirs)) |
+				pigz  -p  $cores  " -" $compression-ratio |
+				$target-name))
 	(defn dpgz
 	"Parallelized un gzip.
 	cores:
 		use lscpu to determine # of cores on box
 	Section: user-shell"
 			(target-name cores)
-				$(pigz --keep --decompress --processes cores target-name))
+				$(pigz --keep --decompress --processes $cores $target-name))
 
 	(defn fullfp
 	"Give me a relative filepath and I'll give you an absolute filepath!
@@ -149,6 +157,7 @@
 				(eval `(syscall vim ,@vimargs))))
 		(err "Only accepts 0 or 1 arguments")))
 
+(slshrc-timer :pr-next "shell helpers")
 ;; }}}
 
 ;; java helpers {{{
@@ -184,6 +193,7 @@
 	Section: java"
 	(&rest args)
 		`$(java "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005" ,@args))
+(slshrc-timer :pr-next "java helpers")
 ;; }}}
 
 
@@ -206,12 +216,10 @@
 	(set! tok-sys-command-color shell::*fg-green*)
 	(set! tok-string-color (fg-color-rgb 255 128 0))
 
-;; you deserve all the information
-	(error-stack-on)
-
 ;; you never know
 	(hash-set! *repl-settings* :max-history 10000)
 
+(slshrc-timer :pr-next "custom env settings")
 ;; }}}
 
 
@@ -252,9 +260,34 @@ Section: user-shell"
 		nil))
 	;; use register-alias to have better syntax highlighting for cd.
 	(register-alias 'cd)
+(slshrc-timer :pr-next "quality of shell life")
 ;; }}}
 
 ;; quality of life {{{
+    (defn cathead
+    "
+    cat to head, provide n and file
+    Section: user-shell
+    "
+    (n file)
+          $(cat $file | head -n $n))
+
+    (defn cattail
+    "
+    cat to tail, provide n and file
+    Section: user-shell
+    "
+    (n file)
+          $(cat $file | tail -n $n))
+
+    (defn catail
+    "
+    cat to tail, provide n and file
+    Section: user-shell
+    "
+    (n file)
+          $(cat $file | tail -n $n))
+
 	(defn spl
 	"Give it a spelling of a word, it will tell you what words are spelled like it.
 	Section: user-shell
@@ -271,8 +304,8 @@ Section: user-shell"
 
 ;; notification helpers {{{
 
-(defmacro nss (title msg icon)
-	`$(notify-send -t 0 ,title ,msg -i ,icon))
+(defn nss (title msg icon)
+	$(notify-send -t 0 $title $msg -i $icon))
 
 (defn persist-nss
 	"provide persistent notification via notify-send and libnotify
@@ -351,7 +384,7 @@ Section: user-shell"
 	"epoch in milliseconds
 	Section: time"
 	()
-	(str-trim $(date +%s%N | cut -b1-13)))
+	(epoch))
 
 (defn datest
 	"human readable eastern time zone
@@ -384,24 +417,32 @@ Section: user-shell"
 	()
 	(str-cat-list "/" (str-split "/" (str-replace (str-trim $PWD) $HOME "~"))))
 
-;;TODO maybe a version of this that strips out all non first/last char consononants
-(defn path_list_trunc
+(defn remove-vowels (target)
+      (if (> (length target) 4)
+        (let* ((vowels (list "a" "e" "i" "o" "u"))
+             (first-char (str-nth 0 target))
+             (mid-chars (str-sub target 1 (- (length target) 2)))
+             (last-char (str-nth (- (length target) 1) target)))
+        (str first-char (apply str (collect (filter (fn (y) (not (in? vowels (str y)))) mid-chars))) last-char))
+        target))
+
+(defn path-list-trunc
 	"take a path string abbreviates it
 	Section: prompt"
 	(plist)
-		(if (> (length plist) 1)
-			(if (> (length (first plist)) 0)
-				(vec-insert! (path_list_trunc (rest plist)) 0 (str-sub (first plist) 0 1))
-				(path_list_trunc (rest plist)))
-			plist))
+	(if (> (length plist) 1)
+		(if (> (length (first plist)) 0)
+			(vec-insert! (path-list-trunc (rest plist)) 0 (remove-vowels (first plist)))
+			(path-list-trunc (rest plist)))
+		plist))
 
-(defn smaller_path
+(defn smaller-path
 	"take a path string abbreviates it
 	Section: prompt"
 	(dir)
-	(str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
+	(str-cat-list "/" (path-list-trunc (str-split "/" (str-replace (str-trim dir) $HOME "~")))))
 
-(defn set_prompt_tail
+(defn set-prompt-tail
 	"used to grab return value of last command and put a non 0 error code in
 	the prompt for greater visibility.
 	Section: prompt"
@@ -414,6 +455,7 @@ Section: user-shell"
                         "\u{03bb}\u{2e28}\u{2699}\u{2009}\u{2e29}\u{2009}\u{2192} "
                         shell::*fg-default*))))
       prompt))
+
 
 (defn parse_git_branch
 	"if in git repo, get the name of the branch
@@ -430,45 +472,29 @@ Section: user-shell"
 		(str " (" shell::*bg-red* build-type shell::*bg-default* ")")
 		"")))
 
-;; TODO maybe list bkrd processes as well in prompt.
-
 (defn colorize-rand (string seed)
     (let* ((fg-color-vec (vec shell::*fg-default* shell::*fg-red*
                             shell::*fg-green* shell::*fg-yellow*
                             shell::*fg-blue* shell::*fg-magenta*
                             shell::*fg-cyan* shell::*fg-white*))
-           (ascii-to-int (fn (ascii-char)
-                        (str->int (str $(bash -c $((str "printf \"%d\" \'" ascii-char)))))))
+           (num (math::round (apply stats::mean (collect (map (fn (char) (char->int char)) seed)))))
            (color (vec-nth
                     fg-color-vec
-                    (% (reduce (fn (curr nxt)
-                                (+ curr (ascii-to-int nxt))) 0 seed)
+                    (% num
                         (length fg-color-vec)))))
         (str color
             string
             shell::*fg-default*)))
 
-(defn colorize-rand-cache (filename color-str seed)
-    (let* ((dir (str (temp-dir) "/sl-sh/"))
-          (fp (str dir filename)))
-      (if (and (fs-exists? fp) (not (fs-dir? fp)))
-        (str (str-trim $(cat $fp)))
-        (do
-          (var color-val (colorize-rand color-str seed))
-          $(mkdir -p $dir)
-          (out> fp $(echo $color-val))
-          color-val))))
-
-(def sl-sh-open-paren (colorize-rand-cache "sl-sh-open-paren" "[" (str $HOST "1")))
-(def sl-sh-title (colorize-rand-cache "sl-sh-title" "sl-sh" (str $HOST "4")))
-(def sl-sh-close-paren (colorize-rand-cache "sl-sh-close-paren"  "] " (str $HOST "1")))
-(def open-paren (colorize-rand-cache "open-paren" "{[ " (str $HOST "7")))
-(def host-string (colorize-rand-cache "host-string" $HOST $HOST))
-(def close-paren (colorize-rand-cache "close-paren" " ]}" (str $HOST "7")))
-(def prompt-left (colorize-rand-cache "prompt-left" "\u{03bb}\u{2e28}" (str $HOST "9")))
-(def prompt-cog (colorize-rand-cache "prompt-cog" "\u{2699}\u{2009}" (str $HOST "4")))
-(def prompt-right (colorize-rand-cache "prompt-right" "\u{2e29}\u{2009}\u{2192} " (str $HOST "9")))
-;; "\u{03bb}\u{2e28}\u{2699}\u{2009}\u{2e29}\u{2009}\u{2192}"
+(def sl-sh-open-paren (colorize-rand "[" (str $HOST "1")))
+(def sl-sh-title (colorize-rand "sl-sh" (str $HOST "4")))
+(def sl-sh-close-paren (colorize-rand  "] " (str $HOST "1")))
+(def open-paren (colorize-rand "{[ " (str $HOST "7")))
+(def host-string (colorize-rand $HOST $HOST))
+(def close-paren (colorize-rand " ]}" (str $HOST "7")))
+(def prompt-left (colorize-rand "\u{03bb}\u{2e28}" (str $HOST "9")))
+(def prompt-cog (colorize-rand "\u{2699}\u{2009}" (str $HOST "4")))
+(def prompt-right (colorize-rand "\u{2e29}\u{2009}\u{2192} " (str $HOST "9")))
 
 ;; prompt ensures
 ;;	1. always a new line above prompt
@@ -503,14 +529,35 @@ Section: user-shell"
         (str
             "\n"
             (if (> (length (get-dirs)) 0)
-                (collect-str (map smaller_path (reverse (get-dirs))))
+                (collect-str (map smaller-path (reverse (get-dirs))))
                 "")
-            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": " shell::*fg-magenta* (str-trim (get_pwd)) "/ " shell::*fg-default* (parse_git_branch) "\n"
-            (set_prompt_tail last-status))))
+            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": " shell::*fg-magenta* (smaller-path (str-trim (get_pwd))) "/ " shell::*fg-default* (parse_git_branch) "\n"
+            (set-prompt-tail last-status))))
 
+(slshrc-timer :pr-next "prompt")
 ;; }}}
 
 ;; i'm fun {{{
+(println "                                           ██╗")
+(println "                                           ██║")
+(println "                                           ██║")
+(println "      ██████████████████████████████████╗  ██║")
+(println "      ██╔═════════════════════════════██║  ██║")
+(println "      ██║                             ██║  ██║")
+(println "███████╗██╗      ███████╗██╗  ██╗     ██║  ██║")
+(println "██╔════╝██║      ██╔════╝██║  ██║     ██║  ██║")
+(println "███████╗██║█████╗███████╗███████║     ██║  ██║")
+(println "╚════██║██║╚════╝╚════██║██╔══██║     ██║  ██║")
+(println "███████║███████╗ ███████║██║  ██║     ██║  ██║")
+(println "╚══════╝╚══════╝ ╚══════╝╚═╝  ╚═╝     ██║  ╚═╝")
+(println " ██╗  ██║                             ██║")
+(println " ██║  ██████████████████████████████████║")
+(println " ██║  ╚═════════════════════════════════╝")
+(println " ██║")
+(println " ██║  ████████████████████████████████████████████╗")
+(println " ██║  ╚═══════════════════════════════════════════╝")
+(println " ██║")
+(println " ╚═╝")
 
 (println "		Hey, hey, hey. Don't be mean.")
 (println "		We don't have to be mean because,")
@@ -519,6 +566,7 @@ Section: user-shell"
 (println (str "			- Buckaroo Banzai (" (str-trim $(cat ~/.local/share/sl-sh/history | grep -v "<ctx>" | wc -l)) ")"))
 (intern-stats)
 
+(slshrc-timer :pr-next "ps")
 ;; }}}
 
 ;; machine specific {{{
@@ -532,6 +580,7 @@ Section: user-shell"
              (get-error (load custom-lisp-config)))
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 
+(slshrc-timer :pr-next "machine-specific")
 ;; }}}
 
 
@@ -545,23 +594,20 @@ Section: user-shell"
 			(list root::cd cmd-str)
 			orig-cmd-ast)))
 
-(defn __exec-hook (cmd-str)
-	(if (= (car (get-error (var cmd-ast (read-all cmd-str)))) :error)
-	cmd-str
-	(do
-		(match (length cmd-ast)
-		;; if string is of length 0 either nothing was typed or
-		;; everything was a comment
-		(0 cmd-ast)
-		;; check to see if this single argument is a filepath
-		(1 (change-dir-if-arg-is-dir (first cmd-ast) cmd-ast))
-		;; check for infix notation
-		(nil cmd-ast)))))
+;; if directory input, treat it as if it was prefixed by cd,
+;; due to shell reader changes receive and return raw string,
+;; do not return a list.
+(defn __exec_hook (cmd-str)
+    (if (fs-dir? cmd-str)
+        (str "cd " cmd-str)
+        cmd-str))
 
+(slshrc-timer :pr-next "exec-hook")
 ;; }}}
 
-
 ;; user ns docs {{{
+
+
 (def api-page-name "mydoc_api.md")
 (def api-page (str "pages/mydoc/" api-page-name))
 (shell::pushd "/home/price/development/slsh/docs")
@@ -623,14 +669,10 @@ Section: user-shell"
 (undef api-page-name)
 (undef api-page)
 (undef docs-error-ret)
+(slshrc-timer :pr-next "ns-docs")
 ;; }}}
 
-
 ;; cleanup symbols I might use {{{
-(def end-time (str (user::epochms)))
-
-(println "Load time: " (- (str->int end-time) (str->int start-time)) "ms")
-(undef start-time)
-(undef end-time)
-
+(slshrc-timer :pr-next "end")
+(slshrc-total-timer :pr-next "full load time")
 ;; }}

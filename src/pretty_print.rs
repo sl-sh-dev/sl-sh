@@ -58,7 +58,7 @@ impl fmt::Display for Expression {
             ExpEnum::Symbol(s, _) => write!(f, "{}", s),
             ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
             ExpEnum::Char(c) => write!(f, "#\\{}", c),
-            ExpEnum::CodePoint(c) => write!(f, "#\\{}", c),
+            ExpEnum::CodePoint(c) => write!(f, "#{}", c.escape_unicode()),
             ExpEnum::Lambda(l) => lambda_out(f, l),
             ExpEnum::Macro(m) => lambda_out(f, m),
             ExpEnum::Process(ProcessState::Running(pid)) => write!(f, "#<PID: {} Running>", pid),

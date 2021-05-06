@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::hash::BuildHasher;
+use std::hash::{BuildHasher, Hash, Hasher};
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -8,6 +8,8 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::{param_eval, params_done};
+use std::collections::hash_map::DefaultHasher;
 
 fn as_string(environment: &mut Environment, exp: &Expression) -> Result<String, LispError> {
     exp.as_string(environment)
@@ -787,6 +789,98 @@ fn builtin_char_is_whitespace(
     ))
 }
 
+fn builtin_char_int(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "char->int")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "char->int")?;
+    let to_int = |s: &str| -> Result<Expression, LispError> {
+        let mut count = 0;
+        for _s in <str as UnicodeSegmentation>::graphemes(s, true) {
+            count += 1;
+        }
+        match count {
+            0 => Ok(Expression::alloc_data(ExpEnum::Int(0))),
+            1 => {
+                let mut int_val: i64 = 0;
+                let mut overflow = false;
+                for c in s.chars() {
+                    let (add, overflowed) = int_val.overflowing_add(c as i64);
+                    if overflowed {
+                        overflow = true;
+                        break;
+                    }
+                    int_val += add;
+                }
+                if overflow {
+                    Err(LispError::new("overflow occurred in char->in tadding unicode scalar values that compose provided grapheme interpreted as unsigned 32 byte integers: {:?}."))
+                } else {
+                    Ok(Expression::alloc_data(ExpEnum::Int(int_val)))
+                }
+            }
+            _ => Err(LispError::new(
+                "char->int takes one grapheme, multiple were provided.",
+            )),
+        }
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => to_int(s),
+        ExpEnum::Char(s) => to_int(s),
+        ExpEnum::CodePoint(c) => Ok(Expression::alloc_data(ExpEnum::Int(*c as i64))),
+        _ => Err(LispError::new(
+            "char->int expects one argument of type Char or String",
+        )),
+    }
+}
+
+fn builtin_codepoints(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "codepoints")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "codepoints")?;
+    let with_str = |s: &str| {
+        let mut codepoints: Vec<Expression> = Vec::new();
+        for c in s.chars() {
+            codepoints.push(Expression::alloc_data(ExpEnum::CodePoint(c)));
+        }
+        Ok(Expression::alloc_data(ExpEnum::Vector(codepoints)))
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => with_str(s),
+        ExpEnum::Char(s) => with_str(s),
+        ExpEnum::CodePoint(c) => with_str(&*format!("{}", c)),
+        _ => Err(LispError::new(
+            "codepoints expects one argument of type Char or String",
+        )),
+    }
+}
+
+fn builtin_str_float(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let next_arg = param_eval(environment, args, "str-hash")?;
+    let next_arg_d = next_arg.get();
+    params_done(args, "str-hash")?;
+    let with_str = |s: &str| {
+        let mut h = DefaultHasher::new();
+        s.hash(&mut h);
+        let hash: u64 = h.finish();
+        Ok(Expression::alloc_data(ExpEnum::Float(hash as f64)))
+    };
+    match &next_arg_d.data {
+        ExpEnum::String(s, _) => with_str(s),
+        ExpEnum::Char(s) => with_str(s),
+        _ => Err(LispError::new(
+            "str->float expects one argument of type Char or String",
+        )),
+    }
+}
+
 pub fn add_str_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -1418,6 +1512,82 @@ Example:
 (test::assert-true (char-whitespace? #\tab))
 (test::assert-false (char-whitespace? #\s))
 "#,
+        ),
+    );
+
+    data.insert(
+        interner.intern("char->int"),
+        Expression::make_function(
+            builtin_char_int,
+            "Usage: (char->int a-char)
+
+Reads a char or string, which may be composed of one or more unicode scalar values,
+(see (doc 'codepoints) for more information) and returns a sum of the values.
+This is not a hashing function, and only accepts one grapheme in the form of a
+string or character. Graphemes composed of the same unicode scalar values will
+result in the same integer value.'
+
+Section: string
+
+Example:
+(test::assert-error-msg (char->int (make-vec)) \"char->int expects one argument of type Char or String\")
+(test::assert-error-msg (char->int) \"char->int: Missing required argument, see (doc 'char->int) for usage.\")
+(test::assert-error-msg (char->int \"a\" \"b\") \"char->int: Too many arguments, see (doc 'char->int) for usage.\")
+(test::assert-error-msg (char->int \"ab\") \"char->int takes one grapheme, multiple were provided.\")
+(test::assert-error-msg (char->int \"λ⚙\") \"char->int takes one grapheme, multiple were provided.\")
+(test::assert-equal 97 (char->int \"a\"))
+(test::assert-equal 97 (char->int #\\a))
+(test::assert-equal 7101 (char->int #\\स्))
+(test::assert-equal 9881 (char->int (str \"\\\" \"u{2699}\")))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("codepoints"),
+        Expression::make_function(
+            builtin_codepoints,
+            "Usage: (codepoints string)
+
+Returns array of unicode scalars for each char in string. Note, a char
+is not a grapheme. The hindi word namaste (\"न\" \"म\" \"स्\" \"ते\")
+written in Devanagari script is 4 graphemes, but 6 unicode scalar values,
+(\"u{928}\" \"u{92e}\" \"u{938}\" \"u{94d}\" \"u{924}\" \"u{947}\");
+[reference](https://doc.rust-lang.org/book/ch08-02-strings.html#bytes-and-scalar-values-and-grapheme-clusters-oh-my).
+
+Section: string
+
+Example:
+(test::assert-error-msg (codepoints) \"codepoints: Missing required argument, see (doc 'codepoints) for usage.\")
+(test::assert-error-msg (codepoints (make-vec)) \"codepoints expects one argument of type Char or String\")
+(test::assert-error-msg (codepoints \"a\" \"b\") \"codepoints: Too many arguments, see (doc 'codepoints) for usage.\")
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (codepoints \"⚙\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (codepoints \"स्\"))
+(test::assert-equal (vec (str \"\\\" \"u{938}\") ((str \"\\\" \"u{94d}\"))) (codepoints #\\स्))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints \"a\"))
+(test::assert-equal (vec (str \"\\\" \"u{61}\")) (codepoints #\\a))
+",
+        ),
+    );
+
+    data.insert(
+        interner.intern("str->float"),
+        Expression::make_function(
+            builtin_str_float,
+            "Usage: (str->float s)
+
+Accepts values of type String or Char and returns hash of value as Float. Hash is not cryptographically secure.
+
+Section: string
+
+Example:
+(test::assert-error-msg (str-hash) \"str-hash: Missing required argument, see (doc 'str-hash) for usage.\")
+(test::assert-error-msg (str-hash (make-vec)) \"str->float expects one argument of type Char or String\")
+(test::assert-error-msg (str-hash \"a\" \"b\") \"str-hash: Too many arguments, see (doc 'str-hash) for usage.\")
+(test::assert-equal (vec (str \"\\\" \"u{2699}\")) (codepoints \"⚙\"))
+(test::assert-equal 8186225505942432000 (str-hash \"a\"))
+(test::assert-equal 8186225505942432000 (str-hash #\\a))
+",
         ),
     );
 }

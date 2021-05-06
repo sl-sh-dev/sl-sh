@@ -18,6 +18,7 @@ use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
 use crate::unix::*;
+use std::time::SystemTime;
 
 fn builtin_syscall(
     environment: &mut Environment,
@@ -193,6 +194,22 @@ fn builtin_jobs(
             );
         }
         Ok(Expression::alloc_data(ExpEnum::Nil))
+    }
+}
+
+fn builtin_epoch(
+    _environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if args.next().is_some() {
+        Err(LispError::new("epoch takes no arguments"))
+    } else {
+        match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(elapsed) => Ok(Expression::alloc_data(ExpEnum::Int(
+                elapsed.as_millis() as i64
+            ))),
+            Err(err) => Err(LispError::new(format!("epoch failed {}", err))),
+        }
     }
 }
 
@@ -649,6 +666,22 @@ Example:
 (test::assert-equal "ONE" $TEST_EXPORT_ONE))
 (unexport 'TEST_EXPORT_ONE)
 (test::assert-equal "" $TEST_EXPORT_ONE))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("epoch"),
+        Expression::make_function(
+            builtin_epoch,
+            r#"Usage: (epoch)
+
+Prints system time in milliseconds.
+
+Section: shell
+
+Example:
+;(epoch)
+t
 "#,
         ),
     );

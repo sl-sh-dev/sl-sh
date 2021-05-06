@@ -105,15 +105,14 @@ Section: post"
 			(write-line target-file line)))
 		(when (= :entrypoint (hash-get snippet :type)) (do
 			(set! entrypoint target-file-name)
-			$(chmod +x target-file-name)))
+			$(chmod +x $target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
 	(var temp-out (str temp-dir "/output"))
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(let ((return-value (get-error (out-err> temp-out (entrypoint)))))
-	;; write output in temp-out to the dest-file
+	(let ((return-value (get-error (out-err> temp-out (load entrypoint)))))
 	(popd)
 	(loop (input-file) ((open temp-out :read)) (do
 			(var line (read-line input-file))

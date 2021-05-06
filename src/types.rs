@@ -273,8 +273,8 @@ pub enum ExpEnum {
     // when evaluated just unwrap it).
     Wrapper(Expression),
 
-    // Used to help the analyzer reconize things it cares about without
-    // doing a lot of extra work.  These are morally equivelent to a Function.
+    // Used to help the analyzer recognize things it cares about without
+    // doing a lot of extra work.  These are morally equivalent to a Function.
     // If adding to this list be sure to add to builtins_types.rs/builtin_is_builtin.
     DeclareDef,
     DeclareVar,

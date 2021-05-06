@@ -197,7 +197,6 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 		(if (not (nil? doc-example))
 			(do
 				(write-line file "<details style=\"cursor: pointer; padding-bottom: 15px; padding-left: 10px\">")
-				(write-line file "<p>&gt;</p>")
 				(write-line file "<code>")
 				(for line in (str-split "\n" doc-example) (write-line file (str line "<br>")))
 				(write-line file "</code>")
