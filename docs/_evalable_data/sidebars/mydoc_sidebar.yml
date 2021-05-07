@@ -40,6 +40,14 @@ entries:
       url: /mydoc_faq_layout.html
       output: web, pdf
 
+  - title: Lisp
+    output: web, pdf
+    folderitems:
+
+    - title: Reader
+      url: /mydoc_reader.html
+      output: web, pdf
+
   - title: Standard Library
     output: web, pdf
     folderitems:
