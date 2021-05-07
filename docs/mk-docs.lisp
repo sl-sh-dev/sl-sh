@@ -7,26 +7,21 @@
 (ns-import 'shell)
 (ns-import 'struct)
 (ns-import 'test)
+(ns-import 'docmd)
 
-(defn filter-user-undocable-forms (sym-list)
-	(filter (fn (x)
-		(and (not (= x 'custom-lisp-config))
-			(not (= x '*repl-settings*))
-			(not (= x '__completion_hook))
-			(not (= x '__line_handler))
-			(not (= x '__exec_hook))
-				(not (= x '__prompt))))
-			sym-list))
-
+;; TODO
+;;  - some undocable forms are global variables that
+;;  should actually have docs, and be explained to the user,
+;;  because they are useful
+;;  - global symbols arne't showing up...
+;;  - all the relative links are broken..?
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and
 			(not (= x 'filter-undocable-forms))
-			(not (= x '*std-lib-syms-hash*))
 			(not (= x '*ns*))
 			(not (= x '*euid*))
 			(not (= x '*uid*))
-			(not (= x '*repl-settings*))
 			(not (= x '*ns-exports*))
 			(not (= x '^ns-stack-xyz^))
 			(not (= x 'tok-slsh-form-color))
@@ -36,9 +31,6 @@
 			(not (= x 'tok-sys-alias-color))
 			(not (= x 'tok-string-color))
 			(not (= x 'tok-invalid-color))
-			(not (= x '*last-status*))
-			(not (= x '*repl-settings*))
-			(not (= x '*last-command*))
 			(not (= x '*run-script*))
 			(not (= x '*active-ns*))
 			(not (= x 'internal-fn))
@@ -50,43 +42,42 @@
 			(not (= x '__exec_hook))
 			(not (= x '__prompt))
 			(not (= x 'list-of-all-slsh-syms))
-			(not (= x 'filter-user-undocable-forms))
-			(not (= x 'filter-undocable-forms))
 			(not (= x 'args))))
 		sym-list))
 
+(def *default-namespaces* (list "mkpost" "mkdocs" "docmd" "docstruct" "stats" "struct" "math" "iterator" "root" "test"))
+
 (defn list-of-all-slsh-syms ()
-	(var sym-list (ns-symbols 'root))
-	(for a-ns in (filter (fn (x) (and
-						(not (= x "docmd"))
-						(not (= x "mkpost"))
-						(not (= x "moddocs"))
-						(not (= x "docstruct"))
-						(not (= x "docify"))
-						(not (= x "root"))
-						(not (= x "test"))
-						(not (= x "user")
-                             ))) (ns-list)) (do
-		(append-to! sym-list (eval (sym (str a-ns "::*ns-exports*"))))))
-	(filter-undocable-forms (qsort sym-list)))
+    (let* ((sym-list (collect (filter-undocable-forms (qsort (hash-keys *std-lib-syms-hash*))))))
+    sym-list))
 
 (defn get-doc-list-for
-	(target-doc-form)
-	(match target-doc-form
-			(:single (append '() (last (list-of-all-slsh-syms))))
-			(:lang (list-of-all-slsh-syms))))
+    (target-doc-form)
+    (match target-doc-form
+            (:single (append '() (last (list-of-all-slsh-syms))))
+            (:lang (list-of-all-slsh-syms))
+            (nil (err "target doc keyword invalid! must be one of :single, for
+                       a preview of one random doc, or :lang, to generate doc
+                       page for entire sl-sh std lib."))))
 
 (defn make-md-file
 "Generate slsh standard library documentation md page."
-(index-file target-doc-form)
-	(var syms (collect-vec (map (fn (x) (sym x))
-			(get-doc-list-for target-doc-form))))
-	(docmd::make-md-file
+(index-file syms-or-doc-form)
+	(if (symbol? syms-or-doc-form)
+      (let ((syms (collect-vec (map (fn (x) (sym x))
+			(get-doc-list-for syms-or-doc-form)))))
+		(gen-std-lib-md-file
 		index-file
 		syms))
-
-;;(when (> (length args) 0)
-;;;;  (println (get-doc-list-for (vec-nth args 1))))
+     ;;TODO this or requires too much esoteric knowledge to be a good callee
+     ;; need a common way to ask if something is useable on the std lib's 
+     ;; seq/iter stuffz.
+      (if (or (seq? syms-or-doc-form) (iter? syms-or-doc-form))
+        (let ((syms (collect-vec (map (fn (x) (sym x))
+               syms-or-doc-form))))
+          (gen-std-lib-md-file index-file (qsort syms)))
+        (err "second argument ot make-md-file must be keyword :single or :lang
+        or a sequence of sl-sh symbols"))))
 
 (ns-auto-export 'mkdocs)
 (ns-pop)

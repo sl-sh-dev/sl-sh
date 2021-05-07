@@ -607,7 +607,6 @@ Section: user-shell"
 
 ;; user ns docs {{{
 
-
 (def api-page-name "mydoc_api.md")
 (def api-page (str "pages/mydoc/" api-page-name))
 (shell::pushd "/home/price/development/slsh/docs")
@@ -615,53 +614,23 @@ Section: user-shell"
     (get-error (when (or
         (nil? (fs-exists? api-page))
         (= api-page (str-trim (str $(find $api-page -type f -mmin "+1440"))))) (do
-    (load "docstrings-to-md.lisp")
+
     (load "mk-docs.lisp")
-    (load "docstruct.lisp")
-    (defn filter-non-user-forms (sym-list namespaces) (do
-        (if (empty-seq? namespaces)
-            sym-list
-              (recur
-                  (collect-vec (filter (fn (x) (do
-                                (not (in? (ns-symbols (sym (first namespaces))) x))))
-                      sym-list))
-              (rest namespaces)))))
 
-    (defn filter-user-undocable-forms (sym-list)
-        (var to-filter (list 'custom-lisp-config 'filter-non-user-forms 'filter-user-undocable-forms 'list-of-user-slsh-syms '*repl-settings* '__completion_hook 'default-namespaces 'tok-invalid-color 'tok-default-color 'tok-string-color 'endfix-on 'config-file 'token-str 'all-non-user-namespaces 'build-type 'user-syms 'the-ns 'last-status '*ns-exports* '__line_handler '__exec_hook '__prompt 'tok-slsh-fcn-color 'possible-completions 'all-user-slsh-syms 'all-docstrings 'colorize-rand 'colorize-rand-cache 'smaller-path 'parse_git_branch 'sl-sh-open-paren 'sl-sh-title 'sl-sh-close-paren 'open-paren 'host-string 'close-paren 'api-page 'api-page-name))
-          (filter (fn (x) (not (in? to-filter x))) sym-list))
+    (let* ((ns-to-filter-out (append-to! (list "mkdocs" "docparse" "docmd") *std-lib-namespaces*))
+          (almost-proper-sym-list (iterator::reduce
+                (fn (fst nxt)
+                    (append-to! fst (ns-symbols nxt)))
+                (list)
+                (filter (fn (x) (not (in? ns-to-filter-out x))) (ns-list))))
+          (filter-imported-std-lib-syms (iterator::filter
+                (fn (x)
+                    (not (in? (hash-keys *std-lib-syms-hash*) x)))
+                almost-proper-sym-list)))
+        (mkdocs::make-md-file
+            api-page
+            filter-imported-std-lib-syms))
 
-    ;; TODO ideally this would live in mk-docs.lisp
-    ;; and :user would be an option as param of mkdocs::get-doc-list-for
-    (defn list-of-user-slsh-syms () (do
-        (var user-syms (list))
-        (var all-non-user-namespaces (append-to! (list) default-namespaces (list "mkdocs" "docparse" "docmd")))
-        (for a-ns in (filter
-                        (fn (x) (not (in? all-non-user-namespaces x)))
-                        (ns-list))
-            (append-to! user-syms (ns-symbols (sym a-ns))))
-        (var user-forms (filter-non-user-forms user-syms default-namespaces))
-        (var partial-docable-user-forms (mkdocs::filter-undocable-forms user-forms))
-        (var all-docable-user-forms (filter-user-undocable-forms partial-docable-user-forms))
-        (collect-vec all-docable-user-forms)))
-
-    (def all-user-slsh-syms (list-of-user-slsh-syms))
-    (def get-doc-pair (fn (x) (let ((result (get-error (doc (sym x)))))
-                                  (if (= :ok (car result))
-                                    (do
-                                      (list sym (car result))
-                                      (def new-result (car result))
-                                      new-result)
-                                    (println "Error: sym doc fail: " (cdr result))))))
-    ;; check the last modified time of api-page-name and only do this if
-    ;; has not been done in some amount of time.
-    (def docs-by-section (make-hash))
-    (for doc-struct in (map docstruct::make-doc-struct all-user-slsh-syms)
-          (let ((section-key (doc-struct :section-key)))
-            (if (hash-haskey docs-by-section section-key)
-                (append-to! (hash-get docs-by-section section-key) doc-struct)
-            (hash-set! docs-by-section section-key (list doc-struct)))))
-    (docmd::make-md-file-with-sections api-page docs-by-section)
     (println "Built docs!")))))
 (shell::popd)
 (if (not (= (car docs-error-ret) :ok))

@@ -65,6 +65,10 @@ it open (closures currently capture the entire scope not just used symbols).") i
 		("scripting" (vec-nth '#("Scripting forms" nil) idx))
 		("math" (vec-nth '#("Math forms" nil) idx))
 		("namespace" (vec-nth '#("Namespace forms" nil) idx))
+		("globals" (vec-nth '#("Global symbols" "In sl-sh global symbols (made
+by 'def) are wrapped in *earmuffs* like in common lisp. Some of these symbols
+contain information used by the standard library and may be useful to
+end users, while others are intended for use in scripting.") idx))
 		("pair" (vec-nth '#("Pair forms"
 "Operations on the 'Pair' type (aka Cons Cell) that can be used to create
 traditional Lisp list structures. These are the default list structure and
@@ -200,7 +204,8 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 				(write-line file "<code>")
 				(for line in (str-split "\n" doc-example) (write-line file (str line "<br>")))
 				(write-line file "</code>")
-				(write-line file "</details>"))
+				(write-line file "</details>")
+				(write-line file "<br>"))
 			(write-line file "<br>")))
 
 (defn write-md-table (key docstrings file-name)
@@ -218,7 +223,7 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).") idx))
 	(close file)
 	file-name)
 
-(defn make-md-file-with-sections
+(defn gen-std-lib-md-with-sections
 "Create markdown file at given path and populate with documentation from
 provided hash-map of section-key to list of doc struct pairs. The structure
 was chosen becuase the markdown file is grouped by documentation sections.
@@ -245,7 +250,7 @@ was chosen becuase the markdown file is grouped by documentation sections.
 		nil))
 	 #t)
 
-(defn make-md-file
+(defn gen-std-lib-md-file
 "Create markdown file at given path and populate with documentation from
 provided list of symbols.
 "
@@ -256,8 +261,8 @@ provided list of symbols.
             (if (hash-haskey docs-by-section section-key)
                 (append-to! (hash-get docs-by-section section-key) doc-struct)
             (hash-set! docs-by-section section-key (list doc-struct)))))
-    (make-md-file-with-sections index-file docs-by-section))
+    (gen-std-lib-md-with-sections index-file docs-by-section))
 
-(ns-export '(make-md-file make-md-file-with-sections))
+(ns-export '(gen-std-lib-md-file gen-std-lib-md-with-sections))
 
 (ns-pop)

@@ -140,7 +140,7 @@ fn builtin_ns_symbols(
                 }
                 return Ok(Expression::make_nil());
             } else {
-                return Err(LispError::new("ns-symbols: namespace not found"));
+                return Err(LispError::new(format!("ns-symbols: namespace, {}, not found", key)));
             }
         }
     }

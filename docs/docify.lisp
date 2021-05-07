@@ -25,7 +25,8 @@
   ;; TODO last updated line frontmatter line should update automatically.
   ;; create std lib md file
   (make-md-file "pages/mydoc/mydoc_api.md" :lang)
-  (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md"))))
+  (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md")
+)))
   (if (= (car result) :ok)
     (cdr result)
     (print-error result)))

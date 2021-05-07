@@ -70,10 +70,21 @@ Example:
 "
       () nil)
 
-(def *last-status* 0)
-(def *last-command* "")
+(def *last-status*
+     "Return code of last run sl-sh command on the repl
+     Section: globals"
+     0)
+(def *last-command*
+     "last run command by sl-sh on repl
+     Section: globals"
+     ""
+     )
 
-(def *repl-settings* (make-hash))
+(def *repl-settings*
+     "hash map of repl settings
+     Section: globals"
+     (make-hash))
+
 (hash-set! *repl-settings* :keybindings :emacs)
 
 (load-std-file "seq.lisp")
@@ -88,6 +99,11 @@ Example:
 
 (undef load-std-file)
 
+(def *std-lib-namespaces*
+     "vector of all namespaces present in sl-sh by default
+     Section: globals"
+     (ns-list))
+
 ;;; *std-lib-syms-hash* must be the symbol defined
 ;;; in the sl-sh standard library. In order to increase speed of ns-auto-export
 ;;; a list of all symbols in the standard library is pre-computed by iterating
@@ -96,14 +112,17 @@ Example:
 ;;; In order for this set of symbols to be complete the calls to (ns-list)
 ;;; and (ns-symbols) must be done after all symbols and the namespaces they're
 ;;; defined in have been called.
-(def *std-lib-syms-hash* (iterator::reduce
+(def *std-lib-syms-hash*
+     "vector of all symbols in sl-sh-standard library
+     Section: globals"
+     (iterator::reduce
                           (fn (fst nxt)
                                 (iterator::reduce (fn (fst x)
                                             (hash-set! fst x nxt))
                                         fst
                                         (ns-symbols nxt)))
                           (make-hash)
-                          (ns-list)))
+                          *std-lib-namespaces*))
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 
