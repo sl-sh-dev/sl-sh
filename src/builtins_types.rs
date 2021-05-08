@@ -34,16 +34,17 @@ fn builtin_is_values(
             return if let ExpEnum::Values(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
     Err(LispError::new("values? needs one form"))
 }
 
-fn builtin_is_nil(
+fn is_nil(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
+    name: &str,
 ) -> Result<Expression, LispError> {
     if let Some(arg) = args.next() {
         if args.next().is_none() {
@@ -51,11 +52,42 @@ fn builtin_is_nil(
             return if arg.is_nil() {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
-    Err(LispError::new("nil? needs one form"))
+    Err(LispError::new(format!("{} needs one form", name)))
+}
+
+fn builtin_is_nil(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    is_nil(environment, args, "nil?")
+}
+
+fn builtin_is_none(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    is_nil(environment, args, "none?")
+}
+
+fn builtin_is_some(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval_no_values(environment, arg)?;
+            return if !arg.is_nil() {
+                Ok(Expression::make_true())
+            } else {
+                Ok(Expression::make_false())
+            };
+        }
+    }
+    Err(LispError::new("some? needs one form"))
 }
 
 fn builtin_is_true(
@@ -68,11 +100,45 @@ fn builtin_is_true(
             return if let ExpEnum::True = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
     Err(LispError::new("true? needs one form"))
+}
+
+fn builtin_is_false(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval_no_values(environment, arg)?;
+            return if let ExpEnum::False = arg.get().data {
+                Ok(Expression::make_true())
+            } else {
+                Ok(Expression::make_false())
+            };
+        }
+    }
+    Err(LispError::new("false? needs one form"))
+}
+
+fn builtin_is_boolean(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval_no_values(environment, arg)?;
+            return match arg.get().data {
+                ExpEnum::True => Ok(Expression::make_true()),
+                ExpEnum::False => Ok(Expression::make_true()),
+                _ => Ok(Expression::make_false()),
+            };
+        }
+    }
+    Err(LispError::new("boolean? needs one form"))
 }
 
 fn builtin_is_float(
@@ -85,7 +151,7 @@ fn builtin_is_float(
             return if let ExpEnum::Float(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -102,7 +168,7 @@ fn builtin_is_int(
             return if let ExpEnum::Int(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -119,7 +185,7 @@ fn builtin_is_symbol(
             return if let ExpEnum::Symbol(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -136,7 +202,7 @@ fn builtin_is_string(
             return if let ExpEnum::String(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -153,7 +219,7 @@ fn builtin_is_char(
             return if let ExpEnum::Char(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -170,7 +236,7 @@ fn builtin_is_lambda(
             return if let ExpEnum::Lambda(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -187,7 +253,7 @@ fn builtin_is_macro(
             return if let ExpEnum::Macro(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -204,7 +270,7 @@ fn builtin_is_vec(
             return if let ExpEnum::Vector(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -221,7 +287,7 @@ fn builtin_is_pair(
             return if let ExpEnum::Pair(_, _) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -242,7 +308,7 @@ fn builtin_is_builtin(
                 ExpEnum::DeclareMacro => Ok(Expression::make_true()),
                 ExpEnum::Quote => Ok(Expression::make_true()),
                 ExpEnum::BackQuote => Ok(Expression::make_true()),
-                _ => Ok(Expression::make_nil()),
+                _ => Ok(Expression::make_false()),
             };
         }
     }
@@ -259,7 +325,7 @@ fn builtin_is_process(
             return if let ExpEnum::Process(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -276,7 +342,7 @@ fn builtin_is_file(
             return if let ExpEnum::File(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -293,7 +359,7 @@ fn builtin_is_hash(
             return if let ExpEnum::HashMap(_) = arg.get().data {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -310,7 +376,7 @@ fn builtin_is_list(
             return if arg.is_nil() || is_proper_list(&arg) {
                 Ok(Expression::make_true())
             } else {
-                Ok(Expression::make_nil())
+                Ok(Expression::make_false())
             };
         }
     }
@@ -429,6 +495,7 @@ Return the type of the given expression as a string.
 
 Types are:
     True
+    False
     Float
     Int
     Symbol
@@ -449,6 +516,7 @@ Section: type
 
 Example:
 (test::assert-equal "True" (type #t))
+(test::assert-equal "False" (type #f))
 (test::assert-equal "Float" (type 1.1))
 (test::assert-equal "Int" (type 1))
 (test::assert-equal "Symbol" (type 'symbol))
@@ -517,20 +585,97 @@ Example:
         ),
     );
     data.insert(
+        interner.intern("none?"),
+        Expression::make_function(
+            builtin_is_none,
+            r#"Usage: (none? expression)
+
+True if the expression is nil (aka none/nothing), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (none? nil))
+(test::assert-true (none? '()))
+(test::assert-false (none? #t))
+(test::assert-false (none? '(1)))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("some?"),
+        Expression::make_function(
+            builtin_is_some,
+            r#"Usage: (some? expression)
+
+True if the expression is NOT nil (aka something), false otherwise.
+Note that anything other then nil (including false) is something.
+
+Section: type
+
+Example:
+(test::assert-false (some? nil))
+(test::assert-false (some? '()))
+(test::assert-true (some? #t))
+(test::assert-true (some? '(1)))
+"#,
+        ),
+    );
+    data.insert(
         interner.intern("true?"),
         Expression::make_function(
             builtin_is_true,
             r#"Usage: (true? expression)
 
-True if the expression is true (true type NOT non-null), false otherwise.
+True if the expression is true(#t) (true type NOT non-nil), false otherwise.
 
 Section: type
 
 Example:
 (test::assert-true (true? #t))
+(test::assert-false (true? #f))
 (test::assert-false (true? nil))
 (test::assert-false (true? 1))
 (test::assert-false (true? "str"))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("false?"),
+        Expression::make_function(
+            builtin_is_false,
+            r#"Usage: (false? expression)
+
+True if the expression is false(#f) (false type NOT nil), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (false? #f))
+(test::assert-false (false? nil))
+(test::assert-false (false? nil))
+(test::assert-false (false? 1))
+(test::assert-false (false? "str"))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("boolean?"),
+        Expression::make_function(
+            builtin_is_boolean,
+            r#"Usage: (boolean? expression)
+
+True if the expression is true(#t) or false(#f), false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (boolean? #f))
+(test::assert-true (boolean? #t))
+(test::assert-false (boolean? nil))
+(test::assert-false (boolean? nil))
+(test::assert-false (boolean? 1))
+(test::assert-false (boolean? "str"))
 "#,
         ),
     );

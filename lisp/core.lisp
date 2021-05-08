@@ -306,7 +306,7 @@ Example:
 (assert-equal \"opt-two\" (select-option 2))
 (assert-equal b 5)
 (assert-equal \"opt-three\" (select-option 3))
-(assert-equal nil (select-option 4))
+(assert-equal #f (select-option 4))
 (assert-equal \"opt-one\" (select-option-def 1))
 (assert-equal \"opt-two\" (select-option-def 2))
 (assert-equal \"opt-three\" (select-option-def 3))

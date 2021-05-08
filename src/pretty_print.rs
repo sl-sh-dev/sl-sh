@@ -53,6 +53,7 @@ impl fmt::Display for Expression {
 
         match &self.get().data {
             ExpEnum::True => write!(f, "true"),
+            ExpEnum::False => write!(f, "false"),
             ExpEnum::Float(n) => write!(f, "{}", n),
             ExpEnum::Int(i) => write!(f, "{}", i),
             ExpEnum::Symbol(s, _) => write!(f, "{}", s),
@@ -308,6 +309,7 @@ fn pretty_print_int(
             pretty_print_int(&exp, environment, indent, writer)?;
         }
         ExpEnum::True => expression.writef(environment, writer)?,
+        ExpEnum::False => expression.writef(environment, writer)?,
         ExpEnum::Float(_) => expression.writef(environment, writer)?,
         ExpEnum::Int(_) => expression.writef(environment, writer)?,
         ExpEnum::Symbol(_, _) => expression.writef(environment, writer)?,

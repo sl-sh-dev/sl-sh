@@ -50,6 +50,7 @@ Comment out (read and throwaway) s-expression with #;.  If the sexp after #; is 
 - #< unreadable, this will error out- used to print things that can not be read back in
 - #( read a vector instead of a list (terminates with ')')
 - #t true
+- #f false
 - #. evaluates the next form and replaces itself with that evaluation
 - #; read and discard the next sexp (will be an error if the sexp can not be read)
 - #"_ read a string literal (see above)

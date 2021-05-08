@@ -427,6 +427,7 @@ fn internal_eval(
         ExpEnum::HashMap(_) => Ok(expression.clone()),
         ExpEnum::String(_, _) => Ok(expression.clone()),
         ExpEnum::True => Ok(expression.clone()),
+        ExpEnum::False => Ok(expression.clone()),
         ExpEnum::Float(_) => Ok(expression.clone()),
         ExpEnum::Int(_) => Ok(expression.clone()),
         ExpEnum::Char(_) => Ok(expression.clone()),

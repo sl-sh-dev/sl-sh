@@ -521,7 +521,7 @@ fn do_atom(
         if symbol.is_empty() {
             return make_exp(ExpEnum::Nil, meta);
         }
-         if symbol == "nil" {
+        if symbol == "nil" {
             make_exp(ExpEnum::Nil, meta)
         } else {
             make_exp(
@@ -1221,7 +1221,10 @@ fn read_inner(
                         return Ok((Some(exp), chars));
                     }
                     "t" => {
-                        return Ok((Some(Expression::alloc_data(ExpEnum::True)), chars));
+                        return Ok((Some(Expression::make_true()), chars));
+                    }
+                    "f" => {
+                        return Ok((Some(Expression::make_false()), chars));
                     }
                     "\"" => match read_string_literal(environment, chars, buffer) {
                         Ok((s, ichars)) => return Ok((Some(s), ichars)),
