@@ -1,5 +1,5 @@
 (defmacro let*
-"Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
+  "Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
 let-body with all values of binding bound to the result of the evaluation of
 sexp. Differs from let in that sexps can reference bindings from previous items
 in the list of vals.
@@ -11,16 +11,16 @@ Example:
        (double-add (fn (x) (add-one (add-one x)))))
        (test::assert-equal 4 (add-one 3))
        (test::assert-equal 6 (double-add 4)))"
-(vals &rest let-body)
+  (vals &rest let-body)
   (let ((reducer (fn (fst nxt)
-                (var val (car nxt))
-                (var bind (cadr nxt))
-                (if (= 1 (length nxt))
-                  `(((fn :no-recur (,val) ,@fst) nil))
-                  (if (= 2 (length nxt))
-                         `(((fn :no-recur (,val) ,@fst) ,bind))
-                         (err "ERROR: invalid bindings on let*"))))))
-      (car (iterator::reduce reducer let-body (iterator::reverse vals)))))
+                     (let ((val (car nxt))
+                           (bind (cadr nxt)))
+                       (if (= 1 (length nxt))
+                           `(((fn :no-recur (,val) ,@fst) nil))
+                           (if (= 2 (length nxt))
+                               `(((fn :no-recur (,val) ,@fst) ,bind))
+                               (err "ERROR: invalid bindings on let*")))))))
+    (car (iterator::reduce reducer let-body (iterator::reverse vals)))))
 
 (defn occurs
 "Usage: (occurs (list 1 2 ...) 7) (occurs (list 1 2 ...) 0 (fn (x) (% x 2)))

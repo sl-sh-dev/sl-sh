@@ -5,7 +5,7 @@
 ;;; Macros to make working with the shell easier.
 
 (defmacro alias
-"
+  "
 Usage: (alias name body) or (alias name docstring body).
 
 Create an alias, intended to be used with executables not lisp code (use defn
@@ -13,23 +13,23 @@ for that).
 
 Section: shell
 "
-	(name &rest args)
-	(var usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
-	(shell::register-alias name)
-	(var docstring nil)
-	(var body nil)
-	(match (length args)
-		(2 (do
-			(set! docstring (vec-nth args 0))
-			(set! body (vec-nth args 1))
-			`(defmacro ,name ,docstring (&rest ars)
-				(iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
-		(1 (do
-			(set! body (vec-nth args 0))
-			`(defmacro ,name (&rest ars)
-				(iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
-		(0 (err usage))
-		(nil (err usage))))
+  (name &rest args)
+  (let ((usage "Usage: (alias ll (ls -haltr)) or (alias ll \"ls show all files in reverse chronological order abd display size of each file..\" (ls -haltr)).")
+        (docstring nil)
+        (body nil))
+    (shell::register-alias name)
+    (match (length args)
+      (2 (do
+          (set! docstring (vec-nth args 0))
+          (set! body (vec-nth args 1))
+           `(defmacro ,name ,docstring (&rest ars)
+              (iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
+      (1 (do
+          (set! body (vec-nth args 0))
+          `(defmacro ,name (&rest ars)
+             (iterator::collect (iterator::append '(syscall)(iterator::map (fn (x) (str x)) ',body) ars)))))
+      (0 (err usage))
+      (nil (err usage)))))
 
 ;; Remove an alias, this should be used instead of a raw undef for aliases.
 (defn unalias (name)
@@ -404,8 +404,7 @@ Example:
 					(vec-insert! bindings idx nil)
 					(vec-insert! olds idx (eval `(get-env (iterator::nth 0 el)))))
 				(if (= 2 (length el))
-					(do
-						(var binding (iterator::nth 1 el))
+					(let ((binding (iterator::nth 1 el)))
 						(if (or (list? binding)(vec? binding)) (set! binding (eval binding)))
 						(vec-insert! params idx (iterator::nth 0 el))
 						(vec-insert! bindings idx binding)
@@ -494,27 +493,28 @@ Example:
         (nil (make-color 38)))))
 
 (defn find-symbol (com)
-	(var val (sym *active-ns* "::" com))
-	(if (def? (ref val)) val (sym "root::" com)))
+  (let ((val (sym *active-ns* "::" com)))
+    (if (def? (ref val)) val (sym "root::" com))))
 
 (defmacro sys-alias?
-"
+  "
 True if the supplied command is an alias for a system command.
 
 Section: shell
 "
-	(com) `((fn ()
-	(var ret nil)
-	(var val (shell::find-symbol ,com))
-	(if (def? (ref val))
-		(set! val (eval val)))
-	(if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
-		(var expansion (expand-macro (val)))
-		(set! ret (sys-command? (sym->str (first expansion))))))
-	ret)))
+  (com) `((fn ()
+              (let ((ret nil)
+                    (expansion)
+                    (val (shell::find-symbol ,com)))
+                (if (def? (ref val))
+                    (set! val (eval val)))
+                (if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
+                                  (set! expansion (expand-macro (val)))
+                                  (set! ret (sys-command? (sym->str (first expansion))))))
+                ret))))
 
-(defn sys-command?
-"
+  (defn sys-command?
+    "
 True if the supplied command is a system command.
 
 Section: shell
@@ -523,18 +523,18 @@ Example:
 (assert-true (sys-command? \"ls\"))
 (assert-false (sys-command? \"rst-not-a-comand-strsnt\"))
 "
-	(com)
-	(var ret nil)
-	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
-		(if (fs-exists? com) (set! ret #t))
-		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
-			(set! ret #t)
-			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" (get-env HOME) com)))
-				(set! ret #t)
-				(for p in (str-split ":" (get-env PATH)) (do
-					(var path (str p "/" com))
-					(if (and (fs-exists? path)(not ret)) (set! ret #t)))))))
-	ret)
+    (com)
+    (let ((ret nil))
+      (if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
+          (if (fs-exists? com) (set! ret #t))
+          (if (and (str-contains "/" com)(fs-exists? (str "./" com)))
+              (set! ret #t)
+              (if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" (get-env HOME) com)))
+                  (set! ret #t)
+                  (for p in (str-split ":" (get-env PATH))
+                       (let ((path (str p "/" com)))
+                         (if (and (fs-exists? path)(not ret)) (set! ret #t)))))))
+      ret))
 
 ;(let ((alias (make-hash)))
 ((fn (alias)
@@ -600,26 +600,26 @@ Section: shell
 
          (paren-color
            (fn (level)
-               (var col (% level 4))
+               (let ((col (% level 4)))
                (if (= col 0) shell::*fg-white*
                    (if (= col 1) shell::*fg-cyan*
                        (if (= col 2) shell::*fg-yellow*
-                           (if (= col 3) shell::*fg-blue*))))))
+                           (if (= col 3) shell::*fg-blue*)))))))
 
          (my-sys-command?
            (fn (command)
-               (var ret nil)
+               (let ((ret nil))
                (if (hash-haskey sys-syms command)
                    (set! ret #t)
                    (if (not (hash-haskey bad-syms command))
                        (do
                         (set! ret (shell::sys-command? command))
                         (if ret (hash-set! sys-syms command #t) (hash-set! bad-syms command #t)))))
-               ret))
+               ret)))
 
          (command-color
            (fn (command)
-               (var ns-command (shell::find-symbol command))
+               (let ((ns-command (shell::find-symbol command)))
                (if (not tok-command)
                    (if (def? (ref ns-command))
                        (if (syn-func? command)
@@ -638,24 +638,24 @@ Section: shell
                            (do
                             (set! in-sys-command #t)
                             (str shell::tok-sys-command-color command shell::*fg-default*))
-                           (str shell::tok-invalid-color command shell::*fg-default*))))))
+                           (str shell::tok-invalid-color command shell::*fg-default*)))))))
 
          (prrawtoken
            (fn ()
-               (var ttok token)
+               (let ((ttok token))
                (set! token (str ""))
-               ttok))
+               ttok)))
          (prtoken
            (fn ()
-               (var ttok token)
+               (let ((ttok token))
                (set! token (str ""))
-               (command-color ttok)))
+               (command-color ttok))))
          (paren-open
            (fn ()
-               (var ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
+               (let ((ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*)))
                (set! plev (+ plev 1))
                (set! tok-command #t)
-               ret))
+               ret)))
          (paren-close
            (fn ()
                (set! in-sys-command nil)
@@ -667,15 +667,15 @@ Section: shell
 
          (whitespace
            (fn (ch)
-               (var ret (str (prtoken) ch))
+               (let ((ret (str (prtoken) ch)))
                (set! token (str ""))
                (set! tok-command nil)
-               ret))
+               ret)))
 
          (line-handler
            (fn (line)
-               (var in-quote nil)
-               (var last-ch #\ )
+               (let ((in-quote nil)
+                     (last-ch #\ ))
                (set! plev 0)
                (set! ch nil)
                (set! token (str ""))
@@ -686,7 +686,7 @@ Section: shell
                     (hash-clear! bad-syms)
                     (hash-clear! sys-syms)))
                (set! out (str-map (fn (ch)
-                                      (var ret (if in-quote
+                                      (let ((ret (if in-quote
                                                    (do
                                                     (str-push! token ch)
                                                     (if (and (not (= last-ch #\\))(= ch #\"))
@@ -703,14 +703,14 @@ Section: shell
                                                                (paren-close)
                                                                (if (char-whitespace? ch)
                                                                    (whitespace ch)
-                                                                   (do (str-push! token ch) "")))))))
-                                      (do (set! last-ch ch) ret)) line))
+                                                                   (do (str-push! token ch) ""))))))))
+                                      (do (set! last-ch ch) ret))) line))
                (if in-quote (str-push! out (prrawtoken)) (str-push! out (prtoken)))
-               (str out))))
+               (str out)))))
 
      (defn __line_handler (line)
-           (var result (get-error (line-handler line)))
-           (if (= :error (car result)) (print-error result) (cdr result)))
+       (let ((result (get-error (line-handler line))))
+           (if (= :error (car result)) (print-error result) (cdr result))))
 
      nil))
 
@@ -852,8 +852,7 @@ Section: shell"
       (do
         (out> fc-file (print *last-command*))
         (when (= 0 (wait (eval (read (str "(syscall " $EDITOR " $(str " fc-file "))")))))
-            (do
-                (var file-contents (str (cat fc-file)))
+            (let ((file-contents (str (cat fc-file))))
                 (when (not (= "" (str-trim file-contents)))
                     (do
                         (handle-last-command (str-trim file-contents))
@@ -879,13 +878,13 @@ Section: shell"
 	associated namespace, the one in which the symbols were created.
 
 	Section: scripting "
-	(&rest args) (let* ((filepath nil) (namespace nil) (script-body nil))
+	(&rest args) (let ((filepath nil) (namespace nil) (script-body nil) (new-file))
 	(when (= 0 (length args)) (err "Must have at least 1 argument, the path to the script to be created."))
 	(when (< 3 (length args)) (err (str "Too many arguments, see doc ")))
 	(when (< 2 (length args)) (set! script-body (vec-nth args 2)))
 	(when (< 1 (length args)) (set! namespace (vec-nth args 1)))
 	(when (< 0 (length args)) (set! filepath (vec-nth args 0)))
-	(var new-file (open filepath :create :append))
+	(set! new-file (open filepath :create :append))
 	$(chmod +x $filepath)
 	(write-line new-file "#!/usr/bin/env sl-sh")
 	(write-line new-file "")

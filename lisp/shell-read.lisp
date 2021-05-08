@@ -1,8 +1,8 @@
 (ns-push 'shell-read)
 
 (defn find-symbol (com)
-  (var val (sym *active-ns* "::" com))
-  (if (def? (ref val)) val (sym "root::" com)))
+  (let ((val (sym *active-ns* "::" com)))
+    (if (def? (ref val)) val (sym "root::" com))))
 
 (defn callable? (com)
   ; Want the actual thing pointed to by the symbol in com for the test.
