@@ -448,7 +448,7 @@ Types are:
 Section: type
 
 Example:
-(test::assert-equal "True" (type t))
+(test::assert-equal "True" (type #t))
 (test::assert-equal "Float" (type 1.1))
 (test::assert-equal "Int" (type 1))
 (test::assert-equal "Symbol" (type 'symbol))
@@ -512,7 +512,7 @@ Section: type
 
 Example:
 (test::assert-true (nil? nil))
-(test::assert-false (nil? t))
+(test::assert-false (nil? #t))
 "#,
         ),
     );
@@ -527,7 +527,7 @@ True if the expression is true (true type NOT non-null), false otherwise.
 Section: type
 
 Example:
-(test::assert-true (true? t))
+(test::assert-true (true? #t))
 (test::assert-false (true? nil))
 (test::assert-false (true? 1))
 (test::assert-false (true? "str"))

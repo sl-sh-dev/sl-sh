@@ -521,9 +521,7 @@ fn do_atom(
         if symbol.is_empty() {
             return make_exp(ExpEnum::Nil, meta);
         }
-        if symbol == "t" {
-            make_exp(ExpEnum::True, meta)
-        } else if symbol == "nil" {
+         if symbol == "nil" {
             make_exp(ExpEnum::Nil, meta)
         } else {
             make_exp(

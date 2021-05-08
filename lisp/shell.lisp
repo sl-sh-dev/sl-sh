@@ -264,7 +264,7 @@ Example:
                 (do
                   (vec-push! dir_stack (get-env OLDPWD))
                   (if (> (length dir_stack) dir_stack_max) (vec-remove! dir_stack 0))
-                  t)
+                  #t)
                 nil))
   (defn popd
         "
@@ -526,14 +526,14 @@ Example:
 	(com)
 	(var ret nil)
 	(if (or (str-empty? com)(= (str-nth 0 com) #\/)(= (str-nth 0 com) #\.))
-		(if (fs-exists? com) (set! ret t))
+		(if (fs-exists? com) (set! ret #t))
 		(if (and (str-contains "/" com)(fs-exists? (str "./" com)))
-			(set! ret t)
+			(set! ret #t)
 			(if (and (str-starts-with "~/" com)(fs-exists? (str-replace "~/" (get-env HOME) com)))
-				(set! ret t)
+				(set! ret #t)
 				(for p in (str-split ":" (get-env PATH)) (do
 					(var path (str p "/" com))
-					(if (and (fs-exists? path)(not ret)) (set! ret t)))))))
+					(if (and (fs-exists? path)(not ret)) (set! ret #t)))))))
 	ret)
 
 ;(let ((alias (make-hash)))
@@ -545,7 +545,7 @@ Example:
 
 		Section: shell
 		"
-		(name) (hash-set! alias name t))
+		(name) (hash-set! alias name #t))
 	(defn ns::unregister-alias
 		"
 		Unregisters an alias, removing it from scope.
@@ -586,7 +586,7 @@ Section: shell
          (out (str ""))
          (token (str ""))
          (in-sys-command nil)
-         (tok-command t)
+         (tok-command #t)
 
          ; Want the actual thing pointed to by the symbol in com for the test.
          (syn-func?
@@ -610,11 +610,11 @@ Section: shell
            (fn (command)
                (var ret nil)
                (if (hash-haskey sys-syms command)
-                   (set! ret t)
+                   (set! ret #t)
                    (if (not (hash-haskey bad-syms command))
                        (do
                         (set! ret (shell::sys-command? command))
-                        (if ret (hash-set! sys-syms command t) (hash-set! bad-syms command t)))))
+                        (if ret (hash-set! sys-syms command #t) (hash-set! bad-syms command #t)))))
                ret))
 
          (command-color
@@ -631,12 +631,12 @@ Section: shell
                    (if (syn-func? command)
                        (if (or (shell::alias? command)(shell::sys-alias? command))
                            (do
-                            (set! in-sys-command t)
+                            (set! in-sys-command #t)
                             (str shell::tok-sys-alias-color command shell::*fg-default*))
                            (str shell::tok-slsh-fcn-color command shell::*fg-default*))
                        (if (my-sys-command? command)
                            (do
-                            (set! in-sys-command t)
+                            (set! in-sys-command #t)
                             (str shell::tok-sys-command-color command shell::*fg-default*))
                            (str shell::tok-invalid-color command shell::*fg-default*))))))
 
@@ -654,7 +654,7 @@ Section: shell
            (fn ()
                (var ret (str (prtoken) (paren-color plev) #\( shell::*fg-default*))
                (set! plev (+ plev 1))
-               (set! tok-command t)
+               (set! tok-command #t)
                ret))
          (paren-close
            (fn ()
@@ -679,7 +679,7 @@ Section: shell
                (set! plev 0)
                (set! ch nil)
                (set! token (str ""))
-               (set! tok-command t)
+               (set! tok-command #t)
                (set! in-sys-command nil)
                (if (<= (length line) 1)
                    (do
@@ -696,7 +696,7 @@ Section: shell
                                                           (prrawtoken))
                                                         ""))
                                                    (if (and (not (= last-ch #\\))(= ch #\"))
-                                                       (do (str-push! token (str shell::tok-string-color ch))(set! in-quote t) "")
+                                                       (do (str-push! token (str shell::tok-string-color ch))(set! in-quote #t) "")
                                                        (if (= ch #\()
                                                            (paren-open)
                                                            (if (= ch #\))

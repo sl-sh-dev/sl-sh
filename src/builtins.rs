@@ -1603,30 +1603,30 @@ Section: conditional
 
 Example:
 (def test-if-one
-    (if t \"ONE TRUE\" \"ONE FALSE\"))
+    (if #t \"ONE TRUE\" \"ONE FALSE\"))
 (def test-if-two
     (if nil \"TWO TRUE\" \"TWO FALSE\"))
 (test::assert-equal \"ONE TRUE\" test-if-one)
 (test::assert-equal \"TWO FALSE\" test-if-two)
 
 (def test-if-one2
-    (if t \"ONE2 TRUE\"))
+    (if #t \"ONE2 TRUE\"))
 (def test-if-two2
     (if nil \"TWO2 TRUE\"))
 (test::assert-equal \"ONE2 TRUE\" test-if-one2)
 (test::assert-equal nil test-if-two2)
 
 (def test-if-one2
-    (if nil \"ONE FALSE\" t \"ONE TRUE\" t \"ONE TRUE2\"))
+    (if nil \"ONE FALSE\" #t \"ONE TRUE\" #t \"ONE TRUE2\"))
 (def test-if-two2
-    (if nil \"TWO TRUE\" nil \"TWO FALSE\" t \"TWO TRUE2\"))
+    (if nil \"TWO TRUE\" nil \"TWO FALSE\" #t \"TWO TRUE2\"))
 (def test-if-three2
     (if nil \"THREE TRUE\" nil \"THREE FALSE\" \"THREE DEFAULT\"))
 (test::assert-equal \"ONE TRUE\" test-if-one2)
 (test::assert-equal \"TWO TRUE2\" test-if-two2)
 (test::assert-equal \"THREE DEFAULT\" test-if-three2)
 (test::assert-false (if nil))
-(test::assert-false (if nil t nil t nil t))
+(test::assert-false (if nil #t nil #t nil t))
 ",
         ),
     );
@@ -1814,10 +1814,6 @@ Example:
 ",
         ),
     );
-    /*data.insert(
-        "spawn"),
-        Expression::Func(builtin_spawn)),
-    );*/
     data.insert(
         interner.intern("and"),
         Expression::make_special(builtin_and,
@@ -1831,9 +1827,9 @@ Section: conditional
 
 Example:
 (test::assert-false (and nil (err \"and- can not happen\")))
-(test::assert-equal \"and- done\" (and t \"and- done\"))
-(test::assert-equal \"and- done\" (and t t \"and- done\"))
-(test::assert-equal 6 (and t t (+ 1 2 3)))
+(test::assert-equal \"and- done\" (and #t \"and- done\"))
+(test::assert-equal \"and- done\" (and #t #t \"and- done\"))
+(test::assert-equal 6 (and #t #t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
 "),
     );
@@ -1850,7 +1846,7 @@ The or form will stop evaluating when the first expression produces non-nil.
 Section: conditional
 
 Example:
-(test::assert-true (or nil nil t (err \"and- can not happen\")))
+(test::assert-true (or nil nil #t (err \"and- can not happen\")))
 (test::assert-false (or nil nil nil))
 (test::assert-equal \"or- done\" (or nil \"or- done\"))
 (test::assert-equal \"or- done\" (or nil nil \"or- done\"))
@@ -1872,7 +1868,7 @@ Section: conditional
 Example:
 (test::assert-true (not nil))
 (test::assert-false (not 10))
-(test::assert-false (not t))
+(test::assert-false (not #t))
 (test::assert-false (not (+ 1 2 3)))
 ",
         ),
@@ -1890,7 +1886,7 @@ Section: conditional
 Example:
 (test::assert-true (null nil))
 (test::assert-false (null 10))
-(test::assert-false (null t))
+(test::assert-false (null #t))
 (test::assert-false (null (+ 1 2 3)))
 ",
         ),
@@ -2166,7 +2162,7 @@ Section: core
 
 Example:
 ;(doc 'car)
-t
+#t
 ",
         ),
     );
@@ -2182,7 +2178,7 @@ Section: core
 
 Example:
 ;(doc-raw 'car)
-t
+#t
 ",
         ),
     );
@@ -2206,7 +2202,7 @@ Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
-(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy #t) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block yyy ((fn (p) (return-from yyy p)) '(5 6)) '(a b)) '(2 3))
 (test::assert-equal 2
     (block forloop
@@ -2233,7 +2229,7 @@ Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
-(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy #t) '(a b)) '(2 3)))
 "
         ),
     );
@@ -2250,7 +2246,7 @@ Section: core
 
 Example:
 ;(intern-stats)
-t
+#t
 ",
         ),
     );
@@ -2267,7 +2263,7 @@ Section: core
 
 Example:
 ;(meta-line-no)
-t
+#t
 ",
         ),
     );
@@ -2284,7 +2280,7 @@ Section: core
 
 Example:
 ;(meta-column-no)
-t
+#t
 ",
         ),
     );
@@ -2301,7 +2297,7 @@ Section: core
 
 Example:
 ;(meta-file-name)
-t
+#t
 ",
         ),
     );
@@ -2524,7 +2520,7 @@ Section: core
 
 Example:
 ;(print *core-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2541,7 +2537,7 @@ Section: core
 
 Example:
 ;(print *struct-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2558,7 +2554,7 @@ Section: core
 
 Example:
 ;(print *iterator-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2575,7 +2571,7 @@ Section: core
 
 Example:
 ;(print *collection-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2592,7 +2588,7 @@ Section: core
 
 Example:
 ;(print *seq-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2609,7 +2605,7 @@ Section: core
 
 Example:
 ;(print *shell-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2626,7 +2622,7 @@ Section: core
 
 Example:
 ;(print *getopts-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2643,7 +2639,7 @@ Section: core
 
 Example:
 ;(print *test-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2660,7 +2656,7 @@ Section: core
 
 Example:
 ;(print *lib-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2677,7 +2673,7 @@ Section: core
 
 Example:
 ;(print *shell-read-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2694,7 +2690,7 @@ Section: core
 
 Example:
 ;(print *slsh-std-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2711,7 +2707,7 @@ Section: core
 
 Example:
 ;(print *slshrc-src*)
-t
+#t
 "
             .to_string(),
         ),

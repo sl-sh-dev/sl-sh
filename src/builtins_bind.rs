@@ -405,7 +405,7 @@ is a symbol it is not evaluted and if a list it is evaluted to produce a symbol.
 Section: core
 
 Example:
-(def test-is-def t)
+(def test-is-def #t)
 (def test-is-def2 'test-is-def)
 (test::assert-true (def? test-is-def))
 (test::assert-true (def? (sym \"test-is-def\")))
@@ -429,7 +429,7 @@ in the current scope or an error is raised.
 Section: core
 
 Example:
-(def test-is-def t)
+(def test-is-def #t)
 (def test-is-def2 'test-is-def)
 (test::assert-true (ref test-is-def))
 (set! test-is-def '(1 2 3))

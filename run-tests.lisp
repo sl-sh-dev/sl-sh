@@ -122,7 +122,8 @@
                                        "ERR!"
                                        shell::*fg-default* shell::*bg-default*))
                            (println "")
-                           (println (cdr test-result))
+(print-error test-result)
+                           ;(println (cdr test-result))
                            (set! exit-status :error)
                            (hash-set! test-report :failed (+ 1 (hash-get test-report :failed)))))))
                     (report-pretty-printer exit-status (hash-get fst :name))

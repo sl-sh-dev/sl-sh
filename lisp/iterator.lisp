@@ -325,7 +325,7 @@ Example:
     (set! rev-data (cdr rev-data))
     (if elements (set! elements (- elements 1)))
     val))
-  (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) t nil))
+  (:fn empty? (self) (if (or (null data)(and (not (null elements))(<= elements 0))) #t nil))
   (:fn init (self l) (do (if (list? l) (set! data l) (err "list-iter requires a list")) self))
   (:fn make-rev (self) (do
     (var node nil)
@@ -583,7 +583,7 @@ Example:
                (set! next (plist :next!))
                (if (not (predicate next))
                  (recur plist)))
-             (set! is-empty t)))))
+             (set! is-empty #t)))))
   (:fn init (self pred data-in) (do
           (set! data (iter data-in))
           (set! predicate pred)
@@ -681,8 +681,8 @@ Example:
   (value nil)
   (done nil)
   ; methods
-  (:fn next! (self) (do (var ret (if done nil value))(set! done t)ret))
-  (:fn next-back! (self) (do (var ret (if done nil value))(set! done t)ret))
+  (:fn next! (self) (do (var ret (if done nil value))(set! done #t)ret))
+  (:fn next-back! (self) (do (var ret (if done nil value))(set! done #t)ret))
   (:fn empty? (self) done)
   (:fn init (self v) (do (set! value v)self))
   (:impl iterator::iterator iterator::double-ended-iterator))
@@ -717,7 +717,7 @@ Example:
 (assert-false (iterator::double-ended-iter? (test-iter)))
 "
   (thing)
-  (if (and (iter? thing)(thing :double-ended?)) t nil))
+  (if (and (iter? thing)(thing :double-ended?)) #t nil))
 
 (defn iter
 "Return thing as an iterator if possible (if it is an iterator just return thing).

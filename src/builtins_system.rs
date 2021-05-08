@@ -681,7 +681,7 @@ Section: shell
 
 Example:
 ;(epoch)
-t
+#t
 "#,
         ),
     );
@@ -697,7 +697,7 @@ Section: system
 
 Example:
 ;(jobs)
-t
+#t
 "#,
         ),
     );
@@ -715,7 +715,7 @@ Section: system
 
 Example:
 ;(bg)
-t
+#t
 "#,
         ),
     );
@@ -733,7 +733,7 @@ Section: system
 
 Example:
 ;(fg)
-t
+#t
 "#,
         ),
     );
@@ -773,7 +773,7 @@ Example:
 ;(test::assert-equal 10 (wait (fork (exit 10))))
 ;(test::assert-equal 11 (wait (fork (exit 11))))
 ;(test::assert-equal 12 (wait (fork (exit 12))))
-t
+#t
 "#,
         ),
     );
@@ -822,7 +822,7 @@ Section: system
 
 Example:
 ;(reap-jobs)
-t
+#t
 "#,
         ),
     );

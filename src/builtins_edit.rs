@@ -513,7 +513,7 @@ Section: shell
 
 Example:
 ;(def input-string (prompt \"prompt> \"))
-t
+#t
 ",
         ),
     );
@@ -530,7 +530,7 @@ Section: shell
 
 Example:
 ;(history-push :repl \"Some command\")
-t
+#t
 ",
         ),
     );
@@ -549,7 +549,7 @@ Section: shell
 
 Example:
 ;(history-push-throwaway :repl \"Some broken command\")
-t
+#t
 ",
         ),
     );
@@ -566,7 +566,7 @@ Section: shell
 
 Example:
 ;(history-context :repl \"/home\")
-t
+#t
 ",
         ),
     );
@@ -582,7 +582,7 @@ Section: shell
 
 Example:
 ;(history-length :repl)
-t
+#t
 ",
         ),
     );
@@ -598,7 +598,7 @@ Section: shell
 
 Example:
 ;(history-empty? :repl)
-t
+#t
 ",
         ),
     );
@@ -614,7 +614,7 @@ Section: shell
 
 Example:
 ;(history-nth :repl 0)
-t
+#t
 ",
         ),
     );

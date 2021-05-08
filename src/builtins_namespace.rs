@@ -170,7 +170,7 @@ Example:
 (ns-enter test-ns-create::test-ns-enter)
 (test::assert-false (def? test-symbol))
 (ns-pop)
-t
+#t
 ",
         ),
     );
@@ -197,7 +197,7 @@ Example:
 (test::assert-equal \"testing\" test-symbol)
 (ns-enter test-ns-enter::test-ns-enter)
 (ns-pop)
-t
+#t
 ",
         ),
     );
@@ -234,7 +234,6 @@ Example:
 (ns-push 'ns-list-test-namespace)
 (ns-pop)
 (test::assert-includes \"ns-list-test-namespace\" (ns-list))
-t
 ",
         ),
     );
@@ -252,7 +251,6 @@ Example:
 (test::assert-includes 'loop (ns-symbols 'root))
 (test::assert-not-includes 'dumb-symbol-xxx (ns-symbols 'root))
 (test::assert-includes 'car (ns-symbols 'root))
-t
 ",
         ),
     );

@@ -246,7 +246,7 @@ Example:
         (var seq-iter (iterator::iter seq-to-search))
         (var inner-in (fn (seq-iter item-to-match)
             (if (iterator::empty? seq-iter) nil
-                (if (= item-to-match (iterator::next! seq-iter)) t
+                (if (= item-to-match (iterator::next! seq-iter)) #t
                     (recur seq-iter item-to-match)))))
         (inner-in seq-iter item-to-match))))
 

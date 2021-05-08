@@ -295,7 +295,7 @@ Section: shell
 
 Example:
 ;See tests/getopts.lisp
-t
+#t
 "
 (options-map args)
     (when (not (hash? options-map)) (err getopts-options-map-is-map))

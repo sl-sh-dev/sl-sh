@@ -350,7 +350,7 @@ Example:
 (ns-push 'root)
 ;XXX TODO- analyzer breaks this test by patching *ns* to the namespace before the push... (test::assert-equal \"root\" *ns*)
 (ns-pop)
-t
+#t
 "
                 .to_string(),
             ),
@@ -367,7 +367,7 @@ Section: root
 
 Example:
 ;(hash-set! *read-table* #\\$ 'shell-read::shell-read)
-t
+#t
 "
                 .to_string(),
             ),
@@ -384,7 +384,7 @@ Section: root
 
 Example:
 ;(hash-set! *read-table-terminal* #\\] 'nop-read)
-t
+#t
 "
                 .to_string(),
             ),
@@ -401,7 +401,7 @@ Section: root
 
 Example:
 ;(hash-set! *string-read-table* #\\$ 'shell-read::shell-read)
-t
+#t
 "
                 .to_string(),
             ),
