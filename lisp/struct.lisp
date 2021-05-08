@@ -24,7 +24,7 @@
 
 ; macro to build a "trait" that can be implemented by a struct
 (defmacro deftrait
-"Define a trait.  Traits define methods that are added to structures (and usually require one or
+  "Define a trait.  Traits define methods that are added to structures (and usually require one or
 more methods in the struct.  Use them to provide common functionality shared by different structures.
 Use (:fn name doc-str? body) to add a method.
 
@@ -59,58 +59,61 @@ Example:
 (test::assert-equal \"queen\" (ts :b))
 (ns-pop)
 "
-    (name &rest fields)
-    ((fn ()
-         (let ((tags (vec))
-               (dispatch-map (make-hash))
-               (methods (vec))
-               (dispatcher (vec))
-               (fields-len (length fields))
-               (doc (str))
-               (doc-exp (str))
-               (idx-start 0))
-        (vec-push! tags (sym ":trait-" name))
-        (if (and (> fields-len 1)(string? (vec-nth fields 0)))
-            (let ((doc-split (str-splitn 2 "Section:" (vec-nth fields 0))))
-              (set! doc (vec-nth doc-split 0))
-              (set! idx-start 1)
-              (if (= 2 (length doc-split)) (set! doc-exp (vec-nth doc-split 1)))))
-        (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
+  (name &rest fields)
+  ((fn ()
+       (let ((tags (vec))
+             (dispatch-map (make-hash))
+             (methods (vec))
+             (dispatcher (vec))
+             (fields-len (length fields))
+             (doc (str))
+             (doc-exp (str))
+             (idx-start 0))
+         (vec-push! tags (sym ":trait-" name))
+         (if (and (> fields-len 1)(string? (vec-nth fields 0)))
+             (let ((doc-split (str-splitn 2 "Section:" (vec-nth fields 0))))
+               (set! doc (vec-nth doc-split 0))
+               (set! idx-start 1)
+               (if (= 2 (length doc-split)) (set! doc-exp (vec-nth doc-split 1)))))
+         (if (not (str-contains "Example:" doc-exp)) (str-push! doc-exp "\nExample:\n"))
 
-           ((fn (idx)
-                (if (< idx fields-len)
-                    (let ((field (vec-nth fields idx)))
-                      (if (= (car field) :fn)
-                          (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
-                          (err "Traits only have :fn fields!"))
-                      (recur (+ idx 1))
-                      )))idx-start)
-           (let ((keys (hash-keys dispatch-map)))
+         ((fn (idx)
+              (if (< idx fields-len)
+                  (let ((field (vec-nth fields idx)))
+                    (if (= (car field) :fn)
+                        (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
+                        (err "Traits only have :fn fields!"))
+                    (recur (+ idx 1))
+                    )))idx-start)
+         (let ((keys (hash-keys dispatch-map)))
            (let ((keys-len (length keys))
                  (tags-len (length tags))
                  (methods-len (length methods))
                  (dispatcher-len (length dispatcher))
                  (doc-final (str)))
-        (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (deftrait ... (:impl " name "))\n\n"))
-        (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
-        `(def ,name ,doc-final (fn (target-dispatch-map target-methods target-dispatcher target-tags)
-            ((fn (idx)
-                (if (< idx ,tags-len) (do
-                    (vec-push! target-tags (vec-nth ',tags idx))
-                    (recur (+ idx 1)))))0)
-            ((fn (idx)
-                (if (< idx ,methods-len) (do
-                    (vec-push! target-methods (vec-nth ',methods idx))
-                    (recur (+ idx 1)))))0)
-            ((fn (idx)
-                (if (< idx ,dispatcher-len) (do
-                    (vec-push! target-dispatcher (vec-nth ',dispatcher idx))
-                    (recur (+ idx 1)))))0)
-            ((fn (idx)
-                 (if (< idx ,keys-len)
-                     (let ((key (vec-nth ',keys idx)))
-                       (if (not (hash-haskey target-dispatch-map key)) (hash-set! target-dispatch-map key (hash-get ,dispatch-map key)))
-                       (recur (+ idx 1)) )))0) )) ))))))
+             (if (not (str-contains "Usage:" doc)) (str-push! doc-final "Usage: (deftrait ... (:impl " name "))\n\n"))
+             (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
+             `(def ,name ,doc-final (fn (target-dispatch-map target-methods target-dispatcher target-tags)
+                                        ((fn (idx)
+                                             (if (< idx ,tags-len)
+                                                 (do
+                                                  (vec-push! target-tags (vec-nth ',tags idx))
+                                                  (recur (+ idx 1)))))0)
+                                        ((fn (idx)
+                                             (if (< idx ,methods-len)
+                                                 (do
+                                                  (vec-push! target-methods (vec-nth ',methods idx))
+                                                  (recur (+ idx 1)))))0)
+                                        ((fn (idx)
+                                             (if (< idx ,dispatcher-len)
+                                                 (do
+                                                  (vec-push! target-dispatcher (vec-nth ',dispatcher idx))
+                                                  (recur (+ idx 1)))))0)
+                                        ((fn (idx)
+                                             (if (< idx ,keys-len)
+                                                 (let ((key (vec-nth ',keys idx)))
+                                                   (if (not (hash-haskey target-dispatch-map key)) (hash-set! target-dispatch-map key (hash-get ,dispatch-map key)))
+                                                   (recur (+ idx 1)) )))0) )) ))))))
 
 ; macro to build a "struct"
 (defmacro defstruct
@@ -232,43 +235,44 @@ Example:
                                (err "defstruct: invalid field access key (valid are :rw, :ro and :wo)")))
                          (err "ERROR: invalid attribute bindings on defstruct")))))
 
-               (set! impl
-                     (fn (field doc)
-                         (if (not (not field))
-                             (do
-                              (str-push! doc "impl " (car field) "\n")
-                              (apply (car field) dispatch-map methods dispatcher tags nil)
-                               (recur (cdr field) doc)))))
+         (set! impl
+               (fn (field doc)
+                   (if (not (not field))
+                       (do
+                        (str-push! doc "impl " (car field) "\n")
+                        (apply (car field) dispatch-map methods dispatcher tags nil)
+                         (recur (cdr field) doc)))))
 
-               ((fn (idx)
-                    (if (< idx fields-len)
-                        (let ((field (vec-nth fields idx)))
-                          (if (= (car field) :fn) (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
-                              (= (car field) :impl) nil ; do impls last (struct methods take precident).
-                              (attrib field doc doc-exp))
-                          (recur (+ idx 1)))))idx-start)
+         ((fn (idx)
+              (if (< idx fields-len)
+                  (let ((field (vec-nth fields idx)))
+                    (if (= (car field) :fn) (method (cdr field) (str name "^") methods dispatcher tags doc doc-exp)
+                        (= (car field) :impl) nil ; do impls last (struct methods take precident).
+                        (attrib field doc doc-exp))
+                    (recur (+ idx 1)))))idx-start)
 
-               ((fn (idx)
-                    (if (< idx fields-len)
-                        (let ((field (vec-nth fields idx)))
-                          (if (= (car field) :impl) (impl (cdr field) doc))
-                          (recur (+ idx 1)))))idx-start)
+         ((fn (idx)
+              (if (< idx fields-len)
+                  (let ((field (vec-nth fields idx)))
+                    (if (= (car field) :impl) (impl (cdr field) doc))
+                    (recur (+ idx 1)))))idx-start)
 
-               (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
-               (let ((msym (sym name "^type"))
-                     (doc-final (str)))
-                 (vec-push! methods `(,msym (fn (_) (sym->str ',name))))
-                 (vec-push! dispatcher `(= msg :type))
-                 (vec-push! dispatcher `(apply ,msym this-fn args))
-                 (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
-                 `(def ,name ,doc-final (fn () ((fn (,@params)
-                                                    (let (,@methods)
-                                                    (let ((self
-                                                         (fn (msg &rest args)
-                                                             (if ,@dispatcher (err (str "Invalid message (" msg ") to struct: " ',name))))))
-                                                    (meta-add-tags self ',tags) self))) ,@bindings))))))
-         (make-vec (length fields)) ; params
-         (make-vec (length fields)))) ; bindings
+         (hash-set! dispatch-map :type `(fn (_) (sym->str ',name)))
+         (let ((msym (sym name "^type"))
+               (doc-final (str)))
+           (vec-push! methods `(,msym (fn (_) (sym->str ',name))))
+           (vec-push! dispatcher `(= msg :type))
+           (vec-push! dispatcher `(apply ,msym this-fn args))
+           (str-push! doc-final doc (if (> (length doc-exp) 0) (str "\nSection:" doc-exp)""))
+           `(def ,name ,doc-final (fn () ((fn (,@params)
+                                              (let (,@methods)
+                                                (let ((self
+                                                        (fn (msg &rest args)
+                                                            (if ,@dispatcher
+                                                                (err (str "Invalid message (" msg ") to struct: " ',name))))))
+                                                  (meta-add-tags self ',tags) self))) ,@bindings))))))
+   (make-vec (length fields)) ; params
+   (make-vec (length fields)))) ; bindings
 
 ; Due to the bootstrap order of std lib files can not use the ns-export macro at this point.
 (def *ns-exports* (vec 'deftrait 'defstruct))
