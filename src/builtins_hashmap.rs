@@ -208,7 +208,7 @@ fn builtin_hash_haskey(
         if map.contains_key(sym) {
             Expression::make_true()
         } else {
-            Expression::make_nil()
+            Expression::make_false()
         }
     }
     if let Some(map) = args.next() {

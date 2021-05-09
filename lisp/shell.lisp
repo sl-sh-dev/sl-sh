@@ -5,20 +5,35 @@
 ;;; Macros to make working with the shell easier.
 
 (defmacro alias
-  "
-Usage: (alias name body) or (alias name docstring body).
+  #"_
+Usage: (alias name body) or (alias name docstring body)
 
 Create an alias, intended to be used with executables not lisp code (use defn
 for that).
 
 Section: shell
-"
+
+Example:
+(shell::alias xx-echo1 (echo -en))
+(shell::alias xx-echo2 "Dummy doc string" (echo))
+(let ((file-name (str (temp-dir)"/alias-test.out"))
+      (topen))
+  (out> file-name (xx-echo1 "stdout redir\\none1\\n"))
+  (out>> file-name (xx-echo2 "stdout redir\\none2"))
+  (set! topen (open file-name :read))
+  (test::assert-equal "stdout redir\n" (read-line topen))
+  (test::assert-equal "one1\n" (read-line topen))
+  (test::assert-equal "stdout redir\\none2\n" (read-line topen))
+  (test::assert-false (read-line topen))
+  (close topen))
+_"
   (name &rest args)
   (let ((usage #"_Usage: (alias label ["docstring"] (command))
 example: '(alias ll (ls -haltr))' or
          '(alias ll "ls show all files in reverse chronological order abd display size of each file.." (ls -haltr))'._")
         (docstring nil)
         (body nil))
+    (set! name (sym name))
     (shell::register-alias name)
     (match (length args)
       (2 (do
@@ -34,9 +49,31 @@ example: '(alias ll (ls -haltr))' or
       (nil (err usage)))))
 
 ;; Remove an alias, this should be used instead of a raw undef for aliases.
-(defn unalias (name)
-  (shell::unregister-alias name)
-  (undef name))
+(defmacro unalias
+  #"_
+Usage: (unalias name)
+
+Remove an alias.  Use this instead of undef to make sure book keeping happens.
+
+Section: shell
+
+Example:
+(shell::alias xx-echo (echo -en))
+(let ((file-name (str (temp-dir)"/unalias-test.out"))
+      (topen))
+  (out> file-name (xx-echo "stdout redir\\none1\\n"))
+  (set! topen (open file-name :read))
+  (test::assert-equal "stdout redir\n" (read-line topen))
+  (test::assert-equal "one1\n" (read-line topen))
+  (test::assert-false (read-line topen))
+  (close topen))
+(unalias xx-echo)
+(test::assert-error (xx-echo "error"))
+_"
+  (name)
+  (set! name (sym name))
+  `(do (shell::unregister-alias ',name)
+       (undef ,name)))
 
 (defmacro out>>
   "
@@ -498,23 +535,6 @@ Example:
   (let ((val (sym *active-ns* "::" com)))
     (if (def? (ref val)) val (sym "root::" com))))
 
-(defmacro sys-alias?
-  "
-True if the supplied command is an alias for a system command.
-
-Section: shell
-"
-  (com) `((fn ()
-              (let ((ret nil)
-                    (expansion)
-                    (val (shell::find-symbol ,com)))
-                (if (def? (ref val))
-                    (set! val (eval val)))
-                (if (macro? val) (get-error  ; If the next two lines fail it was not an alias...
-                                  (set! expansion (expand-macro (val)))
-                                  (set! ret (sys-command? (sym->str (first expansion))))))
-                ret))))
-
 (defn sys-command?
   "
 True if the supplied command is a system command.
@@ -538,31 +558,38 @@ Example:
                        (if (and (fs-exists? path)(not ret)) (set! ret #t)))))))
     ret))
 
-;(let ((alias (make-hash)))
-((fn (alias)
-     (defn ns::register-alias
-       "
+(let ((alias (make-hash)))
+  (defn ns::register-alias
+    "
         Registers an alias to the current scope. Useful if unregistering or
         ability to know whether an alias has been registered is desirable.
 
         Section: shell
         "
-       (name) (hash-set! alias name #t))
-     (defn ns::unregister-alias
-       "
+    (name) (hash-set! alias name #t))
+  (defn ns::unregister-alias
+    "
         Unregisters an alias, removing it from scope.
 
         Section: shell
         "
-       (name) (hash-remove! alias name))
-     (defn ns::alias?
-       "
-        Provides boolean value confirming or denying given alias' presence
-        in set of registered aliases.
+    (name) (hash-remove! alias name))
+  (defn ns::alias?
+    #"_ Provides boolean value confirming or denying given alias' presence
+in set of registered aliases.
 
-        Section: shell
-        "
-       (name) (hash-haskey alias name)))(make-hash))
+Section: shell
+
+Example:
+(def xx-echo-not-alias #t)
+(test::assert-false (alias? 'xx-echo-not-alias))
+(test::assert-false (alias? 'xx-echo))
+(shell::alias xx-echo (echo -en))
+(test::assert-true (alias? 'xx-echo))
+(unalias xx-echo)
+(test::assert-false (alias? 'xx-echo))
+_"
+    (name) (hash-haskey alias name)))
 
 ; These will be imported with syntax-on (ie copied into another namespace).
 ; Since syntax-on is a macro these copies are what will be read/used in that
@@ -631,7 +658,7 @@ Section: shell
                              (str shell::tok-slsh-form-color command shell::*fg-default*))
                          (str shell::tok-default-color command shell::*fg-default*))
                      (if (syn-func? command)
-                         (if (or (shell::alias? command)(shell::sys-alias? command))
+                         (if (shell::alias? command)
                              (do
                               (set! in-sys-command #t)
                               (str shell::tok-sys-alias-color command shell::*fg-default*))
@@ -959,6 +986,7 @@ Example:
 
 (ns-export '(
              alias
+             unalias
              register-alias
              unregister-alias
              alias?
