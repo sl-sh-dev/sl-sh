@@ -1,0 +1,149 @@
+#!/usr/bin/env sl-sh
+
+(load "docstruct.lisp")
+(load "mk-docs.lisp")
+
+(ns-push 'mksidebar)
+
+(ns-import 'shell)
+(ns-import 'iterator)
+(ns-import 'docstruct)
+(ns-import 'mkdocs)
+
+(defn make-sections (sections)
+        (let* (
+            (sections-str (str))
+            (section-xform (fn (section-name)
+                (str-push! (str)
+                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "- title:" #\u{20} section-name
+                           #\u{a}
+                            #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "  url: /mydoc_api.html#" section-name "-body"
+                           #\u{a}
+                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "  output: web"
+                           #\u{a} #\u{a}
+                           ))))
+          (for section in (hash-keys sections) (str-push! sections-str (section-xform section))) sections-str))
+
+(defn -get-sidebar-yml ()
+      (let ((yml "
+# This is your sidebar TOC. The sidebar code loops through sections here and provides the appropriate formatting.
+
+entries:
+- title: sidebar
+  product: sl-sh doc
+  version: $((vec-nth (str-split :whitespace (version)) 1))
+  folders:
+
+  - title:
+    output: pdf
+    type: frontmatter
+    folderitems:
+    - title:
+      url: /titlepage.html
+      output: pdf
+      type: frontmatter
+    - title:
+      url: /tocpage.html
+      output: pdf
+      type: frontmatter
+
+  - title: Overview
+    output: web, pdf
+    folderitems:
+
+    - title: Get started
+      url: /index.html
+      output: web, pdf
+      type: homepage
+
+    - title: Introduction
+      url: /mydoc_introduction.html
+      output: web, pdf
+
+    - title: Support
+      url: /mydoc_support.html
+      output: web, pdf
+
+    - title: FAQ
+      url: /mydoc_faq_layout.html
+      output: web, pdf
+
+  - title: Standard Library
+    output: web, pdf
+    folderitems:
+
+    - title: Standard Library
+      url: /mydoc_api.html
+      output: web, pdf
+
+      subfolders:
+      - title: Quicker Links
+        output: web
+        subfolderitems:
+        $quicklinks
+      subfolders:
+      - title: Quick Links
+        output: web
+        subfolderitems:
+
+        $((make-sections (reduce (fn (fst nxt)
+            (hash-set! fst (nxt :section-key ) nil)) (make-hash) (map make-doc-struct (list-of-all-slsh-syms)))))
+
+  - title: Shell
+    output: web, pdf
+    folderitems:
+
+    - title: Namespaces
+      url: /mydoc_namespaces.html
+      output: web, pdf
+
+    - title: Slshrc config
+      url: /mydoc_slsh_config.html
+      output: web, pdf
+
+    - title: Working with files
+      url: /mydoc_files.html
+      output: web, pdf
+
+    - title: Endfix notation on the REPL
+      url: /mydoc_endfix.html
+      output: web, pdf
+
+    - title: Macros
+      url: /mydoc_macros.html
+      output: web, pdf
+
+    - title: Pipes
+      url: /mydoc_pipes.html
+      output: web, pdf
+
+  - title: Release Notes
+    output: web, pdf
+    folderitems:
+
+    - title: 1.0 Blockers
+      url: /mydoc_blockers_1_0.html
+      output: web, pdf
+
+  - title: Contributing
+    output: web, pdf
+
+    folderitems:
+    - title: Pull Requests
+      url: /mydoc_pull_requests.html
+      output: web, pdf"))
+      yml))
+
+(defn write-sidebar (dest-filename)
+    (let ((dest-file (open dest-filename :create :truncate)))
+      (for line in (str-split "\n" (-get-sidebar-yml))
+        (write-line dest-file line))
+      (close dest-file)))
+
+;;(write-sidebar "thefile.txt")
+
+(ns-auto-export 'mksidebar)
+(ns-pop)

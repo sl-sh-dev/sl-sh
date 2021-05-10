@@ -16,13 +16,13 @@ Some of the more prominent features of this theme include the following:
 
 * Supports endfix notation so familiar bash-isms like
     ```bash
-    cat file | tr -s " " | cut -d " " _f 2,4
+    cat file | tr -s " " | cut -d " " -f 2,4
     ```
     "just work" and writing said operations when using the shell is unnecessary.
 * Commpon Lisp style macro system with support for quote and backquote (with , and ,@ expansion).
-* Common Lisp style keyword symbols with colon.
+* Common Lisp style keyword symbols with colon, `:a-keyword`.
 * Dynamically Typed
-* OO functionality with lisp style defstruct and deftrait. TODO add links.
+* OO functionality with lisp style [defstruct](mydoc_api.html#struct::defstruct) and [deftrait](mydoc_api.html#struct::deftrait).
 * Mutable state (it's a shell!) but support for functional idioms is built into the standard lib, e.g. filter, reduce, apply, map, etc.
 * Support for an rc file to set up environment and fully customize your prompt.
 * Clojure style [threading macros](https://clojure.org/guides/threading_macros) and scheme style [pipeline operators](https://srfi.schemers.org/srfi-197/srfi-197.html).

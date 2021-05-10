@@ -29,11 +29,11 @@
 
 ;; shell helpers {{{
 
-    (defmacro rsynccp
-        "sane defaults for treating rsync like copy.
-        Section: user-shell"
-        (src target)
-        `$(rsync -av ,src ,target --progress --inplace --no-compress))
+(defmacro rsynccp
+    "sane defaults for treating rsync like copy.
+    Section: user-shell"
+    (src target)
+        `$(rsync -av ,@src ,target --progress --inplace --no-compress))
 
 	(defn dsh
 		"With no arguments: alias for du ./* -sh
@@ -623,13 +623,13 @@ Section: user-shell"
                     (append-to! fst (ns-symbols nxt)))
                 (list)
                 (filter (fn (x) (not (in? ns-to-filter-out x))) (ns-list))))
-          (filter-imported-std-lib-syms (iterator::filter
+          (proper-user-sym-list-no-std-lib-defs (iterator::filter
                 (fn (x)
                     (not (in? (hash-keys *std-lib-syms-hash*) x)))
                 almost-proper-sym-list)))
         (mkdocs::make-md-file
             api-page
-            filter-imported-std-lib-syms))
+            proper-user-sym-list-no-std-lib-defs))
 
     (println "Built docs!")))))
 (shell::popd)

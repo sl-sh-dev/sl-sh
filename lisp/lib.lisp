@@ -46,6 +46,66 @@ Example:
            (add-if-equals-item (fn (fst nxt) (if (= (xform nxt) item) (+ 1 fst) fst))))
       (iterator::reduce add-if-equals-item 0 sequence)))
 
+(defmacro ->
+"inserts result of previous expression as second argument to current expression.
+First argument is not evaluated.
+
+Section: threading-macros
+
+Example:
+
+(assert-equal
+    (str \"I go at the beginning.I'll be stuck in the middle.I'll be at the end.\")
+    (-> \"I go at the beginning.\"
+        (str \"I'll be stuck in the middle.\")
+        (str \"I'll be at the end.\")))"
+(&rest args)
+    (if (< (length args) 2)
+        (err "-> (thush operator) requires at least two arguments")
+        (let ((fst (first args))
+              (sexp)
+              (fcn))
+          (loop (curr-form forms) (fst (rest args))
+                (if (empty-seq? forms)
+                    curr-form
+                    (do
+                     (set! sexp nil)
+                     (set! fcn (first forms))
+                      (if (seq? fcn)
+                          (set! sexp `(,(first fcn) ,curr-form ,@(rest fcn)))
+                          (set! sexp (list fcn curr-form)))
+                      (recur sexp (rest forms))))))))
+
+(defmacro ->>
+"inserts result of previous expression as last argument to current expression.
+First argument is not evaluated.
+
+Section: threading-macros
+
+Example:
+
+(assert-equal
+    (str \"I'll be at the beginning.I'll be more in the middle.I go at the end.\")
+    (->> \"I go at the end.\"
+        (str \"I'll be more in the middle.\")
+        (str \"I'll be at the beginning.\")))"
+(&rest args)
+    (if (< (length args) 2)
+        (err "->> (thush operator) requires at least two arguments")
+        (let ((fst (first args))
+              (sexp)
+              (fcn))
+          (loop (curr-form forms) (fst (rest args))
+                (if (empty-seq? forms)
+                    curr-form
+                    (do
+                     (set! sexp nil)
+                     (set! fcn (first forms))
+                      (if (seq? fcn)
+                          (set! sexp `(,@fcn ,curr-form))
+                          (set! sexp (list fcn curr-form)))
+                      (recur sexp (rest forms))))))))
+
 (defmacro chain
 "Inserts result of previous expression into place indicated by the _ symbol
 in the next expression. This macro is useful when nested actions
@@ -60,7 +120,7 @@ results can be \"threaded\" into any desired place in a clause which is an
 advantage over the thread first, [->](#root::->) and thread last,
 [->>](#root::->>), macros
 
-Section: Threading-macros
+Section: threading-macros
 
 Example:
 
@@ -154,7 +214,7 @@ is evaluated. The chaining component of this macro works by threading init
 through the cdr of each pair whose car evaluates to true. Useful for building
 or modifying an object based on a set of boolean conditions.
 
-Section: Threading-macros
+Section: threading-macros
 
 Example:
 (defn add-number-attributes (n)
@@ -198,7 +258,7 @@ indicated by the _ symbol. This macro is useful when nested actions
 need to take place but the operations should stop and return nil if any step
 evaluates to false.
 
-Section: Threading-macros
+Section: threading-macros
 
 Example:
 (test::assert-false (chain-and \"howdy\" (string? _) (= _ \"howdy\")))

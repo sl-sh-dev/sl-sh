@@ -5,7 +5,7 @@ permalink: sl-sh-new-documentation.html
 tags: [news]
 ---
 
-Testing post functinoality. New documentation site has capability for
+Testing post functionality. New documentation site has capability for
 time based article sharing.
 
 {% include links.html %}
