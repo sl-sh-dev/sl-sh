@@ -14,16 +14,15 @@ for that).
 Section: shell
 
 Example:
-(shell::alias xx-echo1 (echo -en))
+(shell::alias xx-echo1 (echo arg1))
 (shell::alias xx-echo2 "Dummy doc string" (echo))
 (let ((file-name (str (temp-dir)"/alias-test.out"))
       (topen))
-  (out> file-name (xx-echo1 "stdout redir\\none1\\n"))
-  (out>> file-name (xx-echo2 "stdout redir\\none2"))
+  (out> file-name (xx-echo1 "stdout redir one1"))
+  (out>> file-name (xx-echo2 "stdout redir one2"))
   (set! topen (open file-name :read))
-  (test::assert-equal "stdout redir\n" (read-line topen))
-  (test::assert-equal "one1\n" (read-line topen))
-  (test::assert-equal "stdout redir\\none2\n" (read-line topen))
+  (test::assert-equal "arg1 stdout redir one1\n" (read-line topen))
+  (test::assert-equal "stdout redir one2\n" (read-line topen))
   (test::assert-false (read-line topen))
   (close topen))
 _"
@@ -58,10 +57,10 @@ Remove an alias.  Use this instead of undef to make sure book keeping happens.
 Section: shell
 
 Example:
-(shell::alias xx-echo (echo -en))
+(shell::alias xx-echo (echo))
 (let ((file-name (str (temp-dir)"/unalias-test.out"))
       (topen))
-  (out> file-name (xx-echo "stdout redir\\none1\\n"))
+  (out> file-name (xx-echo "stdout redir\none1"))
   (set! topen (open file-name :read))
   (test::assert-equal "stdout redir\n" (read-line topen))
   (test::assert-equal "one1\n" (read-line topen))
