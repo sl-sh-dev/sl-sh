@@ -75,15 +75,10 @@ entries:
     output: web, pdf
     folderitems:
 
-    - title: Standard Library
+    - title: Sl-sh Forms
       url: /mydoc_api.html
       output: web, pdf
 
-      subfolders:
-      - title: Quicker Links
-        output: web
-        subfolderitems:
-        $quicklinks
       subfolders:
       - title: Quick Links
         output: web
@@ -142,8 +137,6 @@ entries:
       (for line in (str-split "\n" (-get-sidebar-yml))
         (write-line dest-file line))
       (close dest-file)))
-
-;;(write-sidebar "thefile.txt")
 
 (ns-auto-export 'mksidebar)
 (ns-pop)
