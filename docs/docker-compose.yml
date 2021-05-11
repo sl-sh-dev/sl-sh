@@ -1,11 +1,11 @@
 version: '2'
 services:
-  server:
+    jekyll:
+        user: "1000:985"
     build:
-      context: .
-      dockerfile: Dockerfile
-    image: result/latest
+        context: .
+    dockerfile: Dockerfile
     ports:
-      - "4000:4000"
+        - "4000:4000"
     volumes:
-      - ".:/src"
+        - ".:/tmp"

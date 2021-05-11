@@ -266,7 +266,7 @@ Example:
 
 Returns non-negative number less than limit and of the same type as limit.
 
-Section: math
+Section: random
 
 Example:
 (def rand-int (random 100))

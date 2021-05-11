@@ -1172,8 +1172,16 @@ Section: iterator
 (:fn empty? (self) (if flip-flop (fst :empty?) (scnd :empty?)))
 (:fn init (self in-fst in-scnd)
      (do
-       (set! fst in-fst)
-       (set! scnd in-scnd)
+       (if (iter? in-fst)
+           (set! fst in-fst)
+           (if (seq? in-fst))
+            (set! fst (iter in-fst))
+            (err "first argument to zip must be iterator or vector"))
+       (if (iter? in-scnd)
+           (set! scnd in-scnd)
+           (if (seq? in-scnd))
+            (set! scnd (iter in-scnd))
+            (err "second argument to zip must be iterator or vector"))
        self))
 (:impl iterator::iterator iterator::double-ended-iterator))
 
@@ -1206,9 +1214,9 @@ Section: iterator
     to-repeat))
 (:fn init (self in-to-repeat in-len)
     (do
-        (set! to-repeat in-to-repeat)
-        (set! len in-len)
-        self))
+       (set! to-repeat in-to-repeat)
+       (set! len in-len)
+       self))
 (:impl iterator::iterator))
 
 (defn repeat
@@ -1238,9 +1246,13 @@ Section: iterator
 (:fn next! (self) (do
     (set! current (+ current 1))
     (provided-iter :next!)))
-(:fn init (self in-to-repeat in-len)
+(:fn init (self in-to-take in-len)
     (do
-        (set! provided-iter in-to-repeat)
+       (if (iter? in-to-take)
+           (set! provided-iter in-to-take)
+           (if (seq? in-to-take))
+            (set! provided-iter (iter in-to-take))
+            (err "first argument to take must be iterator or vector"))
         (set! len in-len)
         self))
 (:impl iterator::iterator))
