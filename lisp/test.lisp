@@ -109,10 +109,26 @@
     (for v in seq (if (= v value) (set! found t)))
     (if found (do (println (str value " found in " seq))(exit 3)))))
 
-(defmacro assert-error (form)
+(defmacro assert-error
+  "Test asserts an error is thrown.
+
+  Section: test
+
+  Example:
+  (test::assert-error (err \"error thrown\"))
+  "
+  (form)
     `(test::assert-equal :error (car (get-error ,form)) ". Expected :error"))
 
-(defmacro assert-error-msg (form msg)
+(defmacro assert-error-msg
+  "Test asserts an error is thrown with a given message.
+
+  Section: test
+
+  Example:
+  (test::assert-error-msg (err \"error thrown\") \"error thrown\")
+  "
+  (form msg)
     `((fn (ret) (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
      ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\""))
         (get-error ,form)))
@@ -122,7 +138,11 @@
     `(eval (read (str "(dyn exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))"))))
 
 (defmacro run-example
-      "Given a symbol, run any tests found in example section if exists."
+  "
+  Given a symbol, run any tests found in example section if exists.
+
+  Section: test
+  "
      (sym)
     `(let
         ((doc-list (str-split "Example:" (str (doc ,sym)))))
