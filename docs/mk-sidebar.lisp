@@ -10,6 +10,59 @@
 (ns-import 'docstruct)
 (ns-import 'mkdocs)
 
+(defn make-section (sym-list title sub-title url)
+        (let* ((sections-str (str-push! (str)
+                #\u{a} #\u{a}
+                #\u{20} #\u{20}
+                "- title:" #\u{20} title
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20}
+                "output: web, pdf"
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20}
+                "folderitems:"
+                #\u{a} #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20}
+                "- title: " sub-title
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "url: " url
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "output: web, pdf"
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "subfolders:"
+                #\u{a} #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "- title: Quick Links"
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "output: web"
+                #\u{a}
+                #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                "subfolderitems:"
+                #\u{a} #\u{a}))
+            (section-xform (fn (section-name)
+                (str-push! (str)
+                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "- title:" #\u{20} section-name
+                           #\u{a}
+                            #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "  url: /mydoc_api.html#" section-name "-body"
+                           #\u{a}
+                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
+                           "  output: web"
+                           #\u{a} #\u{a}
+                           )))
+            )
+          ;;(for i in sym-list (do
+          ;;     (println "i: " i)))
+          (for section in (hash-keys (reduce (fn (fst nxt)
+            (do (hash-set! fst (nxt :section-key) nil))) (make-hash) (map make-doc-struct sym-list)))
+               (str-push! sections-str (section-xform section)))
+              sections-str))
+
 (defn make-sections (sections)
         (let* (
             (sections-str (str))
@@ -27,8 +80,8 @@
                            ))))
           (for section in (hash-keys sections) (str-push! sections-str (section-xform section))) sections-str))
 
-(defn -get-sidebar-yml ()
-      (let ((yml "
+(defn -get-sidebar-yml (sym-list title sub-title url)
+      (let ((yml (str "
 # This is your sidebar TOC. The sidebar code loops through sections here and provides the appropriate formatting.
 
 entries:
@@ -70,23 +123,10 @@ entries:
     - title: FAQ
       url: /mydoc_faq_layout.html
       output: web, pdf
+"
+(make-section sym-list title sub-title url)
 
-  - title: Standard Library
-    output: web, pdf
-    folderitems:
-
-    - title: Sl-sh Forms
-      url: /mydoc_api.html
-      output: web, pdf
-
-      subfolders:
-      - title: Quick Links
-        output: web
-        subfolderitems:
-
-        $((make-sections (reduce (fn (fst nxt)
-            (hash-set! fst (nxt :section-key ) nil)) (make-hash) (map make-doc-struct (list-of-all-slsh-syms)))))
-
+"
   - title: Shell
     output: web, pdf
     folderitems:
@@ -129,12 +169,12 @@ entries:
     folderitems:
     - title: Pull Requests
       url: /mydoc_pull_requests.html
-      output: web, pdf"))
+      output: web, pdf")))
       yml))
 
-(defn write-sidebar (dest-filename)
+(defn write-sidebar (dest-filename sym-list title sub-title url)
     (let ((dest-file (open dest-filename :create :truncate)))
-      (for line in (str-split "\n" (-get-sidebar-yml))
+      (for line in (str-split "\n" (-get-sidebar-yml sym-list title sub-title url))
         (write-line dest-file line))
       (close dest-file)))
 

@@ -33,7 +33,7 @@ toc: false
       (str "#" (make-section-body-id name)))
 
 (defn make-section-contents-id (name)
-      (str "#" name "-contents"))
+      (str name "-contents"))
 
 (defn make-section-contents-link (name)
       (str "#" (make-section-contents-id name)))
@@ -99,6 +99,9 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
 (defn create-anchor (id)
 	(str "<a id=\"" id "\" class=\"anchor\" aria-hidden=\"true\" href=\"#sl-sh-form-documentation\"></a>"))
 
+(defn make-md-link-able-with-tooltip (link-display-text link tooltip)
+	(str "<a href='$link' title='$tooltip'>$link-display-test</a>"))
+
 (defn make-md-link-able (link-display-text link)
 	(str "[" link-display-text "](" link ")"))
 
@@ -142,7 +145,11 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
 		(write-string file
 			(str
 				(create-anchor (str (get-anchor-link-id doc-struct) "-contents"))
-				(make-md-link-able (str "``" doc-form "``") (str "#" (get-anchor-link-id doc-struct))))))))
+				(make-md-link-able
+                  (str "``" doc-form "``")
+                  (str "#" (get-anchor-link-id doc-struct))
+                  ;;(doc-struct :description)
+                  ))))))
 	(write-line file "")
 	(close file)
 	file-name))
@@ -213,7 +220,9 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
 				(write-line file "</code>")
 				(write-line file "</details>")
 				(write-line file "<br>"))
-			(write-line file "<br>"))))
+			(do
+              (write-line file "<br>")
+              (write-line file "<br>")))))
 
 (defn write-md-table (section-name docstrings file-name) (let
     ((file (open file-name :append))

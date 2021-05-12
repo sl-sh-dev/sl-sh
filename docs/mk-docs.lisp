@@ -35,7 +35,6 @@
 			(not (= x '*active-ns*))
 			(not (= x 'internal-fn))
 			(not (= x 'internal-macro))
-			(not (= x 'get-doc-list-for))
 			(not (= x 'make-md-file))
 			(not (= x '__completion_hook))
 			(not (= x '__line_handler))
@@ -45,39 +44,19 @@
 			(not (= x 'args))))
 		sym-list))
 
-(def *default-namespaces* (list "mkpost" "mkdocs" "docmd" "docstruct" "stats" "struct" "math" "iterator" "root" "test"))
-
-(defn list-of-all-slsh-syms ()
-    (let* ((sym-list (collect (filter-undocable-forms (qsort (hash-keys *std-lib-syms-hash*))))))
-    sym-list))
-
-(defn get-doc-list-for
-    (target-doc-form)
-    (match target-doc-form
-            (:single (append '() (last (list-of-all-slsh-syms))))
-            (:lang (list-of-all-slsh-syms))
-            (nil (err "target doc keyword invalid! must be one of :single, for
-                       a preview of one random doc, or :lang, to generate doc
-                       page for entire sl-sh std lib."))))
-
 (defn make-md-file
 "Generate slsh standard library documentation md page."
-(index-file syms-or-doc-form)
-	(if (symbol? syms-or-doc-form)
-      (let ((syms (collect-vec (map (fn (x) (sym x))
-			(get-doc-list-for syms-or-doc-form)))))
-		(gen-std-lib-md-file
-		index-file
-		syms))
+(index-file sym-list)
      ;;TODO this or requires too much esoteric knowledge to be a good callee
      ;; need a common way to ask if something is useable on the std lib's 
      ;; seq/iter stuffz.
-      (if (or (seq? syms-or-doc-form) (iter? syms-or-doc-form))
-        (let ((syms (collect-vec (map (fn (x) (sym x))
-               syms-or-doc-form))))
-          (gen-std-lib-md-file index-file (qsort syms)))
-        (err "second argument ot make-md-file must be keyword :single or :lang
-        or a sequence of sl-sh symbols"))))
+     ;;TODO need a few macros around get-error to make it less verbose to deal with,
+     ;; maybe form, if success, if failure
+      (if (or (seq? sym-list) (iter? sym-list))
+          (gen-std-lib-md-file index-file (qsort sym-list))
+          (err "second argument ot make-md-file must be keyword :single or :lang
+               or a sequence of sl-sh symbols")))
 
 (ns-auto-export 'mkdocs)
+
 (ns-pop)

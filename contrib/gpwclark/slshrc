@@ -608,7 +608,9 @@ Section: user-shell"
 ;; user ns docs {{{
 
 (def api-page-name "mydoc_api.md")
+(def sidebar-page-name "mydoc_sidebar.yml")
 (def api-page (str "pages/mydoc/" api-page-name))
+(def sidebar-page (str "_data/sidebars/" sidebar-page-name))
 (shell::pushd "/home/price/development/slsh/docs")
 (def docs-error-ret
     (get-error (when (or
@@ -616,20 +618,22 @@ Section: user-shell"
         (= api-page (str-trim (str $(find $api-page -type f -mmin "+1440"))))) (do
 
     (load "mk-docs.lisp")
+    (load "mk-sidebar.lisp")
 
-    (let* ((ns-to-filter-out (append-to! (list "mkdocs" "docparse" "docmd") *std-lib-namespaces*))
+    (let* ((ns-to-filter-out (append-to! (list "mksidebar" "mkdocs") *std-lib-namespaces*))
           (almost-proper-sym-list (iterator::reduce
                 (fn (fst nxt)
                     (append-to! fst (ns-symbols nxt)))
                 (list)
                 (filter (fn (x) (not (in? ns-to-filter-out x))) (ns-list))))
-          (proper-user-sym-list-no-std-lib-defs (iterator::filter
+          (proper-user-sym-list-no-std-lib-defs (collect (iterator::filter
                 (fn (x)
                     (not (in? (hash-keys *std-lib-syms-hash*) x)))
-                almost-proper-sym-list)))
+                almost-proper-sym-list))))
         (mkdocs::make-md-file
             api-page
-            proper-user-sym-list-no-std-lib-defs))
+            proper-user-sym-list-no-std-lib-defs)
+        (mksidebar::write-sidebar sidebar-page proper-user-sym-list-no-std-lib-defs "User Standard Lib" "User Forms" "/mydoc_api.html"))
 
     (println "Built docs!")))))
 (shell::popd)

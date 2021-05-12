@@ -113,16 +113,32 @@ Example:
 ;;; and (ns-symbols) must be done after all symbols and the namespaces they're
 ;;; defined in have been called.
 (def *std-lib-syms-hash*
-     "vector of all symbols in sl-sh-standard library
-     Section: globals"
-     (iterator::reduce
-                          (fn (fst nxt)
-                                (iterator::reduce (fn (fst x)
-                                            (hash-set! fst x nxt))
-                                        fst
-                                        (ns-symbols nxt)))
-                          (make-hash)
-                          *std-lib-namespaces*))
+    "vector of all symbols in sl-sh-standard library
+    Section: globals"
+    (iterator::reduce
+    (fn (fst nxt)
+        (iterator::reduce
+            (fn (fst x)
+                (hash-set! fst x nxt))
+            fst
+            (ns-symbols nxt)))
+    (make-hash)
+    *std-lib-namespaces*))
+
+(def *std-lib-exported-syms-hash*
+    "vector of all symbols in sl-sh-standard library
+    Section: globals"
+    (iterator::reduce
+    (fn (fst nxt)
+        (iterator::reduce
+            (fn (fst x)
+                (hash-set! fst x nxt))
+            fst
+            (if (= "root" nxt)
+              (ns-symbols nxt)
+              (eval (sym (str nxt "::*ns-exports*"))))))
+    (make-hash)
+    *std-lib-namespaces*))
 
 (if (ns-exists? 'user) (ns-enter 'user) (ns-create 'user))
 

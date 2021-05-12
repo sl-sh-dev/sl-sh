@@ -19,11 +19,15 @@
 
 (error-stack-on)
 
-(let ((result (get-error (let ((syms list-of-all-slsh-syms))
+(defn list-of-all-slsh-syms ()
+    (let ((sym-list (qsort (collect (filter-undocable-forms (hash-keys *std-lib-exported-syms-hash*))))))
+    sym-list))
+
+(let ((result (get-error (let ((sym-list (list-of-all-slsh-syms)))
   ;; TODO last updated line frontmatter line should update automatically.
   ;; create std lib md file
-  (write-sidebar "_data/sidebars/mydoc_sidebar.yml")
-  (make-md-file "pages/mydoc/mydoc_api.md" :lang)
+  (write-sidebar "_data/sidebars/mydoc_sidebar.yml"  sym-list "Standard Library" "Sl-sh Forms" "/mydoc_api.html")
+  (make-md-file "pages/mydoc/mydoc_api.md" sym-list)
   (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md")))))
   (if (= (car result) :ok)
     (cdr result)
