@@ -56,29 +56,10 @@
                            #\u{a} #\u{a}
                            )))
             )
-          ;;(for i in sym-list (do
-          ;;     (println "i: " i)))
-          (for section in (hash-keys (reduce (fn (fst nxt)
-            (do (hash-set! fst (nxt :section-key) nil))) (make-hash) (map make-doc-struct sym-list)))
+          (for section in (qsort (hash-keys (reduce (fn (fst nxt)
+            (do (hash-set! fst (nxt :section-key) nil))) (make-hash) (map make-doc-struct sym-list))))
                (str-push! sections-str (section-xform section)))
               sections-str))
-
-(defn make-sections (sections)
-        (let* (
-            (sections-str (str))
-            (section-xform (fn (section-name)
-                (str-push! (str)
-                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
-                           "- title:" #\u{20} section-name
-                           #\u{a}
-                            #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
-                           "  url: /mydoc_api.html#" section-name "-body"
-                           #\u{a}
-                           #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20} #\u{20}
-                           "  output: web"
-                           #\u{a} #\u{a}
-                           ))))
-          (for section in (hash-keys sections) (str-push! sections-str (section-xform section))) sections-str))
 
 (defn -get-sidebar-yml (sym-list title sub-title url)
       (let ((yml (str "
