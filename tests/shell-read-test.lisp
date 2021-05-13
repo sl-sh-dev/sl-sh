@@ -27,6 +27,13 @@ $(export BIN $((str-sub $GREP 0 (- (length $GREP) 6))))
 
 $(export YYY $($ECHO "1\n20\n10" | grep 1 | ${BIN}/grep 0))
 (test::assert-equal "10\n" $YYY)
+$(export YYY $($ECHO "1\n20\n10" | grep 1 | $BIN/grep 0))
+(test::assert-equal "10\n" $YYY)
+$(export YYY $($ECHO "1\n20\n10" | # Some comment
+    grep 1 |
+# Another comment...
+    $BIN/grep 0))
+(test::assert-equal "10\n" $YYY)
 
 $(echo "one" > $(temp-dir)/shell-read-test1.txt)
 (def topen (open (str (temp-dir) "/shell-read-test1.txt") :read))

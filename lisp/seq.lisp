@@ -4,7 +4,7 @@
 ;;; collections but these can still be useful for dealing with list/vectors.
 
 (defn seq?
-"Usage: (seq? expression) -> t/nil
+  "Usage: (seq? expression) -> t/nil
 
 True if expression is a list or vector, nil otherwise.
 
@@ -18,11 +18,11 @@ Example:
 (test::assert-false (seq? \"aaa\"))
 (test::assert-false (seq? 1))
 "
-    (obj)
-    (or (vec? obj)(list? obj)))
+  (obj)
+  (or (vec? obj)(list? obj)))
 
 (defn empty-seq?
-"Usage: (empty-seq? obj) -> t/nil
+  "Usage: (empty-seq? obj) -> t/nil
 
 `empty-seq?` returns true if a list or vector is empty and false/nil
 otherwise. If a non list or non vector is passed in it returns nil.
@@ -37,13 +37,13 @@ Example:
 (test::assert-false (empty-seq? \"aaa\"))
 (test::assert-false (empty-seq? 1))
 "
-    (obj)
-    (if (vec? obj) (vec-empty? obj)
-        (list? obj) (not obj)
-        nil))
+  (obj)
+  (if (vec? obj) (vec-empty? obj)
+      (list? obj) (not obj)
+      nil))
 
 (defn non-empty-seq?
-"Usage: (non-empty-seq? obj) -> t/nil
+  "Usage: (non-empty-seq? obj) -> t/nil
 
 `non-empty-seq?` returns true if a list or vector is not empty and false/nil
 otherwise. If a non list or non vector is passed in it returns nil.
@@ -58,13 +58,13 @@ Example:
 (test::assert-false (non-empty-seq? \"aaa\"))
 (test::assert-false (non-empty-seq? 1))
 "
-    (obj)
-    (if (vec? obj) (not (vec-empty? obj))
-        (list? obj) (not (not obj))
-        nil))
+  (obj)
+  (if (vec? obj) (not (vec-empty? obj))
+      (list? obj) (not (not obj))
+      nil))
 
 (defn last
-"
+  "
 Produces the last element in a list or vector.  Nil if the list/vector is empty.
 
 Section: sequence
@@ -76,18 +76,18 @@ Example:
 (assert-equal nil (last nil))
 (assert-equal nil (last '#()))
 "
-    (obj)
+  (obj)
 
-    (var last-list (fn (obj)
-        (if (null (cdr obj)) (car obj)
-            (recur (cdr obj)))))
+  (let ((last-list (fn (obj)
+                       (if (null (cdr obj)) (car obj)
+                           (recur (cdr obj))))))
 
     (if (vec? obj) (if (> (length obj) 0) (vec-nth obj (- (length obj) 1)) nil)
         (list? obj) (last-list obj)
-        (err "Not a vector or list")))
+        (err "Not a vector or list"))))
 
 (defn butlast
-"
+  "
 Produces the provided list minus the last element.  Nil if the list is empty or one element.
 
 Section: sequence
@@ -101,18 +101,18 @@ Example:
 (assert-equal nil (butlast nil))
 (assert-equal nil (butlast '#()))
 "
-    (obj)
-    (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
-        (list? obj) (do
-            (var new-link (join nil nil))
-            (if (null (cdr obj))
-                (set! new-link nil)
-                (set! new-link (join (car obj) (butlast (cdr obj)))))
-            new-link)
-        (err "Not a vector or list")))
+  (obj)
+  (if (vec? obj) (if (> (length obj) 0) (vec-slice obj 0 (- (length obj) 1)) nil)
+      (list? obj)
+      (let ((new-link (join nil nil)))
+        (if (null (cdr obj))
+            (set! new-link nil)
+            (set! new-link (join (car obj) (butlast (cdr obj)))))
+        new-link)
+      (err "Not a vector or list")))
 
 (defn setnth!
-"
+  "
 Sets idx item in the vector or list to obj, produces nil or errors on invalid input.
 This is destructive!  Because vectors support indexing and lists do not, this is
 a much faster operation for a vector (uses [builtin](root::builtin?) [vec-set!](root::vec-set!)
@@ -152,17 +152,17 @@ Example:
 (assert-error (setnth! 0 1 '()))
 (assert-error (setnth! 0 1 (list)))
 "
-    (idx obj sequence)
+  (idx obj sequence)
 
-    (var setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l)))))
+  (let ((setnth-list (fn (idx obj l) (if (= idx 0) (do (xar! l obj) nil) (recur (- idx 1) obj (cdr l))))))
 
     (if (empty-seq? sequence) (err "setnth!: Not a sequence or empty!"))
     (if (vec? sequence) (vec-set! sequence idx obj)
         (list? sequence) (do (setnth-list idx obj sequence) sequence)
-        (err "setnth!: Not a vector or list")))
+        (err "setnth!: Not a vector or list"))))
 
 (defn first
-"
+  "
 Produces the first element of the provided list or vector.  Nil if the
 list/vector is nil/empty.  Note this is like car that works for lists and
 vectors.
@@ -177,13 +177,13 @@ Example:
 (assert-equal nil (first nil))
 (assert-equal nil (first '#()))
 "
-    (obj)
-    (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
-        (list? obj) (car obj)
-        (err "Not a vector or list")))
+  (obj)
+  (if (vec? obj) (if (vec-empty? obj) nil (vec-nth obj 0))
+      (list? obj) (car obj)
+      (err "Not a vector or list")))
 
 (defn rest
-"
+  "
 Produces the provided list or vector minus the first element.  Nil if the
 list/vector is nil/empty or one element.  Note this is like cdr that works for
 lists and vectors.  This calls vec-slice to create a new vector when called with
@@ -201,13 +201,13 @@ Example:
 (assert-equal nil (rest nil))
 (assert-equal nil (rest '#()))
 "
-    (obj)
-    (if (vec? obj) (vec-slice obj 1)
-        (list? obj) (cdr obj)
-        (err "Not a vector or list")))
+  (obj)
+  (if (vec? obj) (vec-slice obj 1)
+      (list? obj) (cdr obj)
+      (err "Not a vector or list")))
 
 (defmacro seq-for
-"
+  "
 Loops over each element in a sequence.  Simple version that works with lists and
 vectors, use iterator::for in general.
 
@@ -218,17 +218,16 @@ Example:
 (seq-for x in '(1 2 3 4 5 6) (set! i (+ 1 i)))
 (assert-equal 6 i)
 "
-    (bind in items body) (do
-    (if (not (= in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
-    `((fn (lst)
-         (if (non-empty-seq? lst)
-           (do
-             (var ,bind (first lst))
-             (,@body)
-             (recur (rest lst))))),items)))
+  (bind in items body) (do
+                        (if (not (= in 'in)) (err "Invalid seq-for: (for [i] in [sequence] (body))"))
+                        `((fn (lst)
+                              (if (non-empty-seq? lst)
+                                  (let ((,bind (first lst)))
+                                    (,@body)
+                                    (recur (rest lst))))),items)))
 
 (defn in?
-"
+  "
 Takes a [seq?](#root::seq?) that is not an [empty-seq?](#root::empty-seq?) and
 returns true if the second argument is is in list, false otherwise.
 
@@ -242,16 +241,16 @@ Example:
     (assert-false (in? 8 18)))
 "
   (seq-to-search item-to-match)
-    (when (or (seq? seq-to-search)(iterator::iter? seq-to-search)) (do
-        (var seq-iter (iterator::iter seq-to-search))
-        (var inner-in (fn (seq-iter item-to-match)
-            (if (iterator::empty? seq-iter) nil
-                (if (= item-to-match (iterator::next! seq-iter)) t
-                    (recur seq-iter item-to-match)))))
-        (inner-in seq-iter item-to-match))))
+  (when (or (seq? seq-to-search)(iterator::iter? seq-to-search))
+    (let ((seq-iter (iterator::iter seq-to-search))
+          (inner-in (fn (seq-iter item-to-match)
+                        (if (iterator::empty? seq-iter) nil
+                            (if (= item-to-match (iterator::next! seq-iter)) #t
+                                (recur seq-iter item-to-match))))))
+      (inner-in seq-iter item-to-match))))
 
 (defn collect-copy
-"
+  "
 Produces a copy of the provided list (copy has same type as the parameter).
 
 Section: sequence
@@ -270,27 +269,26 @@ Example:
 (assert-equal test-colcv test-colcv2)
 "
 
-(seq)
-    (var tseq nil)
+  (seq)
+  (let ((tseq nil))
     (if (vec? seq)
         (do
-            (set! tseq (make-vec (length seq)))
-            (seq-for el in seq (vec-push! tseq el))
-            tseq)
+         (set! tseq (make-vec (length seq)))
+         (seq-for el in seq (vec-push! tseq el))
+         tseq)
         (if (list? seq)
-            (do
-                (set! tseq nil)
-                (var tcell nil)
-                (var head nil)
-                (seq-for el in seq (do
-                    (if (null head)
-                        (do (set! tseq (set! head (join el nil))))
-                        (do (set! tcell (join el nil)) (xdr! tseq tcell) (set! tseq tcell)))))
-                head)
-            (err "Not a list or vector."))))
+            (let ((tcell nil)
+                  (head nil))
+              (set! tseq nil)
+              (seq-for el in seq (do
+                                  (if (null head)
+                                      (do (set! tseq (set! head (join el nil))))
+                                      (do (set! tcell (join el nil)) (xdr! tseq tcell) (set! tseq tcell)))))
+              head)
+            (err "Not a list or vector.")))))
 
 (defn qsort
-"Usage: (qsort sequence comp-lambda?) -> [sorted vector]
+  "Usage: (qsort sequence comp-lambda?) -> [sorted vector]
 
 Sort a sequence using the quick sort algorithm.  Returns a vector of the sorted sequence.
 
@@ -320,45 +318,44 @@ Example:
 (test::assert-equal '#() (qsort '()))
 (test::assert-equal '#() (qsort '#()))
 "
-    (lst &rest comp)
-    (var quick-inner (fn (comp-fn sorted to-sort)
-        (if (> (length to-sort) 0) (do
-            (var lst (vec-pop! to-sort))
-            (if (not (seq? lst))
-                (do
-                    (vec-push! sorted lst)
-                    (recur comp-fn sorted to-sort))
-                (if (<= (length lst) 1)
-                    (do
-                        (if (= (length lst) 1)
-                            (vec-push! sorted (vec-pop! lst)))
-                        (recur comp-fn sorted to-sort))
-                    (do
-                        (var pivot (first lst))
-                        (var less (vec))
-                        (var greater (vec))
-                        ; Don't have for yet so do it the "hard" way.
-                        ((fn (lst)
-                          (if (non-empty-seq? lst)
+  (lst &rest comp)
+  (let ((sorted)
+        (to-sort)
+        (comp-fn)
+        (quick-inner
+          (fn (comp-fn sorted to-sort)
+              (if (> (length to-sort) 0)
+                  (let ((lst (vec-pop! to-sort)))
+                    (if (not (seq? lst))
+                        (do
+                         (vec-push! sorted lst)
+                         (recur comp-fn sorted to-sort))
+                        (if (<= (length lst) 1)
                             (do
-                              (var i (first lst))
-                              (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i))
-                              (recur (rest lst)))))(rest lst))
-                        ;(iterator::for i in (rest lst)
-                        ;    (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i)))
-                        (vec-push! to-sort greater)
-                        (vec-push! to-sort pivot)
-                        (vec-push! to-sort less)
-                        (recur comp-fn sorted to-sort)))))
+                             (if (= (length lst) 1)
+                                 (vec-push! sorted (vec-pop! lst)))
+                             (recur comp-fn sorted to-sort))
+                            (let ((pivot (first lst))
+                                  (less (vec))
+                                  (greater (vec)))
+                              ; Don't have for yet so do it the "hard" way.
+                              ((fn (lst)
+                                   (if (non-empty-seq? lst)
+                                       (let ((i (first lst)))
+                                         (if (comp-fn i pivot) (vec-push! less i) (vec-push! greater i))
+                                         (recur (rest lst)))))(rest lst))
+                              (vec-push! to-sort greater)
+                              (vec-push! to-sort pivot)
+                              (vec-push! to-sort less)
+                              (recur comp-fn sorted to-sort)))))
 
-            sorted)))
+                  sorted))))
 
     (if (> (length comp) 1) (err "qsort takes one option compare lambda"))
-    (var comp-fn (if (= (length comp) 1) (first comp) <))
+    (set! comp-fn (if (= (length comp) 1) (first comp) <))
     (if (not (or (lambda? comp-fn)(builtin? comp-fn))) (err "compare must be a callable"))
-    (var sorted (vec))
-    (var to-sort (vec))
+    (set! sorted (vec))
+    (set! to-sort (vec))
     (vec-push! to-sort lst)
     (quick-inner comp-fn sorted to-sort)
-    sorted)
-
+    sorted))

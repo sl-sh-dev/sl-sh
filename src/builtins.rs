@@ -385,7 +385,7 @@ fn builtin_if(
     while let Some(arg) = next_arg {
         if args.peek().is_some() {
             let cond = eval(environment, arg)?;
-            if cond.is_nil() {
+            if cond.is_falsy() {
                 args.next();
             } else {
                 return eval_nr(environment, args.next().unwrap());
@@ -395,7 +395,7 @@ fn builtin_if(
         }
         next_arg = args.next();
         if next_arg.is_none() {
-            return Ok(Expression::make_nil());
+            return Ok(Expression::make_false());
         }
     }
     Err(LispError::new("if: requires expressions"))
@@ -610,8 +610,8 @@ fn builtin_and(
     let mut last_exp = None;
     for arg in args {
         let arg = eval(environment, arg)?;
-        if arg.is_nil() {
-            return Ok(Expression::alloc_data(ExpEnum::Nil));
+        if arg.is_falsy() {
+            return Ok(Expression::make_false());
         } else {
             last_exp = Some(arg);
         }
@@ -625,11 +625,11 @@ fn builtin_or(
 ) -> Result<Expression, LispError> {
     for arg in args {
         let arg = eval(environment, arg)?;
-        if !arg.is_nil() {
+        if !arg.is_falsy() {
             return Ok(arg);
         }
     }
-    Ok(Expression::alloc_data(ExpEnum::Nil))
+    Ok(Expression::make_false())
 }
 
 fn builtin_not(
@@ -639,10 +639,10 @@ fn builtin_not(
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return if arg0.is_nil() {
-                Ok(Expression::alloc_data(ExpEnum::True))
+            return if arg0.is_falsy() {
+                Ok(Expression::make_true())
             } else {
-                Ok(Expression::alloc_data(ExpEnum::Nil))
+                Ok(Expression::make_false())
             };
         }
     }
@@ -1127,11 +1127,6 @@ pub fn builtin_block(
                 break;
             }
         }
-        /*ret = if let Some(ret) = ret {
-            Some(ret.resolve(environment)?)
-        } else {
-            None
-        };*/
         if let Some(ret) = check_return(environment, name) {
             return Ok(ret);
         }
@@ -1594,39 +1589,47 @@ Example:
             builtin_if,
             "Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]
 
-If conditional.  Will evaluate p1 and if true (i.e. not nil) then return the
-evaluation of a1, if nil evaluate p2 and so on.  On an odd number of arguments
-(an is missing) then evaluate and return pn.  Return nil if no predicate is
-true.  This degenerates into the traditional (if predicate then-form else-form).
+If conditional.  Will evaluate p1 and if true (i.e. not nil or false) then
+return the evaluation of a1, if falsy(i.e. nil or false) evaluate p2 and so on.
+On an odd number of arguments (an is missing) then evaluate and return pn.
+Return false(#f) if no predicate is true.  This degenerates into the traditional
+(if predicate then-form else-form).
+NOTE: Both nil and false(#f) are 'falsy' for the purposes of if.
 
 Section: conditional
 
 Example:
 (def test-if-one
-    (if t \"ONE TRUE\" \"ONE FALSE\"))
+    (if #t \"ONE TRUE\" \"ONE FALSE\"))
 (def test-if-two
     (if nil \"TWO TRUE\" \"TWO FALSE\"))
+(def test-if-three
+    (if #f \"THREE TRUE\" \"THREE FALSE\"))
 (test::assert-equal \"ONE TRUE\" test-if-one)
 (test::assert-equal \"TWO FALSE\" test-if-two)
+(test::assert-equal \"THREE FALSE\" test-if-three)
 
 (def test-if-one2
-    (if t \"ONE2 TRUE\"))
+    (if #t \"ONE2 TRUE\"))
 (def test-if-two2
     (if nil \"TWO2 TRUE\"))
+(def test-if-three2
+    (if #f \"THREE2 TRUE\"))
 (test::assert-equal \"ONE2 TRUE\" test-if-one2)
-(test::assert-equal nil test-if-two2)
+(test::assert-equal #f test-if-two2)
+(test::assert-equal #f test-if-three2)
 
 (def test-if-one2
-    (if nil \"ONE FALSE\" t \"ONE TRUE\" t \"ONE TRUE2\"))
+    (if nil \"ONE FALSE\" #t \"ONE TRUE\" #t \"ONE TRUE2\"))
 (def test-if-two2
-    (if nil \"TWO TRUE\" nil \"TWO FALSE\" t \"TWO TRUE2\"))
+    (if nil \"TWO TRUE\" #f \"TWO FALSE\" #t \"TWO TRUE2\"))
 (def test-if-three2
-    (if nil \"THREE TRUE\" nil \"THREE FALSE\" \"THREE DEFAULT\"))
+    (if #f \"THREE TRUE\" nil \"THREE FALSE\" \"THREE DEFAULT\"))
 (test::assert-equal \"ONE TRUE\" test-if-one2)
 (test::assert-equal \"TWO TRUE2\" test-if-two2)
 (test::assert-equal \"THREE DEFAULT\" test-if-three2)
-(test::assert-false (if nil))
-(test::assert-false (if nil t nil t nil t))
+(test::assert-equal nil (if nil))
+(test::assert-equal #f (if nil #t nil #t nil t))
 ",
         ),
     );
@@ -1814,44 +1817,50 @@ Example:
 ",
         ),
     );
-    /*data.insert(
-        "spawn"),
-        Expression::Func(builtin_spawn)),
-    );*/
     data.insert(
         interner.intern("and"),
-        Expression::make_special(builtin_and,
-        "Usage: (and exp0 ... expN) -> [nil or expN result]
+        Expression::make_special(
+            builtin_and,
+            "Usage: (and exp0 ... expN) -> [false(#f) or expN result]
 
-Evaluates each form until one produces nil (false), produces nil if any form is nil or the result of the last expression.
+Evaluates each form until one produces nil or false(#f), produces false(#f) if
+any form is nil/#f or the result of the last expression.
 
-The and form will stop evaluating when the first expression produces nil.
+The and form will stop evaluating when the first expression produces nil/#f.
 
 Section: conditional
 
 Example:
-(test::assert-false (and nil (err \"and- can not happen\")))
-(test::assert-equal \"and- done\" (and t \"and- done\"))
-(test::assert-equal \"and- done\" (and t t \"and- done\"))
-(test::assert-equal 6 (and t t (+ 1 2 3)))
+(test::assert-equal #f (and nil (err \"and- can not happen\")))
+(test::assert-equal #f (and #f (err \"and- can not happen\")))
+(test::assert-equal \"and- done\" (and #t \"and- done\"))
+(test::assert-equal \"and- done\" (and #t #t \"and- done\"))
+(test::assert-equal 6 (and #t #t (+ 1 2 3)))
 (test::assert-equal 6 (and (/ 10 5) (* 5 2) (+ 1 2 3)))
-"),
+",
+        ),
     );
     data.insert(
         interner.intern("or"),
         Expression::make_special(
             builtin_or,
-            "Usage: (or exp0 ... expN) -> [nil or first non nil expression]
+            "Usage: (or exp0 ... expN) -> [false(#f) or first non nil expression]
 
-Evaluates each form until one produces a non-nil result, produces nil if all expressions are nil.
+Evaluates each form until one produces a non-nil/non-false result, produces #f
+if all expressions are 'falsy'.
 
-The or form will stop evaluating when the first expression produces non-nil.
+The or form will stop evaluating when the first expression produces non-nil/false.
 
 Section: conditional
 
 Example:
-(test::assert-true (or nil nil t (err \"and- can not happen\")))
-(test::assert-false (or nil nil nil))
+(test::assert-true (or nil nil #t (err \"and- can not happen\")))
+(test::assert-true (or #f nil #t (err \"and- can not happen\")))
+(test::assert-true (or #f #f #t (err \"and- can not happen\")))
+(test::assert-equal #f (or nil nil nil))
+(test::assert-equal #f (or #f nil nil))
+(test::assert-equal #f (or #f nil #f))
+(test::assert-equal #f (or #f #f #f))
 (test::assert-equal \"or- done\" (or nil \"or- done\"))
 (test::assert-equal \"or- done\" (or nil nil \"or- done\"))
 (test::assert-equal 6 (or nil nil (+ 1 2 3)))
@@ -1865,14 +1874,14 @@ Example:
             builtin_not,
             "Usage: (not expression)
 
-Return true if expression is nil.
+Return true(#t) if expression is nil, false(#f) otherwise.
 
 Section: conditional
 
 Example:
 (test::assert-true (not nil))
 (test::assert-false (not 10))
-(test::assert-false (not t))
+(test::assert-false (not #t))
 (test::assert-false (not (+ 1 2 3)))
 ",
         ),
@@ -1883,14 +1892,14 @@ Example:
             builtin_not,
             "Usage: (null expression)
 
-Return true if expression is nil (null).
+Return true(#t) if expression is nil (null).
 
 Section: conditional
 
 Example:
 (test::assert-true (null nil))
 (test::assert-false (null 10))
-(test::assert-false (null t))
+(test::assert-false (null #t))
 (test::assert-false (null (+ 1 2 3)))
 ",
         ),
@@ -2166,7 +2175,7 @@ Section: core
 
 Example:
 ;(doc 'car)
-t
+#t
 ",
         ),
     );
@@ -2182,7 +2191,7 @@ Section: core
 
 Example:
 ;(doc-raw 'car)
-t
+#t
 ",
         ),
     );
@@ -2206,7 +2215,7 @@ Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
-(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy #t) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block yyy ((fn (p) (return-from yyy p)) '(5 6)) '(a b)) '(2 3))
 (test::assert-equal 2
     (block forloop
@@ -2233,7 +2242,7 @@ Example:
 (test::assert-equal '(4 5) (block xxx '(1 2) (return-from nil '(4 5)) '(a b) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy (return-from xxx '(5 6)) '(a b)) '(2 3)))
 (test::assert-equal '(5 6) (block xxx '(1 2) (block yyy ((fn (p) (return-from xxx p)) '(5 6)) '(a b)) '(2 3)))
-(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy t) '(a b)) '(2 3)))
+(test::assert-equal '(2 3) (block xxx '(1 2) (block yyy (return-from yyy #t) '(a b)) '(2 3)))
 "
         ),
     );
@@ -2250,7 +2259,7 @@ Section: core
 
 Example:
 ;(intern-stats)
-t
+#t
 ",
         ),
     );
@@ -2267,7 +2276,7 @@ Section: core
 
 Example:
 ;(meta-line-no)
-t
+#t
 ",
         ),
     );
@@ -2284,7 +2293,7 @@ Section: core
 
 Example:
 ;(meta-column-no)
-t
+#t
 ",
         ),
     );
@@ -2301,7 +2310,7 @@ Section: core
 
 Example:
 ;(meta-file-name)
-t
+#t
 ",
         ),
     );
@@ -2524,7 +2533,7 @@ Section: core
 
 Example:
 ;(print *core-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2541,7 +2550,7 @@ Section: core
 
 Example:
 ;(print *struct-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2558,7 +2567,7 @@ Section: core
 
 Example:
 ;(print *iterator-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2575,7 +2584,7 @@ Section: core
 
 Example:
 ;(print *collection-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2592,7 +2601,7 @@ Section: core
 
 Example:
 ;(print *seq-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2609,7 +2618,7 @@ Section: core
 
 Example:
 ;(print *shell-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2626,7 +2635,7 @@ Section: core
 
 Example:
 ;(print *getopts-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2643,7 +2652,7 @@ Section: core
 
 Example:
 ;(print *test-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2660,7 +2669,7 @@ Section: core
 
 Example:
 ;(print *lib-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2677,7 +2686,7 @@ Section: core
 
 Example:
 ;(print *shell-read-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2694,7 +2703,7 @@ Section: core
 
 Example:
 ;(print *slsh-std-src*)
-t
+#t
 "
             .to_string(),
         ),
@@ -2711,7 +2720,7 @@ Section: core
 
 Example:
 ;(print *slshrc-src*)
-t
+#t
 "
             .to_string(),
         ),

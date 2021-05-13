@@ -345,7 +345,7 @@ Make a new vector with items.
 Section: vector
 
 Example:
-(test::assert-false (vec))
+(test::assert-equal '() (vec))
 (test::assert-equal '(1 2 3) (vec 1 2 3))
 ",
         ),
@@ -361,7 +361,7 @@ Make a new vector with capacity and default item(s).
 Section: vector
 
 Example:
-(test::assert-false (make-vec))
+(test::assert-equal '() (make-vec))
 (test::assert-equal '(x x x) (make-vec 3 'x))
 (test::assert-equal '(nil nil nil nil nil) (make-vec 5 nil))
 (test::assert-equal '() (make-vec 5))

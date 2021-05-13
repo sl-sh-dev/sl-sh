@@ -67,7 +67,7 @@
 
 (defn map= (m n)
     (var keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
-                       (if (nil? last-ret)
+                       (if (not last-ret)
                          nil
                          (if (empty-seq? m-keys)
                            #t

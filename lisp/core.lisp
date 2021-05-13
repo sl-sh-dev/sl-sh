@@ -94,7 +94,7 @@ Example:
 (test::assert-equal 7 (defn-test 2 3))
 (defn defn-test (x y))
 (test::assert-false (defn-test 2 3))
-(defn defn-test (x y) t)
+(defn defn-test (x y) #t)
 (test::assert-true (defn-test 2 3))
 "
     (name &rest args)
@@ -158,7 +158,7 @@ Example:
     ()
     `(do
         (ns-enter (car ^ns-stack-xyz^))
-        (set! ^ns-stack-xyz^ (cdr ^ns-stack-xyz^))));)
+        (set! ^ns-stack-xyz^ (cdr ^ns-stack-xyz^))))
 
 (defmacro let
   "Takes list, vals, of form ((binding0 sexp0) (binding1 sexp1) ...) and evaluates
@@ -308,7 +308,7 @@ Example:
 (assert-equal \"opt-two\" (select-option 2))
 (assert-equal b 5)
 (assert-equal \"opt-three\" (select-option 3))
-(assert-equal nil (select-option 4))
+(assert-equal #f (select-option 4))
 (assert-equal \"opt-one\" (select-option-def 1))
 (assert-equal \"opt-two\" (select-option-def 2))
 (assert-equal \"opt-three\" (select-option-def 3))
@@ -347,7 +347,7 @@ Example:
     (cond ((= a 1) \"opt-one\")
           ((= a 2) \"opt-two\")
           ((= a 3) (str \"opt\" \"-three\"))
-          (t \"default\")))
+          (#t \"default\")))
 (def b 0)
 (assert-equal \"opt-one\" (select-option 1))
 (assert-equal b 0)

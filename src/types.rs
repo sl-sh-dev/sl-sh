@@ -241,6 +241,7 @@ impl SymLoc {
 pub enum ExpEnum {
     // Primatives
     True,
+    False,
     Nil,
     Float(f64),
     Int(i64),
@@ -328,6 +329,7 @@ impl ExpEnum {
     fn copy(&self) -> ExpEnum {
         match self {
             ExpEnum::True => ExpEnum::True,
+            ExpEnum::False => ExpEnum::False,
             ExpEnum::Nil => ExpEnum::Nil,
             ExpEnum::Float(n) => ExpEnum::Float(*n),
             ExpEnum::Int(i) => ExpEnum::Int(*i),
@@ -364,6 +366,7 @@ impl Clone for ExpEnum {
     fn clone(&self) -> ExpEnum {
         match self {
             ExpEnum::True => ExpEnum::True,
+            ExpEnum::False => ExpEnum::False,
             ExpEnum::Nil => ExpEnum::Nil,
             ExpEnum::Float(n) => ExpEnum::Float(*n),
             ExpEnum::Int(i) => ExpEnum::Int(*i),
@@ -397,6 +400,7 @@ impl fmt::Debug for ExpEnum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
             ExpEnum::True => write!(f, "ExpEnum::True"),
+            ExpEnum::False => write!(f, "ExpEnum::False"),
             ExpEnum::Float(n) => write!(f, "ExpEnum::Float({})", n),
             ExpEnum::Int(i) => write!(f, "ExpEnum::Int({})", i),
             ExpEnum::Symbol(s, loc) => write!(f, "ExpEnum::Symbol({}, {:?})", s, loc),
@@ -579,6 +583,15 @@ impl Expression {
         })
     }
 
+    pub fn make_false() -> Expression {
+        Expression::alloc(ExpObj {
+            data: ExpEnum::False,
+            meta: None,
+            meta_tags: None,
+            analyzed: RefCell::new(false),
+        })
+    }
+
     pub fn duplicate(&self) -> Expression {
         Expression::alloc(self.get().clone())
     }
@@ -614,6 +627,11 @@ impl Expression {
     pub fn is_nil(&self) -> bool {
         let data = &self.get().data;
         matches!(data, ExpEnum::Nil)
+    }
+
+    pub fn is_falsy(&self) -> bool {
+        let data = &self.get().data;
+        matches!(data, ExpEnum::Nil | ExpEnum::False)
     }
 
     // If the expression is a lazy fn then resolve it to concrete expression.
@@ -714,6 +732,7 @@ impl Expression {
     pub fn display_type(&self) -> String {
         match &self.get().data {
             ExpEnum::True => "True".to_string(),
+            ExpEnum::False => "False".to_string(),
             ExpEnum::Float(_) => "Float".to_string(),
             ExpEnum::Int(_) => "Int".to_string(),
             ExpEnum::Symbol(_, _) => "Symbol".to_string(),
@@ -946,10 +965,10 @@ impl Expression {
                         }
                     }
                     Some((_, None)) => {
-                        return Err(LispError::new("Failed to get process to write to."));
+                        // Got a process with no grabbed output so nothing to write...
                     }
                     None => {
-                        return Err(LispError::new("Failed to get process to write to."));
+                        // Appear to have a stale process, nothing to write.
                     }
                 }
                 drop(procs);

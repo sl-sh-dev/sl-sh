@@ -198,6 +198,7 @@ fn do_char(
                         "{}",
                         read_utf_scalar(&mut chars, &mut environment.reader_state)?
                     );
+                    // XXX TODO- codepoint here?
                     return Ok(Expression::alloc_data(ExpEnum::Char(char_str.into())));
                 }
                 "x" => {
@@ -448,6 +449,51 @@ fn read_string(
     }
 }
 
+fn read_string_literal(
+    environment: &mut Environment,
+    mut chars: CharIter,
+    symbol: &mut String,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    symbol.clear();
+    let meta = get_meta(
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
+    );
+    let end_ch = if let Some(ch) = chars.next() {
+        ch
+    } else {
+        return Err((
+            ReadError {
+                reason: "Unexpected stream end on string literal".to_string(),
+            },
+            chars,
+        ));
+    };
+
+    while let Some(ch) = chars.next() {
+        let peek = if let Some(pch) = chars.peek() {
+            pch
+        } else {
+            ""
+        };
+        if ch == end_ch && peek == "\"" {
+            chars.next();
+            return Ok((
+                make_exp(ExpEnum::String(symbol.clone().into(), None), meta),
+                chars,
+            ));
+        }
+        symbol.push_str(&ch);
+    }
+    Err((
+        ReadError {
+            reason: "Unexpected end of string literal".to_string(),
+        },
+        chars,
+    ))
+}
+
 fn do_atom(
     environment: &mut Environment,
     symbol: &str,
@@ -475,9 +521,7 @@ fn do_atom(
         if symbol.is_empty() {
             return make_exp(ExpEnum::Nil, meta);
         }
-        if symbol == "t" {
-            make_exp(ExpEnum::True, meta)
-        } else if symbol == "nil" {
+        if symbol == "nil" {
             make_exp(ExpEnum::Nil, meta)
         } else {
             make_exp(
@@ -1177,8 +1221,15 @@ fn read_inner(
                         return Ok((Some(exp), chars));
                     }
                     "t" => {
-                        return Ok((Some(Expression::alloc_data(ExpEnum::True)), chars));
+                        return Ok((Some(Expression::make_true()), chars));
                     }
+                    "f" => {
+                        return Ok((Some(Expression::make_false()), chars));
+                    }
+                    "\"" => match read_string_literal(environment, chars, buffer) {
+                        Ok((s, ichars)) => return Ok((Some(s), ichars)),
+                        Err((e, ichars)) => return Err((e, ichars)),
+                    },
                     "." => {
                         return prep_reader_macro(environment, chars, "reader-macro-dot", ".");
                     }
@@ -1200,6 +1251,14 @@ fn read_inner(
                             read_num_radix(environment, chars, buffer, 2, meta, read_table_term)?;
                         return Ok((Some(exp), chars));
                     }
+                    ";" => match read_inner(environment, chars, buffer, in_back_quote, false) {
+                        Ok((_, ichars)) => {
+                            return Ok((None, ichars));
+                        }
+                        Err((err, ichars)) => {
+                            return Err((err, ichars));
+                        }
+                    },
                     _ => {
                         let reason = format!(
                             "Found # with invalid char {}: line {}, col: {}",
@@ -1380,16 +1439,6 @@ pub fn read(
     read2(environment, text, false, name, list_only)
 }
 
-// Read the text but always wrap in an outer list even if text is one list.
-// Useful for loading scripts.
-/*pub fn read_list_wrap(
-    environment: &mut Environment,
-    text: &str,
-    name: Option<&'static str>,
-) -> Result<Expression, ReadError> {
-    read2(environment, text, true, name, false)
-}*/
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1525,6 +1574,24 @@ mod tests {
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
         let tokens = tokenize(&mut environment, "'((1 2 (3)))", None);
+        assert!(tokens.len() == 12);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:quote");
+        assert!(tokens[2] == "(");
+        assert!(tokens[3] == "(");
+        assert!(tokens[4] == "Int:1");
+        assert!(tokens[5] == "Int:2");
+        assert!(tokens[6] == "(");
+        assert!(tokens[7] == "Int:3");
+        assert!(tokens[8] == ")");
+        assert!(tokens[9] == ")");
+        assert!(tokens[10] == ")");
+        assert!(tokens[11] == ")");
+        let tokens = tokenize(
+            &mut environment,
+            "'((1 2 #;4 #;\"gone\"(3#;(x)) #;'(1 2 3)))",
+            None,
+        );
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:quote");
@@ -1812,12 +1879,29 @@ mod tests {
     #[test]
     fn test_tok_strings() {
         let mut environment = build_def_env();
-        let input =
-            "\"on\\te\\ntwo\" two \"th\\rree\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
+        let input = r#""on\te\ntwo" two "th\rree" "fo\"u\\r" 5 6 "slash\x2fx\x2F\x3a\x3b""#;
         let tokens = tokenize(&mut environment, input, None);
         assert!(tokens.len() == 9);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "String:\"on\te\ntwo\"");
+        assert!(tokens[2] == "Symbol:two");
+        assert!(tokens[3] == "String:\"th\rree\"");
+        assert!(tokens[4] == "String:\"fo\"u\\r\"");
+        assert!(tokens[5] == "Int:5");
+        assert!(tokens[6] == "Int:6");
+        assert!(tokens[7] == "String:\"slash/x/:;\"");
+        assert!(tokens[8] == ")");
+
+        let input = r##"#"_on	e
+two_" two "th\rree" "fo\"u\\r" 5 6 #"_slash/x/:;_""##;
+        let tokens = tokenize(&mut environment, input, None);
+        assert!(tokens.len() == 9);
+        assert!(tokens[0] == "#(");
+        assert!(
+            tokens[1]
+                == r#"String:"on	e
+two""#
+        );
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "String:\"th\rree\"");
         assert!(tokens[4] == "String:\"fo\"u\\r\"");

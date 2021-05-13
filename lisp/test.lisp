@@ -13,11 +13,11 @@
     "
     (list1 list2)
     (if (not (= (length list1)(length list2)))
-        nil
+        #f
         (if (= (length list1) 0)
-            t
+            #t
             (if (not (= (first list1)(first list2)))
-                nil
+                #f
                 (recur (rest list1) (rest list2))))))
 
 (defn pair=
@@ -31,12 +31,12 @@
     "
     (pair1 pair2)
     (if (not (and (pair? pair1)(pair? pair2))) nil
-        (and (null pair1)(null pair2)) t
+        (and (null pair1)(null pair2)) #t
         (and (null pair1)(not (null pair2))) nil
         (and (not (null pair1))(null pair2)) nil
         (not (= (car pair1)(car pair2))) nil
         (not (= (cdr pair1)(cdr pair2))) nil
-        t))
+        #t))
 
 (defn assert-equal
     "Test expected and actual for equality.
@@ -49,12 +49,12 @@
     "
    (expected-val right-val &rest args)
    (if (or (list? expected-val)(vec? expected-val))
-          (if (lists= expected-val right-val) t
+          (if (lists= expected-val right-val) #t
               (do (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
       (pair? expected-val)
-          (if (pair= expected-val right-val) t
+          (if (pair= expected-val right-val) #t
               (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))
-      (= expected-val right-val) t
+      (= expected-val right-val) #t
       (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1))))
 
 (defn assert-not-equal
@@ -68,12 +68,12 @@
     "
       (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
-              (if (not (lists= expected-val right-val)) t
+              (if (not (lists= expected-val right-val)) #t
                   (do (println (apply str "Did not expect " expected-val " got " right-val args))(exit 2)))
           (pair? expected-val)
-              (if (not (pair= expected-val right-val)) t
+              (if (not (pair= expected-val right-val)) #t
                   (do (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1)))
-          (not (= expected-val right-val)) t
+          (not (= expected-val right-val)) #t
           (do (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1))))
 
 (defn assert-true
@@ -85,7 +85,7 @@
     (test::assert-true #t)
     "
       (value &rest args)
-      (apply assert-equal t value args))
+      (apply assert-equal #t value args))
 
 (defn assert-false
     "Test for falsiness.
@@ -101,13 +101,15 @@
 
 (defn assert-includes (value seq)
   (let ((found nil))
-    (for v in seq (if (= v value) (set! found t)))
-    (if (not found) (do (println (str value " not found in " seq))(exit 3)))))
+    (for v in seq (if (= v value) (set! found #t)))
+    (if (not found) (do (println (str value " not found in " seq))(exit 3)))
+    #t))
 
 (defn assert-not-includes (value seq)
   (let ((found nil))
-    (for v in seq (if (= v value) (set! found t)))
-    (if found (do (println (str value " found in " seq))(exit 3)))))
+    (for v in seq (if (= v value) (set! found #t)))
+    (if found (do (println (str value " found in " seq))(exit 3)))
+    #t))
 
 (defmacro assert-error
   "Test asserts an error is thrown.
