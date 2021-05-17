@@ -9,12 +9,6 @@
 (ns-import 'test)
 (ns-import 'docmd)
 
-;; TODO
-;;  - some undocable forms are global variables that
-;;  should actually have docs, and be explained to the user,
-;;  because they are useful
-;;  - global symbols arne't showing up...
-;;  - all the relative links are broken..?
 (defn filter-undocable-forms (sym-list)
 	(filter (fn (x)
 		(and

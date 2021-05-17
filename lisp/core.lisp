@@ -75,8 +75,6 @@ Section: namespace"
         (def import (vec def 1 2))
         (iterator::for symbol in (ref (sym ,namespace "::*ns-exports*"))
                        (do
-                         (meta-add-tags ,namespace :imported)
-                         (meta-add-tags symbol :imported)
                          (vec-set! import 1 (sym "ns::" symbol))
                          (vec-set! import 2 (sym ,namespace "::" symbol))
                          (eval import))))))

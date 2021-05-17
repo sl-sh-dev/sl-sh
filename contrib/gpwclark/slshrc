@@ -99,14 +99,13 @@
 				(first (collect-vec (filter (fn (x) (and (if (= 1 (length args)) (str-contains (first args) (str x)) #t) (fs-dir? x) (not (= ".." x)) (not (= "." x)))) (mrf)))))
 			(eval `(cd ,most-recent-dir)))
 
-
 ;; stdin to clipboard
 (defmacro sc
 	"pipe things into this and they'll be in your clipboard.
 	Section: user-shell
 	"
 	()
-	`$(xclip -selection c))
+	(syscall "xclip" "-selection" "c"))
 
 (defmacro this
 	"
@@ -246,24 +245,6 @@ Section: user-shell"
 	Section: user-shell"
 	(lsd -haltr))
 
-;; Replace cd with a version that also runs ls after.
-;; Macro to let un-expanded args go to root::cd.
-(defmacro cd
-	"(= 'cd (do (cd) (ls))) ;; life changing
-	Section: user-shell"
-	(&rest args) (do
-		(if (= (length args) 0)
-			(and (root::cd) (ls .))
-			(if (= (length args) 1)
-				(and (root::cd (first args)) $(ls .))
-				(err "I take zero or one argument.")))
-		nil))
-	;; use register-alias to have better syntax highlighting for cd.
-	(register-alias 'cd)
-(slshrc-timer :pr-next "quality of shell life")
-;; }}}
-
-;; quality of life {{{
     (defn cathead
     "
     cat to head, provide n and file
@@ -287,6 +268,25 @@ Section: user-shell"
     "
     (n file)
           $(cat $file | tail -n $n))
+
+;; Replace cd with a version that also runs ls after.
+;; Macro to let un-expanded args go to root::cd.
+(defmacro cd
+	"(= 'cd (do (cd) (ls))) ;; life changing
+	Section: user-shell"
+	(&rest args) (do
+		(if (= (length args) 0)
+			(and (root::cd) (ls .))
+			(if (= (length args) 1)
+				(and (root::cd (first args)) $(ls .))
+				(err "I take zero or one argument.")))
+		nil))
+	;; use register-alias to have better syntax highlighting for cd.
+	(register-alias 'cd)
+(slshrc-timer :pr-next "quality of shell life")
+;; }}}
+
+;; quality of life {{{
 
 	(defn spl
 	"Give it a spelling of a word, it will tell you what words are spelled like it.
@@ -529,9 +529,13 @@ Section: user-shell"
         (str
             "\n"
             (if (> (length (get-dirs)) 0)
-                (collect-str (map smaller-path (reverse (get-dirs))))
+                ;; (collect-str (map smaller-path (reverse (get-dirs))))
+                (collect-str (reverse (get-dirs)))
                 "")
-            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": " shell::*fg-magenta* (smaller-path (str-trim (get_pwd))) "/ " shell::*fg-default* (parse_git_branch) "\n"
+            "\n\r" sl-sh-open-paren sl-sh-title (get-build-type) sl-sh-close-paren open-paren  host-string close-paren ": " shell::*fg-magenta*
+				;; (smaller-path (str-trim (get_pwd)))
+				(str-trim (get_pwd))
+				"/ " shell::*fg-default* (parse_git_branch) "\n"
             (set-prompt-tail last-status))))
 
 (slshrc-timer :pr-next "prompt")

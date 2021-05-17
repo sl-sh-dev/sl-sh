@@ -2,16 +2,10 @@
 
 (ns-import 'iterator)
 
-(defn lists=
-    "Test list/vec for equality
+(defn list-vec? (lst)
+  (or (list? lst)(vec? lst)))
 
-    Section: test
-
-    Example:
-    (test::assert-true (list= (list 1 2 3) (vec 1 2 3)))
-    (test::assert-false (list= (list 1 2 3) (vec 1 2 4)))
-    "
-    (list1 list2)
+(defn lists= (list1 list2)
     (if (not (= (length list1)(length list2)))
         #f
         (if (= (length list1) 0)
@@ -20,52 +14,45 @@
                 #f
                 (recur (rest list1) (rest list2))))))
 
-(defn pair=
-    "Test pair for equality
-
-    Section: test
-
-    Example:
-    (test::assert-true (pair= (join 1  2) (join 1 2)))
-    (test::assert-false (pair= (join 1 3) (join 1 4)))
-    "
-    (pair1 pair2)
-    (if (not (and (pair? pair1)(pair? pair2))) nil
+(defn pair= (pair1 pair2)
+    (if (not (and (pair? pair1)(pair? pair2))) #f
         (and (null pair1)(null pair2)) #t
-        (and (null pair1)(not (null pair2))) nil
-        (and (not (null pair1))(null pair2)) nil
-        (not (= (car pair1)(car pair2))) nil
-        (not (= (cdr pair1)(cdr pair2))) nil
+        (and (null pair1)(not (null pair2))) #f
+        (and (not (null pair1))(null pair2)) #f
+        (not (= (car pair1)(car pair2))) #f
+        (not (= (cdr pair1)(cdr pair2))) #f
         #t))
 
 (defn assert-equal
-    "Test expected and actual for equality.
+  "Test expected-val and right-val for equality.
 
     Section: test
 
     Example:
     (test::assert-true (test::assert-equal 1 1))
-    (test::assert-false (test::assert-equal 1 2))
+    (test::assert-false (test::assert-equal (list 1 2) (list 1)))
+    (test::assert-true (test:: assert-equal (list 1 2) (list 1 2)))
     "
-   (expected-val right-val &rest args)
-   (if (or (list? expected-val)(vec? expected-val))
-          (if (lists= expected-val right-val) #t
-              (do (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
-      (pair? expected-val)
-          (if (pair= expected-val right-val) #t
-              (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))
-      (= expected-val right-val) #t
-      (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1))))
+      (expected-val right-val &rest args)
+      (if (and (list-vec? expected-val)(list-vec? right-val))
+              (if (lists= expected-val right-val) #t
+                  (do (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
+          (pair? expected-val)
+              (if (pair= expected-val right-val) #t
+                  (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1)))
+          (= expected-val right-val) #t
+          (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1))))
 
 (defn assert-not-equal
-    "Test expected and actual are not equal.
+ "Test expected-val and right-val are not equal.
 
     Section: test
 
     Example:
     (test::assert-false (test::assert-not-equal 1 1))
     (test::assert-true (test::assert-not-equal 1 2))
-    "
+    (test::assert-false (test::assert-not-equal (list 1 2 3) (list 1 2 3))
+"
       (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
               (if (not (lists= expected-val right-val)) #t
@@ -96,8 +83,9 @@
     (test::assert-false #f)
     (test::assert-false nil)
     "
-      (value &rest args)
-      (apply assert-equal nil value args))
+  (value &rest args)
+  (if (and (not (nil? value))(not (false? value)))
+      (do (println (apply str "Expected falsy (nil or #f) got " value args))(exit 1))))
 
 (defn assert-includes (value seq)
   (let ((found nil))

@@ -104,6 +104,15 @@ entries:
     - title: FAQ
       url: /mydoc_faq_layout.html
       output: web, pdf
+
+  - title: Lisp
+    output: web, pdf
+    folderitems:
+
+    - title: Reader
+      url: /mydoc_reader.html
+      output: web, pdf
+
 "
 (make-section sym-list title sub-title url)
 
@@ -111,6 +120,10 @@ entries:
   - title: Shell
     output: web, pdf
     folderitems:
+
+    - title: Shell Reader
+      url: /mydoc_shellreader.html
+      output: web, pdf
 
     - title: Namespaces
       url: /mydoc_namespaces.html
