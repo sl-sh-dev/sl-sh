@@ -403,66 +403,6 @@ Example:
     (provided-condition if-true)
     `(if ,provided-condition ,if-true))
 
-(defmacro ->
-"inserts result of previous expression as second argument to current expression.
-First argument is not evaluated.
-
-Section: Threading-macros
-
-Example:
-
-(assert-equal
-    (str \"I go at the beginning.I'll be stuck in the middle.I'll be at the end.\")
-    (-> \"I go at the beginning.\"
-        (str \"I'll be stuck in the middle.\")
-        (str \"I'll be at the end.\")))"
-(&rest args)
-    (if (< (length args) 2)
-        (err "-> (thush operator) requires at least two arguments")
-        (let ((fst (first args))
-              (sexp)
-              (fcn))
-          (loop (curr-form forms) (fst (rest args))
-                (if (empty-seq? forms)
-                    curr-form
-                    (do
-                     (set! sexp nil)
-                     (set! fcn (first forms))
-                      (if (seq? fcn)
-                          (set! sexp `(,(first fcn) ,curr-form ,@(rest fcn)))
-                          (set! sexp (list fcn curr-form)))
-                      (recur sexp (rest forms))))))))
-
-(defmacro ->>
-"inserts result of previous expression as last argument to current expression.
-First argument is not evaluated.
-
-Section: Threading-macros
-
-Example:
-
-(assert-equal
-    (str \"I'll be at the beginning.I'll be more in the middle.I go at the end.\")
-    (->> \"I go at the end.\"
-        (str \"I'll be more in the middle.\")
-        (str \"I'll be at the beginning.\")))"
-(&rest args)
-    (if (< (length args) 2)
-        (err "->> (thush operator) requires at least two arguments")
-        (let ((fst (first args))
-              (sexp)
-              (fcn))
-          (loop (curr-form forms) (fst (rest args))
-                (if (empty-seq? forms)
-                    curr-form
-                    (do
-                     (set! sexp nil)
-                     (set! fcn (first forms))
-                      (if (seq? fcn)
-                          (set! sexp `(,@fcn ,curr-form))
-                          (set! sexp (list fcn curr-form)))
-                      (recur sexp (rest forms))))))))
-
 ; Reader macro for #.
 (defn reader-macro-dot
 "Reader macro for #.(...).  Do not call directly.

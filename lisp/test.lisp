@@ -23,7 +23,17 @@
         (not (= (cdr pair1)(cdr pair2))) #f
         #t))
 
-(defn assert-equal (expected-val right-val &rest args)
+(defn assert-equal
+  "Test expected-val and right-val for equality.
+
+    Section: test
+
+    Example:
+    (test::assert-true (test::assert-equal 1 1))
+    (test::assert-false (test::assert-equal (list 1 2) (list 1)))
+    (test::assert-true (test:: assert-equal (list 1 2) (list 1 2)))
+    "
+      (expected-val right-val &rest args)
       (if (and (list-vec? expected-val)(list-vec? right-val))
               (if (lists= expected-val right-val) #t
                   (do (println (apply str "Expected " expected-val " got " right-val args))(exit 2)))
@@ -33,7 +43,17 @@
           (= expected-val right-val) #t
           (do (println (apply str "Expected " expected-val " got " right-val args))(exit 1))))
 
-(defn assert-not-equal (expected-val right-val &rest args)
+(defn assert-not-equal
+ "Test expected-val and right-val are not equal.
+
+    Section: test
+
+    Example:
+    (test::assert-false (test::assert-not-equal 1 1))
+    (test::assert-true (test::assert-not-equal 1 2))
+    (test::assert-false (test::assert-not-equal (list 1 2 3) (list 1 2 3))
+"
+      (expected-val right-val &rest args)
       (if (or (list? expected-val)(vec? expected-val))
               (if (not (lists= expected-val right-val)) #t
                   (do (println (apply str "Did not expect " expected-val " got " right-val args))(exit 2)))
@@ -43,10 +63,27 @@
           (not (= expected-val right-val)) #t
           (do (println (apply str "Did not expect " expected-val " got " right-val args))(exit 1))))
 
-(defn assert-true (value &rest args)
+(defn assert-true
+    "Test for truthiness.
+
+    Section: test
+
+    Example:
+    (test::assert-true #t)
+    "
+      (value &rest args)
       (apply assert-equal #t value args))
 
-(defn assert-false (value &rest args)
+(defn assert-false
+    "Test for falsiness.
+
+    Section: test
+
+    Example:
+    (test::assert-false #f)
+    (test::assert-false nil)
+    "
+  (value &rest args)
   (if (and (not (nil? value))(not (false? value)))
       (do (println (apply str "Expected falsy (nil or #f) got " value args))(exit 1))))
 
@@ -62,10 +99,26 @@
     (if found (do (println (str value " found in " seq))(exit 3)))
     #t))
 
-(defmacro assert-error (form)
+(defmacro assert-error
+  "Test asserts an error is thrown.
+
+  Section: test
+
+  Example:
+  (test::assert-error (err \"error thrown\"))
+  "
+  (form)
     `(test::assert-equal :error (car (get-error ,form)) ". Expected :error"))
 
-(defmacro assert-error-msg (form msg)
+(defmacro assert-error-msg
+  "Test asserts an error is thrown with a given message.
+
+  Section: test
+
+  Example:
+  (test::assert-error-msg (err \"error thrown\") \"error thrown\")
+  "
+  (form msg)
     `((fn (ret) (test::assert-true (and (= :error (car ret)) (= ,msg (cadr ret)))
      ". Expected :error, with message: \n" ,msg "\n => Test returned:\n\"" (if (pair? (cdr ret)) (cadr ret) (cdr ret)) "\""))
         (get-error ,form)))
@@ -74,7 +127,13 @@
 (defmacro run-ns-example (sym)
     `(eval (read (str "(dyn exit (fn (x) (err (str \"Got assert error \" x))) (do "(vec-nth (str-split "Example:" (doc ,sym)) 1) "))"))))
 
-(defmacro run-example (sym)
+(defmacro run-example
+  "
+  Given a symbol, run any tests found in example section if exists.
+
+  Section: test
+  "
+     (sym)
     `(let
         ((doc-list (str-split "Example:" (str (doc ,sym)))))
         (if (> (length doc-list) 1)

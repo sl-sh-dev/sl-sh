@@ -9,25 +9,28 @@
 
 (load "mk-docs.lisp")
 (load "mk-post.lisp")
-(load "mod-docs.lisp")
+(load "mk-sidebar.lisp")
 
 (ns-import 'iterator)
 (ns-import 'shell)
 (ns-import 'mkdocs)
 (ns-import 'mkpost)
-(ns-import 'moddocs)
+(ns-import 'mksidebar)
 
 (error-stack-on)
 
-(let* ((result (get-error
-   ;; set version number properly in sidebar yaml
-  (set-version "_evalable_data/sidebars/mydoc_sidebar.yml" "_data/sidebars/mydoc_sidebar.yml")
+(defn list-of-all-slsh-syms ()
+    (let ((sym-list (qsort (collect (filter-undocable-forms (hash-keys *std-lib-exported-syms-hash*))))))
+    sym-list))
+
+(let ((result (get-error (let ((sym-list (list-of-all-slsh-syms)))
   ;; TODO last updated line frontmatter line should update automatically.
   ;; create std lib md file
-  (make-md-file "pages/mydoc/mydoc_api.md" :lang)
-  (eval-post "_evalable_pages/mydoc/mydoc_reader.md" "pages/mydoc/mydoc_reader.md")
+  (write-sidebar "_data/sidebars/mydoc_sidebar.yml"  sym-list "Standard Library" "Sl-sh Forms" "/mydoc_api.html")
+  (make-md-file "pages/mydoc/mydoc_api.md" sym-list)
   (eval-post "_evalable_pages/mydoc/mydoc_shellreader.md" "pages/mydoc/mydoc_shellreader.md")
-  (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md"))))
+  (eval-post "_evalable_pages/mydoc/mydoc_reader.md" "pages/mydoc/mydoc_reader.md")
+  (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md")))))
   (if (= (car result) :ok)
     (cdr result)
     (print-error result)))

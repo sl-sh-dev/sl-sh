@@ -971,8 +971,9 @@ Example:
         time-str))))
   (:fn pr-next (self timer-tag)
    (let ((time-str (self :get-next timer-tag)))
-     (when (not (nil? time-str))
-       (println time-str))))
+     (when time-str
+       (do
+         (println time-str)))))
   (:fn init (self in-timer-name in-noop) (do
                                           (set! noop in-noop)
                                           (set! timer-name in-timer-name)

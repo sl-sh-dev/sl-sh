@@ -1139,10 +1139,10 @@ Example:
         (err "append-to!: First element not a list or vector."))
     ret))
 
-(defstruct zip-iter
-"create iterator that zips two iterators together. Resultant iter
+(defstruct meld-iter
+"create iterator that melds two iterators together. Resultant iter
 is composed of pairs (fst, scnd) for each value of next! in each provided
-iterator. Length of zip-iter is equal to length of shorter iterator.
+iterator. Length of meld-iter is equal to length of shorter iterator.
 
 Section: iterator
 "
@@ -1159,17 +1159,17 @@ Section: iterator
            (set! fst in-fst)
            (if (seq? in-fst))
             (set! fst (iter in-fst))
-            (err "first argument to zip must be iterator or vector"))
+            (err "first argument to meld must be iterator or vector"))
        (if (iter? in-scnd)
            (set! scnd in-scnd)
            (if (seq? in-scnd))
             (set! scnd (iter in-scnd))
-            (err "second argument to zip must be iterator or vector"))
+            (err "second argument to meld must be iterator or vector"))
        self))
 (:impl iterator::iterator iterator::double-ended-iterator))
 
-(defn zip
-"zips two iterators together. Resultant iter is composed of pairs (fst, scnd)
+(defn meld
+"melds two iterators together. Resultant iter is composed of pairs (fst, scnd)
 for each value of next! in each provided iterator. Length of returned
 iter is equal to length of the shortest provided iterator.
 
@@ -1177,11 +1177,11 @@ Section: iterator
 
 Example:
 (ns-import 'iterator)
-(test::assert-equal (list (join 'string 'bean) (join 'monte 'carlo)) (collect (zip (iter (list 'string 'monte)) (iter (list 'bean 'carlo)))))
-(test::assert-equal (list (join 1 2) (join 3 4)) (collect (zip (iter (list 1 3)) (iter (list 2 4 5)))))
+(test::assert-equal (list (join 'string 'bean) (join 'monte 'carlo)) (collect (meld (iter (list 'string 'monte)) (iter (list 'bean 'carlo)))))
+(test::assert-equal (list (join 1 2) (join 3 4)) (collect (meld (iter (list 1 3)) (iter (list 2 4 5)))))
 "
     (fst scnd)
-      ((zip-iter) :init fst scnd))
+      ((meld-iter) :init fst scnd))
 
 (defstruct interleave-iter
 "create iterator that interleaves two iterators together. Resultant iter
@@ -1314,8 +1314,8 @@ Example:
     iter?
     double-ended-iter?
     iter
-    zip-iter
-    zip
+    meld-iter
+    meld
     interleave-iter
     interleave
     repeat-iter
