@@ -9,7 +9,6 @@
 
 (def slshrc-total-timer ((timer) :init "slshrc" nil))
 
-
 ;; gpwclark TODOs
 ;; - put in docs about how you call doc on the cmd line all the time with custom stuff!!
 ;; - rewrite bash-completions so we don't have gpl in here?

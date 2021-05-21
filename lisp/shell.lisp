@@ -982,6 +982,21 @@ Example:
                                            (set! curr-time prev-time)
                                           self)))
 
+(defn with-padding
+"Given a \"target\" string, an integer length to pad to \"padding\", and a
+character to use for padding \"padding-char\", return a string with length equal
+to the specified padding length, only if the target string is less than the
+amount of padding specified. The resultant string is composed of the target
+string followed by \"padding\" number of \"padding-char\".
+
+Example:
+(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\"))
+"
+      (target padding padding-char)
+      (if (>= (length target) padding)
+        (str target)
+        (str target (apply str (collect (repeat padding-char (- padding (length target))))))))
+
 (load "getopts.lisp")
 
 (ns-export '(
@@ -1020,8 +1035,10 @@ Example:
              bg-color-rgb
              fc
              getopts
+             getopts-help
              mkli
              temp-dir
-             timer))
+             timer
+             with-padding))
 
 (ns-pop)

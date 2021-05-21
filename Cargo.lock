@@ -180,6 +180,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossterm_winapi"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a6966607622438301997d3dac0d2f6e9a90c68bb6bc1785ea98456ab93c0507"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,9 +360,9 @@ dependencies = [
 
 [[package]]
 name = "numtoa"
-version = "0.1.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
+checksum = "e521b6adefa0b2c1fa5d2abdf9a5216288686fe6146249215d884c0e5ab320b0"
 
 [[package]]
 name = "oorandom"
@@ -481,10 +490,8 @@ dependencies = [
 [[package]]
 name = "redox_liner"
 version = "0.5.1"
-source = "git+https://github.com/sstanfield/liner.git#e2fb17c5f00ace6b1bbe45bca192da70656741eb"
 dependencies = [
  "bytecount",
- "libc",
  "termion",
  "unicode-width",
 ]
@@ -650,9 +657,11 @@ dependencies = [
 [[package]]
 name = "termion"
 version = "1.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077185e2eac69c3f8379a4298e1e07cd36beb962290d4a51199acf0fdc10607e"
+source = "git+https://github.com/sstanfield/termion.git#a09f85fb0fcc094443dbd9060032b1337bb34358"
 dependencies = [
+ "crossbeam-channel",
+ "crossterm_winapi",
+ "lazy_static",
  "libc",
  "numtoa",
  "redox_syscall",

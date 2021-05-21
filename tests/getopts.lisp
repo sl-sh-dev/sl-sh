@@ -312,13 +312,13 @@
 
 (var nil-bindings
  (hash-get
-   (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :nil?)))) '("-h" nil))
+   (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :falsey?)))) '("-h" nil))
    :-h))
 (assert-true (nil? nil-bindings) ". Return value should be of type Nil.")
 
 (assert-error-msg
-   (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :nil?)))) '("-h" "nickel"))
-   (getopts-type-error-message ":-h" "nickel" ":nil?"))
+   (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :falsey?)))) '("-h" "nickel"))
+   (getopts-type-error-message ":-h" "nickel" ":falsey?"))
 
 (var list-bindings
  (hash-get

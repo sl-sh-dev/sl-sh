@@ -1,6 +1,8 @@
 (defmacro debugln (&rest args)
     (if (nil? #t)
         `(println "=> " ,@args)))
+;;; TODO
+;;;  - add :required
 
 (def token-delim "-")
 
@@ -17,12 +19,6 @@
 (defn getopts-type-error-message (key binding opt-type-fun)
     (str "Input types did not match :type specified in options-map. At argument " key ", failed to read in provided " binding " as type " opt-type-fun ". Binding, " binding ", was of type " (type binding) "."))
 
-(defn getopts-build-param (arity default type-fun)
-    (make-hash
-        (list
-            (join :arity arity)
-            (join :default default)
-            (join :type type-fun))))
 
 (defn getopts-illegal-option (key)
     (str "Illegal option " key ", not in allowable arguments provided to getopts."))
@@ -69,7 +65,8 @@ up until the next token delimeted option, -c.
     (var arity-map (hash-get options-map key))
     (var arity (if (nil? arity-map)
                   0
-                  (hash-get arity-map :arity 0)))
+                  (get-arity arity-map)))
+    (debugln "arity: " arity)
     (when (nil? arity-map)
       (err (getopts-illegal-option option)))
     ;; in case we are at end of args vector but the last option expects more
@@ -183,7 +180,7 @@ otherwise the error message is thrown."
         (join :string? (fn (x unused) (str x)))
         (join :char? (check char?))
         (join :hash? (check hash?))
-        (join :nil? (check nil?))
+        (join :falsey? (check falsey?))
         (join :list? (check list?))
         (join :vec? (check vec?))
         (join :lambda? (check lambda?))
@@ -225,6 +222,98 @@ otherwise the error message is thrown."
                          ))))))
              (recur (rest keys) bindings-map)))))
 
+(defn get-arity (bindings)
+      (hash-get bindings :arity 0))
+
+(defn getopts-help
+"Companion function to getopts, call this function in the docstring of
+any function that relies on getopts. getopts-help takes as an argument
+the same bindings hash map that getopts does, and returns the documentation
+for those getopts settings. getopts-help optionally supports a :doc keyword
+for each command key. The value of doc is included in the resultant doc string
+getopts-help returns.
+
+Section: shell
+
+Example:
+(def getopts-help-bindings
+       (make-hash
+         (list (join
+                 :-m
+                 (make-hash '((:arity . 1)
+                              (:default . 0)
+                              (:type . :int?)
+                              (:doc \"this is displayed as\ntwo indented lines.\"))))
+                 (join
+                   :-b
+                     (make-hash '((:doc \"this opts doc for -b
+goes on two lines!\"))))
+                 (join
+                   :-a
+                     (make-hash '((:arity . 1)
+                                  (:doc \"this doc is for -a.\"))))
+                 (join
+                   :-k
+                     (make-hash '((:arity . 1)
+                              (:type . :int?)))))))
+(test::assert-equal
+    (str-split :whitespace (getopts-help getopts-help-bindings))
+    (str-split :whitespace (str-push! (str)
+        #\u{9}
+            \"-a\"
+        #\u{9}
+            \"arity          1\"
+        #\u{9}
+            \"this doc is for -a.\"
+        #\u{9}
+            \"-b\"
+        #\u{9}
+            \"arity          0\"
+        #\u{9}
+            \"this opts doc for -b\"
+        #\u{9}
+            \"goes on two lines!\"
+        #\u{9}
+            \"-k\"
+        #\u{9}
+            \"arity          1\"
+        #\u{9}
+            \"required type  :int?\"
+        #\u{9}
+            \"-m\"
+        #\u{9}
+            \"arity          1\"
+        #\u{9}
+            \"default value  0\"
+        #\u{9}
+            \"required type  :int?\"
+        #\u{9}
+            \"this is displayed as\"
+        #\u{9}
+            \"two indented lines.\")))
+"
+(bindings)
+(let ((options-str (str)))
+  (for key in (qsort (hash-keys bindings))
+     (do
+       (str-push! options-str
+            #\u{9} (apply str (rest (collect (iter (str key)))))
+            #\u{a}
+            #\u{9} #\u{9} (with-padding "arity" 15 " ") (get-arity (hash-get bindings key))
+            (if (not (nil? (hash-get (hash-get bindings key) :default)))
+              (str #\u{a} #\u{9} #\u{9}
+                   (with-padding "default value" 15 " ") (hash-get (hash-get bindings key) :default))
+              "")
+            (if (not (nil? (hash-get (hash-get bindings key) :type)))
+              (str #\u{a} #\u{9} #\u{9}
+                   (with-padding "required type" 15 " ") (hash-get (hash-get bindings key) :type))
+              "")
+            (if (not (nil? (hash-get (hash-get bindings key) :doc)))
+              (str #\u{a} (apply str (collect (map (fn (x) (str #\u{a} #\u{9} #\u{9} x)) (str-split "\n" (first (hash-get (hash-get bindings key) :doc)))))))
+              "")
+           #\u{a})))
+  options-str))
+
 (defn getopts
 "Getopts takes a hash map and a vector of args and returns a hash map with all
 the values extracted from the args and bound to the corresponding keys in the
@@ -238,7 +327,7 @@ sample-getopts.lisp
 (println \"Passing: \" args \" to getopts\")
 ;; getopts is given a hash map with one key, :-m, that corresponds to the flag,
 ;; -m, that it configures.
-(var bindings
+(def sample-getopts-bindings
      (getopts
        (make-hash
          (list (join
@@ -247,7 +336,7 @@ sample-getopts.lisp
                               (:default . 0)
                               (:type . :int?))))))
         args))
-(println \"The binding for -m is: \" (hash-get bindings :-m) \"of type \" (type (hash-get bindings :-m)))
+(println \"The binding for -m is: \" (hash-get sample-getopts-bindings :-m) \"of type \" (type (hash-get sample-getopts-bindings :-m)))
 ----------------
 
 Running the script with one argument to the -m flag yields:
