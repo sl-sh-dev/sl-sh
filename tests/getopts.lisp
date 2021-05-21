@@ -6,6 +6,12 @@
 
 (def getopts-bad-first-arg "First argument must be a flag.")
 
+(defn arity-zero-can-not-be-required (x)
+      (str "Options with required #t must have arity > 0, bad option " (apply str (rest (collect (iter (str x))))) "."))
+
+(defn required-argument (option)
+    (str "Wrong number of arguments passed to " (apply str (rest (collect (iter (str option))))) ". Expected 1 argument."))
+
 (defn getopts-bad-option-arity (option expected)
     (str "Wrong number of arguments passed to " option ". Expected " expected
          " arguments."))
@@ -380,3 +386,26 @@
            (list "--lambda" (fn (x) x)))
          :--lambda))
 (assert-true (lambda? lambda-bindings) ". Return value should be of type lambda."))
+
+(def bad-getopts-required-args-zero-arity
+		(make-hash
+			(list
+			(join :-a (make-hash '((:arity . 0)
+                                   (:required . #t)))))))
+(assert-error-msg (getopts bad-getopts-required-args-zero-arity (list "-a")) (arity-zero-can-not-be-required ":-a"))
+
+(def getopts-bindings-missing-required-arg
+		(make-hash
+			(list
+			(join :-a
+					(make-hash '((:arity . 1)
+							(:required . #t))))
+			(join :-b
+					(make-hash '((:arity . 1)
+							(:required . #t))))
+            (join :-c
+					(make-hash '((:arity . 2)
+							(:required . #t)))))))
+
+(assert-error-msg (getopts getopts-bindings-missing-required-arg (list "-a" "peep" "-c" "oink" "moo")) (required-argument ":-b"))
+(assert-error-msg (getopts getopts-bindings-missing-required-arg (list "-a" "peep" "-b" "gawrf")) (getopts-bad-option-arity "-c" 2))

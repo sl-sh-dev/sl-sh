@@ -106,14 +106,6 @@
 	()
 	(syscall "xclip" "-selection" "c"))
 
-(defmacro this
-	"
-	put my pwd in my clipboard
-	Section: user-shell
-	"
-	()
-	`$(echo -n $((str-trim (str $(pwd)))) | sc))
-
 (defn zh
 	"
 	fuzzy zsh history search

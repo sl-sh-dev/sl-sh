@@ -1,8 +1,6 @@
 (defmacro debugln (&rest args)
     (if (nil? #t)
         `(println "=> " ,@args)))
-;;; TODO
-;;;  - add :required
 
 (def token-delim "-")
 
@@ -11,6 +9,12 @@
 (def getopts-options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
 
 (def getopts-bad-first-arg "First argument must be a flag.")
+
+(defn arity-zero-can-not-be-required (x)
+      (str "Options with required #t must have arity > 0, bad option " (apply str (rest (collect (iter (str x))))) "."))
+
+(defn required-argument (option)
+    (str "Wrong number of arguments passed to " (apply str (rest (collect (iter (str option))))) ". Expected 1 argument."))
 
 (defn getopts-bad-option-arity (option expected)
     (str "Wrong number of arguments passed to " option ". Expected " expected
@@ -186,7 +190,7 @@ otherwise the error message is thrown."
         (join :lambda? (check lambda?))
         (join :macro? (check macro?)))))
 
-(defn enforce-types (options-map bindings-map)
+(defn enforce-constrains (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
             (do
@@ -195,7 +199,15 @@ otherwise the error message is thrown."
              (var opt-type-arity (hash-get opt-config :arity))
              (var opt-type-fun (hash-get opt-config :type))
              (var default (hash-get opt-config :default))
+             (var required (hash-get opt-config :required nil))
              (var binding (hash-get bindings-map key))
+             (when (and (= opt-type-arity 0) required)
+               (err (arity-zero-can-not-be-required key)))
+             (when (and (> opt-type-arity 0) required (nil? binding))
+               (if (= opt-type-arity 1)
+                 (err (required-argument key))
+                 (err (getopts-bad-option-arity (apply str (rest (collect (iter (str key))))) opt-type-arity))
+                 ))
              (when (and (not (nil? opt-type-arity))
                         (not (nil? opt-type-fun)))
                (do
@@ -293,26 +305,27 @@ goes on two lines!\"))))
             \"two indented lines.\")))
 "
 (bindings)
-(let ((options-str (str)))
+(let ((options-str (str "OPTIONS" #\u{a})))
   (for key in (qsort (hash-keys bindings))
      (do
        (str-push! options-str
             #\u{9} (apply str (rest (collect (iter (str key)))))
             #\u{a}
             #\u{9} #\u{9} (with-padding "arity" 15 " ") (get-arity (hash-get bindings key))
+            #\u{a}
             (if (not (nil? (hash-get (hash-get bindings key) :default)))
-              (str #\u{a} #\u{9} #\u{9}
+              (str #\u{9} #\u{9}
                    (with-padding "default value" 15 " ") (hash-get (hash-get bindings key) :default))
               "")
             (if (not (nil? (hash-get (hash-get bindings key) :type)))
-              (str #\u{a} #\u{9} #\u{9}
-                   (with-padding "required type" 15 " ") (hash-get (hash-get bindings key) :type))
+              (str #\u{9} #\u{9}
+                   (with-padding "required type" 15 " ") (hash-get (hash-get bindings key) :type) #\u{a} )
               "")
             (if (not (nil? (hash-get (hash-get bindings key) :doc)))
-              (str #\u{a} (apply str (collect (map (fn (x) (str #\u{a} #\u{9} #\u{9} x)) (str-split "\n" (first (hash-get (hash-get bindings key) :doc)))))))
+              (str #\u{a} (apply str (collect (map (fn (x) (str #\u{a} #\u{9} #\u{9} x)) (str-split "\n" (hash-get (hash-get bindings key) :doc))))))
               "")
            #\u{a})))
-  options-str))
+  (str-push! options-str #\u{a})))
 
 (defn getopts
 "Getopts takes a hash map and a vector of args and returns a hash map with all
@@ -397,6 +410,6 @@ Example:
     (apply-defaults options-map bindings-map)
     ;; after apply-defaults, bindings with (= arity 1) will not be in a seqeunce.
     (debugln "options " options-map)
-    (enforce-types options-map bindings-map)
+    (enforce-constrains options-map bindings-map)
     (debugln "bindings-map: " bindings-map)
     bindings-map)
