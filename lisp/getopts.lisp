@@ -2,9 +2,6 @@
     (if (nil? #t)
         `(println "=> " ,@args)))
 
-;; TODO
-;; remove use of var
-
 (def token-delim "-")
 
 (def getopts-invalid-type-function (str "Type not supported. See (doc 'getopts) for supported types."))
@@ -50,29 +47,30 @@ get-next-params would return \"foo\" since that is the rest of the vector
 up until the next token delimeted option, -c.
 "
     (idx vec-args)
-    (var possible-params (vec-slice vec-args (+ idx 1) (length vec-args)))
+    ()
     ;; possible params is nil if at the end of a list, return an empty vec 
     ;; indicating no paramaters
-    (var potential-params (make-vec))
-    (if (nil? possible-params)
+    (let ((possible-params (vec-slice vec-args (+ idx 1) (length vec-args)))
+          (potential-params (make-vec)))
+      (if (nil? possible-params)
       potential-params
       (loop (params) (possible-params)
           (if (or (empty-seq? params) (str-starts-with token-delim (first params)))
             potential-params
             (do
                 (vec-push! potential-params (first params))
-                (recur (rest params)))))))
+                (recur (rest params))))))))
 
 (defn is-getopts-option-string (arg)
     (and (string? arg) (str-starts-with token-delim arg)))
 
 (defn verify-arity (idx given-args options-map bindings-map)
-    (var option (vec-nth given-args idx))
-    (var key (sym (str ":" option)))
-    (var arity-map (hash-get options-map key))
-    (var arity (if (nil? arity-map)
+    (let* ((option (vec-nth given-args idx))
+          (key (sym (str ":" option)))
+          (arity-map (hash-get options-map key))
+          (arity (if (nil? arity-map)
                   0
-                  (get-arity arity-map)))
+                  (get-arity arity-map))))
     (debugln "arity: " arity)
     (when (nil? arity-map)
       (err (getopts-illegal-option option)))
@@ -82,14 +80,14 @@ up until the next token delimeted option, -c.
       (err (getopts-bad-option-arity option arity)))
     ;; since all options start with a " -" use a str-split/str-cat trick
     ;; to get a vector representing all args to current option
-    (var potential-args (get-next-params idx given-args))
+    (let ((potential-args (get-next-params idx given-args)))
     (debugln "potential-args: " potential-args ", type: " (type potential-args))
-      (when (not (= (length potential-args) arity))
-          (err (getopts-bad-option-arity option arity)))
-    (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))
+    (when (not (= (length potential-args) arity))
+        (err (getopts-bad-option-arity option arity)))
+    (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
-    (var vec-args (collect-vec cmd-line-args))
+    (let ((vec-args (collect-vec cmd-line-args)))
     (debugln "vec-args: " vec-args)
     (for-i idx cmd in vec-args
          (do
@@ -98,17 +96,19 @@ up until the next token delimeted option, -c.
              ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-single-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-multi-single-char-args cmd)
-                 (do
                  ;; if the command in question looked like "-ab", de-multi-single-arged-str
                  ;; will be "-a -b" this way the new cmd-line-args list can
                  ;; be fed recursively to verify-all-options-valid
-                 (var de-multi-single-arged-str
-                      (str-split " " (str token-delim
-                           (str-cat-list (str " " token-delim)
-                           (collect-vec (str-replace (vec-nth vec-args idx) token-delim ""))))))
-                 (var sub-vec (map str (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args)))))
+                 (let* ((de-multi-single-arged-str
+                          (str-split " " (str token-delim
+                               (str-cat-list (str " " token-delim)
+                               (collect-vec (str-replace (vec-nth vec-args idx) token-delim ""))))))
+                        (sub-vec
+                          (map str
+                               (append de-multi-single-arged-str (slice vec-args (+ 1 idx) (length vec-args))))))
+                 
                    (verify-all-options-valid sub-vec options-map bindings-map)
-                   "a"))))))
+                   "a")))))))
 
 (defn valid-first-arg? (args)
     (when (not (is-getopts-option-string (first args)))
@@ -125,11 +125,10 @@ a vector whose only element is the desired binding."
       (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys bindings-map) bindings-map)
         (when (not (empty-seq? keys))
-            (do
-             (var key (first keys))
-             (var opt-config (hash-get options-map key))
-             (var opt-arity (hash-get opt-config :arity))
-             (var binding (hash-get bindings-map key))
+            (let* ((key (first keys))
+                 (opt-config (hash-get options-map key))
+                 (opt-arity (hash-get opt-config :arity))
+                 (binding (hash-get bindings-map key)))
              (when (and (not (nil? opt-arity)) (= 1 opt-arity) (seq? binding) (= 1 (length binding)))
                (hash-set! bindings-map key (first binding)))
              (recur (rest keys) bindings-map)))))
@@ -137,9 +136,8 @@ a vector whose only element is the desired binding."
 (defn apply-defaults (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
-            (do
-             (var key (first keys))
-             (var opt-config (hash-get options-map key))
+            (let* ((key (first keys))
+                 (opt-config (hash-get options-map key)))
              (when (and (hash-haskey opt-config :default) (nil? (hash-get bindings-map key)))
                (hash-set! bindings-map key (hash-get opt-config :default)))
              (recur (rest keys) bindings-map)))))
@@ -170,10 +168,10 @@ error message. If the given (applier (predicate string)) is true the string is r
 otherwise the error message is thrown."
   (applier predicate)
   (fn (string custom-message)
-    (var res (applier string))
-    (if (predicate res)
+    (let ((res (applier string)))
+      (if (predicate res)
       res
-      (err custom-message))))
+      (err custom-message)))))
 
 (def supported-types-map
     (make-hash
@@ -196,14 +194,13 @@ otherwise the error message is thrown."
 (defn enforce-constrains (options-map bindings-map)
     (loop (keys bindings-map) ((hash-keys options-map) bindings-map)
         (when (not (empty-seq? keys))
-            (do
-             (var key (first keys))
-             (var opt-config (hash-get options-map key))
-             (var opt-type-arity (hash-get opt-config :arity))
-             (var opt-type-fun (hash-get opt-config :type))
-             (var default (hash-get opt-config :default))
-             (var required (hash-get opt-config :required nil))
-             (var binding (hash-get bindings-map key))
+            (let* ((key (first keys))
+                 (opt-config (hash-get options-map key))
+                 (opt-type-arity (hash-get opt-config :arity))
+                 (opt-type-fun (hash-get opt-config :type))
+                 (default (hash-get opt-config :default))
+                 (required (hash-get opt-config :required nil))
+                 (binding (hash-get bindings-map key)))
              (when (and (= opt-type-arity 0) required)
                (err (arity-zero-can-not-be-required key)))
              (when (and (> opt-type-arity 0) required (nil? binding))
@@ -218,9 +215,8 @@ otherwise the error message is thrown."
                    (err getopts-invalid-type-function)
                    (do
                      (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
-                       (do
-                         (debugln "look our binding is: " binding ", of type: " (type binding))
-                         (var err-str (getopts-type-error-message key binding opt-type-fun))
+                       (let ((debug-strm (debugln "look our binding is: " binding ", of type: " (type binding)))
+                            (err-str (getopts-type-error-message key binding opt-type-fun)))
                          (if (= 1 opt-type-arity)
                              (hash-set!
                                bindings-map
@@ -251,6 +247,13 @@ getopts-help returns.
 Section: shell
 
 Example:
+;;; The following represents a full example usage of getopts
+;;; with documentation generated in the doc string of the function that uses
+;;; getopts:
+
+(def getopts-bindings
+		(make-hash
+			(list
 (def getopts-help-bindings
        (make-hash
          (list (join
@@ -385,7 +388,7 @@ is thrown.
     Use this as a default if the given flag is not provided at execution time.
 - :type (optional)
     Specify a type for every provided argument for the given flag. Types can be
-any of: $((str (collect (map (fn (x) (var func (first (rest (str-split ":" x)))) (str "[" func "](#root::" func ")")) (hash-keys supported-types-map)))))
+any of: $((str (collect (map (fn (x) (let ((func (first (rest (str-split ":" x))))) (str "[" func "](#root::" func ")"))) (hash-keys supported-types-map)))))
 
 
 Rules for flags:
@@ -405,14 +408,14 @@ Example:
 (options-map args)
     (when (not (hash? options-map)) (err getopts-options-map-is-map))
     (when (> (length args) 0) (valid-first-arg? args))
-    (var bindings-map (make-hash-with-keys options-map))
-    (verify-all-options-valid args options-map bindings-map)
-    ;; perform after setting defaults, in case user desires binding with
-    ;; (= arity 1) to be a sequence.
-    (fix-one-arg-bindings options-map bindings-map)
-    (apply-defaults options-map bindings-map)
-    ;; after apply-defaults, bindings with (= arity 1) will not be in a seqeunce.
-    (debugln "options " options-map)
-    (enforce-constrains options-map bindings-map)
-    (debugln "bindings-map: " bindings-map)
-    bindings-map)
+    (let ((bindings-map (make-hash-with-keys options-map)))
+        (verify-all-options-valid args options-map bindings-map)
+        ;; perform after setting defaults, in case user desires binding with
+        ;; (= arity 1) to be a sequence.
+        (fix-one-arg-bindings options-map bindings-map)
+        (apply-defaults options-map bindings-map)
+        ;; after apply-defaults, bindings with (= arity 1) will not be in a seqeunce.
+        (debugln "options " options-map)
+        (enforce-constrains options-map bindings-map)
+        (debugln "bindings-map: " bindings-map)
+        bindings-map))

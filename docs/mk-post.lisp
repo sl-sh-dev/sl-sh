@@ -7,8 +7,9 @@
 	directory, title of post, the header, for the post, and optionally,
 	categories.
 	Section: post"
-	(post-dir title header &rest categories) (do
-	(var post-body (str "---
+	(post-dir title header &rest categories)
+    (let*
+      ((post-body (str "---
 layout: default
 title: " title "
 categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categories)) "]
@@ -17,8 +18,8 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 <hr>
 [<-- back to the docs]( {{ site.url }} )
 "))
-	(var date (str-trim (str $(date +%Y-%m-%d))))
-	(var post (open (str post-dir "/evalable-" date "-" (str-replace title " " "-") ".md") :create :append))
+	(date (str-trim (str $(date +%Y-%m-%d))))
+	(post (open (str post-dir "/evalable-" date "-" (str-replace title " " "-") ".md") :create :append)))
 	(write-line post post-body)
 	(close post)))
 
@@ -48,7 +49,7 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 	evaled md file.
 	Section: post"
 	(src-file dest-file) (block file-read
-	(var line (read-line src-file))
+	(let ((line (read-line src-file)))
 	(when (nil? line)
 		(return-from file-read nil))
 	(do
@@ -56,24 +57,23 @@ categories: [" (if (= 0 (length categories)) "general" (str-cat-list "," categor
 		(if (and
 			(str-contains begin-comment line)
 			(str-contains end-comment line))
-		(do
-			(var directive-metadata (vec-nth (str-split begin-comment (vec-nth (str-split end-comment line) 0)) 1))
+		(let ((directive-metadata (vec-nth (str-split begin-comment (vec-nth (str-split end-comment line) 0)) 1)))
 			(eval (read directive-metadata))
 			(hash-set! directive :trigger-line line)
 			directive)
 		(do
-			(recur src-file dest-file))))))
+			(recur src-file dest-file)))))))
 
 (defn -read-in-code-block
 "read in code block from src-file into the code-snippets map.  also,
 continue to write the lines in the evalable md file into the evaled
 md file.
 Section: post"
-	(src-file dest-file directive-map code-snippets) (do
-	(var line (str-trim (read-line src-file)))
+	(src-file dest-file directive-map code-snippets)
+	(let ((line (str-trim (read-line src-file)))
+          (contents (list)))
 	(write-line dest-file line)
 	(println "codeblockstart::: " line)
-	(var contents (list))
 	(when (not (= line code-block-delim))
 		(err "First line after :entrypoint or :lib directive must be ```"))
 	;; read code block into list of strings, store list in directive map as
@@ -91,31 +91,31 @@ Section: post"
 	directive-map))
 
 (defn -eval-file (src-file dest-file directive-map code-snippets)
-	(var temp-dir (str-replace (str $(mktemp -d)) "\n" ""))
-	(var entrypoint nil)
+    (let ((temp-dir (str-replace (str $(mktemp -d)) "\n" ""))
+            (entrypoint nil))
 	;; write all the files to a temp directory so the entrypoint(s) can be
 	;; evaled
-	(for file-name in (hash-get directive-map :files) (do
-		(var snippet (hash-get code-snippets file-name))
-		(var target-file-name (str temp-dir "/" file-name))
+	(for file-name in (hash-get directive-map :files)
+       (let* ((snippet (hash-get code-snippets file-name))
+		(target-file-name (str temp-dir "/" file-name))
+		(target-file (open target-file-name :create :truncate)))
 		(println "target-file-name: " target-file-name)
 		(println "contents: " (hash-get snippet :contents))
-		(var target-file (open target-file-name :create :truncate))
-		(for line in (hash-get snippet :contents) (do
-			(write-line target-file line)))
+		(for line in (hash-get snippet :contents)
+			(write-line target-file line))
 		(when (= :entrypoint (hash-get snippet :type)) (do
 			(set! entrypoint target-file-name)
 			$(chmod +x $target-file-name)))
 		(close target-file)))
 	(when (nil? entrypoint) (err "No defined for :type :entrypoint in files found in :files for given :eval directive."))
-	(var temp-out (str temp-dir "/output"))
 	(pushd temp-dir)
 	;; TODO is the eval needed
 	;; eval executable file and write output to temp-out
-	(let ((return-value (get-error (out-err> temp-out (load entrypoint)))))
+	(let* ((temp-out (str temp-dir "/output"))
+          (return-value (get-error (out-err> temp-out (load entrypoint)))))
 	(popd)
-	(loop (input-file) ((open temp-out :read)) (do
-			(var line (read-line input-file))
+	(loop (input-file) ((open temp-out :read))
+        (let ((line (read-line input-file)))
 			(when (not (nil? line)) (do
                 (write-string dest-file (str ";; " line))
 				(recur input-file)))))
@@ -123,13 +123,13 @@ Section: post"
       (do
         (write-line dest-file (str "Error evaluating entrypoint!"))
         (write-line dest-file (str "==> " (cdr return-value)))))
-    (println "codeblock lives: " temp-out)))
+    (println "codeblock lives: " temp-out))))
 
 (defn -eval-post
 "TODO enumerate different directive and expectations
 Section: scripting"
     (src-file dest-file code-snippets)
-    (var directive-map (-get-directive-hash-map src-file dest-file))
+    (let ((directive-map (-get-directive-hash-map src-file dest-file)))
     ;;(println "src-file: " src-file)
     ;;(println "dest-file: " dest-file)
     ;;(println "code-snippets: " code-snippets)
@@ -144,15 +144,15 @@ Section: scripting"
             (:lib (-read-in-code-block src-file dest-file directive-map code-snippets))
             (:eval (-eval-file src-file dest-file directive-map code-snippets))
             (nil (err "Unknown hash map found")))
-        (recur src-file dest-file code-snippets))))
+        (recur src-file dest-file code-snippets)))))
 
 (defn eval-post
 	"enumerate different directive and expectations
 	Section: scripting"
-	(evalable-post-file-name evaled-post-file-name) (do
-		(var code-snippets (make-hash))
-		(var src-file (open evalable-post-file-name :read))
-		(var dest-file (open evaled-post-file-name :create :truncate))
+	(evalable-post-file-name evaled-post-file-name)
+    (let ((code-snippets (make-hash))
+            (src-file (open evalable-post-file-name :read))
+            (dest-file (open evaled-post-file-name :create :truncate)))
 		(-eval-post src-file dest-file code-snippets)
 		(close src-file)
 		(close dest-file)))

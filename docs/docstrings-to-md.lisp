@@ -7,8 +7,8 @@
 (ns-import 'docstruct)
 
 (defn create-jekyll-header (index-file)
-	(var new-file (open index-file :create :truncate))
-	(write-string new-file "---
+	(let ((new-file (open index-file :create :truncate)))
+		(write-string new-file "---
 title: Sl-sh Standard Library
 tags: [documentation]
 keywords: forms, sl-sh, examples, api, standard library
@@ -21,7 +21,7 @@ toc: false
 # Sl-sh
 
 ")
-	(close new-file))
+	(close new-file)))
 
 (defn make-section-name (name)
       (str (capitalize name) " forms"))

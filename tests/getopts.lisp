@@ -72,7 +72,7 @@
 (assert-error-msg (getopts test-options-map '("-lb" "an-argument")) (getopts-bad-option-arity "-b" 3))
 
 (defn map= (m n)
-    (var keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
+    (let ((keys-in-map (fn (m n) (loop (m-keys m n last-ret) ((hash-keys m) m n #t)
                        (if (not last-ret)
                          nil
                          (if (empty-seq? m-keys)
@@ -83,10 +83,10 @@
                              n
                              (and
                                (hash-haskey n (first m-keys))
-                               (= (hash-get m (first m-keys)) (hash-get n (first m-keys))))))))))
+                               (= (hash-get m (first m-keys)) (hash-get n (first m-keys)))))))))))
     (and (hash? m) (hash? n) (= (length (hash-keys m)) (length (hash-keys n)))
       (keys-in-map m n)
-      (keys-in-map n m)))
+      (keys-in-map n m))))
 
 (assert-true
     (map=
@@ -247,62 +247,62 @@
   (getopts (make-hash (list (join :-i (getopts-build-param 1 nil :int?)))) '("-i" "1.23"))
   "str->int: string is not a valid integer")
 
-(var i-int-bindings
+(def *i-int-bindings*
  (hash-get
    (getopts (make-hash (list (join :-i (getopts-build-param 1 nil :int?)))) '("-i" "1"))
    :-i))
-(assert-true (int? i-int-bindings) ". Return value should be of type Int.")
+(assert-true (int? *i-int-bindings*) ". Return value should be of type Int.")
 
-(var f-float-bindings
+(def *f-float-bindings*
  (hash-get
    (getopts (make-hash (list (join :-f (getopts-build-param 1 nil :float?)))) '("-f" "1.3"))
    :-f))
-(assert-true (float? f-float-bindings) ". Return value should be of type Float.")
+(assert-true (float? *f-float-bindings*) ". Return value should be of type Float.")
 
-(var f-float-vec-bindings
+(def *f-float-vec-bindings*
  (hash-get
    (getopts (make-hash (list (join :-f (getopts-build-param 2 nil :float?)))) '("-f" "1.3" "0.12"))
    :-f))
-(for f in f-float-vec-bindings (assert-true (float? f) ". Return value should be of type Float."))
+(for f in *f-float-vec-bindings* (assert-true (float? f) ". Return value should be of type Float."))
 
-(var fs-file-vec-bindings
+(def *fs-file-vec-bindings*
 (hash-get
 (getopts (make-hash (list (join :-f (getopts-build-param 2 nil :fs-file?))))
          '("-f" "/etc/group" "/etc/passwd"))
            :-f))
-(for f in fs-file-vec-bindings (assert-true (fs-file? f) ". Return value should pass test fs-file?."))
+(for f in *fs-file-vec-bindings* (assert-true (fs-file? f) ". Return value should pass test fs-file?."))
 
-(var fs-dir-bindings
+(def *fs-dir-bindings*
      (hash-get
        (getopts (make-hash (list (join :--fs-dir (getopts-build-param 1 nil :fs-dir?))))
                 '("--fs-dir" "/tmp"))
        :--fs-dir))
-(assert-true (fs-dir? fs-dir-bindings) ". Return value should pass test fs-dir?.")
+(assert-true (fs-dir? *fs-dir-bindings*) ". Return value should pass test fs-dir?.")
 
-(var fs-exists-bindings
+(def *fs-exists-bindings*
     (hash-get
       (getopts (make-hash (list (join :--exists (getopts-build-param 1 nil :fs-exists?))))
                '("--exists" "/etc/group"))
       :--exists))
-(assert-true (fs-exists? fs-exists-bindings) ". Return value should pass test fs-exists?.")
+(assert-true (fs-exists? *fs-exists-bindings*) ". Return value should pass test fs-exists?.")
 
 (assert-error-msg
   (getopts (make-hash (list (join :--not-exists (getopts-build-param 1 nil :fs-exists?))))
            '("--not-exists" "/tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj"))
   "Argument, /tmp/this/file/does/not/exist/i/hope/lakjdslfakjdlkfjdlkjfaslfkjlksdj, should pass test fs-exists?")
 
-(var symbol-bindings
+(def *symbol-bindings*
     (hash-get
       (getopts (make-hash (list (join :-s (getopts-build-param 1 nil :symbol?))))
                '("-s" ":a-keyword-symbol"))
       :-s))
-(assert-true (symbol? symbol-bindings) ". Return value should be of type Symbol?.")
+(assert-true (symbol? *symbol-bindings*) ". Return value should be of type Symbol?.")
 
-(var c-char-bindings
+(def *c-char-bindings*
  (hash-get
    (getopts (make-hash (list (join :-c (getopts-build-param 1 nil :char?)))) (list "-c" #\a))
    :-c))
-(assert-true (char? c-char-bindings) ". Return value should be of type Char.")
+(assert-true (char? *c-char-bindings*) ". Return value should be of type Char.")
 
 (assert-error-msg
   (getopts
@@ -310,66 +310,66 @@
        (list "-c" (list #\a)))
   (getopts-type-error-message ":-c" (list #\a) ":char?"))
 
-(var hash-bindings
+(def *hash-bindings*
  (hash-get
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :hash?)))) (list "-h" (make-hash (list (join :-h "meow")))))
    :-h))
-(assert-true (hash? hash-bindings) ". Return value should be of type HashMap.")
+(assert-true (hash? *hash-bindings*) ". Return value should be of type HashMap.")
 
-(var nil-bindings
+(def *nil-bindings*
  (hash-get
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :falsey?)))) '("-h" nil))
    :-h))
-(assert-true (nil? nil-bindings) ". Return value should be of type Nil.")
+(assert-true (nil? *nil-bindings*) ". Return value should be of type Nil.")
 
 (assert-error-msg
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :falsey?)))) '("-h" "nickel"))
    (getopts-type-error-message ":-h" "nickel" ":falsey?"))
 
-(var list-bindings
+(def *list-bindings*
  (hash-get
 ;;   (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :list?)))) '("-h" (arg1 arg2)))
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :list?)))) (list "-h" (list 'arg1 'arg2)))
    :-h))
-(assert-true (= 'arg1 (car list-bindings)) ". First arg not correct symbol.")
-(assert-true (= 'arg2 (cadr list-bindings)) ". Second arg not correct symbol.")
+(assert-true (= 'arg1 (car *list-bindings*)) ". First arg not correct symbol.")
+(assert-true (= 'arg2 (cadr *list-bindings*)) ". Second arg not correct symbol.")
 
-(var list-bindings2
+(def *list-bindings2*
  (hash-get
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :list?)))) (list "-h" (list "arg1" "arg2")))
    :-h))
-(assert-true (= "arg1" (car list-bindings2)) ". First arg not correct string.")
-(assert-true (= "arg2" (cadr list-bindings2)) ". Second arg not correct string.")
+(assert-true (= "arg1" (car *list-bindings2*)) ". First arg not correct string.")
+(assert-true (= "arg2" (cadr *list-bindings2*)) ". Second arg not correct string.")
 
 (assert-error-msg
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :list?)))) '("-h" "(list nxx nxx)"))
    (getopts-type-error-message  ":-h" "(list nxx nxx)" ":list?"))
 
-(var vec-bindings
+(def *vec-bindings*
  (hash-get
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :vec?)))) (list "-h" '#(1 2 3 4)))
    :-h))
-(assert-true (vec? vec-bindings) ". Return value should be of type Vector.")
-(assert-true (= (vec-nth vec-bindings 0) '1) ". Idx 0 is wrong.")
-(assert-true (= (vec-nth vec-bindings 1) '2) ". Idx 2 is wrong.")
-(assert-true (=(vec-nth vec-bindings 2) '3) ". Idx 3 is wrong.")
-(assert-true (= (vec-nth vec-bindings 3) '4) ". Idx 3 is wrong.")
+(assert-true (vec? *vec-bindings*) ". Return value should be of type Vector.")
+(assert-true (= (vec-nth *vec-bindings* 0) '1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth *vec-bindings* 1) '2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth *vec-bindings* 2) '3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth *vec-bindings* 3) '4) ". Idx 3 is wrong.")
 
-(var vec-bindings2
+(def *vec-bindings2*
  (hash-get
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :vec?)))) (list "-h" (vec 1 2 3 4)))
    :-h))
-(assert-true (vec? vec-bindings2) ". Return value should be of type Vector.")
-(assert-true (= (vec-nth vec-bindings2 0) 1) ". Idx 0 is wrong.")
-(assert-true (= (vec-nth vec-bindings2 1) 2) ". Idx 2 is wrong.")
-(assert-true (=(vec-nth vec-bindings2 2) 3) ". Idx 3 is wrong.")
-(assert-true (= (vec-nth vec-bindings2 3) 4) ". Idx 3 is wrong.")
+(assert-true (vec? *vec-bindings2*) ". Return value should be of type Vector.")
+(assert-true (= (vec-nth *vec-bindings2* 0) 1) ". Idx 0 is wrong.")
+(assert-true (= (vec-nth *vec-bindings2* 1) 2) ". Idx 2 is wrong.")
+(assert-true (=(vec-nth *vec-bindings2* 2) 3) ". Idx 3 is wrong.")
+(assert-true (= (vec-nth *vec-bindings2* 3) 4) ". Idx 3 is wrong.")
 
 (assert-error-msg
    (getopts (make-hash (list (join :-h (getopts-build-param 1 nil :vec?)))) (list "-h" (list 'nxx 'nxx)))
    (getopts-type-error-message  ":-h" (list 'nxx 'nxx) ":vec?"))
 
-(var macro-bindings
+(def *macro-bindings*
      (hash-get
          (getopts
            (make-hash
@@ -377,15 +377,15 @@
            (list "--macro" (macro (x) x)))
          :--macro))
 
-(assert-true (macro? macro-bindings) ". Return value should be of type macro.")
-(var lambda-bindings
+(assert-true (macro? *macro-bindings*) ". Return value should be of type macro.")
+(def *lambda-bindings*
      (hash-get
          (getopts
            (make-hash
              (list (join :--lambda (getopts-build-param 1 nil :lambda?))))
            (list "--lambda" (fn (x) x)))
          :--lambda))
-(assert-true (lambda? lambda-bindings) ". Return value should be of type lambda."))
+(assert-true (lambda? *lambda-bindings*) ". Return value should be of type lambda."))
 
 (def bad-getopts-required-args-zero-arity
 		(make-hash

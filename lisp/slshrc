@@ -18,12 +18,12 @@
 ; Turn on syntax highlighting at the repl- use (syntax-off) to turn off.
 (syntax-on)
 
-(defn parse_git_branch () 
-    (var branch "")
+(defn parse_git_branch ()
+    (let ((branch ""))
     (if (sys-command? "git") (err>null (set! branch (str $(git rev-parse --abbrev-ref HEAD)))))
     (if (= branch "")
         (format "")
-        (format "(" (str-trim branch) ")")))
+        (format "(" (str-trim branch) ")"))))
 
 (defn path_list_trunc (plist)
     (if (> (length plist) 1)
@@ -36,15 +36,16 @@
     (str-cat-list "/" (path_list_trunc (str-split "/" (str-replace (str-trim $PWD) $HOME "~")))))
 
 (defn set_prompt_tail (last-status)
-    (var debug (if (str-contains "debug" (version)) "[DEBUG]" ""))
-    (var status (if (= last-status 0) "" (str "\x1b[31m(" last-status ")\x1b[39m")))
+    (let ((debug (if (str-contains "debug" (version)) "[DEBUG]" ""))
+            (status (if (= last-status 0) "" (str "\x1b[31m(" last-status ")\x1b[39m"))))
     (if (= *euid* 0)
         (str "\x1b[31m" status "\n\x1b[31m" debug "λ #\x1b[39m ")
-        (str "\x1b[32m" status "\n\x1b[32m" debug "λ >\x1b[39m ")))
+        (str "\x1b[32m" status "\n\x1b[32m" debug "λ >\x1b[39m "))))
 
 (defn __prompt ()
-    (var last-status *last-status*)  ; Save this so it is not overwritten by commands run as part of prompt.
-    (str "\x1b[32m" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail last-status)))
+;; Save this so it is not overwritten by commands run as part of prompt.
+    (let ((last-status *last-status*))
+    (str "\x1b[32m" $HOST ":\x1b[34m" (str-trim (get_pwd)) "/\x1b[37m" (parse_git_branch) (set_prompt_tail last-status))))
 
 ; How to set aliases.
 ;(alias ls (/bin/ls --color=auto -F))
