@@ -989,6 +989,8 @@ to the specified padding length, only if the target string is less than the
 amount of padding specified. The resultant string is composed of the target
 string followed by \"padding\" number of \"padding-char\".
 
+Section: shell
+
 Example:
 (test::assert-equal \"test......\" (with-padding \"test\" 10 \".\"))
 "
