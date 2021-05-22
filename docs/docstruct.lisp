@@ -71,8 +71,10 @@ values-nth 1 = accum lst to string.
                               (list "Example:")
                               (list)))
           (when (not (nil? (values-nth 1 sect)))
-            (set! sect-key
-              (str-trim (vec-nth (str-split "Section:" (values-nth 1 sect)) 1))))
+            (let ((ret (get-error (str-trim (vec-nth (str-split "Section:" (values-nth 1 sect)) 1)))))
+              (if (= :ok (car ret))
+                (set! sect-key (cdr ret))
+                (set! sect-key "Undefined"))))
           (when (and (> (values-nth 0 sect) 0) ;; if idx is 0, no stop-condition
                      ;; strings were found.
                      (> (length doc-vec) (+ 2 usage desc sect))) (do

@@ -2,6 +2,9 @@
     (if (nil? #t)
         `(println "=> " ,@args)))
 
+;; TODO
+;; remove use of var
+
 (def token-delim "-")
 
 (def getopts-invalid-type-function (str "Type not supported. See (doc 'getopts) for supported types."))
