@@ -346,7 +346,7 @@ sample-getopts.lisp
 (println \"Passing: \" args \" to getopts\")
 ;; getopts is given a hash map with one key, :-m, that corresponds to the flag,
 ;; -m, that it configures.
-(def sample-getopts-bindings
+(def *sample-getopts-bindings*
      (getopts
        (make-hash
          (list (join
@@ -355,7 +355,7 @@ sample-getopts.lisp
                               (:default . 0)
                               (:type . :int?))))))
         args))
-(println \"The binding for -m is: \" (hash-get sample-getopts-bindings :-m) \"of type \" (type (hash-get sample-getopts-bindings :-m)))
+(println \"The binding for -m is: \" (hash-get *sample-getopts-bindings* :-m) \"of type \" (type (hash-get *sample-getopts-bindings* :-m)))
 ----------------
 
 Running the script with one argument to the -m flag yields:
