@@ -390,7 +390,7 @@ specified in code set the environment variable SLSH_LOG_LEVEL to the desired
 log level before initializing the struct.
 
 Format is:
-<unix time> <pid> <log level>: [<logger-name>] <log-string>
+`{unix time} {pid} {log level}: [{logger-name}] {log-string}`
 
 Section: logger
 
