@@ -389,6 +389,9 @@ unless that particular log level is enabled. To override the log level
 specified in code set the environment variable SLSH_LOG_LEVEL to the desired
 log level before initializing the struct.
 
+Format is:
+<unix time> <pid> <log level>: [<logger-name>] <log-string>
+
 Section: shell
 
 Example:
@@ -431,7 +434,8 @@ Example:
   (:fn get-log (self log-level to-log)
        (when (>= (convert-log-level log-level) log-level-int)
            (str (epoch)
-                    "  " (with-padding (str (str-upper (apply str (rest (iterator::collect (iterator::iter (str log-level)))))) ":") 7 " " :center)
+                    "  " (with-padding (str (get-pid) ) 9 " " :center)
+                    " " (with-padding (str (str-upper (apply str (rest (iterator::collect (iterator::iter (str log-level)))))) ":") 7 " " :center)
                     "[" logger-name "]"
                     " " to-log)))
   (:fn log-it (self calling-log-level to-log)
