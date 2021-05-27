@@ -461,6 +461,7 @@ fn read_string_literal(
         environment.reader_state.column,
     );
     let end_ch = if let Some(ch) = chars.next() {
+        environment.reader_state.column += 1;
         ch
     } else {
         return Err((
@@ -472,6 +473,12 @@ fn read_string_literal(
     };
 
     while let Some(ch) = chars.next() {
+        if ch == "\n" {
+            environment.reader_state.line += 1;
+            environment.reader_state.column = 0;
+        } else {
+            environment.reader_state.column += 1;
+        }
         let peek = if let Some(pch) = chars.peek() {
             pch
         } else {
