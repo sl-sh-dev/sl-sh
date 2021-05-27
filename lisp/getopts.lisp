@@ -1,6 +1,4 @@
-(defmacro debugln (&rest args)
-    (if (nil? #t)
-        `(println "=> " ,@args)))
+(def *getopts-log* ((logger) :init "getopts" :off))
 
 (def token-delim "-")
 
@@ -71,7 +69,7 @@ up until the next token delimeted option, -c.
           (arity (if (nil? arity-map)
                   0
                   (get-arity arity-map))))
-    (debugln "arity: " arity)
+    (*getopts-log* :trace "arity: " arity)
     (when (nil? arity-map)
       (err (getopts-illegal-option option)))
     ;; in case we are at end of args vector but the last option expects more
@@ -81,17 +79,17 @@ up until the next token delimeted option, -c.
     ;; since all options start with a " -" use a str-split/str-cat trick
     ;; to get a vector representing all args to current option
     (let ((potential-args (get-next-params idx given-args)))
-    (debugln "potential-args: " potential-args ", type: " (type potential-args))
+    (*getopts-log* :trace "potential-args: " potential-args ", type: " (type potential-args))
     (when (not (= (length potential-args) arity))
         (err (getopts-bad-option-arity option arity)))
     (hash-set! bindings-map key (if (empty-seq? potential-args) #t potential-args)))))
 
 (defn verify-all-options-valid (cmd-line-args options-map bindings-map)
     (let ((vec-args (collect-vec cmd-line-args)))
-    (debugln "vec-args: " vec-args)
+    (*getopts-log* :trace "vec-args: " vec-args)
     (for-i idx cmd in vec-args
          (do
-           (debugln "cmd: " (vec-nth vec-args idx) ", idx: " idx)
+           (*getopts-log* :trace "cmd: " (vec-nth vec-args idx) ", idx: " idx)
            (cond
              ((is-multi-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
              ((is-single-char-arg cmd) (verify-arity idx vec-args options-map bindings-map))
@@ -215,7 +213,7 @@ otherwise the error message is thrown."
                    (err getopts-invalid-type-function)
                    (do
                      (when (and (not (= binding default)) (not (= 0 opt-type-arity)))
-                       (let ((debug-strm (debugln "look our binding is: " binding ", of type: " (type binding)))
+                       (let ((debug-strm (*getopts-log* :trace "look our binding is: " binding ", of type: " (type binding)))
                             (err-str (getopts-type-error-message key binding opt-type-fun)))
                          (if (= 1 opt-type-arity)
                              (hash-set!
@@ -229,7 +227,7 @@ otherwise the error message is thrown."
                                  (map
                                    (fn (x) ((hash-get supported-types-map opt-type-fun) x err-str))
                                    binding))))
-                         (debugln "look our binding is now: " (hash-get bindings-map key) ", of type: " (type (hash-get bindings-map key)))
+                         (*getopts-log* :trace "look our binding is now: " (hash-get bindings-map key) ", of type: " (type (hash-get bindings-map key)))
                          ))))))
              (recur (rest keys) bindings-map)))))
 
@@ -415,7 +413,7 @@ Example:
         (fix-one-arg-bindings options-map bindings-map)
         (apply-defaults options-map bindings-map)
         ;; after apply-defaults, bindings with (= arity 1) will not be in a seqeunce.
-        (debugln "options " options-map)
+        (*getopts-log* :trace "options " options-map)
         (enforce-constrains options-map bindings-map)
-        (debugln "bindings-map: " bindings-map)
+        (*getopts-log* :trace "bindings-map: " bindings-map)
         bindings-map))
