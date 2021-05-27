@@ -392,7 +392,7 @@ log level before initializing the struct.
 Format is:
 <unix time> <pid> <log level>: [<logger-name>] <log-string>
 
-Section: shell
+Section: logger
 
 Example:
 
