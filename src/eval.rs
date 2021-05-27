@@ -540,7 +540,16 @@ pub fn eval(
     expression: impl AsRef<Expression>,
 ) -> Result<Expression, LispError> {
     let expression = expression.as_ref();
-    eval_nr(environment, expression)?.resolve(environment)
+    let mut result = eval_nr(environment, expression)?.resolve(environment);
+    if let Err(err) = &mut result {
+        if err.backtrace.is_none() {
+            err.backtrace = Some(Vec::new());
+        }
+        if let Some(backtrace) = &mut err.backtrace {
+            backtrace.push(expression.clone());
+        }
+    }
+    result
 }
 
 pub fn eval_data(environment: &mut Environment, data: ExpEnum) -> Result<Expression, LispError> {

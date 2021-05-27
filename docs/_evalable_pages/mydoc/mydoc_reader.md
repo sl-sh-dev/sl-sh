@@ -6,7 +6,7 @@ permalink: mydoc_reader.html
 ---
 # Reader
 
-The reader should be more less as expected for a lisp reader.
+The reader should work more or less as expected for a lisp reader.
 
 ## Strings
 String are surrounded by "" and can be multiline.  Stings support the following escape sequences:

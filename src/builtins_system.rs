@@ -578,6 +578,19 @@ fn builtin_pid(
     Err(LispError::new("pid takes one form (a process)"))
 }
 
+fn builtin_get_pid(
+    _environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if args.next().is_none() {
+        Ok(Expression::alloc_data(ExpEnum::Int(i64::from(
+            std::process::id(),
+        ))))
+    } else {
+        Err(LispError::new("get-pid: takes no arguments"))
+    }
+}
+
 pub fn add_system_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -948,6 +961,21 @@ Example:
 (test::assert-true (int? (pid pid-test)))
 (test::assert-true (int? (pid (fork ((fn () nil))))))
 (test::assert-error (pid 1))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("get-pid"),
+        Expression::make_function(
+            builtin_get_pid,
+            r#"Usage: (get-pid)
+
+Return the pid of running process (shell).
+
+Section: system
+
+Example:
+(test::assert-true (int? (get-pid)))
 "#,
         ),
     );
