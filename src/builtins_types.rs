@@ -487,7 +487,7 @@ fn builtin_falsey(
 ) -> Result<Expression, LispError> {
     let arg = param_eval(environment, args, "falsey?")?;
     params_done(args, "falsey?")?;
-    return if arg.is_falsy() {
+    if arg.is_falsy() {
         Ok(Expression::make_true())
     } else {
         Ok(Expression::make_false())
