@@ -12,9 +12,7 @@
 (def *padding* 42)
 
 (defn print-with-padding (to-print)
-      (if (>= (length to-print) *padding*)
-        (print to-print)
-        (print to-print (apply str (collect (repeat "." (- *padding* (length to-print))))))))
+      (print (with-padding to-print *padding* ".")))
 
 (defn has-example (docstring)
 	(str-contains "Example:" docstring))

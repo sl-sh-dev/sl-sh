@@ -107,7 +107,7 @@ Example:
              (set! body (if (> (length args) 2) (vec-slice args 2) (vec nil)))
              `(def ,name ,doc-str (fn ,ars (block ,name ,@body))))
            (do
-             (set! ars (vec-nth args 0)) 
+             (set! ars (vec-nth args 0))
              (set! body (if (> (length args) 1) (vec-slice args 1) (vec nil)))
              `(def ,name (fn ,ars (block ,name ,@body))))))nil nil nil))))
 

@@ -336,3 +336,126 @@ Section: namespace"
              (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
              curr-syms)))
     (iterator::collect public-syms))))
+
+(defn with-padding
+"Given a \"target\" string, a keyword specifying the type of padding, an integer
+length to pad to \"padding\", and a character to use for padding
+\"padding-char\", return a string with length equal to the specified padding
+length, only if the target string is less than the amount of padding specified.
+The resultant string defaults to right padding and is composed of the target
+string followed by \"padding\" number of \"padding-char\". If left or center
+padding is desired pass one of the keywords :left or :center as the final
+argument to the function. For completeness, the keyword :right is also
+supported.
+
+Section: string
+
+Example:
+(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\"))
+(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\" :right))
+(test::assert-equal \"......test\" (with-padding \"test\" 10 \".\" :left))
+(test::assert-equal \"...test...\" (with-padding \"test\" 10 \".\" :center))
+(test::assert-equal \"..tests...\" (with-padding \"tests\" 10 \".\" :center))
+"
+    (target padding padding-char &rest padding-keyword)
+    (let ((pad (fn (x)
+                (apply str (iterator::collect (iterator::repeat padding-char x)))))
+            (err-msg "padding-keyword must be one of :left, :right, or :center"))
+        (when (= 0 (length padding-keyword))
+          (set! padding-keyword (vec :right)))
+        (if (>= (length target) padding)
+            (str target)
+            (if (= 1 (length padding-keyword))
+                (match (first padding-keyword)
+                    (:left (str (pad (- padding (length target))) target))
+                    (:right (str target (pad (- padding (length target)))))
+                    (:center (let* ((padding-len (- padding (length target)))
+                                    (even? (= 0 (% padding-len 2)))
+                                    (right-padding (pad (/ padding-len 2)))
+                                    (left-padding (pad (if even?
+                                                    (/ padding-len 2)
+                                                    (math::ceil (/ padding-len 2.0))))))
+                              (str right-padding target left-padding)))
+                    (nil (err err-msg)))
+                (err err-msg)))))
+
+(struct::defstruct logger
+  "logger struct
+
+Initialize a logger object with a name and a log level that can be called
+repeatedly to log to stdout. Supported log levels in order are :trace, :debug,
+:info, :warn, :error, or :off. Calls to functions provided by struct are noops
+unless that particular log level is enabled. To override the log level
+specified in code set the environment variable SLSH_LOG_LEVEL to the desired
+log level before initializing the struct.
+
+Format is:
+<unix time> <pid> <log level>: [<logger-name>] <log-string>
+
+Section: logger
+
+Example:
+
+(defn test-logger (log-name log-level)
+      (let ((a-logger ((logger) :init log-name log-level))
+            (str-list (list)))
+        (append-to! str-list (list (a-logger :get-log :trace (str \"test log \" log-level))))
+        (append-to! str-list (list (a-logger :get-log :debug (str \"test log \" log-level))))
+        (append-to! str-list (list (a-logger :get-log :info (str \"test log \" log-level))))
+        (append-to! str-list (list (a-logger :get-log :warn (str \"test log \" log-level))))
+        (append-to! str-list (list (a-logger :get-log :error (str \"test log \" log-level))))
+        (collect (filter (fn (x) (not (falsey? x))) str-list))))
+
+(test::assert-equal 5 (length (test-logger \"test-logger\" :trace)))
+(test::assert-equal 4 (length (test-logger \"test-logger\" :debug)))
+(test::assert-equal 3 (length (test-logger \"test-logger\" :info)))
+(test::assert-equal 2 (length (test-logger \"test-logger\" :warn)))
+(test::assert-equal 1 (length (test-logger \"test-logger\" :error)))
+(test::assert-equal 0 (length (test-logger \"test-logger\" :off)))
+(test::assert-error-msg ((logger) :init \"test-logger\" :bad-log-level) \"log level must be a symbol one of: :trace, :debug, :info, :warn, :error, or :off\")
+(test::assert-error-msg ((logger) :init 'bad-log-name :error) \"in-logger-name must be a string.\")
+"
+  ;; fields
+  (log-level nil)
+  (log-level-int nil)
+  (logger-name 0)
+  (convert-log-level (fn (log-level)
+      (let ((err-msg "log level must be a symbol one of: :trace, :debug, :info, :warn, :error, or :off"))
+        (if (symbol? log-level)
+       (match log-level
+        (:trace 0)
+        (:debug 1)
+        (:info 2)
+        (:warn 3)
+        (:error 4)
+        (:off 5)
+        (nil (err err-msg)))
+       (err err-msg)))))
+  (:fn get-log (self log-level to-log)
+       (when (>= (convert-log-level log-level) log-level-int)
+           (str (epoch)
+                    "  " (with-padding (str (get-pid) ) 9 " " :center)
+                    " " (with-padding (str (str-upper (apply str (rest (iterator::collect (iterator::iter (str log-level)))))) ":") 7 " " :center)
+                    "[" logger-name "]"
+                    " " to-log)))
+  (:fn log-it (self calling-log-level to-log)
+       (let ((log-str (self :get-log calling-log-level (str-cat-list " " to-log))))
+        (when (not (falsey? log-str))
+          (println log-str))))
+  (:fn trace (self &rest to-log)
+       (self :log-it :trace to-log))
+  (:fn debug (self &rest to-log)
+       (self :log-it :debug to-log))
+  (:fn info (self &rest to-log)
+       (self :log-it :info to-log))
+  (:fn warn (self &rest to-log)
+       (self :log-it :warn to-log))
+  (:fn error (self &rest to-log)
+       (self :log-it :error to-log))
+  (:fn init (self in-logger-name in-log-level) (do
+       (when (not (str-empty? (get-env "SLSH_LOG_LEVEL")))
+         (set! in-log-level (sym (get-env "SLSH_LOG_LEVEL"))))
+       (set! log-level-int (convert-log-level in-log-level))
+       (set! log-level in-log-level)
+       (if (string? in-logger-name) (set! logger-name in-logger-name) (err "in-logger-name must be a string."))
+       self)))

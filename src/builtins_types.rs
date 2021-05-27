@@ -481,6 +481,19 @@ fn builtin_symbol_to_str(
     Err(LispError::new("sym->str: take one form (a symbol)"))
 }
 
+fn builtin_falsey(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let arg = param_eval(environment, args, "falsey?")?;
+    params_done(args, "falsey?")?;
+    if arg.is_falsy() {
+        Ok(Expression::make_true())
+    } else {
+        Ok(Expression::make_false())
+    }
+}
+
 pub fn add_type_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -1051,6 +1064,24 @@ Example:
 (def test-sym->str-sym nil)
 (test::assert-true (string? (sym->str 'test-sym->str-sym)))
 (test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("falsey?"),
+        Expression::make_function(
+            builtin_falsey,
+            r#"Usage: (falsey? under-test) -> bool
+
+Returns true if the expression under-test evaluates to nil or false.
+
+Section: type
+
+Example:
+(test::assert-true (falsey? nil))
+(test::assert-true (falsey? #f))
+(test::assert-false (falsey? #t))
+(test::assert-false (falsey? "false"))
 "#,
         ),
     );

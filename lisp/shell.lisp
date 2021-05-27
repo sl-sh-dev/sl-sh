@@ -934,7 +934,7 @@ Section: shell"
 (struct::defstruct timer
   "timer struct
 
-Initialize a timer object that can be called repeatedely with :pr-next to
+Initialize a timer object that can be called repeatedly with :pr-next to
 return relative time passed since instantiation and time since last called or
 first instantiated.
 
@@ -982,6 +982,7 @@ Example:
                                            (set! curr-time prev-time)
                                           self)))
 
+
 (load "getopts.lisp")
 
 (ns-export '(
@@ -1020,6 +1021,7 @@ Example:
              bg-color-rgb
              fc
              getopts
+             getopts-help
              mkli
              temp-dir
              timer))
