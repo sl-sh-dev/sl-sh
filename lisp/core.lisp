@@ -586,18 +586,4 @@ Example:
       (= (length args) 1) `(set! ,s (- ,s ,(vec-nth args 0)))
       (err "dec!: requires a symbol and optional number")))
 
-(defn falsey?
-      "Returns true if item is nil or #f.
-
-      Section: type
-
-      Example:
-      (test::assert-true (falsey? #f))
-      (test::assert-true (falsey? nil))
-      (test::assert-false (falsey? \"nil\"))
-      (test::assert-false (falsey? #t))
-      "
-      (item)
-      (or (nil? item) (false? item)))
-
 (load "collection.lisp")

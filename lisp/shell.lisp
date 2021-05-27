@@ -982,92 +982,6 @@ Example:
                                            (set! curr-time prev-time)
                                           self)))
 
-(defn with-padding
-"Given a \"target\" string, an integer length to pad to \"padding\", and a
-character to use for padding \"padding-char\", return a string with length equal
-to the specified padding length, only if the target string is less than the
-amount of padding specified. The resultant string is composed of the target
-string followed by \"padding\" number of \"padding-char\".
-
-Section: shell
-
-Example:
-(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\"))
-"
-      (target padding padding-char)
-      (if (>= (length target) padding)
-        (str target)
-        (str target (apply str (collect (repeat padding-char (- padding (length target))))))))
-
-(struct::defstruct logger
-  "logger struct
-
-Initialize a logger object that can be called repeatedly with
-
-Section: shell
-
-Example:
-
-(defn test-logger (log-name log-level)
-      (let ((a-logger ((logger) :init log-name log-level))
-            (str-list (list)))
-        (append-to! str-list (list (a-logger :get-log :trace (str \"test log \" log-level))))
-        (append-to! str-list (list (a-logger :get-log :debug (str \"test log \" log-level))))
-        (append-to! str-list (list (a-logger :get-log :info (str \"test log \" log-level))))
-        (append-to! str-list (list (a-logger :get-log :warn (str \"test log \" log-level))))
-        (append-to! str-list (list (a-logger :get-log :error (str \"test log \" log-level))))
-        (collect (filter (fn (x) (not (falsey? x))) str-list))))
-
-(test::assert-equal 5 (length (test-logger \"test-logger\" :trace)))
-(test::assert-equal 4 (length (test-logger \"test-logger\" :debug)))
-(test::assert-equal 3 (length (test-logger \"test-logger\" :info)))
-(test::assert-equal 2 (length (test-logger \"test-logger\" :warn)))
-(test::assert-equal 1 (length (test-logger \"test-logger\" :error)))
-(test::assert-equal 0 (length (test-logger \"test-logger\" :off)))
-(test::assert-error-msg ((logger) :init \"test-logger\" :bad-log-level) \"log level must be a symbol one of: :trace, :debug, :info, :warn, :error, or :off\")
-(test::assert-error-msg ((logger) :init 'bad-log-name :error) \"in-logger-name must be a string.\")
-"
-  ;; fields
-  (log-level nil)
-  (log-level-int nil)
-  (logger-name 0)
-  (convert-log-level (fn (log-level)
-      (let ((err-msg "log level must be a symbol one of: :trace, :debug, :info, :warn, :error, or :off"))
-        (if (symbol? log-level)
-       (match log-level
-        (:trace 0)
-        (:debug 1)
-        (:info 2)
-        (:warn 3)
-        (:error 4)
-        (:off 5)
-        (nil (err err-msg)))
-       (err err-msg)))))
-  (:fn get-log (self log-level to-log)
-       (when (>= (convert-log-level log-level) log-level-int)
-           (str (epoch)
-                    "  " (with-padding (str-upper (apply str (rest (collect (iter (str log-level)))))) 7 " ")
-                    "  " logger-name
-                    ":  " to-log)))
-  (:fn log-it (self calling-log-level to-log)
-       (let ((log-str (self :get-log calling-log-level to-log)))
-        (when (not (falsey? log-str))
-          (println log-str))))
-  (:fn trace (self to-log)
-       (self :log-it :trace to-log))
-  (:fn debug (self to-log)
-       (self :log-it :debug to-log))
-  (:fn info (self to-log)
-       (self :log-it :info to-log))
-  (:fn warn (self to-log)
-       (self :log-it :warn to-log))
-  (:fn error (self to-log)
-       (self :log-it :error to-log))
-  (:fn init (self in-logger-name in-log-level) (do
-       (set! log-level-int (convert-log-level in-log-level))
-       (set! log-level in-log-level)
-       (if (string? in-logger-name) (set! logger-name in-logger-name) (err "in-logger-name must be a string."))
-       self)))
 
 (load "getopts.lisp")
 
@@ -1110,8 +1024,6 @@ Example:
              getopts-help
              mkli
              temp-dir
-             timer
-             with-padding
-             logger))
+             timer))
 
 (ns-pop)

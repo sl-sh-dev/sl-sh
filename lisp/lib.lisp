@@ -336,3 +336,45 @@ Section: namespace"
              (fn (x) (chain x (sym->str _) (str-starts-with "-" _) (not _)))
              curr-syms)))
     (iterator::collect public-syms))))
+
+(defn with-padding
+"Given a \"target\" string, a keyword specifying the type of padding, an integer
+length to pad to \"padding\", and a character to use for padding
+\"padding-char\", return a string with length equal to the specified padding
+length, only if the target string is less than the amount of padding specified.
+The resultant string defaults to right padding and is composed of the target
+string followed by \"padding\" number of \"padding-char\". If left or center
+padding is desired pass one of the keywords :left or :center as the final
+argument to the function. For completeness, the keyword :right is also
+supported.
+
+Section: string
+
+Example:
+(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\"))
+(test::assert-equal \"test......\" (with-padding \"test\" 10 \".\" :right))
+(test::assert-equal \"......test\" (with-padding \"test\" 10 \".\" :left))
+(test::assert-equal \"...test...\" (with-padding \"test\" 10 \".\" :center))
+(test::assert-equal \"..tests...\" (with-padding \"tests\" 10 \".\" :center))
+"
+    (target padding padding-char &rest padding-keyword)
+    (let ((pad (fn (x)
+                (apply str (iterator::collect (iterator::repeat padding-char x)))))
+            (err-msg "padding-keyword must be one of :left, :right, or :center"))
+        (when (= 0 (length padding-keyword))
+          (set! padding-keyword (vec :right)))
+        (if (>= (length target) padding)
+            (str target)
+            (if (= 1 (length padding-keyword))
+                (match (first padding-keyword)
+                    (:left (str (pad (- padding (length target))) target))
+                    (:right (str target (pad (- padding (length target)))))
+                    (:center (let* ((padding-len (- padding (length target)))
+                                    (even? (= 0 (% padding-len 2)))
+                                    (right-padding (pad (/ padding-len 2)))
+                                    (left-padding (pad (if even?
+                                                    (/ padding-len 2)
+                                                    (math::ceil (/ padding-len 2.0))))))
+                              (str right-padding target left-padding)))
+                    (nil (err err-msg)))
+                (err err-msg)))))
