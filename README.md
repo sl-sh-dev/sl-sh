@@ -24,6 +24,8 @@
 
 # Simple Lisp Shell (pronounced slush)
 
+![Rust](https://github.com/sl-sh-dev/sl-sh/workflows/Rust/badge.svg?branch=master)
+
 Simple Lisp SHell (sl-sh) is a lisp based shell written in Rust. It is not POSIX
 compliant and makes no effort to be. It runs on the Linux and MacOS platforms.
 It is a Lisp-1 that is heavily inspired by Clojure and Common Lisp. It is a
@@ -85,5 +87,19 @@ chsh -s /usr/local/bin/sl-sh
 ```
 ## Documentation
 
-An API reference, various guides, and more can be found on the [documentation site](https://sl-sh-dev.github.io/sl-sh/)
+An [API](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html) reference, various guides, and more on the [documentation site](https://sl-sh-dev.github.io/sl-sh/)
+Be warned! Documentation is a first class citizen in sl-sh. Docstrings for functions
+can be viewed directly in the terminal with the [doc](AP://sl-sh-dev.github.io/sl-sh/mydoc_api.html#root::doc)
+form (e.g. `doc reduce`, `doc car` or `doc getopts`) and of the 357 sl-sh forms in existence at the time of this writing, 98.04% of them
+include Example sections with actual test cases that are run as part of CI. It
+is even possible to run a custom documentation site locally for all forms in
+all namespaces loaded at startup in the user's slshrc, see [this](https://sl-sh-dev.github.io/sl-sh/mydoc_documentation.html) FAQ page.
+
+## Status
+
+Sl-sh is still in a beta stage and an official 1.0 release is targeted for end of 2021.
+While the project is in beta, the API is not stable (although it is fairly stable)
+and documentation on certain features is lacking (but improving!). Finding
+examples on how to do things can best be achieved by searching in the contrib
+directory and consulting the [documentation](https://sl-sh-dev.github.io/sl-sh/).
 

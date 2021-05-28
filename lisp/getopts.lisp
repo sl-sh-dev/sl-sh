@@ -334,11 +334,12 @@ goes on two lines!\"))))
 (defn getopts
 "Getopts takes a hash map and a vector of args and returns a hash map with all
 the values extracted from the args and bound to the corresponding keys in the
-provided hash map.
+provided hash map. Support for automatically generating documentation is
+available with helper function [getopts-help](#shell::getopts-help).
 
 Take this example script:
-sample-getopts.lisp
-----------------
+`sample-getopts.lisp`
+```
 #!/usr/bin/env sl-sh
 
 (println \"Passing: \" args \" to getopts\")
@@ -354,12 +355,14 @@ sample-getopts.lisp
                               (:type . :int?))))))
         args))
 (println \"The binding for -m is: \" (hash-get *sample-getopts-bindings* :-m) \"of type \" (type (hash-get *sample-getopts-bindings* :-m)))
-----------------
+```
 
 Running the script with one argument to the -m flag yields:
-\$> ./sample-getopts.lisp -m 7
-=> Passing: #(\"-m\" \"7\") to getopts
-=> The binding for -m is 7 of type Int
+```
+$ ./sample-getopts.lisp -m 7
+Passing: #(\"-m\" \"7\") to getopts
+The binding for -m is 7 of type Int
+```
 
 The hash map for the key :-m showcases the configuration keys that exist for
 each flag: arity, :default, and :type. :arity specifies that the -m flag will
@@ -367,9 +370,11 @@ take one argument. :default specifies the bindng for :-m should be 0 if the
 -m flag is not seen in args. :type :int? specifies that the binding should
 be of that type, in this case int?. Running the script again with no -m
 flag yields:
-\$> ./sample-getopts.lisp
-=> Passing: #() to getopts
-=> The binding for -m is 0 of type Int
+```
+$ ./sample-getopts.lisp
+Passing: #() to getopts
+The binding for -m is 0 of type Int
+```
 
 Demonstrating the :default binding of 0 for the symbol :-m since the -m flag
 was not provided as an argument to the script.

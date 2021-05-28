@@ -28,6 +28,7 @@
   ;; create std lib md file
   (write-sidebar "_data/sidebars/mydoc_sidebar.yml"  sym-list "Standard Library" "Sl-sh Forms" "/mydoc_api.html")
   (make-md-file "pages/mydoc/mydoc_api.md" sym-list)
+  (eval-post "_evalable_pages/mydoc/mydoc_documentation.md" "pages/mydoc/mydoc_documentation.md")
   (eval-post "_evalable_pages/mydoc/mydoc_shellreader.md" "pages/mydoc/mydoc_shellreader.md")
   (eval-post "_evalable_pages/mydoc/mydoc_reader.md" "pages/mydoc/mydoc_reader.md")
   (eval-post "_evalable_pages/mydoc/mydoc_namespaces.md" "pages/mydoc/mydoc_namespaces.md")))))

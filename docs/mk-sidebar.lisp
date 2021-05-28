@@ -109,8 +109,8 @@ entries:
     output: web, pdf
     folderitems:
 
-    - title: Scripting
-      url: /mydoc_scripting.html
+    - title: Documentation
+      url: /mydoc_documentation.html
       output: web, pdf
 
     - title: Reader

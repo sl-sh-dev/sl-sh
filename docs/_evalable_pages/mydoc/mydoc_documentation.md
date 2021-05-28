@@ -1,7 +1,10 @@
 ---
-title:  "How to generate a personal documentation site"
-permalink: sl-sh-making-personal-documentation.html
-tags: [news, slshrc]
+title:  "Documentation in Sl-sh"
+tags: [documentation]
+last_updated: May 28, 2021
+sidebar: mydoc_sidebar
+keywords: documentation
+permalink: mydoc_documentation.html
 ---
 
 # Sl-sh documentation
