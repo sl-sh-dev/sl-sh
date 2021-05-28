@@ -109,6 +109,10 @@ entries:
     output: web, pdf
     folderitems:
 
+    - title: Scripting
+      url: /mydoc_scripting.html
+      output: web, pdf
+
     - title: Reader
       url: /mydoc_reader.html
       output: web, pdf
@@ -130,7 +134,7 @@ entries:
       output: web, pdf
 
     - title: Slshrc config
-      url: /mydoc_slsh_config.html
+      url: /mydoc_slshrc_config.html
       output: web, pdf
 
     - title: Working with files
@@ -141,8 +145,8 @@ entries:
       url: /mydoc_endfix.html
       output: web, pdf
 
-    - title: Macros
-      url: /mydoc_macros.html
+    - title: Scripting
+      url: /mydoc_scripting.html
       output: web, pdf
 
     - title: Pipes

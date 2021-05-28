@@ -25,6 +25,16 @@ Follow these instructions to install sl-sh.
     ```
 -  sl-sh will load with the default slshrc file.
 
+### 3. Use sl-sh as primary shell
+-  install binary
+```
+sudo install -D -m 755 target/release/sl-sh /usr/local/bin/
+```
+-  change shell
+```
+chsh -s /usr/local/bin/sl-sh
+```
+
 {% include links.html %}
 
 This site built from [Documentation Theme for Jekyll](https://github.com/tomjoht/documentation-theme-jekyll).
