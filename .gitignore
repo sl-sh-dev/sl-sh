@@ -1,6 +1,3 @@
 /target
 **/*.rs.bk
-docs/_data/sidebars/mydoc_sidebar.yml
-docs/pages/mydoc/mydoc_api.md
-docs/pages/mydoc/mydoc_namespaces.md
 .idea/**
