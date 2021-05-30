@@ -12,7 +12,7 @@ topnav: topnav
 
 ## Contact Us
 -  GitHub:
-    [Issues](https://github.com/sstanfield/slsh/issues)
+    [Issues](https://github.com/sl-sh-dev/sl-sh/issues)
 -  Gitter:
     [sl-sh](Page://gitter.im/sl-sh/community)
 

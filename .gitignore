@@ -1,3 +1,10 @@
 /target
 **/*.rs.bk
 .idea/**
+docs/Gemfile.lock
+docs/pages/mydoc/mydoc_shellreader.md
+docs/pages/mydoc/mydoc_reader.md
+docs/_data/sidebars/mydoc_sidebar.yml
+docs/pages/mydoc/mydoc_api.md
+docs/pages/mydoc/mydoc_namespaces.md
+docs/pages/mydoc/mydoc_documentation.md

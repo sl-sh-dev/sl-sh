@@ -4,7 +4,7 @@ topnav:
 - title: Topnav
   items:
     - title: GitHub
-      external_url: https://github.com/sstanfield/slsh
+      external_url: https://github.com/sl-sh-dev/sl-sh
     - title: News
       url: /news
 
@@ -17,4 +17,4 @@ topnav_dropdowns:
         - title: Gitter
           external_url: https://gitter.im/sl-sh/community
         - title: GitHub Issues
-          external_url: https://github.com/sstanfield/slsh/issues
+          external_url: https://github.com/sl-sh-dev/sl-sh/issues

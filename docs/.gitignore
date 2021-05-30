@@ -8,9 +8,3 @@ _pdf
 .vendor/
 .vscode/
 .bundle/
-pages/mydoc/mydoc_shellreader.md
-pages/mydoc/mydoc_reader.md
-_data/sidebars/mydoc_sidebar.yml
-pages/mydoc/mydoc_api.md
-pages/mydoc/mydoc_namespaces.md
-pages/mydoc/mydoc_documentation.md
