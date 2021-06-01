@@ -188,7 +188,7 @@ arguments to a sl-sh script, the parameters will be available as a vector,
 
 
 ## Documentation of available forms
-- [sl-sh documentation page](https://sstanfield.github.io/sl-sh)
+- [sl-sh documentation page](https://sl-sh-dev.github.io/sl-sh/)
 - notes on building the documentation are [here](https://github.com/sstanfield/sl-sh/wiki/Building-the-docs)
 
 ## Cross Compiling
