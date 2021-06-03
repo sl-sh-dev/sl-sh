@@ -106,16 +106,6 @@
 	()
 	(syscall "xclip" "-selection" "c"))
 
-(defn zh
-	"
-	fuzzy zsh history search
-	Section: user-shell
-	"
-	()
-	(do
-		(var raw-zsh-str (str $(cat ~/.zsh_history | fzf-tmux)))
-		(eval (str "(loose-symbols (" (str-cat-list ";" (rest (str-split ";" raw-zsh-str))) "))"))))
-
 (defn stripcolor
 	"remove all color codes from any strings
 	Section: user-shell"

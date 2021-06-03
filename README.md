@@ -23,7 +23,7 @@ Some of the more prominent features:
 * OO functionality with lisp style [defstruct](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html#struct::defstruct) and [deftrait](https://sl-sh-dev.github.io/sl-sh/mydoc_api.html#struct::deftrait).
 * Dynamically Typed
 * Mutable state (it's a shell!) but support for functional idioms is built into the standard lib, e.g. filter, reduce, apply, map, etc.
-* Import system with [namespaces](https://sl-sh-dev.github.io/sl-sh/mydoc_namespaces.html) to make writing modular scripts and/or library code easily.
+* Import system with [namespaces](https://sl-sh-dev.github.io/sl-sh/mydoc_namespaces.html) to make writing modular scripts and library code easier.
 * Common Lisp style keyword symbols with colon, `:a-keyword`.
 * Clojure style [threading macros](https://clojure.org/guides/threading_macros) and scheme style [pipeline operators](https://srfi.schemers.org/srfi-197/srfi-197.html).
 

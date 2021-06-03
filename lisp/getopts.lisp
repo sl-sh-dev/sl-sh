@@ -6,6 +6,8 @@
 
 (def getopts-options-map-is-map "Getopts first argument, options-map, must pass test hash?.")
 
+(def getopts-help--options-map-is-map "Getopts help first argument, options-map, must pass test hash?.")
+
 (def getopts-bad-first-arg "First argument must be a flag.")
 
 (defn arity-zero-can-not-be-required (x)
@@ -274,41 +276,10 @@ goes on two lines!\"))))
                               (:type . :int?)))))))
 (test::assert-equal
     (str-split :whitespace (getopts-help getopts-help-bindings))
-    (str-split :whitespace (str-push! (str)
-        #\u{9}
-            \"-a\"
-        #\u{9}
-            \"arity          1\"
-        #\u{9}
-            \"this doc is for -a.\"
-        #\u{9}
-            \"-b\"
-        #\u{9}
-            \"arity          0\"
-        #\u{9}
-            \"this opts doc for -b\"
-        #\u{9}
-            \"goes on two lines!\"
-        #\u{9}
-            \"-k\"
-        #\u{9}
-            \"arity          1\"
-        #\u{9}
-            \"required type  :int?\"
-        #\u{9}
-            \"-m\"
-        #\u{9}
-            \"arity          1\"
-        #\u{9}
-            \"default value  0\"
-        #\u{9}
-            \"required type  :int?\"
-        #\u{9}
-            \"this is displayed as\"
-        #\u{9}
-            \"two indented lines.\")))
+    (str-split :whitespace (str-push! (str) #\u{9} \"-a\" #\u{9} \"arity          1\" #\u{9} \"this doc is for -a.\" #\u{9} \"-b\" #\u{9} \"arity          0\" #\u{9} \"this opts doc for -b\" #\u{9} \"goes on two lines!\" #\u{9} \"-k\" #\u{9} \"arity          1\" #\u{9} \"required type  :int?\" #\u{9} \"-m\" #\u{9} \"arity          1\" #\u{9} \"default value  0\" #\u{9} \"required type  :int?\" #\u{9} \"this is displayed as\" #\u{9} \"two indented lines.\")))
 "
 (bindings)
+(when (not (hash? bindings)) (err getopts-help--options-map-is-map))
 (let ((options-str (str "OPTIONS" #\u{a})))
   (for key in (qsort (hash-keys bindings))
      (do
