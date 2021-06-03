@@ -3,7 +3,7 @@ use std::env;
 use std::hash::BuildHasher;
 use std::io::{self, ErrorKind};
 
-use liner::{keymap, Buffer, ColorClosure, Context, Prompt};
+use sl_liner::{keymap, Buffer, ColorClosure, Context, Prompt};
 
 use crate::builtins_util::*;
 use crate::completions::*;

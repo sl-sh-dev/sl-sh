@@ -4,7 +4,7 @@ use std::fmt;
 use std::io;
 use std::rc::Rc;
 
-use liner::Context;
+use sl_liner::Context;
 
 use crate::interner::*;
 use crate::process::*;

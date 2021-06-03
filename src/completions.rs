@@ -1,5 +1,5 @@
 use glob::{glob, glob_with, MatchOptions};
-use liner::{Completer, CursorPosition, Event, EventKind};
+use sl_liner::{Completer, CursorPosition, Event, EventKind};
 use std::env;
 use std::path::Path;
 

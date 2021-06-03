@@ -1,7 +1,7 @@
 extern crate glob;
 extern crate libc;
-extern crate liner;
 extern crate nix;
+extern crate sl_liner;
 
 pub mod types;
 pub use crate::types::*;
