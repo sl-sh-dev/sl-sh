@@ -1,13 +1,16 @@
 ---
-title:  "How to generate a personal documentation site"
-permalink: sl-sh-making-personal-documentation.html
-tags: [news, slshrc]
+title:  "Documentation in Sl-sh"
+tags: [documentation]
+last_updated: May 28, 2021
+sidebar: mydoc_sidebar
+keywords: documentation
+permalink: mydoc_documentation.html
 ---
 
 # Sl-sh documentation
 
 
-The [sl-sh documentation](https://sstanfield.github.io/sl-sh/) relies on github pages which is in turn powered by jekyll to build
+The [sl-sh documentation]({{ site.url }}) relies on github pages which is in turn powered by jekyll to build
 documentation. In the docs/ sub directory of the sl-sh root project all
 of the resources needed to run the docs locally can be found.
 

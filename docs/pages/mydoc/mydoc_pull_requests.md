@@ -28,5 +28,5 @@ is made available automatically in this section) to verify correctness.
 
 ## Checking out issues
 
-*  peruse [open issues](https://github.com/sstanfield/slsh/issues?q=is%3Aopen+is%3Aissue)
+*  peruse [open issues](https://github.com/sl-sh-dev/sl-sh/issues?q=is%3Aopen+is%3Aissue)
 if you want to get started right away.

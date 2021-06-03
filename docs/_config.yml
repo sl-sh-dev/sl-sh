@@ -1,15 +1,14 @@
 # TODO
 # 1. Fix tag or remove them and make note they exist if I'm not using them.
-repository: sstanfield/slsh
+repository: sl-sh-dev/sl-sh
 description: documentation for Simple Lisp SHell
 title: sl-sh documentation
 output: web
 topnav_title: sl-sh documentation
 site_title: sl-sh documentation
 company_name: sl-sh
-github_editme_path: sstanfield/slsh/blob/gh-pages/
-baseurl: "/slsh" # the subpath of your site, e.g. /blog
-url: "https://sstanfield.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "/sl-sh" # the subpath of your site, e.g. /blog
+url: "https://sl-sh-dev.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 exclude:
   - .idea/
   - .gitignore
