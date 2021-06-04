@@ -651,7 +651,7 @@ dependencies = [
 [[package]]
 name = "sl-console"
 version = "0.9.0"
-source = "git+https://github.com/sl-sh-dev/sl-console.git#11d24377e6e00ca253e5278a5292c389553d0bd2"
+source = "git+https://github.com/sl-sh-dev/sl-console.git#10ef023b36ffbbfdccffe03b4bc080944b43768e"
 dependencies = [
  "crossbeam-channel",
  "lazy_static",
@@ -667,7 +667,7 @@ dependencies = [
 [[package]]
 name = "sl-liner"
 version = "0.6.0"
-source = "git+https://github.com/sl-sh-dev/sl-liner.git#2b9c811bdd05d3df5b24101806b37775d91db105"
+source = "git+https://github.com/sl-sh-dev/sl-liner.git#53ceb49e7954ea763dba8d36c68da70f050e1c7b"
 dependencies = [
  "bytecount",
  "sl-console",
@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.53"
+version = "0.9.54"
 dependencies = [
  "cfg-if",
  "chrono",
