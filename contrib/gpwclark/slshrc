@@ -596,7 +596,7 @@ Section: user-shell"
 (def sidebar-page-name "mydoc_sidebar.yml")
 (def api-page (str "pages/mydoc/" api-page-name))
 (def sidebar-page (str "_data/sidebars/" sidebar-page-name))
-(shell::pushd "/home/price/development/slsh/docs")
+(shell::pushd "/home/price/development/sl-sh-dev/sl-sh/docs")
 (def docs-error-ret
     (get-error (when (or
         (nil? (fs-exists? api-page))

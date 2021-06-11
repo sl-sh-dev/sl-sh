@@ -18,11 +18,23 @@ folder: mydoc
         </div>
         <div id="collapseOne" class="panel-collapse collapse noCrossRef">
             <div class="panel-body">
-            No. Not at this time at least.
+            Work is being done in [sl-liner](https://github.com/sl-sh-dev/sl-liner) and [sl-console](https://github.com/sl-sh-dev/sl-console) to make this possible but currently it is not supported.
             </div>
         </div>
     </div>
     <!-- /.panel -->
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4 class="panel-title">
+                <a class="noCrossRef accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">Is it good?</a>
+            </h4>
+        </div>
+        <div id="collapseTwo" class="panel-collapse collapse noCrossRef">
+            <div class="panel-body">
+            Yes.
+            </div>
+        </div>
+    </div>
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4 class="panel-title">
