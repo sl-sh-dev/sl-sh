@@ -26,22 +26,22 @@ folder: mydoc
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4 class="panel-title">
-                <a class="noCrossRef accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">Is it good?</a>
+                <a class="noCrossRef accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">Is it any good?</a>
             </h4>
         </div>
         <div id="collapseTwo" class="panel-collapse collapse noCrossRef">
             <div class="panel-body">
-            Yes.
+            <a href="https://news.ycombinator.com/item?id=3067434">Yes.</a>
             </div>
         </div>
     </div>
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4 class="panel-title">
-                <a class="noCrossRef accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">Wouldn't sl-sh run faster with a VM?</a>
+                <a class="noCrossRef accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseThree">Wouldn't sl-sh run faster with a VM?</a>
             </h4>
         </div>
-        <div id="collapseTwo" class="panel-collapse collapse noCrossRef">
+        <div id="collapseThree" class="panel-collapse collapse noCrossRef">
             <div class="panel-body">
             Yes! One is currently being developed. It is called <a href="https://github.com/sstanfield/slvm">slvm</a>
             </div>
