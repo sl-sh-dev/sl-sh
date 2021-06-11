@@ -18,7 +18,7 @@ folder: mydoc
         </div>
         <div id="collapseOne" class="panel-collapse collapse noCrossRef">
             <div class="panel-body">
-            Work is being done in [sl-liner](https://github.com/sl-sh-dev/sl-liner) and [sl-console](https://github.com/sl-sh-dev/sl-console) to make this possible but currently it is not supported.
+            Work is being done in <a href="https://github.com/sl-sh-dev/sl-liner">sl-liner</a> and <a href="https://github.com/sl-sh-dev/sl-console">sl-console</a> to make this possible but currently it is not supported.
             </div>
         </div>
     </div>
