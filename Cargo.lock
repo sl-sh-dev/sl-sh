@@ -103,7 +103,7 @@ dependencies = [
  "clap",
  "criterion-plot",
  "csv",
- "itertools 0.10.0",
+ "itertools 0.10.1",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -252,9 +252,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
 dependencies = [
  "either",
 ]
@@ -282,9 +282,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.95"
+version = "0.2.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "789da6d93f1b866ffe175afc5322a4d76c038605a1c3319bb57b06967ca98a36"
+checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
 
 [[package]]
 name = "lock_api"
@@ -362,9 +362,9 @@ dependencies = [
 
 [[package]]
 name = "numtoa"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e521b6adefa0b2c1fa5d2abdf9a5216288686fe6146249215d884c0e5ab320b0"
+checksum = "6aa2c4e539b869820a2b82e1aef6ff40aa85e65decdd5185e83fb4b1249cd00f"
 
 [[package]]
 name = "oorandom"
@@ -472,9 +472,9 @@ dependencies = [
 
 [[package]]
 name = "rand_chacha"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e12735cf05c9e10bf21534da50a147b924d555dc7a547c42e6bb2d5b6017ae0d"
+checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
  "rand_core",
@@ -530,15 +530,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "742739e41cd49414de871ea5e549afb7e2a3ac77b589bcbebe8c82fab37147fc"
 dependencies = [
  "bitflags",
-]
-
-[[package]]
-name = "redox_termios"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8440d8acb4fd3d277125b4bd01a6f38aee8d814b3b5fc09b3f2b825d37d3fe8f"
-dependencies = [
- "redox_syscall",
 ]
 
 [[package]]
@@ -651,15 +642,14 @@ dependencies = [
 [[package]]
 name = "sl-console"
 version = "0.9.0"
-source = "git+https://github.com/sl-sh-dev/sl-console.git#10ef023b36ffbbfdccffe03b4bc080944b43768e"
+source = "git+https://github.com/sl-sh-dev/sl-console.git#114573c9b913897cdda4194b092f908283e0e5bc"
 dependencies = [
  "crossbeam-channel",
  "lazy_static",
  "libc",
+ "log",
  "numtoa",
  "parking_lot",
- "redox_syscall",
- "redox_termios",
  "scopeguard",
  "winapi",
 ]
@@ -667,7 +657,7 @@ dependencies = [
 [[package]]
 name = "sl-liner"
 version = "0.6.0"
-source = "git+https://github.com/sl-sh-dev/sl-liner.git#53ceb49e7954ea763dba8d36c68da70f050e1c7b"
+source = "git+https://github.com/sl-sh-dev/sl-liner.git#dfbff0d33191dad410048f80d0c6c60771b67531"
 dependencies = [
  "bytecount",
  "sl-console",
@@ -676,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.54"
+version = "0.9.55"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -698,9 +688,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "syn"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e8cdbefb79a9a5a65e0db8b47b723ee907b7c7f8496c76a1770b5c310bab82"
+checksum = "f71489ff30030d2ae598524f61326b902466f72a0fb1a8564c001cc63425bcc7"
 dependencies = [
  "proc-macro2",
  "quote",
