@@ -525,11 +525,13 @@ where
     let mut bytes = [0; 8];
 
     let mut input = unsafe { File::from_raw_fd(input) };
-    setup_job(environment, pid, program);
     // loop to handle EINTR
     loop {
         match input.read(&mut bytes) {
-            Ok(0) => return Ok(pid),
+            Ok(0) => {
+                setup_job(environment, pid, program);
+                return Ok(pid);
+            }
             Ok(8) => {
                 let (errno, footer) = bytes.split_at(4);
                 assert_eq!(
