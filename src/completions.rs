@@ -300,12 +300,11 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
     let mut using_cur_path = false;
     if start.starts_with('/') {
         split_start.next();
-        pat.push('/');
     } else {
         using_cur_path = true;
         pat.push_str(&cur_path.to_string_lossy());
-        pat.push('/');
     }
+    pat.push('/');
     for element in split_start {
         if !element.is_empty() {
             pat.push_str(element);
@@ -313,11 +312,10 @@ fn find_file_completions(org_start: &str, cur_path: &Path) -> Vec<String> {
             if element != "." && element != ".." && !path.exists() {
                 pat.push('*');
             }
-            pat.push('/');
         } else {
             pat.push('*');
-            pat.push('/');
         }
+        pat.push('/');
     }
 
     pat.pop(); // pop out the last '/' character

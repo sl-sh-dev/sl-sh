@@ -298,27 +298,17 @@ impl ExpEnum {
         if !v.is_empty() {
             let mut i = v.len() - 1;
             loop {
+                last_pair = ExpEnum::Pair(
+                    v.remove(i),
+                    Expression::alloc(ExpObj {
+                        data: last_pair.clone(),
+                        meta: None,
+                        meta_tags: None,
+                        analyzed: RefCell::new(false),
+                    }),
+                );
                 if i == 0 {
-                    last_pair = ExpEnum::Pair(
-                        v.remove(i),
-                        Expression::alloc(ExpObj {
-                            data: last_pair.clone(),
-                            meta: None,
-                            meta_tags: None,
-                            analyzed: RefCell::new(false),
-                        }),
-                    );
                     break;
-                } else {
-                    last_pair = ExpEnum::Pair(
-                        v.remove(i),
-                        Expression::alloc(ExpObj {
-                            data: last_pair.clone(),
-                            meta: None,
-                            meta_tags: None,
-                            analyzed: RefCell::new(false),
-                        }),
-                    );
                 }
                 i -= 1;
             }

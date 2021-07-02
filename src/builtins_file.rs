@@ -193,10 +193,8 @@ fn builtin_glob(
                 _ => {
                     if last_esc {
                         ret.push('\\');
-                        ret.push(ch);
-                    } else {
-                        ret.push(ch);
                     }
+                    ret.push(ch);
                 }
             }
         }
