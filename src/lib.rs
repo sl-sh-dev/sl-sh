@@ -66,6 +66,9 @@ pub use crate::builtins_types::*;
 pub mod builtins_namespace;
 pub use crate::builtins_namespace::*;
 
+pub mod builtins_notify;
+pub use crate::builtins_notify::*;
+
 pub mod builtins_values;
 pub use crate::builtins_values::*;
 
