@@ -17,6 +17,7 @@ unicode-segmentation = "1.7.1"
 unicode_reader = "1"
 rand = "0.8.3"
 walkdir = "2"
+same-file = "1.0.6"
 #jemallocator = "0.3.2"
 
 [build-dependencies]

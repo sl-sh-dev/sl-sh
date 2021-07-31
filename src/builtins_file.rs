@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use glob::glob;
 
@@ -10,6 +10,9 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use core::iter;
+use same_file;
+use walkdir::WalkDir;
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -107,6 +110,20 @@ fn builtin_cd(
     }
 }
 
+fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
+    let p = match &eval(environment, p).ok()?.get().data {
+        ExpEnum::String(p, _) => {
+            match expand_tilde(&p) {
+                Some(p) => p,
+                None => p.to_string(), // XXX not great.
+            }
+        }
+        _ => return None,
+    };
+    let p = Path::new(&p);
+    Some((*p.to_path_buf()).to_owned())
+}
+
 fn file_test(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -115,23 +132,15 @@ fn file_test(
 ) -> Result<Expression, LispError> {
     if let Some(p) = args.next() {
         if args.next().is_none() {
-            let p = match &eval(environment, p)?.get().data {
-                ExpEnum::String(p, _) => {
-                    match expand_tilde(p) {
-                        Some(p) => p,
-                        None => p.to_string(), // XXX not great.
-                    }
+            if let Some(path) = get_file(environment, p) {
+                if test(path.as_path()) {
+                    return Ok(Expression::make_true());
+                } else {
+                    return Ok(Expression::make_nil());
                 }
-                _ => {
-                    let msg = format!("{} path must be a string", fn_name);
-                    return Err(LispError::new(msg));
-                }
-            };
-            let path = Path::new(&p);
-            if test(path) {
-                return Ok(Expression::make_true());
             } else {
-                return Ok(Expression::make_nil());
+                let msg = format!("{} takes a string (a path)", fn_name);
+                return Err(LispError::new(msg));
             }
         }
     }
@@ -250,6 +259,96 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
+fn builtin_same_file(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-same?";
+    let arg0 = param_eval(environment, args, fn_name)?;
+    let arg1 = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    let path_0 = match get_file(environment, arg0) {
+        Some(path) => path,
+        None => {
+            let msg = format!("{} first arg is not a valid path", fn_name);
+            return Err(LispError::new(msg));
+        }
+    };
+
+    let path_1 = match get_file(environment, arg1) {
+        Some(path) => path,
+        None => {
+            let msg = format!("{} second arg is not a valid path", fn_name);
+            return Err(LispError::new(msg));
+        }
+    };
+
+    if let Ok(b) = same_file::is_same_file(path_0.as_path(), path_1.as_path()) {
+        if b {
+            Ok(Expression::make_true())
+        } else {
+            Ok(Expression::make_false())
+        }
+    } else {
+        let msg = format!(
+            "{} one or more paths does not exist, or there were not enough \
+                permissions.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    }
+}
+
+fn builtin_fs_crawl(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-crawl";
+    let arg0 = param_eval(environment, args, fn_name)?;
+    let file_or_dir = get_file(environment, arg0);
+    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let lambda_exp_d = &lambda_exp.get().data;
+    params_done(args, fn_name)?;
+    match lambda_exp_d {
+        ExpEnum::Lambda(_) => {
+            if let Some(file_or_dir) = file_or_dir {
+                for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
+                    println!("{}", entry.path().display());
+                    let path = entry.path();
+                    if let Some(path) = path.to_str() {
+                        let path = Expression::alloc_data(ExpEnum::String(
+                            environment.interner.intern(path).into(),
+                            None,
+                        ));
+                        let mut args = iter::once(path);
+                        call_lambda(environment, lambda_exp.copy(), &mut args, true)?;
+                    }
+                }
+                Ok(Expression::make_true())
+            } else {
+                let msg = format!("{} provided path does not exist", fn_name);
+                Err(LispError::new(msg))
+            }
+        }
+        _ => {
+            let msg = format!("{} second argument must be function", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+fn builtin_fs_filetype(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-type";
+    let arg0 = param_eval(environment, args, fn_name)?;
+    let file_or_dir = get_file(environment, arg0);
+    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let lambda_exp_d = &lambda_exp.get().data;
+    params_done(args, fn_name)?;
+}
+
 pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -361,6 +460,34 @@ Example:
 (syscall 'rm "/tmp/tst-fs-glob/g2")
 (syscall 'rm "/tmp/tst-fs-glob/g3")
 (syscall 'rmdir "/tmp/tst-fs-glob")
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-crawl"),
+        Expression::make_function(
+            builtin_fs_crawl,
+            r#"Usage: (glob /path/to/file/or/dir (fn (x) (println "found path" x))
+
+If a directory is provided the path is resursively searched and every
+file and directory is called as an argument to the provided function.
+If a file is provided the path is provided as an argument to the provided
+function.
+
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-same?"),
+        Expression::make_function(
+            builtin_same_file,
+            r#"Usage: (fs-same? /path/to/file/or/dir /path/to/file/or/dir)
+
+Returns true if the two provided file paths refer to the same file or directory.
+
+Section: file
 "#,
         ),
     );

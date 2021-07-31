@@ -29,7 +29,7 @@ fn get_event(file_or_dir: PathBuf) -> Result<Event, LispError> {
             Ok(md) => {
                 println!("Metadata:: {:?}.", md);
                 Ok(Event::Create(format!("Event::Create: {:?}", file_or_dir)))
-            },
+            }
             Err(e) => Err(LispError::new(format!(
                 "unable to get metadata for file: {:?}. Errror: {:?}",
                 file_or_dir, e

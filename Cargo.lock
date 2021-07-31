@@ -647,6 +647,7 @@ dependencies = [
  "libc",
  "nix",
  "rand",
+ "same-file",
  "sl-liner",
  "unicode-segmentation",
  "unicode_reader",
