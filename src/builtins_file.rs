@@ -536,7 +536,7 @@ Example:
         interner.intern("fs-crawl"),
         Expression::make_function(
             builtin_fs_crawl,
-            r#"Usage: (glob /path/to/file/or/dir (fn (x) (println "found path" x))
+            r#"Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x))
 
 If a directory is provided the path is resursively searched and every
 file and directory is called as an argument to the provided function.
