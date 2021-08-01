@@ -315,7 +315,6 @@ fn builtin_fs_crawl(
         ExpEnum::Lambda(_) => {
             if let Some(file_or_dir) = file_or_dir {
                 for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
-                    println!("{}", entry.path().display());
                     let path = entry.path();
                     if let Some(path) = path.to_str() {
                         let path = Expression::alloc_data(ExpEnum::String(
@@ -375,7 +374,7 @@ fn get_file_time(
             if let Ok(sys_time) = to_time(metadata) {
                 match sys_time.duration_since(SystemTime::UNIX_EPOCH) {
                     Ok(n) => {
-                        let n = n.as_secs() as i64;
+                        let n = n.as_millis() as i64;
                         Ok(Expression::alloc_data(ExpEnum::Int(n)))
                     }
                     Err(_) => {
@@ -401,7 +400,7 @@ fn builtin_fs_modified(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    get_file_time(environment, args, "fs-mod", |md| md.modified())
+    get_file_time(environment, args, "fs-modified", |md| md.modified())
 }
 
 fn builtin_fs_accessed(
@@ -573,12 +572,12 @@ Section: file
         ),
     );
     data.insert(
-        interner.intern("fs-mod"),
+        interner.intern("fs-modified"),
         Expression::make_function(
             builtin_fs_modified,
-            r#"Usage: (fs-mod /path/to/file/or/dir)
+            r#"Usage: (fs-modified /path/to/file/or/dir)
 
-Returns the time file last modified.
+Returns the time file last modified in ms.
 
 Section: file
 "#,
@@ -590,7 +589,7 @@ Section: file
             builtin_fs_accessed,
             r#"Usage: (fs-accessed /path/to/file/or/dir)
 
-Returns the time file last accessed.
+Returns the time file last accessed in ms.
 
 Section: file
 "#,
@@ -602,11 +601,12 @@ Section: file
             builtin_fs_created,
             r#"Usage: (fs-created /path/to/file/or/dir)
 
-Returns the time file was created.
+Returns the time file was created in ms.
 
 Section: file
 "#,
         ),
     );
     //TODO what does CL name these things?
+    // TODO should epoch and times be in ms or s?
 }
