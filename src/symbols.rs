@@ -10,7 +10,6 @@ use crate::builtins_hashmap::add_hash_builtins;
 use crate::builtins_io::add_io_builtins;
 use crate::builtins_math::*;
 use crate::builtins_namespace::add_namespace_builtins;
-use crate::builtins_notify::add_notify_builtins;
 use crate::builtins_pair::add_pair_builtins;
 use crate::builtins_rand::add_rand_builtins;
 use crate::builtins_stats::add_stats_builtins;
@@ -277,7 +276,6 @@ impl Namespace {
         add_hash_builtins(interner, &mut data);
         add_type_builtins(interner, &mut data);
         add_namespace_builtins(interner, &mut data);
-        add_notify_builtins(interner, &mut data);
         add_bind_builtins(interner, &mut data);
         data.insert(
             interner.intern("*stdin*"),

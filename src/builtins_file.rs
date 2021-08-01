@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::env;
 use std::hash::BuildHasher;
 use std::path::{Path, PathBuf};
+use std::{env, fs, io};
 
 use glob::glob;
 
@@ -12,6 +12,8 @@ use crate::interner::*;
 use crate::types::*;
 use core::iter;
 use same_file;
+use std::fs::Metadata;
+use std::time::SystemTime;
 use walkdir::WalkDir;
 
 fn cd_expand_all_dots(cd: String) -> String {
@@ -337,16 +339,83 @@ fn builtin_fs_crawl(
     }
 }
 
-fn builtin_fs_filetype(
+fn builtin_fs_len(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "fs-type";
+    let fn_name = "fs-len";
     let arg0 = param_eval(environment, args, fn_name)?;
     let file_or_dir = get_file(environment, arg0);
-    let lambda_exp = param_eval(environment, args, fn_name)?;
-    let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
+    if let Some(file_or_dir) = file_or_dir {
+        if let Ok(metadata) = fs::metadata(file_or_dir) {
+            let len = metadata.len();
+            Ok(Expression::alloc_data(ExpEnum::Float(len as f64)))
+        } else {
+            let msg = format!("{} can not fetch metadata at provided path", fn_name);
+            Err(LispError::new(msg))
+        }
+    } else {
+        let msg = format!("{} provided path does not exist", fn_name);
+        Err(LispError::new(msg))
+    }
+}
+
+fn get_file_time(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+    fn_name: &str,
+    to_time: fn(Metadata) -> io::Result<SystemTime>,
+) -> Result<Expression, LispError> {
+    let arg0 = param_eval(environment, args, fn_name)?;
+    let file_or_dir = get_file(environment, arg0);
+    params_done(args, fn_name)?;
+    if let Some(file_or_dir) = file_or_dir {
+        if let Ok(metadata) = fs::metadata(file_or_dir) {
+            if let Ok(sys_time) = to_time(metadata) {
+                match sys_time.duration_since(SystemTime::UNIX_EPOCH) {
+                    Ok(n) => {
+                        let n = n.as_secs() as i64;
+                        Ok(Expression::alloc_data(ExpEnum::Int(n)))
+                    }
+                    Err(_) => {
+                        let msg = format!("{} can not parse time", fn_name);
+                        Err(LispError::new(msg))
+                    }
+                }
+            } else {
+                let msg = format!("{} can not fetch time", fn_name);
+                Err(LispError::new(msg))
+            }
+        } else {
+            let msg = format!("{} can not fetch metadata at provided path", fn_name);
+            Err(LispError::new(msg))
+        }
+    } else {
+        let msg = format!("{} provided path does not exist", fn_name);
+        Err(LispError::new(msg))
+    }
+}
+
+fn builtin_fs_modified(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    get_file_time(environment, args, "fs-mod", |md| md.modified())
+}
+
+fn builtin_fs_accessed(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    get_file_time(environment, args, "fs-accessed", |md| md.accessed())
+}
+
+fn builtin_fs_created(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    get_file_time(environment, args, "fs-created", |md| md.created())
 }
 
 pub fn add_file_builtins<S: BuildHasher>(
@@ -491,4 +560,53 @@ Section: file
 "#,
         ),
     );
+    data.insert(
+        interner.intern("fs-len"),
+        Expression::make_function(
+            builtin_fs_len,
+            r#"Usage: (fs-len /path/to/file/or/dir)
+
+Returns the size of the file in bytes.
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-mod"),
+        Expression::make_function(
+            builtin_fs_modified,
+            r#"Usage: (fs-mod /path/to/file/or/dir)
+
+Returns the time file last modified.
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-accessed"),
+        Expression::make_function(
+            builtin_fs_accessed,
+            r#"Usage: (fs-accessed /path/to/file/or/dir)
+
+Returns the time file last accessed.
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-created"),
+        Expression::make_function(
+            builtin_fs_created,
+            r#"Usage: (fs-created /path/to/file/or/dir)
+
+Returns the time file was created.
+
+Section: file
+"#,
+        ),
+    );
+    //TODO what does CL name these things?
 }
