@@ -459,3 +459,88 @@ Example:
        (set! log-level in-log-level)
        (if (string? in-logger-name) (set! logger-name in-logger-name) (err "in-logger-name must be a string."))
        self)))
+
+(defn collate-fs-changes
+"Takes a file or directory to watch and returns a function that encloses the
+state of the file or directory (and all its contents). When the resultant
+function is called it returns a map whose keys are the types of change: :created
+, :deleted, and :modified and values are vectors of files subject to the change.
+Each invocation encloses the state of the previous invocation and can be called
+at any time to report change sets since the last invocation.
+
+sample return value:
+(make-hash
+	((:modified . #(\"/tmp/collate-fs-changes\"))
+	(:deleted . #())
+	(:created . #(\"/tmp/collate-fs-changes/foo1.txt\"))))
+
+
+Section: file
+
+Example:
+;; see tests/collate-fs-changes.lisp
+#t
+"
+	(file-or-dir-to-watch)
+	(let* ((get-file-md (fn (file)
+					(chain (make-hash) (hash-set! _ :modified (fs-modified file)))))
+			(add-file-md (fn (file-map file) (hash-set! file-map file (get-file-md file))))
+			(get-file-map (fn (file)
+					(let ((file-map (make-hash)))
+					(fs-crawl file (fn (x) (add-file-md file-map x)))
+					 file-map)))
+			(prev-map (get-file-map file-or-dir-to-watch)))
+	 (fn ()
+		(let ((new-map (get-file-map file-or-dir-to-watch))
+			   (changes (chain (make-hash)
+						  (hash-set! _ :created (make-vec))
+						  (hash-set! _ :modified (make-vec))
+						  (hash-set! _ :deleted (make-vec)))))
+			(iterator::for file in (hash-keys new-map)
+				(let ((prev-file-md (hash-remove! prev-map file)))
+					(if (nil? prev-file-md) ;; file not in previous scan, it's new!
+						(vec-push! (hash-get changes :created) (str file))
+						(let ((new-file-md (hash-get new-map file)))
+							(when (> (hash-get new-file-md :modified)
+								(hash-get prev-file-md :modified))
+								;; modified time increased, file was changed.
+								(vec-push! (hash-get changes :modified) (str file)))))))
+			;; prev-map will now only have keys that were not in new-map indicating
+			;; files were deleted.
+			(iterator::for file in (hash-keys prev-map)
+				(vec-push! (hash-get changes :deleted) (str file)))
+			(set! prev-map new-map)
+			changes))))
+
+(defn fs-notify
+"fs-notify is designed to notify the caller of changes to a file or
+directory heirarchy via a callback that accepts two arguments, the file that
+changed and the type of change: :created, :deleted, xor :modified.
+Takes a callback and file or directory to watch for changes and the number
+of milliseconds to sleep before checking for changes to the provided file/directory
+hierarchy. This function loops forever, and calls the callback whenever it
+detects a change. This function relies on the function [collate-fs-changes](#file::colate-fs-changes)
+to compute differences.
+
+The following invocation of fs-notify prints out every change event for the provided
+directory, polling every 250ms.
+
+(fs-notify
+	(fn (f e) (println \"file: \" f \", event: \" e))
+	\"/dir/to/watch\"
+	250)
+
+
+Section: file
+
+Example:
+#t"
+	(callback to-watch to-sleep)
+	(let ((collator (collate-fs-changes to-watch)))
+		(loop () ()
+			(let ((slept (sleep to-sleep))
+			(changes (collator)))
+				(iterator::for event in (hash-keys changes)
+					(iterator::for file in (hash-get changes event)
+						(callback file event)))
+			(recur)))))
