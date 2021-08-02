@@ -14,7 +14,7 @@ use core::iter;
 use same_file;
 use std::fs::Metadata;
 use std::time::SystemTime;
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 fn cd_expand_all_dots(cd: String) -> String {
     let mut all_dots = false;
@@ -309,22 +309,71 @@ fn builtin_fs_crawl(
     let arg0 = param_eval(environment, args, fn_name)?;
     let file_or_dir = get_file(environment, arg0);
     let lambda_exp = param_eval(environment, args, fn_name)?;
+    let mut depth = None;
+    let mut sym_links = None;
+    for _ in 0..2 {
+        if let Ok(depth_or_sym_link) = param_eval(environment, args, fn_name) {
+            if let Ok(d) = depth_or_sym_link.make_int(environment) {
+                depth = Some(d);
+            } else if let Ok(s) = depth_or_sym_link.make_string(environment) {
+                if s == ":follow-syms" {
+                    sym_links = Some(true);
+                }
+            }
+        };
+    }
+    let mut cb = |entry: &DirEntry| {
+        let path = entry.path();
+        if let Some(path) = path.to_str() {
+            let path = Expression::alloc_data(ExpEnum::String(
+                environment.interner.intern(path).into(),
+                None,
+            ));
+            let mut args = iter::once(path);
+            let _ = call_lambda(environment, lambda_exp.copy(), &mut args, true);
+        }
+    };
+    let mut iterate = |file_or_dir, depth, sym_links| match (depth, sym_links) {
+        (Some(depth), Some(sym_links)) => {
+            for entry in WalkDir::new(file_or_dir)
+                .max_depth(depth as usize)
+                .follow_links(sym_links)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                cb(&entry);
+            }
+        }
+        (Some(depth), None) => {
+            for entry in WalkDir::new(file_or_dir)
+                .max_depth(depth as usize)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                cb(&entry);
+            }
+        }
+        (None, Some(sym_links)) => {
+            for entry in WalkDir::new(file_or_dir)
+                .follow_links(sym_links)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                cb(&entry);
+            }
+        }
+        (None, None) => {
+            for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
+                cb(&entry);
+            }
+        }
+    };
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             if let Some(file_or_dir) = file_or_dir {
-                for entry in WalkDir::new(file_or_dir).into_iter().filter_map(|e| e.ok()) {
-                    let path = entry.path();
-                    if let Some(path) = path.to_str() {
-                        let path = Expression::alloc_data(ExpEnum::String(
-                            environment.interner.intern(path).into(),
-                            None,
-                        ));
-                        let mut args = iter::once(path);
-                        call_lambda(environment, lambda_exp.copy(), &mut args, true)?;
-                    }
-                }
+                iterate(file_or_dir, depth, sym_links);
                 Ok(Expression::make_true())
             } else {
                 let msg = format!("{} provided path does not exist", fn_name);
@@ -535,12 +584,16 @@ Example:
         interner.intern("fs-crawl"),
         Expression::make_function(
             builtin_fs_crawl,
-            r#"Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x))
+            r#"Usage: (fs-crawl /path/to/file/or/dir (fn (x) (println "found path" x) [max-depth]
+             [:follow-syms])
 
 If a directory is provided the path is resursively searched and every
 file and directory is called as an argument to the provided function.
 If a file is provided the path is provided as an argument to the provided
-function.
+function. Takes two optional arguments (in any order) an integer,
+representing max depth to traverse if file is a directory, or the
+symbol, :follow-syms, to follow symbol links when traversing if
+desired.
 
 
 Section: file
