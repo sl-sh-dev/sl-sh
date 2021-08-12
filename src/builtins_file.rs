@@ -322,6 +322,9 @@ fn builtin_fs_crawl(
             }
         };
     }
+    // TODO cb masks fact that call_lambda can fail,
+    // this is bad, an error should be (optionally?) passed up
+    // not swallowed s.t. silent failure occurs.
     let mut cb = |entry: &DirEntry| {
         let path = entry.path();
         if let Some(path) = path.to_str() {

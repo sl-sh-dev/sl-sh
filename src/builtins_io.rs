@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, DirEntry};
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -18,6 +18,8 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
+use crate::{param_eval, params_done};
+use core::iter;
 
 fn builtin_open(
     environment: &mut Environment,
@@ -509,6 +511,87 @@ fn builtin_write_string(
     ))
 }
 
+fn builtin_in_temp(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "in-temp";
+    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let mut cb = |entry: &DirEntry| {
+        let path = entry.path();
+        if let Some(path) = path.to_str() {
+            let path = Expression::alloc_data(ExpEnum::String(
+                environment.interner.intern(path).into(),
+                None,
+            ));
+            let mut args = iter::once(path);
+            let _ = call_lambda(environment, lambda_exp.copy(), &mut args, true);
+        }
+    };
+
+    let lambda_exp_d = &lambda_exp.get().data;
+    params_done(args, fn_name)?;
+    match lambda_exp_d {
+        ExpEnum::Lambda(_) => {
+            let tmp = tempfile::tempdir();
+            if let Ok(tmp) = tmp {
+                if let Some(path) = tmp.path() {
+                    let path = Expression::alloc_data(ExpEnum::String(
+                        environment.interner.intern(path).into(),
+                        None,
+                    ));
+                    let mut args = iter::once(path);
+                    call_lambda(environment, lambda_exp.copy(), &mut args, true)
+                } else {
+                    let msg = format!("{} unable to provide temporary directory", fn_name);
+                    Err(LispError::new(msg))
+                }
+            } else {
+                let msg = format!("{} unable to provide temporary directory", fn_name);
+                Err(LispError::new(msg))
+            }
+        }
+        _ => {
+            let msg = format!("{} first argument must be function", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+fn builtin_get_temp(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "get-temp";
+    params_done(args, fn_name)?;
+    match lambda_exp_d {
+        ExpEnum::Lambda(_) => {
+            let tmp = tempfile::tempdir();
+            if let Ok(tmp) = tmp {
+                if let Some(path) = tmp.into_path() {
+                    let path = Expression::alloc_data(ExpEnum::String(
+                        environment.interner.intern(path).into(),
+                        None,
+                    ));
+                    Ok(Expression::alloc_data(path))
+                } else {
+                    let msg = format!("{} unable to provide temporary directory", fn_name);
+                    Err(LispError::new(msg))
+                }
+            } else {
+                let msg = format!("{} unable to provide temporary directory", fn_name);
+                Err(LispError::new(msg))
+            }
+        }
+        _ => {
+            let msg = format!("{} first argument must be function", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+
+
 pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -708,6 +791,19 @@ Example:
             "Usage: (write-string file string)
 
 Write a string to a file.
+
+Section: file
+
+Example:
+",
+        ),
+    );
+    data.insert(
+        interner.intern("in-temp"),
+        Expression::make_function(
+            builtin_in_temp,
+            "Usage: (in-temp (fn (x) (println \"given temp dir:\" x))
+
 
 Section: file
 
