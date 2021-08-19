@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::{OpenOptions, DirEntry};
+use std::fs::OpenOptions;
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -517,25 +517,13 @@ fn builtin_in_temp(
 ) -> Result<Expression, LispError> {
     let fn_name = "in-temp";
     let lambda_exp = param_eval(environment, args, fn_name)?;
-    let mut cb = |entry: &DirEntry| {
-        let path = entry.path();
-        if let Some(path) = path.to_str() {
-            let path = Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(path).into(),
-                None,
-            ));
-            let mut args = iter::once(path);
-            let _ = call_lambda(environment, lambda_exp.copy(), &mut args, true);
-        }
-    };
-
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
             let tmp = tempfile::tempdir();
             if let Ok(tmp) = tmp {
-                if let Some(path) = tmp.path() {
+                if let Some(path) = tmp.path().to_path_buf().to_str() {
                     let path = Expression::alloc_data(ExpEnum::String(
                         environment.interner.intern(path).into(),
                         None,
@@ -558,39 +546,29 @@ fn builtin_in_temp(
     }
 }
 
-fn builtin_get_temp(
+fn builtin_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "get-temp";
+    let fn_name = "temp-dir";
     params_done(args, fn_name)?;
-    match lambda_exp_d {
-        ExpEnum::Lambda(_) => {
-            let tmp = tempfile::tempdir();
-            if let Ok(tmp) = tmp {
-                if let Some(path) = tmp.into_path() {
-                    let path = Expression::alloc_data(ExpEnum::String(
-                        environment.interner.intern(path).into(),
-                        None,
-                    ));
-                    Ok(Expression::alloc_data(path))
-                } else {
-                    let msg = format!("{} unable to provide temporary directory", fn_name);
-                    Err(LispError::new(msg))
-                }
-            } else {
-                let msg = format!("{} unable to provide temporary directory", fn_name);
-                Err(LispError::new(msg))
-            }
-        }
-        _ => {
-            let msg = format!("{} first argument must be function", fn_name);
+    let tmp = tempfile::tempdir();
+    if let Ok(tmp) = tmp {
+        if let Some(path) = tmp.into_path().to_str() {
+            let path = Expression::alloc_data(ExpEnum::String(
+                environment.interner.intern(path).into(),
+                None,
+            ));
+            Ok(path)
+        } else {
+            let msg = format!("{} unable to provide temporary directory", fn_name);
             Err(LispError::new(msg))
         }
+    } else {
+        let msg = format!("{} unable to provide temporary directory", fn_name);
+        Err(LispError::new(msg))
     }
 }
-
-
 
 pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
@@ -616,10 +594,11 @@ Options are:
 Section: file
 
 Example:
-(def test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def test-open-f (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line test-open-f \"Test Line One\")
 (close test-open-f)
-(test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
+(test::assert-equal \"Test Line One\n\" (read-line (open (str tmp \"/slsh-tst-open.txt\"))))
 ",
         ),
     );
@@ -634,10 +613,11 @@ Close a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Two\")
 (close tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Two\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -654,10 +634,11 @@ Flush a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Three\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -674,11 +655,12 @@ Read a line from a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Read Line One\")
 (write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Read Line One\n\" (read-line tst-file))
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
@@ -700,16 +682,17 @@ If no parameters are provided then read stdin.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 ;(write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '(1 2 3) (read tst-file))
 (test::assert-equal '(x y z) (read tst-file))
 (test::assert-error (read test-file))
 (close tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '(1 2 3) (read tst-file :done))
 (test::assert-equal '(x y z) (read tst-file :done))
 (test::assert-equal :done (read tst-file :done))
@@ -751,10 +734,11 @@ empty-exp if it is provided.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '#((1 2 3)(x y z)) (read-all tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read-all \"(4 5 6)\"))
@@ -775,10 +759,11 @@ Write a line to a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (temp-dir))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Write Line\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -804,16 +789,36 @@ Example:
             builtin_in_temp,
             "Usage: (in-temp (fn (x) (println \"given temp dir:\" x))
 
+Takes a function that accepts a temporary directory. This directory will be recursively removed
+when the provided function is finished executing.
 
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
-(write-string tst-file \"Test Line Write String\")
-(flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
-(test::assert-equal \"Test Line Write String\" (read-line tst-file))
-(close tst-file)
+(def a-file nil)
+(def myfun (fn (x) ()))
+",
+        ),
+    );
+    data.insert(
+        interner.intern("temp-dir"),
+        Expression::make_function(
+            builtin_temp_dir,
+            "Usage: (temp-dir)
+
+Creates a directory inside of a OS specific temporary directory.
+Unix:
+Returns the value of TEMPDIR environment variable if set otherwise /tmp.
+
+Windows:
+Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set
+and not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This
+behavior is identical to that of GetTempPath, which this function uses internally.
+
+Section: file
+
+Example:
+#t
 ",
         ),
     );

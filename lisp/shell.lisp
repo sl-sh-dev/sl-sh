@@ -861,15 +861,9 @@ Section: shell
                 (print-error result)
                  (recur))))))))
 
-(defn temp-dir
-  "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
-Section: shell"
-  ()
-  (if (> (length $TMPDIR) 0) (str $TMPDIR) "/tmp"))
-
 (defn fc
   "Put the contents of the last command into a temporary file
-([temp-dir](shell::temp-dir)), and open the temporary file in the text editor,
+([temp-dir](root::temp-dir)), and open the temporary file in the text editor,
 $EDITOR. If the editor returns with an error code of 0 the contents of the
 temporary file are executed. `fc` can be used in succession and the contents of
 the temporary file are saved to the sl-sh history.
@@ -1023,7 +1017,6 @@ Example:
              getopts
              getopts-help
              mkli
-             temp-dir
              timer))
 
 (ns-pop)
