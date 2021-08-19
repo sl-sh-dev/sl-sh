@@ -75,10 +75,10 @@ pub fn make_fn(
         }
         match &body {
             MultiExpression::None => {}
-            MultiExpression::Single(arg) => analyze(environment, &arg, &mut Some(syms.clone()))?,
+            MultiExpression::Single(arg) => analyze(environment, arg, &mut Some(syms.clone()))?,
             MultiExpression::Multiple(body) => {
                 for arg in body {
-                    analyze(environment, &arg, &mut Some(syms.clone()))?;
+                    analyze(environment, arg, &mut Some(syms.clone()))?;
                 }
             }
         }

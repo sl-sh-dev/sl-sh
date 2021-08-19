@@ -169,7 +169,7 @@ fn builtin_undef(
         if args.next().is_none() {
             let key_d = &key.get().data;
             if let ExpEnum::Symbol(k, _) = key_d {
-                return if let Some(rexp) = environment.namespace.borrow_mut().remove(&k) {
+                return if let Some(rexp) = environment.namespace.borrow_mut().remove(k) {
                     Ok(rexp)
                 } else {
                     let msg = format!("undef: symbol {} not defined in current scope (can only undef symbols in current scope).", k);

@@ -243,7 +243,7 @@ fn builtin_str_cat_list(
                             if !first {
                                 new_str.push_str(&join_str);
                             }
-                            new_str.push_str(&as_string(environment, &s)?);
+                            new_str.push_str(&as_string(environment, s)?);
                             first = false;
                         }
                     }
@@ -345,8 +345,8 @@ fn builtin_str_append(
                 if let ExpEnum::String(end, _) = &end_d.data {
                     if let ExpEnum::String(start, _) = &start.get().data {
                         let mut new_string = String::with_capacity(start.len() + end.len());
-                        new_string.push_str(&start);
-                        new_string.push_str(&end);
+                        new_string.push_str(start);
+                        new_string.push_str(end);
                         return Ok(Expression::alloc_data(ExpEnum::String(
                             new_string.into(),
                             None,
@@ -617,7 +617,7 @@ fn builtin_str_map(
                 if let ExpEnum::Lambda(func) = &func_d.data {
                     if let ExpEnum::String(string, _) = &string.get().data {
                         return Ok(Expression::alloc_data(ExpEnum::String(
-                            str_map_inner(environment, func, &string)?.into(),
+                            str_map_inner(environment, func, string)?.into(),
                             None,
                         )));
                     }

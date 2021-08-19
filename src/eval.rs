@@ -96,9 +96,9 @@ fn call_lambda_int(
             tvars.push(eval(environment, &v)?);
         }
         let ib = &mut tvars.iter().cloned();
-        prep_stack(environment, ib, &lambda, lambda_current.clone())?;
+        prep_stack(environment, ib, lambda, lambda_current.clone())?;
     } else {
-        prep_stack(environment, args, &lambda, lambda_current.clone())?;
+        prep_stack(environment, args, lambda, lambda_current.clone())?;
     }
 
     let mut llast_eval: Option<Expression> = None;
@@ -142,7 +142,7 @@ fn call_lambda_int(
                 prep_stack(
                     environment,
                     &mut last_eval.iter(),
-                    &lambda,
+                    lambda,
                     lambda_current.clone(),
                 )?;
             }
@@ -162,7 +162,7 @@ fn call_lambda_int(
                     environment.stack_frames.truncate(stack_frames_len);
                     environment.stack_frame_base = stack_base;
                     let ib = &mut parts.iter().cloned();
-                    prep_stack(environment, ib, &lambda, lambda_current.clone())?;
+                    prep_stack(environment, ib, lambda, lambda_current.clone())?;
                 }
             }
         }
@@ -515,7 +515,7 @@ pub fn eval_nr(
         }
         return Err(err);
     }
-    let tres = internal_eval(environment, &expression);
+    let tres = internal_eval(environment, expression);
     let mut result = if environment.eval_level == 1 && environment.return_val.is_some() {
         environment.return_val = None;
         Err(LispError::new("Return without matching block."))

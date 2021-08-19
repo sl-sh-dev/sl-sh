@@ -169,7 +169,7 @@ fn do_backquote_list(
     let mut head = ExpEnum::Nil;
     let mut args = PairIter::new(args);
     let mut argo = args.next();
-    while let Some(arg) = &argo {
+    while let Some(arg) = argo {
         if let Some(exp) = get_unquote_splice(&arg)? {
             if args.is_dotted() {
                 return Err(LispError::new("unquote-splice (,@) not valid after '.'."));

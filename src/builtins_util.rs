@@ -41,7 +41,7 @@ pub fn is_proper_list(exp: &Expression) -> bool {
         if e2.is_nil() {
             true
         } else {
-            is_proper_list(&e2)
+            is_proper_list(e2)
         }
     } else {
         false

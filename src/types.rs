@@ -942,7 +942,7 @@ impl Expression {
                 };
                 let procs = environment.procs.clone();
                 let mut procs = procs.borrow_mut();
-                match procs.get_mut(&pid) {
+                match procs.get_mut(pid) {
                     Some((_, Some(read_fd))) => {
                         let mut out = BufReader::new(fd_to_file(*read_fd));
                         let mut buf = [0; 1024];
@@ -1038,7 +1038,7 @@ impl Expression {
 
 impl AsRef<Expression> for Expression {
     fn as_ref(&self) -> &Expression {
-        &self
+        self
     }
 }
 

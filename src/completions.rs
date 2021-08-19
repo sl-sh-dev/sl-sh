@@ -92,7 +92,7 @@ impl<'env> ShellCompleter<'env> {
             return HookResult::Default;
         }
         let ns = {
-            let ns_exp = lookup_expression(&self.environment, "*active-ns*");
+            let ns_exp = lookup_expression(self.environment, "*active-ns*");
             if let Some(ns_exp) = ns_exp {
                 if let ExpEnum::String(s, _) = &ns_exp.get().data {
                     s.to_string()
@@ -107,7 +107,7 @@ impl<'env> ShellCompleter<'env> {
             .environment
             .interner
             .intern(&format!("{}::__completion_hook", ns));
-        let comp_exp = lookup_expression(&self.environment, hook_name);
+        let comp_exp = lookup_expression(self.environment, hook_name);
         if let Some(comp_exp) = comp_exp {
             let exp = match &comp_exp.get().data {
                 ExpEnum::Lambda(_) => {

@@ -84,7 +84,7 @@ impl fmt::Display for Expression {
                 }
             }
             ExpEnum::Pair(e1, e2) => {
-                if is_proper_list(&self) {
+                if is_proper_list(self) {
                     match &e1.get().data {
                         ExpEnum::Symbol("quote", _) => {
                             f.write_str("'")?;
@@ -214,7 +214,7 @@ fn pretty_print_int(
                     } else {
                         first = false;
                     }
-                    pretty_print_int(&exp, environment, indent + 1, writer)?;
+                    pretty_print_int(exp, environment, indent + 1, writer)?;
                 }
                 writer.write_all(b")")?;
             }
@@ -231,7 +231,7 @@ fn pretty_print_int(
             let a_str = expression.to_string();
             if a_str.len() < 40 || a_str.starts_with('\'') || a_str.starts_with('`') {
                 writer.write_all(a_str.as_bytes())?;
-            } else if is_proper_list(&expression) {
+            } else if is_proper_list(expression) {
                 writer.write_all(b"(")?;
                 let mut first = true;
                 for p in expression.iter() {
@@ -280,11 +280,11 @@ fn pretty_print_int(
             match &l.body {
                 MultiExpression::None => {}
                 MultiExpression::Single(body) => {
-                    pretty_print_int(&body, environment, indent + 1, writer)?
+                    pretty_print_int(body, environment, indent + 1, writer)?
                 }
                 MultiExpression::Multiple(body) => {
                     for b in body {
-                        pretty_print_int(&b, environment, indent + 1, writer)?;
+                        pretty_print_int(b, environment, indent + 1, writer)?;
                     }
                 }
             }
@@ -295,18 +295,18 @@ fn pretty_print_int(
             match &m.body {
                 MultiExpression::None => {}
                 MultiExpression::Single(body) => {
-                    pretty_print_int(&body, environment, indent + 1, writer)?
+                    pretty_print_int(body, environment, indent + 1, writer)?
                 }
                 MultiExpression::Multiple(body) => {
                     for b in body {
-                        pretty_print_int(&b, environment, indent + 1, writer)?;
+                        pretty_print_int(b, environment, indent + 1, writer)?;
                     }
                 }
             }
             writer.write_all(b")")?;
         }
         ExpEnum::Wrapper(exp) => {
-            pretty_print_int(&exp, environment, indent, writer)?;
+            pretty_print_int(exp, environment, indent, writer)?;
         }
         ExpEnum::True => expression.writef(environment, writer)?,
         ExpEnum::False => expression.writef(environment, writer)?,

@@ -11,7 +11,7 @@ use crate::types::*;
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
     match input {
         Cow::Borrowed(s) => s,
-        Cow::Owned(s) => environment.interner.intern(&s),
+        Cow::Owned(s) => environment.interner.intern(s),
     }
 }
 
@@ -24,8 +24,8 @@ fn build_map(
         if let ExpEnum::Pair(key, val) = &key_val.get().data {
             match &key.get().data {
                 ExpEnum::Symbol(sym, _) => map.insert(sym, val.clone()),
-                ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, &s), val.clone()),
-                ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, &ch), val.clone()),
+                ExpEnum::String(s, _) => map.insert(cow_to_ref(environment, s), val.clone()),
+                ExpEnum::Char(ch) => map.insert(cow_to_ref(environment, ch), val.clone()),
                 _ => {
                     return Err(LispError::new(
                         "make-hash key can only be a symbol or string",
@@ -83,11 +83,11 @@ fn builtin_hash_set(
                                 return Ok(exp_map.clone());
                             }
                             ExpEnum::String(s, _) => {
-                                map.insert(cow_to_ref(environment, &s), val);
+                                map.insert(cow_to_ref(environment, s), val);
                                 return Ok(exp_map.clone());
                             }
                             ExpEnum::Char(ch) => {
-                                map.insert(cow_to_ref(environment, &ch), val);
+                                map.insert(cow_to_ref(environment, ch), val);
                                 return Ok(exp_map.clone());
                             }
                             _ => {
@@ -128,10 +128,10 @@ fn builtin_hash_remove(
                             return Ok(do_rem(map, sym));
                         }
                         ExpEnum::String(s, _) => {
-                            return Ok(do_rem(map, &s));
+                            return Ok(do_rem(map, s));
                         }
                         ExpEnum::Char(ch) => {
-                            return Ok(do_rem(map, &ch));
+                            return Ok(do_rem(map, ch));
                         }
                         _ => {
                             return Err(LispError::new(
@@ -180,10 +180,10 @@ fn builtin_hash_get(
                             return do_get(environment, map, sym, default);
                         }
                         ExpEnum::String(s, _) => {
-                            return do_get(environment, map, &s, default);
+                            return do_get(environment, map, s, default);
                         }
                         ExpEnum::Char(ch) => {
-                            return do_get(environment, map, &ch, default);
+                            return do_get(environment, map, ch, default);
                         }
                         _ => {
                             return Err(LispError::new(
@@ -223,10 +223,10 @@ fn builtin_hash_haskey(
                             return Ok(do_has(map, sym));
                         }
                         ExpEnum::String(s, _) => {
-                            return Ok(do_has(map, &s));
+                            return Ok(do_has(map, s));
                         }
                         ExpEnum::Char(ch) => {
-                            return Ok(do_has(map, &ch));
+                            return Ok(do_has(map, ch));
                         }
                         _ => {
                             let msg =

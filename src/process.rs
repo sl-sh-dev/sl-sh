@@ -157,7 +157,7 @@ fn run_command(
             None,
         )
     };
-    let proc = fork_exec(environment, None, out_fd, err_fd, &command, &args);
+    let proc = fork_exec(environment, None, out_fd, err_fd, command, &args);
 
     match proc {
         Ok(proc) => {

@@ -69,7 +69,7 @@ fn fork_job_name(environment: &mut Environment, exp: &Expression) -> Result<Stri
                 if let ExpEnum::Pair(cadr, _) = &cdr.get().data {
                     eval(environment, cadr)?.to_string()
                 } else {
-                    fork_job_name(environment, &cdr)?
+                    fork_job_name(environment, cdr)?
                 }
             } else {
                 car.to_string()

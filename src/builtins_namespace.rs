@@ -21,7 +21,7 @@ fn builtin_ns_create(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Symbol(sym, _) => sym,
-                ExpEnum::String(s, _) => environment.interner.intern(&s),
+                ExpEnum::String(s, _) => environment.interner.intern(s),
                 _ => {
                     return Err(LispError::new(
                         "ns-create: namespace must be a symbol or string",
@@ -48,7 +48,7 @@ fn builtin_ns_enter(
             let key_exp = eval(environment, key)?;
             let key = match &key_exp.get().data {
                 ExpEnum::Symbol(sym, _) => sym,
-                ExpEnum::String(s, _) => environment.interner.intern(&s),
+                ExpEnum::String(s, _) => environment.interner.intern(s),
                 _ => {
                     return Err(LispError::new(format!(
                         "ns-enter: namespace must be a symbol or string, got {} {}",
@@ -82,7 +82,7 @@ fn builtin_ns_exists(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Symbol(sym, _) => sym,
-                ExpEnum::String(s, _) => environment.interner.intern(&s),
+                ExpEnum::String(s, _) => environment.interner.intern(s),
                 _ => {
                     return Err(LispError::new(
                         "ns-exists?: namespace must be a symbol or string",
@@ -123,7 +123,7 @@ fn builtin_ns_symbols(
         if args.next().is_none() {
             let key = match &eval(environment, key)?.get().data {
                 ExpEnum::Symbol(sym, _) => sym,
-                ExpEnum::String(s, _) => environment.interner.intern(&s),
+                ExpEnum::String(s, _) => environment.interner.intern(s),
                 _ => {
                     return Err(LispError::new(
                         "ns-symbols: namespace must be a symbol or string",

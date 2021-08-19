@@ -374,7 +374,7 @@ fn builtin_read_all(
         input: &str,
         empty_exp: Option<Expression>,
     ) -> Result<Expression, LispError> {
-        match read(environment, &input, None, true) {
+        match read(environment, input, None, true) {
             Ok(ast) => Ok(ast),
             Err(err) => {
                 if let Some(empty_exp) = empty_exp {

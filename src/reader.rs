@@ -560,7 +560,7 @@ fn read_symbol(
             *last_e = true;
             true
         } else {
-            is_digit(&ch) || ch == "." || ch == "_" || (*last_e && (ch == "+" || ch == "-"))
+            is_digit(ch) || ch == "." || ch == "_" || (*last_e && (ch == "+" || ch == "-"))
         }
     }
 
@@ -576,7 +576,7 @@ fn read_symbol(
     let mut has_e = false;
     let mut last_e = false;
     if let Some(ch) = chars.peek() {
-        if end_symbol(&ch, read_table_term) && !for_ch {
+        if end_symbol(ch, read_table_term) && !for_ch {
             return buffer.len() == 1 && is_digit(&buffer[..]);
         }
     };

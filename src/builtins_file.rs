@@ -117,7 +117,7 @@ fn file_test(
         if args.next().is_none() {
             let p = match &eval(environment, p)?.get().data {
                 ExpEnum::String(p, _) => {
-                    match expand_tilde(&p) {
+                    match expand_tilde(p) {
                         Some(p) => p,
                         None => p.to_string(), // XXX not great.
                     }

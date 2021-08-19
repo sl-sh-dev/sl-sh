@@ -188,7 +188,7 @@ fn builtin_err(
 }
 
 pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression, LispError> {
-    let file_name = match expand_tilde(&file_name) {
+    let file_name = match expand_tilde(file_name) {
         Some(f) => f,
         None => file_name.to_string(),
     };
@@ -263,7 +263,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     // XXX- can we do better then this supress_eval hack?
     environment.supress_eval = false;
     if shebanged {
-        while let Some(ch) = chars.next() {
+        for ch in &mut chars {
             if ch == "\n" {
                 environment.reader_state.line += 1;
                 environment.reader_state.column = 0;
@@ -949,12 +949,12 @@ fn make_doc(
     new_docs.push_str(namespace.borrow().name());
     if let Some(doc_str) = namespace.borrow().get_docs(key) {
         if !doc_str.contains("Usage:") {
-            add_usage(&mut new_docs, key, &exp);
+            add_usage(&mut new_docs, key, exp);
         }
         new_docs.push_str("\n\n");
-        new_docs.push_str(&doc_str);
+        new_docs.push_str(doc_str);
     } else {
-        add_usage(&mut new_docs, key, &exp);
+        add_usage(&mut new_docs, key, exp);
     }
     new_docs.push('\n');
     new_docs
@@ -1019,7 +1019,7 @@ fn get_doc(
                 }
                 return Ok(Expression::alloc_data(ExpEnum::String("".into(), None)));
             } else {
-                let namespaces = get_symbol_namespaces(environment, &key);
+                let namespaces = get_symbol_namespaces(environment, key);
                 if namespaces.is_empty() {
                     return Err(LispError::new(
                         "doc: first form must evaluate to an existing global symbol",

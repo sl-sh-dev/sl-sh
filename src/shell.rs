@@ -171,7 +171,7 @@ pub fn run_one_command(command: &str, args: &[String]) -> Result<(), LispError> 
     let mut nargs: Vec<String> = Vec::new();
     parse_one_run_command_line(command, &mut nargs);
     for arg in args {
-        parse_one_run_command_line(&arg, &mut nargs);
+        parse_one_run_command_line(arg, &mut nargs);
     }
 
     if !nargs.is_empty() {
