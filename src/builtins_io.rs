@@ -6,6 +6,7 @@ use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
+use std::fs;
 
 use unicode_segmentation::UnicodeSegmentation;
 extern crate unicode_reader;
@@ -566,6 +567,33 @@ fn builtin_temp_dir(
     }
 }
 
+fn builtin_rm(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-rm";
+    let fp = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    if let Some(path) = get_file(environment, fp) {
+        let p = path.as_path();
+        if p.exists() {
+            let r;
+            if p.is_dir() {
+                r = fs::remove_dir_all(p);
+            } else {
+                r = fs::remove_file(p);
+            }
+            if let Ok = r {
+                Ok(Expression::make_true())
+            } else {
+                Ok(Expression::make_false())
+            }
+        }
+    }
+    let msg = format!("{} target must be valid path.", fn_name);
+    Err(LispError::new(msg))
+}
+
 fn builtin_get_temp(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -848,7 +876,7 @@ Example:
             builtin_get_temp,
             "Usage: (get-temp)
 
-Creates a directory inside of a OS specific temporary directory. See [temp-dir](root::temp-dir)
+Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
 for OS specific notes.
 
 Section: file
@@ -859,6 +887,5 @@ Example:
         ),
     );
     //TODO
-    // remove all
     // mktemp
 }

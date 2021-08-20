@@ -656,6 +656,7 @@ dependencies = [
  "libc",
  "nix",
  "rand",
+ "remove_dir_all",
  "same-file",
  "sl-liner",
  "tempfile",
