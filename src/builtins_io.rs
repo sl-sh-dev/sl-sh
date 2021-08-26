@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::fs::OpenOptions;
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::rc::Rc;
-use std::fs;
 
 use unicode_segmentation::UnicodeSegmentation;
 extern crate unicode_reader;
@@ -19,8 +19,10 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
-use crate::{param_eval, params_done};
+use crate::{get_file, param_eval, params_done, rand_alphanumeric_str};
 use core::iter;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
 fn builtin_open(
     environment: &mut Environment,
@@ -512,7 +514,31 @@ fn builtin_write_string(
     ))
 }
 
-fn builtin_in_temp(
+//fn builtin_in_temp_file(
+//    environment: &mut Environment,
+//    args: &mut dyn Iterator<Item = Expression>,
+//) -> Result<Expression, LispError> {
+//    let fn_name = "in-temp";
+//    let lambda_exp = param_eval(environment, args, fn_name)?;
+//    let lambda_exp_d = &lambda_exp.get().data;
+//    params_done(args, fn_name)?;
+//    match lambda_exp_d {
+//        ExpEnum::Lambda(_) => {
+//        }
+//        _ => {
+//            let msg = format!("{} first argument must be function", fn_name);
+//            Err(LispError::new(msg))
+//        }
+//    }
+//}
+
+fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
+    let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
+    let name = rand_alphanumeric_str(len);
+    format!("{}{}{}", prefix, name, suffix)
+}
+
+fn builtin_in_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -522,16 +548,23 @@ fn builtin_in_temp(
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let tmp_dir = tempfile::tempdir();
-            if let Ok(tmp) = tmp_dir {
-                if let Some(path) = tmp.path().to_path_buf().to_str() {
+            let p = temp_dir();
+            if p.as_path().exists() && p.as_path().is_dir() {
+                let dir_name = random_name("", "", 5);
+                let dir = Path::new::<OsStr>(dir_name.as_ref());
+                let dir = p.join(dir);
+                fs::create_dir(dir.as_path()).map_err(|err| {
+                    let msg = format!("{} unable to create temporary directory inside default temporary directory ({:?}), reason: {:?}", fn_name, p.as_path(), err);
+                    LispError::new(msg)
+                })?;
+                if let Some(path) = dir.as_path().to_str() {
                     let path = Expression::alloc_data(ExpEnum::String(
                         environment.interner.intern(path).into(),
                         None,
                     ));
                     let mut args = iter::once(path);
                     let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
-                    let _ = tmp.close();
+                    let _ = fs::remove_dir_all(dir.as_path());
                     ret
                 } else {
                     let msg = format!("{} unable to provide temporary directory", fn_name);
@@ -549,13 +582,17 @@ fn builtin_in_temp(
     }
 }
 
+fn temp_dir() -> PathBuf {
+    std::env::temp_dir()
+}
+
 fn builtin_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "temp-dir";
     params_done(args, fn_name)?;
-    if let Some(path) = std::env::temp_dir().to_str() {
+    if let Some(path) = temp_dir().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(path).into(),
             None,
@@ -577,17 +614,16 @@ fn builtin_rm(
     if let Some(path) = get_file(environment, fp) {
         let p = path.as_path();
         if p.exists() {
-            let r;
+            let removed;
             if p.is_dir() {
-                r = fs::remove_dir_all(p);
+                removed = fs::remove_dir_all(p).is_ok();
             } else {
-                r = fs::remove_file(p);
+                removed = fs::remove_file(p).is_ok();
             }
-            if let Ok = r {
-                Ok(Expression::make_true())
-            } else {
-                Ok(Expression::make_false())
-            }
+            return Ok(Expression::alloc_data(match removed {
+                true => ExpEnum::True,
+                false => ExpEnum::False,
+            }));
         }
     }
     let msg = format!("{} target must be valid path.", fn_name);
@@ -832,9 +868,9 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("in-temp"),
+        interner.intern("in-temp-dir"),
         Expression::make_function(
-            builtin_in_temp,
+            builtin_in_temp_dir,
             "Usage: (in-temp (fn (x) (println \"given temp dir:\" x))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
@@ -861,7 +897,14 @@ Example:
             builtin_temp_dir,
             "Usage: (temp-dir)
 
-Behavior outlined [here](https://doc.rust-lang.org/std/env/fn.temp_dir.html).
+Returns a string representing the temporary directory. See [get-temp](root::get-temp) for higher
+level temporary directory creation mechanism.
+
+On Unix:
+Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it returns /tmp. If Android, since there is no global temporary folder (it is usually allocated per-app), it returns /data/local/tmp.
+
+On Windows:
+Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set and not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This behavior is identical to that of GetTempPath, which this function uses internally.
 
 Section: file
 
@@ -878,6 +921,21 @@ Example:
 
 Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
 for OS specific notes.
+
+Section: file
+
+Example:
+#t
+",
+        ),
+    );
+    data.insert(
+        interner.intern("fs-rm"),
+        Expression::make_function(
+            builtin_rm,
+            "Usage: (fs-rm \"/dir/or/file/to/remove\")
+
+Takes a file or directory as a string and removes it. Works recursively for directories.
 
 Section: file
 

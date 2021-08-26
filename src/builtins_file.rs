@@ -112,7 +112,7 @@ fn builtin_cd(
     }
 }
 
-fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
+pub fn get_file(environment: &mut Environment, p: Expression) -> Option<PathBuf> {
     let p = match &eval(environment, p).ok()?.get().data {
         ExpEnum::String(p, _) => {
             match expand_tilde(p) {
