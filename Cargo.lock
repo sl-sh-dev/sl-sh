@@ -659,7 +659,6 @@ dependencies = [
  "remove_dir_all",
  "same-file",
  "sl-liner",
- "tempfile",
  "unicode-segmentation",
  "unicode_reader",
  "walkdir",
@@ -680,20 +679,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
-]
-
-[[package]]
-name = "tempfile"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
-dependencies = [
- "cfg-if",
- "libc",
- "rand",
- "redox_syscall",
- "remove_dir_all",
- "winapi",
 ]
 
 [[package]]

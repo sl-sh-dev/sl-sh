@@ -538,38 +538,43 @@ fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
     format!("{}{}{}", prefix, name, suffix)
 }
 
+fn get_temp(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
+    let p = temp_dir();
+    if p.as_path().exists() && p.as_path().is_dir() {
+        let dir_name = random_name(prefix, suffix, len);
+        let dir = Path::new::<OsStr>(dir_name.as_ref());
+        let dir = p.join(dir);
+        fs::create_dir(dir.as_path()).map_err(|err| {
+            let msg = format!("{} unable to create temporary directory inside default temporary directory ({:?}), reason: {:?}", fn_name, dir.as_path(), err);
+            LispError::new(msg)
+        })?;
+        Ok(dir)
+    } else {
+        let msg = format!("{} unable to provide temporary directory", fn_name);
+        Err(LispError::new(msg))
+    }
+}
+
 fn builtin_in_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "in-temp";
+    let fn_name = "in-temp-dir";
     let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let p = temp_dir();
-            if p.as_path().exists() && p.as_path().is_dir() {
-                let dir_name = random_name("", "", 5);
-                let dir = Path::new::<OsStr>(dir_name.as_ref());
-                let dir = p.join(dir);
-                fs::create_dir(dir.as_path()).map_err(|err| {
-                    let msg = format!("{} unable to create temporary directory inside default temporary directory ({:?}), reason: {:?}", fn_name, p.as_path(), err);
-                    LispError::new(msg)
-                })?;
-                if let Some(path) = dir.as_path().to_str() {
-                    let path = Expression::alloc_data(ExpEnum::String(
-                        environment.interner.intern(path).into(),
-                        None,
-                    ));
-                    let mut args = iter::once(path);
-                    let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
-                    let _ = fs::remove_dir_all(dir.as_path());
-                    ret
-                } else {
-                    let msg = format!("{} unable to provide temporary directory", fn_name);
-                    Err(LispError::new(msg))
-                }
+            let dir = get_temp("", "", 5, fn_name)?;
+            if let Some(path) = dir.as_path().to_str() {
+                let path = Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern(path).into(),
+                    None,
+                ));
+                let mut args = iter::once(path);
+                let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
+                let _ = fs::remove_dir_all(dir.as_path());
+                ret
             } else {
                 let msg = format!("{} unable to provide temporary directory", fn_name);
                 Err(LispError::new(msg))
@@ -636,18 +641,13 @@ fn builtin_get_temp(
 ) -> Result<Expression, LispError> {
     let fn_name = "get-temp";
     params_done(args, fn_name)?;
-    let tmp = tempfile::tempdir();
-    if let Ok(tmp) = tmp {
-        if let Some(path) = tmp.into_path().to_str() {
-            let path = Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(path).into(),
-                None,
-            ));
-            Ok(path)
-        } else {
-            let msg = format!("{} unable to provide temporary directory", fn_name);
-            Err(LispError::new(msg))
-        }
+    let dir = get_temp("", "", 5, fn_name)?;
+    if let Some(path) = dir.to_str() {
+        let path = Expression::alloc_data(ExpEnum::String(
+            environment.interner.intern(path).into(),
+            None,
+        ));
+        Ok(path)
     } else {
         let msg = format!("{} unable to provide temporary directory", fn_name);
         Err(LispError::new(msg))
@@ -871,7 +871,7 @@ Example:
         interner.intern("in-temp-dir"),
         Expression::make_function(
             builtin_in_temp_dir,
-            "Usage: (in-temp (fn (x) (println \"given temp dir:\" x))
+            "Usage: (in-temp-dir (fn (x) (println \"given temp dir:\" x))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
 when the provided function is finished executing.
@@ -880,7 +880,7 @@ Section: file
 
 Example:
 (def fp nil)
-(in-temp (fn (tmp-dir)
+(in-temp-dir (fn (tmp-dir)
     (let* ((tmp-file (str tmp-dir \"/sl-sh-tmp-file.txt\"))
         (a-file (open tmp-file :create :truncate)))
         (test::assert-true (fs-exists? tmp-file))
