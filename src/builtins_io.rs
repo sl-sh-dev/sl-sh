@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::{OpenOptions, File};
+use std::fs::{File, OpenOptions};
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -569,14 +569,24 @@ fn builtin_with_temp_dir(
     }
 }
 
-fn get_temp(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
-    let dir = get_temp_dir("", "", 5, fn_name)?;
+fn get_temp(
+    dir: PathBuf,
+    prefix: &str,
+    suffix: &str,
+    len: u64,
+    fn_name: &str,
+) -> Result<PathBuf, LispError> {
     let filename = random_name(prefix, suffix, len);
     let p = Path::new::<OsStr>(filename.as_ref());
     let file = dir.join(p);
     let p = file.as_path();
     File::create(p).map_err(|err| {
-        let msg = format!("{} unable to create temporary file inside temporary directory ({:?}), reason: {:?}", fn_name, dir.as_path(), err);
+        let msg = format!(
+            "{} unable to create temporary file inside temporary directory ({:?}), reason: {:?}",
+            fn_name,
+            dir.as_path(),
+            err
+        );
         LispError::new(msg)
     })?;
     Ok(file)
@@ -587,8 +597,29 @@ fn builtin_temp(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "temp";
-    params_done(args, fn_name)?;
-    let file = get_temp("", "", 5, fn_name)?;
+    let dir;
+    if let Some(s) = args.next() {
+        let fp = eval(environment, s)?;
+        params_done(args, fn_name)?;
+        if let Some(path) = get_file(environment, fp) {
+            let p = path.as_path();
+            if p.exists() && p.is_dir() {
+                dir = path
+            } else {
+                let msg = format!(
+                    "{} unable to provide temporary file in provided directory",
+                    fn_name
+                );
+                return Err(LispError::new(msg));
+            }
+        } else {
+            let msg = format!("{} unable to access provided file", fn_name);
+            return Err(LispError::new(msg));
+        }
+    } else {
+        dir = get_temp_dir("", "", 5, fn_name)?;
+    }
+    let file = get_temp(dir, "", "", 5, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(path).into(),
@@ -611,7 +642,8 @@ fn builtin_with_temp(
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let mut file = get_temp("", "", 5, fn_name)?;
+            let dir = get_temp_dir("", "", 5, fn_name)?;
+            let file = get_temp(dir, "", "", 5, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(
                     environment.interner.intern(path).into(),
@@ -619,8 +651,7 @@ fn builtin_with_temp(
                 ));
                 let mut args = iter::once(path);
                 let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
-                file.pop();
-                let _ = fs::remove_dir_all(file.as_path());
+                let _ = fs::remove_file(file.as_path());
                 ret
             } else {
                 let msg = format!("{} unable to provide temporary file", fn_name);
@@ -672,14 +703,17 @@ fn builtin_rm(
             } else {
                 removed = fs::remove_file(p).is_ok();
             }
-            return Ok(Expression::alloc_data(match removed {
+            Ok(Expression::alloc_data(match removed {
                 true => ExpEnum::True,
                 false => ExpEnum::False,
-            }));
+            }))
+        } else {
+            Ok(Expression::make_true())
         }
+    } else {
+        let msg = format!("{} target must be valid path.", fn_name);
+        Err(LispError::new(msg))
     }
-    let msg = format!("{} target must be valid path.", fn_name);
-    Err(LispError::new(msg))
 }
 
 fn builtin_get_temp(
@@ -911,6 +945,13 @@ Write a string to a file.
 Section: file
 
 Example:
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
+(write-string tst-file \"Test Line Write Line\")
+(flush tst-file)
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
+(test::assert-equal \"Test Line Write Line\" (read-line tst-file))
+(close tst-file)
 ",
         ),
     );
@@ -918,14 +959,18 @@ Example:
         interner.intern("temp"),
         Expression::make_function(
             builtin_temp,
-            "Usage: (temp)
+            "Usage: (temp [\"/path/to/directory/to/use/as/base\"])
 
-Returns name of file created inside temporary directory.
+Returns name of file created inside temporary directory. Optionally takes a directory to use as
+the parent directory of the temporary file.
 
 Section: file
 
 Example:
 (test::assert-true (str-contains (temp-dir) (temp)))
+(with-temp-dir (fn (tmp)
+        (let ((tmp-file (temp tmp)))
+            (test::assert-true (str-contains tmp tmp-file)))))
 ",
         ),
     );
