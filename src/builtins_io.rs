@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, File};
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -514,31 +514,13 @@ fn builtin_write_string(
     ))
 }
 
-//fn builtin_in_temp_file(
-//    environment: &mut Environment,
-//    args: &mut dyn Iterator<Item = Expression>,
-//) -> Result<Expression, LispError> {
-//    let fn_name = "in-temp";
-//    let lambda_exp = param_eval(environment, args, fn_name)?;
-//    let lambda_exp_d = &lambda_exp.get().data;
-//    params_done(args, fn_name)?;
-//    match lambda_exp_d {
-//        ExpEnum::Lambda(_) => {
-//        }
-//        _ => {
-//            let msg = format!("{} first argument must be function", fn_name);
-//            Err(LispError::new(msg))
-//        }
-//    }
-//}
-
 fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
     let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
     let name = rand_alphanumeric_str(len);
     format!("{}{}{}", prefix, name, suffix)
 }
 
-fn get_temp(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
+fn get_temp_dir(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
     let p = temp_dir();
     if p.as_path().exists() && p.as_path().is_dir() {
         let dir_name = random_name(prefix, suffix, len);
@@ -565,7 +547,7 @@ fn builtin_in_temp_dir(
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let dir = get_temp("", "", 5, fn_name)?;
+            let dir = get_temp_dir("", "", 5, fn_name)?;
             if let Some(path) = dir.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(
                     environment.interner.intern(path).into(),
@@ -577,6 +559,71 @@ fn builtin_in_temp_dir(
                 ret
             } else {
                 let msg = format!("{} unable to provide temporary directory", fn_name);
+                Err(LispError::new(msg))
+            }
+        }
+        _ => {
+            let msg = format!("{} first argument must be function", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+fn get_temp(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
+    let dir = get_temp_dir("", "", 5, fn_name)?;
+    let filename = random_name(prefix, suffix, len);
+    let p = Path::new::<OsStr>(filename.as_ref());
+    let file = dir.join(p);
+    let p = file.as_path();
+    File::create(p).map_err(|err| {
+        let msg = format!("{} unable to create temporary file inside temporary directory ({:?}), reason: {:?}", fn_name, dir.as_path(), err);
+        LispError::new(msg)
+    })?;
+    Ok(file)
+}
+
+fn builtin_temp(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "temp";
+    params_done(args, fn_name)?;
+    let file = get_temp("", "", 5, fn_name)?;
+    if let Some(path) = file.as_path().to_str() {
+        let path = Expression::alloc_data(ExpEnum::String(
+            environment.interner.intern(path).into(),
+            None,
+        ));
+        Ok(path)
+    } else {
+        let msg = format!("{} unable to provide temporary file", fn_name);
+        Err(LispError::new(msg))
+    }
+}
+
+fn builtin_in_temp(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "in-temp";
+    let lambda_exp = param_eval(environment, args, fn_name)?;
+    let lambda_exp_d = &lambda_exp.get().data;
+    params_done(args, fn_name)?;
+    match lambda_exp_d {
+        ExpEnum::Lambda(_) => {
+            let mut file = get_temp("", "", 5, fn_name)?;
+            if let Some(path) = file.as_path().to_str() {
+                let path = Expression::alloc_data(ExpEnum::String(
+                    environment.interner.intern(path).into(),
+                    None,
+                ));
+                let mut args = iter::once(path);
+                let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
+                file.pop();
+                let _ = fs::remove_dir_all(file.as_path());
+                ret
+            } else {
+                let msg = format!("{} unable to provide temporary file", fn_name);
                 Err(LispError::new(msg))
             }
         }
@@ -641,7 +688,7 @@ fn builtin_get_temp(
 ) -> Result<Expression, LispError> {
     let fn_name = "get-temp";
     params_done(args, fn_name)?;
-    let dir = get_temp("", "", 5, fn_name)?;
+    let dir = get_temp_dir("", "", 5, fn_name)?;
     if let Some(path) = dir.to_str() {
         let path = Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(path).into(),
@@ -868,6 +915,44 @@ Example:
         ),
     );
     data.insert(
+        interner.intern("temp"),
+        Expression::make_function(
+            builtin_temp,
+            "Usage: (temp)
+
+Returns name of file created inside temporary directory.
+
+Section: file
+
+Example:
+#t
+",
+        ),
+    );
+    data.insert(
+        interner.intern("in-temp"),
+        Expression::make_function(
+            builtin_in_temp,
+            "Usage: (in-temp (fn (x) (println \"given temp file:\" x)))
+
+Takes a function that accepts a temporary directory. This directory will be recursively removed
+when the provided function is finished executing.
+
+Section: file
+
+Example:
+(def fp nil)
+(in-temp (fn (tmp-file)
+    (let* ((a-file (open tmp-file :create :truncate)))
+        (test::assert-true (fs-exists? tmp-file))
+        (set! fp tmp-file)
+        (close a-file))))
+(test::assert-false (nil? fp))
+(test::assert-false (fs-exists? fp))
+",
+        ),
+    );
+    data.insert(
         interner.intern("in-temp-dir"),
         Expression::make_function(
             builtin_in_temp_dir,
@@ -940,10 +1025,14 @@ Takes a file or directory as a string and removes it. Works recursively for dire
 Section: file
 
 Example:
-#t
+(def fp nil)
+(let* ((a-file (temp)))
+        (test::assert-true (fs-exists? a-file))
+        (set! fp a-file)
+        (fs-rm a-file)))
+(test::assert-false (nil? fp))
+(test::assert-false (fs-exists? fp))
 ",
         ),
     );
-    //TODO
-    // mktemp
 }
