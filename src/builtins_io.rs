@@ -537,11 +537,11 @@ fn get_temp_dir(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<P
     }
 }
 
-fn builtin_in_temp_dir(
+fn builtin_with_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "in-temp-dir";
+    let fn_name = "with-temp-dir";
     let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
@@ -601,11 +601,11 @@ fn builtin_temp(
     }
 }
 
-fn builtin_in_temp(
+fn builtin_with_temp(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "in-temp";
+    let fn_name = "with-temp";
     let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
@@ -925,15 +925,15 @@ Returns name of file created inside temporary directory.
 Section: file
 
 Example:
-#t
+(test::assert-true (str-contains (temp-dir) (temp)))
 ",
         ),
     );
     data.insert(
-        interner.intern("in-temp"),
+        interner.intern("with-temp"),
         Expression::make_function(
-            builtin_in_temp,
-            "Usage: (in-temp (fn (x) (println \"given temp file:\" x)))
+            builtin_with_temp,
+            "Usage: (with-temp (fn (x) (println \"given temp file:\" x)))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
 when the provided function is finished executing.
@@ -942,7 +942,7 @@ Section: file
 
 Example:
 (def fp nil)
-(in-temp (fn (tmp-file)
+(with-temp (fn (tmp-file)
     (let* ((a-file (open tmp-file :create :truncate)))
         (test::assert-true (fs-exists? tmp-file))
         (set! fp tmp-file)
@@ -953,10 +953,10 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("in-temp-dir"),
+        interner.intern("with-temp-dir"),
         Expression::make_function(
-            builtin_in_temp_dir,
-            "Usage: (in-temp-dir (fn (x) (println \"given temp dir:\" x))
+            builtin_with_temp_dir,
+            "Usage: (with-temp-dir (fn (x) (println \"given temp dir:\" x))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
 when the provided function is finished executing.
@@ -965,7 +965,7 @@ Section: file
 
 Example:
 (def fp nil)
-(in-temp-dir (fn (tmp-dir)
+(with-temp-dir (fn (tmp-dir)
     (let* ((tmp-file (str tmp-dir \"/sl-sh-tmp-file.txt\"))
         (a-file (open tmp-file :create :truncate)))
         (test::assert-true (fs-exists? tmp-file))
@@ -1010,7 +1010,7 @@ for OS specific notes.
 Section: file
 
 Example:
-#t
+(test::assert-true (str-contains (temp-dir) (get-temp)))
 ",
         ),
     );
