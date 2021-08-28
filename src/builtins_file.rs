@@ -261,6 +261,36 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
+fn builtin_fs_base(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-base";
+    let arg = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    match get_file(environment, arg) {
+        Some(path) => {
+            let path = path
+                .as_path()
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| {
+                    let msg = format!("{} failed to extract base nam of file", fn_name);
+                    LispError::new(msg)
+                })?;
+            let path = Expression::alloc_data(ExpEnum::String(
+                environment.interner.intern(path).into(),
+                None,
+            ));
+            Ok(path)
+        }
+        None => {
+            let msg = format!("{} first arg is not a valid path", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
 fn builtin_same_file(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -616,6 +646,22 @@ Section: file
         ),
     );
     data.insert(
+        interner.intern("fs-base"),
+        Expression::make_function(
+            builtin_fs_base,
+            r#"Usage: (fs-base /path/to/file/or/dir)
+
+Returns base name of file or directory passed to function.
+
+Section: file
+Example:
+(with-temp (fn (tmp)
+        (let ((tmp-file (temp-file tmp)))
+            (test::assert-equal (length \".tmp01234\") (length (fs-base tmp-file))))))
+"#,
+        ),
+    );
+    data.insert(
         interner.intern("fs-len"),
         Expression::make_function(
             builtin_fs_len,
@@ -624,6 +670,16 @@ Section: file
 Returns the size of the file in bytes.
 
 Section: file
+
+Example:
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"slsh-tst-open.txt\") :create :truncate))
+(write-line tst-file \"Test Line Read Line One\")
+(write-string tst-file \"Test Line Read Line Two\")
+(flush tst-file)
+(close tst-file)
+(println \"fs-len is: \" (fs-len tst-file))
+(test::assert-equal 47 (fs-len tst-file))
 "#,
         ),
     );

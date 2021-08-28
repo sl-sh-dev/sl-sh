@@ -1473,7 +1473,7 @@ Example:
             builtin_apply,
             "Usage: (apply function arg* list)
 
-Call the provided function with the suplied arguments, last is a list that will be expanded.
+Call the provided function with the supplied arguments, last is a list that will be expanded.
 
 Section: core
 
@@ -1564,7 +1564,7 @@ Example:
             builtin_length,
             "Usage: (length expression) -> int
 
-Return length of suplied expression.
+Return length of supplied expression.
 
 Section: core
 
