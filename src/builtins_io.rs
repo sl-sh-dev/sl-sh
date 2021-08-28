@@ -24,6 +24,8 @@ use core::iter;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+const LEN: u64 = 5;
+
 fn builtin_open(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -536,12 +538,39 @@ fn get_temp_dir(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<P
         Err(LispError::new(msg))
     }
 }
+fn get_temp_name_defaults<'a>(
+    environment: &'a mut Environment,
+    args: &'a mut dyn Iterator<Item = Expression>,
+) -> Result<(String, String, u64), LispError> {
+    let mut prefix = String::from("");
+    let mut suffix = String::from("");
+    let mut len = LEN;
+    if let Some(arg) = args.next() {
+        let exp = eval(environment, arg)?;
+        if let ExpEnum::String(s, _) = &exp.get().data {
+            prefix = s.parse().unwrap_or_default();
+            if let Some(arg) = args.next() {
+                let exp = eval(environment, arg)?;
+                if let ExpEnum::String(s, _) = &exp.get().data {
+                    suffix = s.parse().unwrap_or_default();
+                    if let Some(arg) = args.next() {
+                        let exp = eval(environment, arg)?;
+                        if let Ok(i) = exp.make_float(environment) {
+                            len = i as u64;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    Ok((prefix, suffix, len))
+}
 
 fn builtin_with_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "with-temp-dir";
+    let fn_name = "with-temp";
     let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
     params_done(args, fn_name)?;
@@ -592,19 +621,26 @@ fn get_temp(
     Ok(file)
 }
 
-fn builtin_temp(
+fn builtin_temp_file(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "temp";
+    let fn_name = "temp-file";
     let dir;
+    let mut prefix = String::from("");
+    let mut suffix = String::from("");
+    let mut len = LEN;
     if let Some(s) = args.next() {
         let fp = eval(environment, s)?;
-        params_done(args, fn_name)?;
         if let Some(path) = get_file(environment, fp) {
             let p = path.as_path();
             if p.exists() && p.is_dir() {
-                dir = path
+                dir = path;
+                let (p, s, l) = get_temp_name_defaults(environment, args)?;
+                // TODO call params_done
+                prefix = p;
+                suffix = s;
+                len = l;
             } else {
                 let msg = format!(
                     "{} unable to provide temporary file in provided directory",
@@ -617,9 +653,9 @@ fn builtin_temp(
             return Err(LispError::new(msg));
         }
     } else {
-        dir = get_temp_dir("", "", 5, fn_name)?;
+        dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
     }
-    let file = get_temp(dir, "", "", 5, fn_name)?;
+    let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(path).into(),
@@ -632,18 +668,19 @@ fn builtin_temp(
     }
 }
 
-fn builtin_with_temp(
+fn builtin_with_temp_file(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "with-temp";
+    let fn_name = "with-temp-file";
     let lambda_exp = param_eval(environment, args, fn_name)?;
     let lambda_exp_d = &lambda_exp.get().data;
+    let (prefix, suffix, len) = get_temp_name_defaults(environment, args)?;
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let dir = get_temp_dir("", "", 5, fn_name)?;
-            let file = get_temp(dir, "", "", 5, fn_name)?;
+            let dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
+            let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(
                     environment.interner.intern(path).into(),
@@ -716,7 +753,7 @@ fn builtin_rm(
     }
 }
 
-fn builtin_get_temp(
+fn builtin_get_temp_dir(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
@@ -956,10 +993,10 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("temp"),
+        interner.intern("temp-file"),
         Expression::make_function(
-            builtin_temp,
-            "Usage: (temp [\"/path/to/directory/to/use/as/base\"])
+            builtin_temp_file,
+            "Usage: (temp-file [\"/path/to/directory/to/use/as/base\"])
 
 Returns name of file created inside temporary directory. Optionally takes a directory to use as
 the parent directory of the temporary file.
@@ -967,18 +1004,18 @@ the parent directory of the temporary file.
 Section: file
 
 Example:
-(test::assert-true (str-contains (temp-dir) (temp)))
-(with-temp-dir (fn (tmp)
-        (let ((tmp-file (temp tmp)))
+(test::assert-true (str-contains (temp-dir) (temp-file)))
+(with-temp (fn (tmp)
+        (let ((tmp-file (temp-file tmp)))
             (test::assert-true (str-contains tmp tmp-file)))))
 ",
         ),
     );
     data.insert(
-        interner.intern("with-temp"),
+        interner.intern("with-temp-file"),
         Expression::make_function(
-            builtin_with_temp,
-            "Usage: (with-temp (fn (x) (println \"given temp file:\" x)))
+            builtin_with_temp_file,
+            "Usage: (with-temp-file (fn (x) (println \"given temp file:\" x)))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
 when the provided function is finished executing.
@@ -987,7 +1024,7 @@ Section: file
 
 Example:
 (def fp nil)
-(with-temp (fn (tmp-file)
+(with-temp-file (fn (tmp-file)
     (let* ((a-file (open tmp-file :create :truncate)))
         (test::assert-true (fs-exists? tmp-file))
         (set! fp tmp-file)
@@ -998,10 +1035,10 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("with-temp-dir"),
+        interner.intern("with-temp"),
         Expression::make_function(
             builtin_with_temp_dir,
-            "Usage: (with-temp-dir (fn (x) (println \"given temp dir:\" x))
+            "Usage: (with-temp (fn (x) (println \"given temp dir:\" x)))
 
 Takes a function that accepts a temporary directory. This directory will be recursively removed
 when the provided function is finished executing.
@@ -1010,7 +1047,7 @@ Section: file
 
 Example:
 (def fp nil)
-(with-temp-dir (fn (tmp-dir)
+(with-temp (fn (tmp-dir)
     (let* ((tmp-file (str tmp-dir \"/sl-sh-tmp-file.txt\"))
         (a-file (open tmp-file :create :truncate)))
         (test::assert-true (fs-exists? tmp-file))
@@ -1046,7 +1083,7 @@ Example:
     data.insert(
         interner.intern("get-temp"),
         Expression::make_function(
-            builtin_get_temp,
+            builtin_get_temp_dir,
             "Usage: (get-temp)
 
 Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
@@ -1071,7 +1108,7 @@ Section: file
 
 Example:
 (def fp nil)
-(let* ((a-file (temp)))
+(let* ((a-file (temp-file)))
         (test::assert-true (fs-exists? a-file))
         (set! fp a-file)
         (fs-rm a-file)))
