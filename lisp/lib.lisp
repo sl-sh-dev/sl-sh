@@ -533,7 +533,6 @@ directory, polling every 250ms.
 
 Section: file
 
-Example:
 ;;TODO write test cases"
 	(callback to-watch to-sleep)
 	(let ((collator (collate-fs-changes to-watch)))

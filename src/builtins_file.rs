@@ -261,6 +261,37 @@ fn builtin_glob(
     Ok(Expression::with_list(files))
 }
 
+fn builtin_fs_parent(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-parent";
+    let arg = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    match get_file(environment, arg) {
+        Some(path) => {
+            let mut path = path.canonicalize().map_err(|_| {
+                let msg = format!("{} failed to get full filepath of parent", fn_name);
+                LispError::new(msg)
+            })?;
+            let _ = path.pop();
+            let path = path.as_path().to_str().ok_or_else(|| {
+                let msg = format!("{} failed to get parent path", fn_name);
+                LispError::new(msg)
+            })?;
+            let path = Expression::alloc_data(ExpEnum::String(
+                environment.interner.intern(path).into(),
+                None,
+            ));
+            Ok(path)
+        }
+        None => {
+            let msg = format!("{} first arg is not a valid path", fn_name);
+            Err(LispError::new(msg))
+        }
+    }
+}
+
 fn builtin_fs_base(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -270,14 +301,10 @@ fn builtin_fs_base(
     params_done(args, fn_name)?;
     match get_file(environment, arg) {
         Some(path) => {
-            let path = path
-                .as_path()
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| {
-                    let msg = format!("{} failed to extract base nam of file", fn_name);
-                    LispError::new(msg)
-                })?;
+            let path = path.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
+                let msg = format!("{} failed to extract name of file", fn_name);
+                LispError::new(msg)
+            })?;
             let path = Expression::alloc_data(ExpEnum::String(
                 environment.interner.intern(path).into(),
                 None,
@@ -492,13 +519,6 @@ fn builtin_fs_accessed(
     get_file_time(environment, args, "fs-accessed", |md| md.accessed())
 }
 
-fn builtin_fs_created(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    get_file_time(environment, args, "fs-created", |md| md.created())
-}
-
 pub fn add_file_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -642,6 +662,10 @@ Section: file
 Returns true if the two provided file paths refer to the same file or directory.
 
 Section: file
+
+Example:
+(with-temp-file (fn (tmp-file)
+    (test::assert-true (fs-same? tmp-file tmp-file)))
 "#,
         ),
     );
@@ -662,6 +686,22 @@ Example:
         ),
     );
     data.insert(
+        interner.intern("fs-parent"),
+        Expression::make_function(
+            builtin_fs_parent,
+            r#"Usage: (fs-parent /path/to/file/or/dir)
+
+Returns base name of file or directory passed to function.
+
+Section: file
+Example:
+(with-temp (fn (tmp)
+        (let ((tmp-file (get-temp-file tmp)))
+            (test::assert-equal (fs-parent tmp-file) tmp))))
+"#,
+        ),
+    );
+    data.insert(
         interner.intern("fs-len"),
         Expression::make_function(
             builtin_fs_len,
@@ -672,14 +712,14 @@ Returns the size of the file in bytes.
 Section: file
 
 Example:
-(def tmp (get-temp))
-(def tst-file (open (str tmp \"slsh-tst-open.txt\") :create :truncate))
-(write-line tst-file \"Test Line Read Line One\")
-(write-string tst-file \"Test Line Read Line Two\")
-(flush tst-file)
-(close tst-file)
-(println \"fs-len is: \" (fs-len tst-file))
-(test::assert-equal 47 (fs-len tst-file))
+(with-temp-file (fn (tmp)
+    (let ((tst-file (open tmp :create :truncate)))
+        (write-line tst-file \"Test Line Read Line One\")
+        (write-string tst-file \"Test Line Read Line Two\")
+        (flush tst-file)
+        (close tst-file)
+        (println \"fs-len is: \" (fs-len tst-file))
+        (test::assert-equal 47 (fs-len tst-file)))))
 "#,
         ),
     );
@@ -689,9 +729,19 @@ Example:
             builtin_fs_modified,
             r#"Usage: (fs-modified /path/to/file/or/dir)
 
-Returns the time file last modified in ms.
+Returns the unix time file last modified in ms.
 
 Section: file
+
+Example:
+(with-temp-file (fn (tmp)
+    (let ((tst-file (open tmp :create :truncate))
+          (last-mod (fs-modified tmp)))
+        (write-line tst-file \"Test Line Read Line One\")
+        (write-string tst-file \"Test Line Read Line Two\")
+        (flush tst-file)
+        (close tst-file)
+        (test::assert-true (> (fs-modified tmp) last-mod)))))
 "#,
         ),
     );
@@ -701,21 +751,18 @@ Section: file
             builtin_fs_accessed,
             r#"Usage: (fs-accessed /path/to/file/or/dir)
 
-Returns the time file last accessed in ms.
+Returns the unix time file last accessed in ms.
 
 Section: file
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("fs-created"),
-        Expression::make_function(
-            builtin_fs_created,
-            r#"Usage: (fs-created /path/to/file/or/dir)
 
-Returns the time file was created in ms.
-
-Section: file
+Example:
+(with-temp-file (fn (tmp)
+    (let ((tst-file (open tmp :read))
+          (last-acc (fs-accessed tmp)))
+        (close tst-file)
+        (let ((tst-file (open tmp :read)))
+            (test::assert-true (> (fs-accessed tmp) last-acc))
+            (close tst-file))))
 "#,
         ),
     );

@@ -1150,7 +1150,7 @@ Example:
         interner.intern("get-temp"),
         Expression::make_function(
             builtin_get_temp_dir,
-            "Usage: (get-temp)
+            "Usage: (get-temp [\"optional-prefix\" \"optional-suffix\" length])
 
 Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
 for OS specific notes. Also accepts an optional prefix, an optional suffix, and an optional
