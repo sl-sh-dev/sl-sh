@@ -522,12 +522,11 @@ fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
     format!("{}{}{}", prefix, name, suffix)
 }
 
-fn get_temp_dir(prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
-    let p = temp_dir();
-    if p.as_path().exists() && p.as_path().is_dir() {
+fn get_temp_dir(path: &Path, prefix: &str, suffix: &str, len: u64, fn_name: &str) -> Result<PathBuf, LispError> {
+    if path.exists() && path.is_dir() {
         let dir_name = random_name(prefix, suffix, len);
         let dir = Path::new::<OsStr>(dir_name.as_ref());
-        let dir = p.join(dir);
+        let dir = path.join(dir);
         fs::create_dir(dir.as_path()).map_err(|err| {
             let msg = format!("{} unable to create temporary directory inside default temporary directory ({:?}), reason: {:?}", fn_name, dir.as_path(), err);
             LispError::new(msg)
@@ -577,7 +576,8 @@ fn builtin_with_temp_dir(
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
+            let p = &temp_dir();
+            let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = dir.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(
                     environment.interner.intern(path).into(),
@@ -654,7 +654,8 @@ fn builtin_get_temp_file(
             return Err(LispError::new(msg));
         }
     } else {
-        dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
+        let p = &temp_dir();
+        dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
     }
     let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
@@ -680,7 +681,8 @@ fn builtin_with_temp_file(
     params_done(args, fn_name)?;
     match lambda_exp_d {
         ExpEnum::Lambda(_) => {
-            let dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
+            let p = &temp_dir();
+            let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
             let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
                 let path = Expression::alloc_data(ExpEnum::String(
@@ -759,9 +761,36 @@ fn builtin_get_temp_dir(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "get-temp";
-    let (prefix, suffix, len) = get_temp_name_defaults(environment, args)?;
-    params_done(args, fn_name)?;
-    let dir = get_temp_dir(&prefix, &suffix, len, fn_name)?;
+    let dir;
+    let mut prefix = String::from("");
+    let mut suffix = String::from("");
+    let mut len = LEN;
+    if let Some(s) = args.next() {
+        let fp = eval(environment, s)?;
+        if let Some(path) = get_file(environment, fp) {
+            let p = path.as_path();
+            if p.exists() && p.is_dir() {
+                dir = path;
+                let (p, s, l) = get_temp_name_defaults(environment, args)?;
+                params_done(args, fn_name)?;
+                prefix = p;
+                suffix = s;
+                len = l;
+            } else {
+                let msg = format!(
+                    "{} unable to provide temporary file in provided directory",
+                    fn_name
+                );
+                return Err(LispError::new(msg));
+            }
+        } else {
+            let msg = format!("{} unable to access provided file", fn_name);
+            return Err(LispError::new(msg));
+        }
+    } else {
+        dir = temp_dir();
+    }
+    let dir = get_temp_dir(&dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = dir.to_str() {
         let path = Expression::alloc_data(ExpEnum::String(
             environment.interner.intern(path).into(),
@@ -1150,7 +1179,7 @@ Example:
         interner.intern("get-temp"),
         Expression::make_function(
             builtin_get_temp_dir,
-            "Usage: (get-temp [\"optional-prefix\" \"optional-suffix\" length])
+            "Usage: (get-temp [\"/path/to/directory/to/use/as/base\" \"optional-prefix\" \"optional-suffix\" length])
 
 Creates a directory inside of an OS specific temporary directory. See [temp-dir](root::temp-dir)
 for OS specific notes. Also accepts an optional prefix, an optional suffix, and an optional
@@ -1162,17 +1191,27 @@ Section: file
 Example:
 (test::assert-true (str-contains (temp-dir) (get-temp)))
 
-(let ((tmp-dir (get-temp \"some-prefix\")))
-    (test::assert-true (str-contains \"some-prefix\" tmp-dir)))
+(with-temp (fn (tmp)
+        (let ((tmp-dir (get-temp tmp)))
+            (test::assert-true (str-contains tmp tmp-dir)))))
 
-(let ((tmp-dir (get-temp \"some-prefix\" \"some-suffix\")))
-    (test::assert-true (str-contains \"some-prefix\" tmp-dir))
-    (test::assert-true (str-contains \"some-suffix\" tmp-dir)))
+(with-temp (fn (tmp)
+        (let ((tmp-dir (get-temp tmp \"some-prefix\")))
+            (test::assert-true (str-contains tmp tmp-dir))
+            (test::assert-true (str-contains \"some-prefix\" tmp-dir)))))
 
-(let ((tmp-dir (get-temp \"some-prefix\" \"some-suffix\" 10)))
-    (test::assert-true (str-contains \"some-prefix\" tmp-dir))
-    (test::assert-true (str-contains \"some-suffix\" tmp-dir))
-    (test::assert-equal (length \"some-prefix0123456789some-suffix\") (length (fs-base tmp-dir))))
+(with-temp (fn (tmp)
+        (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\")))
+            (test::assert-true (str-contains tmp tmp-dir))
+            (test::assert-true (str-contains \"some-prefix\" tmp-dir))
+            (test::assert-true (str-contains \"some-suffix\" tmp-dir)))))
+
+(with-temp (fn (tmp)
+        (let ((tmp-dir (get-temp tmp \"some-prefix\" \"some-suffix\" 6)))
+            (test::assert-true (str-contains tmp tmp-dir))
+            (test::assert-true (str-contains \"some-prefix\" tmp-dir))
+            (test::assert-true (str-contains \"some-suffix\" tmp-dir))
+            (test::assert-equal (length \"some-prefix012345some-suffix\") (length (fs-base tmp-dir))))))
 ",
         ),
     );
