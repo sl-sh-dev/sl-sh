@@ -766,6 +766,4 @@ Example:
 "#,
         ),
     );
-    //TODO what does CL name these things?
-    // TODO should epoch and times be in ms or s?
 }

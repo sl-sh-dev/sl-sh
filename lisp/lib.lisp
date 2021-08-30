@@ -533,7 +533,10 @@ directory, polling every 250ms.
 
 Section: file
 
-;;TODO write test cases"
+Example:
+;; see tests/collate-fs-changes.lisp
+#t
+"
 	(callback to-watch to-sleep)
 	(let ((collator (collate-fs-changes to-watch)))
 		(loop () ()
