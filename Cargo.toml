@@ -19,6 +19,7 @@ rand = "0.8.3"
 walkdir = "2"
 same-file = "1.0.6"
 remove_dir_all = "0.5.3"
+faccess = "0.2.3"
 #jemallocator = "0.3.2"
 
 [build-dependencies]

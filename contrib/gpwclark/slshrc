@@ -119,9 +119,9 @@
 	"pass in a string. list all files in vim whose filenames contain that string.
 	Section: user-shell"
 	(&rest args)
-	(if (< (length args) 2)
-		(| $(find $PWD -iname $((str (nth 0 args)))))
-		(err "Only accepts 0 or 1 arguments")))
+	;;$(find $PWD -iname $((str (nth 0 args))))
+	(let ((find-str (apply str #\* (collect (iterator::interleave args (repeat #\* (length args)))))))
+		$(find $PWD -iname $find-str)))
 
 ;;results feed into vim
 (defn vimifind

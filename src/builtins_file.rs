@@ -17,6 +17,7 @@ use std::ffi::OsStr;
 use std::fs::{File, Metadata};
 use std::time::SystemTime;
 use walkdir::{DirEntry, WalkDir};
+use faccess::{AccessMode, PathExt};
 
 const LEN: u64 = 5;
 
@@ -173,6 +174,27 @@ fn builtin_is_dir(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     file_test(environment, args, |path| path.is_dir(), "fs-dir?")
+}
+
+fn builtin_is_executable(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    file_test(environment, args, |path| path.is_executable(), "fs-exec?")
+}
+
+fn builtin_is_writable(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    file_test(environment, args, |path| path.is_writable(), "fs-write?")
+}
+
+fn builtin_is_readable(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    file_test(environment, args, |path| path.is_writable(), "fs-read?")
 }
 
 fn builtin_glob(
@@ -875,6 +897,42 @@ $(touch /tmp/tst-fs-dir/fs-dir-file)
 (test::assert-false (fs-dir? "/tmp/tst-fs-dir/fs-dir-nope"))
 $(rm /tmp/tst-fs-dir/fs-dir-file)
 $(rmdir /tmp/tst-fs-dir)
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-write?"),
+        Expression::make_function(
+            builtin_is_dir,
+            r#"Usage: (fs-write? path-to-test)
+
+Is the given path writable?
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-read?"),
+        Expression::make_function(
+            builtin_is_dir,
+            r#"Usage: (fs-read? path-to-test)
+
+Is the given path readable?
+
+Section: file
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("fs-exec?"),
+        Expression::make_function(
+            builtin_is_dir,
+            r#"Usage: (fs-exec? path-to-test)
+
+Is the given path executable?
+
+Section: file
 "#,
         ),
     );
