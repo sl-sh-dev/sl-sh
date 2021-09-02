@@ -283,10 +283,7 @@ fn builtin_fs_parent(
                 let msg = format!("{} failed to get parent path", fn_name);
                 LispError::new(msg)
             })?;
-            let path = Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(path).into(),
-                None,
-            ));
+            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
             Ok(path)
         }
         None => {
@@ -309,10 +306,7 @@ fn builtin_fs_base(
                 let msg = format!("{} failed to extract name of file", fn_name);
                 LispError::new(msg)
             })?;
-            let path = Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(path).into(),
-                None,
-            ));
+            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
             Ok(path)
         }
         None => {
@@ -389,10 +383,7 @@ fn builtin_fs_crawl(
     let mut cb = |entry: &DirEntry| {
         let path = entry.path();
         if let Some(path) = path.to_str() {
-            let path = Expression::alloc_data(ExpEnum::String(
-                environment.interner.intern(path).into(),
-                None,
-            ));
+            let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
             let mut args = iter::once(path);
             let _ = call_lambda(environment, lambda_exp.copy(), &mut args, true);
         }
@@ -462,7 +453,7 @@ fn builtin_fs_len(
     if let Some(file_or_dir) = file_or_dir {
         if let Ok(metadata) = fs::metadata(file_or_dir) {
             let len = metadata.len();
-            Ok(Expression::alloc_data(ExpEnum::Float(len as f64)))
+            Ok(Expression::alloc_data(ExpEnum::Int(len as i64)))
         } else {
             let msg = format!("{} can not fetch metadata at provided path", fn_name);
             Err(LispError::new(msg))
@@ -563,10 +554,7 @@ fn builtin_get_temp_dir(
     }
     let dir = get_temp_dir(&dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = dir.to_str() {
-        let path = Expression::alloc_data(ExpEnum::String(
-            environment.interner.intern(path).into(),
-            None,
-        ));
+        let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
     } else {
         let msg = format!("{} unable to provide temporary directory", fn_name);
@@ -643,10 +631,7 @@ fn builtin_with_temp_dir(
             let p = &temp_dir();
             let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = dir.as_path().to_str() {
-                let path = Expression::alloc_data(ExpEnum::String(
-                    environment.interner.intern(path).into(),
-                    None,
-                ));
+                let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
                 let mut args = iter::once(path);
                 let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
                 let _ = fs::remove_dir_all(dir.as_path());
@@ -723,10 +708,7 @@ fn builtin_get_temp_file(
     }
     let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
     if let Some(path) = file.as_path().to_str() {
-        let path = Expression::alloc_data(ExpEnum::String(
-            environment.interner.intern(path).into(),
-            None,
-        ));
+        let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
     } else {
         let msg = format!("{} unable to provide temporary file", fn_name);
@@ -749,10 +731,7 @@ fn builtin_with_temp_file(
             let dir = get_temp_dir(p, &prefix, &suffix, len, fn_name)?;
             let file = get_temp(dir, &prefix, &suffix, len, fn_name)?;
             if let Some(path) = file.as_path().to_str() {
-                let path = Expression::alloc_data(ExpEnum::String(
-                    environment.interner.intern(path).into(),
-                    None,
-                ));
+                let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
                 let mut args = iter::once(path);
                 let ret = call_lambda(environment, lambda_exp.copy(), &mut args, true);
                 let _ = fs::remove_file(file.as_path());
@@ -770,16 +749,13 @@ fn builtin_with_temp_file(
 }
 
 fn builtin_temp_dir(
-    environment: &mut Environment,
+    _environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "temp-dir";
     params_done(args, fn_name)?;
     if let Some(path) = temp_dir().to_str() {
-        let path = Expression::alloc_data(ExpEnum::String(
-            environment.interner.intern(path).into(),
-            None,
-        ));
+        let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
     } else {
         let msg = format!("{} unable to provide temporary directory", fn_name);
@@ -1041,7 +1017,7 @@ Section: file
 Example:
 (with-temp (fn (tmp)
         (let ((tmp-file (get-temp-file tmp)))
-            (test::assert-equal (fs-base (fs-parent tmp-file)) (fs-base tmp)))))
+            (test::assert-true (fs-same? (fs-parent tmp-file) tmp)))))
 "#,
         ),
     );
@@ -1303,3 +1279,4 @@ Example:
         ),
     );
 }
+// fix fs-notify to have default to-sleep

@@ -3,7 +3,7 @@
 		(collator (collate-fs-changes collate-test-dir))
 		(collate-test-file1 (get-temp-file collate-test-dir))
 		(changes (collator)))
-	(test::assert-equal (make-vec) (hash-get changes :modified))
+	(test::assert-equal (vec collate-test-dir) (hash-get changes :modified))
 	(test::assert-equal (vec collate-test-file1) (hash-get changes :created))
 	(test::assert-equal (make-vec) (hash-get changes :deleted))
 
