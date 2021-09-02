@@ -1041,7 +1041,7 @@ Section: file
 Example:
 (with-temp (fn (tmp)
         (let ((tmp-file (get-temp-file tmp)))
-            (test::assert-equal (fs-parent tmp-file) tmp))))
+            (test::assert-equal (fs-base (fs-parent tmp-file)) (fs-base tmp)))))
 "#,
         ),
     );
