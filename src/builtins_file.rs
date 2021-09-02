@@ -1266,10 +1266,14 @@ Returns a string representing the temporary directory. See [get-temp](root::get-
 level temporary directory creation mechanism.
 
 On Unix:
-Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it returns /tmp. If Android, since there is no global temporary folder (it is usually allocated per-app), it returns /data/local/tmp.
+Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it
+returns /tmp. If Android, since there is no global temporary folder (it is usually allocated
+per-app), it returns /data/local/tmp.
 
 On Windows:
-Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set and not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This behavior is identical to that of GetTempPath, which this function uses internally.
+Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set and
+not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This behavior
+is identical to that of GetTempPath, which this function uses internally.
 
 Section: file
 
