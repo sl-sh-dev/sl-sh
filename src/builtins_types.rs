@@ -1030,7 +1030,7 @@ Example:
             builtin_to_symbol,
             r#"Usage: (sym expression+) -> symbol
 
-Takes one or more forms, converts them to strings, concatonates them and returns
+Takes one or more forms, converts them to strings, concatenates them and returns
 a symbol with that name.
 
 Section: type

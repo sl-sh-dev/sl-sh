@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.9.59"
+version = "0.9.60"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
@@ -16,6 +16,9 @@ libc = "0.2"
 unicode-segmentation = "1.7.1"
 unicode_reader = "1"
 rand = "0.8.3"
+walkdir = "2"
+same-file = "1.0.6"
+remove_dir_all = "0.5.3"
 #jemallocator = "0.3.2"
 
 [build-dependencies]

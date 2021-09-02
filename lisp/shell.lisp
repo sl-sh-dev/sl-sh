@@ -861,15 +861,9 @@ Section: shell
                 (print-error result)
                  (recur))))))))
 
-(defn temp-dir
-  "Returns $TMPDIR environment variable if set, otherwise returns \"/tmp\".
-Section: shell"
-  ()
-  (if (> (length $TMPDIR) 0) (str $TMPDIR) "/tmp"))
-
 (defn fc
   "Put the contents of the last command into a temporary file
-([temp-dir](shell::temp-dir)), and open the temporary file in the text editor,
+([temp-dir](root::temp-dir)), and open the temporary file in the text editor,
 $EDITOR. If the editor returns with an error code of 0 the contents of the
 temporary file are executed. `fc` can be used in succession and the contents of
 the temporary file are saved to the sl-sh history.
@@ -905,7 +899,41 @@ Section: shell"
     ns-export must be called before ns-pop so the appropriate symbols are
     associated namespace, the one in which the symbols were created.
 
-    Section: scripting "
+    Section: scripting
+
+    Example:
+
+(defn test-file (code file)
+    (let ((tmp (open file :read)))
+      (assert-equal
+        code
+        (read-all tmp))
+      (close tmp))
+
+(with-temp (fn (tmp-dir)
+    (let ((tmp0 (get-temp-file tmp-dir))
+          (tmp1 (get-temp-file tmp-dir))
+          (tmp2 (get-temp-file tmp-dir)))
+        (mkli tmp0 'mytest (println \"hello test\"))
+        (test-file
+            '#((ns-push 'mytest)
+                (ns-import 'shell)
+                (println \"hello test\")
+                (ns-auto-export 'mytest)
+                (ns-pop))
+            tmp0)
+        (mkli tmp1 'mytest)
+        (test-file
+            '#((ns-push 'mytest)
+                (ns-import 'shell)
+                (ns-auto-export 'mytest)
+                (ns-pop))
+            tmp1)
+        (mkli tmp2)
+        (test-file
+            '#(ns-import 'shell)
+            tmp2))))
+"
   (&rest args) (let ((filepath nil) (namespace nil) (script-body nil) (new-file))
                  (when (= 0 (length args)) (err "Must have at least 1 argument, the path to the script to be created."))
                  (when (< 3 (length args)) (err (str "Too many arguments, see doc ")))
@@ -1023,7 +1051,6 @@ Example:
              getopts
              getopts-help
              mkli
-             temp-dir
              timer))
 
 (ns-pop)

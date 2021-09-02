@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::fs::OpenOptions;
 use std::hash::BuildHasher;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -18,6 +19,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::reader::*;
 use crate::types::*;
+use crate::{get_file, param_eval, params_done};
 
 fn builtin_open(
     environment: &mut Environment,
@@ -509,6 +511,35 @@ fn builtin_write_string(
     ))
 }
 
+fn builtin_rm(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "fs-rm";
+    let fp = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    if let Some(path) = get_file(environment, fp) {
+        let p = path.as_path();
+        if p.exists() {
+            let removed;
+            if p.is_dir() {
+                removed = fs::remove_dir_all(p).is_ok();
+            } else {
+                removed = fs::remove_file(p).is_ok();
+            }
+            Ok(Expression::alloc_data(match removed {
+                true => ExpEnum::True,
+                false => ExpEnum::False,
+            }))
+        } else {
+            Ok(Expression::make_true())
+        }
+    } else {
+        let msg = format!("{} target must be valid path.", fn_name);
+        Err(LispError::new(msg))
+    }
+}
+
 pub fn add_io_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -533,10 +564,11 @@ Options are:
 Section: file
 
 Example:
-(def test-open-f (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def test-open-f (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line test-open-f \"Test Line One\")
 (close test-open-f)
-(test::assert-equal \"Test Line One\n\" (read-line (open \"/tmp/slsh-tst-open.txt\")))
+(test::assert-equal \"Test Line One\n\" (read-line (open (str tmp \"/slsh-tst-open.txt\"))))
 ",
         ),
     );
@@ -551,10 +583,11 @@ Close a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Two\")
 (close tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Two\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -571,10 +604,11 @@ Flush a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Three\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Three\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -591,11 +625,12 @@ Read a line from a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Read Line One\")
 (write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Read Line One\n\" (read-line tst-file))
 (test::assert-equal \"Test Line Read Line Two\" (read-line tst-file))
 (close tst-file)
@@ -617,16 +652,17 @@ If no parameters are provided then read stdin.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 ;(write-string tst-file \"Test Line Read Line Two\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '(1 2 3) (read tst-file))
 (test::assert-equal '(x y z) (read tst-file))
 (test::assert-error (read test-file))
 (close tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '(1 2 3) (read tst-file :done))
 (test::assert-equal '(x y z) (read tst-file :done))
 (test::assert-equal :done (read tst-file :done))
@@ -668,10 +704,11 @@ empty-exp if it is provided.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"(1 2 3)(x y z)\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal '#((1 2 3)(x y z)) (read-all tst-file))
 (close tst-file)
 (test::assert-equal '(4 5 6) (read-all \"(4 5 6)\"))
@@ -692,10 +729,11 @@ Write a line to a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
 (write-line tst-file \"Test Line Write Line\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
 (test::assert-equal \"Test Line Write Line\n\" (read-line tst-file))
 (close tst-file)
 ",
@@ -712,12 +750,34 @@ Write a string to a file.
 Section: file
 
 Example:
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :create :truncate))
-(write-string tst-file \"Test Line Write String\")
+(def tmp (get-temp))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :create :truncate))
+(write-string tst-file \"Test Line Write Line\")
 (flush tst-file)
-(def tst-file (open \"/tmp/slsh-tst-open.txt\" :read))
-(test::assert-equal \"Test Line Write String\" (read-line tst-file))
+(def tst-file (open (str tmp \"/slsh-tst-open.txt\") :read))
+(test::assert-equal \"Test Line Write Line\" (read-line tst-file))
 (close tst-file)
+",
+        ),
+    );
+    data.insert(
+        interner.intern("fs-rm"),
+        Expression::make_function(
+            builtin_rm,
+            "Usage: (fs-rm \"/dir/or/file/to/remove\")
+
+Takes a file or directory as a string and removes it. Works recursively for directories.
+
+Section: file
+
+Example:
+(def fp nil)
+(let* ((a-file (get-temp-file)))
+        (test::assert-true (fs-exists? a-file))
+        (set! fp a-file)
+        (fs-rm a-file)))
+(test::assert-false (nil? fp))
+(test::assert-false (fs-exists? fp))
 ",
         ),
     );

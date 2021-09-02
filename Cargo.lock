@@ -538,6 +538,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
+name = "remove_dir_all"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -638,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.59"
+version = "0.9.60"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -647,9 +656,12 @@ dependencies = [
  "libc",
  "nix",
  "rand",
+ "remove_dir_all",
+ "same-file",
  "sl-liner",
  "unicode-segmentation",
  "unicode_reader",
+ "walkdir",
 ]
 
 [[package]]
