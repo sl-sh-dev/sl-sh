@@ -899,7 +899,41 @@ Section: shell"
     ns-export must be called before ns-pop so the appropriate symbols are
     associated namespace, the one in which the symbols were created.
 
-    Section: scripting "
+    Section: scripting
+
+    Example:
+
+(defn test-file (code file)
+    (let ((tmp (open file :read)))
+      (assert-equal
+        code
+        (read-all tmp))
+      (close tmp))
+
+(with-temp (fn (tmp-dir)
+    (let ((tmp0 (get-temp-file tmp-dir))
+          (tmp1 (get-temp-file tmp-dir))
+          (tmp2 (get-temp-file tmp-dir)))
+        (mkli tmp0 'mytest (println \"hello test\"))
+        (test-file
+            '#((ns-push 'mytest)
+                (ns-import 'shell)
+                (println \"hello test\")
+                (ns-auto-export 'mytest)
+                (ns-pop))
+            tmp0)
+        (mkli tmp1 'mytest)
+        (test-file
+            '#((ns-push 'mytest)
+                (ns-import 'shell)
+                (ns-auto-export 'mytest)
+                (ns-pop))
+            tmp1)
+        (mkli tmp2)
+        (test-file
+            '#(ns-import 'shell)
+            tmp2))))
+"
   (&rest args) (let ((filepath nil) (namespace nil) (script-body nil) (new-file))
                  (when (= 0 (length args)) (err "Must have at least 1 argument, the path to the script to be created."))
                  (when (< 3 (length args)) (err (str "Too many arguments, see doc ")))
