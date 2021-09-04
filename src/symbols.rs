@@ -521,6 +521,7 @@ Example:
     pub fn clear(&mut self) {
         self.map.clear();
         self.data.clear();
+        self.doc_strings.clear();
     }
 
     pub fn remove(&mut self, key: &str) -> Option<Expression> {

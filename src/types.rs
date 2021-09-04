@@ -246,8 +246,8 @@ pub enum ExpEnum {
     Float(f64),
     Int(i64),
     Symbol(&'static str, SymLoc),
-    // NOTE: String has an invarent to maintain, if Cow ever changes then the iterator must be set
-    // to None if it is Some.
+    // NOTE: String has an invariant to maintain, if Cow ever changes then the
+    // iterator must be set to None if it is Some.
     String(Cow<'static, str>, Option<CharIter>),
     Char(Cow<'static, str>),
     CodePoint(char),

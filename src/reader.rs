@@ -342,7 +342,7 @@ fn read_string(
                     "\"" => symbol.push('"'),
                     "x" => {
                         let res = escape_to_char(&mut chars, &mut environment.reader_state);
-                        // ? seems to confuse the borrow the checker here.
+                        // ? seems to confuse the borrow checker here.
                         let res = if let Err(e) = res {
                             return Err((e, chars));
                         } else {
@@ -355,7 +355,7 @@ fn read_string(
                     }
                     "u" => {
                         let res = read_utf_scalar(&mut chars, &mut environment.reader_state);
-                        // ? seems to confuse the borrow the checker here.
+                        // ? seems to confuse the borrow checker here.
                         let res = if let Err(e) = res {
                             return Err((e, chars));
                         } else {

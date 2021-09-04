@@ -119,7 +119,7 @@ pub struct Environment {
     // key is pid, val is (process expression, output fd)
     pub procs: ProcessMap,
     pub save_exit_status: bool,
-    // If this is Some then need to unwind and exit with then provided code (exit was called).
+    // If this is Some then need to unwind and exit with the provided code (exit was called).
     pub exit_code: Option<i32>,
     // This is the environment's root (global namespace), it will also be part of
     // higher level namespaces.
