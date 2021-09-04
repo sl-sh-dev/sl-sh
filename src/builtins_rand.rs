@@ -9,6 +9,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
+use std::borrow::Cow;
 
 fn builtin_random(
     environment: &mut Environment,
@@ -43,7 +44,7 @@ fn builtin_get_random_str(
     let next_arg_d = next_arg.get();
     if let ExpEnum::Int(i) = next_arg_d.data {
         match i {
-            positive if positive > 0 => get_random_str(environment, args, positive),
+            positive if positive > 0 => get_random_str(environment, args, positive as u64),
             _ => Err(LispError::new("Expected positive number")),
         }
     } else {
@@ -51,10 +52,19 @@ fn builtin_get_random_str(
     }
 }
 
+pub fn rand_alphanumeric_str(len: u64) -> Cow<'static, str> {
+    let mut rng = rand::thread_rng();
+    iter::repeat(())
+        .map(|()| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(len as usize)
+        .collect()
+}
+
 fn get_random_str(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
-    len: i64,
+    len: u64,
 ) -> Result<Expression, LispError> {
     let charset_arg = param_eval(environment, args, "random-str")?;
     let charset_arg_d = charset_arg.get();
@@ -71,11 +81,7 @@ fn get_random_str(
                 None,
             ))),
             ":alnum" => Ok(Expression::alloc_data(ExpEnum::String(
-                iter::repeat(())
-                    .map(|()| rng.sample(Alphanumeric))
-                    .map(char::from)
-                    .take(len as usize)
-                    .collect(),
+                rand_alphanumeric_str(len),
                 None,
             ))),
             ":hex" => Ok(Expression::alloc_data(ExpEnum::String(

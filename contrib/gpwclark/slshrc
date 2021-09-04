@@ -119,9 +119,10 @@
 	"pass in a string. list all files in vim whose filenames contain that string.
 	Section: user-shell"
 	(&rest args)
-	(if (< (length args) 2)
-		(| $(find $PWD -iname $((str (nth 0 args)))))
-		(err "Only accepts 0 or 1 arguments")))
+	(let ((find-str
+			(apply str #\*
+				(collect (iterator::interleave args (repeat #\* (length args)))))))
+		$(find $PWD -iname $find-str)))
 
 ;;results feed into vim
 (defn vimifind
@@ -562,7 +563,8 @@ Section: user-shell"
             (if (= :ok (car result))
                 (cdr result)
                 (cdr result)))
-             (get-error (load custom-lisp-config)))
+             (get-error (load custom-lisp-config)
+						(ns-import (sym (str-trim (str $(cat /etc/hostname)))))))
         (println (str shell::*fg-red* "Failed loading sl-sh config at " custom-lisp-config shell::*fg-default*)))
 
 (slshrc-timer :pr-next "machine-specific")
@@ -596,7 +598,8 @@ Section: user-shell"
 (def sidebar-page-name "mydoc_sidebar.yml")
 (def api-page (str "pages/mydoc/" api-page-name))
 (def sidebar-page (str "_data/sidebars/" sidebar-page-name))
-(shell::pushd "/home/price/development/sl-sh-dev/sl-sh/docs")
+(when (fs-exists? $SLSH_DOC_PATH) (do
+(shell::pushd $SLSH_DOC_PATH)
 (def docs-error-ret
     (get-error (when (or
         (nil? (fs-exists? api-page))
@@ -621,7 +624,8 @@ Section: user-shell"
         (mksidebar::write-sidebar sidebar-page proper-user-sym-list-no-std-lib-defs "User Standard Lib" "User Forms" "/mydoc_api.html"))
 
     (println "Built docs!")))))
-(shell::popd)
+(shell::popd)))
+
 (if (not (= (car docs-error-ret) :ok))
     (println "Failed to build docs: " (cdr docs-error-ret)))
 (undef api-page-name)
