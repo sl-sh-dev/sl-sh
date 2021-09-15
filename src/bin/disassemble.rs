@@ -13,6 +13,7 @@ fn main() -> Result<(), VMError> {
     println!("Value size: {}", std::mem::size_of::<Value>());
     println!("usize: {}", std::mem::size_of::<usize>());
     println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
+    println!("Chunk size: {}", std::mem::size_of::<slvm::chunk::Chunk>());
     println!("Vec<Value> size: {}", std::mem::size_of::<Vec<Value>>());
     println!(
         "Cow size: {}",
@@ -33,14 +34,12 @@ fn main() -> Result<(), VMError> {
     chunk.push_simple(CONS, 12)?;
     chunk.push_simple(CAR, 12)?;
     chunk.push_u16(LIST, 10, 13)?;*/
-    chunk.encode2(STORE, 10, 15, 1)?;
-    chunk.encode2(STORE_K, 10, 15, 1)?;
-    chunk.encode2(STORE_K, 0x8fff, 0x9fff, 1)?;
+    chunk.encode2(MOV, 10, 15, 1)?;
+    chunk.encode2(CONST, 10, 15, 1)?;
+    chunk.encode2(CONST, 0x8fff, 0x9fff, 1)?;
     chunk.encode2(REF, 1, 2, 2)?;
-    chunk.encode2(REF_K, 1, 2, 2)?;
     chunk.encode3(CONS, 1, 2, 3, 2)?;
-    chunk.encode2(BIND, 1, 2, 4)?;
-    chunk.encode2(BIND_K, 1, 2, 4)?;
+    chunk.encode2(DEF, 1, 2, 4)?;
     chunk.disassemble_chunk()?;
     Ok(())
 }

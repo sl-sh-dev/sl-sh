@@ -144,10 +144,8 @@ impl Chunk {
     fn encode_operand(&mut self, op: u16, wide: bool) {
         if wide {
             self.code.push(((op & 0xFF00) >> 8) as u8);
-            self.code.push((op & 0x00FF) as u8);
-        } else {
-            self.code.push((op & 0x00FF) as u8);
         }
+        self.code.push((op & 0x00FF) as u8);
     }
 
     fn encode_line_number(&mut self, offsets: u8, line_number: u32) -> VMResult<()> {
@@ -317,16 +315,16 @@ impl Chunk {
                 println!("RET");
                 Ok(())
             }
-            STORE => {
-                print!("STORE  \t");
+            MOV => {
+                print!("MOV    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(())
             }
-            STORE_K => {
-                print!("STORE_K\t");
+            CONST => {
+                print!("CONST  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, false, wide);
@@ -343,18 +341,8 @@ impl Chunk {
                 println!();
                 Ok(())
             }
-            REF_K => {
-                print!("REF_K  \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                print!("G[");
-                disassemble_operand!(code, false, wide);
-                print!("]");
-                println!();
-                Ok(())
-            }
-            BIND => {
-                print!("BIND   \t");
+            DEF => {
+                print!("DEF    \t");
                 print!("G[");
                 disassemble_operand!(code, true, wide);
                 print!("]");
@@ -363,10 +351,10 @@ impl Chunk {
                 println!();
                 Ok(())
             }
-            BIND_K => {
-                print!("BIND_K \t");
+            DEFV => {
+                print!("DEFV   \t");
                 print!("G[");
-                disassemble_operand!(code, false, wide);
+                disassemble_operand!(code, true, wide);
                 print!("]");
                 print!("\t");
                 disassemble_operand!(code, true, wide);
@@ -393,7 +381,7 @@ impl Chunk {
                 print!("CONS   \t");
                 //R(A) = conscell(R(B), R(C))
                 print!("R(");
-                disassemble_operand!(code, false, wide);
+                disassemble_operand!(code, true, wide);
                 print!(")");
                 print!("\tconscell(R(");
                 disassemble_operand!(code, true, wide);
@@ -502,45 +490,45 @@ mod tests {
     #[test]
     fn test_encode2() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode2(STORE, 0, 0, 1).unwrap();
-        chunk.encode2(STORE, 128, 128, 1).unwrap();
-        chunk.encode2(STORE, 255, 255, 1).unwrap();
-        chunk.encode2(STORE, 256, 256, 1).unwrap();
-        chunk.encode2(STORE, 2, 256, 1).unwrap();
-        chunk.encode2(STORE, 256, 1, 1).unwrap();
-        chunk.encode2(STORE, 257, 257, 1).unwrap();
-        chunk.encode2(STORE, u16::MAX, u16::MAX, 1).unwrap();
+        chunk.encode2(MOV, 0, 0, 1).unwrap();
+        chunk.encode2(MOV, 128, 128, 1).unwrap();
+        chunk.encode2(MOV, 255, 255, 1).unwrap();
+        chunk.encode2(MOV, 256, 256, 1).unwrap();
+        chunk.encode2(MOV, 2, 256, 1).unwrap();
+        chunk.encode2(MOV, 256, 1, 1).unwrap();
+        chunk.encode2(MOV, 257, 257, 1).unwrap();
+        chunk.encode2(MOV, u16::MAX, u16::MAX, 1).unwrap();
         let mut code = chunk.code.iter();
 
-        assert!(*code.next().unwrap() == STORE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(*code.next().unwrap() == 0);
         assert!(*code.next().unwrap() == 0);
 
-        assert!(*code.next().unwrap() == STORE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(*code.next().unwrap() == 128);
         assert!(*code.next().unwrap() == 128);
 
-        assert!(*code.next().unwrap() == STORE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(*code.next().unwrap() == 255);
         assert!(*code.next().unwrap() == 255);
 
-        assert!(*code.next().unwrap() == STORE | 0x80);
+        assert!(*code.next().unwrap() == MOV | 0x80);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == STORE | 0x80);
+        assert!(*code.next().unwrap() == MOV | 0x80);
         assert!(decode_u16!(code).unwrap() == 2);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == STORE | 0x80);
+        assert!(*code.next().unwrap() == MOV | 0x80);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 1);
 
-        assert!(*code.next().unwrap() == STORE | 0x80);
+        assert!(*code.next().unwrap() == MOV | 0x80);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
 
-        assert!(*code.next().unwrap() == STORE | 0x80);
+        assert!(*code.next().unwrap() == MOV | 0x80);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
     }
@@ -604,13 +592,13 @@ mod tests {
     #[test]
     fn test_line_numbers() {
         let mut chunk = Chunk::new("no_file", 1);
-        chunk.encode2(STORE, 1, 2, 1).unwrap();
-        chunk.encode2(STORE, 1, 2, 2).unwrap();
-        chunk.encode2(STORE, 1, 2, 3).unwrap();
-        chunk.encode2(STORE, 1, 2, 4).unwrap();
-        chunk.encode2(STORE, 1, 2, 4).unwrap();
-        chunk.encode2(STORE, 1, 2, 30).unwrap();
-        chunk.encode2(STORE, 1, 2, 200).unwrap();
+        chunk.encode2(MOV, 1, 2, 1).unwrap();
+        chunk.encode2(MOV, 1, 2, 2).unwrap();
+        chunk.encode2(MOV, 1, 2, 3).unwrap();
+        chunk.encode2(MOV, 1, 2, 4).unwrap();
+        chunk.encode2(MOV, 1, 2, 4).unwrap();
+        chunk.encode2(MOV, 1, 2, 30).unwrap();
+        chunk.encode2(MOV, 1, 2, 200).unwrap();
         assert!(chunk.offset_to_line(0).unwrap() == 1);
         assert!(chunk.offset_to_line(1).unwrap() == 1);
         assert!(chunk.offset_to_line(2).unwrap() == 1);

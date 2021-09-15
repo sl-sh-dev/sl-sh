@@ -5,15 +5,14 @@ pub const HALT: OpCode = 0x01;
 pub const RET: OpCode = 0x02;
 // Load a constant onto the stack
 const STACK_BASE: OpCode = 0x03;
-pub const STORE: OpCode = STACK_BASE + 1; // STORE A B - R(A) = R(B)
-pub const STORE_K: OpCode = STACK_BASE + 2; // STORE_K A B - R(A) = K(B)
+pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B)
+pub const CONST: OpCode = STACK_BASE + 2; // CONST A B - R(A) = K(B)
 pub const REF: OpCode = STACK_BASE + 3; // REF A B - R(A) = G[R(B)]
-pub const REF_K: OpCode = STACK_BASE + 4; // REF_K A B - R(A) = G[K(B)]
-pub const BIND: OpCode = STACK_BASE + 5; // BIND A B - G[R(A)] = R(B)
-pub const BIND_K: OpCode = STACK_BASE + 6; // BIND_K A B - G[K(A)] = R(B)
+pub const DEF: OpCode = STACK_BASE + 4; // DEF A B - G[R(A)] = R(B)
+pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
 
 // Basic math
-const MATH_BASE: OpCode = STACK_BASE + 7;
+const MATH_BASE: OpCode = STACK_BASE + 6;
 pub const ADD: OpCode = MATH_BASE;
 pub const ADD_RK: OpCode = MATH_BASE + 1;
 pub const ADD_KR: OpCode = MATH_BASE + 2;
