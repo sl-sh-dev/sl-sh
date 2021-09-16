@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::chunk::*;
 use crate::error::*;
 use crate::heap::*;
@@ -124,10 +126,17 @@ macro_rules! set_register {
     }};
 }
 
+pub struct CallFrame {
+    chunk: Rc<Chunk>,
+    ip: usize,
+    stack_top: usize,
+}
+
 pub struct Vm {
     interner: Interner,
     heap: Heap,
     stack: Vec<Value>,
+    call_stack: Vec<CallFrame>,
     globals: Globals,
 }
 
@@ -146,6 +155,7 @@ impl Vm {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             stack,
+            call_stack: Vec::new(),
             globals,
         }
     }
@@ -273,9 +283,10 @@ impl Vm {
         unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
     }
 
-    pub fn execute(&mut self, chunk: &Chunk) -> VMResult<()> {
-        let registers = self.make_registers(0);
-        //let chunk = &self.chunk;
+    pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
+        let mut stack_top = 0;
+        let mut registers = self.make_registers(stack_top);
+        let mut chunk = chunk;
         let mut ip = 0;
         loop {
             let opcode = chunk.code[ip];
@@ -283,7 +294,14 @@ impl Vm {
             let wide = (opcode & 0x80) != 0;
             match opcode & 0x7F {
                 RET => {
-                    return Ok(());
+                    if let Some(frame) = self.call_stack.pop() {
+                        stack_top = frame.stack_top;
+                        registers = self.make_registers(stack_top);
+                        chunk = frame.chunk.clone();
+                        ip = frame.ip;
+                    } else {
+                        return Ok(());
+                    }
                 }
                 MOV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
@@ -337,6 +355,33 @@ impl Vm {
                         }
                     } else {
                         return Err(VMError::new_vm("DEFV: Not a symbol."));
+                    }
+                }
+                CALL => {
+                    let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
+                    let lambda = registers[lambda as usize];
+                    match lambda {
+                        Value::Builtin(f) => {
+                            let last_reg = (first_reg + num_args + 1) as usize;
+                            let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                            set_register!(registers, first_reg, res);
+                        }
+                        Value::Reference(h) => match self.heap.get(h)? {
+                            Object::Lambda(l) => {
+                                let frame = CallFrame {
+                                    chunk: chunk.clone(),
+                                    ip,
+                                    stack_top,
+                                };
+                                self.call_stack.push(frame);
+                                stack_top = first_reg as usize;
+                                chunk = l.clone();
+                                ip = 0;
+                                registers = self.make_registers(stack_top);
+                            }
+                            _ => return Err(VMError::new_vm("CALL: Not a callable.")),
+                        },
+                        _ => return Err(VMError::new_vm("CALL: Not a callable.")),
                     }
                 }
                 ADD => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide, true, true),
@@ -441,64 +486,82 @@ mod tests {
         let mut vm = Vm::new();
         let const_handle = vm.alloc(Object::Value(Value::Nil));
         chunk.add_constant(Value::Reference(const_handle));
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 2);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CAR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 1);
 
         // car with nil
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
+
         // car with nil on heap
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 5, line).unwrap();
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
         // cdr with nil
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
+
         // cdr with nil on heap
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 5, line).unwrap();
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 2, line).unwrap();
         chunk.encode2(XAR, 1, 2, line).unwrap();
         chunk.encode2(CAR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 3);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 3, line).unwrap();
         chunk.encode2(XDR, 1, 2, line).unwrap();
         chunk.encode2(CDR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 4);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CONST, 3, 2, line).unwrap();
@@ -506,11 +569,13 @@ mod tests {
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode2(CDR, 3, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 3);
         assert!(vm.stack[3].is_nil());
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CONST, 3, 3, line).unwrap();
@@ -518,19 +583,22 @@ mod tests {
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode2(CAR, 3, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 4);
         assert!(vm.stack[3].is_nil());
 
         // Test a list with elements.
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 0, 0, line).unwrap();
         chunk.encode2(CONST, 1, 1, line).unwrap();
         chunk.encode2(CONST, 2, 2, line).unwrap();
         chunk.encode3(LIST, 0, 0, 3, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         if let Value::Reference(h) = result {
             if let Object::Pair(car, cdr) = &*vm.heap.get(*h)? {
@@ -561,16 +629,21 @@ mod tests {
             assert!(false);
         }
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode3(LIST, 0, 0, 0, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         assert!(result.is_nil());
+
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode3(LIST, 0, 1, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         assert!(result.is_nil());
         Ok(())
@@ -589,25 +662,30 @@ mod tests {
         chunk.encode0(RET, line)?;
 
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 255);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 1, 256, line).unwrap();
         chunk.encode3(ADD, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
 
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 255 + 256);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let result = vm.stack[1].get_int()?;
         assert!(result == 256);
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let result = vm.stack[1].get_int()?;
         assert!(result == 255 + 256);
 
@@ -628,25 +706,31 @@ mod tests {
         chunk.encode2(CONST, 0, const0, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
-        assert!(vm.execute(&chunk).is_err());
+        let chunk = Rc::new(chunk);
+        assert!(vm.execute(chunk.clone()).is_err());
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
         chunk.encode2(CONST, 0, const0, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[1].get_int()? == 11);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(CONST, 1, const2, line)?;
         chunk.encode2(DEF, 0, 1, line)?;
         chunk.encode2(REF, 2, 0, line)?;
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[2].get_int()? == 42);
 
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
         let slot = vm.globals.interned_slot(sym2).unwrap() as u32;
@@ -660,10 +744,12 @@ mod tests {
         chunk.encode2(DEFV, 0, 3, line)?;
         chunk.encode2(REF, 2, 0, line)?;
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[2].get_int()? == 43);
 
         let mut vm = Vm::new();
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
         let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
@@ -676,10 +762,12 @@ mod tests {
         chunk.encode2(DEFV, 1, 3, line)?;
         chunk.encode2(REF, 0, 1, line)?;
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 44);
 
         let mut vm = Vm::new();
+        let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
         let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
@@ -692,8 +780,120 @@ mod tests {
         chunk.encode2(DEF, 1, 3, line)?;
         chunk.encode2(REF, 0, 1, line)?;
         chunk.encode0(RET, line)?;
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 55);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_lambda() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        let const1 = chunk.add_constant(Value::Int(10)) as u16;
+        chunk.encode2(CONST, 2, const1, line).unwrap();
+        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        vm.stack[0] = add;
+        vm.stack[1] = add_ten;
+        vm.stack[3] = Value::Int(5);
+        vm.stack[4] = Value::Int(2);
+        vm.stack[6] = Value::Int(2);
+        chunk.encode3(CALL, 0, 2, 2, line).unwrap();
+        chunk.encode3(CALL, 1, 1, 5, line).unwrap();
+        chunk.encode0(RET, line)?;
+
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        let result = vm.stack[2].get_int()?;
+        assert!(result == 7);
+        let result = vm.stack[5].get_int()?;
+        assert!(result == 12);
+        let result = vm.stack[7].get_int()?;
+        assert!(result == 10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_builtin() -> VMResult<()> {
+        fn add(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+            if registers.len() != 2 {
+                return Err(VMError::new_vm("test add: wrong number of args."));
+            }
+            Ok(Value::Int(
+                registers[0].get_int()? + registers[1].get_int()?,
+            ))
+        }
+        fn add_10(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+            if registers.len() != 1 {
+                return Err(VMError::new_vm("test add_10: wrong number of args."));
+            }
+            Ok(Value::Int(registers[0].get_int()? + 10))
+        }
+        fn make_str(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+            if registers.len() != 0 {
+                return Err(VMError::new_vm("test make_str: wrong number of args."));
+            }
+            let s = Value::Reference(vm.alloc(Object::String("builtin hello".into())));
+            Ok(s)
+        }
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        let const1 = chunk.add_constant(Value::Builtin(add)) as u16;
+        chunk.encode2(CONST, 10, const1, line).unwrap();
+        chunk.encode3(CALL, 10, 2, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        let const1 = chunk.add_constant(Value::Builtin(add_10)) as u16;
+        chunk.encode2(CONST, 3, const1, line).unwrap();
+        chunk.encode3(CALL, 3, 1, 0, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        vm.stack[0] = add;
+        vm.stack[1] = add_ten;
+        vm.stack[3] = Value::Int(6);
+        vm.stack[4] = Value::Int(3);
+        vm.stack[6] = Value::Int(12);
+        let const1 = chunk.add_constant(Value::Builtin(make_str)) as u16;
+        chunk.encode3(CALL, 0, 2, 2, line).unwrap();
+        chunk.encode3(CALL, 1, 1, 5, line).unwrap();
+        chunk.encode2(CONST, 8, const1, line).unwrap();
+        chunk.encode3(CALL, 8, 0, 9, line).unwrap();
+        chunk.encode0(RET, line)?;
+
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        let result = vm.stack[2].get_int()?;
+        assert!(result == 9);
+        let result = vm.stack[5].get_int()?;
+        assert!(result == 22);
+        match vm.stack[9] {
+            Value::Reference(h) => match vm.heap.get(h)? {
+                Object::String(s) => assert!(s == "builtin hello"),
+                _ => panic!("bad make_str call."),
+            },
+            _ => panic!("bad make_str call"),
+        }
 
         Ok(())
     }
@@ -710,7 +910,8 @@ mod tests {
         chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -722,7 +923,8 @@ mod tests {
         chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
@@ -739,7 +941,8 @@ mod tests {
         chunk.encode3(ADD_KR, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
@@ -760,7 +963,8 @@ mod tests {
         chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == -2);
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -772,7 +976,8 @@ mod tests {
         chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
@@ -789,7 +994,8 @@ mod tests {
         chunk.encode3(SUB_KR, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
@@ -810,7 +1016,8 @@ mod tests {
         chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -822,7 +1029,8 @@ mod tests {
         chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
@@ -839,7 +1047,8 @@ mod tests {
         chunk.encode3(MUL_KR, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
@@ -860,7 +1069,8 @@ mod tests {
         chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 3);
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -872,7 +1082,8 @@ mod tests {
         chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
         assert!(item.is_number());
@@ -889,7 +1100,8 @@ mod tests {
         chunk.encode3(DIV_KR, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        vm.execute(&chunk)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
         assert!(item.is_int());
@@ -904,7 +1116,8 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let res = vm.execute(&chunk);
+        let chunk = Rc::new(chunk);
+        let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
@@ -916,7 +1129,8 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let res = vm.execute(&chunk);
+        let chunk = Rc::new(chunk);
+        let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
@@ -928,7 +1142,8 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let res = vm.execute(&chunk);
+        let chunk = Rc::new(chunk);
+        let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
         Ok(())

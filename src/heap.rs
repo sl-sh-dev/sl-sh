@@ -1,5 +1,7 @@
 use std::borrow::Cow;
+use std::rc::Rc;
 
+use crate::chunk::*;
 use crate::error::*;
 use crate::value::*;
 
@@ -13,6 +15,7 @@ const TYPE_STRING: u8 = 0x10;
 const TYPE_VECTOR: u8 = 0x20;
 const TYPE_BYTES: u8 = 0x30;
 const TYPE_PAIR: u8 = 0x40;
+const TYPE_LAMBDA: u8 = 0x50;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -52,6 +55,7 @@ pub enum Object {
     Vector(Vec<Value>),
     Bytes(Vec<u8>),
     Pair(Value, Value),
+    Lambda(Rc<Chunk>),
 }
 
 impl Object {
@@ -68,6 +72,7 @@ pub struct Handle {
     idx: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct HeapStats {
     live_objects: usize,
     sticky_objects: usize,
@@ -150,6 +155,7 @@ impl Heap {
             Object::Vector(_) => TYPE_VECTOR | FLAG_TRACE,
             Object::Bytes(_) => TYPE_BYTES,
             Object::Pair(_, _) => TYPE_PAIR | FLAG_TRACE,
+            Object::Lambda(_) => TYPE_LAMBDA,
         }
     }
 
@@ -345,6 +351,7 @@ impl Heap {
             Object::Pair(Value::Reference(car), _) => self.mark_trace(*car, current)?,
             Object::Pair(_, Value::Reference(cdr)) => self.mark_trace(*cdr, current)?,
             Object::Pair(_, _) => {}
+            Object::Lambda(_) => {}
         }
         Ok(())
     }

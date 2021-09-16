@@ -6,7 +6,7 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::vm::Vm;
 
-type CallFunc = fn(registers: &mut [Value]) -> VMResult<Value>;
+type CallFunc = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
 
 #[derive(Copy, Clone)]
 pub enum Value {

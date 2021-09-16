@@ -106,6 +106,25 @@ macro_rules! disassemble_operand {
     }};
 }
 
+macro_rules! disassemble_immediate {
+    ($code:expr, $register:expr, $wide:expr) => {{
+        if $register {
+            if $wide {
+                print!("{:#06x}", decode_u16_enum!($code)?);
+            } else {
+                print!("{:#04x}", decode_u8_enum!($code)?);
+            }
+        } else {
+            if $wide {
+                print!("{:#06x}", decode_u16_enum!($code)?);
+            } else {
+                print!("{:#04x}", decode_u8_enum!($code)?);
+            }
+        }
+    }};
+}
+
+#[derive(Clone, Debug)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub file_name: &'static str,
@@ -356,6 +375,16 @@ impl Chunk {
                 print!("G[");
                 disassemble_operand!(code, true, wide);
                 print!("]");
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            CALL => {
+                print!("CALL   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();

@@ -11,8 +11,12 @@ pub const REF: OpCode = STACK_BASE + 3; // REF A B - R(A) = G[R(B)]
 pub const DEF: OpCode = STACK_BASE + 4; // DEF A B - G[R(A)] = R(B)
 pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
 
+// Flow control
+const FLOW_BASE: OpCode = STACK_BASE + 6;
+pub const CALL: OpCode = FLOW_BASE; // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
+
 // Basic math
-const MATH_BASE: OpCode = STACK_BASE + 6;
+const MATH_BASE: OpCode = FLOW_BASE + 1;
 pub const ADD: OpCode = MATH_BASE;
 pub const ADD_RK: OpCode = MATH_BASE + 1;
 pub const ADD_KR: OpCode = MATH_BASE + 2;
