@@ -64,18 +64,10 @@ macro_rules! decode3 {
 }
 
 macro_rules! binary_math {
-    ($chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
+    ($chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = if $op2_reg {
-            $registers[op2 as usize]
-        } else {
-            $chunk.constants[op2 as usize]
-        };
-        let op3 = if $op3_reg {
-            $registers[op3 as usize]
-        } else {
-            $chunk.constants[op3 as usize]
-        };
+        let op2 = $registers[op2 as usize];
+        let op3 = $registers[op3 as usize];
         let val = if op2.is_int() && op3.is_int() {
             Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
         } else {
@@ -86,18 +78,10 @@ macro_rules! binary_math {
 }
 
 macro_rules! div_math {
-    ($chunk:expr, $ip:expr, $registers:expr, $wide:expr, $op2_reg:expr, $op3_reg:expr) => {{
+    ($chunk:expr, $ip:expr, $registers:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = if $op2_reg {
-            $registers[op2 as usize]
-        } else {
-            $chunk.constants[op2 as usize]
-        };
-        let op3 = if $op3_reg {
-            $registers[op3 as usize]
-        } else {
-            $chunk.constants[op3 as usize]
-        };
+        let op2 = $registers[op2 as usize];
+        let op3 = $registers[op3 as usize];
         let val = if op2.is_int() && op3.is_int() {
             let op3 = op3.get_int()?;
             if op3 == 0 {
@@ -112,7 +96,6 @@ macro_rules! div_math {
             Value::Float(op2.get_float()? / op3)
         };
         set_register!($registers, dest, val);
-        // Ok(())
     }};
 }
 
@@ -384,18 +367,10 @@ impl Vm {
                         _ => return Err(VMError::new_vm("CALL: Not a callable.")),
                     }
                 }
-                ADD => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide, true, true),
-                ADD_RK => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide, true, false),
-                ADD_KR => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide, false, true),
-                SUB => binary_math!(chunk, &mut ip, registers, |a, b| a - b, wide, true, true),
-                SUB_RK => binary_math!(chunk, &mut ip, registers, |a, b| a - b, wide, true, false),
-                SUB_KR => binary_math!(chunk, &mut ip, registers, |a, b| a - b, wide, false, true),
-                MUL => binary_math!(chunk, &mut ip, registers, |a, b| a * b, wide, true, true),
-                MUL_RK => binary_math!(chunk, &mut ip, registers, |a, b| a * b, wide, true, false),
-                MUL_KR => binary_math!(chunk, &mut ip, registers, |a, b| a * b, wide, false, true),
-                DIV => div_math!(chunk, &mut ip, registers, wide, true, true),
-                DIV_RK => div_math!(chunk, &mut ip, registers, wide, true, false),
-                DIV_KR => div_math!(chunk, &mut ip, registers, wide, false, true),
+                ADD => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide),
+                SUB => binary_math!(chunk, &mut ip, registers, |a, b| a - b, wide),
+                MUL => binary_math!(chunk, &mut ip, registers, |a, b| a * b, wide),
+                DIV => div_math!(chunk, &mut ip, registers, wide),
                 CONS => {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut ip, wide);
                     let car = registers[op2 as usize];
@@ -906,8 +881,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(ADD_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(ADD, 0, 0, 1, line).unwrap();
+        chunk.encode3(ADD, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -919,8 +896,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(ADD_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(ADD_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(ADD, 0, 0, 1, line).unwrap();
+        chunk.encode3(ADD, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -936,9 +915,11 @@ mod tests {
         }
         chunk.encode2(CONST, 1, 1, line)?;
         chunk.encode2(CONST, 2, 2, line)?;
+        chunk.encode2(CONST, 5, 5, line)?;
+        chunk.encode2(CONST, 500, 500, line)?;
         chunk.encode3(ADD, 0, 1, 2, line).unwrap();
-        chunk.encode3(ADD_KR, 0, 5, 0, line).unwrap();
-        chunk.encode3(ADD_KR, 1, 500, 0, line).unwrap();
+        chunk.encode3(ADD, 0, 5, 0, line).unwrap();
+        chunk.encode3(ADD, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -959,8 +940,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(SUB_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(SUB, 0, 0, 1, line).unwrap();
+        chunk.encode3(SUB, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -972,8 +955,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(SUB_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(SUB_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(SUB, 0, 0, 1, line).unwrap();
+        chunk.encode3(SUB, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -989,9 +974,11 @@ mod tests {
         }
         chunk.encode2(CONST, 1, 1, line)?;
         chunk.encode2(CONST, 2, 2, line)?;
+        chunk.encode2(CONST, 5, 5, line)?;
+        chunk.encode2(CONST, 500, 500, line)?;
         chunk.encode3(SUB, 0, 1, 2, line).unwrap();
-        chunk.encode3(SUB_KR, 0, 5, 0, line).unwrap();
-        chunk.encode3(SUB_KR, 1, 500, 0, line).unwrap();
+        chunk.encode3(SUB, 0, 5, 0, line).unwrap();
+        chunk.encode3(SUB, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1012,8 +999,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(MUL_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(MUL, 0, 0, 1, line).unwrap();
+        chunk.encode3(MUL, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1025,8 +1014,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(MUL_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(MUL_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(MUL, 0, 0, 1, line).unwrap();
+        chunk.encode3(MUL, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1042,9 +1033,11 @@ mod tests {
         }
         chunk.encode2(CONST, 1, 1, line)?;
         chunk.encode2(CONST, 2, 2, line)?;
+        chunk.encode2(CONST, 5, 5, line)?;
+        chunk.encode2(CONST, 500, 500, line)?;
         chunk.encode3(MUL, 0, 1, 2, line).unwrap();
-        chunk.encode3(MUL_KR, 0, 5, 0, line).unwrap();
-        chunk.encode3(MUL_KR, 1, 500, 0, line).unwrap();
+        chunk.encode3(MUL, 0, 5, 0, line).unwrap();
+        chunk.encode3(MUL, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1065,8 +1058,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(3)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(DIV_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(DIV, 0, 0, 1, line).unwrap();
+        chunk.encode3(DIV, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1078,8 +1073,10 @@ mod tests {
         let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
-        chunk.encode3(DIV_RK, 0, 0, const1, line).unwrap();
-        chunk.encode3(DIV_RK, 0, 0, const2, line).unwrap();
+        chunk.encode2(CONST, 1, const1, line)?;
+        chunk.encode2(CONST, 2, const2, line)?;
+        chunk.encode3(DIV, 0, 0, 1, line).unwrap();
+        chunk.encode3(DIV, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);
@@ -1095,9 +1092,11 @@ mod tests {
         }
         chunk.encode2(CONST, 1, 1, line)?;
         chunk.encode2(CONST, 2, 2, line)?;
+        chunk.encode2(CONST, 10, 10, line)?;
+        chunk.encode2(CONST, 500, 500, line)?;
         chunk.encode3(DIV, 0, 2, 1, line).unwrap();
-        chunk.encode3(DIV_KR, 0, 10, 0, line).unwrap();
-        chunk.encode3(DIV_KR, 1, 500, 0, line).unwrap();
+        chunk.encode3(DIV, 0, 10, 0, line).unwrap();
+        chunk.encode3(DIV, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         let chunk = Rc::new(chunk);

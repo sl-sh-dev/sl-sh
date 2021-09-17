@@ -18,20 +18,12 @@ pub const CALL: OpCode = FLOW_BASE; // CALL A B C - Call fn R(A) with B args wit
 // Basic math
 const MATH_BASE: OpCode = FLOW_BASE + 1;
 pub const ADD: OpCode = MATH_BASE;
-pub const ADD_RK: OpCode = MATH_BASE + 1;
-pub const ADD_KR: OpCode = MATH_BASE + 2;
-pub const SUB: OpCode = MATH_BASE + 3;
-pub const SUB_RK: OpCode = MATH_BASE + 4;
-pub const SUB_KR: OpCode = MATH_BASE + 5;
-pub const MUL: OpCode = MATH_BASE + 6;
-pub const MUL_RK: OpCode = MATH_BASE + 7;
-pub const MUL_KR: OpCode = MATH_BASE + 8;
-pub const DIV: OpCode = MATH_BASE + 9;
-pub const DIV_RK: OpCode = MATH_BASE + 10;
-pub const DIV_KR: OpCode = MATH_BASE + 11;
+pub const SUB: OpCode = MATH_BASE + 1;
+pub const MUL: OpCode = MATH_BASE + 2;
+pub const DIV: OpCode = MATH_BASE + 3;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 12;
+const CONS_BASE: OpCode = MATH_BASE + 4;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))
