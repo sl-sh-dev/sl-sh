@@ -13,10 +13,27 @@ pub const DEFV: OpCode = STACK_BASE + 5; // DEFV A B - G[R(A)] = R(B) if G[R(A)]
 
 // Flow control
 const FLOW_BASE: OpCode = STACK_BASE + 6;
-pub const CALL: OpCode = FLOW_BASE; // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
+// CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
+pub const CALL: OpCode = FLOW_BASE;
+// TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
+pub const TCALL: OpCode = FLOW_BASE + 1;
+// JMP A - Jump to IP A
+pub const JMP: OpCode = FLOW_BASE + 2;
+// JMPF A - Jump to current IP + A
+pub const JMPF: OpCode = FLOW_BASE + 3;
+// JMPB A - Jump to current IP - A
+pub const JMPB: OpCode = FLOW_BASE + 4;
+// JMPFT A B - Jump to current IP + B if R(A) is truthy (not nil or false)
+pub const JMPFT: OpCode = FLOW_BASE + 5;
+// JMPBT A B - Jump to current IP - B if R(A) is truthy (not nil or false)
+pub const JMPBT: OpCode = FLOW_BASE + 6;
+// JMPFF A B - Jump to current IP + B if R(A) is falsy (nil or false)
+pub const JMPFF: OpCode = FLOW_BASE + 7;
+// JMPBF A B - Jump to current IP - B if R(A) is falsy (nil or false)
+pub const JMPBF: OpCode = FLOW_BASE + 8;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 1;
+const MATH_BASE: OpCode = FLOW_BASE + 9;
 pub const ADD: OpCode = MATH_BASE;
 pub const SUB: OpCode = MATH_BASE + 1;
 pub const MUL: OpCode = MATH_BASE + 2;

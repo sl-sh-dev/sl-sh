@@ -390,20 +390,102 @@ impl Chunk {
                 println!();
                 Ok(())
             }
+            TCALL => {
+                print!("CALL   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMP => {
+                print!("JMP    \t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPF => {
+                print!("JMPF   \t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPB => {
+                print!("JMPB   \t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPFT => {
+                print!("JMPFT  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPBT => {
+                print!("JMPBT  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPFF => {
+                print!("JMPFF  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPBF => {
+                print!("JMPBF  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
             ADD => {
-                println!("ADD");
+                print!("ADD    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             SUB => {
-                println!("SUB");
+                print!("SUB    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             MUL => {
-                println!("MUL");
+                print!("MUL    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             DIV => {
-                println!("DIV");
+                print!("DIV    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             CONS => {

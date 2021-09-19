@@ -40,6 +40,8 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(REF, 1, 2, 2)?;
     chunk.encode3(CONS, 1, 2, 3, 2)?;
     chunk.encode2(DEF, 1, 2, 4)?;
+    chunk.encode1(JMP, 1, 5)?;
+    chunk.encode2(JMPFT, 1, 21, 5)?;
     chunk.disassemble_chunk()?;
     Ok(())
 }

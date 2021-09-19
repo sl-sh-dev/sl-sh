@@ -16,6 +16,18 @@ macro_rules! decode_u16 {
     }};
 }
 
+macro_rules! decode1 {
+    ($code:expr, $ip:expr, $wide:expr) => {{
+        if $wide {
+            decode_u16!($code, $ip)
+        } else {
+            let ret = $code[*$ip] as u16;
+            *$ip += 1;
+            ret
+        }
+    }};
+}
+
 macro_rules! decode2 {
     ($code:expr, $ip:expr, $wide:expr) => {{
         let op1 = if $wide {
@@ -276,6 +288,10 @@ impl Vm {
             ip += 1;
             let wide = (opcode & 0x80) != 0;
             match opcode & 0x7F {
+                NOP => {}
+                HALT => {
+                    return Err(VMError::new_vm("HALT: VM halted and on fire!"));
+                }
                 RET => {
                     if let Some(frame) = self.call_stack.pop() {
                         stack_top = frame.stack_top;
@@ -343,7 +359,7 @@ impl Vm {
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
                     let lambda = registers[lambda as usize];
-                    match lambda {
+                    match lambda.unref(self)? {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;
                             let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
@@ -361,10 +377,67 @@ impl Vm {
                                 chunk = l.clone();
                                 ip = 0;
                                 registers = self.make_registers(stack_top);
+                                set_register!(registers, 0, Value::UInt(num_args as u64));
                             }
                             _ => return Err(VMError::new_vm("CALL: Not a callable.")),
                         },
                         _ => return Err(VMError::new_vm("CALL: Not a callable.")),
+                    }
+                }
+                TCALL => {
+                    let (lambda, num_args) = decode2!(chunk.code, &mut ip, wide);
+                    let lambda = registers[lambda as usize];
+                    match lambda.unref(self)? {
+                        Value::Builtin(f) => {
+                            let last_reg = num_args as usize + 1;
+                            let res = f(self, &registers[1..last_reg])?;
+                            set_register!(registers, 0, res);
+                        }
+                        Value::Reference(h) => match self.heap.get(h)? {
+                            Object::Lambda(l) => {
+                                chunk = l.clone();
+                                ip = 0;
+                                set_register!(registers, 0, Value::UInt(num_args as u64));
+                            }
+                            _ => return Err(VMError::new_vm("TCALL: Not a callable.")),
+                        },
+                        _ => return Err(VMError::new_vm("TCALL: Not a callable.")),
+                    }
+                }
+                JMP => {
+                    let nip = decode1!(chunk.code, &mut ip, wide);
+                    ip = nip as usize;
+                }
+                JMPF => {
+                    let ipoff = decode1!(chunk.code, &mut ip, wide);
+                    ip += ipoff as usize;
+                }
+                JMPB => {
+                    let ipoff = decode1!(chunk.code, &mut ip, wide);
+                    ip -= ipoff as usize;
+                }
+                JMPFT => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].is_truethy() {
+                        ip += ipoff as usize;
+                    }
+                }
+                JMPBT => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].is_truethy() {
+                        ip -= ipoff as usize;
+                    }
+                }
+                JMPFF => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].is_falsey() {
+                        ip += ipoff as usize;
+                    }
+                }
+                JMPBF => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].is_falsey() {
+                        ip -= ipoff as usize;
                     }
                 }
                 ADD => binary_math!(chunk, &mut ip, registers, |a, b| a + b, wide),
@@ -803,8 +876,50 @@ mod tests {
     }
 
     #[test]
+    fn test_tcall() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        let const1 = chunk.add_constant(Value::Int(10)) as u16;
+        let const2 = chunk.add_constant(add) as u16;
+        chunk.encode2(CONST, 2, const1, line).unwrap();
+        chunk.encode2(CONST, 3, const2, line).unwrap();
+        chunk.encode2(TCALL, 3, 2, line).unwrap();
+        // The TCALL will keep HALT from executing.
+        chunk.encode0(HALT, line)?;
+        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        vm.stack[1] = Value::Int(5);
+        vm.stack[2] = Value::Int(2);
+        vm.stack[4] = Value::Int(2);
+        vm.stack[50] = add;
+        vm.stack[60] = add_ten;
+        chunk.encode3(CALL, 60, 1, 3, line).unwrap();
+        chunk.encode2(TCALL, 50, 2, line).unwrap();
+        // The TCALL will keep HALT from executing.
+        chunk.encode0(HALT, line)?;
+
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        let result = vm.stack[0].get_int()?;
+        assert!(result == 7);
+        let result = vm.stack[3].get_int()?;
+        assert!(result == 12);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_builtin() -> VMResult<()> {
-        fn add(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+        fn add_b(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             if registers.len() != 2 {
                 return Err(VMError::new_vm("test add: wrong number of args."));
             }
@@ -828,11 +943,19 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(add)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(add_b)) as u16;
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode3(CALL, 10, 2, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        let const1 = chunk.add_constant(Value::Builtin(add_b)) as u16;
+        chunk.encode2(CONST, 10, const1, line).unwrap();
+        chunk.encode2(TCALL, 10, 2, line).unwrap();
+        chunk.encode0(RET, line)?;
+        let tadd = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -855,7 +978,37 @@ mod tests {
         chunk.encode2(CONST, 8, const1, line).unwrap();
         chunk.encode3(CALL, 8, 0, 9, line).unwrap();
         chunk.encode0(RET, line)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        let result = vm.stack[2].get_int()?;
+        assert!(result == 9);
+        let result = vm.stack[5].get_int()?;
+        assert!(result == 22);
+        match vm.stack[9] {
+            Value::Reference(h) => match vm.heap.get(h)? {
+                Object::String(s) => assert!(s == "builtin hello"),
+                _ => panic!("bad make_str call."),
+            },
+            _ => panic!("bad make_str call"),
+        }
+        assert!(vm.call_stack.is_empty());
 
+        let mut chunk = Chunk::new("no_file", 1);
+        let line = 1;
+        for i in 0..100 {
+            vm.stack[i] = Value::Undefined;
+        }
+        vm.stack[0] = tadd;
+        vm.stack[1] = add_ten;
+        vm.stack[3] = Value::Int(6);
+        vm.stack[4] = Value::Int(3);
+        vm.stack[6] = Value::Int(12);
+        let const1 = chunk.add_constant(Value::Builtin(make_str)) as u16;
+        chunk.encode3(CALL, 0, 2, 2, line).unwrap();
+        chunk.encode3(CALL, 1, 1, 5, line).unwrap();
+        chunk.encode2(CONST, 8, const1, line).unwrap();
+        chunk.encode3(CALL, 8, 0, 9, line).unwrap();
+        chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[2].get_int()?;
@@ -870,6 +1023,101 @@ mod tests {
             _ => panic!("bad make_str call"),
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_jumps() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let const0 = chunk.add_constant(Value::Int(2 as i64)) as u16;
+        let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
+        vm.stack[0] = Value::True;
+        vm.stack[1] = Value::False;
+        vm.stack[2] = Value::Nil;
+        vm.stack[3] = Value::Int(0);
+        let line = 1;
+        chunk.encode2(CONST, 4, const0, line)?;
+        chunk.encode1(JMP, 8, line)?;
+        chunk.encode2(CONST, 4, const1, line)?;
+        chunk.encode2(CONST, 5, const1, line)?;
+
+        chunk.encode2(CONST, 6, const0, line)?;
+        chunk.encode1(JMPF, 3, line)?;
+        chunk.encode2(CONST, 6, const1, line)?;
+        chunk.encode2(CONST, 7, const1, line)?;
+
+        chunk.encode1(JMPF, 5, line)?;
+        chunk.encode2(CONST, 8, const0, line)?;
+        chunk.encode1(JMPF, 2, line)?;
+        chunk.encode1(JMPB, 7, line)?;
+        chunk.encode2(CONST, 9, const1, line)?;
+
+        chunk.encode2(CONST, 10, const0, line)?;
+        chunk.encode2(JMPFT, 0, 3, line)?;
+        chunk.encode2(CONST, 10, const1, line)?;
+        chunk.encode2(CONST, 11, const1, line)?;
+
+        chunk.encode2(CONST, 12, const0, line)?;
+        chunk.encode2(JMPFT, 3, 3, line)?;
+        chunk.encode2(CONST, 12, const1, line)?;
+        chunk.encode2(CONST, 13, const1, line)?;
+
+        chunk.encode2(CONST, 14, const0, line)?;
+        chunk.encode2(JMPFF, 1, 3, line)?;
+        chunk.encode2(CONST, 14, const1, line)?;
+        chunk.encode2(CONST, 15, const1, line)?;
+
+        chunk.encode2(CONST, 16, const0, line)?;
+        chunk.encode2(JMPFF, 2, 3, line)?;
+        chunk.encode2(CONST, 16, const1, line)?;
+        chunk.encode2(CONST, 17, const1, line)?;
+
+        chunk.encode2(CONST, 18, const0, line)?;
+        chunk.encode2(JMPFT, 1, 3, line)?;
+        chunk.encode2(CONST, 18, const1, line)?;
+        chunk.encode2(CONST, 19, const1, line)?;
+
+        chunk.encode2(CONST, 20, const0, line)?;
+        chunk.encode2(JMPFT, 2, 3, line)?;
+        chunk.encode2(CONST, 20, const1, line)?;
+        chunk.encode2(CONST, 21, const1, line)?;
+
+        chunk.encode2(CONST, 22, const0, line)?;
+        chunk.encode2(JMPFF, 0, 3, line)?;
+        chunk.encode2(CONST, 22, const1, line)?;
+        chunk.encode2(CONST, 23, const1, line)?;
+
+        chunk.encode2(CONST, 24, const0, line)?;
+        chunk.encode2(JMPFF, 3, 3, line)?;
+        chunk.encode2(CONST, 24, const1, line)?;
+        chunk.encode2(CONST, 25, const1, line)?;
+
+        chunk.encode0(RET, line)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        assert!(vm.stack[4].get_int()? == 2);
+        assert!(vm.stack[5].get_int()? == 3);
+        assert!(vm.stack[6].get_int()? == 2);
+        assert!(vm.stack[7].get_int()? == 3);
+        assert!(vm.stack[8].get_int()? == 2);
+        assert!(vm.stack[9].get_int()? == 3);
+        assert!(vm.stack[10].get_int()? == 2);
+        assert!(vm.stack[11].get_int()? == 3);
+        assert!(vm.stack[12].get_int()? == 2);
+        assert!(vm.stack[13].get_int()? == 3);
+        assert!(vm.stack[14].get_int()? == 2);
+        assert!(vm.stack[15].get_int()? == 3);
+        assert!(vm.stack[16].get_int()? == 2);
+        assert!(vm.stack[17].get_int()? == 3);
+        assert!(vm.stack[18].get_int()? == 3);
+        assert!(vm.stack[19].get_int()? == 3);
+        assert!(vm.stack[20].get_int()? == 3);
+        assert!(vm.stack[21].get_int()? == 3);
+        assert!(vm.stack[22].get_int()? == 3);
+        assert!(vm.stack[23].get_int()? == 3);
+        assert!(vm.stack[24].get_int()? == 3);
+        assert!(vm.stack[25].get_int()? == 3);
         Ok(())
     }
 

@@ -87,8 +87,16 @@ impl Value {
         matches!(self, Value::True)
     }
 
+    pub fn is_truethy(&self) -> bool {
+        !matches!(self, Value::False | Value::Nil)
+    }
+
     pub fn is_false(&self) -> bool {
         matches!(self, Value::False)
+    }
+
+    pub fn is_falsey(&self) -> bool {
+        matches!(self, Value::False | Value::Nil)
     }
 
     pub fn is_int(&self) -> bool {
@@ -103,6 +111,7 @@ impl Value {
         match &self {
             Value::Byte(b) => Ok(*b as i64),
             Value::Int(i) => Ok(*i),
+            Value::UInt(i) => Ok(*i as i64),
             _ => Err(VMError::new_value("Not an integer")),
         }
     }
