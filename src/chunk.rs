@@ -342,6 +342,14 @@ impl Chunk {
                 println!();
                 Ok(())
             }
+            SET => {
+                print!("SET    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
             CONST => {
                 print!("CONST  \t");
                 disassemble_operand!(code, true, wide);

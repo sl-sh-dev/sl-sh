@@ -17,6 +17,8 @@ pub enum Value {
     Symbol(Interned, Option<u32>),
     StringConst(Interned),
     Reference(Handle),
+    Binding(Handle),
+    Global(u32),
     Builtin(CallFunc),
     True,
     False,
@@ -34,6 +36,8 @@ impl fmt::Debug for Value {
             Self::Symbol(s, _) => write!(f, "Symbol({:?})", s),
             Self::StringConst(s) => write!(f, "StringConst({:?})", s),
             Self::Reference(r) => write!(f, "Reference({:?})", r),
+            Self::Binding(r) => write!(f, "Binding({:?})", r),
+            Self::Global(g) => write!(f, "Global({})", g),
             Self::Builtin(_) => write!(f, "Builtin(...)"),
             Self::True => write!(f, "True"),
             Self::False => write!(f, "False"),
@@ -55,12 +59,24 @@ impl Value {
     }
 
     pub fn unref(self, vm: &Vm) -> VMResult<Value> {
-        if let Value::Reference(handle) = &self {
-            if let Object::Value(value) = &*vm.get(*handle)? {
-                return Ok(*value);
+        match &self {
+            Value::Reference(handle) => {
+                if let Object::Value(value) = &*vm.get(*handle)? {
+                    Ok(*value)
+                } else {
+                    Ok(self)
+                }
             }
+            Value::Binding(handle) => {
+                if let Object::Value(value) = &*vm.get(*handle)? {
+                    value.unref(vm)
+                } else {
+                    Ok(self)
+                }
+            }
+            Value::Global(idx) => vm.get_global(*idx).unref(vm),
+            _ => Ok(self),
         }
-        Ok(self)
     }
 
     pub fn handle(self, vm: &mut Vm) -> VMResult<Handle> {
@@ -100,11 +116,14 @@ impl Value {
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(&self, Value::Byte(_) | Value::Int(_))
+        matches!(&self, Value::Byte(_) | Value::Int(_) | Value::UInt(_))
     }
 
     pub fn is_number(&self) -> bool {
-        matches!(&self, Value::Byte(_) | Value::Int(_) | Value::Float(_))
+        matches!(
+            &self,
+            Value::Byte(_) | Value::Int(_) | Value::UInt(_) | Value::Float(_)
+        )
     }
 
     pub fn get_int(&self) -> VMResult<i64> {
