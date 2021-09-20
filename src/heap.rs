@@ -164,9 +164,7 @@ impl Heap {
         MarkFunc: Fn(&mut Heap) -> VMResult<()>,
     {
         if self.stats.live_objects() >= self.capacity() {
-            if let Err(err) = self.collect(mark_roots) {
-                panic!("Garbage collection failed! {}", err);
-            }
+            self.collect(mark_roots);
             let new_min = (self.stats.live_objects() as f64 * self.grow_factor) as usize;
             if new_min > self.capacity() {
                 self.capacity = new_min;
@@ -236,35 +234,35 @@ impl Heap {
         }
     }
 
-    pub fn get(&self, handle: Handle) -> VMResult<HandleRef<'_>> {
+    pub fn get(&self, handle: Handle) -> HandleRef<'_> {
         if let Some(data) = self.objects.get(handle.idx) {
-            Ok(data)
+            data
         } else {
-            Err(VMError::new_heap("Invalid object handle!"))
+            panic!("Invalid object handle!");
         }
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> VMResult<HandleRefMut<'_>> {
+    pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
         if let Some(data) = self.objects.get_mut(handle.idx) {
-            Ok(data)
+            data
         } else {
-            Err(VMError::new_heap("Invalid object handle!"))
+            panic!("Invalid object handle!");
         }
     }
 
-    pub fn replace(&mut self, handle: Handle, obj: Object) -> VMResult<Object> {
+    pub fn replace(&mut self, handle: Handle, obj: Object) -> Object {
         let type_flag = Self::type_flag(&obj);
         self.objects.push(obj);
         let old = self.objects.swap_remove(handle.idx);
         self.flags[handle.idx] = type_flag | (self.flags[handle.idx] & 0x0f);
-        Ok(old)
+        old
     }
 
-    pub fn get_value(&self, handle: Handle) -> VMResult<Value> {
-        if let Object::Value(val) = self.get(handle)? {
-            Ok(*val)
+    pub fn get_value(&self, handle: Handle) -> Value {
+        if let Object::Value(val) = self.get(handle) {
+            *val
         } else {
-            Ok(Value::Reference(handle))
+            Value::Reference(handle)
         }
     }
 
@@ -276,87 +274,82 @@ impl Heap {
         }
     }
 
-    pub fn mark(&mut self, handle: Handle) -> VMResult<()> {
+    pub fn mark(&mut self, handle: Handle) {
         if let Some(flag) = self.flags.get_mut(handle.idx) {
             if !is_marked(*flag) {
                 self.stats.live_objects += 1;
                 set_bit!(*flag, FLAG_MARK);
             }
-            Ok(())
         } else {
-            Err(VMError::new_heap("Invalid object handle!"))
+            panic!("Invalid object handle in mark!")
         }
     }
 
-    pub fn sticky(&mut self, handle: Handle) -> VMResult<()> {
+    pub fn sticky(&mut self, handle: Handle) {
         if let Some(flag) = self.flags.get_mut(handle.idx) {
             if !is_bit_set!(*flag, FLAG_STICKY) {
                 self.stats.sticky_objects += 1;
                 self.stats.live_objects += 1;
                 set_bit!(*flag, FLAG_STICKY);
             }
-            Ok(())
         } else {
-            Err(VMError::new_heap("Invalid object handle!"))
+            panic!("Invalid object handle in sticky!")
         }
     }
 
-    pub fn unsticky(&mut self, handle: Handle) -> VMResult<()> {
+    pub fn unsticky(&mut self, handle: Handle) {
         if let Some(flag) = self.flags.get_mut(handle.idx) {
             if is_bit_set!(*flag, FLAG_STICKY) {
                 self.stats.sticky_objects -= 1;
                 self.stats.live_objects -= 1;
                 clear_bit!(*flag, FLAG_STICKY);
             }
-            Ok(())
         } else {
-            Err(VMError::new_heap("Invalid object handle!"))
+            panic!("Invalid object handle in unsticky!")
         }
     }
 
     // mark_trace has an invariant to maintain, do not touch objects (see unsafe in
     // trace below).
-    fn mark_trace(&mut self, handle: Handle, current: usize) -> VMResult<()> {
+    fn mark_trace(&mut self, handle: Handle, current: usize) {
         if !self.is_marked(handle) {
-            self.mark(handle)?;
+            self.mark(handle);
             if handle.idx < current {
                 self.greys.push(handle.idx);
             }
         }
-        Ok(())
     }
 
-    fn trace(&mut self, idx: usize, current: usize) -> VMResult<()> {
+    fn trace(&mut self, idx: usize, current: usize) {
         // This unsafe avoids cloning the object to avoid having a mutable and immutable self.
         // This should be fine because we are not touching objects in a mark, only flags.
         // idx should also have been validated before it gets here (by mark if nothing else).
         let obj = unsafe { &*(self.objects.get_unchecked(idx) as *const Object) };
         match obj {
-            Object::Value(Value::Reference(h)) => self.mark_trace(*h, current)?,
+            Object::Value(Value::Reference(h)) => self.mark_trace(*h, current),
             Object::Value(_) => {}
             Object::String(_) => {}
             Object::Vector(vec) => {
                 for v in vec {
                     if let Value::Reference(h) = v {
                         let h = *h;
-                        self.mark_trace(h, current)?;
+                        self.mark_trace(h, current);
                     }
                 }
             }
             Object::Bytes(_) => {}
             Object::Pair(Value::Reference(car), Value::Reference(cdr)) => {
-                self.mark_trace(*car, current)?;
-                self.mark_trace(*cdr, current)?;
+                self.mark_trace(*car, current);
+                self.mark_trace(*cdr, current);
             }
-            Object::Pair(Value::Reference(car), _) => self.mark_trace(*car, current)?,
-            Object::Pair(_, Value::Reference(cdr)) => self.mark_trace(*cdr, current)?,
+            Object::Pair(Value::Reference(car), _) => self.mark_trace(*car, current),
+            Object::Pair(_, Value::Reference(cdr)) => self.mark_trace(*cdr, current),
             Object::Pair(_, _) => {}
             Object::Lambda(_) => {}
         }
-        Ok(())
     }
 
-    pub fn collect<MarkFunc>(&mut self, mark_roots: MarkFunc) -> VMResult<()>
+    pub fn collect<MarkFunc>(&mut self, mark_roots: MarkFunc)
     where
         MarkFunc: Fn(&mut Heap) -> VMResult<()>,
     {
@@ -364,21 +357,20 @@ impl Heap {
         for flag in self.flags.iter_mut() {
             clear_bit!(*flag, FLAG_MARK);
         }
-        mark_roots(self)?;
+        mark_roots(self).expect("Failed to mark the roots!");
         let mut cur = 0;
         //for (cur, flag) in self.flags.iter().enumerate() {
         let mut val = self.flags.get(cur);
         while let Some(flag) = val {
             if need_trace(*flag) {
-                self.trace(cur, cur)?;
+                self.trace(cur, cur);
                 while let Some(idx) = self.greys.pop() {
-                    self.trace(idx, cur)?;
+                    self.trace(idx, cur);
                 }
             }
             cur += 1;
             val = self.flags.get(cur);
         }
-        Ok(())
     }
 
     pub fn capacity(&self) -> usize {
@@ -406,7 +398,7 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
-            let obj = heap.get(Handle { idx: x }).unwrap();
+            let obj = heap.get(Handle { idx: x });
             if let Object::Value(Value::Int(v)) = obj {
                 assert!(x == *v as usize);
             } else {
@@ -416,7 +408,7 @@ mod tests {
         heap.alloc(Object::Value(Value::Int(512)), mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
-        let obj = heap.get(Handle { idx: 0 }).unwrap();
+        let obj = heap.get(Handle { idx: 0 });
         if let Object::Value(Value::Int(v)) = obj {
             assert!(512 == *v);
         } else {
@@ -424,7 +416,7 @@ mod tests {
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..512 {
-                heap.mark(Handle { idx })?;
+                heap.mark(Handle { idx });
             }
             Ok(())
         };
@@ -434,7 +426,7 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
-            let obj = heap.get(Handle { idx: x }).unwrap();
+            let obj = heap.get(Handle { idx: x });
             if let Object::Value(Value::Int(v)) = obj {
                 if x == 0 {
                     assert!(512 == *v);
@@ -448,23 +440,23 @@ mod tests {
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..513 {
                 if idx % 2 == 0 {
-                    heap.mark(Handle { idx })?;
+                    heap.mark(Handle { idx });
                 }
             }
             Ok(())
         };
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 257);
         let mark_roots = |_heap: &mut Heap| -> VMResult<()> { Ok(()) };
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
             let h = heap.alloc(Object::Value(Value::Int(x)), mark_roots);
-            heap.sticky(h)?;
+            heap.sticky(h);
         }
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
@@ -472,11 +464,11 @@ mod tests {
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
-                heap.mark(Handle { idx })?;
+                heap.mark(Handle { idx });
             }
             Ok(())
         };
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 1024);
         heap.alloc(Object::String("steve".into()), mark_roots);
@@ -495,7 +487,7 @@ mod tests {
         let outers_mark = outers.clone();
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for h in outers_mark.borrow().iter() {
-                heap.mark(*h)?;
+                heap.mark(*h);
             }
             Ok(())
         };
@@ -509,9 +501,9 @@ mod tests {
         assert!(heap.live_objects() == 512);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::Value(Value::Reference(inner)) = obj {
-                let obj = heap.get(*inner).unwrap();
+                let obj = heap.get(*inner);
                 if let Object::Value(Value::Int(v)) = obj {
                     assert!(i == *v as usize);
                 } else {
@@ -522,17 +514,17 @@ mod tests {
             }
             i += 1;
         }
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for h in outers.borrow().iter() {
-            heap.replace(*h, Object::String("bloop".into()))?;
+            heap.replace(*h, Object::String("bloop".into()));
         }
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 256);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::String(sstr) = obj {
                 assert!(sstr == "bloop");
             } else {
@@ -553,7 +545,7 @@ mod tests {
         let outers_mark = outers.clone();
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for h in outers_mark.borrow().iter() {
-                heap.mark(*h)?;
+                heap.mark(*h);
             }
             Ok(())
         };
@@ -568,12 +560,12 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::Vector(v) = obj {
                 let mut i = 0;
                 for hv in v {
                     if let Value::Reference(hv) = hv {
-                        let obj = heap.get(*hv).unwrap();
+                        let obj = heap.get(*hv);
                         if let Object::Value(Value::Int(v)) = obj {
                             assert!(i == *v as usize);
                         } else {
@@ -588,16 +580,16 @@ mod tests {
                 assert!(false);
             }
         }
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::Vector(v) = obj {
                 let mut i = 0;
                 for hv in v {
                     if let Value::Reference(hv) = hv {
-                        let obj = heap.get(*hv).unwrap();
+                        let obj = heap.get(*hv);
                         if let Object::Value(Value::Int(v)) = obj {
                             assert!(i == *v as usize);
                         } else {
@@ -613,13 +605,13 @@ mod tests {
             }
         }
         for h in outers.borrow().iter() {
-            heap.replace(*h, Object::String("bloop".into()))?;
+            heap.replace(*h, Object::String("bloop".into()));
         }
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::String(sstr) = obj {
                 assert!(sstr == "bloop");
             } else {
@@ -638,7 +630,7 @@ mod tests {
         let outers_mark = outers.clone();
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for h in outers_mark.borrow().iter() {
-                heap.mark(*h)?;
+                heap.mark(*h);
             }
             Ok(())
         };
@@ -661,12 +653,12 @@ mod tests {
         ));
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 6);
-        heap.collect(mark_roots)?;
+        heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 6);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h).unwrap();
+            let obj = heap.get(*h);
             if let Object::Pair(car, cdr) = obj {
                 if i == 0 {
                     let (car, cdr) = if let Value::Int(car) = car {
@@ -682,7 +674,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 1 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Value(Value::Int(car)) = heap.get(*car_h).unwrap() {
+                        if let Object::Value(Value::Int(car)) = heap.get(*car_h) {
                             if let Value::Int(cdr) = cdr {
                                 (*car, *cdr)
                             } else {
@@ -698,7 +690,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 2 {
                     let (car, cdr) = if let Value::Reference(cdr_h) = cdr {
-                        if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h).unwrap() {
+                        if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h) {
                             if let Value::Int(car) = car {
                                 (*car, *cdr)
                             } else {
@@ -714,9 +706,9 @@ mod tests {
                     assert!(cdr == 4);
                 } else if i == 3 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Value(Value::Int(car)) = heap.get(*car_h).unwrap() {
+                        if let Object::Value(Value::Int(car)) = heap.get(*car_h) {
                             if let Value::Reference(cdr_h) = cdr {
-                                if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h).unwrap() {
+                                if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h) {
                                     (*car, *cdr)
                                 } else {
                                     (*car, 0)

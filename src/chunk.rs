@@ -456,6 +456,52 @@ impl Chunk {
                 println!();
                 Ok(())
             }
+            JMP_T => {
+                print!("JMP_T  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMP_F => {
+                print!("JMP_F  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPEQ => {
+                print!("JMPEQ  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPLT => {
+                print!("JMPLT  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            JMPGT => {
+                print!("JMPGT  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
             ADD => {
                 print!("ADD    \t");
                 disassemble_operand!(code, true, wide);
@@ -496,6 +542,22 @@ impl Chunk {
                 println!();
                 Ok(())
             }
+            INC => {
+                print!("INC    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            DEC => {
+                print!("DEC    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, true, wide);
+                println!();
+                Ok(())
+            }
             CONS => {
                 print!("CONS   \t");
                 //R(A) = conscell(R(B), R(C))
@@ -529,6 +591,68 @@ impl Chunk {
             LIST => {
                 print!("LIST    \t");
                 println!("{:#06x} ", decode_u16_enum!(code)?);
+                Ok(())
+            }
+            VECMK => {
+                print!("VECMK  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECELS => {
+                print!("VECELS \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECPSH => {
+                print!("VECPSH \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECPOP => {
+                print!("VECPOP \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECNTH => {
+                print!("VECNTH \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECSTH => {
+                print!("VECSTH \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            VECMKD => {
+                print!("VECMKD \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             _ => Err(VMError::new_chunk(format!("ERROR: unknow opcode {}", op))),

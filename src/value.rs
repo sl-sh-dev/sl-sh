@@ -58,24 +58,47 @@ impl Value {
         Value::Undefined
     }
 
-    pub fn unref(self, vm: &Vm) -> VMResult<Value> {
+    // This is used a LOT in a tight loop and this inline seems to help a lot.
+    #[inline(always)]
+    pub fn unref(self, vm: &Vm) -> Value {
         match &self {
             Value::Reference(handle) => {
-                if let Object::Value(value) = &*vm.get(*handle)? {
-                    Ok(*value)
+                if let Object::Value(value) = &*vm.get(*handle) {
+                    *value
                 } else {
-                    Ok(self)
+                    self
                 }
             }
             Value::Binding(handle) => {
-                if let Object::Value(value) = &*vm.get(*handle)? {
-                    value.unref(vm)
+                if let Object::Value(value) = &*vm.get(*handle) {
+                    match value {
+                        Value::Reference(handle) => {
+                            if let Object::Value(value2) = vm.get(*handle) {
+                                *value2
+                            } else {
+                                *value
+                            }
+                        }
+                        _ => *value,
+                    }
                 } else {
-                    Ok(self)
+                    self
                 }
             }
-            Value::Global(idx) => vm.get_global(*idx).unref(vm),
-            _ => Ok(self),
+            Value::Global(idx) => {
+                let val = vm.get_global(*idx);
+                match val {
+                    Value::Reference(handle) => {
+                        if let Object::Value(value) = vm.get(handle) {
+                            *value
+                        } else {
+                            val
+                        }
+                    }
+                    _ => val,
+                }
+            }
+            _ => self,
         }
     }
 
@@ -131,7 +154,7 @@ impl Value {
             Value::Byte(b) => Ok(*b as i64),
             Value::Int(i) => Ok(*i),
             Value::UInt(i) => Ok(*i as i64),
-            _ => Err(VMError::new_value("Not an integer")),
+            _ => Err(VMError::new_value(format!("Not an integer: {:?}", self))),
         }
     }
 
@@ -139,8 +162,16 @@ impl Value {
         match &self {
             Value::Byte(b) => Ok(*b as f64),
             Value::Int(i) => Ok(*i as f64),
+            Value::UInt(i) => Ok(*i as f64),
             Value::Float(f) => Ok(*f),
-            _ => Err(VMError::new_value("Not a float")),
+            _ => Err(VMError::new_value(format!("Not a float: {:?}", self))),
+        }
+    }
+
+    pub fn get_object<'vm>(&self, vm: &'vm mut Vm) -> VMResult<HandleRefMut<'vm>> {
+        match &self {
+            Value::Reference(h) => Ok(vm.get_mut(*h)),
+            _ => Err(VMError::new_value("Not an object")),
         }
     }
 }

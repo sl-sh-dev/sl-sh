@@ -74,12 +74,43 @@ macro_rules! decode3 {
         (op1, op2, op3)
     }};
 }
+/*
+macro_rules! binary_math_inner {
+    ($vm:expr, $registers:expr, $dest:expr, $bin_fn:expr, $op3:expr, $op2:expr, $int:expr) => {{
+        let val = match $op3 {
+            Value::Byte(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
+            Value::Byte(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
+            Value::Int(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
+            Value::Int(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
+            Value::UInt(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
+            Value::UInt(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
+            Value::Float(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
+            Value::Float(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
+            _ => panic!("Attempt to do math with a {:?}", $op3),
+        };
+        $vm.set_register($registers, $dest as usize, val);
+    }};
+}
 
 macro_rules! binary_math {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = $registers[op2 as usize].unref($vm)?;
-        let op3 = $registers[op3 as usize].unref($vm)?;
+        let op2 = $registers[op2 as usize].unref($vm);
+        let op3 = $registers[op3 as usize].unref($vm);
+        match op2 {
+            Value::Byte(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
+            Value::Int(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
+            Value::UInt(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
+            Value::Float(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, false),
+            _ => panic!("Attempt to do math with a {:?}", op2),
+        }
+    }};
+}*/
+macro_rules! binary_math {
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+        let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
+        let op2 = $registers[op2 as usize].unref($vm);
+        let op3 = $registers[op3 as usize].unref($vm);
         let val = if op2.is_int() && op3.is_int() {
             Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
         } else {
@@ -92,8 +123,8 @@ macro_rules! binary_math {
 macro_rules! div_math {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = $registers[op2 as usize].unref($vm)?;
-        let op3 = $registers[op3 as usize].unref($vm)?;
+        let op2 = $registers[op2 as usize].unref($vm);
+        let op3 = $registers[op3 as usize].unref($vm);
         let val = if op2.is_int() && op3.is_int() {
             let op3 = op3.get_int()?;
             if op3 == 0 {
@@ -159,12 +190,20 @@ impl Vm {
         self.heap.alloc(obj, |_heap| Ok(()))
     }
 
-    pub fn get(&self, handle: Handle) -> VMResult<HandleRef<'_>> {
+    pub fn get(&self, handle: Handle) -> HandleRef<'_> {
         self.heap.get(handle)
+    }
+
+    pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
+        self.heap.get_mut(handle)
     }
 
     pub fn get_global(&self, idx: u32) -> Value {
         self.globals.get(idx)
+    }
+
+    pub fn get_stack(&self, idx: usize) -> Value {
+        self.stack[idx]
     }
 
     pub fn intern(&mut self, string: &str) -> Interned {
@@ -185,9 +224,7 @@ impl Vm {
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &registers[idx] {
             Value::Binding(handle) => {
-                self.heap
-                    .replace(*handle, Object::Value(val))
-                    .expect("Invalid heap handle!");
+                self.heap.replace(*handle, Object::Value(val));
             }
             Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
@@ -213,7 +250,7 @@ impl Vm {
             let mut last_cdr = Value::Nil;
             for i in (start..end).rev() {
                 let car = if let Some(op) = registers.get(i as usize) {
-                    op.unref(self)?
+                    op.unref(self)
                 } else {
                     return Err(VMError::new_vm("List: Not enough elements."));
                 };
@@ -233,17 +270,17 @@ impl Vm {
         wide: bool,
     ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, ip, wide);
-        let pair = registers[pair_reg as usize].unref(self)?;
-        let val = registers[val as usize].unref(self)?;
+        let pair = registers[pair_reg as usize].unref(self);
+        let val = registers[val as usize].unref(self);
         match &pair {
             Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(*cons_handle)?;
+                let cons_d = self.heap.get(*cons_handle);
                 if let Object::Pair(_car, cdr) = &*cons_d {
                     let cdr = *cdr;
-                    self.heap.replace(*cons_handle, Object::Pair(val, cdr))?;
+                    self.heap.replace(*cons_handle, Object::Pair(val, cdr));
                 } else if cons_d.is_nil() {
                     let pair = Object::Pair(val, Value::Nil);
-                    self.heap.replace(*cons_handle, pair)?;
+                    self.heap.replace(*cons_handle, pair);
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -267,17 +304,17 @@ impl Vm {
         wide: bool,
     ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, ip, wide);
-        let pair = registers[pair_reg as usize].unref(self)?;
-        let val = registers[val as usize].unref(self)?;
+        let pair = registers[pair_reg as usize].unref(self);
+        let val = registers[val as usize].unref(self);
         match &pair {
             Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(*cons_handle)?;
+                let cons_d = self.heap.get(*cons_handle);
                 if let Object::Pair(car, _cdr) = &*cons_d {
                     let car = *car;
-                    self.heap.replace(*cons_handle, Object::Pair(car, val))?;
+                    self.heap.replace(*cons_handle, Object::Pair(car, val));
                 } else if cons_d.is_nil() {
                     let pair = Object::Pair(Value::Nil, val);
-                    self.heap.replace(*cons_handle, pair)?;
+                    self.heap.replace(*cons_handle, pair);
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -331,7 +368,7 @@ impl Vm {
                 }
                 SET => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self)?;
+                    let val = registers[src as usize].unref(self);
                     self.set_register(registers, dest as usize, val);
                 }
                 CONST => {
@@ -341,7 +378,7 @@ impl Vm {
                 }
                 REF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let idx = if let Value::Symbol(s, i) = registers[src as usize].unref(self)? {
+                    let idx = if let Value::Symbol(s, i) = registers[src as usize].unref(self) {
                         if let Some(i) = i {
                             i
                         } else if let Some(i) = self.globals.interned_slot(s) {
@@ -359,8 +396,8 @@ impl Vm {
                 }
                 DEF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self)?;
-                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self)? {
+                    let val = registers[src as usize].unref(self);
+                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self) {
                         if let Some(i) = i {
                             self.globals.set(i, val);
                         } else {
@@ -372,8 +409,8 @@ impl Vm {
                 }
                 DEFV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self)?;
-                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self)? {
+                    let val = registers[src as usize].unref(self);
+                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self) {
                         if let Some(i) = i {
                             if let Value::Undefined = self.globals.get(i) {
                                 self.globals.set(i, val);
@@ -388,13 +425,13 @@ impl Vm {
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
                     let lambda = registers[lambda as usize];
-                    match lambda.unref(self)? {
+                    match lambda.unref(self) {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;
                             let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
                             self.mov_register(registers, first_reg as usize, res);
                         }
-                        Value::Reference(h) => match self.heap.get(h)? {
+                        Value::Reference(h) => match self.heap.get(h) {
                             Object::Lambda(l) => {
                                 let frame = CallFrame {
                                     chunk: chunk.clone(),
@@ -416,13 +453,13 @@ impl Vm {
                 TCALL => {
                     let (lambda, num_args) = decode2!(chunk.code, &mut ip, wide);
                     let lambda = registers[lambda as usize];
-                    match lambda.unref(self)? {
+                    match lambda.unref(self) {
                         Value::Builtin(f) => {
                             let last_reg = num_args as usize + 1;
                             let res = f(self, &registers[1..last_reg])?;
                             self.mov_register(registers, 0, res);
                         }
-                        Value::Reference(h) => match self.heap.get(h)? {
+                        Value::Reference(h) => match self.heap.get(h) {
                             Object::Lambda(l) => {
                                 chunk = l.clone();
                                 ip = 0;
@@ -447,45 +484,107 @@ impl Vm {
                 }
                 JMPFT => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].is_truethy() {
+                    if registers[test as usize].unref(self).is_truethy() {
                         ip += ipoff as usize;
                     }
                 }
                 JMPBT => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].is_truethy() {
+                    if registers[test as usize].unref(self).is_truethy() {
                         ip -= ipoff as usize;
                     }
                 }
                 JMPFF => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].is_falsey() {
+                    if registers[test as usize].unref(self).is_falsey() {
                         ip += ipoff as usize;
                     }
                 }
                 JMPBF => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].is_falsey() {
+                    if registers[test as usize].unref(self).is_falsey() {
                         ip -= ipoff as usize;
+                    }
+                }
+                JMP_T => {
+                    let (test, nip) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].unref(self).is_truethy() {
+                        ip = nip as usize;
+                    }
+                }
+                JMP_F => {
+                    let (test, nip) = decode2!(chunk.code, &mut ip, wide);
+                    if registers[test as usize].unref(self).is_falsey() {
+                        ip = nip as usize;
+                    }
+                }
+                JMPEQ => {
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let op1 = registers[op1 as usize].unref(self).get_int()?;
+                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    if op1 == op2 {
+                        ip = nip as usize;
+                    }
+                }
+                JMPLT => {
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let op1 = registers[op1 as usize].unref(self).get_int()?;
+                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    if op1 < op2 {
+                        ip = nip as usize;
+                    }
+                }
+                JMPGT => {
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let op1 = registers[op1 as usize].unref(self).get_int()?;
+                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    if op1 > op2 {
+                        ip = nip as usize;
                     }
                 }
                 ADD => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide),
                 SUB => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide),
                 MUL => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide),
                 DIV => div_math!(self, chunk, &mut ip, registers, wide),
+                INC => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let val = match registers[dest as usize].unref(self) {
+                        Value::Byte(v) => Value::Byte(v + i as u8),
+                        Value::Int(v) => Value::Int(v + i as i64),
+                        Value::UInt(v) => Value::UInt(v + i as u64),
+                        _ => panic!(
+                            "Can only INC an integer type, got {:?}",
+                            registers[dest as usize].unref(self)
+                        ),
+                    };
+                    self.set_register(registers, dest as usize, val);
+                }
+                DEC => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let val = match registers[dest as usize].unref(self) {
+                        Value::Byte(v) => Value::Byte(v - i as u8),
+                        Value::Int(v) => Value::Int(v - i as i64),
+                        Value::UInt(v) => Value::UInt(v - i as u64),
+                        _ => panic!(
+                            "Can only DEC an integer type, got {:?}",
+                            registers[dest as usize].unref(self)
+                        ),
+                    };
+                    self.set_register(registers, dest as usize, val);
+                }
                 CONS => {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut ip, wide);
-                    let car = registers[op2 as usize].unref(self)?;
-                    let cdr = registers[op3 as usize].unref(self)?;
+                    let car = registers[op2 as usize].unref(self);
+                    let cdr = registers[op3 as usize].unref(self);
                     let pair = Value::Reference(self.alloc(Object::Pair(car, cdr)));
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
                     let op = registers[op as usize];
-                    match op.unref(self)? {
+                    match op.unref(self) {
                         Value::Reference(handle) => {
-                            let handle_d = self.heap.get(handle)?;
+                            let handle_d = self.heap.get(handle);
                             if let Object::Pair(car, _) = &*handle_d {
                                 let car = *car;
                                 self.set_register(registers, dest as usize, car);
@@ -500,9 +599,9 @@ impl Vm {
                 CDR => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
                     let op = registers[op as usize];
-                    match op.unref(self)? {
+                    match op.unref(self) {
                         Value::Reference(handle) => {
-                            let handle_d = self.heap.get(handle)?;
+                            let handle_d = self.heap.get(handle);
                             if let Object::Pair(_, cdr) = &*handle_d {
                                 let cdr = *cdr;
                                 self.set_register(registers, dest as usize, cdr);
@@ -517,6 +616,89 @@ impl Vm {
                 LIST => self.list(&chunk.code[..], &mut ip, registers, wide)?,
                 XAR => self.xar(&chunk.code[..], &mut ip, registers, wide)?,
                 XDR => self.xdr(&chunk.code[..], &mut ip, registers, wide)?,
+                VECMK => {
+                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let len = registers[op as usize].unref(self).get_int()?;
+                    let val = Value::Reference(
+                        self.alloc(Object::Vector(Vec::with_capacity(len as usize))),
+                    );
+                    self.set_register(registers, dest as usize, val);
+                }
+                VECELS => {
+                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let len = registers[op as usize].unref(self).get_int()?;
+                    if let Object::Vector(v) =
+                        registers[dest as usize].unref(self).get_object(self)?
+                    {
+                        v.resize(len as usize, Value::Undefined);
+                    }
+                }
+                VECPSH => {
+                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let val = registers[op as usize].unref(self);
+                    if let Object::Vector(v) =
+                        registers[dest as usize].unref(self).get_object(self)?
+                    {
+                        v.push(val);
+                    }
+                }
+                VECPOP => {
+                    let (vc, dest) = decode2!(chunk.code, &mut ip, wide);
+                    let val = if let Object::Vector(v) =
+                        registers[vc as usize].unref(self).get_object(self)?
+                    {
+                        if let Some(val) = v.pop() {
+                            val
+                        } else {
+                            return Err(VMError::new_vm("VECPOP: Vector is empty."));
+                        }
+                    } else {
+                        return Err(VMError::new_vm("VECPOP: Not a vector."));
+                    };
+                    self.set_register(registers, dest as usize, val);
+                }
+                VECNTH => {
+                    let (vc, dest, i) = decode3!(chunk.code, &mut ip, wide);
+                    let i = registers[i as usize].unref(self).get_int()? as usize;
+                    let val = if let Object::Vector(v) =
+                        registers[vc as usize].unref(self).get_object(self)?
+                    {
+                        if let Some(val) = v.get(i) {
+                            *val
+                        } else {
+                            return Err(VMError::new_vm("VECNTH: index out of bounds."));
+                        }
+                    } else {
+                        return Err(VMError::new_vm("VECNTH: Not a vector."));
+                    };
+                    self.set_register(registers, dest as usize, val);
+                }
+                VECSTH => {
+                    let (vc, src, i) = decode3!(chunk.code, &mut ip, wide);
+                    let i = registers[i as usize].unref(self).get_int()? as usize;
+                    let val = registers[src as usize].unref(self);
+                    if let Object::Vector(v) =
+                        registers[vc as usize].unref(self).get_object(self)?
+                    {
+                        if i >= v.len() {
+                            return Err(VMError::new_vm("VECSTH: Index out of range."));
+                        }
+                        v[i] = val;
+                    } else {
+                        return Err(VMError::new_vm("VECSTH: Not a vector."));
+                    };
+                }
+                VECMKD => {
+                    let (dest, len, dfn) = decode3!(chunk.code, &mut ip, wide);
+                    let len = registers[len as usize].unref(self).get_int()?;
+                    let dfn = registers[dfn as usize].unref(self);
+                    let mut v = Vec::with_capacity(len as usize);
+                    for _ in 0..len {
+                        v.push(dfn);
+                    }
+                    let val = Value::Reference(self.alloc(Object::Vector(v)));
+                    self.set_register(registers, dest as usize, val);
+                }
                 _ => {
                     return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
                 }
@@ -677,13 +859,13 @@ mod tests {
         vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         if let Value::Reference(h) = result {
-            if let Object::Pair(car, cdr) = &*vm.heap.get(*h)? {
+            if let Object::Pair(car, cdr) = &*vm.heap.get(*h) {
                 assert!(get_int(&vm, car)? == 1);
                 if let Value::Reference(cdr) = cdr {
-                    if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr)? {
+                    if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr) {
                         assert!(get_int(&vm, car)? == 2);
                         if let Value::Reference(cdr) = cdr {
-                            if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr)? {
+                            if let Object::Pair(car, cdr) = &*vm.heap.get(*cdr) {
                                 assert!(get_int(&vm, car)? == 3);
                                 assert!(is_nil(&vm, cdr)?);
                             } else {
@@ -779,9 +961,9 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].unref(&vm)?.get_int()?;
+        let result = vm.stack[0].unref(&vm).get_int()?;
         assert!(result == 4);
-        let result = vm.stack[1].unref(&vm)?.get_int()?;
+        let result = vm.stack[1].unref(&vm).get_int()?;
         assert!(result == 4);
 
         Ok(())
@@ -812,7 +994,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[1].unref(&vm)?.get_int()? == 11);
+        assert!(vm.stack[1].unref(&vm).get_int()? == 11);
 
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
@@ -823,7 +1005,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm)?.get_int()? == 42);
+        assert!(vm.stack[2].unref(&vm).get_int()? == 42);
 
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
@@ -841,7 +1023,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm)?.get_int()? == 43);
+        assert!(vm.stack[2].unref(&vm).get_int()? == 43);
 
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
@@ -862,8 +1044,8 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[2].unref(&vm)?.get_int()? == 53);
-        assert!(vm.stack[5].unref(&vm)?.get_int()? == 53);
+        assert!(vm.stack[2].unref(&vm).get_int()? == 53);
+        assert!(vm.stack[5].unref(&vm).get_int()? == 53);
         assert!(vm.globals.get(slot).get_int()? == 53);
 
         let mut vm = Vm::new();
@@ -882,7 +1064,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[0].unref(&vm)?.get_int()? == 44);
+        assert!(vm.stack[0].unref(&vm).get_int()? == 44);
 
         let mut vm = Vm::new();
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
@@ -900,7 +1082,7 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[0].unref(&vm)?.get_int()? == 55);
+        assert!(vm.stack[0].unref(&vm).get_int()? == 55);
 
         let mut vm = Vm::new();
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
@@ -922,8 +1104,92 @@ mod tests {
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        assert!(vm.stack[0].unref(&vm)?.get_int()? == 3);
+        assert!(vm.stack[0].unref(&vm).get_int()? == 3);
         assert!(vm.globals.get(slot).get_int()? == 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pol() -> VMResult<()> {
+        /*
+        (defn eval-pol (n x)
+          (let ((su 0.0) (mu 10.0) (pu 0.0)
+                (pol (make-vec 100 0.0)))
+            (dotimes-i i n
+              (do
+                (set! su 0.0)
+                (dotimes-i j 100
+                   (do
+                     (set! mu (/ (+ mu 2.0) 2.0))
+                     (vec-set! pol j mu)))
+                (dotimes-i j 100
+                  (set! su (+ (vec-nth pol j) (* su x))))
+                (set! pu (+ pu su))))
+            (println pu)))
+                 */
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let n = chunk.add_constant(Value::Int(5000)) as u16;
+        let x = chunk.add_constant(Value::Float(0.2)) as u16;
+        let su = chunk.add_constant(Value::Float(0.0)) as u16;
+        let mu = chunk.add_constant(Value::Float(10.0)) as u16;
+        let pu = chunk.add_constant(Value::Float(0.0)) as u16;
+        let zero = chunk.add_constant(Value::Int(0)) as u16;
+        let zerof = chunk.add_constant(Value::Float(0.0)) as u16;
+        let twof = chunk.add_constant(Value::Float(2.0)) as u16;
+        let hundred = chunk.add_constant(Value::Int(100)) as u16;
+        let one = chunk.add_constant(Value::Int(1)) as u16;
+        let line = 1;
+        chunk.encode2(CONST, 1, n, line)?;
+        chunk.encode2(CONST, 2, x, line)?;
+        chunk.encode2(CONST, 3, su, line)?;
+        chunk.encode2(CONST, 4, mu, line)?;
+        chunk.encode2(CONST, 5, pu, line)?;
+        chunk.encode2(CONST, 6, zero, line)?; // i
+        chunk.encode2(CONST, 7, zero, line)?; // j
+        chunk.encode2(CONST, 8, twof, line)?; // 2.0
+        chunk.encode2(CONST, 100, hundred, line)?;
+        chunk.encode2(CONST, 101, one, line)?;
+        chunk.encode2(CONST, 103, zerof, line)?;
+        chunk.encode3(VECMKD, 10, 100, 103, line)?; // pols
+                                                    //chunk.encode2(VECELS, 10, 100, line)?;
+                                                    // loop i .. n
+        chunk.encode2(CONST, 3, zerof, line)?;
+        chunk.encode2(CONST, 7, zero, line)?; // j
+                                              // loop j .. 100
+                                              // (set! mu (/ (+ mu 2.0) 2.0))
+        chunk.encode3(ADD, 4, 4, 8, line)?;
+        chunk.encode3(DIV, 4, 4, 8, line)?;
+        // (vec-set! pol j mu)))
+        chunk.encode3(VECSTH, 10, 4, 7, line)?;
+
+        chunk.encode2(INC, 7, 1, line)?;
+        chunk.encode3(JMPLT, 7, 100, 0x2b, line)?;
+
+        chunk.encode2(CONST, 7, zero, line)?; // j
+                                              // (dotimes-i j 100 (j2)
+                                              //   (set! su (+ (vec-nth pol j) (* su x))))
+        chunk.encode3(MUL, 50, 3, 2, line)?;
+        chunk.encode3(VECNTH, 10, 51, 7, line)?;
+        chunk.encode3(ADD, 3, 50, 51, line)?;
+
+        chunk.encode2(INC, 7, 1, line)?;
+        chunk.encode3(JMPLT, 7, 100, 0x41, line)?;
+        // (set! pu (+ pu su))))
+        chunk.encode3(ADD, 5, 5, 3, line)?;
+
+        chunk.encode2(INC, 6, 1, line)?;
+        chunk.encode3(JMPLT, 6, 1, 0x25, line)?;
+
+        chunk.encode0(RET, line)?;
+        chunk.disassemble_chunk()?;
+        //assert!(false);
+
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        let result = vm.stack[5].get_float()?;
+        assert!(result == 12500.0);
 
         Ok(())
     }
@@ -1078,7 +1344,7 @@ mod tests {
         let result = vm.stack[5].get_int()?;
         assert!(result == 22);
         match vm.stack[9] {
-            Value::Reference(h) => match vm.heap.get(h)? {
+            Value::Reference(h) => match vm.heap.get(h) {
                 Object::String(s) => assert!(s == "builtin hello"),
                 _ => panic!("bad make_str call."),
             },
@@ -1109,7 +1375,7 @@ mod tests {
         let result = vm.stack[5].get_int()?;
         assert!(result == 22);
         match vm.stack[9] {
-            Value::Reference(h) => match vm.heap.get(h)? {
+            Value::Reference(h) => match vm.heap.get(h) {
                 Object::String(s) => assert!(s == "builtin hello"),
                 _ => panic!("bad make_str call."),
             },
