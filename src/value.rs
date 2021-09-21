@@ -58,9 +58,14 @@ impl Value {
         Value::Undefined
     }
 
-    // This is used a LOT in a tight loop and this inline seems to help a lot.
+    // This is used a LOT in a tight loop and this inline seems to help.
     #[inline(always)]
     pub fn unref(self, vm: &Vm) -> Value {
+        // This is pointless from a logic standpoint but it makes the vm loop
+        // faster...
+        if !self.is_indirect() {
+            return self;
+        }
         match &self {
             Value::Reference(handle) => {
                 if let Object::Value(value) = &*vm.get(*handle) {
@@ -112,6 +117,13 @@ impl Value {
 
     pub fn is_ref(&self) -> bool {
         matches!(self, Value::Reference(_))
+    }
+
+    pub fn is_indirect(&self) -> bool {
+        matches!(
+            self,
+            Value::Reference(_) | Value::Binding(_) | Value::Global(_)
+        )
     }
 
     pub fn is_nil(&self) -> bool {

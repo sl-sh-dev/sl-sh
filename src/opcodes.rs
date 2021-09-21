@@ -3,8 +3,9 @@ pub type OpCode = u8;
 pub const NOP: OpCode = 0x00;
 pub const HALT: OpCode = 0x01;
 pub const RET: OpCode = 0x02;
+pub const WIDE: OpCode = 0x03;
 // Load a constant onto the stack
-const STACK_BASE: OpCode = 0x03;
+const STACK_BASE: OpCode = 0x04;
 pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B)
 pub const SET: OpCode = STACK_BASE + 2; // SET A B respecting global and local bindings - R(A) = R(B)
 pub const CONST: OpCode = STACK_BASE + 3; // CONST A B - R(A) = K(B)

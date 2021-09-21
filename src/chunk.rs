@@ -256,13 +256,12 @@ impl Chunk {
     pub fn encode1(&mut self, opcode: OpCode, op1: u16, line_number: u32) -> VMResult<()> {
         let mut bytes: u8 = 2;
         let mut wide = false;
-        let opcode = if op1 > u8::MAX as u16 {
+        if op1 > u8::MAX as u16 {
             wide = true;
             bytes = 3;
-            opcode | 0x80
-        } else {
-            opcode
-        };
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
 
         self.encode_line_number(bytes, line_number)?;
         self.code.push(opcode);
@@ -280,13 +279,12 @@ impl Chunk {
     ) -> VMResult<()> {
         let mut bytes: u8 = 3;
         let mut wide = false;
-        let opcode = if op1 > u8::MAX as u16 || op2 > u8::MAX as u16 {
+        if op1 > u8::MAX as u16 || op2 > u8::MAX as u16 {
             wide = true;
             bytes = 5;
-            opcode | 0x80
-        } else {
-            opcode
-        };
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
 
         self.encode_line_number(bytes, line_number)?;
         self.code.push(opcode);
@@ -306,13 +304,12 @@ impl Chunk {
     ) -> VMResult<()> {
         let mut bytes: u8 = 4;
         let mut wide = false;
-        let opcode = if op1 > u8::MAX as u16 || op2 > u8::MAX as u16 || op3 > u8::MAX as u16 {
+        if op1 > u8::MAX as u16 || op2 > u8::MAX as u16 || op3 > u8::MAX as u16 {
             wide = true;
             bytes = 7;
-            opcode | 0x80
-        } else {
-            opcode
-        };
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
 
         self.encode_line_number(bytes, line_number)?;
         self.code.push(opcode);
@@ -330,8 +327,20 @@ impl Chunk {
         let mut code = chunk.into_iter();
         let wide = (op & 0x80) != 0;
         match op & 0x7F {
+            NOP => {
+                println!("NOP");
+                Ok(())
+            }
+            HALT => {
+                println!("HALT");
+                Ok(())
+            }
             RET => {
                 println!("RET");
+                Ok(())
+            }
+            WIDE => {
+                println!("WIDE");
                 Ok(())
             }
             MOV => {
@@ -720,13 +729,16 @@ mod tests {
         assert!(*code.next().unwrap() == CAR);
         assert!(*code.next().unwrap() == 255);
 
-        assert!(*code.next().unwrap() == CAR | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CAR);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == CAR | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CAR);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == CAR | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CAR);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
     }
 
@@ -755,23 +767,28 @@ mod tests {
         assert!(*code.next().unwrap() == 255);
         assert!(*code.next().unwrap() == 255);
 
-        assert!(*code.next().unwrap() == MOV | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == MOV | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(decode_u16!(code).unwrap() == 2);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == MOV | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 1);
 
-        assert!(*code.next().unwrap() == MOV | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
 
-        assert!(*code.next().unwrap() == MOV | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == MOV);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
     }
@@ -806,27 +823,32 @@ mod tests {
         assert!(*code.next().unwrap() == 255);
         assert!(*code.next().unwrap() == 255);
 
-        assert!(*code.next().unwrap() == CONS | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CONS);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == CONS | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CONS);
         assert!(decode_u16!(code).unwrap() == 2);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 256);
 
-        assert!(*code.next().unwrap() == CONS | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CONS);
         assert!(decode_u16!(code).unwrap() == 256);
         assert!(decode_u16!(code).unwrap() == 1);
         assert!(decode_u16!(code).unwrap() == 1);
 
-        assert!(*code.next().unwrap() == CONS | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CONS);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
         assert!(decode_u16!(code).unwrap() == 257);
 
-        assert!(*code.next().unwrap() == CONS | 0x80);
+        assert!(*code.next().unwrap() == WIDE);
+        assert!(*code.next().unwrap() == CONS);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);
         assert!(decode_u16!(code).unwrap() == u16::MAX);

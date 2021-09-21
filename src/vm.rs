@@ -21,57 +21,42 @@ macro_rules! decode1 {
         if $wide {
             decode_u16!($code, $ip)
         } else {
-            let ret = $code[*$ip] as u16;
+            let oip = *$ip;
             *$ip += 1;
-            ret
+            $code[oip] as u16
         }
     }};
 }
 
 macro_rules! decode2 {
     ($code:expr, $ip:expr, $wide:expr) => {{
-        let op1 = if $wide {
-            decode_u16!($code, $ip)
+        if $wide {
+            (decode_u16!($code, $ip), decode_u16!($code, $ip))
         } else {
-            let ret = $code[*$ip] as u16;
-            *$ip += 1;
-            ret
-        };
-        let op2 = if $wide {
-            decode_u16!($code, $ip)
-        } else {
-            let ret = $code[*$ip] as u16;
-            *$ip += 1;
-            ret
-        };
-        (op1, op2)
+            let oip = *$ip;
+            *$ip += 2;
+            ($code[oip] as u16, $code[oip + 1] as u16)
+        }
     }};
 }
 
 macro_rules! decode3 {
     ($code:expr, $ip:expr, $wide:expr) => {{
-        let op1 = if $wide {
-            decode_u16!($code, $ip)
+        if $wide {
+            (
+                decode_u16!($code, $ip),
+                decode_u16!($code, $ip),
+                decode_u16!($code, $ip),
+            )
         } else {
-            let ret = $code[*$ip] as u16;
-            *$ip += 1;
-            ret
-        };
-        let op2 = if $wide {
-            decode_u16!($code, $ip)
-        } else {
-            let ret = $code[*$ip] as u16;
-            *$ip += 1;
-            ret
-        };
-        let op3 = if $wide {
-            decode_u16!($code, $ip)
-        } else {
-            let ret = $code[*$ip] as u16;
-            *$ip += 1;
-            ret
-        };
-        (op1, op2, op3)
+            let oip = *$ip;
+            *$ip += 3;
+            (
+                $code[oip] as u16,
+                $code[oip + 1] as u16,
+                $code[oip + 2] as u16,
+            )
+        }
     }};
 }
 /*
@@ -342,11 +327,11 @@ impl Vm {
         let mut registers = self.make_registers(stack_top);
         let mut chunk = chunk;
         let mut ip = 0;
+        let mut wide = false;
         loop {
             let opcode = chunk.code[ip];
             ip += 1;
-            let wide = (opcode & 0x80) != 0;
-            match opcode & 0x7F {
+            match opcode {
                 NOP => {}
                 HALT => {
                     return Err(VMError::new_vm("HALT: VM halted and on fire!"));
@@ -361,6 +346,7 @@ impl Vm {
                         return Ok(());
                     }
                 }
+                WIDE => wide = true,
                 MOV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
                     let val = registers[src as usize];
@@ -552,10 +538,12 @@ impl Vm {
                         Value::Byte(v) => Value::Byte(v + i as u8),
                         Value::Int(v) => Value::Int(v + i as i64),
                         Value::UInt(v) => Value::UInt(v + i as u64),
-                        _ => panic!(
-                            "Can only INC an integer type, got {:?}",
-                            registers[dest as usize].unref(self)
-                        ),
+                        _ => {
+                            return Err(VMError::new_vm(format!(
+                                "INC: Can only INC an integer type, got {:?}.",
+                                registers[dest as usize].unref(self)
+                            )))
+                        }
                     };
                     self.set_register(registers, dest as usize, val);
                 }
@@ -565,10 +553,12 @@ impl Vm {
                         Value::Byte(v) => Value::Byte(v - i as u8),
                         Value::Int(v) => Value::Int(v - i as i64),
                         Value::UInt(v) => Value::UInt(v - i as u64),
-                        _ => panic!(
-                            "Can only DEC an integer type, got {:?}",
-                            registers[dest as usize].unref(self)
-                        ),
+                        _ => {
+                            return Err(VMError::new_vm(format!(
+                                "DEC: Can only DEC an integer type, got {:?}.",
+                                registers[dest as usize].unref(self)
+                            )))
+                        }
                     };
                     self.set_register(registers, dest as usize, val);
                 }
@@ -702,6 +692,9 @@ impl Vm {
                 _ => {
                     return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
                 }
+            }
+            if wide && opcode != WIDE {
+                wide = false;
             }
         }
     }
@@ -1112,6 +1105,8 @@ mod tests {
 
     #[test]
     fn test_pol() -> VMResult<()> {
+        // algorithm from http://dan.corlan.net/bench.html
+        // Do a lot of loops and simple math.
         /*
         (defn eval-pol (n x)
           (let ((su 0.0) (mu 10.0) (pu 0.0)
