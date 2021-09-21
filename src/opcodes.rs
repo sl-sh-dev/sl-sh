@@ -78,6 +78,6 @@ pub const VECPOP: OpCode = VEC_BASE + 3;
 // VECNTH A B C - get nth R(C) item from vec in R(A) to R(B)
 pub const VECNTH: OpCode = VEC_BASE + 4;
 // VECSTH A B C - set nth R(C) item in vec R(A) from R(B)
-pub const VECSTH: OpCode = VEC_BASE + 5; // CONS A B C - R(A) = conscell(R(B), R(C))
-                                         // VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defauted to R(C)
+pub const VECSTH: OpCode = VEC_BASE + 5;
+// VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defauted to R(C)
 pub const VECMKD: OpCode = VEC_BASE + 6;

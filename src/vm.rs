@@ -656,7 +656,11 @@ impl Vm {
                         if let Some(val) = v.get(i) {
                             *val
                         } else {
-                            return Err(VMError::new_vm("VECNTH: index out of bounds."));
+                            return Err(VMError::new_vm(format!(
+                                "VECNTH: index out of bounds, {}/{}.",
+                                i,
+                                v.len()
+                            )));
                         }
                     } else {
                         return Err(VMError::new_vm("VECNTH: Not a vector."));
@@ -1472,6 +1476,72 @@ mod tests {
         assert!(vm.stack[23].get_int()? == 3);
         assert!(vm.stack[24].get_int()? == 3);
         assert!(vm.stack[25].get_int()? == 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vecs() -> VMResult<()> {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new("no_file", 1);
+        let zero = chunk.add_constant(Value::Int(0)) as u16;
+        let hundred = chunk.add_constant(Value::Int(100)) as u16;
+        let one = chunk.add_constant(Value::Int(1)) as u16;
+        let line = 1;
+        chunk.encode2(CONST, 2, hundred, line)?;
+        chunk.encode2(CONST, 3, zero, line)?;
+        chunk.encode2(CONST, 4, one, line)?;
+        chunk.encode3(VECMKD, 1, 2, 3, line)?;
+        chunk.encode2(VECPSH, 1, 4, line)?;
+        chunk.encode2(VECPOP, 1, 5, line)?;
+        chunk.encode2(VECPOP, 1, 6, line)?;
+        chunk.encode2(VECPSH, 1, 4, line)?;
+        chunk.encode2(VECPSH, 1, 4, line)?;
+        chunk.encode3(VECNTH, 1, 7, 2, line)?;
+        chunk.encode3(VECSTH, 1, 3, 2, line)?;
+        chunk.encode3(VECNTH, 1, 8, 2, line)?;
+        chunk.encode2(VECMK, 10, 2, line)?;
+        chunk.encode2(VECPSH, 10, 4, line)?;
+        chunk.encode2(VECPSH, 10, 3, line)?;
+        chunk.encode2(VECPOP, 10, 15, line)?;
+        chunk.encode2(VECPOP, 10, 16, line)?;
+        chunk.encode2(VECPSH, 10, 4, line)?;
+        chunk.encode2(VECPSH, 10, 4, line)?;
+        chunk.encode3(VECNTH, 10, 17, 3, line)?;
+        chunk.encode3(VECSTH, 10, 3, 3, line)?;
+        chunk.encode3(VECNTH, 10, 18, 3, line)?;
+        chunk.encode2(VECMK, 20, 2, line)?;
+        chunk.encode2(VECELS, 20, 2, line)?;
+        chunk.encode3(VECSTH, 20, 3, 3, line)?;
+        chunk.encode0(RET, line)?;
+        let chunk = Rc::new(chunk);
+        vm.execute(chunk.clone())?;
+        assert!(vm.stack[5].get_int()? == 1);
+        assert!(vm.stack[6].get_int()? == 0);
+        assert!(vm.stack[7].get_int()? == 1);
+        assert!(vm.stack[8].get_int()? == 0);
+
+        assert!(vm.stack[15].get_int()? == 0);
+        assert!(vm.stack[16].get_int()? == 1);
+        assert!(vm.stack[17].get_int()? == 1);
+        assert!(vm.stack[18].get_int()? == 0);
+        let vc = vm.stack[1];
+        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+            assert!(v.len() == 101);
+            assert!(v[0].get_int()? == 0);
+        }
+        let vc = vm.stack[10];
+        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+            assert!(v.len() == 2);
+            assert!(v[0].get_int()? == 0);
+            assert!(v[1].get_int()? == 1);
+        }
+        let vc = vm.stack[20];
+        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+            assert!(v.len() == 100);
+            assert!(v[0].get_int()? == 0);
+            assert!(v[1].is_undef());
+            assert!(v[99].is_undef());
+        }
         Ok(())
     }
 
