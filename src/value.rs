@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::iter;
 
 use crate::error::*;
 use crate::heap::*;
@@ -8,18 +9,73 @@ use crate::vm::Vm;
 
 type CallFunc = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
 
+pub struct PairIter<'vm> {
+    vm: &'vm Vm,
+    current: Option<Value>,
+    dotted: bool,
+}
+
+impl<'vm> PairIter<'vm> {
+    pub fn new(vm: &'vm Vm, exp: Value) -> PairIter {
+        PairIter {
+            vm,
+            current: Some(exp),
+            dotted: false,
+        }
+    }
+
+    pub fn is_dotted(&self) -> bool {
+        self.dotted
+    }
+}
+
+impl<'vm> Iterator for PairIter<'vm> {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.current {
+            match current {
+                Value::Reference(h) => match self.vm.get(h) {
+                    Object::Pair(car, cdr) => {
+                        self.current = Some(*cdr);
+                        Some(*car)
+                    }
+                    _ => {
+                        let cur = Some(current);
+                        self.current = None;
+                        self.dotted = true;
+                        cur
+                    }
+                },
+                Value::Nil => None,
+                _ => {
+                    let cur = Some(current);
+                    self.current = None;
+                    self.dotted = true;
+                    cur
+                }
+            }
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum Value {
     Byte(u8),
     Int(i64),
     UInt(u64),
     Float(f64),
+    CodePoint(char),
+    CharCluster(u8, [u8; 14]),
+    CharClusterLong(Handle), // XXX TODO- move to Object?
     Symbol(Interned, Option<u32>),
     StringConst(Interned),
     Reference(Handle),
     Binding(Handle),
     Global(u32),
-    Builtin(CallFunc),
+    Builtin(CallFunc), // XXX TODO, special form?
     True,
     False,
     Nil,
@@ -33,6 +89,9 @@ impl fmt::Debug for Value {
             Self::Int(i) => write!(f, "Int({})", i),
             Self::UInt(i) => write!(f, "UInt({})", i),
             Self::Float(v) => write!(f, "Float({})", v),
+            Self::CodePoint(c) => write!(f, "CodePoint({})", c),
+            Self::CharCluster(_, c) => write!(f, "CharCluster({:?})", c),
+            Self::CharClusterLong(c) => write!(f, "CharClusterLong({:?})", c),
             Self::Symbol(s, _) => write!(f, "Symbol({:?})", s),
             Self::StringConst(s) => write!(f, "StringConst({:?})", s),
             Self::Reference(r) => write!(f, "Reference({:?})", r),
@@ -184,6 +243,148 @@ impl Value {
         match &self {
             Value::Reference(h) => Ok(vm.get_mut(*h)),
             _ => Err(VMError::new_value("Not an object")),
+        }
+    }
+
+    pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
+        match &self.unref(vm) {
+            Value::Reference(h) => match vm.get(*h) {
+                Object::Pair(_, _) => Box::new(PairIter::new(vm, *self)),
+                Object::Vector(v) => Box::new(v.iter().copied()),
+                _ => Box::new(iter::empty()),
+            },
+            _ => Box::new(iter::empty()),
+        }
+    }
+
+    pub fn display_value(&self, vm: &Vm) -> String {
+        fn list_out(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
+            let mut first = true;
+            for p in itr {
+                if !first {
+                    res.push(' ');
+                } else {
+                    first = false;
+                }
+                res.push_str(&p.display_value(vm));
+            }
+        }
+        match self {
+            Value::True => "true".to_string(),
+            Value::False => "false".to_string(),
+            Value::Float(f) => format!("{}", f),
+            Value::Int(i) => format!("{}", i),
+            Value::UInt(i) => format!("{}", i),
+            Value::Byte(b) => format!("{}", b),
+            Value::Symbol(i, _) => vm.get_interned(*i).to_string(),
+            Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i).to_string()),
+            Value::CodePoint(ch) => format!("#\\{}", ch),
+            Value::CharCluster(l, c) => {
+                format!("#\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
+            }
+            Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+            Value::Builtin(_) => "#<Function>".to_string(),
+            Value::Binding(_) => self.unref(vm).display_type(vm),
+            Value::Global(_) => self.unref(vm).display_type(vm),
+            Value::Nil => "nil".to_string(),
+            Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
+            Value::Reference(h) => match vm.get(*h) {
+                Object::Lambda(_) => "#<Lambda>".to_string(),
+                //Object::Macro(_) => "Macro".to_string(),
+                //Object::Process(_) => "Process".to_string(),
+                Object::Vector(v) => {
+                    let mut res = String::new();
+                    res.push_str("#(");
+                    list_out(vm, &mut res, &mut v.iter().copied());
+                    res.push(')');
+                    res
+                }
+                /*Object::Values(v) => {
+                    if v.is_empty() {
+                        "Nil".to_string()
+                    } else {
+                        let v: Expression = (&v[0]).clone();
+                        v.display_type()
+                    }
+                }*/
+                Object::Pair(_, _) => {
+                    let mut res = String::new();
+                    res.push('(');
+                    list_out(vm, &mut res, &mut self.iter(vm));
+                    res.push(')');
+                    res
+                }
+                Object::Value(v) => v.display_value(vm),
+                Object::String(s) => format!("\"{}\"", s),
+                Object::Bytes(_) => "Bytes".to_string(), // XXX TODO
+                                                         //Object::HashMap(_) => "HashMap".to_string(),
+                                                         //Object::File(_) => "File".to_string(),
+            },
+        }
+    }
+
+    pub fn display_type(&self, vm: &Vm) -> String {
+        match self {
+            Value::True => "True".to_string(),
+            Value::False => "False".to_string(),
+            Value::Float(_) => "Float".to_string(),
+            Value::Int(_) => "Int".to_string(),
+            Value::UInt(_) => "UInt".to_string(),
+            Value::Symbol(_, _) => "Symbol".to_string(),
+            Value::StringConst(_) => "String".to_string(),
+            Value::CodePoint(_) => "Char".to_string(),
+            Value::CharCluster(_, _) => "Char".to_string(),
+            Value::CharClusterLong(_) => "Char".to_string(),
+            Value::Builtin(_) => "Builtin".to_string(),
+            Value::Byte(_) => "Byte".to_string(),
+            Value::Binding(_) => self.unref(vm).display_type(vm),
+            Value::Global(_) => self.unref(vm).display_type(vm),
+            Value::Nil => "Nil".to_string(),
+            Value::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
+            Value::Reference(h) => match vm.get(*h) {
+                Object::Lambda(_) => "Lambda".to_string(),
+                //Object::Macro(_) => "Macro".to_string(),
+                //Object::Process(_) => "Process".to_string(),
+                /*Object::Function(f) => {
+                    if f.is_special_form {
+                        "SpecialForm".to_string()
+                    } else {
+                        "Function".to_string()
+                    }
+                }*/
+                Object::Vector(_) => "Vector".to_string(),
+                /*Object::Values(v) => {
+                    if v.is_empty() {
+                        "Nil".to_string()
+                    } else {
+                        let v: Expression = (&v[0]).clone();
+                        v.display_type()
+                    }
+                }*/
+                Object::Pair(_, _) => "Pair".to_string(),
+                Object::Value(v) => v.display_type(vm),
+                Object::String(_) => "String".to_string(),
+                Object::Bytes(_) => "Bytes".to_string(),
+                //Object::HashMap(_) => "HashMap".to_string(),
+                //Object::File(_) => "File".to_string(),
+            },
+        }
+    }
+
+    pub fn is_proper_list(&self, vm: &Vm) -> bool {
+        // does not detect empty (nil) lists on purpose.
+        if let Value::Reference(h) = self {
+            if let Object::Pair(_car, cdr) = vm.get(*h) {
+                if cdr.is_nil() {
+                    true
+                } else {
+                    cdr.is_proper_list(vm)
+                }
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 }

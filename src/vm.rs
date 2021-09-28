@@ -59,6 +59,66 @@ macro_rules! decode3 {
         }
     }};
 }
+
+macro_rules! get_reg_unref {
+    ($regs:expr, $idx:expr, $vm:expr) => {{
+        $regs[$idx as usize].unref($vm)
+        //unsafe { *$regs.get_unchecked($idx as usize) }
+        /*let v = $regs[$idx as usize];//.unref($vm)
+        // This is pointless from a logic standpoint but it makes the vm loop
+        // faster...
+        if !v.is_indirect() {
+            v
+        } else {
+        match &v {
+            Value::Reference(handle) => {
+                if let Object::Value(value) = &*$vm.get(*handle) {
+                    *value
+                } else {
+                    v
+                }
+            }
+            Value::Binding(handle) => {
+                if let Object::Value(value) = &*$vm.get(*handle) {
+                    match value {
+                        Value::Reference(handle) => {
+                            if let Object::Value(value2) = $vm.get(*handle) {
+                                *value2
+                            } else {
+                                *value
+                            }
+                        }
+                        _ => *value,
+                    }
+                } else {
+                    v
+                }
+            }
+            Value::Global(idx) => {
+                let val = $vm.get_global(*idx);
+                match val {
+                    Value::Reference(handle) => {
+                        if let Object::Value(value) = $vm.get(handle) {
+                            *value
+                        } else {
+                            val
+                        }
+                    }
+                    _ => val,
+                }
+            }
+            _ => v,
+        }
+        }*/
+    }};
+}
+
+macro_rules! get_reg {
+    ($regs:expr, $idx:expr) => {{
+        $regs[$idx as usize]
+    }};
+}
+
 /*
 macro_rules! binary_math_inner {
     ($vm:expr, $registers:expr, $dest:expr, $bin_fn:expr, $op3:expr, $op2:expr, $int:expr) => {{
@@ -94,8 +154,8 @@ macro_rules! binary_math {
 macro_rules! binary_math {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = $registers[op2 as usize].unref($vm);
-        let op3 = $registers[op3 as usize].unref($vm);
+        let op2 = get_reg_unref!($registers, op2, $vm);
+        let op3 = get_reg_unref!($registers, op3, $vm);
         let val = if op2.is_int() && op3.is_int() {
             Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
         } else {
@@ -108,8 +168,8 @@ macro_rules! binary_math {
 macro_rules! div_math {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $wide:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = $registers[op2 as usize].unref($vm);
-        let op3 = $registers[op3 as usize].unref($vm);
+        let op2 = get_reg_unref!($registers, op2, $vm);
+        let op3 = get_reg_unref!($registers, op3, $vm);
         let val = if op2.is_int() && op3.is_int() {
             let op3 = op3.get_int()?;
             if op3 == 0 {
@@ -191,6 +251,10 @@ impl Vm {
         self.stack[idx]
     }
 
+    pub fn get_interned(&self, i: Interned) -> &'static str {
+        self.interner.get_string(i).expect("Invalid interned value")
+    }
+
     pub fn intern(&mut self, string: &str) -> Interned {
         self.interner.intern(string)
     }
@@ -207,7 +271,7 @@ impl Vm {
 
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
-        match &registers[idx] {
+        match &get_reg!(registers, idx) {
             Value::Binding(handle) => {
                 self.heap.replace(*handle, Object::Value(val));
             }
@@ -234,11 +298,7 @@ impl Vm {
         } else {
             let mut last_cdr = Value::Nil;
             for i in (start..end).rev() {
-                let car = if let Some(op) = registers.get(i as usize) {
-                    op.unref(self)
-                } else {
-                    return Err(VMError::new_vm("List: Not enough elements."));
-                };
+                let car = get_reg_unref!(registers, i, self);
                 let cdr = last_cdr;
                 last_cdr = Value::Reference(self.alloc(Object::Pair(car, cdr)));
             }
@@ -255,8 +315,8 @@ impl Vm {
         wide: bool,
     ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, ip, wide);
-        let pair = registers[pair_reg as usize].unref(self);
-        let val = registers[val as usize].unref(self);
+        let pair = get_reg_unref!(registers, pair_reg, self);
+        let val = get_reg_unref!(registers, val, self);
         match &pair {
             Value::Reference(cons_handle) => {
                 let cons_d = self.heap.get(*cons_handle);
@@ -289,8 +349,8 @@ impl Vm {
         wide: bool,
     ) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, ip, wide);
-        let pair = registers[pair_reg as usize].unref(self);
-        let val = registers[val as usize].unref(self);
+        let pair = get_reg_unref!(registers, pair_reg, self);
+        let val = get_reg_unref!(registers, val, self);
         match &pair {
             Value::Reference(cons_handle) => {
                 let cons_d = self.heap.get(*cons_handle);
@@ -349,12 +409,12 @@ impl Vm {
                 WIDE => wide = true,
                 MOV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize];
+                    let val = get_reg!(registers, src);
                     self.mov_register(registers, dest as usize, val);
                 }
                 SET => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self);
+                    let val = get_reg_unref!(registers, src, self);
                     self.set_register(registers, dest as usize, val);
                 }
                 CONST => {
@@ -364,7 +424,7 @@ impl Vm {
                 }
                 REF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let idx = if let Value::Symbol(s, i) = registers[src as usize].unref(self) {
+                    let idx = if let Value::Symbol(s, i) = get_reg_unref!(registers, src, self) {
                         if let Some(i) = i {
                             i
                         } else if let Some(i) = self.globals.interned_slot(s) {
@@ -382,8 +442,8 @@ impl Vm {
                 }
                 DEF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self);
-                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self) {
+                    let val = get_reg_unref!(registers, src, self);
+                    if let Value::Symbol(s, i) = get_reg_unref!(registers, dest, self) {
                         if let Some(i) = i {
                             self.globals.set(i, val);
                         } else {
@@ -395,8 +455,8 @@ impl Vm {
                 }
                 DEFV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[src as usize].unref(self);
-                    if let Value::Symbol(s, i) = registers[dest as usize].unref(self) {
+                    let val = get_reg_unref!(registers, src, self);
+                    if let Value::Symbol(s, i) = get_reg_unref!(registers, dest, self) {
                         if let Some(i) = i {
                             if let Value::Undefined = self.globals.get(i) {
                                 self.globals.set(i, val);
@@ -410,8 +470,8 @@ impl Vm {
                 }
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
-                    let lambda = registers[lambda as usize];
-                    match lambda.unref(self) {
+                    let lambda = get_reg_unref!(registers, lambda, self);
+                    match lambda {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;
                             let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
@@ -438,8 +498,8 @@ impl Vm {
                 }
                 TCALL => {
                     let (lambda, num_args) = decode2!(chunk.code, &mut ip, wide);
-                    let lambda = registers[lambda as usize];
-                    match lambda.unref(self) {
+                    let lambda = get_reg_unref!(registers, lambda, self);
+                    match lambda {
                         Value::Builtin(f) => {
                             let last_reg = num_args as usize + 1;
                             let res = f(self, &registers[1..last_reg])?;
@@ -470,60 +530,60 @@ impl Vm {
                 }
                 JMPFT => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_truethy() {
+                    if get_reg_unref!(registers, test, self).is_truethy() {
                         ip += ipoff as usize;
                     }
                 }
                 JMPBT => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_truethy() {
+                    if get_reg_unref!(registers, test, self).is_truethy() {
                         ip -= ipoff as usize;
                     }
                 }
                 JMPFF => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_falsey() {
+                    if get_reg_unref!(registers, test, self).is_falsey() {
                         ip += ipoff as usize;
                     }
                 }
                 JMPBF => {
                     let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_falsey() {
+                    if get_reg_unref!(registers, test, self).is_falsey() {
                         ip -= ipoff as usize;
                     }
                 }
                 JMP_T => {
                     let (test, nip) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_truethy() {
+                    if get_reg_unref!(registers, test, self).is_truethy() {
                         ip = nip as usize;
                     }
                 }
                 JMP_F => {
                     let (test, nip) = decode2!(chunk.code, &mut ip, wide);
-                    if registers[test as usize].unref(self).is_falsey() {
+                    if get_reg_unref!(registers, test, self).is_falsey() {
                         ip = nip as usize;
                     }
                 }
                 JMPEQ => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
-                    let op1 = registers[op1 as usize].unref(self).get_int()?;
-                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
+                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 == op2 {
                         ip = nip as usize;
                     }
                 }
                 JMPLT => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
-                    let op1 = registers[op1 as usize].unref(self).get_int()?;
-                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
+                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 < op2 {
                         ip = nip as usize;
                     }
                 }
                 JMPGT => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
-                    let op1 = registers[op1 as usize].unref(self).get_int()?;
-                    let op2 = registers[op2 as usize].unref(self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
+                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 > op2 {
                         ip = nip as usize;
                     }
@@ -534,14 +594,14 @@ impl Vm {
                 DIV => div_math!(self, chunk, &mut ip, registers, wide),
                 INC => {
                     let (dest, i) = decode2!(chunk.code, &mut ip, wide);
-                    let val = match registers[dest as usize].unref(self) {
+                    let val = match get_reg_unref!(registers, dest, self) {
                         Value::Byte(v) => Value::Byte(v + i as u8),
                         Value::Int(v) => Value::Int(v + i as i64),
                         Value::UInt(v) => Value::UInt(v + i as u64),
                         _ => {
                             return Err(VMError::new_vm(format!(
                                 "INC: Can only INC an integer type, got {:?}.",
-                                registers[dest as usize].unref(self)
+                                get_reg_unref!(registers, dest, self)
                             )))
                         }
                     };
@@ -549,14 +609,14 @@ impl Vm {
                 }
                 DEC => {
                     let (dest, i) = decode2!(chunk.code, &mut ip, wide);
-                    let val = match registers[dest as usize].unref(self) {
+                    let val = match get_reg_unref!(registers, dest, self) {
                         Value::Byte(v) => Value::Byte(v - i as u8),
                         Value::Int(v) => Value::Int(v - i as i64),
                         Value::UInt(v) => Value::UInt(v - i as u64),
                         _ => {
                             return Err(VMError::new_vm(format!(
                                 "DEC: Can only DEC an integer type, got {:?}.",
-                                registers[dest as usize].unref(self)
+                                get_reg_unref!(registers, dest, self)
                             )))
                         }
                     };
@@ -564,15 +624,15 @@ impl Vm {
                 }
                 CONS => {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut ip, wide);
-                    let car = registers[op2 as usize].unref(self);
-                    let cdr = registers[op3 as usize].unref(self);
+                    let car = get_reg_unref!(registers, op2, self);
+                    let cdr = get_reg_unref!(registers, op3, self);
                     let pair = Value::Reference(self.alloc(Object::Pair(car, cdr)));
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
-                    let op = registers[op as usize];
-                    match op.unref(self) {
+                    let op = get_reg_unref!(registers, op, self);
+                    match op {
                         Value::Reference(handle) => {
                             let handle_d = self.heap.get(handle);
                             if let Object::Pair(car, _) = &*handle_d {
@@ -588,8 +648,8 @@ impl Vm {
                 }
                 CDR => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
-                    let op = registers[op as usize];
-                    match op.unref(self) {
+                    let op = get_reg_unref!(registers, op, self);
+                    match op {
                         Value::Reference(handle) => {
                             let handle_d = self.heap.get(handle);
                             if let Object::Pair(_, cdr) = &*handle_d {
@@ -608,7 +668,7 @@ impl Vm {
                 XDR => self.xdr(&chunk.code[..], &mut ip, registers, wide)?,
                 VECMK => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
-                    let len = registers[op as usize].unref(self).get_int()?;
+                    let len = get_reg_unref!(registers, op, self).get_int()?;
                     let val = Value::Reference(
                         self.alloc(Object::Vector(Vec::with_capacity(len as usize))),
                     );
@@ -616,18 +676,18 @@ impl Vm {
                 }
                 VECELS => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
-                    let len = registers[op as usize].unref(self).get_int()?;
+                    let len = get_reg_unref!(registers, op, self).get_int()?;
                     if let Object::Vector(v) =
-                        registers[dest as usize].unref(self).get_object(self)?
+                        get_reg_unref!(registers, dest, self).get_object(self)?
                     {
                         v.resize(len as usize, Value::Undefined);
                     }
                 }
                 VECPSH => {
                     let (dest, op) = decode2!(chunk.code, &mut ip, wide);
-                    let val = registers[op as usize].unref(self);
+                    let val = get_reg_unref!(registers, op, self);
                     if let Object::Vector(v) =
-                        registers[dest as usize].unref(self).get_object(self)?
+                        get_reg_unref!(registers, dest, self).get_object(self)?
                     {
                         v.push(val);
                     }
@@ -635,7 +695,7 @@ impl Vm {
                 VECPOP => {
                     let (vc, dest) = decode2!(chunk.code, &mut ip, wide);
                     let val = if let Object::Vector(v) =
-                        registers[vc as usize].unref(self).get_object(self)?
+                        get_reg_unref!(registers, vc, self).get_object(self)?
                     {
                         if let Some(val) = v.pop() {
                             val
@@ -649,9 +709,9 @@ impl Vm {
                 }
                 VECNTH => {
                     let (vc, dest, i) = decode3!(chunk.code, &mut ip, wide);
-                    let i = registers[i as usize].unref(self).get_int()? as usize;
+                    let i = get_reg_unref!(registers, i, self).get_int()? as usize;
                     let val = if let Object::Vector(v) =
-                        registers[vc as usize].unref(self).get_object(self)?
+                        get_reg_unref!(registers, vc, self).get_object(self)?
                     {
                         if let Some(val) = v.get(i) {
                             *val
@@ -669,10 +729,10 @@ impl Vm {
                 }
                 VECSTH => {
                     let (vc, src, i) = decode3!(chunk.code, &mut ip, wide);
-                    let i = registers[i as usize].unref(self).get_int()? as usize;
-                    let val = registers[src as usize].unref(self);
+                    let i = get_reg_unref!(registers, i, self).get_int()? as usize;
+                    let val = get_reg_unref!(registers, src, self);
                     if let Object::Vector(v) =
-                        registers[vc as usize].unref(self).get_object(self)?
+                        get_reg_unref!(registers, vc, self).get_object(self)?
                     {
                         if i >= v.len() {
                             return Err(VMError::new_vm("VECSTH: Index out of range."));
@@ -684,8 +744,8 @@ impl Vm {
                 }
                 VECMKD => {
                     let (dest, len, dfn) = decode3!(chunk.code, &mut ip, wide);
-                    let len = registers[len as usize].unref(self).get_int()?;
-                    let dfn = registers[dfn as usize].unref(self);
+                    let len = get_reg_unref!(registers, len, self).get_int()?;
+                    let dfn = get_reg_unref!(registers, dfn, self);
                     let mut v = Vec::with_capacity(len as usize);
                     for _ in 0..len {
                         v.push(dfn);
