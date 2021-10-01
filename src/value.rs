@@ -73,7 +73,7 @@ pub enum Value {
     Symbol(Interned, Option<u32>),
     StringConst(Interned),
     Reference(Handle),
-    Binding(Handle),
+    Binding(usize),
     Global(u32),
     Builtin(CallFunc), // XXX TODO, special form?
     True,
@@ -126,51 +126,9 @@ impl Value {
             return self;
         }
         match &self {
-            Value::Reference(handle) => {
-                if let Object::Value(value) = &*vm.get(*handle) {
-                    *value
-                } else {
-                    self
-                }
-            }
-            Value::Binding(handle) => {
-                if let Object::Value(value) = &*vm.get(*handle) {
-                    match value {
-                        Value::Reference(handle) => {
-                            if let Object::Value(value2) = vm.get(*handle) {
-                                *value2
-                            } else {
-                                *value
-                            }
-                        }
-                        _ => *value,
-                    }
-                } else {
-                    self
-                }
-            }
-            Value::Global(idx) => {
-                let val = vm.get_global(*idx);
-                match val {
-                    Value::Reference(handle) => {
-                        if let Object::Value(value) = vm.get(handle) {
-                            *value
-                        } else {
-                            val
-                        }
-                    }
-                    _ => val,
-                }
-            }
+            Value::Binding(idx) => vm.get_upval(*idx),
+            Value::Global(idx) => vm.get_global(*idx),
             _ => self,
-        }
-    }
-
-    pub fn handle(self, vm: &mut Vm) -> VMResult<Handle> {
-        if let Value::Reference(handle) = self {
-            Ok(handle)
-        } else {
-            Ok(vm.alloc(Object::Value(self)))
         }
     }
 
@@ -181,7 +139,8 @@ impl Value {
     pub fn is_indirect(&self) -> bool {
         matches!(
             self,
-            Value::Reference(_) | Value::Binding(_) | Value::Global(_)
+            //Value::Reference(_) | Value::Binding(_) | Value::Global(_)
+            Value::Binding(_) | Value::Global(_)
         )
     }
 
@@ -299,14 +258,6 @@ impl Value {
                     res.push(')');
                     res
                 }
-                /*Object::Values(v) => {
-                    if v.is_empty() {
-                        "Nil".to_string()
-                    } else {
-                        let v: Expression = (&v[0]).clone();
-                        v.display_type()
-                    }
-                }*/
                 Object::Pair(_, _) => {
                     let mut res = String::new();
                     res.push('(');
@@ -314,7 +265,6 @@ impl Value {
                     res.push(')');
                     res
                 }
-                Object::Value(v) => v.display_value(vm),
                 Object::String(s) => format!("\"{}\"", s),
                 Object::Bytes(_) => "Bytes".to_string(), // XXX TODO
                                                          //Object::HashMap(_) => "HashMap".to_string(),
@@ -353,16 +303,7 @@ impl Value {
                     }
                 }*/
                 Object::Vector(_) => "Vector".to_string(),
-                /*Object::Values(v) => {
-                    if v.is_empty() {
-                        "Nil".to_string()
-                    } else {
-                        let v: Expression = (&v[0]).clone();
-                        v.display_type()
-                    }
-                }*/
                 Object::Pair(_, _) => "Pair".to_string(),
-                Object::Value(v) => v.display_type(vm),
                 Object::String(_) => "String".to_string(),
                 Object::Bytes(_) => "Bytes".to_string(),
                 //Object::HashMap(_) => "HashMap".to_string(),

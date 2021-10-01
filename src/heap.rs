@@ -10,7 +10,6 @@ const FLAG_TRACE: u8 = 0x02;
 const FLAG_STICKY: u8 = 0x04;
 //const FLAG_NEW: u8 = 0x08;
 
-const TYPE_VALUE: u8 = 0x00;
 const TYPE_STRING: u8 = 0x10;
 const TYPE_VECTOR: u8 = 0x20;
 const TYPE_BYTES: u8 = 0x30;
@@ -50,18 +49,11 @@ fn need_trace(flag: u8) -> bool {
 // (for instance closed over values or globals).
 #[derive(Clone, Debug)]
 pub enum Object {
-    Value(Value),
     String(Cow<'static, str>),
     Vector(Vec<Value>),
     Bytes(Vec<u8>),
     Pair(Value, Value),
     Lambda(Rc<Chunk>),
-}
-
-impl Object {
-    pub fn is_nil(&self) -> bool {
-        matches!(self, Object::Value(Value::Nil))
-    }
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -149,8 +141,6 @@ impl Heap {
 
     fn type_flag(obj: &Object) -> u8 {
         match obj {
-            Object::Value(Value::Reference(_)) => TYPE_VALUE | FLAG_TRACE,
-            Object::Value(_) => TYPE_VALUE,
             Object::String(_) => TYPE_STRING,
             Object::Vector(_) => TYPE_VECTOR | FLAG_TRACE,
             Object::Bytes(_) => TYPE_BYTES,
@@ -191,14 +181,6 @@ impl Heap {
                 }
             }
             panic!("Failed to allocate to heap- no free objects and no capacity!");
-        }
-    }
-
-    pub fn is_value(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx) {
-            (flag & 0xf0) == TYPE_VALUE
-        } else {
-            false
         }
     }
 
@@ -256,14 +238,6 @@ impl Heap {
         let old = self.objects.swap_remove(handle.idx);
         self.flags[handle.idx] = type_flag | (self.flags[handle.idx] & 0x0f);
         old
-    }
-
-    pub fn get_value(&self, handle: Handle) -> Value {
-        if let Object::Value(val) = self.get(handle) {
-            *val
-        } else {
-            Value::Reference(handle)
-        }
     }
 
     pub fn is_marked(&self, handle: Handle) -> bool {
@@ -326,8 +300,6 @@ impl Heap {
         // idx should also have been validated before it gets here (by mark if nothing else).
         let obj = unsafe { &*(self.objects.get_unchecked(idx) as *const Object) };
         match obj {
-            Object::Value(Value::Reference(h)) => self.mark_trace(*h, current),
-            Object::Value(_) => {}
             Object::String(_) => {}
             Object::Vector(vec) => {
                 for v in vec {
@@ -393,23 +365,23 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            heap.alloc(Object::Value(Value::Int(x)), mark_roots);
+            heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
             let obj = heap.get(Handle { idx: x });
-            if let Object::Value(Value::Int(v)) = obj {
+            if let Object::Pair(Value::Int(v), Value::Nil) = obj {
                 assert!(x == *v as usize);
             } else {
                 assert!(false);
             }
         }
-        heap.alloc(Object::Value(Value::Int(512)), mark_roots);
+        heap.alloc(Object::Pair(Value::Int(512), Value::Nil), mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
         let obj = heap.get(Handle { idx: 0 });
-        if let Object::Value(Value::Int(v)) = obj {
+        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
             assert!(512 == *v);
         } else {
             assert!(false);
@@ -421,13 +393,13 @@ mod tests {
             Ok(())
         };
         for x in 0..512 {
-            heap.alloc(Object::Value(Value::Int(x)), mark_roots);
+            heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
         }
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
             let obj = heap.get(Handle { idx: x });
-            if let Object::Value(Value::Int(v)) = obj {
+            if let Object::Pair(Value::Int(v), Value::Nil) = obj {
                 if x == 0 {
                     assert!(512 == *v);
                 } else {
@@ -453,14 +425,14 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            let h = heap.alloc(Object::Value(Value::Int(x)), mark_roots);
+            let h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
             heap.sticky(h);
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
-            let _h = heap.alloc(Object::Value(Value::Int(x)), mark_roots);
+            let _h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
@@ -492,19 +464,20 @@ mod tests {
             Ok(())
         };
         for x in 0..256 {
-            let inner = heap.alloc(Object::Value(Value::Int(x)), mark_roots);
-            outers
-                .borrow_mut()
-                .push(heap.alloc(Object::Value(Value::Reference(inner)), mark_roots));
+            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            outers.borrow_mut().push(heap.alloc(
+                Object::Pair(Value::Reference(inner), Value::Nil),
+                mark_roots,
+            ));
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         let mut i = 0;
         for h in outers.borrow().iter() {
             let obj = heap.get(*h);
-            if let Object::Value(Value::Reference(inner)) = obj {
+            if let Object::Pair(Value::Reference(inner), Value::Nil) = obj {
                 let obj = heap.get(*inner);
-                if let Object::Value(Value::Int(v)) = obj {
+                if let Object::Pair(Value::Int(v), Value::Nil) = obj {
                     assert!(i == *v as usize);
                 } else {
                     assert!(false);
@@ -551,7 +524,7 @@ mod tests {
         };
         let mut v = vec![];
         for x in 0..256 {
-            let inner = heap.alloc(Object::Value(Value::Int(x)), mark_roots);
+            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
             v.push(Value::Reference(inner));
         }
         outers
@@ -566,7 +539,7 @@ mod tests {
                 for hv in v {
                     if let Value::Reference(hv) = hv {
                         let obj = heap.get(*hv);
-                        if let Object::Value(Value::Int(v)) = obj {
+                        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
                             assert!(i == *v as usize);
                         } else {
                             assert!(false);
@@ -590,7 +563,7 @@ mod tests {
                 for hv in v {
                     if let Value::Reference(hv) = hv {
                         let obj = heap.get(*hv);
-                        if let Object::Value(Value::Int(v)) = obj {
+                        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
                             assert!(i == *v as usize);
                         } else {
                             assert!(false);
@@ -637,8 +610,8 @@ mod tests {
         outers
             .borrow_mut()
             .push(heap.alloc(Object::Pair(Value::Int(1), Value::Int(2)), mark_roots));
-        let car_h = heap.alloc(Object::Value(Value::Int(3)), mark_roots);
-        let cdr_h = heap.alloc(Object::Value(Value::Int(4)), mark_roots);
+        let car_h = heap.alloc(Object::Pair(Value::Int(3), Value::Nil), mark_roots);
+        let cdr_h = heap.alloc(Object::Pair(Value::Int(4), Value::Nil), mark_roots);
         outers.borrow_mut().push(heap.alloc(
             Object::Pair(Value::Reference(car_h), Value::Int(2)),
             mark_roots,
@@ -674,7 +647,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 1 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Value(Value::Int(car)) = heap.get(*car_h) {
+                        if let Object::Pair(Value::Int(car), Value::Nil) = heap.get(*car_h) {
                             if let Value::Int(cdr) = cdr {
                                 (*car, *cdr)
                             } else {
@@ -690,7 +663,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 2 {
                     let (car, cdr) = if let Value::Reference(cdr_h) = cdr {
-                        if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h) {
+                        if let Object::Pair(Value::Int(cdr), Value::Nil) = heap.get(*cdr_h) {
                             if let Value::Int(car) = car {
                                 (*car, *cdr)
                             } else {
@@ -706,9 +679,10 @@ mod tests {
                     assert!(cdr == 4);
                 } else if i == 3 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Value(Value::Int(car)) = heap.get(*car_h) {
+                        if let Object::Pair(Value::Int(car), Value::Nil) = heap.get(*car_h) {
                             if let Value::Reference(cdr_h) = cdr {
-                                if let Object::Value(Value::Int(cdr)) = heap.get(*cdr_h) {
+                                if let Object::Pair(Value::Int(cdr), Value::Nil) = heap.get(*cdr_h)
+                                {
                                     (*car, *cdr)
                                 } else {
                                     (*car, 0)

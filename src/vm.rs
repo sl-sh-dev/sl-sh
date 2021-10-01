@@ -63,53 +63,6 @@ macro_rules! decode3 {
 macro_rules! get_reg_unref {
     ($regs:expr, $idx:expr, $vm:expr) => {{
         $regs[$idx as usize].unref($vm)
-        //unsafe { *$regs.get_unchecked($idx as usize) }
-        /*let v = $regs[$idx as usize];//.unref($vm)
-        // This is pointless from a logic standpoint but it makes the vm loop
-        // faster...
-        if !v.is_indirect() {
-            v
-        } else {
-        match &v {
-            Value::Reference(handle) => {
-                if let Object::Value(value) = &*$vm.get(*handle) {
-                    *value
-                } else {
-                    v
-                }
-            }
-            Value::Binding(handle) => {
-                if let Object::Value(value) = &*$vm.get(*handle) {
-                    match value {
-                        Value::Reference(handle) => {
-                            if let Object::Value(value2) = $vm.get(*handle) {
-                                *value2
-                            } else {
-                                *value
-                            }
-                        }
-                        _ => *value,
-                    }
-                } else {
-                    v
-                }
-            }
-            Value::Global(idx) => {
-                let val = $vm.get_global(*idx);
-                match val {
-                    Value::Reference(handle) => {
-                        if let Object::Value(value) = $vm.get(handle) {
-                            *value
-                        } else {
-                            val
-                        }
-                    }
-                    _ => val,
-                }
-            }
-            _ => v,
-        }
-        }*/
     }};
 }
 
@@ -209,6 +162,7 @@ pub struct Vm {
     stack: Vec<Value>,
     call_stack: Vec<CallFrame>,
     globals: Globals,
+    upvals: Vec<Value>,
 }
 
 impl Default for Vm {
@@ -228,6 +182,7 @@ impl Vm {
             stack,
             call_stack: Vec::new(),
             globals,
+            upvals: Vec::new(),
         }
     }
 
@@ -245,6 +200,16 @@ impl Vm {
 
     pub fn get_global(&self, idx: u32) -> Value {
         self.globals.get(idx)
+    }
+
+    pub fn get_upval(&self, idx: usize) -> Value {
+        self.upvals[idx]
+    }
+
+    pub fn new_upval(&mut self, val: Value) -> usize {
+        let r = self.upvals.len();
+        self.upvals.push(val);
+        r
     }
 
     pub fn get_stack(&self, idx: usize) -> Value {
@@ -272,8 +237,8 @@ impl Vm {
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
-            Value::Binding(handle) => {
-                self.heap.replace(*handle, Object::Value(val));
+            Value::Binding(idx) => {
+                self.upvals[*idx] = val;
             }
             Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
@@ -323,9 +288,6 @@ impl Vm {
                 if let Object::Pair(_car, cdr) = &*cons_d {
                     let cdr = *cdr;
                     self.heap.replace(*cons_handle, Object::Pair(val, cdr));
-                } else if cons_d.is_nil() {
-                    let pair = Object::Pair(val, Value::Nil);
-                    self.heap.replace(*cons_handle, pair);
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -357,9 +319,6 @@ impl Vm {
                 if let Object::Pair(car, _cdr) = &*cons_d {
                     let car = *car;
                     self.heap.replace(*cons_handle, Object::Pair(car, val));
-                } else if cons_d.is_nil() {
-                    let pair = Object::Pair(Value::Nil, val);
-                    self.heap.replace(*cons_handle, pair);
                 } else {
                     return Err(VMError::new_vm("XAR: Not a pair/conscell."));
                 }
@@ -799,8 +758,7 @@ mod tests {
         chunk.encode2(CDR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let const_handle = vm.alloc(Object::Value(Value::Nil));
-        chunk.add_constant(Value::Reference(const_handle));
+        chunk.add_constant(Value::Nil);
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
@@ -1005,8 +963,7 @@ mod tests {
         assert!(result == 255 + 256);
 
         let mut vm = Vm::new();
-        let handle = vm.alloc(Object::Value(Value::Int(1)));
-        vm.stack[0] = Value::Binding(handle);
+        vm.stack[0] = Value::Binding(vm.new_upval(Value::Int(1)));
         vm.stack[1] = Value::Int(10);
         vm.stack[2] = Value::Int(1);
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
