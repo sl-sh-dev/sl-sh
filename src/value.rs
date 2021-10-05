@@ -243,8 +243,8 @@ impl Value {
             }
             Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
             Value::Builtin(_) => "#<Function>".to_string(),
-            Value::Binding(_) => self.unref(vm).display_type(vm),
-            Value::Global(_) => self.unref(vm).display_type(vm),
+            Value::Binding(_) => self.unref(vm).display_value(vm),
+            Value::Global(_) => self.unref(vm).display_value(vm),
             Value::Nil => "nil".to_string(),
             Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
             Value::Reference(h) => match vm.get(*h) {

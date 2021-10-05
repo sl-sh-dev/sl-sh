@@ -4,6 +4,7 @@ use crate::error::*;
 use crate::interner::Interned;
 use crate::opcodes::*;
 use crate::value::*;
+use crate::vm::*;
 
 macro_rules! decode_u8_enum {
     ($code:expr) => {{
@@ -668,7 +669,12 @@ impl Chunk {
         }
     }
 
-    pub fn disassemble_chunk(&self) -> VMResult<()> {
+    pub fn disassemble_chunk(&self, vm: &Vm) -> VMResult<()> {
+        println!("CONSTANTS:");
+        for (i, v) in self.constants.iter().enumerate() {
+            println!("{}: {}", i, v.display_value(vm));
+        }
+        println!();
         let mut code = self.code.iter().cloned().enumerate();
         let mut op = code.next();
         let mut last_line = 0;

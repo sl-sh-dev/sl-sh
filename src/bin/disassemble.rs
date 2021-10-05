@@ -6,6 +6,7 @@ use slvm::error::*;
 use slvm::interner::*;
 use slvm::opcodes::*;
 use slvm::value::*;
+use slvm::vm::*;
 
 fn main() -> Result<(), VMError> {
     let mut interner = Interner::with_capacity(8);
@@ -42,6 +43,7 @@ fn main() -> Result<(), VMError> {
     chunk.encode2(DEF, 1, 2, 4)?;
     chunk.encode1(JMP, 1, 5)?;
     chunk.encode2(JMPFT, 1, 21, 5)?;
-    chunk.disassemble_chunk()?;
+    let vm = Vm::new();
+    chunk.disassemble_chunk(&vm)?;
     Ok(())
 }

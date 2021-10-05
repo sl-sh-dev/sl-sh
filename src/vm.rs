@@ -1201,7 +1201,7 @@ mod tests {
         chunk.encode3(JMPLT, 6, 1, 0x25, line)?;
 
         chunk.encode0(RET, line)?;
-        chunk.disassemble_chunk()?;
+        //chunk.disassemble_chunk(&vm)?;
         //assert!(false);
 
         let chunk = Rc::new(chunk);
