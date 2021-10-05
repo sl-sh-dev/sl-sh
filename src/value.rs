@@ -70,7 +70,7 @@ pub enum Value {
     CodePoint(char),
     CharCluster(u8, [u8; 14]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
-    Symbol(Interned, Option<u32>),
+    Symbol(Interned),
     StringConst(Interned),
     Reference(Handle),
     Binding(usize),
@@ -92,7 +92,7 @@ impl fmt::Debug for Value {
             Self::CodePoint(c) => write!(f, "CodePoint({})", c),
             Self::CharCluster(_, c) => write!(f, "CharCluster({:?})", c),
             Self::CharClusterLong(c) => write!(f, "CharClusterLong({:?})", c),
-            Self::Symbol(s, _) => write!(f, "Symbol({:?})", s),
+            Self::Symbol(s) => write!(f, "Symbol({:?})", s),
             Self::StringConst(s) => write!(f, "StringConst({:?})", s),
             Self::Reference(r) => write!(f, "Reference({:?})", r),
             Self::Binding(r) => write!(f, "Binding({:?})", r),
@@ -235,7 +235,7 @@ impl Value {
             Value::Int(i) => format!("{}", i),
             Value::UInt(i) => format!("{}", i),
             Value::Byte(b) => format!("{}", b),
-            Value::Symbol(i, _) => vm.get_interned(*i).to_string(),
+            Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i).to_string()),
             Value::CodePoint(ch) => format!("#\\{}", ch),
             Value::CharCluster(l, c) => {
@@ -280,7 +280,7 @@ impl Value {
             Value::Float(_) => "Float".to_string(),
             Value::Int(_) => "Int".to_string(),
             Value::UInt(_) => "UInt".to_string(),
-            Value::Symbol(_, _) => "Symbol".to_string(),
+            Value::Symbol(_) => "Symbol".to_string(),
             Value::StringConst(_) => "String".to_string(),
             Value::CodePoint(_) => "Char".to_string(),
             Value::CharCluster(_, _) => "Char".to_string(),
@@ -364,34 +364,6 @@ impl Globals {
             self.objects.push(Value::Undefined);
             self.objects_map.insert(symbol, index);
             index as u32
-        }
-    }
-
-    pub fn def(&mut self, symbol: Interned, val: Value) -> u32 {
-        if let Some(idx) = self.objects_map.get(&symbol) {
-            self.objects[*idx] = val;
-            *idx as u32
-        } else {
-            let index = self.objects.len();
-            self.objects.push(val);
-            self.objects_map.insert(symbol, index);
-            index as u32
-        }
-    }
-
-    pub fn defvar(&mut self, symbol: Interned, val: Value) -> Option<u32> {
-        if let Some(idx) = self.objects_map.get(&symbol) {
-            if let Value::Undefined = self.objects[*idx] {
-                self.objects[*idx] = val;
-                Some(*idx as u32)
-            } else {
-                None
-            }
-        } else {
-            let index = self.objects.len();
-            self.objects.push(val);
-            self.objects_map.insert(symbol, index);
-            Some(index as u32)
         }
     }
 

@@ -226,12 +226,7 @@ impl Vm {
 
     pub fn reserve_symbol(&mut self, string: &str) -> Value {
         let sym = self.interner.intern(string);
-        Value::Symbol(sym, Some(self.globals.reserve(sym)))
-    }
-
-    pub fn def_symbol(&mut self, string: &str, value: Value) -> Value {
-        let sym = self.interner.intern(string);
-        Value::Symbol(sym, Some(self.globals.def(sym, value)))
+        Value::Global(self.globals.reserve(sym))
     }
 
     #[inline]
@@ -383,16 +378,16 @@ impl Vm {
                 }
                 REF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
-                    let idx = if let Value::Symbol(s, i) = get_reg_unref!(registers, src, self) {
-                        if let Some(i) = i {
-                            i
-                        } else if let Some(i) = self.globals.interned_slot(s) {
-                            i as u32
-                        } else {
-                            return Err(VMError::new_vm("REF: Symbol not interned."));
+                    let idx = match get_reg!(registers, src) {
+                        Value::Symbol(s) => {
+                            if let Some(i) = self.globals.interned_slot(s) {
+                                i as u32
+                            } else {
+                                return Err(VMError::new_vm("REF: Symbol not global."));
+                            }
                         }
-                    } else {
-                        return Err(VMError::new_vm("REF: Not a symbol."));
+                        Value::Global(i) => i,
+                        _ => return Err(VMError::new_vm("REF: Not a symbol.")),
                     };
                     if let Value::Undefined = self.globals.get(idx as u32) {
                         return Err(VMError::new_vm("REF: Symbol is not defined."));
@@ -402,29 +397,24 @@ impl Vm {
                 DEF => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
                     let val = get_reg_unref!(registers, src, self);
-                    if let Value::Symbol(s, i) = get_reg_unref!(registers, dest, self) {
-                        if let Some(i) = i {
-                            self.globals.set(i, val);
-                        } else {
-                            self.globals.def(s, val);
-                        }
+                    if let Value::Global(i) = get_reg!(registers, dest) {
+                        self.globals.set(i, val);
                     } else {
-                        return Err(VMError::new_vm("DEF: Not a symbol."));
+                        return Err(VMError::new_vm(format!(
+                            "DEF: Not a global, got: {:?}.",
+                            get_reg!(registers, dest)
+                        )));
                     }
                 }
                 DEFV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
                     let val = get_reg_unref!(registers, src, self);
-                    if let Value::Symbol(s, i) = get_reg_unref!(registers, dest, self) {
-                        if let Some(i) = i {
-                            if let Value::Undefined = self.globals.get(i) {
-                                self.globals.set(i, val);
-                            }
-                        } else {
-                            self.globals.defvar(s, val);
+                    if let Value::Global(i) = get_reg!(registers, dest) {
+                        if let Value::Undefined = self.globals.get(i) {
+                            self.globals.set(i, val);
                         }
                     } else {
-                        return Err(VMError::new_vm("DEFV: Not a symbol."));
+                        return Err(VMError::new_vm("DEFV: Not a global."));
                     }
                 }
                 CALL => {
@@ -991,10 +981,12 @@ mod tests {
         let sym = vm.intern("test_sym");
         let sym2 = vm.intern("test_symTWO");
         let slot = vm.globals.reserve(sym);
-        let const0 = chunk.add_constant(Value::Symbol(sym, Some(slot))) as u16;
-        let const1 = chunk.add_constant(Value::Symbol(sym2, None)) as u16;
+        let slot2 = vm.globals.reserve(sym2);
+        let _const0 = chunk.add_constant(Value::Global(slot)) as u16;
+        let const1 = chunk.add_constant(Value::Symbol(sym)) as u16;
         let const2 = chunk.add_constant(Value::Int(42)) as u16;
-        chunk.encode2(CONST, 0, const0, line)?;
+        let const3 = chunk.add_constant(Value::Global(slot2)) as u16;
+        chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
@@ -1003,7 +995,7 @@ mod tests {
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
-        chunk.encode2(CONST, 0, const0, line)?;
+        chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
@@ -1012,7 +1004,7 @@ mod tests {
 
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        chunk.encode2(CONST, 0, const1, line)?;
+        chunk.encode2(CONST, 0, const3, line)?;
         chunk.encode2(CONST, 1, const2, line)?;
         chunk.encode2(DEF, 0, 1, line)?;
         chunk.encode2(REF, 2, 0, line)?;
@@ -1025,15 +1017,17 @@ mod tests {
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
         let slot = vm.globals.interned_slot(sym2).unwrap() as u32;
-        let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
+        let const1 = chunk.add_constant(Value::Global(slot)) as u16;
         let const2 = chunk.add_constant(Value::Int(43)) as u16;
         let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        let const4 = chunk.add_constant(Value::Symbol(sym2)) as u16;
         chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(CONST, 1, const2, line)?;
         chunk.encode2(CONST, 3, const3, line)?;
+        chunk.encode2(CONST, 4, const4, line)?;
         chunk.encode2(DEF, 0, 1, line)?;
         chunk.encode2(DEFV, 0, 3, line)?;
-        chunk.encode2(REF, 2, 0, line)?;
+        chunk.encode2(REF, 2, 4, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
@@ -1044,16 +1038,18 @@ mod tests {
         let slot = vm.globals.interned_slot(sym2).unwrap() as u32;
         vm.globals.set(slot, Value::Int(11));
         assert!(vm.globals.get(slot).get_int()? == 11);
-        let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
+        let const1 = chunk.add_constant(Value::Global(slot)) as u16;
         let const2 = chunk.add_constant(Value::Int(43)) as u16;
         let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        let const4 = chunk.add_constant(Value::Symbol(sym2)) as u16;
         chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(CONST, 1, const2, line)?;
         chunk.encode2(CONST, 3, const3, line)?;
+        chunk.encode2(CONST, 4, const4, line)?;
         chunk.encode2(DEF, 0, 1, line)?;
         chunk.encode2(DEFV, 0, 3, line)?;
-        chunk.encode2(REF, 2, 0, line)?;
-        chunk.encode2(REF, 5, 0, line)?;
+        chunk.encode2(REF, 2, 4, line)?;
+        chunk.encode2(REF, 5, 4, line)?;
         chunk.encode2(SET, 5, 3, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
@@ -1066,15 +1062,17 @@ mod tests {
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
-        let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
+        let const1 = chunk.add_constant(Value::Global(slot)) as u16;
         let const2 = chunk.add_constant(Value::Int(44)) as u16;
         let const3 = chunk.add_constant(Value::Int(53)) as u16;
+        let const4 = chunk.add_constant(Value::Symbol(sym2)) as u16;
         chunk.encode2(CONST, 1, const1, line)?;
         chunk.encode2(CONST, 2, const2, line)?;
         chunk.encode2(CONST, 3, const3, line)?;
+        chunk.encode2(CONST, 4, const4, line)?;
         chunk.encode2(DEFV, 1, 2, line)?;
         chunk.encode2(DEFV, 1, 3, line)?;
-        chunk.encode2(REF, 0, 1, line)?;
+        chunk.encode2(REF, 0, 4, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
@@ -1084,15 +1082,17 @@ mod tests {
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
-        let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
+        let const1 = chunk.add_constant(Value::Global(slot)) as u16;
         let const2 = chunk.add_constant(Value::Int(45)) as u16;
         let const3 = chunk.add_constant(Value::Int(55)) as u16;
+        let const4 = chunk.add_constant(Value::Symbol(sym2)) as u16;
         chunk.encode2(CONST, 1, const1, line)?;
         chunk.encode2(CONST, 2, const2, line)?;
         chunk.encode2(CONST, 3, const3, line)?;
+        chunk.encode2(CONST, 4, const4, line)?;
         chunk.encode2(DEFV, 1, 2, line)?;
         chunk.encode2(DEF, 1, 3, line)?;
-        chunk.encode2(REF, 0, 1, line)?;
+        chunk.encode2(REF, 0, 4, line)?;
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
@@ -1102,15 +1102,17 @@ mod tests {
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
-        let const1 = chunk.add_constant(Value::Symbol(sym2, Some(slot))) as u16;
+        let const1 = chunk.add_constant(Value::Global(slot)) as u16;
         let const2 = chunk.add_constant(Value::Int(45)) as u16;
         let const3 = chunk.add_constant(Value::Int(1)) as u16;
+        let const4 = chunk.add_constant(Value::Symbol(sym2)) as u16;
         chunk.encode2(CONST, 1, const1, line)?;
         chunk.encode2(CONST, 2, const2, line)?;
         chunk.encode2(CONST, 3, const3, line)?;
+        chunk.encode2(CONST, 4, const4, line)?;
         chunk.encode2(DEFV, 1, 2, line)?;
         chunk.encode2(DEF, 1, 3, line)?;
-        chunk.encode2(REF, 0, 1, line)?;
+        chunk.encode2(REF, 0, 4, line)?;
         chunk.encode2(MOV, 5, 0, line)?;
         chunk.encode2(SET, 5, 3, line)?;
         chunk.encode3(ADD, 5, 5, 3, line)?;
