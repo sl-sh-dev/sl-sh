@@ -7,7 +7,7 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::vm::Vm;
 
-type CallFunc = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
+pub type CallFunc = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
 
 pub struct PairIter<'vm> {
     vm: &'vm Vm,
@@ -381,9 +381,23 @@ impl Globals {
         }
     }
 
+    pub fn get_if_interned(&self, symbol: Interned) -> Option<Value> {
+        if let Some(idx) = self.objects_map.get(&symbol) {
+            self.objects.get(*idx).copied()
+        } else {
+            None
+        }
+    }
+
     pub fn get(&self, idx: u32) -> Value {
         self.objects
             .get(idx as usize)
             .map_or_else(|| Value::Undefined, |v| *v)
+    }
+
+    pub fn dump(&self, vm: &Vm) {
+        for (i, v) in self.objects.iter().enumerate() {
+            println!("{}: {}", i, v.display_value(vm));
+        }
     }
 }

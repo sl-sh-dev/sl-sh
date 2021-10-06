@@ -229,6 +229,23 @@ impl Vm {
         Value::Global(self.globals.reserve(sym))
     }
 
+    pub fn set_global(&mut self, string: &str, value: Value) -> Value {
+        let sym = self.interner.intern(string);
+        let slot = self.globals.reserve(sym);
+        self.globals.set(slot, value);
+        Value::Global(slot)
+    }
+
+    pub fn intern_to_global(&self, i: Interned) -> Option<Value> {
+        self.globals.get_if_interned(i)
+    }
+
+    pub fn dump_globals(&self) {
+        println!("GLOBALS:");
+        self.globals.dump(self);
+        println!();
+    }
+
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
