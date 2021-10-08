@@ -16,6 +16,17 @@ macro_rules! decode_u16 {
     }};
 }
 
+macro_rules! decode_u32 {
+    ($code:expr, $ip:expr) => {{
+        let idx1 = $code[*$ip];
+        let idx2 = $code[*$ip + 1];
+        let idx3 = $code[*$ip + 2];
+        let idx4 = $code[*$ip + 3];
+        *$ip += 4;
+        ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
+    }};
+}
+
 macro_rules! decode1 {
     ($code:expr, $ip:expr, $wide:expr) => {{
         if $wide {
@@ -229,6 +240,14 @@ impl Vm {
         Value::Global(self.globals.reserve(sym))
     }
 
+    pub fn reserve_interned(&mut self, i: Interned) -> Value {
+        Value::Global(self.globals.reserve(i))
+    }
+
+    pub fn reserve_index(&mut self, i: Interned) -> u32 {
+        self.globals.reserve(i)
+    }
+
     pub fn set_global(&mut self, string: &str, value: Value) -> Value {
         let sym = self.interner.intern(string);
         let slot = self.globals.reserve(sym);
@@ -377,6 +396,19 @@ impl Vm {
                         return Ok(());
                     }
                 }
+                SRET => {
+                    let src = decode1!(chunk.code, &mut ip, wide);
+                    let val = get_reg_unref!(registers, src, self);
+                    self.set_register(registers, 0, val);
+                    if let Some(frame) = self.call_stack.pop() {
+                        stack_top = frame.stack_top;
+                        registers = self.make_registers(stack_top);
+                        chunk = frame.chunk.clone();
+                        ip = frame.ip;
+                    } else {
+                        return Ok(());
+                    }
+                }
                 WIDE => wide = true,
                 MOV => {
                     let (dest, src) = decode2!(chunk.code, &mut ip, wide);
@@ -433,6 +465,15 @@ impl Vm {
                     } else {
                         return Err(VMError::new_vm("DEFV: Not a global."));
                     }
+                }
+                REFI => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let idx = if wide {
+                        decode_u32!(chunk.code, &mut ip)
+                    } else {
+                        decode_u16!(chunk.code, &mut ip) as u32
+                    };
+                    self.mov_register(registers, dest as usize, Value::Global(idx));
                 }
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);

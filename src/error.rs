@@ -9,6 +9,8 @@ pub enum VMErrorType {
     Heap,
     Value,
     IO,
+    Compile,
+    Other,
 }
 
 impl fmt::Display for VMErrorType {
@@ -19,6 +21,8 @@ impl fmt::Display for VMErrorType {
             Self::Heap => write!(f, "HEAP"),
             Self::Value => write!(f, "VALUE"),
             Self::IO => write!(f, "IO"),
+            Self::Compile => write!(f, "COMPILE"),
+            Self::Other => write!(f, "OTHER"),
         }
     }
 }
@@ -68,6 +72,14 @@ impl VMError {
 
     pub fn new_value<S: Into<String>>(reason: S) -> Self {
         VMError::new(reason, VMErrorType::Value)
+    }
+
+    pub fn new_compile<S: Into<String>>(reason: S) -> Self {
+        VMError::new(reason, VMErrorType::Compile)
+    }
+
+    pub fn new_other<S: Into<String>>(reason: S) -> Self {
+        VMError::new(reason, VMErrorType::Other)
     }
 }
 

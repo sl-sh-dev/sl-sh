@@ -3,7 +3,8 @@ pub type OpCode = u8;
 pub const NOP: OpCode = 0x00;
 pub const HALT: OpCode = 0x01;
 pub const RET: OpCode = 0x02;
-pub const WIDE: OpCode = 0x03;
+pub const SRET: OpCode = 0x03; // SRET A - R(0) = R(A) and then RET
+pub const WIDE: OpCode = 0x04;
 // Load a constant onto the stack
 const STACK_BASE: OpCode = 0x04;
 pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B)
@@ -12,9 +13,10 @@ pub const CONST: OpCode = STACK_BASE + 3; // CONST A B - R(A) = K(B)
 pub const REF: OpCode = STACK_BASE + 4; // REF A B - R(A) = G[R(B)]
 pub const DEF: OpCode = STACK_BASE + 5; // DEF A B - G[R(A)] = R(B)
 pub const DEFV: OpCode = STACK_BASE + 6; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
+pub const REFI: OpCode = STACK_BASE + 7; // REFI A B - R(A) = G[B]
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 7;
+const FLOW_BASE: OpCode = STACK_BASE + 8;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs

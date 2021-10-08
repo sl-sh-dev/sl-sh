@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::error::*;
+use crate::heap::*;
 use crate::interner::Interned;
 use crate::opcodes::*;
 use crate::value::*;
@@ -89,6 +90,39 @@ macro_rules! decode_u32 {
     }};
 }
 
+macro_rules! decode_u32_enum {
+    ($code:expr) => {{
+        if let Some((_, idx1)) = $code.next() {
+            if let Some((_, idx2)) = $code.next() {
+                if let Some((_, idx3)) = $code.next() {
+                    if let Some((_, idx4)) = $code.next() {
+                        Ok(((idx1 as u32) << 24)
+                            | ((idx2 as u32) << 16)
+                            | ((idx3 as u32) << 8)
+                            | (idx4 as u32))
+                    } else {
+                        Err(VMError::new_chunk(
+                            "Error decoding a u32 from chunk stream.",
+                        ))
+                    }
+                } else {
+                    Err(VMError::new_chunk(
+                        "Error decoding a u32 from chunk stream.",
+                    ))
+                }
+            } else {
+                Err(VMError::new_chunk(
+                    "Error decoding a u32 from chunk stream.",
+                ))
+            }
+        } else {
+            Err(VMError::new_chunk(
+                "Error decoding a u32 from chunk stream.",
+            ))
+        }
+    }};
+}
+
 macro_rules! disassemble_operand {
     ($code:expr, $register:expr, $wide:expr) => {{
         if $register {
@@ -108,19 +142,21 @@ macro_rules! disassemble_operand {
 }
 
 macro_rules! disassemble_immediate {
-    ($code:expr, $register:expr, $wide:expr) => {{
-        if $register {
-            if $wide {
-                print!("{:#06x}", decode_u16_enum!($code)?);
-            } else {
-                print!("{:#04x}", decode_u8_enum!($code)?);
-            }
+    ($code:expr, $wide:expr) => {{
+        if $wide {
+            print!("{:#06x}", decode_u16_enum!($code)?);
         } else {
-            if $wide {
-                print!("{:#06x}", decode_u16_enum!($code)?);
-            } else {
-                print!("{:#04x}", decode_u8_enum!($code)?);
-            }
+            print!("{:#04x}", decode_u8_enum!($code)?);
+        }
+    }};
+}
+
+macro_rules! disassemble_immediate_big {
+    ($code:expr, $wide:expr) => {{
+        if $wide {
+            print!("{:#010x}", decode_u32_enum!($code)?);
+        } else {
+            print!("{:#06x}", decode_u16_enum!($code)?);
         }
     }};
 }
@@ -295,6 +331,29 @@ impl Chunk {
         Ok(())
     }
 
+    pub fn encode_refi(&mut self, reg: u16, global: u32, line_number: u32) -> VMResult<()> {
+        let mut bytes: u8 = 4;
+        let mut wide = false;
+        if reg > u8::MAX as u16 || global > u16::MAX as u32 {
+            wide = true;
+            bytes = 7;
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
+
+        self.encode_line_number(bytes, line_number)?;
+        self.code.push(REFI);
+        self.encode_operand(reg, wide);
+        if wide {
+            self.code.push(((global & 0xFF00_0000) >> 24) as u8);
+            self.code.push(((global & 0x00FF_0000) >> 16) as u8);
+        }
+        self.code.push(((global & 0x0000_FF00) >> 8) as u8);
+        self.code.push((global & 0x0000_00FF) as u8);
+
+        Ok(())
+    }
+
     pub fn encode3(
         &mut self,
         opcode: OpCode,
@@ -338,6 +397,12 @@ impl Chunk {
             }
             RET => {
                 println!("RET");
+                Ok(())
+            }
+            SRET => {
+                print!("SRET   \t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(())
             }
             WIDE => {
@@ -398,11 +463,21 @@ impl Chunk {
                 println!();
                 Ok(())
             }
+            REFI => {
+                print!("REFI   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                print!("G[");
+                disassemble_immediate_big!(code, wide);
+                print!("]");
+                println!();
+                Ok(())
+            }
             CALL => {
                 print!("CALL   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 println!();
@@ -412,25 +487,25 @@ impl Chunk {
                 print!("CALL   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
             JMP => {
                 print!("JMP    \t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
             JMPF => {
                 print!("JMPF   \t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
             JMPB => {
                 print!("JMPB   \t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -438,7 +513,7 @@ impl Chunk {
                 print!("JMPFT  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -446,7 +521,7 @@ impl Chunk {
                 print!("JMPBT  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -454,7 +529,7 @@ impl Chunk {
                 print!("JMPFF  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -462,7 +537,7 @@ impl Chunk {
                 print!("JMPBF  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -470,7 +545,7 @@ impl Chunk {
                 print!("JMP_T  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -478,7 +553,7 @@ impl Chunk {
                 print!("JMP_F  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -488,7 +563,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -498,7 +573,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -508,7 +583,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -556,7 +631,7 @@ impl Chunk {
                 print!("INC    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -564,7 +639,7 @@ impl Chunk {
                 print!("DEC    \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, true, wide);
+                disassemble_immediate!(code, wide);
                 println!();
                 Ok(())
             }
@@ -673,6 +748,13 @@ impl Chunk {
         println!("CONSTANTS:");
         for (i, v) in self.constants.iter().enumerate() {
             println!("{}: {}", i, v.display_value(vm));
+            if let Value::Reference(h) = v {
+                if let Object::Lambda(l) = vm.get(*h) {
+                    println!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx");
+                    l.disassemble_chunk(vm)?;
+                    println!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx");
+                }
+            }
         }
         println!();
         let mut code = self.code.iter().cloned().enumerate();
