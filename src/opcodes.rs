@@ -47,8 +47,11 @@ pub const JMPLT: OpCode = FLOW_BASE + 12;
 // JMPGT A B C - compare B and C and jump to IP C if R(A) > R(B)
 pub const JMPGT: OpCode = FLOW_BASE + 13;
 
+// CALLG A B C - Call fn G[A] with B args with R(C) as first reg/param
+pub const CALLG: OpCode = FLOW_BASE + 14;
+
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 14;
+const MATH_BASE: OpCode = FLOW_BASE + 15;
 pub const ADD: OpCode = MATH_BASE;
 pub const SUB: OpCode = MATH_BASE + 1;
 pub const MUL: OpCode = MATH_BASE + 2;

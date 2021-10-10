@@ -354,6 +354,36 @@ impl Chunk {
         Ok(())
     }
 
+    pub fn encode_callg(
+        &mut self,
+        global: u32,
+        num_args: u16,
+        first_reg: u16,
+        line_number: u32,
+    ) -> VMResult<()> {
+        let mut bytes: u8 = 5;
+        let mut wide = false;
+        if num_args > u8::MAX as u16 || first_reg > u8::MAX as u16 || global > u16::MAX as u32 {
+            wide = true;
+            bytes = 9;
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
+
+        self.encode_line_number(bytes, line_number)?;
+        self.code.push(CALLG);
+        if wide {
+            self.code.push(((global & 0xFF00_0000) >> 24) as u8);
+            self.code.push(((global & 0x00FF_0000) >> 16) as u8);
+        }
+        self.code.push(((global & 0x0000_FF00) >> 8) as u8);
+        self.code.push((global & 0x0000_00FF) as u8);
+        self.encode_operand(num_args, wide);
+        self.encode_operand(first_reg, wide);
+
+        Ok(())
+    }
+
     pub fn encode3(
         &mut self,
         opcode: OpCode,
@@ -476,6 +506,18 @@ impl Chunk {
             CALL => {
                 print!("CALL   \t");
                 disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            CALLG => {
+                print!("CALLG  \t");
+                print!("G[");
+                disassemble_immediate_big!(code, wide);
+                print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 print!("\t");

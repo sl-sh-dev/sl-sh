@@ -125,7 +125,8 @@ macro_rules! binary_math {
         } else {
             Value::Float($bin_fn(op2.get_float()?, op3.get_float()?))
         };
-        $vm.set_register($registers, dest as usize, val);
+        // XXX TODO - set or mov?
+        $vm.mov_register($registers, dest as usize, val);
     }};
 }
 
@@ -257,6 +258,10 @@ impl Vm {
 
     pub fn intern_to_global(&self, i: Interned) -> Option<Value> {
         self.globals.get_if_interned(i)
+    }
+
+    pub fn global_intern_slot(&self, i: Interned) -> Option<usize> {
+        self.globals.interned_slot(i)
     }
 
     pub fn dump_globals(&self) {
@@ -478,6 +483,39 @@ impl Vm {
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
+                    match lambda {
+                        Value::Builtin(f) => {
+                            let last_reg = (first_reg + num_args + 1) as usize;
+                            let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                            self.mov_register(registers, first_reg as usize, res);
+                        }
+                        Value::Reference(h) => match self.heap.get(h) {
+                            Object::Lambda(l) => {
+                                let frame = CallFrame {
+                                    chunk: chunk.clone(),
+                                    ip,
+                                    stack_top,
+                                };
+                                self.call_stack.push(frame);
+                                stack_top = first_reg as usize;
+                                chunk = l.clone();
+                                ip = 0;
+                                registers = self.make_registers(stack_top);
+                                self.mov_register(registers, 0, Value::UInt(num_args as u64));
+                            }
+                            _ => return Err(VMError::new_vm("CALL: Not a callable.")),
+                        },
+                        _ => return Err(VMError::new_vm("CALL: Not a callable.")),
+                    }
+                }
+                CALLG => {
+                    let idx = if wide {
+                        decode_u32!(chunk.code, &mut ip)
+                    } else {
+                        decode_u16!(chunk.code, &mut ip) as u32
+                    };
+                    let (num_args, first_reg) = decode2!(chunk.code, &mut ip, wide);
+                    let lambda = self.get_global(idx);
                     match lambda {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;

@@ -273,6 +273,22 @@ impl Value {
         }
     }
 
+    pub fn pretty_value(&self, vm: &Vm) -> String {
+        match self {
+            Value::StringConst(i) => vm.get_interned(*i).to_string(),
+            Value::CodePoint(ch) => format!("{}", ch),
+            Value::CharCluster(l, c) => {
+                format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
+            }
+            Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+            Value::Reference(h) => match vm.get(*h) {
+                Object::String(s) => format!("{}", s),
+                _ => self.display_value(vm),
+            },
+            _ => self.display_value(vm),
+        }
+    }
+
     pub fn display_type(&self, vm: &Vm) -> String {
         match self {
             Value::True => "True".to_string(),
@@ -396,8 +412,13 @@ impl Globals {
     }
 
     pub fn dump(&self, vm: &Vm) {
-        for (i, v) in self.objects.iter().enumerate() {
-            println!("{}: {}", i, v.display_value(vm));
+        for (k, v) in self.objects_map.iter() {
+            println!(
+                "{} ({}): {}",
+                vm.get_interned(*k),
+                *v,
+                self.objects[*v].display_value(vm)
+            );
         }
     }
 }
