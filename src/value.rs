@@ -7,7 +7,20 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::vm::Vm;
 
-pub type CallFunc = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
+pub type CallFuncSig = fn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value>;
+#[derive(Copy, Clone)]
+pub struct CallFunc {
+    pub func: CallFuncSig,
+}
+
+impl PartialEq for CallFunc {
+    fn eq(&self, other: &CallFunc) -> bool {
+        std::ptr::eq(
+            self.func as *const CallFuncSig,
+            other.func as *const CallFuncSig,
+        )
+    }
+}
 
 pub struct PairIter<'vm> {
     vm: &'vm Vm,
@@ -61,7 +74,7 @@ impl<'vm> Iterator for PairIter<'vm> {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Value {
     Byte(u8),
     Int(i64),

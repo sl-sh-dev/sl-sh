@@ -280,6 +280,11 @@ impl Chunk {
     }
 
     pub fn add_constant(&mut self, value: Value) -> usize {
+        for (i, c) in self.constants.iter().enumerate() {
+            if *c == value {
+                return i;
+            }
+        }
         self.constants.push(value);
         self.constants.len() - 1
     }
@@ -661,6 +666,46 @@ impl Chunk {
             }
             DIV => {
                 print!("DIV    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            ADDM => {
+                print!("ADDM   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            SUBM => {
+                print!("SUBM   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            MULM => {
+                print!("MULM   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(())
+            }
+            DIVM => {
+                print!("DIVM   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);

@@ -83,40 +83,8 @@ macro_rules! get_reg {
     }};
 }
 
-/*
-macro_rules! binary_math_inner {
-    ($vm:expr, $registers:expr, $dest:expr, $bin_fn:expr, $op3:expr, $op2:expr, $int:expr) => {{
-        let val = match $op3 {
-            Value::Byte(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
-            Value::Byte(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
-            Value::Int(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
-            Value::Int(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
-            Value::UInt(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
-            Value::UInt(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
-            Value::Float(i) if $int => Value::Int($bin_fn($op2 as i64, i as i64)),
-            Value::Float(i) => Value::Float($bin_fn($op2 as f64, i as f64)),
-            _ => panic!("Attempt to do math with a {:?}", $op3),
-        };
-        $vm.set_register($registers, $dest as usize, val);
-    }};
-}
-
 macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
-        let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = $registers[op2 as usize].unref($vm);
-        let op3 = $registers[op3 as usize].unref($vm);
-        match op2 {
-            Value::Byte(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
-            Value::Int(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
-            Value::UInt(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, true),
-            Value::Float(i) => binary_math_inner!($vm, $registers, dest, $bin_fn, op3, i, false),
-            _ => panic!("Attempt to do math with a {:?}", op2),
-        }
-    }};
-}*/
-macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $move:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
         let op2 = get_reg_unref!($registers, op2, $vm);
         let op3 = get_reg_unref!($registers, op3, $vm);
@@ -125,13 +93,16 @@ macro_rules! binary_math {
         } else {
             Value::Float($bin_fn(op2.get_float()?, op3.get_float()?))
         };
-        // XXX TODO - set or mov?
-        $vm.mov_register($registers, dest as usize, val);
+        if $move {
+            $vm.mov_register($registers, dest as usize, val);
+        } else {
+            $vm.set_register($registers, dest as usize, val);
+        }
     }};
 }
 
 macro_rules! div_math {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $wide:expr) => {{
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $wide:expr, $move:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
         let op2 = get_reg_unref!($registers, op2, $vm);
         let op3 = get_reg_unref!($registers, op3, $vm);
@@ -148,7 +119,11 @@ macro_rules! div_math {
             }
             Value::Float(op2.get_float()? / op3)
         };
-        $vm.set_register($registers, dest as usize, val);
+        if $move {
+            $vm.mov_register($registers, dest as usize, val);
+        } else {
+            $vm.set_register($registers, dest as usize, val);
+        }
     }};
 }
 
@@ -486,7 +461,8 @@ impl Vm {
                     match lambda {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;
-                            let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                            let res =
+                                (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
                             self.mov_register(registers, first_reg as usize, res);
                         }
                         Value::Reference(h) => match self.heap.get(h) {
@@ -519,7 +495,8 @@ impl Vm {
                     match lambda {
                         Value::Builtin(f) => {
                             let last_reg = (first_reg + num_args + 1) as usize;
-                            let res = f(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                            let res =
+                                (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
                             self.mov_register(registers, first_reg as usize, res);
                         }
                         Value::Reference(h) => match self.heap.get(h) {
@@ -547,7 +524,7 @@ impl Vm {
                     match lambda {
                         Value::Builtin(f) => {
                             let last_reg = num_args as usize + 1;
-                            let res = f(self, &registers[1..last_reg])?;
+                            let res = (f.func)(self, &registers[1..last_reg])?;
                             self.mov_register(registers, 0, res);
                         }
                         Value::Reference(h) => match self.heap.get(h) {
@@ -633,10 +610,14 @@ impl Vm {
                         ip = nip as usize;
                     }
                 }
-                ADD => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide),
-                SUB => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide),
-                MUL => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide),
-                DIV => div_math!(self, chunk, &mut ip, registers, wide),
+                ADD => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide, false),
+                SUB => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide, false),
+                MUL => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide, false),
+                DIV => div_math!(self, chunk, &mut ip, registers, wide, false),
+                ADDM => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide, true),
+                SUBM => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide, true),
+                MULM => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide, true),
+                DIVM => div_math!(self, chunk, &mut ip, registers, wide, true),
                 INC => {
                     let (dest, i) = decode2!(chunk.code, &mut ip, wide);
                     let val = match get_reg_unref!(registers, dest, self) {
@@ -872,7 +853,7 @@ mod tests {
         // car with nil on heap
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        chunk.encode2(CONST, 2, 5, line).unwrap();
+        chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
@@ -891,7 +872,7 @@ mod tests {
         // cdr with nil on heap
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        chunk.encode2(CONST, 2, 5, line).unwrap();
+        chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
@@ -1012,7 +993,7 @@ mod tests {
     fn test_store() -> VMResult<()> {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        for i in 0..u16::MAX {
+        for i in 0..257 {
             chunk.add_constant(Value::Int(i as i64));
         }
         chunk.encode2(CONST, 0, 0, line).unwrap();
@@ -1416,7 +1397,7 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(add_b)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_b })) as u16;
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode3(CALL, 10, 2, 0, line).unwrap();
         chunk.encode0(RET, line)?;
@@ -1424,7 +1405,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(add_b)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_b })) as u16;
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode2(TCALL, 10, 2, line).unwrap();
         chunk.encode0(RET, line)?;
@@ -1432,7 +1413,7 @@ mod tests {
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        let const1 = chunk.add_constant(Value::Builtin(add_10)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_10 })) as u16;
         chunk.encode2(CONST, 3, const1, line).unwrap();
         chunk.encode3(CALL, 3, 1, 0, line).unwrap();
         chunk.encode0(RET, line)?;
@@ -1445,7 +1426,7 @@ mod tests {
         vm.stack[3] = Value::Int(6);
         vm.stack[4] = Value::Int(3);
         vm.stack[6] = Value::Int(12);
-        let const1 = chunk.add_constant(Value::Builtin(make_str)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
         chunk.encode3(CALL, 0, 2, 2, line).unwrap();
         chunk.encode3(CALL, 1, 1, 5, line).unwrap();
         chunk.encode2(CONST, 8, const1, line).unwrap();
@@ -1476,7 +1457,7 @@ mod tests {
         vm.stack[3] = Value::Int(6);
         vm.stack[4] = Value::Int(3);
         vm.stack[6] = Value::Int(12);
-        let const1 = chunk.add_constant(Value::Builtin(make_str)) as u16;
+        let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
         chunk.encode3(CALL, 0, 2, 2, line).unwrap();
         chunk.encode3(CALL, 1, 1, 5, line).unwrap();
         chunk.encode2(CONST, 8, const1, line).unwrap();
@@ -1697,7 +1678,7 @@ mod tests {
         assert!(item.get_float()? == 6.0);
 
         let mut chunk = Chunk::new("no_file", 1);
-        for i in 0..u16::MAX {
+        for i in 0..501 {
             chunk.add_constant(Value::Int(i as i64));
         }
         chunk.encode2(CONST, 1, 1, line)?;
@@ -1756,7 +1737,7 @@ mod tests {
         assert!(item.get_float()? == 1.0);
 
         let mut chunk = Chunk::new("no_file", 1);
-        for i in 0..u16::MAX {
+        for i in 0..501 {
             chunk.add_constant(Value::Int(i as i64));
         }
         chunk.encode2(CONST, 1, 1, line)?;
@@ -1815,7 +1796,7 @@ mod tests {
         assert!(item.get_float()? == 30.0);
 
         let mut chunk = Chunk::new("no_file", 1);
-        for i in 0..u16::MAX {
+        for i in 0..501 {
             chunk.add_constant(Value::Int(i as i64));
         }
         chunk.encode2(CONST, 1, 1, line)?;
@@ -1874,7 +1855,7 @@ mod tests {
         assert!(item.get_float()? == 2.5);
 
         let mut chunk = Chunk::new("no_file", 1);
-        for i in 0..u16::MAX {
+        for i in 0..501 {
             chunk.add_constant(Value::Int(i as i64));
         }
         chunk.encode2(CONST, 1, 1, line)?;

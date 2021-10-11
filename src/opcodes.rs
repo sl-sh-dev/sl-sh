@@ -52,17 +52,29 @@ pub const CALLG: OpCode = FLOW_BASE + 14;
 
 // Basic math
 const MATH_BASE: OpCode = FLOW_BASE + 15;
+// ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
+// SUB A B C - set R(A) = R(B) - R(C)
 pub const SUB: OpCode = MATH_BASE + 1;
+// MUL A B C - set R(A) = R(B) * R(C)
 pub const MUL: OpCode = MATH_BASE + 2;
+// DIV A B C - set R(A) = R(B) / R(C)
 pub const DIV: OpCode = MATH_BASE + 3;
 // INC A B - Increment the integer in R(A) by B
 pub const INC: OpCode = MATH_BASE + 4;
 // DEC A B - Decrement the integer in R(A) by B
 pub const DEC: OpCode = MATH_BASE + 5;
+// ADDM A B C - mov R(A) = R(B) + R(C) NOTE, mov overwrites global or closures.
+pub const ADDM: OpCode = MATH_BASE + 6;
+// SUBM A B C - mov R(A) = R(B) - R(C) NOTE, mov overwrites global or closures.
+pub const SUBM: OpCode = MATH_BASE + 7;
+// MULM A B C - mov R(A) = R(B) * R(C) NOTE, mov overwrites global or closures.
+pub const MULM: OpCode = MATH_BASE + 8;
+// DIVM A B C - mov R(A) = R(B) / R(C) NOTE, mov overwrites global or closures.
+pub const DIVM: OpCode = MATH_BASE + 9;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 6;
+const CONS_BASE: OpCode = MATH_BASE + 10;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))
