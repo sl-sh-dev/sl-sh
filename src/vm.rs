@@ -455,6 +455,62 @@ impl Vm {
                     };
                     self.mov_register(registers, dest as usize, Value::Global(idx));
                 }
+                SREGT => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::True);
+                }
+                SREGF => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::False);
+                }
+                SREGN => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::Nil);
+                }
+                SREGC => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::Undefined);
+                }
+                SREGB => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::Byte(i as u8));
+                }
+                SREGI => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::Int(i as i64));
+                }
+                SREGU => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.set_register(registers, dest as usize, Value::UInt(i as u64));
+                }
+                MREGT => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::True);
+                }
+                MREGF => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::False);
+                }
+                MREGN => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::Nil);
+                }
+                MREGC => {
+                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::Undefined);
+                }
+                MREGB => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::Byte(i as u8));
+                }
+                MREGI => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::Int(i as i64));
+                }
+                MREGU => {
+                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    self.mov_register(registers, dest as usize, Value::UInt(i as u64));
+                }
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);

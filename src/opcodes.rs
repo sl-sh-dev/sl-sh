@@ -14,9 +14,23 @@ pub const REF: OpCode = STACK_BASE + 4; // REF A B - R(A) = G[R(B)]
 pub const DEF: OpCode = STACK_BASE + 5; // DEF A B - G[R(A)] = R(B)
 pub const DEFV: OpCode = STACK_BASE + 6; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
 pub const REFI: OpCode = STACK_BASE + 7; // REFI A B - R(A) = G[B]
+pub const SREGT: OpCode = STACK_BASE + 8; // SREGT A - R(A) = TRUE, set semantics
+pub const SREGF: OpCode = STACK_BASE + 9; // SREGF A - R(A) = FALSE, set semantics
+pub const SREGN: OpCode = STACK_BASE + 10; // SREGN A - R(A) = NIL, set semantics
+pub const SREGC: OpCode = STACK_BASE + 11; // SREGC A - R(A) = UNDEFINED, set semantics
+pub const SREGB: OpCode = STACK_BASE + 12; // MREGC A B - R(A) = Byte(B), set semantics
+pub const SREGI: OpCode = STACK_BASE + 13; // MREGC A B - R(A) = Int(B), set semantics
+pub const SREGU: OpCode = STACK_BASE + 14; // MREGC A B - R(A) = UInt(B), set semantics
+pub const MREGT: OpCode = STACK_BASE + 15; // MREGT A - R(A) = TRUE, mov semantics
+pub const MREGF: OpCode = STACK_BASE + 16; // MREGF A - R(A) = FALSE, mov semantics
+pub const MREGN: OpCode = STACK_BASE + 17; // MREGN A - R(A) = NIL, mov semantics
+pub const MREGC: OpCode = STACK_BASE + 18; // MREGC A - R(A) = UNDEFINED, mov semantics
+pub const MREGB: OpCode = STACK_BASE + 19; // MREGC A B - R(A) = Byte(B), mov semantics
+pub const MREGI: OpCode = STACK_BASE + 20; // MREGC A B - R(A) = Int(B), mov semantics
+pub const MREGU: OpCode = STACK_BASE + 21; // MREGC A B - R(A) = UInt(B), mov semantics
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 8;
+const FLOW_BASE: OpCode = STACK_BASE + 22;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
