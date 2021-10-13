@@ -262,6 +262,7 @@ impl Value {
             Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
             Value::Reference(h) => match vm.get(*h) {
                 Object::Lambda(_) => "#<Lambda>".to_string(),
+                Object::Closure(_, _) => "#<Lambda>".to_string(),
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 Object::Vector(v) => {
@@ -322,6 +323,7 @@ impl Value {
             Value::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
             Value::Reference(h) => match vm.get(*h) {
                 Object::Lambda(_) => "Lambda".to_string(),
+                Object::Closure(_, _) => "Lambda".to_string(),
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 /*Object::Function(f) => {

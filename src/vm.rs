@@ -94,7 +94,7 @@ macro_rules! binary_math {
             Value::Float($bin_fn(op2.get_float()?, op3.get_float()?))
         };
         if $move {
-            $vm.mov_register($registers, dest as usize, val);
+            Vm::mov_register($registers, dest as usize, val);
         } else {
             $vm.set_register($registers, dest as usize, val);
         }
@@ -120,7 +120,7 @@ macro_rules! div_math {
             Value::Float(op2.get_float()? / op3)
         };
         if $move {
-            $vm.mov_register($registers, dest as usize, val);
+            Vm::mov_register($registers, dest as usize, val);
         } else {
             $vm.set_register($registers, dest as usize, val);
         }
@@ -150,6 +150,9 @@ pub struct Vm {
     call_stack: Vec<CallFrame>,
     globals: Globals,
     upvals: Vec<Value>,
+
+    stack_top: usize,
+    ip: usize,
 }
 
 impl Default for Vm {
@@ -170,6 +173,8 @@ impl Vm {
             call_stack: Vec::new(),
             globals,
             upvals: Vec::new(),
+            stack_top: 0,
+            ip: 0,
         }
     }
 
@@ -257,18 +262,12 @@ impl Vm {
     }
 
     #[inline]
-    fn mov_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
+    fn mov_register(registers: &mut [Value], idx: usize, val: Value) {
         registers[idx] = val;
     }
 
-    fn list(
-        &mut self,
-        code: &[u8],
-        ip: &mut usize,
-        registers: &mut [Value],
-        wide: bool,
-    ) -> VMResult<()> {
-        let (dest, start, end) = decode3!(code, ip, wide);
+    fn list(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
+        let (dest, start, end) = decode3!(code, &mut self.ip, wide);
         if end == start {
             self.set_register(registers, dest as usize, Value::Nil);
         } else {
@@ -283,14 +282,8 @@ impl Vm {
         Ok(())
     }
 
-    fn xar(
-        &mut self,
-        code: &[u8],
-        ip: &mut usize,
-        registers: &mut [Value],
-        wide: bool,
-    ) -> VMResult<()> {
-        let (pair_reg, val) = decode2!(code, ip, wide);
+    fn xar(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
+        let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
@@ -314,14 +307,8 @@ impl Vm {
         Ok(())
     }
 
-    fn xdr(
-        &mut self,
-        code: &[u8],
-        ip: &mut usize,
-        registers: &mut [Value],
-        wide: bool,
-    ) -> VMResult<()> {
-        let (pair_reg, val) = decode2!(code, ip, wide);
+    fn xdr(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
+        let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
@@ -352,15 +339,73 @@ impl Vm {
         unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
     }
 
+    fn make_call(
+        &mut self,
+        lambda: Value,
+        chunk: Rc<Chunk>,
+        registers: &mut [Value],
+        first_reg: u16,
+        num_args: u16,
+        tail_call: bool,
+    ) -> VMResult<Rc<Chunk>> {
+        match lambda {
+            Value::Builtin(f) => {
+                let last_reg = (first_reg + num_args + 1) as usize;
+                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                Self::mov_register(registers, first_reg as usize, res);
+                Ok(chunk)
+            }
+            Value::Reference(h) => match self.heap.get(h) {
+                Object::Lambda(l) => {
+                    if !tail_call {
+                        let frame = CallFrame {
+                            chunk,
+                            ip: self.ip,
+                            stack_top: self.stack_top,
+                        };
+                        self.call_stack.push(frame);
+                        self.stack_top += first_reg as usize;
+                    }
+                    self.ip = 0;
+                    Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
+                    Ok(l.clone())
+                }
+                Object::Closure(l, caps) => {
+                    if !tail_call {
+                        let frame = CallFrame {
+                            chunk,
+                            ip: self.ip,
+                            stack_top: self.stack_top,
+                        };
+                        self.call_stack.push(frame);
+                        self.stack_top += first_reg as usize;
+                    }
+                    self.ip = 0;
+                    for (i, c) in caps.iter().enumerate() {
+                        Self::mov_register(
+                            registers,
+                            (first_reg + num_args + 1 + i as u16).into(),
+                            Value::Binding(*c),
+                        );
+                    }
+                    Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
+                    Ok(l.clone())
+                }
+                _ => Err(VMError::new_vm("CALL: Not a callable.")),
+            },
+            _ => Err(VMError::new_vm("CALL: Not a callable.")),
+        }
+    }
+
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
-        let mut stack_top = 0;
-        let mut registers = self.make_registers(stack_top);
+        self.stack_top = 0;
+        let mut registers = self.make_registers(self.stack_top);
         let mut chunk = chunk;
-        let mut ip = 0;
+        self.ip = 0;
         let mut wide = false;
         loop {
-            let opcode = chunk.code[ip];
-            ip += 1;
+            let opcode = chunk.code[self.ip];
+            self.ip += 1;
             match opcode {
                 NOP => {}
                 HALT => {
@@ -368,45 +413,45 @@ impl Vm {
                 }
                 RET => {
                     if let Some(frame) = self.call_stack.pop() {
-                        stack_top = frame.stack_top;
-                        registers = self.make_registers(stack_top);
+                        self.stack_top = frame.stack_top;
+                        registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
-                        ip = frame.ip;
+                        self.ip = frame.ip;
                     } else {
                         return Ok(());
                     }
                 }
                 SRET => {
-                    let src = decode1!(chunk.code, &mut ip, wide);
+                    let src = decode1!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
                     self.set_register(registers, 0, val);
                     if let Some(frame) = self.call_stack.pop() {
-                        stack_top = frame.stack_top;
-                        registers = self.make_registers(stack_top);
+                        self.stack_top = frame.stack_top;
+                        registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
-                        ip = frame.ip;
+                        self.ip = frame.ip;
                     } else {
                         return Ok(());
                     }
                 }
                 WIDE => wide = true,
                 MOV => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg!(registers, src);
-                    self.mov_register(registers, dest as usize, val);
+                    Self::mov_register(registers, dest as usize, val);
                 }
                 SET => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
                     self.set_register(registers, dest as usize, val);
                 }
                 CONST => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = chunk.constants[src as usize];
-                    self.mov_register(registers, dest as usize, val);
+                    Self::mov_register(registers, dest as usize, val);
                 }
                 REF => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let idx = match get_reg!(registers, src) {
                         Value::Symbol(s) => {
                             if let Some(i) = self.globals.interned_slot(s) {
@@ -421,10 +466,10 @@ impl Vm {
                     if let Value::Undefined = self.globals.get(idx as u32) {
                         return Err(VMError::new_vm("REF: Symbol is not defined."));
                     }
-                    self.mov_register(registers, dest as usize, Value::Global(idx));
+                    Self::mov_register(registers, dest as usize, Value::Global(idx));
                 }
                 DEF => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
                     if let Value::Global(i) = get_reg!(registers, dest) {
                         self.globals.set(i, val);
@@ -436,7 +481,7 @@ impl Vm {
                     }
                 }
                 DEFV => {
-                    let (dest, src) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
                     if let Value::Global(i) = get_reg!(registers, dest) {
                         if let Value::Undefined = self.globals.get(i) {
@@ -447,235 +492,265 @@ impl Vm {
                     }
                 }
                 REFI => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
                     let idx = if wide {
-                        decode_u32!(chunk.code, &mut ip)
+                        decode_u32!(chunk.code, &mut self.ip)
                     } else {
-                        decode_u16!(chunk.code, &mut ip) as u32
+                        decode_u16!(chunk.code, &mut self.ip) as u32
                     };
-                    self.mov_register(registers, dest as usize, Value::Global(idx));
+                    Self::mov_register(registers, dest as usize, Value::Global(idx));
                 }
                 SREGT => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::True);
                 }
                 SREGF => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::False);
                 }
                 SREGN => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::Nil);
                 }
                 SREGC => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::Undefined);
                 }
                 SREGB => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::Byte(i as u8));
                 }
                 SREGI => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::Int(i as i64));
                 }
                 SREGU => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     self.set_register(registers, dest as usize, Value::UInt(i as u64));
                 }
                 MREGT => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::True);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::True);
                 }
                 MREGF => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::False);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::False);
                 }
                 MREGN => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::Nil);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::Nil);
                 }
                 MREGC => {
-                    let dest = decode1!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::Undefined);
+                    let dest = decode1!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::Undefined);
                 }
                 MREGB => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::Byte(i as u8));
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::Byte(i as u8));
                 }
                 MREGI => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::Int(i as i64));
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::Int(i as i64));
                 }
                 MREGU => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
-                    self.mov_register(registers, dest as usize, Value::UInt(i as u64));
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
+                    Self::mov_register(registers, dest as usize, Value::UInt(i as u64));
+                }
+                CLOSE => {
+                    let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
+                    let lambda = get_reg_unref!(registers, src, self);
+                    let (lambda, caps) = if let Value::Reference(h) = lambda {
+                        let lr = self.get(h);
+                        if let Object::Lambda(l) = lr {
+                            let l = l.clone();
+                            let mut caps = Vec::new();
+                            if let Some(captures) = &l.captures {
+                                for c in captures {
+                                    let r = get_reg!(registers, *c);
+                                    if let Value::Binding(b) = r {
+                                        caps.push(b);
+                                    } else {
+                                        let slot = self.new_upval(r);
+                                        Self::mov_register(
+                                            registers,
+                                            *c as usize,
+                                            Value::Binding(slot),
+                                        );
+                                        caps.push(slot);
+                                    }
+                                }
+                            }
+                            (l.clone(), caps)
+                        } else {
+                            return Err(VMError::new_vm(format!(
+                                "CLOSE: requires a lambda, got {:?}.",
+                                lambda
+                            )));
+                        }
+                    } else {
+                        return Err(VMError::new_vm(format!(
+                            "CLOSE: requires a lambda, got {:?}.",
+                            lambda
+                        )));
+                    };
+                    Self::mov_register(
+                        registers,
+                        dest as usize,
+                        Value::Reference(self.alloc(Object::Closure(lambda, caps))),
+                    );
                 }
                 CALL => {
-                    let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut ip, wide);
+                    let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
-                    match lambda {
-                        Value::Builtin(f) => {
-                            let last_reg = (first_reg + num_args + 1) as usize;
-                            let res =
-                                (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
-                            self.mov_register(registers, first_reg as usize, res);
-                        }
-                        Value::Reference(h) => match self.heap.get(h) {
-                            Object::Lambda(l) => {
-                                let frame = CallFrame {
-                                    chunk: chunk.clone(),
-                                    ip,
-                                    stack_top,
-                                };
-                                self.call_stack.push(frame);
-                                stack_top = first_reg as usize;
-                                chunk = l.clone();
-                                ip = 0;
-                                registers = self.make_registers(stack_top);
-                                self.mov_register(registers, 0, Value::UInt(num_args as u64));
-                            }
-                            _ => return Err(VMError::new_vm("CALL: Not a callable.")),
-                        },
-                        _ => return Err(VMError::new_vm("CALL: Not a callable.")),
-                    }
+                    chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
+                    registers = self.make_registers(self.stack_top);
                 }
                 CALLG => {
                     let idx = if wide {
-                        decode_u32!(chunk.code, &mut ip)
+                        decode_u32!(chunk.code, &mut self.ip)
                     } else {
-                        decode_u16!(chunk.code, &mut ip) as u32
+                        decode_u16!(chunk.code, &mut self.ip) as u32
                     };
-                    let (num_args, first_reg) = decode2!(chunk.code, &mut ip, wide);
+                    let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
-                    match lambda {
-                        Value::Builtin(f) => {
-                            let last_reg = (first_reg + num_args + 1) as usize;
-                            let res =
-                                (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
-                            self.mov_register(registers, first_reg as usize, res);
-                        }
-                        Value::Reference(h) => match self.heap.get(h) {
-                            Object::Lambda(l) => {
-                                let frame = CallFrame {
-                                    chunk: chunk.clone(),
-                                    ip,
-                                    stack_top,
-                                };
-                                self.call_stack.push(frame);
-                                stack_top = first_reg as usize;
-                                chunk = l.clone();
-                                ip = 0;
-                                registers = self.make_registers(stack_top);
-                                self.mov_register(registers, 0, Value::UInt(num_args as u64));
-                            }
-                            _ => return Err(VMError::new_vm("CALL: Not a callable.")),
-                        },
-                        _ => return Err(VMError::new_vm("CALL: Not a callable.")),
-                    }
+                    chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
+                    registers = self.make_registers(self.stack_top);
                 }
                 TCALL => {
-                    let (lambda, num_args) = decode2!(chunk.code, &mut ip, wide);
+                    let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
-                    match lambda {
-                        Value::Builtin(f) => {
-                            let last_reg = num_args as usize + 1;
-                            let res = (f.func)(self, &registers[1..last_reg])?;
-                            self.mov_register(registers, 0, res);
-                        }
-                        Value::Reference(h) => match self.heap.get(h) {
-                            Object::Lambda(l) => {
-                                chunk = l.clone();
-                                ip = 0;
-                                self.mov_register(registers, 0, Value::UInt(num_args as u64));
-                            }
-                            _ => return Err(VMError::new_vm("TCALL: Not a callable.")),
-                        },
-                        _ => return Err(VMError::new_vm("TCALL: Not a callable.")),
-                    }
+                    chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
                 }
                 JMP => {
-                    let nip = decode1!(chunk.code, &mut ip, wide);
-                    ip = nip as usize;
+                    let nip = decode1!(chunk.code, &mut self.ip, wide);
+                    self.ip = nip as usize;
                 }
                 JMPF => {
-                    let ipoff = decode1!(chunk.code, &mut ip, wide);
-                    ip += ipoff as usize;
+                    let ipoff = decode1!(chunk.code, &mut self.ip, wide);
+                    self.ip += ipoff as usize;
                 }
                 JMPB => {
-                    let ipoff = decode1!(chunk.code, &mut ip, wide);
-                    ip -= ipoff as usize;
+                    let ipoff = decode1!(chunk.code, &mut self.ip, wide);
+                    self.ip -= ipoff as usize;
                 }
                 JMPFT => {
-                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_truethy() {
-                        ip += ipoff as usize;
+                        self.ip += ipoff as usize;
                     }
                 }
                 JMPBT => {
-                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_truethy() {
-                        ip -= ipoff as usize;
+                        self.ip -= ipoff as usize;
                     }
                 }
                 JMPFF => {
-                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_falsey() {
-                        ip += ipoff as usize;
+                        self.ip += ipoff as usize;
                     }
                 }
                 JMPBF => {
-                    let (test, ipoff) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_falsey() {
-                        ip -= ipoff as usize;
+                        self.ip -= ipoff as usize;
                     }
                 }
                 JMP_T => {
-                    let (test, nip) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, nip) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_truethy() {
-                        ip = nip as usize;
+                        self.ip = nip as usize;
                     }
                 }
                 JMP_F => {
-                    let (test, nip) = decode2!(chunk.code, &mut ip, wide);
+                    let (test, nip) = decode2!(chunk.code, &mut self.ip, wide);
                     if get_reg_unref!(registers, test, self).is_falsey() {
-                        ip = nip as usize;
+                        self.ip = nip as usize;
                     }
                 }
                 JMPEQ => {
-                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
                     let op1 = get_reg_unref!(registers, op1, self).get_int()?;
                     let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 == op2 {
-                        ip = nip as usize;
+                        self.ip = nip as usize;
                     }
                 }
                 JMPLT => {
-                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
                     let op1 = get_reg_unref!(registers, op1, self).get_int()?;
                     let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 < op2 {
-                        ip = nip as usize;
+                        self.ip = nip as usize;
                     }
                 }
                 JMPGT => {
-                    let (op1, op2, nip) = decode3!(chunk.code, &mut ip, wide);
+                    let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
                     let op1 = get_reg_unref!(registers, op1, self).get_int()?;
                     let op2 = get_reg_unref!(registers, op2, self).get_int()?;
                     if op1 > op2 {
-                        ip = nip as usize;
+                        self.ip = nip as usize;
                     }
                 }
-                ADD => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide, false),
-                SUB => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide, false),
-                MUL => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide, false),
-                DIV => div_math!(self, chunk, &mut ip, registers, wide, false),
-                ADDM => binary_math!(self, chunk, &mut ip, registers, |a, b| a + b, wide, true),
-                SUBM => binary_math!(self, chunk, &mut ip, registers, |a, b| a - b, wide, true),
-                MULM => binary_math!(self, chunk, &mut ip, registers, |a, b| a * b, wide, true),
-                DIVM => div_math!(self, chunk, &mut ip, registers, wide, true),
+                ADD => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a + b,
+                    wide,
+                    false
+                ),
+                SUB => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a - b,
+                    wide,
+                    false
+                ),
+                MUL => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a * b,
+                    wide,
+                    false
+                ),
+                DIV => div_math!(self, chunk, &mut self.ip, registers, wide, false),
+                ADDM => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a + b,
+                    wide,
+                    true
+                ),
+                SUBM => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a - b,
+                    wide,
+                    true
+                ),
+                MULM => binary_math!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a * b,
+                    wide,
+                    true
+                ),
+                DIVM => div_math!(self, chunk, &mut self.ip, registers, wide, true),
                 INC => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = match get_reg_unref!(registers, dest, self) {
                         Value::Byte(v) => Value::Byte(v + i as u8),
                         Value::Int(v) => Value::Int(v + i as i64),
@@ -690,7 +765,7 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 DEC => {
-                    let (dest, i) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = match get_reg_unref!(registers, dest, self) {
                         Value::Byte(v) => Value::Byte(v - i as u8),
                         Value::Int(v) => Value::Int(v - i as i64),
@@ -705,14 +780,14 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 CONS => {
-                    let (dest, op2, op3) = decode3!(chunk.code, &mut ip, wide);
+                    let (dest, op2, op3) = decode3!(chunk.code, &mut self.ip, wide);
                     let car = get_reg_unref!(registers, op2, self);
                     let cdr = get_reg_unref!(registers, op3, self);
                     let pair = Value::Reference(self.alloc(Object::Pair(car, cdr)));
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
-                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
                         Value::Reference(handle) => {
@@ -729,7 +804,7 @@ impl Vm {
                     }
                 }
                 CDR => {
-                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
                         Value::Reference(handle) => {
@@ -745,11 +820,11 @@ impl Vm {
                         _ => return Err(VMError::new_vm("CDR: Not a pair/conscell.")),
                     }
                 }
-                LIST => self.list(&chunk.code[..], &mut ip, registers, wide)?,
-                XAR => self.xar(&chunk.code[..], &mut ip, registers, wide)?,
-                XDR => self.xdr(&chunk.code[..], &mut ip, registers, wide)?,
+                LIST => self.list(&chunk.code[..], registers, wide)?,
+                XAR => self.xar(&chunk.code[..], registers, wide)?,
+                XDR => self.xdr(&chunk.code[..], registers, wide)?,
                 VECMK => {
-                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let len = get_reg_unref!(registers, op, self).get_int()?;
                     let val = Value::Reference(
                         self.alloc(Object::Vector(Vec::with_capacity(len as usize))),
@@ -757,7 +832,7 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 VECELS => {
-                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let len = get_reg_unref!(registers, op, self).get_int()?;
                     if let Object::Vector(v) =
                         get_reg_unref!(registers, dest, self).get_object(self)?
@@ -766,7 +841,7 @@ impl Vm {
                     }
                 }
                 VECPSH => {
-                    let (dest, op) = decode2!(chunk.code, &mut ip, wide);
+                    let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, op, self);
                     if let Object::Vector(v) =
                         get_reg_unref!(registers, dest, self).get_object(self)?
@@ -775,7 +850,7 @@ impl Vm {
                     }
                 }
                 VECPOP => {
-                    let (vc, dest) = decode2!(chunk.code, &mut ip, wide);
+                    let (vc, dest) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = if let Object::Vector(v) =
                         get_reg_unref!(registers, vc, self).get_object(self)?
                     {
@@ -790,7 +865,7 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 VECNTH => {
-                    let (vc, dest, i) = decode3!(chunk.code, &mut ip, wide);
+                    let (vc, dest, i) = decode3!(chunk.code, &mut self.ip, wide);
                     let i = get_reg_unref!(registers, i, self).get_int()? as usize;
                     let val = if let Object::Vector(v) =
                         get_reg_unref!(registers, vc, self).get_object(self)?
@@ -810,7 +885,7 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 VECSTH => {
-                    let (vc, src, i) = decode3!(chunk.code, &mut ip, wide);
+                    let (vc, src, i) = decode3!(chunk.code, &mut self.ip, wide);
                     let i = get_reg_unref!(registers, i, self).get_int()? as usize;
                     let val = get_reg_unref!(registers, src, self);
                     if let Object::Vector(v) =
@@ -825,7 +900,7 @@ impl Vm {
                     };
                 }
                 VECMKD => {
-                    let (dest, len, dfn) = decode3!(chunk.code, &mut ip, wide);
+                    let (dest, len, dfn) = decode3!(chunk.code, &mut self.ip, wide);
                     let len = get_reg_unref!(registers, len, self).get_int()?;
                     let dfn = get_reg_unref!(registers, dfn, self);
                     let mut v = Vec::with_capacity(len as usize);

@@ -28,9 +28,10 @@ pub const MREGC: OpCode = STACK_BASE + 18; // MREGC A - R(A) = UNDEFINED, mov se
 pub const MREGB: OpCode = STACK_BASE + 19; // MREGC A B - R(A) = Byte(B), mov semantics
 pub const MREGI: OpCode = STACK_BASE + 20; // MREGC A B - R(A) = Int(B), mov semantics
 pub const MREGU: OpCode = STACK_BASE + 21; // MREGC A B - R(A) = UInt(B), mov semantics
+pub const CLOSE: OpCode = STACK_BASE + 22; // CLOSE A B - R(A) = closure derived from lambda in R(B)
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 22;
+const FLOW_BASE: OpCode = STACK_BASE + 23;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs

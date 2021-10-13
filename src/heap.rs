@@ -54,6 +54,7 @@ pub enum Object {
     Bytes(Vec<u8>),
     Pair(Value, Value),
     Lambda(Rc<Chunk>),
+    Closure(Rc<Chunk>, Vec<usize>),
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -146,6 +147,7 @@ impl Heap {
             Object::Bytes(_) => TYPE_BYTES,
             Object::Pair(_, _) => TYPE_PAIR | FLAG_TRACE,
             Object::Lambda(_) => TYPE_LAMBDA,
+            Object::Closure(_, _) => TYPE_LAMBDA,
         }
     }
 
@@ -318,6 +320,7 @@ impl Heap {
             Object::Pair(_, Value::Reference(cdr)) => self.mark_trace(*cdr, current),
             Object::Pair(_, _) => {}
             Object::Lambda(_) => {}
+            Object::Closure(_, _) => {}
         }
     }
 

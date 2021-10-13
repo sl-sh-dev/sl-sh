@@ -170,6 +170,7 @@ pub struct Chunk {
     line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
     pub namespace: Option<Interned>,
+    pub captures: Option<Vec<u32>>,
 }
 
 impl Chunk {
@@ -182,6 +183,7 @@ impl Chunk {
             line_numbers: Vec::new(),
             constants: Vec::new(),
             namespace: None,
+            captures: None,
         }
     }
 
@@ -194,6 +196,7 @@ impl Chunk {
             line_numbers: Vec::new(),
             constants: Vec::new(),
             namespace: Some(namespace),
+            captures: None,
         }
     }
 
@@ -600,6 +603,14 @@ impl Chunk {
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            CLOSE => {
+                print!("CLOSE  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
