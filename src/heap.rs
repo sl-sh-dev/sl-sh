@@ -60,7 +60,7 @@ pub enum Object {
 pub type HandleRef<'a> = &'a Object;
 pub type HandleRefMut<'a> = &'a mut Object;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
     idx: usize,
 }

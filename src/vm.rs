@@ -91,7 +91,7 @@ macro_rules! binary_math {
         let val = if op2.is_int() && op3.is_int() {
             Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
         } else {
-            Value::Float($bin_fn(op2.get_float()?, op3.get_float()?))
+            Value::Float(F64Wrap($bin_fn(op2.get_float()?, op3.get_float()?)))
         };
         if $move {
             Vm::mov_register($registers, dest as usize, val);
@@ -117,7 +117,7 @@ macro_rules! div_math {
             if op3 == 0.0 {
                 return Err(VMError::new_vm("Divide by zero error."));
             }
-            Value::Float(op2.get_float()? / op3)
+            Value::Float(F64Wrap(op2.get_float()? / op3))
         };
         if $move {
             Vm::mov_register($registers, dest as usize, val);
@@ -437,6 +437,8 @@ impl Vm {
                 WIDE => wide = true,
                 MOV => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
+                    // XXX TODO- figure out proper mov symantics...
+                    //let val = get_reg_unref!(registers, src, self);
                     let val = get_reg!(registers, src);
                     Self::mov_register(registers, dest as usize, val);
                 }
@@ -1174,6 +1176,7 @@ mod tests {
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].unref(&vm).get_int()?;
+        println!("XXXX res: {:?}", result);
         assert!(result == 4);
         let result = vm.stack[1].unref(&vm).get_int()?;
         assert!(result == 4);
@@ -1357,13 +1360,13 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let n = chunk.add_constant(Value::Int(5000)) as u16;
-        let x = chunk.add_constant(Value::Float(0.2)) as u16;
-        let su = chunk.add_constant(Value::Float(0.0)) as u16;
-        let mu = chunk.add_constant(Value::Float(10.0)) as u16;
-        let pu = chunk.add_constant(Value::Float(0.0)) as u16;
+        let x = chunk.add_constant(Value::float(0.2)) as u16;
+        let su = chunk.add_constant(Value::float(0.0)) as u16;
+        let mu = chunk.add_constant(Value::float(10.0)) as u16;
+        let pu = chunk.add_constant(Value::float(0.0)) as u16;
         let zero = chunk.add_constant(Value::Int(0)) as u16;
-        let zerof = chunk.add_constant(Value::Float(0.0)) as u16;
-        let twof = chunk.add_constant(Value::Float(2.0)) as u16;
+        let zerof = chunk.add_constant(Value::float(0.0)) as u16;
+        let twof = chunk.add_constant(Value::float(2.0)) as u16;
         let hundred = chunk.add_constant(Value::Int(100)) as u16;
         let one = chunk.add_constant(Value::Int(1)) as u16;
         let line = 1;
@@ -1791,7 +1794,7 @@ mod tests {
         assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(2 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(2 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
@@ -1850,7 +1853,7 @@ mod tests {
         assert!(vm.stack[0].get_int()? == -2);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(5 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(1)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
@@ -1909,7 +1912,7 @@ mod tests {
         assert!(vm.stack[0].get_int()? == 6);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(5 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(5 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(3 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
@@ -1968,7 +1971,7 @@ mod tests {
         assert!(vm.stack[0].get_int()? == 3);
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(10 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Int(2 as i64)) as u16;
         let const2 = chunk.add_constant(Value::Byte(2)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
@@ -2020,8 +2023,8 @@ mod tests {
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
-        let const1 = chunk.add_constant(Value::Float(0 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(10 as f64)) as u16;
+        let const1 = chunk.add_constant(Value::float(0 as f64)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
         chunk.encode2(CONST, 1, const1, line)?;
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
@@ -2033,7 +2036,7 @@ mod tests {
         assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
-        let const0 = chunk.add_constant(Value::Float(10 as f64)) as u16;
+        let const0 = chunk.add_constant(Value::float(10 as f64)) as u16;
         let const1 = chunk.add_constant(Value::Byte(0)) as u16;
         chunk.encode2(CONST, 0, const0, line)?;
         chunk.encode2(CONST, 1, const1, line)?;

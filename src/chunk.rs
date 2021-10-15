@@ -950,6 +950,9 @@ impl Chunk {
             }
         }
         println!();
+        if let Some(caps) = &self.captures {
+            println!("Caputures: {:?}", caps);
+        }
         let mut code = self.code.iter().cloned().enumerate();
         let mut op = code.next();
         let mut last_line = 0;

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::iter;
 
 use crate::error::*;
@@ -19,6 +20,14 @@ impl PartialEq for CallFunc {
             self.func as *const CallFuncSig,
             other.func as *const CallFuncSig,
         )
+    }
+}
+
+impl Eq for CallFunc {}
+
+impl Hash for CallFunc {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.func as usize);
     }
 }
 
@@ -74,12 +83,30 @@ impl<'vm> Iterator for PairIter<'vm> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+// Do this wrap nonsense so that Value is hashable...
+#[derive(Copy, Clone)]
+pub struct F64Wrap(pub f64);
+
+impl PartialEq for F64Wrap {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+
+impl Eq for F64Wrap {}
+
+impl Hash for F64Wrap {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.0.to_bits());
+    }
+}
+
+#[derive(Copy, Clone)]
 pub enum Value {
     Byte(u8),
     Int(i64),
     UInt(u64),
-    Float(f64),
+    Float(F64Wrap),
     CodePoint(char),
     CharCluster(u8, [u8; 14]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
@@ -95,13 +122,180 @@ pub enum Value {
     Undefined,
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Byte(v1) => {
+                if let Self::Byte(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Int(v1) => {
+                if let Self::Int(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::UInt(v1) => {
+                if let Self::UInt(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Float(v1) => {
+                if let Self::Float(v2) = other {
+                    v1.0.to_bits() == v2.0.to_bits()
+                } else {
+                    false
+                }
+            }
+            Self::CodePoint(v1) => {
+                if let Self::CodePoint(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::CharCluster(l1, v1) => {
+                if let Self::CharCluster(l2, v2) = other {
+                    l1 == l2 && v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::CharClusterLong(v1) => {
+                if let Self::CharClusterLong(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Symbol(v1) => {
+                if let Self::Symbol(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::StringConst(v1) => {
+                if let Self::StringConst(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Reference(v1) => {
+                if let Self::Reference(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Binding(v1) => {
+                if let Self::Binding(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Global(v1) => {
+                if let Self::Global(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Builtin(v1) => {
+                if let Self::Builtin(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::True => matches!(other, Self::True),
+            Self::False => matches!(other, Self::False),
+            Self::Nil => matches!(other, Self::Nil),
+            Self::Undefined => matches!(other, Self::Undefined),
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Float(f) => {
+                f.0.to_bits().hash(state);
+            }
+            Value::Byte(b) => {
+                1.hash(state);
+                b.hash(state);
+            }
+            Value::Int(i) => {
+                (1 << 1).hash(state);
+                i.hash(state);
+            }
+            Value::UInt(i) => {
+                (1 << 2).hash(state);
+                i.hash(state);
+            }
+            Value::CodePoint(c) => {
+                (1 << 3).hash(state);
+                c.hash(state);
+            }
+            Value::CharCluster(l, a) => {
+                (1 << 4).hash(state);
+                l.hash(state);
+                a.hash(state);
+            }
+            Value::CharClusterLong(l) => {
+                (1 << 5).hash(state);
+                l.hash(state);
+            }
+            Value::Symbol(i) => {
+                (1 << 6).hash(state);
+                i.hash(state);
+            }
+            Value::StringConst(i) => {
+                (1 << 7).hash(state);
+                i.hash(state);
+            }
+            Value::Reference(r) => {
+                (1 << 8).hash(state);
+                r.hash(state);
+            }
+            Value::Binding(b) => {
+                (1 << 9).hash(state);
+                b.hash(state);
+            }
+            Value::Global(g) => {
+                (1 << 10).hash(state);
+                g.hash(state);
+            }
+            Value::Builtin(c) => {
+                (1 << 11).hash(state);
+                c.hash(state);
+            }
+            Value::True => (1 << 12).hash(state),
+            Value::False => (1 << 13).hash(state),
+            Value::Nil => (1 << 14).hash(state),
+            Value::Undefined => (1 << 15).hash(state),
+        }
+    }
+}
+
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Byte(b) => write!(f, "Byte({})", b),
             Self::Int(i) => write!(f, "Int({})", i),
             Self::UInt(i) => write!(f, "UInt({})", i),
-            Self::Float(v) => write!(f, "Float({})", v),
+            Self::Float(v) => write!(f, "Float({})", v.0),
             Self::CodePoint(c) => write!(f, "CodePoint({})", c),
             Self::CharCluster(_, c) => write!(f, "CharCluster({:?})", c),
             Self::CharClusterLong(c) => write!(f, "CharClusterLong({:?})", c),
@@ -128,6 +322,10 @@ impl Default for Value {
 impl Value {
     pub fn new() -> Self {
         Value::Undefined
+    }
+
+    pub fn float(f: f64) -> Self {
+        Value::Float(F64Wrap(f))
     }
 
     // This is used a LOT in a tight loop and this inline seems to help.
@@ -206,7 +404,7 @@ impl Value {
             Value::Byte(b) => Ok(*b as f64),
             Value::Int(i) => Ok(*i as f64),
             Value::UInt(i) => Ok(*i as f64),
-            Value::Float(f) => Ok(*f),
+            Value::Float(f) => Ok(f.0),
             _ => Err(VMError::new_value(format!("Not a float: {:?}", self))),
         }
     }
@@ -244,7 +442,7 @@ impl Value {
         match self {
             Value::True => "true".to_string(),
             Value::False => "false".to_string(),
-            Value::Float(f) => format!("{}", f),
+            Value::Float(f) => format!("{}", f.0),
             Value::Int(i) => format!("{}", i),
             Value::UInt(i) => format!("{}", i),
             Value::Byte(b) => format!("{}", b),
