@@ -44,15 +44,21 @@ fn need_trace(flag: u8) -> bool {
     is_marked(flag) && is_bit_set!(flag, FLAG_TRACE)
 }
 
+#[derive(Clone, Copy, Debug)]
+#[repr(packed(1))]
+pub struct Meta {
+    pub line: u32,
+    pub col: u16,
+}
+
 // This is anything that can live on the heap.  Values normally live on the
-// stack or as constants but can be stored in the heap as well
-// (for instance closed over values or globals).
+// stack or as constants.
 #[derive(Clone, Debug)]
 pub enum Object {
     String(Cow<'static, str>),
     Vector(Vec<Value>),
     Bytes(Vec<u8>),
-    Pair(Value, Value),
+    Pair(Value, Value, Option<Meta>),
     Lambda(Rc<Chunk>),
     Closure(Rc<Chunk>, Vec<usize>),
 }
@@ -145,7 +151,7 @@ impl Heap {
             Object::String(_) => TYPE_STRING,
             Object::Vector(_) => TYPE_VECTOR | FLAG_TRACE,
             Object::Bytes(_) => TYPE_BYTES,
-            Object::Pair(_, _) => TYPE_PAIR | FLAG_TRACE,
+            Object::Pair(_, _, _) => TYPE_PAIR | FLAG_TRACE,
             Object::Lambda(_) => TYPE_LAMBDA,
             Object::Closure(_, _) => TYPE_LAMBDA,
         }
@@ -312,13 +318,13 @@ impl Heap {
                 }
             }
             Object::Bytes(_) => {}
-            Object::Pair(Value::Reference(car), Value::Reference(cdr)) => {
+            Object::Pair(Value::Reference(car), Value::Reference(cdr), _) => {
                 self.mark_trace(*car, current);
                 self.mark_trace(*cdr, current);
             }
-            Object::Pair(Value::Reference(car), _) => self.mark_trace(*car, current),
-            Object::Pair(_, Value::Reference(cdr)) => self.mark_trace(*cdr, current),
-            Object::Pair(_, _) => {}
+            Object::Pair(Value::Reference(car), _, _) => self.mark_trace(*car, current),
+            Object::Pair(_, Value::Reference(cdr), _) => self.mark_trace(*cdr, current),
+            Object::Pair(_, _, _) => {}
             Object::Lambda(_) => {}
             Object::Closure(_, _) => {}
         }
@@ -368,23 +374,23 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
             let obj = heap.get(Handle { idx: x });
-            if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+            if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                 assert!(x == *v as usize);
             } else {
                 assert!(false);
             }
         }
-        heap.alloc(Object::Pair(Value::Int(512), Value::Nil), mark_roots);
+        heap.alloc(Object::Pair(Value::Int(512), Value::Nil, None), mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
         let obj = heap.get(Handle { idx: 0 });
-        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
             assert!(512 == *v);
         } else {
             assert!(false);
@@ -396,13 +402,13 @@ mod tests {
             Ok(())
         };
         for x in 0..512 {
-            heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
         }
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
             let obj = heap.get(Handle { idx: x });
-            if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+            if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                 if x == 0 {
                     assert!(512 == *v);
                 } else {
@@ -428,14 +434,14 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            let h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            let h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
             heap.sticky(h);
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
-            let _h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            let _h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
@@ -467,9 +473,9 @@ mod tests {
             Ok(())
         };
         for x in 0..256 {
-            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
             outers.borrow_mut().push(heap.alloc(
-                Object::Pair(Value::Reference(inner), Value::Nil),
+                Object::Pair(Value::Reference(inner), Value::Nil, None),
                 mark_roots,
             ));
         }
@@ -478,9 +484,9 @@ mod tests {
         let mut i = 0;
         for h in outers.borrow().iter() {
             let obj = heap.get(*h);
-            if let Object::Pair(Value::Reference(inner), Value::Nil) = obj {
+            if let Object::Pair(Value::Reference(inner), Value::Nil, _) = obj {
                 let obj = heap.get(*inner);
-                if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+                if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                     assert!(i == *v as usize);
                 } else {
                     assert!(false);
@@ -527,7 +533,7 @@ mod tests {
         };
         let mut v = vec![];
         for x in 0..256 {
-            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil), mark_roots);
+            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
             v.push(Value::Reference(inner));
         }
         outers
@@ -542,7 +548,7 @@ mod tests {
                 for hv in v {
                     if let Value::Reference(hv) = hv {
                         let obj = heap.get(*hv);
-                        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+                        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                             assert!(i == *v as usize);
                         } else {
                             assert!(false);
@@ -566,7 +572,7 @@ mod tests {
                 for hv in v {
                     if let Value::Reference(hv) = hv {
                         let obj = heap.get(*hv);
-                        if let Object::Pair(Value::Int(v), Value::Nil) = obj {
+                        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                             assert!(i == *v as usize);
                         } else {
                             assert!(false);
@@ -612,19 +618,19 @@ mod tests {
         };
         outers
             .borrow_mut()
-            .push(heap.alloc(Object::Pair(Value::Int(1), Value::Int(2)), mark_roots));
-        let car_h = heap.alloc(Object::Pair(Value::Int(3), Value::Nil), mark_roots);
-        let cdr_h = heap.alloc(Object::Pair(Value::Int(4), Value::Nil), mark_roots);
+            .push(heap.alloc(Object::Pair(Value::Int(1), Value::Int(2), None), mark_roots));
+        let car_h = heap.alloc(Object::Pair(Value::Int(3), Value::Nil, None), mark_roots);
+        let cdr_h = heap.alloc(Object::Pair(Value::Int(4), Value::Nil, None), mark_roots);
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Reference(car_h), Value::Int(2)),
+            Object::Pair(Value::Reference(car_h), Value::Int(2), None),
             mark_roots,
         ));
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Int(1), Value::Reference(cdr_h)),
+            Object::Pair(Value::Int(1), Value::Reference(cdr_h), None),
             mark_roots,
         ));
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Reference(car_h), Value::Reference(cdr_h)),
+            Object::Pair(Value::Reference(car_h), Value::Reference(cdr_h), None),
             mark_roots,
         ));
         assert!(heap.capacity() == 512);
@@ -635,7 +641,7 @@ mod tests {
         let mut i = 0;
         for h in outers.borrow().iter() {
             let obj = heap.get(*h);
-            if let Object::Pair(car, cdr) = obj {
+            if let Object::Pair(car, cdr, _) = obj {
                 if i == 0 {
                     let (car, cdr) = if let Value::Int(car) = car {
                         if let Value::Int(cdr) = cdr {
@@ -650,7 +656,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 1 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Pair(Value::Int(car), Value::Nil) = heap.get(*car_h) {
+                        if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
                             if let Value::Int(cdr) = cdr {
                                 (*car, *cdr)
                             } else {
@@ -666,7 +672,7 @@ mod tests {
                     assert!(cdr == 2);
                 } else if i == 2 {
                     let (car, cdr) = if let Value::Reference(cdr_h) = cdr {
-                        if let Object::Pair(Value::Int(cdr), Value::Nil) = heap.get(*cdr_h) {
+                        if let Object::Pair(Value::Int(cdr), Value::Nil, _) = heap.get(*cdr_h) {
                             if let Value::Int(car) = car {
                                 (*car, *cdr)
                             } else {
@@ -682,9 +688,10 @@ mod tests {
                     assert!(cdr == 4);
                 } else if i == 3 {
                     let (car, cdr) = if let Value::Reference(car_h) = car {
-                        if let Object::Pair(Value::Int(car), Value::Nil) = heap.get(*car_h) {
+                        if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
                             if let Value::Reference(cdr_h) = cdr {
-                                if let Object::Pair(Value::Int(cdr), Value::Nil) = heap.get(*cdr_h)
+                                if let Object::Pair(Value::Int(cdr), Value::Nil, _) =
+                                    heap.get(*cdr_h)
                                 {
                                     (*car, *cdr)
                                 } else {

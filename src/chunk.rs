@@ -937,27 +937,34 @@ impl Chunk {
         }
     }
 
-    pub fn disassemble_chunk(&self, vm: &Vm) -> VMResult<()> {
+    pub fn disassemble_chunk(&self, vm: &Vm, indent_level: u16) -> VMResult<()> {
+        fn indent(indent_level: u16) {
+            for _ in 0..indent_level {
+                print!("\t");
+            }
+        }
+        indent(indent_level);
         println!("CONSTANTS:");
         for (i, v) in self.constants.iter().enumerate() {
+            indent(indent_level);
             println!("{}: {}", i, v.display_value(vm));
             if let Value::Reference(h) = v {
                 if let Object::Lambda(l) = vm.get(*h) {
-                    println!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx");
-                    l.disassemble_chunk(vm)?;
-                    println!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx");
+                    l.disassemble_chunk(vm, indent_level + 1)?;
                 }
             }
         }
         println!();
         if let Some(caps) = &self.captures {
-            println!("Caputures: {:?}", caps);
+            indent(indent_level);
+            println!("Captures: {:?}", caps);
         }
         let mut code = self.code.iter().cloned().enumerate();
         let mut op = code.next();
         let mut last_line = 0;
         let mut wide = false;
         while let Some((idx, curr_op)) = op {
+            indent(indent_level);
             print!("{:#010x} ", idx);
             if let Some(line_number) = self.offset_to_line(idx) {
                 if last_line != line_number {

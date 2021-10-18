@@ -58,7 +58,7 @@ impl<'vm> Iterator for PairIter<'vm> {
         if let Some(current) = self.current {
             match current {
                 Value::Reference(h) => match self.vm.get(h) {
-                    Object::Pair(car, cdr) => {
+                    Object::Pair(car, cdr, _) => {
                         self.current = Some(*cdr);
                         Some(*car)
                     }
@@ -419,7 +419,7 @@ impl Value {
     pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
             Value::Reference(h) => match vm.get(*h) {
-                Object::Pair(_, _) => Box::new(PairIter::new(vm, *self)),
+                Object::Pair(_, _, _) => Box::new(PairIter::new(vm, *self)),
                 Object::Vector(v) => Box::new(v.iter().copied()),
                 _ => Box::new(iter::empty()),
             },
@@ -470,7 +470,7 @@ impl Value {
                     res.push(')');
                     res
                 }
-                Object::Pair(_, _) => {
+                Object::Pair(_, _, _) => {
                     let mut res = String::new();
                     res.push('(');
                     list_out(vm, &mut res, &mut self.iter(vm));
@@ -532,7 +532,7 @@ impl Value {
                     }
                 }*/
                 Object::Vector(_) => "Vector".to_string(),
-                Object::Pair(_, _) => "Pair".to_string(),
+                Object::Pair(_, _, _) => "Pair".to_string(),
                 Object::String(_) => "String".to_string(),
                 Object::Bytes(_) => "Bytes".to_string(),
                 //Object::HashMap(_) => "HashMap".to_string(),
@@ -544,7 +544,7 @@ impl Value {
     pub fn is_proper_list(&self, vm: &Vm) -> bool {
         // does not detect empty (nil) lists on purpose.
         if let Value::Reference(h) = self {
-            if let Object::Pair(_car, cdr) = vm.get(*h) {
+            if let Object::Pair(_car, cdr, _) = vm.get(*h) {
                 if cdr.is_nil() {
                     true
                 } else {

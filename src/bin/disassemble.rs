@@ -20,6 +20,7 @@ fn main() -> Result<(), VMError> {
         "Cow size: {}",
         std::mem::size_of::<std::borrow::Cow<'static, str>>()
     );
+    println!("Max opcode: {}", VECMKD);
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;
@@ -44,6 +45,6 @@ fn main() -> Result<(), VMError> {
     chunk.encode1(JMP, 1, 5)?;
     chunk.encode2(JMPFT, 1, 21, 5)?;
     let vm = Vm::new();
-    chunk.disassemble_chunk(&vm)?;
+    chunk.disassemble_chunk(&vm, 0)?;
     Ok(())
 }
