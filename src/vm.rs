@@ -399,6 +399,13 @@ impl Vm {
         }
     }
 
+    pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
+        self.stack[0] = Value::UInt(params.len() as u64);
+        self.stack[1..=params.len()].copy_from_slice(params);
+        self.execute(chunk)?;
+        Ok(self.stack[0])
+    }
+
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         self.stack_top = 0;
         let mut registers = self.make_registers(self.stack_top);

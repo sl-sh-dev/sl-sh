@@ -15,6 +15,7 @@ const TYPE_VECTOR: u8 = 0x20;
 const TYPE_BYTES: u8 = 0x30;
 const TYPE_PAIR: u8 = 0x40;
 const TYPE_LAMBDA: u8 = 0x50;
+const TYPE_MACRO: u8 = 0x60;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -60,6 +61,7 @@ pub enum Object {
     Bytes(Vec<u8>),
     Pair(Value, Value, Option<Meta>),
     Lambda(Rc<Chunk>),
+    Macro(Rc<Chunk>),
     Closure(Rc<Chunk>, Vec<usize>),
 }
 
@@ -153,6 +155,7 @@ impl Heap {
             Object::Bytes(_) => TYPE_BYTES,
             Object::Pair(_, _, _) => TYPE_PAIR | FLAG_TRACE,
             Object::Lambda(_) => TYPE_LAMBDA,
+            Object::Macro(_) => TYPE_MACRO,
             Object::Closure(_, _) => TYPE_LAMBDA,
         }
     }
@@ -325,7 +328,9 @@ impl Heap {
             Object::Pair(Value::Reference(car), _, _) => self.mark_trace(*car, current),
             Object::Pair(_, Value::Reference(cdr), _) => self.mark_trace(*cdr, current),
             Object::Pair(_, _, _) => {}
+            // XXX TODO- these need some tracing (for instance const).
             Object::Lambda(_) => {}
+            Object::Macro(_) => {}
             Object::Closure(_, _) => {}
         }
     }

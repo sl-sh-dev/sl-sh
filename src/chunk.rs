@@ -868,7 +868,13 @@ impl Chunk {
             }
             LIST => {
                 print!("LIST    \t");
-                println!("{:#06x} ", decode_u16_enum!(code)?);
+                //println!("{:#06x} ", decode_u16_enum!(code)?);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(false)
             }
             VECMK => {
@@ -949,8 +955,17 @@ impl Chunk {
             indent(indent_level);
             println!("{}: {}", i, v.display_value(vm));
             if let Value::Reference(h) = v {
-                if let Object::Lambda(l) = vm.get(*h) {
-                    l.disassemble_chunk(vm, indent_level + 1)?;
+                match vm.get(*h) {
+                    Object::Lambda(l) => {
+                        l.disassemble_chunk(vm, indent_level + 1)?;
+                    }
+                    Object::Macro(l) => {
+                        l.disassemble_chunk(vm, indent_level + 1)?;
+                    }
+                    Object::Closure(l, _) => {
+                        l.disassemble_chunk(vm, indent_level + 1)?;
+                    }
+                    _ => {}
                 }
             }
         }
