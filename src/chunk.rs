@@ -877,6 +877,16 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            APND => {
+                print!("APND    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             VECMK => {
                 print!("VECMK  \t");
                 disassemble_operand!(code, true, wide);

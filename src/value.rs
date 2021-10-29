@@ -343,6 +343,22 @@ impl Value {
         }
     }
 
+    pub fn get_symbol(&self) -> Option<Interned> {
+        if let Value::Symbol(i) = self {
+            Some(*i)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_symbol(&self, sym: Interned) -> bool {
+        if let Value::Symbol(i) = self {
+            *i == sym
+        } else {
+            false
+        }
+    }
+
     pub fn is_ref(&self) -> bool {
         matches!(self, Value::Reference(_))
     }

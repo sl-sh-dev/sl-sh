@@ -46,7 +46,7 @@ fn need_trace(flag: u8) -> bool {
 }
 
 #[derive(Clone, Copy, Debug)]
-#[repr(packed(1))]
+//#[repr(packed(1))]
 pub struct Meta {
     pub line: u32,
     pub col: u16,

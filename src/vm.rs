@@ -282,6 +282,110 @@ impl Vm {
         Ok(())
     }
 
+    fn append(
+        &mut self,
+        code: &[u8],
+        registers: &mut [Value],
+        wide: bool,
+        allow_singles: bool,
+    ) -> VMResult<()> {
+        let (dest, start, end) = decode3!(code, &mut self.ip, wide);
+        if end == start {
+            self.set_register(registers, dest as usize, Value::Nil);
+        } else {
+            let mut last_cdr = Value::Nil;
+            let mut head = Value::Nil;
+            let mut holder = Vec::new();
+            for i in start..end {
+                let lst = get_reg_unref!(registers, i, self);
+                match lst {
+                    Value::Nil => {}
+                    Value::Reference(h) => {
+                        match self.get(h) {
+                            Object::Pair(_car, _cdr, _) => {
+                                holder.clear();
+                                // Make the borrow checker happy, at least reuse
+                                // the vector to cut down on allocations...
+                                for l in lst.iter(self) {
+                                    holder.push(l);
+                                }
+                                for l in &holder {
+                                    let cdr = last_cdr;
+                                    last_cdr = Value::Reference(self.alloc(Object::Pair(
+                                        *l,
+                                        Value::Nil,
+                                        None,
+                                    )));
+                                    match cdr {
+                                        Value::Nil => head = last_cdr,
+                                        Value::Reference(h) => {
+                                            let cons_d = self.heap.get(h);
+                                            if let Object::Pair(car, _cdr, meta) = &*cons_d {
+                                                let car = *car;
+                                                let meta = *meta;
+                                                self.heap
+                                                    .replace(h, Object::Pair(car, last_cdr, meta));
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {
+                                if allow_singles {
+                                    let cdr = last_cdr;
+                                    last_cdr = Value::Reference(self.alloc(Object::Pair(
+                                        lst,
+                                        Value::Nil,
+                                        None,
+                                    )));
+                                    match cdr {
+                                        Value::Nil => head = last_cdr,
+                                        Value::Reference(h) => {
+                                            let cons_d = self.heap.get(h);
+                                            if let Object::Pair(car, _cdr, meta) = &*cons_d {
+                                                let car = *car;
+                                                let meta = *meta;
+                                                self.heap
+                                                    .replace(h, Object::Pair(car, last_cdr, meta));
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                } else {
+                                    return Err(VMError::new_vm("APND: Param not a list."));
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        if allow_singles {
+                            let cdr = last_cdr;
+                            last_cdr =
+                                Value::Reference(self.alloc(Object::Pair(lst, Value::Nil, None)));
+                            match cdr {
+                                Value::Nil => head = last_cdr,
+                                Value::Reference(h) => {
+                                    let cons_d = self.heap.get(h);
+                                    if let Object::Pair(car, _cdr, meta) = &*cons_d {
+                                        let car = *car;
+                                        let meta = *meta;
+                                        self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            return Err(VMError::new_vm("APND: Param not a list."));
+                        }
+                    }
+                }
+            }
+            self.set_register(registers, dest as usize, head);
+        }
+        Ok(())
+    }
+
     fn xar(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
         let pair = get_reg_unref!(registers, pair_reg, self);
@@ -401,13 +505,25 @@ impl Vm {
 
     pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
         self.stack[0] = Value::UInt(params.len() as u64);
-        self.stack[1..=params.len()].copy_from_slice(params);
+        if !params.is_empty() {
+            self.stack[1..=params.len()].copy_from_slice(params);
+        }
         self.execute(chunk)?;
         Ok(self.stack[0])
     }
 
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
+        let stack_top = self.stack_top;
+        let ip = self.ip;
+        let result = self.execute_internal(chunk);
+        self.stack_top = stack_top;
+        self.ip = ip;
+        result
+    }
+
+    fn execute_internal(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         self.stack_top = 0;
+        //self.stack[0] = Value::Nil;  // Clear the result register for the top level.
         let mut registers = self.make_registers(self.stack_top);
         let mut chunk = chunk;
         self.ip = 0;
@@ -624,7 +740,12 @@ impl Vm {
                     };
                     let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
-                    chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
+                    chunk = match self
+                        .make_call(lambda, chunk, registers, first_reg, num_args, false)
+                    {
+                        Ok(c) => c,
+                        Err(e) => return Err(e),
+                    };
                     registers = self.make_registers(self.stack_top);
                 }
                 TCALL => {
@@ -832,6 +953,7 @@ impl Vm {
                     }
                 }
                 LIST => self.list(&chunk.code[..], registers, wide)?,
+                APND => self.append(&chunk.code[..], registers, wide, false)?,
                 XAR => self.xar(&chunk.code[..], registers, wide)?,
                 XDR => self.xdr(&chunk.code[..], registers, wide)?,
                 VECMK => {
