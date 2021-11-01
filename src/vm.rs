@@ -474,6 +474,15 @@ impl Vm {
                     }
                     self.ip = 0;
                     Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
+                    // XXX TODO- double check num args.
+                    // XXX TODO- maybe test for stack overflow vs waiting for a panic.
+                    // Clear out the extra regs to avoid writing to globals or closures by
+                    // accident.
+                    if l.extra_regs > 0 {
+                        for r in l.input_regs..l.input_regs + l.extra_regs {
+                            Self::mov_register(registers, first_reg as usize + r, Value::Undefined);
+                        }
+                    }
                     Ok(l.clone())
                 }
                 Object::Closure(l, caps) => {
@@ -495,6 +504,13 @@ impl Vm {
                         );
                     }
                     Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
+                    // Clear out the extra regs to avoid writing to globals or closures by
+                    // accident.
+                    if l.extra_regs > 0 {
+                        for r in l.input_regs..l.input_regs + l.extra_regs {
+                            Self::mov_register(registers, first_reg as usize + r, Value::Undefined);
+                        }
+                    }
                     Ok(l.clone())
                 }
                 _ => Err(VMError::new_vm("CALL: Not a callable.")),
@@ -740,17 +756,22 @@ impl Vm {
                     };
                     let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
-                    chunk = match self
-                        .make_call(lambda, chunk, registers, first_reg, num_args, false)
-                    {
-                        Ok(c) => c,
-                        Err(e) => return Err(e),
-                    };
+                    chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
                     registers = self.make_registers(self.stack_top);
                 }
                 TCALL => {
                     let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
+                    chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                }
+                TCALLG => {
+                    let idx = if wide {
+                        decode_u32!(chunk.code, &mut self.ip)
+                    } else {
+                        decode_u16!(chunk.code, &mut self.ip) as u32
+                    };
+                    let num_args = decode1!(chunk.code, &mut self.ip, wide);
+                    let lambda = self.get_global(idx);
                     chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
                 }
                 JMP => {

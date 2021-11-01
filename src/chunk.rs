@@ -171,6 +171,10 @@ pub struct Chunk {
     pub constants: Vec<Value>,
     pub namespace: Option<Interned>,
     pub captures: Option<Vec<u32>>,
+    // Registers holding input (arguments and closured over values) plus 1 for the result.
+    pub input_regs: usize,
+    // Number of registers needed beyond input_regs for computations.
+    pub extra_regs: usize,
 }
 
 impl Chunk {
@@ -184,6 +188,8 @@ impl Chunk {
             constants: Vec::new(),
             namespace: None,
             captures: None,
+            input_regs: 0,
+            extra_regs: 0,
         }
     }
 
@@ -197,6 +203,8 @@ impl Chunk {
             constants: Vec::new(),
             namespace: Some(namespace),
             captures: None,
+            input_regs: 0,
+            extra_regs: 0,
         }
     }
 
@@ -388,6 +396,29 @@ impl Chunk {
         self.code.push((global & 0x0000_00FF) as u8);
         self.encode_operand(num_args, wide);
         self.encode_operand(first_reg, wide);
+
+        Ok(())
+    }
+
+    pub fn encode_tcallg(&mut self, global: u32, num_args: u16, line_number: u32) -> VMResult<()> {
+        let mut bytes: u8 = 5;
+        let mut wide = false;
+        if num_args > u8::MAX as u16 || global > u16::MAX as u32 {
+            wide = true;
+            bytes = 9;
+            self.encode_line_number(1, line_number)?;
+            self.code.push(WIDE);
+        }
+
+        self.encode_line_number(bytes, line_number)?;
+        self.code.push(TCALLG);
+        if wide {
+            self.code.push(((global & 0xFF00_0000) >> 24) as u8);
+            self.code.push(((global & 0x00FF_0000) >> 16) as u8);
+        }
+        self.code.push(((global & 0x0000_FF00) >> 8) as u8);
+        self.code.push((global & 0x0000_00FF) as u8);
+        self.encode_operand(num_args, wide);
 
         Ok(())
     }
@@ -639,6 +670,16 @@ impl Chunk {
             TCALL => {
                 print!("CALL   \t");
                 disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            TCALLG => {
+                print!("TCALLG \t");
+                print!("G[");
+                disassemble_immediate_big!(code, wide);
+                print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 println!();
