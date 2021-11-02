@@ -69,7 +69,7 @@
 	"Give me a relative filepath and I'll give you an absolute filepath!
 	Section: user-shell"
 		(filepath)
-		$(find $PWD -name filepath))
+		(str (fs-parent filepath) "/" (fs-base filepath)))
 
 	(defn mrf
 		"most recent files. return ordered list (oldest -> newest) of files in current working dir

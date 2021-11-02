@@ -1283,4 +1283,3 @@ Example:
         ),
     );
 }
-// fix fs-notify to have default to-sleep
