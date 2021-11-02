@@ -141,6 +141,7 @@ pub struct CallFrame {
     chunk: Rc<Chunk>,
     ip: usize,
     stack_top: usize,
+    this_fn: Option<Value>,
 }
 
 pub struct Vm {
@@ -150,6 +151,7 @@ pub struct Vm {
     call_stack: Vec<CallFrame>,
     globals: Globals,
     upvals: Vec<Value>,
+    this_fn: Option<Value>,
 
     stack_top: usize,
     ip: usize,
@@ -173,6 +175,7 @@ impl Vm {
             call_stack: Vec::new(),
             globals,
             upvals: Vec::new(),
+            this_fn: None,
             stack_top: 0,
             ip: 0,
         }
@@ -468,10 +471,12 @@ impl Vm {
                             chunk,
                             ip: self.ip,
                             stack_top: self.stack_top,
+                            this_fn: self.this_fn,
                         };
                         self.call_stack.push(frame);
                         self.stack_top += first_reg as usize;
                     }
+                    self.this_fn = Some(lambda);
                     self.ip = 0;
                     Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
                     // XXX TODO- double check num args.
@@ -491,10 +496,12 @@ impl Vm {
                             chunk,
                             ip: self.ip,
                             stack_top: self.stack_top,
+                            this_fn: self.this_fn,
                         };
                         self.call_stack.push(frame);
                         self.stack_top += first_reg as usize;
                     }
+                    self.this_fn = Some(lambda);
                     self.ip = 0;
                     for (i, c) in caps.iter().enumerate() {
                         Self::mov_register(
@@ -558,6 +565,7 @@ impl Vm {
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
+                        self.this_fn = frame.this_fn;
                     } else {
                         return Ok(());
                     }
@@ -571,6 +579,7 @@ impl Vm {
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
+                        self.this_fn = frame.this_fn;
                     } else {
                         return Ok(());
                     }
@@ -773,6 +782,40 @@ impl Vm {
                     let num_args = decode1!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
                     chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                }
+                CALLM => {
+                    let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
+                    if let Some(this_fn) = self.this_fn {
+                        chunk =
+                            self.make_call(this_fn, chunk, registers, first_reg, num_args, false)?;
+                        registers = self.make_registers(self.stack_top);
+                    } else {
+                        let line = if wide {
+                            chunk.offset_to_line(self.ip - 4)
+                        } else {
+                            chunk.offset_to_line(self.ip - 2)
+                        };
+                        return Err(VMError::new_vm(format!(
+                            "CALLM: Not in an existing lambda call, line {}.",
+                            line.unwrap_or(0)
+                        )));
+                    }
+                }
+                TCALLM => {
+                    let num_args = decode1!(chunk.code, &mut self.ip, wide);
+                    if let Some(this_fn) = self.this_fn {
+                        chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
+                    } else {
+                        let line = if wide {
+                            chunk.offset_to_line(self.ip - 4)
+                        } else {
+                            chunk.offset_to_line(self.ip - 2)
+                        };
+                        return Err(VMError::new_vm(format!(
+                            "TCALLM: Not in an existing lambda call, line {}.",
+                            line.unwrap_or(0)
+                        )));
+                    }
                 }
                 JMP => {
                     let nip = decode1!(chunk.code, &mut self.ip, wide);

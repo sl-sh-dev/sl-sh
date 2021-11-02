@@ -668,7 +668,7 @@ impl Chunk {
                 Ok(false)
             }
             TCALL => {
-                print!("CALL   \t");
+                print!("TCALL  \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -681,6 +681,20 @@ impl Chunk {
                 disassemble_immediate_big!(code, wide);
                 print!("]");
                 print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            CALLM => {
+                print!("CALLM  \t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            TCALLM => {
+                print!("TCALLM \t");
                 disassemble_immediate!(code, wide);
                 println!();
                 Ok(false)

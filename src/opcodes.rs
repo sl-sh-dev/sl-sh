@@ -66,9 +66,13 @@ pub const JMPGT: OpCode = FLOW_BASE + 13;
 pub const CALLG: OpCode = FLOW_BASE + 14;
 // TCALLG A B - Tail Call fn G[A] with B args with existing stack/regs
 pub const TCALLG: OpCode = FLOW_BASE + 15;
+// CALLM A B - Call current fn with B args with R(C) as first reg/param
+pub const CALLM: OpCode = FLOW_BASE + 16;
+// TCALLM B - Tail Call current fn with B args with existing stack/regs
+pub const TCALLM: OpCode = FLOW_BASE + 17;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 16;
+const MATH_BASE: OpCode = FLOW_BASE + 18;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)
