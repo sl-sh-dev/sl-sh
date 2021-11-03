@@ -93,9 +93,24 @@ pub const SUBM: OpCode = MATH_BASE + 7;
 pub const MULM: OpCode = MATH_BASE + 8;
 // DIVM A B C - mov R(A) = R(B) / R(C) NOTE, mov overwrites global or closures.
 pub const DIVM: OpCode = MATH_BASE + 9;
+// NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMEQ: OpCode = MATH_BASE + 10;
+// NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMLT: OpCode = MATH_BASE + 11;
+// NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMGT: OpCode = MATH_BASE + 12;
+// NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMLTE: OpCode = MATH_BASE + 13;
+// NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMGTE: OpCode = MATH_BASE + 14;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 10;
+const CONS_BASE: OpCode = MATH_BASE + 15;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))

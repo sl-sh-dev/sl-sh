@@ -83,6 +83,56 @@ macro_rules! get_reg {
     }};
 }
 
+macro_rules! compare_eq {
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr, $compf_fn:expr, $wide:expr, $move:expr) => {{
+        let (dest, reg1, reg2) = decode3!($chunk.code, $ip, $wide);
+        let mut val = false;
+        for reg in reg1..reg2 {
+            let op1 = get_reg_unref!($registers, reg, $vm);
+            let op2 = get_reg_unref!($registers, reg + 1, $vm);
+            val = if op1.is_int() && op2.is_int() {
+                $comp_fn(op1.get_int()?, op2.get_int()?)
+            } else {
+                $compf_fn(op1.get_float()?, op2.get_float()?)
+            };
+            if !val {
+                break;
+            }
+        }
+        let val = if val { Value::True } else { Value::False };
+        if $move {
+            Vm::mov_register($registers, dest as usize, val);
+        } else {
+            $vm.set_register($registers, dest as usize, val);
+        }
+    }};
+}
+
+macro_rules! compare {
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
+        let (dest, reg1, reg2) = decode3!($chunk.code, $ip, $wide);
+        let mut val = false;
+        for reg in reg1..reg2 {
+            let op1 = get_reg_unref!($registers, reg, $vm);
+            let op2 = get_reg_unref!($registers, reg + 1, $vm);
+            val = if op1.is_int() && op2.is_int() {
+                $comp_fn(op1.get_int()?, op2.get_int()?)
+            } else {
+                $comp_fn(op1.get_float()?, op2.get_float()?)
+            };
+            if !val {
+                break;
+            }
+        }
+        let val = if val { Value::True } else { Value::False };
+        if $move {
+            Vm::mov_register($registers, dest as usize, val);
+        } else {
+            $vm.set_register($registers, dest as usize, val);
+        }
+    }};
+}
+
 macro_rules! binary_math {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $move:expr) => {{
         let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
@@ -945,6 +995,52 @@ impl Vm {
                     true
                 ),
                 DIVM => div_math!(self, chunk, &mut self.ip, registers, wide, true),
+                NUMEQ => compare_eq!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a == b,
+                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
+                    wide,
+                    true
+                ),
+                NUMLT => compare!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a < b,
+                    wide,
+                    true
+                ),
+                NUMLTE => compare!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a <= b,
+                    wide,
+                    true
+                ),
+                NUMGT => compare!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a > b,
+                    wide,
+                    true
+                ),
+                NUMGTE => compare!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a >= b,
+                    wide,
+                    true
+                ),
                 INC => {
                     let (dest, i) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = match get_reg_unref!(registers, dest, self) {
