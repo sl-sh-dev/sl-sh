@@ -71,8 +71,17 @@ pub const CALLM: OpCode = FLOW_BASE + 16;
 // TCALLM B - Tail Call current fn with B args with existing stack/regs
 pub const TCALLM: OpCode = FLOW_BASE + 17;
 
+// ID A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
+pub const ID: OpCode = FLOW_BASE + 18;
+// EQV A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects or values (for
+// numbers or chars)
+pub const EQV: OpCode = FLOW_BASE + 19;
+// EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
+// containers with equal values (must be the same container type)
+pub const EQUAL: OpCode = FLOW_BASE + 20;
+
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 18;
+const MATH_BASE: OpCode = FLOW_BASE + 21;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)
@@ -96,21 +105,24 @@ pub const DIVM: OpCode = MATH_BASE + 9;
 // NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
 pub const NUMEQ: OpCode = MATH_BASE + 10;
+// NUMNEQ A B C - compare (!=) in register B (inclusive) to C (inclusive) and set R[A] to the
+// result.
+pub const NUMNEQ: OpCode = MATH_BASE + 11;
 // NUMLT A B C - compare (<) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLT: OpCode = MATH_BASE + 11;
+pub const NUMLT: OpCode = MATH_BASE + 12;
 // NUMGT A B C - compare (>) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGT: OpCode = MATH_BASE + 12;
+pub const NUMGT: OpCode = MATH_BASE + 13;
 // NUMLTE A B C - compare (<=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMLTE: OpCode = MATH_BASE + 13;
+pub const NUMLTE: OpCode = MATH_BASE + 14;
 // NUMGTE A B C - compare (>=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
-pub const NUMGTE: OpCode = MATH_BASE + 14;
+pub const NUMGTE: OpCode = MATH_BASE + 15;
 
 // Cons cells
-const CONS_BASE: OpCode = MATH_BASE + 15;
+const CONS_BASE: OpCode = MATH_BASE + 16;
 pub const CONS: OpCode = CONS_BASE; // CONS A B C - R(A) = conscell(R(B), R(C))
 pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))

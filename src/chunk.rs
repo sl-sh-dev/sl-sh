@@ -699,6 +699,36 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            ID => {
+                print!("ID     \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            EQV => {
+                print!("EQV    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            EQUAL => {
+                print!("EQUAL  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             JMP => {
                 print!("JMP    \t");
                 disassemble_immediate!(code, wide);
@@ -877,6 +907,16 @@ impl Chunk {
             }
             NUMEQ => {
                 print!("NUMEQ  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            NUMNEQ => {
+                print!("NUMNEQ \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);

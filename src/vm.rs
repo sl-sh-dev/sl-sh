@@ -83,8 +83,9 @@ macro_rules! get_reg {
     }};
 }
 
-macro_rules! compare_eq {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr, $compf_fn:expr, $wide:expr, $move:expr) => {{
+macro_rules! compare_int {
+    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr,
+     $compf_fn:expr, $wide:expr, $move:expr, $not:expr) => {{
         let (dest, reg1, reg2) = decode3!($chunk.code, $ip, $wide);
         let mut val = false;
         for reg in reg1..reg2 {
@@ -99,6 +100,9 @@ macro_rules! compare_eq {
                 break;
             }
         }
+        if $not {
+            val = !val;
+        }
         let val = if val { Value::True } else { Value::False };
         if $move {
             Vm::mov_register($registers, dest as usize, val);
@@ -110,26 +114,7 @@ macro_rules! compare_eq {
 
 macro_rules! compare {
     ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
-        let (dest, reg1, reg2) = decode3!($chunk.code, $ip, $wide);
-        let mut val = false;
-        for reg in reg1..reg2 {
-            let op1 = get_reg_unref!($registers, reg, $vm);
-            let op2 = get_reg_unref!($registers, reg + 1, $vm);
-            val = if op1.is_int() && op2.is_int() {
-                $comp_fn(op1.get_int()?, op2.get_int()?)
-            } else {
-                $comp_fn(op1.get_float()?, op2.get_float()?)
-            };
-            if !val {
-                break;
-            }
-        }
-        let val = if val { Value::True } else { Value::False };
-        if $move {
-            Vm::mov_register($registers, dest as usize, val);
-        } else {
-            $vm.set_register($registers, dest as usize, val);
-        }
+        compare_int!($vm, $chunk, $ip, $registers, $comp_fn, $comp_fn, $wide, $move, false)
     }};
 }
 
@@ -585,6 +570,70 @@ impl Vm {
         Ok(self.stack[0])
     }
 
+    fn is_id(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+        let mut val = Value::False;
+        if reg1 == reg2 {
+            val = Value::True;
+        } else {
+            for reg in reg1..reg2 {
+                let val1 = get_reg!(registers, reg);
+                let val2 = get_reg!(registers, reg + 1);
+                if unsafe {
+                    std::mem::transmute::<Value, u128>(val1)
+                        == std::mem::transmute::<Value, u128>(val2)
+                } {
+                    val = Value::True;
+                } else {
+                    val = Value::False;
+                    break;
+                }
+            }
+        };
+        Ok(val)
+    }
+
+    fn is_eqv(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+        let mut val = Value::False;
+        if self.is_id(registers, reg1, reg2)? == Value::True {
+            val = Value::True;
+        } else {
+            for reg in reg1..reg2 {
+                let val1 = get_reg_unref!(registers, reg, self);
+                let val2 = get_reg_unref!(registers, reg + 1, self);
+                if val1.is_int() && val2.is_int() {
+                    if val1.get_int()? == val2.get_int()? {
+                        val = Value::True;
+                    } else {
+                        val = Value::False;
+                        break;
+                    }
+                } else if val1.is_number() && val2.is_number() {
+                    if (val1.get_float()? - val2.get_float()?).abs() < f64::EPSILON {
+                        val = Value::True;
+                    } else {
+                        val = Value::False;
+                        break;
+                    }
+                } else if val1 == val2 {
+                    val = Value::True;
+                } else {
+                    val = Value::False;
+                    break;
+                }
+            }
+        }
+        Ok(val)
+    }
+
+    fn is_equal(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+        let val = if self.is_eqv(registers, reg1, reg2)? == Value::True {
+            Value::True
+        } else {
+            Value::False
+        };
+        Ok(val)
+    }
+
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         let stack_top = self.stack_top;
         let ip = self.ip;
@@ -939,6 +988,21 @@ impl Vm {
                         self.ip = nip as usize;
                     }
                 }
+                ID => {
+                    let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
+                    let val = self.is_id(registers, reg1, reg2)?;
+                    self.set_register(registers, dest as usize, val);
+                }
+                EQV => {
+                    let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
+                    let val = self.is_eqv(registers, reg1, reg2)?;
+                    self.set_register(registers, dest as usize, val);
+                }
+                EQUAL => {
+                    let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
+                    let val = self.is_equal(registers, reg1, reg2)?;
+                    self.set_register(registers, dest as usize, val);
+                }
                 ADD => binary_math!(
                     self,
                     chunk,
@@ -995,7 +1059,7 @@ impl Vm {
                     true
                 ),
                 DIVM => div_math!(self, chunk, &mut self.ip, registers, wide, true),
-                NUMEQ => compare_eq!(
+                NUMEQ => compare_int!(
                     self,
                     chunk,
                     &mut self.ip,
@@ -1003,6 +1067,18 @@ impl Vm {
                     |a, b| a == b,
                     |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
                     wide,
+                    true,
+                    false
+                ),
+                NUMNEQ => compare_int!(
+                    self,
+                    chunk,
+                    &mut self.ip,
+                    registers,
+                    |a, b| a == b,
+                    |a: f64, b: f64| (a - b).abs() < f64::EPSILON,
+                    wide,
+                    true,
                     true
                 ),
                 NUMLT => compare!(
