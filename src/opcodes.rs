@@ -71,8 +71,8 @@ pub const CALLM: OpCode = FLOW_BASE + 16;
 // TCALLM B - Tail Call current fn with B args with existing stack/regs
 pub const TCALLM: OpCode = FLOW_BASE + 17;
 
-// ID A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
-pub const ID: OpCode = FLOW_BASE + 18;
+// EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
+pub const EQ: OpCode = FLOW_BASE + 18;
 // EQV A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects or values (for
 // numbers or chars)
 pub const EQV: OpCode = FLOW_BASE + 19;

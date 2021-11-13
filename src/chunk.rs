@@ -699,8 +699,8 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            ID => {
-                print!("ID     \t");
+            EQ => {
+                print!("EQ     \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);

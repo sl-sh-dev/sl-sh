@@ -570,14 +570,16 @@ impl Vm {
         Ok(self.stack[0])
     }
 
-    fn is_id(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+    fn is_eq(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
             val = Value::True;
         } else {
+            //let mut val1 = get_reg!(registers, reg1);
+            let mut val1 = get_reg_unref!(registers, reg1, self);
             for reg in reg1..reg2 {
-                let val1 = get_reg!(registers, reg);
-                let val2 = get_reg!(registers, reg + 1);
+                //let val2 = get_reg!(registers, reg + 1);
+                let val2 = get_reg_unref!(registers, reg + 1, self);
                 if unsafe {
                     std::mem::transmute::<Value, u128>(val1)
                         == std::mem::transmute::<Value, u128>(val2)
@@ -587,6 +589,7 @@ impl Vm {
                     val = Value::False;
                     break;
                 }
+                val1 = val2;
             }
         };
         Ok(val)
@@ -594,27 +597,14 @@ impl Vm {
 
     fn is_eqv(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
-        if self.is_id(registers, reg1, reg2)? == Value::True {
+        //if self.is_id(registers, reg1, reg2)? == Value::True {
+        if reg1 == reg2 {
             val = Value::True;
         } else {
             for reg in reg1..reg2 {
                 let val1 = get_reg_unref!(registers, reg, self);
                 let val2 = get_reg_unref!(registers, reg + 1, self);
-                if val1.is_int() && val2.is_int() {
-                    if val1.get_int()? == val2.get_int()? {
-                        val = Value::True;
-                    } else {
-                        val = Value::False;
-                        break;
-                    }
-                } else if val1.is_number() && val2.is_number() {
-                    if (val1.get_float()? - val2.get_float()?).abs() < f64::EPSILON {
-                        val = Value::True;
-                    } else {
-                        val = Value::False;
-                        break;
-                    }
-                } else if val1 == val2 {
+                if val1 == val2 {
                     val = Value::True;
                 } else {
                     val = Value::False;
@@ -625,12 +615,116 @@ impl Vm {
         Ok(val)
     }
 
-    fn is_equal(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
-        let val = if self.is_eqv(registers, reg1, reg2)? == Value::True {
-            Value::True
+    fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
+        let mut val = Value::False;
+        if unsafe {
+            std::mem::transmute::<Value, u128>(val1) == std::mem::transmute::<Value, u128>(val2)
+        } {
+            val = Value::True;
+        } else if val1.is_int() && val2.is_int() {
+            if val1.get_int()? == val2.get_int()? {
+                val = Value::True;
+            }
+        } else if val1.is_number() && val2.is_number() {
+            if (val1.get_float()? - val2.get_float()?).abs() < f64::EPSILON {
+                val = Value::True;
+            }
         } else {
-            Value::False
-        };
+            match val1 {
+                Value::StringConst(s1) => {
+                    if let Value::Reference(v2) = val2 {
+                        if let Object::String(s2) = self.get(v2) {
+                            if self.get_interned(s1) == s2 {
+                                val = Value::True;
+                            }
+                        }
+                    }
+                }
+                Value::Reference(h1) => {
+                    if let Value::StringConst(s2) = val2 {
+                        if let Object::String(s1) = self.get(h1) {
+                            if s1 == self.get_interned(s2) {
+                                val = Value::True;
+                            }
+                        }
+                    } else if let Value::Reference(h2) = val2 {
+                        match self.get(h1) {
+                            Object::String(s1) => {
+                                if let Object::String(s2) = self.get(h2) {
+                                    if s1 == s2 {
+                                        val = Value::True;
+                                    }
+                                }
+                            }
+                            Object::Vector(v1) => {
+                                if let Object::Vector(v2) = self.get(h2) {
+                                    if v1.len() == v2.len() {
+                                        if v1.is_empty() {
+                                            val = Value::True;
+                                        } else {
+                                            for i in 0..v1.len() {
+                                                val = self.is_equal_pair(v1[i], v2[i])?;
+                                                if val == Value::False {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Object::Bytes(b1) => {
+                                if let Object::Bytes(b2) = self.get(h2) {
+                                    if b1.len() == b2.len() {
+                                        if b1.is_empty() {
+                                            val = Value::True;
+                                        } else {
+                                            for i in 0..b1.len() {
+                                                if b1[i] == b2[i] {
+                                                    val = Value::True;
+                                                } else {
+                                                    val = Value::False;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Object::Pair(car1, cdr1, _) => {
+                                // XXX use iterators to reduce recursion?
+                                if let Object::Pair(car2, cdr2, _) = self.get(h2) {
+                                    val = self.is_equal_pair(*car1, *car2)?;
+                                    if val == Value::True {
+                                        val = self.is_equal_pair(*cdr1, *cdr2)?;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(val)
+    }
+
+    fn is_equal(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+        let mut val = Value::False;
+        if reg1 == reg2 {
+            //if self.is_eqv(registers, reg1, reg2)? == Value::True {
+            val = Value::True
+        } else {
+            let mut val1 = get_reg_unref!(registers, reg1, self);
+            for reg in reg1..reg2 {
+                let val2 = get_reg_unref!(registers, reg + 1, self);
+                val = self.is_equal_pair(val1, val2)?;
+                if val == Value::False {
+                    break;
+                }
+                val1 = val2;
+            }
+        }
         Ok(val)
     }
 
@@ -988,9 +1082,9 @@ impl Vm {
                         self.ip = nip as usize;
                     }
                 }
-                ID => {
+                EQ => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
-                    let val = self.is_id(registers, reg1, reg2)?;
+                    let val = self.is_eq(registers, reg1, reg2)?;
                     self.set_register(registers, dest as usize, val);
                 }
                 EQV => {
