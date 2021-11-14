@@ -462,7 +462,7 @@ impl Vm {
                     self.heap
                         .replace(*cons_handle, Object::Pair(car, val, None));
                 } else {
-                    return Err(VMError::new_vm("XAR: Not a pair/conscell."));
+                    return Err(VMError::new_vm("XDR: Not a pair/conscell."));
                 }
             }
             Value::Nil => {
@@ -470,7 +470,7 @@ impl Vm {
                 self.set_register(registers, pair_reg as usize, pair);
             }
             _ => {
-                return Err(VMError::new_vm("XAR: Not a pair/conscell."));
+                return Err(VMError::new_vm("XDR: Not a pair/conscell."));
             }
         }
         Ok(())
@@ -595,26 +595,6 @@ impl Vm {
         Ok(val)
     }
 
-    fn is_eqv(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
-        let mut val = Value::False;
-        //if self.is_id(registers, reg1, reg2)? == Value::True {
-        if reg1 == reg2 {
-            val = Value::True;
-        } else {
-            for reg in reg1..reg2 {
-                let val1 = get_reg_unref!(registers, reg, self);
-                let val2 = get_reg_unref!(registers, reg + 1, self);
-                if val1 == val2 {
-                    val = Value::True;
-                } else {
-                    val = Value::False;
-                    break;
-                }
-            }
-        }
-        Ok(val)
-    }
-
     fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
         let mut val = Value::False;
         if unsafe {
@@ -692,6 +672,7 @@ impl Vm {
                             }
                             Object::Pair(car1, cdr1, _) => {
                                 // XXX use iterators to reduce recursion?
+                                // Make sure pair iter will work for non-lists...
                                 if let Object::Pair(car2, cdr2, _) = self.get(h2) {
                                     val = self.is_equal_pair(*car1, *car2)?;
                                     if val == Value::True {
@@ -712,7 +693,6 @@ impl Vm {
     fn is_equal(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
-            //if self.is_eqv(registers, reg1, reg2)? == Value::True {
             val = Value::True
         } else {
             let mut val1 = get_reg_unref!(registers, reg1, self);
@@ -1085,11 +1065,6 @@ impl Vm {
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
                     let val = self.is_eq(registers, reg1, reg2)?;
-                    self.set_register(registers, dest as usize, val);
-                }
-                EQV => {
-                    let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
-                    let val = self.is_eqv(registers, reg1, reg2)?;
                     self.set_register(registers, dest as usize, val);
                 }
                 EQUAL => {

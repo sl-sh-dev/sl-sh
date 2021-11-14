@@ -73,9 +73,6 @@ pub const TCALLM: OpCode = FLOW_BASE + 17;
 
 // EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
 pub const EQ: OpCode = FLOW_BASE + 18;
-// EQV A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects or values (for
-// numbers or chars)
-pub const EQV: OpCode = FLOW_BASE + 19;
 // EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
 // containers with equal values (must be the same container type)
 pub const EQUAL: OpCode = FLOW_BASE + 20;
