@@ -144,3 +144,5 @@ pub const VECNTH: OpCode = VEC_BASE + 4;
 pub const VECSTH: OpCode = VEC_BASE + 5;
 // VECMKD A B C - make a vector with R(B) elements and put it in R(A), each element defauted to R(C)
 pub const VECMKD: OpCode = VEC_BASE + 6;
+// VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
+pub const VEC: OpCode = VEC_BASE + 7;

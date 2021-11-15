@@ -1261,6 +1261,20 @@ impl Vm {
                 APND => self.append(&chunk.code[..], registers, wide, false)?,
                 XAR => self.xar(&chunk.code[..], registers, wide)?,
                 XDR => self.xdr(&chunk.code[..], registers, wide)?,
+                VEC => {
+                    let (dest, start, end) = decode3!(chunk.code, &mut self.ip, wide);
+                    if end == start {
+                        let vh = self.alloc(Object::Vector(Vec::new()));
+                        self.set_register(registers, dest as usize, Value::Reference(vh));
+                    } else {
+                        let mut v = Vec::new();
+                        for i in start..end {
+                            v.push(get_reg_unref!(registers, i, self));
+                        }
+                        let vh = self.alloc(Object::Vector(v));
+                        self.set_register(registers, dest as usize, Value::Reference(vh));
+                    }
+                }
                 VECMK => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let len = get_reg_unref!(registers, op, self).get_int()?;
