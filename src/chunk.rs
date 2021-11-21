@@ -175,6 +175,9 @@ pub struct Chunk {
     pub input_regs: usize,
     // Number of registers needed beyond input_regs for computations.
     pub extra_regs: usize,
+    pub args: u16,
+    pub opt_args: u16,
+    pub rest: bool,
 }
 
 impl Chunk {
@@ -190,6 +193,9 @@ impl Chunk {
             captures: None,
             input_regs: 0,
             extra_regs: 0,
+            args: 0,
+            opt_args: 0,
+            rest: false,
         }
     }
 
@@ -205,6 +211,9 @@ impl Chunk {
             captures: None,
             input_regs: 0,
             extra_regs: 0,
+            args: 0,
+            opt_args: 0,
+            rest: false,
         }
     }
 

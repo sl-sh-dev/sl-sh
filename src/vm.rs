@@ -483,6 +483,30 @@ impl Vm {
         unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
     }
 
+    fn setup_rest(
+        chunk: &Rc<Chunk>,
+        registers: &mut [Value],
+        first_reg: u16,
+        num_args: u16,
+    ) -> (usize, Vec<Value>) {
+        let rest_reg = first_reg + chunk.args + chunk.opt_args;
+        let v = if num_args < (chunk.args + chunk.opt_args) {
+            Vec::with_capacity(0)
+        } else {
+            let rest_len = (num_args - (chunk.args + chunk.opt_args)) as usize + 1;
+            let mut v = Vec::with_capacity(rest_len);
+            for item in registers
+                .iter()
+                .take(rest_reg as usize + rest_len)
+                .skip(rest_reg.into())
+            {
+                v.push(*item);
+            }
+            v
+        };
+        (rest_reg.into(), v)
+    }
+
     fn make_call(
         &mut self,
         lambda: Value,
@@ -497,66 +521,112 @@ impl Vm {
                 let last_reg = (first_reg + num_args + 1) as usize;
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
                 Self::mov_register(registers, first_reg as usize, res);
-                Ok(chunk)
-            }
-            Value::Reference(h) => match self.heap.get(h) {
-                Object::Lambda(l) => {
-                    if !tail_call {
-                        let frame = CallFrame {
-                            chunk,
-                            ip: self.ip,
-                            stack_top: self.stack_top,
-                            this_fn: self.this_fn,
-                        };
-                        self.call_stack.push(frame);
-                        self.stack_top += first_reg as usize;
+                if tail_call {
+                    // Go to last call frame so the SRET does not mess up the return of a builtin.
+                    if let Some(frame) = self.call_stack.pop() {
+                        self.stack_top = frame.stack_top;
+                        self.ip = frame.ip;
+                        self.this_fn = frame.this_fn;
+                        Ok(frame.chunk)
+                    } else {
+                        Ok(chunk)
                     }
-                    self.this_fn = Some(lambda);
-                    self.ip = 0;
-                    Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
-                    // XXX TODO- double check num args.
-                    // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                    // Clear out the extra regs to avoid writing to globals or closures by
-                    // accident.
-                    if l.extra_regs > 0 {
-                        for r in l.input_regs..l.input_regs + l.extra_regs {
-                            Self::mov_register(registers, first_reg as usize + r, Value::Undefined);
-                        }
-                    }
-                    Ok(l.clone())
+                } else {
+                    Ok(chunk)
                 }
-                Object::Closure(l, caps) => {
-                    if !tail_call {
-                        let frame = CallFrame {
-                            chunk,
-                            ip: self.ip,
-                            stack_top: self.stack_top,
-                            this_fn: self.this_fn,
-                        };
-                        self.call_stack.push(frame);
-                        self.stack_top += first_reg as usize;
-                    }
-                    self.this_fn = Some(lambda);
-                    self.ip = 0;
-                    for (i, c) in caps.iter().enumerate() {
+            }
+            Value::Reference(h) => {
+                let rf = self.heap.get(h);
+                match rf {
+                    Object::Lambda(l) => {
+                        let l = l.clone();
+                        if !tail_call {
+                            let frame = CallFrame {
+                                chunk,
+                                ip: self.ip,
+                                stack_top: self.stack_top,
+                                this_fn: self.this_fn,
+                            };
+                            self.call_stack.push(frame);
+                            self.stack_top += first_reg as usize;
+                        }
+                        self.this_fn = Some(lambda);
+                        self.ip = 0;
                         Self::mov_register(
                             registers,
-                            (first_reg + num_args + 1 + i as u16).into(),
-                            Value::Binding(*c),
+                            first_reg.into(),
+                            Value::UInt(num_args as u64),
                         );
-                    }
-                    Self::mov_register(registers, first_reg.into(), Value::UInt(num_args as u64));
-                    // Clear out the extra regs to avoid writing to globals or closures by
-                    // accident.
-                    if l.extra_regs > 0 {
-                        for r in l.input_regs..l.input_regs + l.extra_regs {
-                            Self::mov_register(registers, first_reg as usize + r, Value::Undefined);
+                        if l.rest {
+                            let (rest_reg, v) =
+                                Self::setup_rest(&l, registers, first_reg, num_args);
+                            let h = self.alloc(Object::Vector(v));
+                            Self::mov_register(registers, rest_reg, Value::Reference(h));
                         }
+                        // XXX TODO- double check num args.
+                        // XXX TODO- maybe test for stack overflow vs waiting for a panic.
+                        // Clear out the extra regs to avoid writing to globals or closures by
+                        // accident.
+                        if l.extra_regs > 0 {
+                            for r in l.input_regs..l.input_regs + l.extra_regs {
+                                Self::mov_register(
+                                    registers,
+                                    first_reg as usize + r,
+                                    Value::Undefined,
+                                );
+                            }
+                        }
+                        Ok(l)
                     }
-                    Ok(l.clone())
+                    Object::Closure(l, caps) => {
+                        let l = l.clone();
+                        if !tail_call {
+                            let frame = CallFrame {
+                                chunk,
+                                ip: self.ip,
+                                stack_top: self.stack_top,
+                                this_fn: self.this_fn,
+                            };
+                            self.call_stack.push(frame);
+                            self.stack_top += first_reg as usize;
+                        }
+                        self.this_fn = Some(lambda);
+                        self.ip = 0;
+                        let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
+                        if l.rest {
+                            let (rest_reg, v) =
+                                Self::setup_rest(&l, registers, first_reg, num_args);
+                            for (i, c) in caps.iter().enumerate() {
+                                Self::mov_register(registers, cap_first + i, Value::Binding(*c));
+                            }
+                            let h = self.alloc(Object::Vector(v));
+                            Self::mov_register(registers, rest_reg, Value::Reference(h));
+                        } else {
+                            for (i, c) in caps.iter().enumerate() {
+                                Self::mov_register(registers, cap_first + i, Value::Binding(*c));
+                            }
+                        }
+                        Self::mov_register(
+                            registers,
+                            first_reg.into(),
+                            Value::UInt(num_args as u64),
+                        );
+                        // Clear out the extra regs to avoid writing to globals or closures by
+                        // accident.
+                        if l.extra_regs > 0 {
+                            for r in l.input_regs..l.input_regs + l.extra_regs {
+                                Self::mov_register(
+                                    registers,
+                                    first_reg as usize + r,
+                                    Value::Undefined,
+                                );
+                            }
+                        }
+                        Ok(l)
+                    }
+                    _ => Err(VMError::new_vm("CALL: Not a callable.")),
                 }
-                _ => Err(VMError::new_vm("CALL: Not a callable.")),
-            },
+            }
             _ => Err(VMError::new_vm("CALL: Not a callable.")),
         }
     }
@@ -945,6 +1015,7 @@ impl Vm {
                     let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
                     chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                    registers = self.make_registers(self.stack_top); // In case of a builtin call
                 }
                 TCALLG => {
                     let idx = if wide {
@@ -955,6 +1026,7 @@ impl Vm {
                     let num_args = decode1!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
                     chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                    registers = self.make_registers(self.stack_top); // In case of a builtin call
                 }
                 CALLM => {
                     let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
@@ -978,6 +1050,7 @@ impl Vm {
                     let num_args = decode1!(chunk.code, &mut self.ip, wide);
                     if let Some(this_fn) = self.this_fn {
                         chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
+                        registers = self.make_registers(self.stack_top); // In case of a builtin call
                     } else {
                         let line = if wide {
                             chunk.offset_to_line(self.ip - 4)
