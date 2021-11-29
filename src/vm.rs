@@ -1135,6 +1135,30 @@ impl Vm {
                         self.ip = nip as usize;
                     }
                 }
+                JMPFU => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
+                    if get_reg_unref!(registers, test, self).is_undef() {
+                        self.ip += ipoff as usize;
+                    }
+                }
+                JMPBU => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
+                    if get_reg_unref!(registers, test, self).is_undef() {
+                        self.ip -= ipoff as usize;
+                    }
+                }
+                JMPFNU => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
+                    if !get_reg_unref!(registers, test, self).is_undef() {
+                        self.ip += ipoff as usize;
+                    }
+                }
+                JMPBNU => {
+                    let (test, ipoff) = decode2!(chunk.code, &mut self.ip, wide);
+                    if !get_reg_unref!(registers, test, self).is_undef() {
+                        self.ip -= ipoff as usize;
+                    }
+                }
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
                     let val = self.is_eq(registers, reg1, reg2)?;

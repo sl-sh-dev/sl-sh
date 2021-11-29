@@ -5,7 +5,7 @@ pub const HALT: OpCode = 0x01;
 pub const RET: OpCode = 0x02;
 pub const SRET: OpCode = 0x03; // SRET A - R(0) = R(A) and then RET
 pub const WIDE: OpCode = 0x04;
-// Load a constant onto the stack
+
 const STACK_BASE: OpCode = 0x04;
 pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B)
 pub const SET: OpCode = STACK_BASE + 2; // SET A B respecting global and local bindings - R(A) = R(B)
@@ -62,23 +62,32 @@ pub const JMPLT: OpCode = FLOW_BASE + 12;
 // JMPGT A B C - compare B and C and jump to IP C if R(A) > R(B)
 pub const JMPGT: OpCode = FLOW_BASE + 13;
 
+// JMPFU A B - Jump to current IP + B if R(A) is undefined
+pub const JMPFU: OpCode = FLOW_BASE + 14;
+// JMPBU A B - Jump to current IP - B if R(A) is undefined
+pub const JMPBU: OpCode = FLOW_BASE + 15;
+// JMPFNU A B - Jump to current IP + B if R(A) is NOT undefined
+pub const JMPFNU: OpCode = FLOW_BASE + 16;
+// JMPBNU A B - Jump to current IP - B if R(A) is NOT undefined
+pub const JMPBNU: OpCode = FLOW_BASE + 17;
+
 // CALLG A B C - Call fn G[A] with B args with R(C) as first reg/param
-pub const CALLG: OpCode = FLOW_BASE + 14;
+pub const CALLG: OpCode = FLOW_BASE + 18;
 // TCALLG A B - Tail Call fn G[A] with B args with existing stack/regs
-pub const TCALLG: OpCode = FLOW_BASE + 15;
+pub const TCALLG: OpCode = FLOW_BASE + 19;
 // CALLM A B - Call current fn with B args with R(C) as first reg/param
-pub const CALLM: OpCode = FLOW_BASE + 16;
+pub const CALLM: OpCode = FLOW_BASE + 20;
 // TCALLM B - Tail Call current fn with B args with existing stack/regs
-pub const TCALLM: OpCode = FLOW_BASE + 17;
+pub const TCALLM: OpCode = FLOW_BASE + 21;
 
 // EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
-pub const EQ: OpCode = FLOW_BASE + 18;
+pub const EQ: OpCode = FLOW_BASE + 22;
 // EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
 // containers with equal values (must be the same container type)
-pub const EQUAL: OpCode = FLOW_BASE + 20;
+pub const EQUAL: OpCode = FLOW_BASE + 23;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 21;
+const MATH_BASE: OpCode = FLOW_BASE + 24;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)

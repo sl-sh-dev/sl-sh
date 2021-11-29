@@ -824,6 +824,38 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            JMPFU => {
+                print!("JMPFU  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            JMPBU => {
+                print!("JMPBU  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            JMPFNU => {
+                print!("JMPFNU \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
+            JMPBNU => {
+                print!("JMPBNU \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
             ADD => {
                 print!("ADD    \t");
                 disassemble_operand!(code, true, wide);
