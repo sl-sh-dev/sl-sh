@@ -171,7 +171,7 @@ pub struct Chunk {
     pub constants: Vec<Value>,
     pub namespace: Option<Interned>,
     pub captures: Option<Vec<u32>>,
-    // Registers holding input (arguments and closured over values) plus 1 for the result.
+    // Registers holding input (arguments and closed over values) plus 1 for the result.
     pub input_regs: usize,
     // Number of registers needed beyond input_regs for computations.
     pub extra_regs: usize,

@@ -516,6 +516,26 @@ impl Vm {
         num_args: u16,
         tail_call: bool,
     ) -> VMResult<Rc<Chunk>> {
+        // Clear out the extra regs to avoid writing to globals or closures by
+        // accident.
+        fn clear_regs(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
+            // First clear any optional arguments.
+            if num_args < (l.args + l.opt_args) {
+                for r in num_args..(l.args + l.opt_args) {
+                    Vm::mov_register(
+                        registers,
+                        first_reg as usize + (r + 1) as usize,
+                        Value::Undefined,
+                    );
+                }
+            }
+            if l.extra_regs > 0 {
+                for r in l.input_regs..l.input_regs + l.extra_regs {
+                    Vm::mov_register(registers, first_reg as usize + r, Value::Undefined);
+                }
+            }
+        }
+
         match lambda {
             Value::Builtin(f) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
@@ -565,17 +585,7 @@ impl Vm {
                         }
                         // XXX TODO- double check num args.
                         // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                        // Clear out the extra regs to avoid writing to globals or closures by
-                        // accident.
-                        if l.extra_regs > 0 {
-                            for r in l.input_regs..l.input_regs + l.extra_regs {
-                                Self::mov_register(
-                                    registers,
-                                    first_reg as usize + r,
-                                    Value::Undefined,
-                                );
-                            }
-                        }
+                        clear_regs(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
                     Object::Closure(l, caps) => {
@@ -611,17 +621,7 @@ impl Vm {
                             first_reg.into(),
                             Value::UInt(num_args as u64),
                         );
-                        // Clear out the extra regs to avoid writing to globals or closures by
-                        // accident.
-                        if l.extra_regs > 0 {
-                            for r in l.input_regs..l.input_regs + l.extra_regs {
-                                Self::mov_register(
-                                    registers,
-                                    first_reg as usize + r,
-                                    Value::Undefined,
-                                );
-                            }
-                        }
+                        clear_regs(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
                     _ => Err(VMError::new_vm("CALL: Not a callable.")),
