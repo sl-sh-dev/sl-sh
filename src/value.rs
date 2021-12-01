@@ -111,6 +111,7 @@ pub enum Value {
     CharCluster(u8, [u8; 14]),
     CharClusterLong(Handle), // XXX TODO- move to Object?
     Symbol(Interned),
+    Keyword(Interned),
     StringConst(Interned),
     Reference(Handle),
     Binding(usize),
@@ -176,6 +177,13 @@ impl PartialEq for Value {
             }
             Self::Symbol(v1) => {
                 if let Self::Symbol(v2) = other {
+                    v1 == v2
+                } else {
+                    false
+                }
+            }
+            Self::Keyword(v1) => {
+                if let Self::Keyword(v2) = other {
                     v1 == v2
                 } else {
                     false
@@ -285,6 +293,10 @@ impl Hash for Value {
             Value::False => (1 << 13).hash(state),
             Value::Nil => (1 << 14).hash(state),
             Value::Undefined => (1 << 15).hash(state),
+            Value::Keyword(i) => {
+                (1 << 16).hash(state);
+                i.hash(state);
+            }
         }
     }
 }
@@ -300,6 +312,7 @@ impl fmt::Debug for Value {
             Self::CharCluster(_, c) => write!(f, "CharCluster({:?})", c),
             Self::CharClusterLong(c) => write!(f, "CharClusterLong({:?})", c),
             Self::Symbol(s) => write!(f, "Symbol({:?})", s),
+            Self::Keyword(s) => write!(f, "Keyword({:?})", s),
             Self::StringConst(s) => write!(f, "StringConst({:?})", s),
             Self::Reference(r) => write!(f, "Reference({:?})", r),
             Self::Binding(r) => write!(f, "Binding({:?})", r),
@@ -463,6 +476,7 @@ impl Value {
             Value::UInt(i) => format!("{}", i),
             Value::Byte(b) => format!("{}", b),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
+            Value::Keyword(i) => format!(":{}", vm.get_interned(*i).to_string()),
             Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i).to_string()),
             Value::CodePoint(ch) => format!("#\\{}", ch),
             Value::CharCluster(l, c) => {
@@ -526,6 +540,7 @@ impl Value {
             Value::Int(_) => "Int".to_string(),
             Value::UInt(_) => "UInt".to_string(),
             Value::Symbol(_) => "Symbol".to_string(),
+            Value::Keyword(_) => "Keyword".to_string(),
             Value::StringConst(_) => "String".to_string(),
             Value::CodePoint(_) => "Char".to_string(),
             Value::CharCluster(_, _) => "Char".to_string(),
