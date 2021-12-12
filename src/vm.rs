@@ -92,9 +92,15 @@ macro_rules! compare_int {
             let op1 = get_reg_unref!($registers, reg, $vm);
             let op2 = get_reg_unref!($registers, reg + 1, $vm);
             val = if op1.is_int() && op2.is_int() {
-                $comp_fn(op1.get_int()?, op2.get_int()?)
+                $comp_fn(
+                    op1.get_int().map_err(|e| (e, $chunk.clone()))?,
+                    op2.get_int().map_err(|e| (e, $chunk.clone()))?,
+                )
             } else {
-                $compf_fn(op1.get_float()?, op2.get_float()?)
+                $compf_fn(
+                    op1.get_float().map_err(|e| (e, $chunk.clone()))?,
+                    op2.get_float().map_err(|e| (e, $chunk.clone()))?,
+                )
             };
             if !val {
                 break;
@@ -124,9 +130,15 @@ macro_rules! binary_math {
         let op2 = get_reg_unref!($registers, op2, $vm);
         let op3 = get_reg_unref!($registers, op3, $vm);
         let val = if op2.is_int() && op3.is_int() {
-            Value::Int($bin_fn(op2.get_int()?, op3.get_int()?))
+            Value::Int($bin_fn(
+                op2.get_int().map_err(|e| (e, $chunk.clone()))?,
+                op3.get_int().map_err(|e| (e, $chunk.clone()))?,
+            ))
         } else {
-            Value::Float(F64Wrap($bin_fn(op2.get_float()?, op3.get_float()?)))
+            Value::Float(F64Wrap($bin_fn(
+                op2.get_float().map_err(|e| (e, $chunk.clone()))?,
+                op3.get_float().map_err(|e| (e, $chunk.clone()))?,
+            )))
         };
         if $move {
             Vm::mov_register($registers, dest as usize, val);
@@ -142,17 +154,19 @@ macro_rules! div_math {
         let op2 = get_reg_unref!($registers, op2, $vm);
         let op3 = get_reg_unref!($registers, op3, $vm);
         let val = if op2.is_int() && op3.is_int() {
-            let op3 = op3.get_int()?;
+            let op3 = op3.get_int().map_err(|e| (e, $chunk.clone()))?;
             if op3 == 0 {
-                return Err(VMError::new_vm("Divide by zero error."));
+                return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            Value::Int(op2.get_int()? / op3)
+            Value::Int(op2.get_int().map_err(|e| (e, $chunk.clone()))? / op3)
         } else {
-            let op3 = op3.get_float()?;
+            let op3 = op3.get_float().map_err(|e| (e, $chunk.clone()))?;
             if op3 == 0.0 {
-                return Err(VMError::new_vm("Divide by zero error."));
+                return Err((VMError::new_vm("Divide by zero error."), $chunk));
             }
-            Value::Float(F64Wrap(op2.get_float()? / op3))
+            Value::Float(F64Wrap(
+                op2.get_float().map_err(|e| (e, $chunk.clone()))? / op3,
+            ))
         };
         if $move {
             Vm::mov_register($registers, dest as usize, val);
@@ -173,10 +187,11 @@ macro_rules! div_math {
 }*/
 
 pub struct CallFrame {
-    chunk: Rc<Chunk>,
-    ip: usize,
-    stack_top: usize,
-    this_fn: Option<Value>,
+    pub chunk: Rc<Chunk>,
+    pub ip: usize,
+    pub current_ip: usize,
+    pub stack_top: usize,
+    pub this_fn: Option<Value>,
 }
 
 pub struct Vm {
@@ -185,11 +200,13 @@ pub struct Vm {
     stack: Vec<Value>,
     call_stack: Vec<CallFrame>,
     globals: Globals,
-    upvals: Vec<Value>,
+    upvals: Vec<Value>, // XXX these need to be GCed...
     this_fn: Option<Value>,
 
+    err_frame: Option<CallFrame>,
     stack_top: usize,
     ip: usize,
+    current_ip: usize,
 }
 
 impl Default for Vm {
@@ -211,9 +228,27 @@ impl Vm {
             globals,
             upvals: Vec::new(),
             this_fn: None,
+            err_frame: None,
             stack_top: 0,
             ip: 0,
+            current_ip: 0,
         }
+    }
+
+    pub fn clear_err_frame(&mut self) {
+        self.err_frame = None;
+    }
+
+    pub fn err_frame(&self) -> &Option<CallFrame> {
+        &self.err_frame
+    }
+
+    pub fn get_call_stack(&self) -> &[CallFrame] {
+        &self.call_stack[..]
+    }
+
+    pub fn get_registers(&self, start: usize, end: usize) -> &[Value] {
+        &self.stack[start..end]
     }
 
     pub fn alloc(&mut self, obj: Object) -> Handle {
@@ -515,7 +550,7 @@ impl Vm {
         first_reg: u16,
         num_args: u16,
         tail_call: bool,
-    ) -> VMResult<Rc<Chunk>> {
+    ) -> Result<Rc<Chunk>, (VMError, Rc<Chunk>)> {
         // Clear out the extra regs to avoid writing to globals or closures by
         // accident.
         fn clear_regs(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
@@ -539,7 +574,8 @@ impl Vm {
         match lambda {
             Value::Builtin(f) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
-                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])?;
+                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])
+                    .map_err(|e| (e, chunk.clone()))?;
                 Self::mov_register(registers, first_reg as usize, res);
                 if tail_call {
                     // Go to last call frame so the SRET does not mess up the return of a builtin.
@@ -564,6 +600,7 @@ impl Vm {
                             let frame = CallFrame {
                                 chunk,
                                 ip: self.ip,
+                                current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
                             };
@@ -594,6 +631,7 @@ impl Vm {
                             let frame = CallFrame {
                                 chunk,
                                 ip: self.ip,
+                                current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
                             };
@@ -624,20 +662,11 @@ impl Vm {
                         clear_regs(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
-                    _ => Err(VMError::new_vm("CALL: Not a callable.")),
+                    _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
                 }
             }
-            _ => Err(VMError::new_vm("CALL: Not a callable.")),
+            _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
         }
-    }
-
-    pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
-        self.stack[0] = Value::UInt(params.len() as u64);
-        if !params.is_empty() {
-            self.stack[1..=params.len()].copy_from_slice(params);
-        }
-        self.execute(chunk)?;
-        Ok(self.stack[0])
     }
 
     fn is_eq(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
@@ -778,29 +807,54 @@ impl Vm {
         Ok(val)
     }
 
+    pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
+        self.stack[0] = Value::UInt(params.len() as u64);
+        if !params.is_empty() {
+            self.stack[1..=params.len()].copy_from_slice(params);
+        }
+        self.execute(chunk)?;
+        Ok(self.stack[0])
+    }
+
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         let stack_top = self.stack_top;
         let ip = self.ip;
+        let this_fn = self.this_fn;
+        self.this_fn = None;
         let result = self.execute_internal(chunk);
+        let result = if let Err((e, chunk)) = result {
+            self.err_frame = Some(CallFrame {
+                chunk,
+                stack_top: self.stack_top,
+                ip: self.ip,
+                current_ip: self.current_ip,
+                this_fn: self.this_fn,
+            });
+            Err(e)
+        } else {
+            self.err_frame = None;
+            Ok(())
+        };
         self.stack_top = stack_top;
         self.ip = ip;
+        self.this_fn = this_fn;
         result
     }
 
-    fn execute_internal(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
+    fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
         self.stack_top = 0;
-        //self.stack[0] = Value::Nil;  // Clear the result register for the top level.
         let mut registers = self.make_registers(self.stack_top);
         let mut chunk = chunk;
         self.ip = 0;
         let mut wide = false;
         loop {
             let opcode = chunk.code[self.ip];
+            self.current_ip = self.ip;
             self.ip += 1;
             match opcode {
                 NOP => {}
                 HALT => {
-                    return Err(VMError::new_vm("HALT: VM halted and on fire!"));
+                    return Err((VMError::new_vm("HALT: VM halted and on fire!"), chunk));
                 }
                 RET => {
                     if let Some(frame) = self.call_stack.pop() {
@@ -808,6 +862,7 @@ impl Vm {
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
+                        self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
                     } else {
                         return Ok(());
@@ -822,6 +877,7 @@ impl Vm {
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
+                        self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
                     } else {
                         return Ok(());
@@ -852,14 +908,14 @@ impl Vm {
                             if let Some(i) = self.globals.interned_slot(s) {
                                 i as u32
                             } else {
-                                return Err(VMError::new_vm("REF: Symbol not global."));
+                                return Err((VMError::new_vm("REF: Symbol not global."), chunk));
                             }
                         }
                         Value::Global(i) => i,
-                        _ => return Err(VMError::new_vm("REF: Not a symbol.")),
+                        _ => return Err((VMError::new_vm("REF: Not a symbol."), chunk)),
                     };
                     if let Value::Undefined = self.globals.get(idx as u32) {
-                        return Err(VMError::new_vm("REF: Symbol is not defined."));
+                        return Err((VMError::new_vm("REF: Symbol is not defined."), chunk));
                     }
                     Self::mov_register(registers, dest as usize, Value::Global(idx));
                 }
@@ -869,10 +925,13 @@ impl Vm {
                     if let Value::Global(i) = get_reg!(registers, dest) {
                         self.globals.set(i, val);
                     } else {
-                        return Err(VMError::new_vm(format!(
-                            "DEF: Not a global, got: {:?}.",
-                            get_reg!(registers, dest)
-                        )));
+                        return Err((
+                            VMError::new_vm(format!(
+                                "DEF: Not a global, got: {:?}.",
+                                get_reg!(registers, dest)
+                            )),
+                            chunk,
+                        ));
                     }
                 }
                 DEFV => {
@@ -883,7 +942,7 @@ impl Vm {
                             self.globals.set(i, val);
                         }
                     } else {
-                        return Err(VMError::new_vm("DEFV: Not a global."));
+                        return Err((VMError::new_vm("DEFV: Not a global."), chunk));
                     }
                 }
                 REFI => {
@@ -977,16 +1036,19 @@ impl Vm {
                             }
                             (l.clone(), caps)
                         } else {
-                            return Err(VMError::new_vm(format!(
-                                "CLOSE: requires a lambda, got {:?}.",
-                                lambda
-                            )));
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "CLOSE: requires a lambda, got {:?}.",
+                                    lambda
+                                )),
+                                chunk,
+                            ));
                         }
                     } else {
-                        return Err(VMError::new_vm(format!(
-                            "CLOSE: requires a lambda, got {:?}.",
-                            lambda
-                        )));
+                        return Err((
+                            VMError::new_vm(format!("CLOSE: requires a lambda, got {:?}.", lambda)),
+                            chunk,
+                        ));
                     };
                     Self::mov_register(
                         registers,
@@ -1040,10 +1102,13 @@ impl Vm {
                         } else {
                             chunk.offset_to_line(self.ip - 2)
                         };
-                        return Err(VMError::new_vm(format!(
-                            "CALLM: Not in an existing lambda call, line {}.",
-                            line.unwrap_or(0)
-                        )));
+                        return Err((
+                            VMError::new_vm(format!(
+                                "CALLM: Not in an existing lambda call, line {}.",
+                                line.unwrap_or(0)
+                            )),
+                            chunk,
+                        ));
                     }
                 }
                 TCALLM => {
@@ -1057,10 +1122,13 @@ impl Vm {
                         } else {
                             chunk.offset_to_line(self.ip - 2)
                         };
-                        return Err(VMError::new_vm(format!(
-                            "TCALLM: Not in an existing lambda call, line {}.",
-                            line.unwrap_or(0)
-                        )));
+                        return Err((
+                            VMError::new_vm(format!(
+                                "TCALLM: Not in an existing lambda call, line {}.",
+                                line.unwrap_or(0)
+                            )),
+                            chunk,
+                        ));
                     }
                 }
                 JMP => {
@@ -1113,24 +1181,36 @@ impl Vm {
                 }
                 JMPEQ => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
-                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
-                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
+                    let op2 = get_reg_unref!(registers, op2, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
                     if op1 == op2 {
                         self.ip = nip as usize;
                     }
                 }
                 JMPLT => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
-                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
-                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
+                    let op2 = get_reg_unref!(registers, op2, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
                     if op1 < op2 {
                         self.ip = nip as usize;
                     }
                 }
                 JMPGT => {
                     let (op1, op2, nip) = decode3!(chunk.code, &mut self.ip, wide);
-                    let op1 = get_reg_unref!(registers, op1, self).get_int()?;
-                    let op2 = get_reg_unref!(registers, op2, self).get_int()?;
+                    let op1 = get_reg_unref!(registers, op1, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
+                    let op2 = get_reg_unref!(registers, op2, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
                     if op1 > op2 {
                         self.ip = nip as usize;
                     }
@@ -1161,12 +1241,16 @@ impl Vm {
                 }
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
-                    let val = self.is_eq(registers, reg1, reg2)?;
+                    let val = self
+                        .is_eq(registers, reg1, reg2)
+                        .map_err(|e| (e, chunk.clone()))?;
                     self.set_register(registers, dest as usize, val);
                 }
                 EQUAL => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
-                    let val = self.is_equal(registers, reg1, reg2)?;
+                    let val = self
+                        .is_equal(registers, reg1, reg2)
+                        .map_err(|e| (e, chunk.clone()))?;
                     self.set_register(registers, dest as usize, val);
                 }
                 ADD => binary_math!(
@@ -1290,10 +1374,13 @@ impl Vm {
                         Value::Int(v) => Value::Int(v + i as i64),
                         Value::UInt(v) => Value::UInt(v + i as u64),
                         _ => {
-                            return Err(VMError::new_vm(format!(
-                                "INC: Can only INC an integer type, got {:?}.",
-                                get_reg_unref!(registers, dest, self)
-                            )))
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "INC: Can only INC an integer type, got {:?}.",
+                                    get_reg_unref!(registers, dest, self)
+                                )),
+                                chunk,
+                            ))
                         }
                     };
                     self.set_register(registers, dest as usize, val);
@@ -1305,10 +1392,13 @@ impl Vm {
                         Value::Int(v) => Value::Int(v - i as i64),
                         Value::UInt(v) => Value::UInt(v - i as u64),
                         _ => {
-                            return Err(VMError::new_vm(format!(
-                                "DEC: Can only DEC an integer type, got {:?}.",
-                                get_reg_unref!(registers, dest, self)
-                            )))
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "DEC: Can only DEC an integer type, got {:?}.",
+                                    get_reg_unref!(registers, dest, self)
+                                )),
+                                chunk,
+                            ))
                         }
                     };
                     self.set_register(registers, dest as usize, val);
@@ -1330,11 +1420,11 @@ impl Vm {
                                 let car = *car;
                                 self.set_register(registers, dest as usize, car);
                             } else {
-                                return Err(VMError::new_vm("CAR: Not a pair/conscell."));
+                                return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk));
                             }
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
-                        _ => return Err(VMError::new_vm("CAR: Not a pair/conscell.")),
+                        _ => return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk)),
                     }
                 }
                 CDR => {
@@ -1347,17 +1437,25 @@ impl Vm {
                                 let cdr = *cdr;
                                 self.set_register(registers, dest as usize, cdr);
                             } else {
-                                return Err(VMError::new_vm("CDR: Not a pair/conscell."));
+                                return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk));
                             }
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
-                        _ => return Err(VMError::new_vm("CDR: Not a pair/conscell.")),
+                        _ => return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk)),
                     }
                 }
-                LIST => self.list(&chunk.code[..], registers, wide)?,
-                APND => self.append(&chunk.code[..], registers, wide, false)?,
-                XAR => self.xar(&chunk.code[..], registers, wide)?,
-                XDR => self.xdr(&chunk.code[..], registers, wide)?,
+                LIST => self
+                    .list(&chunk.code[..], registers, wide)
+                    .map_err(|e| (e, chunk.clone()))?,
+                APND => self
+                    .append(&chunk.code[..], registers, wide, false)
+                    .map_err(|e| (e, chunk.clone()))?,
+                XAR => self
+                    .xar(&chunk.code[..], registers, wide)
+                    .map_err(|e| (e, chunk.clone()))?,
+                XDR => self
+                    .xdr(&chunk.code[..], registers, wide)
+                    .map_err(|e| (e, chunk.clone()))?,
                 VEC => {
                     let (dest, start, end) = decode3!(chunk.code, &mut self.ip, wide);
                     if end == start {
@@ -1374,7 +1472,9 @@ impl Vm {
                 }
                 VECMK => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
-                    let len = get_reg_unref!(registers, op, self).get_int()?;
+                    let len = get_reg_unref!(registers, op, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
                     let val = Value::Reference(
                         self.alloc(Object::Vector(Vec::with_capacity(len as usize))),
                     );
@@ -1382,9 +1482,12 @@ impl Vm {
                 }
                 VECELS => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
-                    let len = get_reg_unref!(registers, op, self).get_int()?;
-                    if let Object::Vector(v) =
-                        get_reg_unref!(registers, dest, self).get_object(self)?
+                    let len = get_reg_unref!(registers, op, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
+                    if let Object::Vector(v) = get_reg_unref!(registers, dest, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
                     {
                         v.resize(len as usize, Value::Undefined);
                     }
@@ -1392,65 +1495,78 @@ impl Vm {
                 VECPSH => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, op, self);
-                    if let Object::Vector(v) =
-                        get_reg_unref!(registers, dest, self).get_object(self)?
+                    if let Object::Vector(v) = get_reg_unref!(registers, dest, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
                     {
                         v.push(val);
                     }
                 }
                 VECPOP => {
                     let (vc, dest) = decode2!(chunk.code, &mut self.ip, wide);
-                    let val = if let Object::Vector(v) =
-                        get_reg_unref!(registers, vc, self).get_object(self)?
+                    let val = if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
                     {
                         if let Some(val) = v.pop() {
                             val
                         } else {
-                            return Err(VMError::new_vm("VECPOP: Vector is empty."));
+                            return Err((VMError::new_vm("VECPOP: Vector is empty."), chunk));
                         }
                     } else {
-                        return Err(VMError::new_vm("VECPOP: Not a vector."));
+                        return Err((VMError::new_vm("VECPOP: Not a vector."), chunk.clone()));
                     };
                     self.set_register(registers, dest as usize, val);
                 }
                 VECNTH => {
                     let (vc, dest, i) = decode3!(chunk.code, &mut self.ip, wide);
-                    let i = get_reg_unref!(registers, i, self).get_int()? as usize;
-                    let val = if let Object::Vector(v) =
-                        get_reg_unref!(registers, vc, self).get_object(self)?
+                    let i = get_reg_unref!(registers, i, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))? as usize;
+                    let val = if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
                     {
                         if let Some(val) = v.get(i) {
                             *val
                         } else {
-                            return Err(VMError::new_vm(format!(
-                                "VECNTH: index out of bounds, {}/{}.",
-                                i,
-                                v.len()
-                            )));
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "VECNTH: index out of bounds, {}/{}.",
+                                    i,
+                                    v.len()
+                                )),
+                                chunk,
+                            ));
                         }
                     } else {
-                        return Err(VMError::new_vm("VECNTH: Not a vector."));
+                        return Err((VMError::new_vm("VECNTH: Not a vector."), chunk));
                     };
                     self.set_register(registers, dest as usize, val);
                 }
                 VECSTH => {
                     let (vc, src, i) = decode3!(chunk.code, &mut self.ip, wide);
-                    let i = get_reg_unref!(registers, i, self).get_int()? as usize;
+                    let i = get_reg_unref!(registers, i, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg_unref!(registers, src, self);
-                    if let Object::Vector(v) =
-                        get_reg_unref!(registers, vc, self).get_object(self)?
+                    if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
                     {
                         if i >= v.len() {
-                            return Err(VMError::new_vm("VECSTH: Index out of range."));
+                            return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
                         v[i] = val;
                     } else {
-                        return Err(VMError::new_vm("VECSTH: Not a vector."));
+                        return Err((VMError::new_vm("VECSTH: Not a vector."), chunk));
                     };
                 }
                 VECMKD => {
                     let (dest, len, dfn) = decode3!(chunk.code, &mut self.ip, wide);
-                    let len = get_reg_unref!(registers, len, self).get_int()?;
+                    let len = get_reg_unref!(registers, len, self)
+                        .get_int()
+                        .map_err(|e| (e, chunk.clone()))?;
                     let dfn = get_reg_unref!(registers, dfn, self);
                     let mut v = Vec::with_capacity(len as usize);
                     for _ in 0..len {
@@ -1460,7 +1576,7 @@ impl Vm {
                     self.set_register(registers, dest as usize, val);
                 }
                 _ => {
-                    return Err(VMError::new_vm(format!("Invalid opcode {}", opcode)));
+                    return Err((VMError::new_vm(format!("Invalid opcode {}", opcode)), chunk));
                 }
             }
             if wide && opcode != WIDE {
@@ -1750,6 +1866,7 @@ mod tests {
         let chunk = Rc::new(chunk);
         assert!(vm.execute(chunk.clone()).is_err());
 
+        vm.clear_err_frame();
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
@@ -2567,7 +2684,7 @@ mod tests {
         let chunk = Rc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
-        assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
+        assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::float(10 as f64)) as u16;
@@ -2580,7 +2697,7 @@ mod tests {
         let chunk = Rc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
-        assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
+        assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
 
         let mut chunk = Chunk::new("no_file", 1);
         let const0 = chunk.add_constant(Value::float(10 as f64)) as u16;
@@ -2593,7 +2710,7 @@ mod tests {
         let chunk = Rc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
-        assert!(res.unwrap_err().to_string() == "[VM]: Divide by zero error.");
+        assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
         Ok(())
     }
 }

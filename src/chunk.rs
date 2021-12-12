@@ -178,6 +178,8 @@ pub struct Chunk {
     pub args: u16,
     pub opt_args: u16,
     pub rest: bool,
+
+    pub dbg_args: Option<Vec<Interned>>,
 }
 
 impl Chunk {
@@ -196,6 +198,7 @@ impl Chunk {
             args: 0,
             opt_args: 0,
             rest: false,
+            dbg_args: None,
         }
     }
 
@@ -214,6 +217,7 @@ impl Chunk {
             args: 0,
             opt_args: 0,
             rest: false,
+            dbg_args: None,
         }
     }
 
