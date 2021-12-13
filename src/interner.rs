@@ -94,6 +94,24 @@ impl Interner {
         self.map.contains_key(name)
     }
 
+    fn intern_final(&mut self, name: &'static str) -> Interned {
+        let id = self.vals.len() as u32;
+        self.vals.push(name);
+        let interned = Interned { id };
+        self.map.insert(name, interned);
+        interned
+    }
+
+    /// Intern name in this interner.  Will return the existing symbol if it
+    /// exists or add it and and return it if not.  Use this if you already have
+    /// a static str reference to avoid wasting space on making another.
+    pub fn intern_static(&mut self, name: &'static str) -> Interned {
+        if let Some(&id) = self.map.get(name) {
+            return id;
+        }
+        self.intern_final(name)
+    }
+
     /// Intern name in this interner.  Will return the existing symbol if it
     /// exists or add it and and return it if not.
     pub fn intern(&mut self, name: &str) -> Interned {
@@ -115,11 +133,7 @@ impl Interner {
             self.used += name.len();
             unsafe { &*(&self.buf[start..] as *const str) }
         };
-        let id = self.vals.len() as u32;
-        self.vals.push(name);
-        let interned = Interned { id };
-        self.map.insert(name, interned);
-        interned
+        self.intern_final(name)
     }
 
     pub fn get_string(&self, interned: Interned) -> Option<&'static str> {

@@ -532,29 +532,29 @@ impl Value {
         }
     }
 
-    pub fn display_type(&self, vm: &Vm) -> String {
+    pub fn display_type(&self, vm: &Vm) -> &'static str {
         match self {
-            Value::True => "True".to_string(),
-            Value::False => "False".to_string(),
-            Value::Float(_) => "Float".to_string(),
-            Value::Int(_) => "Int".to_string(),
-            Value::UInt(_) => "UInt".to_string(),
-            Value::Symbol(_) => "Symbol".to_string(),
-            Value::Keyword(_) => "Keyword".to_string(),
-            Value::StringConst(_) => "String".to_string(),
-            Value::CodePoint(_) => "Char".to_string(),
-            Value::CharCluster(_, _) => "Char".to_string(),
-            Value::CharClusterLong(_) => "Char".to_string(),
-            Value::Builtin(_) => "Builtin".to_string(),
-            Value::Byte(_) => "Byte".to_string(),
+            Value::True => "True",
+            Value::False => "False",
+            Value::Float(_) => "Float",
+            Value::Int(_) => "Int",
+            Value::UInt(_) => "UInt",
+            Value::Symbol(_) => "Symbol",
+            Value::Keyword(_) => "Keyword",
+            Value::StringConst(_) => "String",
+            Value::CodePoint(_) => "Char",
+            Value::CharCluster(_, _) => "Char",
+            Value::CharClusterLong(_) => "Char",
+            Value::Builtin(_) => "Builtin",
+            Value::Byte(_) => "Byte",
             Value::Binding(_) => self.unref(vm).display_type(vm),
             Value::Global(_) => self.unref(vm).display_type(vm),
-            Value::Nil => "Nil".to_string(),
-            Value::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
+            Value::Nil => "Nil",
+            Value::Undefined => "Undefined", //panic!("Tried to get type for undefined!"),
             Value::Reference(h) => match vm.get(*h) {
-                Object::Lambda(_) => "Lambda".to_string(),
-                Object::Macro(_) => "Macro".to_string(),
-                Object::Closure(_, _) => "Lambda".to_string(),
+                Object::Lambda(_) => "Lambda",
+                Object::Macro(_) => "Macro",
+                Object::Closure(_, _) => "Lambda",
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 /*Object::Function(f) => {
@@ -564,10 +564,10 @@ impl Value {
                         "Function".to_string()
                     }
                 }*/
-                Object::Vector(_) => "Vector".to_string(),
-                Object::Pair(_, _, _) => "Pair".to_string(),
-                Object::String(_) => "String".to_string(),
-                Object::Bytes(_) => "Bytes".to_string(),
+                Object::Vector(_) => "Vector",
+                Object::Pair(_, _, _) => "Pair",
+                Object::String(_) => "String",
+                Object::Bytes(_) => "Bytes",
                 //Object::HashMap(_) => "HashMap".to_string(),
                 //Object::File(_) => "File".to_string(),
             },

@@ -155,3 +155,8 @@ pub const VECSTH: OpCode = VEC_BASE + 5;
 pub const VECMKD: OpCode = VEC_BASE + 6;
 // VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
 pub const VEC: OpCode = VEC_BASE + 7;
+
+// Types
+const TYPE_BASE: OpCode = VEC_BASE + 8;
+// TYPE A B - R(A) = type(R(B)) as a StringConst
+pub const TYPE: OpCode = TYPE_BASE;

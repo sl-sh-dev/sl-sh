@@ -1140,6 +1140,14 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            TYPE => {
+                print!("TYPE    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             _ => Err(VMError::new_chunk(format!("ERROR: unknown opcode {}", op))),
         }
     }

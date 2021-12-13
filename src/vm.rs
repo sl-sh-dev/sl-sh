@@ -285,6 +285,10 @@ impl Vm {
         self.interner.get_string(i).expect("Invalid interned value")
     }
 
+    pub fn intern_static(&mut self, string: &'static str) -> Interned {
+        self.interner.intern_static(string)
+    }
+
     pub fn intern(&mut self, string: &str) -> Interned {
         self.interner.intern(string)
     }
@@ -842,7 +846,7 @@ impl Vm {
     }
 
     fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
-        self.stack_top = 0;
+        self.stack_top = 0; // XXX this is probably very wrong...
         let mut registers = self.make_registers(self.stack_top);
         let mut chunk = chunk;
         self.ip = 0;
@@ -1574,6 +1578,12 @@ impl Vm {
                     }
                     let val = Value::Reference(self.alloc(Object::Vector(v)));
                     self.set_register(registers, dest as usize, val);
+                }
+                TYPE => {
+                    let (dest, val) = decode2!(chunk.code, &mut self.ip, wide);
+                    let val = get_reg_unref!(registers, val, self);
+                    let t = Value::StringConst(self.intern_static(val.display_type(self)));
+                    self.set_register(registers, dest as usize, t);
                 }
                 _ => {
                     return Err((VMError::new_vm(format!("Invalid opcode {}", opcode)), chunk));
