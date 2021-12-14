@@ -227,7 +227,7 @@ impl<'env> Completer for ShellCompleter<'env> {
                     .editor
                     .current_buffer()
                     .range(word_limits.0, word_limits.1);
-                self.args.push(word);
+                self.args.push(word.to_string());
             }
             if String::from(event.editor.current_buffer().clone()).ends_with(' ') {
                 self.args.push("".to_string());
@@ -242,7 +242,7 @@ impl<'env> Completer for ShellCompleter<'env> {
                         let word_limits = words.get(index - 1);
                         let is_form_start = word_limits
                             .map(|(start, end)| event.editor.current_buffer().range(*start, *end))
-                            .filter(|filename| filename == "(")
+                            .filter(|filename| *filename == "(")
                             .is_some();
                         if is_form_start {
                             CompType::CommandParen

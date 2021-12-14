@@ -99,23 +99,23 @@ fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut word_start = None;
     let mut just_had_backslash = false;
 
-    for (i, &c) in buf.chars().enumerate() {
-        if c == '\\' {
+    for (i, str) in buf.range_graphemes_all().enumerate() {
+        if str == "\\" {
             just_had_backslash = true;
             continue;
         }
 
         if let Some(start) = word_start {
-            if (c == ' ' || c == '(' || c == ')') && !just_had_backslash {
+            if (str == " " || str == "(" || str == ")") && !just_had_backslash {
                 res.push((start, i));
-                if c == '(' || c == ')' {
+                if str == "(" || str == ")" {
                     res.push((i, i + 1));
                 }
                 word_start = None;
             }
-        } else if c == '(' || c == ')' {
+        } else if str == "(" || str == ")" {
             res.push((i, i + 1));
-        } else if c != ' ' {
+        } else if str != " " {
             word_start = Some(i);
         }
 
@@ -123,7 +123,7 @@ fn get_liner_words(buf: &Buffer) -> Vec<(usize, usize)> {
     }
 
     if let Some(start) = word_start {
-        res.push((start, buf.num_chars()));
+        res.push((start, buf.num_graphemes()));
     }
 
     res
