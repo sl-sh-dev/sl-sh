@@ -732,6 +732,22 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            NOT => {
+                print!("NOT    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            ERR => {
+                print!("ERR    \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             JMP => {
                 print!("JMP    \t");
                 disassemble_immediate!(code, wide);
@@ -1132,6 +1148,30 @@ impl Chunk {
             VEC => {
                 print!("VEC     \t");
                 //println!("{:#06x} ", decode_u16_enum!(code)?);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            VECLEN => {
+                print!("VECLEN  \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            VECCLR => {
+                print!("VECCLR  \t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            STR => {
+                print!("STR     \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_operand!(code, true, wide);

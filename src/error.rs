@@ -3,6 +3,7 @@ use std::fmt;
 use std::io;
 
 use crate::value::*;
+use crate::vm::*;
 
 #[derive(Clone, Debug)]
 pub enum VMErrorObj {
@@ -39,6 +40,13 @@ impl VMError {
         VMError {
             key,
             obj: VMErrorObj::Message(reason),
+        }
+    }
+
+    pub fn display(&self, vm: &Vm) -> String {
+        match &self.obj {
+            VMErrorObj::Message(msg) => format!("[{}]: {}", self.key, msg),
+            VMErrorObj::Object(val) => format!("[{}]: {}", self.key, val.pretty_value(vm)),
         }
     }
 

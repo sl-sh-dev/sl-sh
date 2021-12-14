@@ -85,9 +85,13 @@ pub const EQ: OpCode = FLOW_BASE + 22;
 // EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
 // containers with equal values (must be the same container type)
 pub const EQUAL: OpCode = FLOW_BASE + 23;
+// NOT A B - R[A] is #t if R[B] is falsey and #f otherwise
+pub const NOT: OpCode = FLOW_BASE + 24;
+// ERR A B - raise error with key R(A) (must be keyword) and value R(B)
+pub const ERR: OpCode = FLOW_BASE + 25;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 24;
+const MATH_BASE: OpCode = FLOW_BASE + 26;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)
@@ -155,8 +159,17 @@ pub const VECSTH: OpCode = VEC_BASE + 5;
 pub const VECMKD: OpCode = VEC_BASE + 6;
 // VEC A B C - R(A) = vec(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
 pub const VEC: OpCode = VEC_BASE + 7;
+// VECLEN A B - R(A) = vector length of vector in R(B)
+pub const VECLEN: OpCode = VEC_BASE + 8;
+// VECCLR A - Clear the vector in R(A)
+pub const VECCLR: OpCode = VEC_BASE + 9;
+
+// Strings
+const STRING_BASE: OpCode = VEC_BASE + 10;
+// STR A B C - R(A) = string concatinated from objects in R(A) - R(B) (inclusive)
+pub const STR: OpCode = STRING_BASE;
 
 // Types
-const TYPE_BASE: OpCode = VEC_BASE + 8;
+const TYPE_BASE: OpCode = STRING_BASE + 1;
 // TYPE A B - R(A) = type(R(B)) as a StringConst
 pub const TYPE: OpCode = TYPE_BASE;

@@ -673,6 +673,16 @@ impl Vm {
         }
     }
 
+    fn mk_str(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+        let mut val = String::new();
+        for reg in reg1..=reg2 {
+            let v = get_reg_unref!(registers, reg, self);
+            val.push_str(&v.pretty_value(self));
+        }
+        let val = Value::Reference(self.alloc(Object::String(val.into())));
+        Ok(val)
+    }
+
     fn is_eq(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
@@ -683,10 +693,11 @@ impl Vm {
             for reg in reg1..reg2 {
                 //let val2 = get_reg!(registers, reg + 1);
                 let val2 = get_reg_unref!(registers, reg + 1, self);
-                if unsafe {
-                    std::mem::transmute::<Value, u128>(val1)
-                        == std::mem::transmute::<Value, u128>(val2)
-                } {
+                if val1 == val2 {
+                    /*if unsafe {
+                        std::mem::transmute::<Value, u128>(val1)
+                            == std::mem::transmute::<Value, u128>(val2)
+                    } {*/
                     val = Value::True;
                 } else {
                     val = Value::False;
@@ -700,9 +711,7 @@ impl Vm {
 
     fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
         let mut val = Value::False;
-        if unsafe {
-            std::mem::transmute::<Value, u128>(val1) == std::mem::transmute::<Value, u128>(val2)
-        } {
+        if val1 == val2 {
             val = Value::True;
         } else if val1.is_int() && val2.is_int() {
             if val1.get_int()? == val2.get_int()? {
@@ -1257,6 +1266,46 @@ impl Vm {
                         .map_err(|e| (e, chunk.clone()))?;
                     self.set_register(registers, dest as usize, val);
                 }
+                NOT => {
+                    let (dest, val) = decode2!(chunk.code, &mut self.ip, wide);
+                    let val = get_reg_unref!(registers, val, self);
+                    let res = if val.is_falsey() {
+                        Value::True
+                    } else {
+                        Value::False
+                    };
+                    self.set_register(registers, dest as usize, res);
+                }
+                ERR => {
+                    let (key, val) = decode2!(chunk.code, &mut self.ip, wide);
+                    let key = get_reg_unref!(registers, key, self);
+                    let val = get_reg_unref!(registers, val, self);
+                    let key = if let Value::Keyword(i) = key {
+                        self.get_interned(i)
+                    } else {
+                        return Err((
+                            VMError::new_vm(format!("ERR: key must be a keyword, got {:?}.", key)),
+                            chunk,
+                        ));
+                    };
+                    if let Value::StringConst(i) = val {
+                        return Err((
+                            VMError {
+                                key,
+                                obj: VMErrorObj::Message(self.get_interned(i).to_string()),
+                            },
+                            chunk,
+                        ));
+                    } else {
+                        return Err((
+                            VMError {
+                                key,
+                                obj: VMErrorObj::Object(val),
+                            },
+                            chunk,
+                        ));
+                    }
+                }
                 ADD => binary_math!(
                     self,
                     chunk,
@@ -1577,6 +1626,32 @@ impl Vm {
                         v.push(dfn);
                     }
                     let val = Value::Reference(self.alloc(Object::Vector(v)));
+                    self.set_register(registers, dest as usize, val);
+                }
+                VECLEN => {
+                    let (dest, v) = decode2!(chunk.code, &mut self.ip, wide);
+                    if let Object::Vector(v) = get_reg_unref!(registers, v, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
+                    {
+                        let len = Value::UInt(v.len() as u64);
+                        self.set_register(registers, dest as usize, len);
+                    }
+                }
+                VECCLR => {
+                    let v = decode1!(chunk.code, &mut self.ip, wide);
+                    if let Object::Vector(v) = get_reg_unref!(registers, v, self)
+                        .get_object(self)
+                        .map_err(|e| (e, chunk.clone()))?
+                    {
+                        v.clear();
+                    }
+                }
+                STR => {
+                    let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
+                    let val = self
+                        .mk_str(registers, reg1, reg2)
+                        .map_err(|e| (e, chunk.clone()))?;
                     self.set_register(registers, dest as usize, val);
                 }
                 TYPE => {
