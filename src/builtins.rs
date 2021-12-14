@@ -252,7 +252,7 @@ pub fn load(environment: &mut Environment, file_name: &str) -> Result<Expression
     let shebanged = contents.starts_with("#!");
     let mut chars: CharIter = Box::new(
         UnicodeSegmentation::graphemes(contents, true)
-            .map(|s| Cow::Borrowed(s))
+            .map(Cow::Borrowed)
             .peekable(),
     );
     let old_reader_state = environment.reader_state.clone();

@@ -642,7 +642,7 @@ fn builtin_str_iter_start(
                 let nstr = unsafe { &*(string.as_ref() as *const str) };
                 *chars = Some(Box::new(
                     UnicodeSegmentation::graphemes(nstr, true)
-                        .map(|s| Cow::Borrowed(s))
+                        .map(Cow::Borrowed)
                         .peekable(),
                 ));
                 drop(string_d);

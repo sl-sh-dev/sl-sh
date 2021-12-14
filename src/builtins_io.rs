@@ -275,7 +275,7 @@ fn builtin_read(
         let input = unsafe { &*(input.as_ref() as *const str) };
         let chars = Box::new(
             UnicodeSegmentation::graphemes(input, true)
-                .map(|s| Cow::Borrowed(s))
+                .map(Cow::Borrowed)
                 .peekable(),
         );
         match read_form_state(environment, chars, true) {
@@ -330,7 +330,7 @@ fn builtin_read(
                         let nstr = unsafe { &*(input.as_ref() as *const str) };
                         *char_iter = Some(Box::new(
                             UnicodeSegmentation::graphemes(nstr, true)
-                                .map(|s| Cow::Borrowed(s))
+                                .map(Cow::Borrowed)
                                 .peekable(),
                         ));
                     }

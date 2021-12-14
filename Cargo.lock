@@ -645,7 +645,7 @@ dependencies = [
 [[package]]
 name = "sl-liner"
 version = "0.6.3"
-source = "git+https://github.com/sl-sh-dev/sl-liner.git#3203f1de149f51e728544dfec14ca5f17ceb8a06"
+source = "git+https://github.com/sl-sh-dev/sl-liner.git#f17c4277335cb9d3c4c643ed84476fc3fecb819f"
 dependencies = [
  "bytecount",
  "sl-console",

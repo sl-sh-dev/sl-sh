@@ -187,7 +187,7 @@ fn do_char(
     let ntext = unsafe { &*(symbol as *const str) };
     let mut chars: CharIter = Box::new(
         UnicodeSegmentation::graphemes(ntext, true)
-            .map(|s| Cow::Borrowed(s))
+            .map(Cow::Borrowed)
             .peekable(),
     );
     if let Some(ch) = chars.next() {
@@ -714,7 +714,7 @@ fn prep_reader_macro(
                 // Can be triggered by $(echo $((ls $xxx)
                 Box::new(
                     UnicodeSegmentation::graphemes("", true)
-                        .map(|s| Cow::Borrowed(s))
+                        .map(Cow::Borrowed)
                         .peekable(),
                 )
             }
@@ -1336,7 +1336,7 @@ fn read2(
     let ntext = unsafe { &*(text as *const str) };
     let mut chars: CharIter = Box::new(
         UnicodeSegmentation::graphemes(ntext, true)
-            .map(|s| Cow::Borrowed(s))
+            .map(Cow::Borrowed)
             .peekable(),
     );
     if text.starts_with("#!") {
@@ -1521,7 +1521,7 @@ mod tests {
         let ntext = unsafe { &*(input as *const str) };
         let mut chars: CharIter = Box::new(
             UnicodeSegmentation::graphemes(ntext, true)
-                .map(|s| Cow::Borrowed(s))
+                .map(Cow::Borrowed)
                 .peekable(),
         );
         let mut tokens = Vec::new();
