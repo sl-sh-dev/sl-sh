@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::{self, Pid};
+use nix::libc;
 
 use crate::environment::*;
 use crate::eval::*;
@@ -128,7 +129,7 @@ fn setup_job(environment: &mut Environment, proc: u32, command: &str) {
         if let Err(_err) = unistd::setpgid(pid, pgid_raw) {
             // Ignore, do in parent and child.
         }
-        if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid_raw) {
+        if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid_raw) {
             // Ignore, do in parent and child.
         }
     }
@@ -205,7 +206,7 @@ pub fn fork(
                     if let Err(_err) = unistd::setpgid(pid, pgid) {
                         // Ignore, do in parent and child.
                     }
-                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                    if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
                         // Ignore, do in parent and child.
                     }
                 }
@@ -486,7 +487,7 @@ where
                     if let Err(_err) = unistd::setpgid(pid, pgid) {
                         // Ignore, do in parent and child.
                     }
-                    if let Err(_err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, pgid) {
+                    if let Err(_err) = unistd::tcsetpgrp(libc::STDIN_FILENO, pgid) {
                         // Ignore, do in parent and child.
                     }
                 }

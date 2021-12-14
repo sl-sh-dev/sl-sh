@@ -22,7 +22,7 @@ pub fn try_wait_pid(environment: &Environment, pid: u32) -> (bool, Option<i32>) 
     opts.insert(WaitPidFlag::WCONTINUED);
     opts.insert(WaitPidFlag::WNOHANG);
     match wait::waitpid(Pid::from_raw(pid as i32), Some(opts)) {
-        Err(nix::Error::Sys(nix::errno::Errno::ECHILD)) => {
+        Err(nix::errno::Errno::ECHILD) => {
             // Does not exist.
             let mut code = None;
             if let Some(pval) = environment.procs.borrow_mut().remove(&pid) {

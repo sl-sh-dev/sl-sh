@@ -5,7 +5,7 @@ use std::io;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
-use libc::uid_t;
+use nix::libc::uid_t;
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::{gethostname, Uid};
 

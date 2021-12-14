@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::rc::Rc;
+use nix::libc;
 
 use sl_liner::Context;
 

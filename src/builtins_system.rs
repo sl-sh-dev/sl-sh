@@ -4,6 +4,7 @@ use nix::{
         termios,
     },
     unistd::{self, Pid},
+    libc,
 };
 use std::collections::HashMap;
 use std::env;
@@ -286,12 +287,12 @@ fn builtin_fg(
     };
     let opid = get_stopped_pid(environment, arg);
     if let Some(pid) = opid {
-        let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
+        let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
         let ppid = Pid::from_raw(pid as i32);
         if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
             eprintln!("Error sending sigcont to wake up process: {}.", err);
         } else {
-            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
+            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
                 let msg = format!("Error making {} foreground in parent: {}", pid, err);
                 eprintln!("{}", msg);
             }
