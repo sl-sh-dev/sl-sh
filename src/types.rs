@@ -332,10 +332,10 @@ impl ExpEnum {
             ExpEnum::Macro(m) => ExpEnum::Macro(m.copy()),
             ExpEnum::Function(c) => ExpEnum::Function(c.clone()),
             ExpEnum::LazyFn(h, v) => {
-                ExpEnum::LazyFn(copy_handle(h), v.iter().map(|h| copy_handle(h)).collect())
+                ExpEnum::LazyFn(copy_handle(h), v.iter().map(copy_handle).collect())
             }
-            ExpEnum::Vector(v) => ExpEnum::Vector(v.iter().map(|h| copy_handle(h)).collect()),
-            ExpEnum::Values(v) => ExpEnum::Values(v.iter().map(|h| copy_handle(h)).collect()),
+            ExpEnum::Vector(v) => ExpEnum::Vector(v.iter().map(copy_handle).collect()),
+            ExpEnum::Values(v) => ExpEnum::Values(v.iter().map(copy_handle).collect()),
             ExpEnum::Pair(car, cdr) => ExpEnum::Pair(copy_handle(car), copy_handle(cdr)),
             ExpEnum::HashMap(map) => ExpEnum::HashMap(map.clone()), //XXX TODO- deep copy
             ExpEnum::Process(p) => ExpEnum::Process(*p),

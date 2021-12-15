@@ -286,14 +286,12 @@ fn analyze_seq(
 fn analyze_expand(environment: &mut Environment, expression: Expression) -> Result<(), LispError> {
     let quoted = {
         let exp_d = expression.get();
-        if let ExpEnum::Vector(_) = &exp_d.data {
-            drop(exp_d);
-            is_quoted(environment, &mut expression.iter())
-        } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
-            drop(exp_d);
-            is_quoted(environment, &mut expression.iter())
-        } else {
-            true // Can't be a macro expansion so skip it.
+        match &exp_d.data {
+            ExpEnum::Vector(_) | ExpEnum::Pair(_, _) => {
+                drop(exp_d);
+                is_quoted(environment, &mut expression.iter())
+            }
+            _ => true,
         }
     };
     if !quoted {
@@ -327,31 +325,25 @@ fn analyze_prep(
 ) -> Result<(), LispError> {
     {
         let exp_d = expression.get();
-        if let ExpEnum::Vector(_) = &exp_d.data {
-            drop(exp_d);
-            let (exp_enum, do_list) = analyze_seq(environment, &mut expression.iter(), syms)?;
-            if let Some(exp_enum) = exp_enum {
-                expression.get_mut().data.replace(exp_enum);
-            } else if do_list {
-                for exp in expression.iter() {
-                    analyze_prep(environment, exp, syms)?;
+        match &exp_d.data {
+            ExpEnum::Vector(_) | ExpEnum::Pair(_, _) => {
+                drop(exp_d);
+                let (exp_enum, do_list) = analyze_seq(environment, &mut expression.iter(), syms)?;
+                if let Some(exp_enum) = exp_enum {
+                    expression.get_mut().data.replace(exp_enum);
+                } else if do_list {
+                    for exp in expression.iter() {
+                        analyze_prep(environment, exp, syms)?;
+                    }
                 }
             }
-        } else if let ExpEnum::Pair(_car, _cdr) = &exp_d.data {
-            drop(exp_d);
-            let (exp_enum, do_list) = analyze_seq(environment, &mut expression.iter(), syms)?;
-            if let Some(exp_enum) = exp_enum {
-                expression.get_mut().data.replace(exp_enum);
-            } else if do_list {
-                for exp in expression.iter() {
-                    analyze_prep(environment, exp, syms)?;
+            ExpEnum::Symbol(_, _) => {
+                drop(exp_d);
+                if let ExpEnum::Symbol(s, location) = &mut expression.get_mut().data {
+                    patch_symbol(environment, syms, s, location);
                 }
             }
-        } else if let ExpEnum::Symbol(_, _) = &exp_d.data {
-            drop(exp_d);
-            if let ExpEnum::Symbol(s, location) = &mut expression.get_mut().data {
-                patch_symbol(environment, syms, s, location);
-            }
+            _ => {}
         }
     }
 
