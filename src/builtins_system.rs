@@ -5,6 +5,7 @@ use nix::{
     },
     unistd::{self, Pid},
     libc,
+    sys::stat::Mode,
 };
 use std::collections::HashMap;
 use std::env;
@@ -592,6 +593,37 @@ fn builtin_get_pid(
     }
 }
 
+fn builtin_umask(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "umask";
+    let arg = param_eval(environment, args, fn_name)?;
+    params_done(args, fn_name)?;
+    let arg_d = arg.get();
+    let msg = format!("{} requires string or octal to use as file creation mask", fn_name);
+    let mode: Option<Mode> = match &arg_d.data {
+        ExpEnum::Int(i) => {
+            Some(Mode::all())
+        },
+        ExpEnum::Float(f) => {
+            Some(Mode::all())
+        },
+        ExpEnum::String(s, _) => {
+            Some(Mode::all())
+        },
+        _ => None
+
+    };
+    if let Some(mode) = mode {
+        println!("umask: {:?}.", mode);
+        nix::sys::stat::umask(mode);
+        Ok(Expression::make_true())
+    } else {
+        Err(LispError::new(msg))
+    }
+}
+
 pub fn add_system_builtins<S: BuildHasher>(
     interner: &mut Interner,
     data: &mut HashMap<&'static str, (Expression, String), S>,
@@ -977,6 +1009,21 @@ Section: system
 
 Example:
 (test::assert-true (int? (get-pid)))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("umask"),
+        Expression::make_function(
+            builtin_umask,
+            r#"Usage: (umask)
+
+usmask
+
+Section: system
+
+Example:
+#t
 "#,
         ),
     );
