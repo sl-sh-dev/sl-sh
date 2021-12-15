@@ -555,9 +555,10 @@ impl Vm {
         num_args: u16,
         tail_call: bool,
     ) -> Result<Rc<Chunk>, (VMError, Rc<Chunk>)> {
-        // Clear out the extra regs to avoid writing to globals or closures by
+        // Clear out the unused optional regs.
+        // Execute will clear working set to avoid writing to globals or closures by
         // accident.
-        fn clear_regs(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
+        fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
             // First clear any optional arguments.
             if num_args < (l.args + l.opt_args) {
                 for r in num_args..(l.args + l.opt_args) {
@@ -566,11 +567,6 @@ impl Vm {
                         first_reg as usize + (r + 1) as usize,
                         Value::Undefined,
                     );
-                }
-            }
-            if l.extra_regs > 0 {
-                for r in l.input_regs..l.input_regs + l.extra_regs {
-                    Vm::mov_register(registers, first_reg as usize + r, Value::Undefined);
                 }
             }
         }
@@ -626,7 +622,7 @@ impl Vm {
                         }
                         // XXX TODO- double check num args.
                         // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                        clear_regs(&l, registers, first_reg, num_args);
+                        clear_opts(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
                     Object::Closure(l, caps) => {
@@ -663,7 +659,7 @@ impl Vm {
                             first_reg.into(),
                             Value::UInt(num_args as u64),
                         );
-                        clear_regs(&l, registers, first_reg, num_args);
+                        clear_opts(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
                     _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
@@ -860,6 +856,12 @@ impl Vm {
         let mut chunk = chunk;
         self.ip = 0;
         let mut wide = false;
+        // Clean up the working regs we are about to use.
+        if chunk.extra_regs > 0 {
+            for r in chunk.input_regs..chunk.input_regs + chunk.extra_regs {
+                Vm::mov_register(registers, r, Value::Undefined);
+            }
+        }
         loop {
             let opcode = chunk.code[self.ip];
             self.current_ip = self.ip;
