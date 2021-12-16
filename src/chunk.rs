@@ -554,96 +554,54 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
-            SREGT => {
-                print!("SREGT  \t");
+            CLRREG => {
+                print!("CLRREG \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
-            SREGF => {
-                print!("SREGF  \t");
+            REGT => {
+                print!("REGT   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
-            SREGN => {
-                print!("SREGN  \t");
+            REGF => {
+                print!("REGF   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
-            SREGC => {
-                print!("SREGC  \t");
+            REGN => {
+                print!("REGN   \t");
                 disassemble_operand!(code, true, wide);
                 println!();
                 Ok(false)
             }
-            SREGB => {
-                print!("SREGB  \t");
+            REGC => {
+                print!("REGC   \t");
                 disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
                 println!();
                 Ok(false)
             }
-            SREGI => {
-                print!("SREGI  \t");
+            REGB => {
+                print!("REGB   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 println!();
                 Ok(false)
             }
-            SREGU => {
-                print!("SREGU  \t");
+            REGI => {
+                print!("REGI   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);
                 println!();
                 Ok(false)
             }
-            MREGT => {
-                print!("MREGT  \t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            MREGF => {
-                print!("MREGF  \t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            MREGN => {
-                print!("MREGN  \t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            MREGC => {
-                print!("MREGC  \t");
-                disassemble_operand!(code, true, wide);
-                println!();
-                Ok(false)
-            }
-            MREGB => {
-                print!("MREGB  \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            MREGI => {
-                print!("MREGI  \t");
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            MREGU => {
-                print!("MREGU  \t");
+            REGU => {
+                print!("REGU   \t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 disassemble_immediate!(code, wide);

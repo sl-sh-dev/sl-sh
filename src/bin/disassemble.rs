@@ -20,7 +20,7 @@ fn main() -> Result<(), VMError> {
         "Cow size: {}",
         std::mem::size_of::<std::borrow::Cow<'static, str>>()
     );
-    println!("Max opcode: {}", VECMKD);
+    println!("Max opcode: {}", MAX_OP_CODE);
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;
     chunk.push_const(128, 2)?;

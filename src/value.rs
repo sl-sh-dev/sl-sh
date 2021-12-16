@@ -445,6 +445,16 @@ impl Value {
         }
     }
 
+    pub fn get_pair(&self, vm: &Vm) -> Option<(Value, Value)> {
+        match &self {
+            Value::Reference(h) => match vm.get(*h) {
+                Object::Pair(car, cdr, _) => Some((*car, *cdr)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
             Value::Reference(h) => match vm.get(*h) {

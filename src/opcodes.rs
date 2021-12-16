@@ -7,31 +7,25 @@ pub const SRET: OpCode = 0x03; // SRET A - R(0) = R(A) and then RET
 pub const WIDE: OpCode = 0x04;
 
 const STACK_BASE: OpCode = 0x04;
-pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B)
-pub const SET: OpCode = STACK_BASE + 2; // SET A B respecting global and local bindings - R(A) = R(B)
+pub const MOV: OpCode = STACK_BASE + 1; // MOV A B - R(A) = R(B) does not respect closed over values
+pub const SET: OpCode = STACK_BASE + 2; // SET A B - R(A) = R(B) respecting local closed over values
 pub const CONST: OpCode = STACK_BASE + 3; // CONST A B - R(A) = K(B)
 pub const REF: OpCode = STACK_BASE + 4; // REF A B - R(A) = G[R(B)]
 pub const DEF: OpCode = STACK_BASE + 5; // DEF A B - G[R(A)] = R(B)
 pub const DEFV: OpCode = STACK_BASE + 6; // DEFV A B - G[R(A)] = R(B) if G[R(A)] is undefined
 pub const REFI: OpCode = STACK_BASE + 7; // REFI A B - R(A) = G[B]
-pub const SREGT: OpCode = STACK_BASE + 8; // SREGT A - R(A) = TRUE, set semantics
-pub const SREGF: OpCode = STACK_BASE + 9; // SREGF A - R(A) = FALSE, set semantics
-pub const SREGN: OpCode = STACK_BASE + 10; // SREGN A - R(A) = NIL, set semantics
-pub const SREGC: OpCode = STACK_BASE + 11; // SREGC A - R(A) = UNDEFINED, set semantics
-pub const SREGB: OpCode = STACK_BASE + 12; // SREGB A B - R(A) = Byte(B), set semantics
-pub const SREGI: OpCode = STACK_BASE + 13; // SREGI A B - R(A) = Int(B), set semantics
-pub const SREGU: OpCode = STACK_BASE + 14; // SREGU A B - R(A) = UInt(B), set semantics
-pub const MREGT: OpCode = STACK_BASE + 15; // MREGT A - R(A) = TRUE, mov semantics
-pub const MREGF: OpCode = STACK_BASE + 16; // MREGF A - R(A) = FALSE, mov semantics
-pub const MREGN: OpCode = STACK_BASE + 17; // MREGN A - R(A) = NIL, mov semantics
-pub const MREGC: OpCode = STACK_BASE + 18; // MREGC A - R(A) = UNDEFINED, mov semantics
-pub const MREGB: OpCode = STACK_BASE + 19; // MREGB A B - R(A) = Byte(B), mov semantics
-pub const MREGI: OpCode = STACK_BASE + 20; // MREGI A B - R(A) = Int(B), mov semantics
-pub const MREGU: OpCode = STACK_BASE + 21; // MREGU A B - R(A) = UInt(B), mov semantics
-pub const CLOSE: OpCode = STACK_BASE + 22; // CLOSE A B - R(A) = closure derived from lambda in R(B)
+pub const CLRREG: OpCode = STACK_BASE + 8; // CLRREG A - R(A) = UNDEFINED (ignores a closed over value)
+pub const REGT: OpCode = STACK_BASE + 9; // REGT A - R(A) = TRUE
+pub const REGF: OpCode = STACK_BASE + 10; // REGF A - R(A) = FALSE
+pub const REGN: OpCode = STACK_BASE + 11; // REGN A - R(A) = NIL
+pub const REGC: OpCode = STACK_BASE + 12; // REGC A - R(A) = UNDEFINED
+pub const REGB: OpCode = STACK_BASE + 13; // REGB A B - R(A) = Byte(B)
+pub const REGI: OpCode = STACK_BASE + 14; // REGI A B - R(A) = Int(B)
+pub const REGU: OpCode = STACK_BASE + 15; // REGU A B - R(A) = UInt(B)
+pub const CLOSE: OpCode = STACK_BASE + 16; // CLOSE A B - R(A) = closure derived from lambda in R(B)
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 23;
+const FLOW_BASE: OpCode = STACK_BASE + 17;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
@@ -104,13 +98,13 @@ pub const DIV: OpCode = MATH_BASE + 3;
 pub const INC: OpCode = MATH_BASE + 4;
 // DEC A B - Decrement the integer in R(A) by B
 pub const DEC: OpCode = MATH_BASE + 5;
-// ADDM A B C - mov R(A) = R(B) + R(C) NOTE, mov overwrites global or closures.
+// ADDM A B C - mov R(A) = R(B) + R(C)
 pub const ADDM: OpCode = MATH_BASE + 6;
-// SUBM A B C - mov R(A) = R(B) - R(C) NOTE, mov overwrites global or closures.
+// SUBM A B C - mov R(A) = R(B) - R(C)
 pub const SUBM: OpCode = MATH_BASE + 7;
-// MULM A B C - mov R(A) = R(B) * R(C) NOTE, mov overwrites global or closures.
+// MULM A B C - mov R(A) = R(B) * R(C)
 pub const MULM: OpCode = MATH_BASE + 8;
-// DIVM A B C - mov R(A) = R(B) / R(C) NOTE, mov overwrites global or closures.
+// DIVM A B C - mov R(A) = R(B) / R(C)
 pub const DIVM: OpCode = MATH_BASE + 9;
 // NUMEQ A B C - compare (=) in register B (inclusive) to C (inclusive) and set R[A] to the
 // result.
@@ -173,3 +167,5 @@ pub const STR: OpCode = STRING_BASE;
 const TYPE_BASE: OpCode = STRING_BASE + 1;
 // TYPE A B - R(A) = type(R(B)) as a StringConst
 pub const TYPE: OpCode = TYPE_BASE;
+
+pub const MAX_OP_CODE: OpCode = TYPE_BASE;

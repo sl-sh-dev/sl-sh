@@ -102,6 +102,11 @@ impl Interner {
         interned
     }
 
+    /// If name is interned then return it, otherwise None.
+    pub fn get_if_interned(&self, name: &str) -> Option<Interned> {
+        self.map.get(name).copied()
+    }
+
     /// Intern name in this interner.  Will return the existing symbol if it
     /// exists or add it and and return it if not.  Use this if you already have
     /// a static str reference to avoid wasting space on making another.
