@@ -1,11 +1,11 @@
 use nix::{
+    libc,
     sys::{
         signal::{self, Signal},
+        stat::Mode,
         termios,
     },
     unistd::{self, Pid},
-    libc,
-    sys::stat::Mode,
 };
 use std::collections::HashMap;
 use std::env;
@@ -21,6 +21,18 @@ use crate::process::*;
 use crate::types::*;
 use crate::unix::*;
 use std::time::SystemTime;
+
+static NIX_PERMISSIONS: &[Mode] = &[
+    Mode::S_IRUSR,
+    Mode::S_IWUSR,
+    Mode::S_IXUSR,
+    Mode::S_IRGRP,
+    Mode::S_IWGRP,
+    Mode::S_IXGRP,
+    Mode::S_IROTH,
+    Mode::S_IWOTH,
+    Mode::S_IXOTH,
+];
 
 fn builtin_syscall(
     environment: &mut Environment,
@@ -593,30 +605,129 @@ fn builtin_get_pid(
     }
 }
 
+/// makes sure the returned string is 4 characters and the first character is 0.
+fn make_parsable_string(str: &str, fn_name: &str) -> Result<String, LispError> {
+    if str.is_empty() {
+        let msg = format!("{}: no input.", fn_name);
+        Err(LispError::new(msg))
+    } else if str.len() > 4 {
+        let msg = format!(
+            "{}: no more than 4 characters can be used to specify a umask, e.g.\
+             644 or 0222.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    } else if !str.starts_with('0') {
+        let msg = format!(
+            "{}: Most significant octal character can only be 0.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    } else {
+        let mut ret = String::from(str);
+        while ret.len() < 4 {
+            ret = "0".to_owned() + &ret;
+        }
+        Ok(ret)
+    }
+}
+
+fn build_mask(to_shift: usize, c: char, fn_name: &str) -> Result<u32, LispError> {
+    let apply = |m| Ok((m << (to_shift * 3)) as u32);
+    match c {
+        '0' => apply(0b000),
+        '1' => apply(0b001),
+        '2' => apply(0b010),
+        '3' => apply(0b011),
+        '4' => apply(0b100),
+        '5' => apply(0b101),
+        '6' => apply(0b110),
+        '7' => apply(0b111),
+        _ => {
+            let msg = format!(
+                "{}: Octal format can only take on values between 0 and 7 inclusive.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+fn octal_string_to_u32(str: &str, fn_name: &str) -> Result<u32, LispError> {
+    let mut val = 0;
+    let mut err = false;
+    for (usize, c) in str.chars().rev().enumerate() {
+        match usize {
+            0..=2 => val |= build_mask(usize, c, fn_name)?,
+            3 => {}
+            _ => {
+                err = true;
+                break;
+            }
+        }
+    }
+    if err {
+        let msg = format!("{}: Failed to parse provided octal.", fn_name);
+        Err(LispError::new(msg))
+    } else {
+        Ok(val)
+    }
+}
+
+fn to_mode(i: u32) -> Mode {
+    NIX_PERMISSIONS.iter().fold(Mode::empty(), |acc, x| {
+        if x.bits() & i == x.bits() {
+            acc | *x
+        } else {
+            acc
+        }
+    })
+}
+
+fn octal_string_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+    let str = make_parsable_string(str, fn_name)?;
+    let val = octal_string_to_u32(&str, fn_name)?;
+    Ok(to_mode(val))
+}
+
+pub fn is_digit(ch: char) -> bool {
+    matches!(
+        ch,
+        '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+    )
+}
+
 fn builtin_umask(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "umask";
+    //TODO if no input then just return current umask.
     let arg = param_eval(environment, args, fn_name)?;
     params_done(args, fn_name)?;
     let arg_d = arg.get();
-    let msg = format!("{} requires string or octal to use as file creation mask", fn_name);
+    let mut msg = format!(
+        "{} requires string or octal to use as file creation mask",
+        fn_name
+    );
     let mode: Option<Mode> = match &arg_d.data {
-        ExpEnum::Int(i) => {
-            Some(Mode::all())
-        },
-        ExpEnum::Float(f) => {
-            Some(Mode::all())
-        },
+        ExpEnum::Int(i) => Some(octal_string_to_mode(&format!("{}", i), fn_name)?),
         ExpEnum::String(s, _) => {
-            Some(Mode::all())
-        },
-        _ => None
-
+            if s.len() > 0 {
+                if is_digit(s.chars().next().unwrap()) {
+                    Some(octal_string_to_mode(s.as_ref(), fn_name)?)
+                } else {
+                    msg = format!("{}: symbolic_mode_string_to_mode not yet implemented!.", fn_name);
+                    None
+                }
+            } else {
+                msg = format!("{}: no input.", fn_name);
+                None
+            }
+        }
+        _ => None,
     };
     if let Some(mode) = mode {
-        println!("umask: {:?}.", mode);
         nix::sys::stat::umask(mode);
         Ok(Expression::make_true())
     } else {
@@ -1022,9 +1133,35 @@ usmask
 
 Section: system
 
+Specify umask as an Integer or a String. If input is omitted, the current mask will be returned.
+
+You can set umask in your slshrc (for you) or /etc/profile (for all users). By default most Linux
+distros will set it to 022 or 002.
+
+If provided mode begins with a digit, it is interpreted as an octal number; if not, it is
+interpreted as a symbolic mode mask .
+
+The value returned is the new value of the mask as an octal string.
+
 Example:
 #t
 "#,
         ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_umask_octal() {
+        let fn_name = "umask";
+        let bs = 0b001001001;
+        let m = to_mode(bs);
+        assert_eq!(m.bits(), bs);
+
+        let m = octal_string_to_mode("0522", fn_name).unwrap();
+        assert_eq!(338, m.bits());
+    }
 }

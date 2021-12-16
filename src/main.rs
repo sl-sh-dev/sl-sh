@@ -4,9 +4,9 @@
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use nix::{
+    libc,
     sys::signal::{self, Signal},
     unistd,
-    libc,
 };
 
 use ::sl_sh::config::*;

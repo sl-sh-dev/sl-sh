@@ -8,9 +8,9 @@ use std::os::unix::io::FromRawFd;
 use std::ptr;
 use std::rc::Rc;
 
+use nix::libc;
 use nix::sys::signal::{self, SigHandler, Signal};
 use nix::unistd::{self, Pid};
-use nix::libc;
 
 use crate::environment::*;
 use crate::eval::*;

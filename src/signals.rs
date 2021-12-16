@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use nix::{
-    sys::signal::{self, sigaction, SigHandler, Signal},
     libc,
+    sys::signal::{self, sigaction, SigHandler, Signal},
 };
 
 static SIG_INT: AtomicBool = AtomicBool::new(false);
