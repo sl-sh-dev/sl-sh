@@ -132,8 +132,8 @@ pub const CAR: OpCode = CONS_BASE + 1; // CAR A B - R(A) = car(R(B))
 pub const CDR: OpCode = CONS_BASE + 2; // CDR A B - R(A) = cdr(R(B))
 pub const XAR: OpCode = CONS_BASE + 3; // XAR A B - car(R(A)) = R(B)
 pub const XDR: OpCode = CONS_BASE + 4; // XDR A B - cdr(R(A)) = R(B)
-pub const LIST: OpCode = CONS_BASE + 5; // LIST A B C - R(A) = list(elements R(B)..R(C)) (R(B) inclusive, R(C) exclusive)
-pub const APND: OpCode = CONS_BASE + 6; // APND A B C - R(A) = append lists R(B)..R(C) (R(B) inclusive, R(C) exclusive)
+pub const LIST: OpCode = CONS_BASE + 5; // LIST A B C - R(A) = list(elements R(B)..R(C)) (R(B) and R(C) are inclusive)
+pub const APND: OpCode = CONS_BASE + 6; // APND A B C - R(A) = append lists R(B)..R(C) (R(B) and R(C) are inclusive)
 
 // Vectors
 const VEC_BASE: OpCode = CONS_BASE + 7;

@@ -467,7 +467,7 @@ impl Value {
     }
 
     pub fn display_value(&self, vm: &Vm) -> String {
-        fn list_out(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
+        fn list_out_iter(vm: &Vm, res: &mut String, itr: &mut dyn Iterator<Item = Value>) {
             let mut first = true;
             for p in itr {
                 if !first {
@@ -476,6 +476,38 @@ impl Value {
                     first = false;
                 }
                 res.push_str(&p.display_value(vm));
+            }
+        }
+        fn list_out(vm: &Vm, res: &mut String, lst: Value) {
+            let mut first = true;
+            let mut cdr = lst;
+            loop {
+                if let Value::Nil = cdr {
+                    break;
+                }
+                if !first {
+                    res.push(' ');
+                } else {
+                    first = false;
+                }
+                match cdr {
+                    Value::Reference(h) => match vm.get(h) {
+                        Object::Pair(car, ncdr, _) => {
+                            res.push_str(&car.display_value(vm));
+                            cdr = *ncdr;
+                        }
+                        _ => {
+                            res.push_str(". ");
+                            res.push_str(&cdr.display_value(vm));
+                            break;
+                        }
+                    },
+                    _ => {
+                        res.push_str(". ");
+                        res.push_str(&cdr.display_value(vm));
+                        break;
+                    }
+                }
             }
         }
         match self {
@@ -507,14 +539,14 @@ impl Value {
                 Object::Vector(v) => {
                     let mut res = String::new();
                     res.push_str("#(");
-                    list_out(vm, &mut res, &mut v.iter().copied());
+                    list_out_iter(vm, &mut res, &mut v.iter().copied());
                     res.push(')');
                     res
                 }
                 Object::Pair(_, _, _) => {
                     let mut res = String::new();
                     res.push('(');
-                    list_out(vm, &mut res, &mut self.iter(vm));
+                    list_out(vm, &mut res, *self);
                     res.push(')');
                     res
                 }

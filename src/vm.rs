@@ -349,11 +349,11 @@ impl Vm {
 
     fn list(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (dest, start, end) = decode3!(code, &mut self.ip, wide);
-        if end == start {
+        if end < start {
             self.set_register(registers, dest as usize, Value::Nil);
         } else {
             let mut last_cdr = Value::Nil;
-            for i in (start..end).rev() {
+            for i in (start..=end).rev() {
                 let car = get_reg_unref!(registers, i, self);
                 let cdr = last_cdr;
                 last_cdr = Value::Reference(self.alloc(Object::Pair(car, cdr, None)));
@@ -363,87 +363,24 @@ impl Vm {
         Ok(())
     }
 
-    fn append(
-        &mut self,
-        code: &[u8],
-        registers: &mut [Value],
-        wide: bool,
-        allow_singles: bool,
-    ) -> VMResult<()> {
+    fn append(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
         let (dest, start, end) = decode3!(code, &mut self.ip, wide);
-        if end == start {
+        if end < start {
             self.set_register(registers, dest as usize, Value::Nil);
         } else {
             let mut last_cdr = Value::Nil;
             let mut head = Value::Nil;
-            let mut holder = Vec::new();
-            for i in start..end {
+            let mut loop_cdr;
+            for i in start..=end {
                 let lst = get_reg_unref!(registers, i, self);
                 match lst {
                     Value::Nil => {}
-                    Value::Reference(h) => {
-                        match self.get(h) {
-                            Object::Pair(_car, _cdr, _) => {
-                                holder.clear();
-                                // Make the borrow checker happy, at least reuse
-                                // the vector to cut down on allocations...
-                                for l in lst.iter(self) {
-                                    holder.push(l);
-                                }
-                                for l in &holder {
-                                    let cdr = last_cdr;
-                                    last_cdr = Value::Reference(self.alloc(Object::Pair(
-                                        *l,
-                                        Value::Nil,
-                                        None,
-                                    )));
-                                    match cdr {
-                                        Value::Nil => head = last_cdr,
-                                        Value::Reference(h) => {
-                                            let cons_d = self.heap.get(h);
-                                            if let Object::Pair(car, _cdr, meta) = &*cons_d {
-                                                let car = *car;
-                                                let meta = *meta;
-                                                self.heap
-                                                    .replace(h, Object::Pair(car, last_cdr, meta));
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            _ => {
-                                if allow_singles {
-                                    let cdr = last_cdr;
-                                    last_cdr = Value::Reference(self.alloc(Object::Pair(
-                                        lst,
-                                        Value::Nil,
-                                        None,
-                                    )));
-                                    match cdr {
-                                        Value::Nil => head = last_cdr,
-                                        Value::Reference(h) => {
-                                            let cons_d = self.heap.get(h);
-                                            if let Object::Pair(car, _cdr, meta) = &*cons_d {
-                                                let car = *car;
-                                                let meta = *meta;
-                                                self.heap
-                                                    .replace(h, Object::Pair(car, last_cdr, meta));
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                } else {
-                                    return Err(VMError::new_vm("APND: Param not a list."));
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if allow_singles {
+                    Value::Reference(h) => match self.get(h) {
+                        Object::Pair(car, cdr, _) => {
+                            loop_cdr = *cdr;
                             let cdr = last_cdr;
-                            last_cdr =
-                                Value::Reference(self.alloc(Object::Pair(lst, Value::Nil, None)));
+                            let obj = Object::Pair(*car, Value::Nil, None);
+                            last_cdr = Value::Reference(self.alloc(obj));
                             match cdr {
                                 Value::Nil => head = last_cdr,
                                 Value::Reference(h) => {
@@ -452,6 +389,120 @@ impl Vm {
                                         let car = *car;
                                         let meta = *meta;
                                         self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                                    }
+                                }
+                                _ => {}
+                            }
+                            loop {
+                                if let Value::Nil = loop_cdr {
+                                    break;
+                                }
+                                match loop_cdr {
+                                    Value::Reference(h) => match self.get(h) {
+                                        Object::Pair(car, ncdr, _) => {
+                                            loop_cdr = *ncdr;
+                                            let cdr = last_cdr;
+                                            let obj = Object::Pair(*car, Value::Nil, None);
+                                            last_cdr = Value::Reference(self.alloc(obj));
+                                            match cdr {
+                                                Value::Nil => head = last_cdr,
+                                                Value::Reference(h) => {
+                                                    let cons_d = self.heap.get(h);
+                                                    if let Object::Pair(car, _cdr, meta) = &*cons_d
+                                                    {
+                                                        let car = *car;
+                                                        let meta = *meta;
+                                                        self.heap.replace(
+                                                            h,
+                                                            Object::Pair(car, last_cdr, meta),
+                                                        );
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        _ => {
+                                            if i == end {
+                                                match last_cdr {
+                                                    Value::Nil => head = loop_cdr,
+                                                    Value::Reference(h) => {
+                                                        let cons_d = self.heap.get(h);
+                                                        if let Object::Pair(car, _cdr, meta) =
+                                                            &*cons_d
+                                                        {
+                                                            let car = *car;
+                                                            let meta = *meta;
+                                                            self.heap.replace(
+                                                                h,
+                                                                Object::Pair(car, loop_cdr, meta),
+                                                            );
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            } else {
+                                                return Err(VMError::new_vm(
+                                                    "APND: Param not a list.",
+                                                ));
+                                            }
+                                            break;
+                                        }
+                                    },
+                                    _ => {
+                                        if i == end {
+                                            match last_cdr {
+                                                Value::Nil => head = loop_cdr,
+                                                Value::Reference(h) => {
+                                                    let cons_d = self.heap.get(h);
+                                                    if let Object::Pair(car, _cdr, meta) = &*cons_d
+                                                    {
+                                                        let car = *car;
+                                                        let meta = *meta;
+                                                        self.heap.replace(
+                                                            h,
+                                                            Object::Pair(car, loop_cdr, meta),
+                                                        );
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        } else {
+                                            return Err(VMError::new_vm("APND: Param not a list."));
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            if i == end {
+                                match last_cdr {
+                                    Value::Nil => head = lst,
+                                    Value::Reference(h) => {
+                                        let cons_d = self.heap.get(h);
+                                        if let Object::Pair(car, _cdr, meta) = &*cons_d {
+                                            let car = *car;
+                                            let meta = *meta;
+                                            self.heap.replace(h, Object::Pair(car, lst, meta));
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            } else {
+                                return Err(VMError::new_vm("APND: Param not a list."));
+                            }
+                        }
+                    },
+                    _ => {
+                        if i == end {
+                            match last_cdr {
+                                Value::Nil => head = lst,
+                                Value::Reference(h) => {
+                                    let cons_d = self.heap.get(h);
+                                    if let Object::Pair(car, _cdr, meta) = &*cons_d {
+                                        let car = *car;
+                                        let meta = *meta;
+                                        self.heap.replace(h, Object::Pair(car, lst, meta));
                                     }
                                 }
                                 _ => {}
@@ -1490,7 +1541,7 @@ impl Vm {
                     .list(&chunk.code[..], registers, wide)
                     .map_err(|e| (e, chunk.clone()))?,
                 APND => self
-                    .append(&chunk.code[..], registers, wide, false)
+                    .append(&chunk.code[..], registers, wide)
                     .map_err(|e| (e, chunk.clone()))?,
                 XAR => self
                     .xar(&chunk.code[..], registers, wide)
@@ -1805,7 +1856,7 @@ mod tests {
         chunk.encode2(CONST, 0, 0, line).unwrap();
         chunk.encode2(CONST, 1, 1, line).unwrap();
         chunk.encode2(CONST, 2, 2, line).unwrap();
-        chunk.encode3(LIST, 0, 0, 3, line).unwrap();
+        chunk.encode3(LIST, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
@@ -1841,16 +1892,7 @@ mod tests {
 
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
-        chunk.encode3(LIST, 0, 0, 0, line).unwrap();
-        chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
-        vm.execute(chunk.clone())?;
-        let result = vm.stack.get(0).unwrap();
-        assert!(result.is_nil());
-
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
-        chunk.code.clear();
-        chunk.encode3(LIST, 0, 1, 1, line).unwrap();
+        chunk.encode3(LIST, 0, 1, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
