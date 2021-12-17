@@ -605,8 +605,112 @@ fn builtin_get_pid(
     }
 }
 
+fn get_class(str: &str, fn_name: &str) -> Result<u32, LispError> {
+    let next = str.chars().find(|x| !is_user_access_token(*x));
+    if next.is_some() {
+        let msg = format!(
+            "{}: symbolic mode string before the '+' can only contain u, g, o, or a.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    } else {
+        let mut class: u32 = 0;
+        for c in str.chars() {
+            class |= match c {
+                'u' => 0b111000000,
+                'g' => 0b000111000,
+                'o' => 0b000000111,
+                'a' => 0b111111111,
+                _ => 0,
+            }
+        }
+        Ok(class)
+    }
+}
+
+fn get_perms(str: &str, fn_name: &str) -> Result<u32, LispError> {
+    let next = str.chars().find(|x| !is_permission_token(*x));
+    if next.is_some() {
+        let msg = format!(
+            "{}: symbolic mode string before the '+' can only contain r, w, or x.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    } else {
+        let mut class: u32 = 0;
+        for c in str.chars() {
+            class |= match c {
+                'r' => 0b100100100,
+                'w' => 0b010010010,
+                'x' => 0b001001001,
+                _ => 0,
+            }
+        }
+        Ok(class)
+    }
+}
+
+fn parse_symbolic_mode_string(str: &str, fn_name: &str) -> Result<u32, LispError> {
+    if str.starts_with('+') {
+        let mode_strings = str.split('+').collect::<Vec<&str>>();
+        if mode_strings.len() == 2 {
+            if let Some(p) = mode_strings.get(1) {
+                let perms = get_perms(p, fn_name)?;
+                Ok(0b111111111 & perms)
+            } else {
+                let msg = format!(
+                    "{}: symbolic mode string contains too many '+' characters.",
+                    fn_name
+                );
+                Err(LispError::new(msg))
+            }
+        } else {
+            let msg = format!(
+                "{}: symbolic mode string contains too many '+' characters.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    } else {
+        let mode_strings = str.split('+').collect::<Vec<&str>>();
+        if mode_strings.len() == 2 {
+            if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
+                let class = get_class(c, fn_name)?;
+                let perms = get_perms(p, fn_name)?;
+                Ok(class & perms)
+            } else {
+                let msg = format!(
+                    "{}: symbolic mode string contains too many '+' characters.",
+                    fn_name
+                );
+                Err(LispError::new(msg))
+            }
+        } else {
+            let msg = format!(
+                "{}: symbolic mode string contains too many '+' characters.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    }
+}
+
+fn symbolic_mode_string_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+    if str.contains('+') {
+        let class = parse_symbolic_mode_string(str, fn_name)?;
+        Ok(to_mode(class))
+    } else {
+        let msg = format!(
+            "{}: symbolic mode string must contain one '+' symbol as there must be bits to \
+                mask.",
+            fn_name
+        );
+        Err(LispError::new(msg))
+    }
+}
+
 /// makes sure the returned string is 4 characters and the first character is 0.
-fn make_parsable_string(str: &str, fn_name: &str) -> Result<String, LispError> {
+fn make_parsable_octal_string(str: &str, fn_name: &str) -> Result<String, LispError> {
     if str.is_empty() {
         let msg = format!("{}: no input.", fn_name);
         Err(LispError::new(msg))
@@ -617,7 +721,7 @@ fn make_parsable_string(str: &str, fn_name: &str) -> Result<String, LispError> {
             fn_name
         );
         Err(LispError::new(msg))
-    } else if !str.starts_with('0') {
+    } else if str.len() == 4 && !str.starts_with('0') {
         let msg = format!(
             "{}: Most significant octal character can only be 0.",
             fn_name
@@ -685,12 +789,20 @@ fn to_mode(i: u32) -> Mode {
 }
 
 fn octal_string_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
-    let str = make_parsable_string(str, fn_name)?;
+    let str = make_parsable_octal_string(str, fn_name)?;
     let val = octal_string_to_u32(&str, fn_name)?;
     Ok(to_mode(val))
 }
 
-pub fn is_digit(ch: char) -> bool {
+fn is_permission_token(ch: char) -> bool {
+    matches!(ch, 'r' | 'w' | 'x')
+}
+
+fn is_user_access_token(ch: char) -> bool {
+    matches!(ch, 'u' | 'g' | 'o' | 'a')
+}
+
+fn is_digit(ch: char) -> bool {
     matches!(
         ch,
         '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -702,36 +814,36 @@ fn builtin_umask(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "umask";
-    //TODO if no input then just return current umask.
     let arg = param_eval(environment, args, fn_name)?;
     params_done(args, fn_name)?;
     let arg_d = arg.get();
-    let mut msg = format!(
-        "{} requires string or octal to use as file creation mask",
-        fn_name
-    );
-    let mode: Option<Mode> = match &arg_d.data {
-        ExpEnum::Int(i) => Some(octal_string_to_mode(&format!("{}", i), fn_name)?),
+    match &arg_d.data {
+        ExpEnum::Int(i) => {
+            octal_string_to_mode(&format!("{}", i), fn_name)?;
+            Ok(Expression::from(&arg_d.data))
+        }
         ExpEnum::String(s, _) => {
             if s.len() > 0 {
+                let mode;
                 if is_digit(s.chars().next().unwrap()) {
-                    Some(octal_string_to_mode(s.as_ref(), fn_name)?)
+                    mode = octal_string_to_mode(s.as_ref(), fn_name)?;
                 } else {
-                    msg = format!("{}: symbolic_mode_string_to_mode not yet implemented!.", fn_name);
-                    None
+                    mode = symbolic_mode_string_to_mode("go+rx", fn_name)?;
                 }
+                nix::sys::stat::umask(mode);
+                Ok(Expression::from(&arg_d.data))
             } else {
-                msg = format!("{}: no input.", fn_name);
-                None
+                let msg = format!("{}: no input.", fn_name);
+                Err(LispError::new(msg))
             }
         }
-        _ => None,
-    };
-    if let Some(mode) = mode {
-        nix::sys::stat::umask(mode);
-        Ok(Expression::make_true())
-    } else {
-        Err(LispError::new(msg))
+        _ => {
+            let msg = format!(
+                "{} requires string or octal to use as file creation mask",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
     }
 }
 
@@ -1155,6 +1267,86 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_perms() {
+        let fn_name = "umask";
+        let perms_str = "rwx";
+        let perms = get_perms(perms_str, fn_name).unwrap();
+        assert_eq!(0b111111111, perms);
+
+        let perms_str = "r";
+        let perms = get_perms(perms_str, fn_name).unwrap();
+        assert_eq!(0b100100100, perms);
+
+        let perms_str = "w";
+        let perms = get_perms(perms_str, fn_name).unwrap();
+        assert_eq!(0b010010010, perms);
+
+        let perms_str = "x";
+        let perms = get_perms(perms_str, fn_name).unwrap();
+        assert_eq!(0b001001001, perms);
+
+        let perms_str = "rw";
+        let perms = get_perms(perms_str, fn_name).unwrap();
+        assert_eq!(0b110110110, perms);
+    }
+
+    #[test]
+    fn test_parse_class() {
+        let fn_name = "umask";
+        let class_str = "ugo";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b111111111, class);
+
+        let class_str = "a";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b111111111, class);
+
+        let class_str = "u";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b111000000, class);
+
+        let class_str = "g";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b000111000, class);
+
+        let class_str = "o";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b000000111, class);
+
+        let class_str = "uo";
+        let class = get_class(class_str, fn_name).unwrap();
+        assert_eq!(0b111000111, class);
+    }
+
+    #[test]
+    fn test_umask_symbolic_mode_string() {
+        let fn_name = "umask";
+        let m = symbolic_mode_string_to_mode("ugo+x", fn_name).unwrap();
+        assert_eq!(0b001001001, m.bits());
+
+        let m = symbolic_mode_string_to_mode("+x", fn_name).unwrap();
+        assert_eq!(0b001001001, m.bits());
+
+        let m = symbolic_mode_string_to_mode("a+rw", fn_name).unwrap();
+        assert_eq!(0b110110110, m.bits());
+
+        let m = symbolic_mode_string_to_mode("a+r", fn_name).unwrap();
+        assert_eq!(0b100100100, m.bits());
+
+        let m = symbolic_mode_string_to_mode("+rw", fn_name).unwrap();
+        assert_eq!(0b110110110, m.bits());
+
+        let m = symbolic_mode_string_to_mode("u+x", fn_name).unwrap();
+        assert_eq!(0b001000000, m.bits());
+
+        let m = symbolic_mode_string_to_mode("ug+r", fn_name).unwrap();
+        assert_eq!(0b100100000, m.bits());
+
+        let m = symbolic_mode_string_to_mode("go+rx", fn_name).unwrap();
+        assert_eq!(0b000101101, m.bits());
+    }
+
+    #[test]
     fn test_umask_octal() {
         let fn_name = "umask";
         let bs = 0b001001001;
@@ -1163,5 +1355,20 @@ mod tests {
 
         let m = octal_string_to_mode("0522", fn_name).unwrap();
         assert_eq!(338, m.bits());
+
+        let m = octal_string_to_mode("522", fn_name).unwrap();
+        assert_eq!(338, m.bits());
+
+        let m = octal_string_to_mode("713", fn_name).unwrap();
+        assert_eq!(0b111001011, m.bits());
+
+        let m = octal_string_to_mode("466", fn_name).unwrap();
+        assert_eq!(0b100110110, m.bits());
+
+        let m = octal_string_to_mode("0", fn_name).unwrap();
+        assert_eq!(0b000000000, m.bits());
+
+        let m = octal_string_to_mode("45", fn_name).unwrap();
+        assert_eq!(0b000100101, m.bits());
     }
 }
