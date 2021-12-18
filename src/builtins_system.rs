@@ -606,25 +606,30 @@ fn builtin_get_pid(
 }
 
 fn get_class(str: &str, fn_name: &str) -> Result<u32, LispError> {
-    let next = str.chars().find(|x| !is_user_access_token(*x));
-    if next.is_some() {
-        let msg = format!(
-            "{}: symbolic mode string before the '+' can only contain u, g, o, or a.",
-            fn_name
-        );
-        Err(LispError::new(msg))
+    if str.is_empty() {
+        Ok(0b111111111)
     } else {
-        let mut class: u32 = 0;
-        for c in str.chars() {
-            class |= match c {
-                'u' => 0b111000000,
-                'g' => 0b000111000,
-                'o' => 0b000000111,
-                'a' => 0b111111111,
-                _ => 0,
+        let next = str.chars().find(|x| !is_user_access_token(*x));
+        if next.is_some() {
+            let msg = format!(
+                "{}: symbolic mode string before the '+' can only contain u, g, o, or a.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        } else {
+            let mut class: u32 = 0;
+            for c in str.chars() {
+                class |= match c {
+                    'u' => 0b111000000,
+                    'g' => 0b000111000,
+                    'o' => 0b000000111,
+                    'a' => 0b111111111,
+                    c if c.is_whitespace() => 0b111111111,
+                    _ => 0,
+                }
             }
+            Ok(class)
         }
-        Ok(class)
     }
 }
 
@@ -651,19 +656,12 @@ fn get_perms(str: &str, fn_name: &str) -> Result<u32, LispError> {
 }
 
 fn parse_symbolic_mode_string(str: &str, fn_name: &str) -> Result<u32, LispError> {
-    if str.starts_with('+') {
-        let mode_strings = str.split('+').collect::<Vec<&str>>();
-        if mode_strings.len() == 2 {
-            if let Some(p) = mode_strings.get(1) {
-                let perms = get_perms(p, fn_name)?;
-                Ok(0b111111111 & perms)
-            } else {
-                let msg = format!(
-                    "{}: symbolic mode string contains too many '+' characters.",
-                    fn_name
-                );
-                Err(LispError::new(msg))
-            }
+    let mode_strings = str.split('+').collect::<Vec<&str>>();
+    if mode_strings.len() == 2 {
+        if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
+            let class = get_class(c, fn_name)?;
+            let perms = get_perms(p, fn_name)?;
+            Ok(class & perms)
         } else {
             let msg = format!(
                 "{}: symbolic mode string contains too many '+' characters.",
@@ -672,26 +670,11 @@ fn parse_symbolic_mode_string(str: &str, fn_name: &str) -> Result<u32, LispError
             Err(LispError::new(msg))
         }
     } else {
-        let mode_strings = str.split('+').collect::<Vec<&str>>();
-        if mode_strings.len() == 2 {
-            if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
-                let class = get_class(c, fn_name)?;
-                let perms = get_perms(p, fn_name)?;
-                Ok(class & perms)
-            } else {
-                let msg = format!(
-                    "{}: symbolic mode string contains too many '+' characters.",
-                    fn_name
-                );
-                Err(LispError::new(msg))
-            }
-        } else {
-            let msg = format!(
-                "{}: symbolic mode string contains too many '+' characters.",
-                fn_name
-            );
-            Err(LispError::new(msg))
-        }
+        let msg = format!(
+            "{}: symbolic mode string contains too many '+' characters.",
+            fn_name
+        );
+        Err(LispError::new(msg))
     }
 }
 
