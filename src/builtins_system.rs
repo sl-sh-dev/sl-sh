@@ -605,6 +605,22 @@ fn builtin_get_pid(
     }
 }
 
+fn to_octal_string(mode: Mode, fn_name: &str) -> Result<String, LispError> {
+    let mut octal = format!("{:o}", mode.bits());
+    if octal.len() < 4 {
+        while octal.len() < 4 {
+            octal = "0".to_owned() + &octal;
+        }
+        Ok(octal)
+    } else {
+        let msg = format!(
+            "{}: Encountered invalid umask {}.",
+            fn_name, octal
+        );
+        Err(LispError::new(msg))
+    }
+}
+
 fn get_class(str: &str, fn_name: &str) -> Result<u32, LispError> {
     if str.is_empty() {
         Ok(0b111111111)
@@ -797,36 +813,43 @@ fn builtin_umask(
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
     let fn_name = "umask";
-    let arg = param_eval(environment, args, fn_name)?;
-    params_done(args, fn_name)?;
-    let arg_d = arg.get();
-    match &arg_d.data {
-        ExpEnum::Int(i) => {
-            octal_string_to_mode(&format!("{}", i), fn_name)?;
-            Ok(Expression::from(&arg_d.data))
-        }
-        ExpEnum::String(s, _) => {
-            if s.len() > 0 {
-                let mode;
-                if is_digit(s.chars().next().unwrap()) {
-                    mode = octal_string_to_mode(s.as_ref(), fn_name)?;
-                } else {
-                    mode = symbolic_mode_string_to_mode("go+rx", fn_name)?;
-                }
-                nix::sys::stat::umask(mode);
+    let arg = param_eval_optional(environment, args)?;
+    if let Some(arg) = arg {
+        params_done(args, fn_name)?;
+        let arg_d = arg.get();
+        match &arg_d.data {
+            ExpEnum::Int(i) => {
+                octal_string_to_mode(&format!("{}", i), fn_name)?;
                 Ok(Expression::from(&arg_d.data))
-            } else {
-                let msg = format!("{}: no input.", fn_name);
+            }
+            ExpEnum::String(s, _) => {
+                if s.len() > 0 {
+                    let mode;
+                    if is_digit(s.chars().next().unwrap()) {
+                        mode = octal_string_to_mode(s.as_ref(), fn_name)?;
+                    } else {
+                        mode = symbolic_mode_string_to_mode("go+rx", fn_name)?;
+                    }
+                    nix::sys::stat::umask(mode);
+                    Ok(Expression::from(&arg_d.data))
+                } else {
+                    let msg = format!("{}: no input.", fn_name);
+                    Err(LispError::new(msg))
+                }
+            }
+            _ => {
+                let msg = format!(
+                    "{} requires string or octal to use as file creation mask",
+                    fn_name
+                );
                 Err(LispError::new(msg))
             }
         }
-        _ => {
-            let msg = format!(
-                "{} requires string or octal to use as file creation mask",
-                fn_name
-            );
-            Err(LispError::new(msg))
-        }
+    } else {
+        let mode = nix::sys::stat::umask(Mode::empty());
+        nix::sys::stat::umask(mode);
+        let octal_string = to_octal_string(mode, fn_name)?;
+        Ok(Expression::alloc_data(ExpEnum::String(octal_string.into(), None)))
     }
 }
 
@@ -1234,7 +1257,7 @@ You can set umask in your slshrc (for you) or /etc/profile (for all users). By d
 distros will set it to 022 or 002.
 
 If provided mode begins with a digit, it is interpreted as an octal number; if not, it is
-interpreted as a symbolic mode mask .
+interpreted as a symbolic mode mask.
 
 The value returned is the new value of the mask as an octal string.
 
@@ -1327,6 +1350,24 @@ mod tests {
 
         let m = symbolic_mode_string_to_mode("go+rx", fn_name).unwrap();
         assert_eq!(0b000101101, m.bits());
+
+        assert!(symbolic_mode_string_to_mode("glo+rx", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("go+nrx", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("+n", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("a+n", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("ar", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("+a+r", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("a++r", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("+ar+", fn_name).is_err());
+
+        assert!(symbolic_mode_string_to_mode("", fn_name).is_err());
     }
 
     #[test]
@@ -1353,5 +1394,13 @@ mod tests {
 
         let m = octal_string_to_mode("45", fn_name).unwrap();
         assert_eq!(0b000100101, m.bits());
+
+        assert!(octal_string_to_mode("a+n", fn_name).is_err());
+
+        assert!(octal_string_to_mode("1111", fn_name).is_err());
+
+        assert!(octal_string_to_mode("11111", fn_name).is_err());
+
+        assert!(octal_string_to_mode("0S11", fn_name).is_err());
     }
 }

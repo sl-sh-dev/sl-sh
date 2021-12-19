@@ -4,13 +4,24 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
+pub fn param_eval_optional(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Option<Expression>, LispError> {
+    if let Some(arg) = args.next() {
+        Ok(Some(eval(environment, arg)?))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn param_eval(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
     form: &str,
 ) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        eval(environment, arg)
+    if let Some(arg) = param_eval_optional(environment, args)? {
+        Ok(arg)
     } else {
         let msg = format!(
             "{}: Missing required argument, see (doc '{}) for usage.",
