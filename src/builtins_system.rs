@@ -839,7 +839,7 @@ fn builtin_umask(
             }
             _ => {
                 let msg = format!(
-                    "{} requires string or octal to use as file creation mask",
+                    "{}: requires string or octal to use as file creation mask",
                     fn_name
                 );
                 Err(LispError::new(msg))
@@ -1402,5 +1402,132 @@ mod tests {
         assert!(octal_string_to_mode("11111", fn_name).is_err());
 
         assert!(octal_string_to_mode("0S11", fn_name).is_err());
+    }
+
+    fn get_class2(str: &str, fn_name: &str) -> Result<u32, LispError> {
+        if str.is_empty() {
+            Ok(0b111111111)
+        } else {
+            let next = str.chars().find(|x| !is_user_access_token(*x));
+            if next.is_some() {
+                let msg = format!(
+                    "{}: symbolic mode string before the '+' can only contain u, g, o, or a.",
+                    fn_name
+                );
+                Err(LispError::new(msg))
+            } else {
+                let mut class: u32 = 0;
+                for c in str.chars() {
+                    class |= match c {
+                        'u' => 0b111000000,
+                        'g' => 0b000111000,
+                        'o' => 0b000000111,
+                        'a' => 0b111111111,
+                        c if c.is_whitespace() => 0b111111111,
+                        _ => 0,
+                    }
+                }
+                Ok(class)
+            }
+        }
+    }
+
+    fn get_perms2(str: &str, fn_name: &str) -> Result<u32, LispError> {
+        let next = str.chars().find(|x| !is_permission_token(*x));
+        if next.is_some() {
+            let msg = format!(
+                "{}: symbolic mode string before the '+' can only contain r, w, or x.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        } else {
+            let mut class: u32 = 0;
+            for c in str.chars() {
+                class |= match c {
+                    'r' => 0b100100100,
+                    'w' => 0b010010010,
+                    'x' => 0b001001001,
+                    _ => 0,
+                }
+            }
+            Ok(class)
+        }
+    }
+
+    fn parse_symbolic_mode_string2(str: &str, fn_name: &str) -> Result<u32, LispError> {
+        let mode_strings = str.split('+').collect::<Vec<&str>>();
+        if mode_strings.len() == 2 {
+            if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
+                let class = get_class(c, fn_name)?;
+                let perms = get_perms(p, fn_name)?;
+                Ok(class & perms)
+            } else {
+                let msg = format!(
+                    "{}: symbolic mode string contains too many '+' characters.",
+                    fn_name
+                );
+                Err(LispError::new(msg))
+            }
+        } else {
+            let msg = format!(
+                "{}: symbolic mode string contains too many '+' characters.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    }
+
+    fn symbolic_plus_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        if str.contains('+') {
+            let umask = parse_symbolic_mode_string2(str, fn_name)?;
+            let mode = nix::sys::stat::umask(Mode::empty());
+            nix::sys::stat::umask(mode);
+            Ok(to_mode((mode.bits() ^ umask) & mode.bits()))
+        } else {
+            let msg = format!(
+                "{}: symbolic mode string must contain one '+' symbol as there must be bits to \
+                mask.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    }
+
+    fn symbolic_minus_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        if str.contains('-') {
+            let umask = parse_symbolic_mode_string2(str, fn_name)?;
+            let mode = nix::sys::stat::umask(Mode::empty());
+            nix::sys::stat::umask(mode);
+            Ok(to_mode((mode.bits() ^ umask) & mode.bits()))
+        } else {
+            let msg = format!(
+                "{}: symbolic mode string must contain one '+' symbol as there must be bits to \
+                mask.",
+                fn_name
+            );
+            Err(LispError::new(msg))
+        }
+    }
+
+
+    #[test]
+    fn test_umask_symbolic_mode_string2() {
+        let fn_name = "umask";
+        let m = symbolic_plus_to_mode("ugo+x", fn_name).unwrap();
+        assert_eq!(0o022, m.bits());
+
+        let m = symbolic_plus_to_mode("+x", fn_name).unwrap();
+        assert_eq!(0o022, m.bits());
+
+        let m = symbolic_plus_to_mode("a+rw", fn_name).unwrap();
+        assert_eq!(0o0, m.bits());
+
+        // 0b 000 010 010
+        // 0b 110 110 110
+        //---------------
+        // 0b 000 000 000
+        let str = "a+ug,a=ug";
+        let csv = str.split(',').collect::<Vec<&str>>();
+        println!("csv [{}]: {:?}.", csv.len(), csv)
     }
 }
