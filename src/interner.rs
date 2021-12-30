@@ -1,63 +1,26 @@
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 use std::mem;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Interned {
-    pub id: u32,
+pub struct Interned(&'static str);
+
+impl Interned {
+    pub fn as_string(&self) -> &'static str {
+        self.0
+    }
 }
 
 impl PartialEq for Interned {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        std::ptr::eq(self.0, other.0)
     }
 }
 impl Eq for Interned {}
 
 impl Hash for Interned {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.id);
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct InternedHasher {
-    hash: u64,
-}
-
-impl Hasher for InternedHasher {
-    fn finish(&self) -> u64 {
-        self.hash
-    }
-
-    fn write(&mut self, _bytes: &[u8]) {
-        panic!("InternedHasher is being misused- only for Interned values.");
-    }
-
-    fn write_u32(&mut self, i: u32) {
-        self.hash = i as u64;
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct BuildInternedHasher {}
-
-impl BuildInternedHasher {
-    pub fn new() -> BuildInternedHasher {
-        BuildInternedHasher {}
-    }
-}
-
-impl Default for BuildInternedHasher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BuildHasher for BuildInternedHasher {
-    type Hasher = InternedHasher;
-    fn build_hasher(&self) -> Self::Hasher {
-        InternedHasher { hash: 0 }
+        std::ptr::hash(self.0, state);
     }
 }
 
@@ -69,7 +32,6 @@ impl BuildHasher for BuildInternedHasher {
 #[derive(Clone, Debug)]
 pub struct Interner {
     map: HashMap<&'static str, Interned>,
-    vals: Vec<&'static str>,
     // Leak buffers to keep the static lifetimes we hand out valid.
     buf: mem::ManuallyDrop<String>,
     capacity: usize,
@@ -82,7 +44,6 @@ impl Interner {
         let cap = cap.next_power_of_two();
         Interner {
             map: HashMap::default(),
-            vals: Vec::new(),
             buf: mem::ManuallyDrop::new(String::with_capacity(cap)),
             capacity: cap,
             used: 0,
@@ -95,9 +56,7 @@ impl Interner {
     }
 
     fn intern_final(&mut self, name: &'static str) -> Interned {
-        let id = self.vals.len() as u32;
-        self.vals.push(name);
-        let interned = Interned { id };
+        let interned = Interned(name);
         self.map.insert(name, interned);
         interned
     }
@@ -141,14 +100,6 @@ impl Interner {
         self.intern_final(name)
     }
 
-    pub fn get_string(&self, interned: Interned) -> Option<&'static str> {
-        if let Some(s) = self.vals.get(interned.id as usize) {
-            Some(s)
-        } else {
-            None
-        }
-    }
-
     /// Return the amount of memory allocated by the interner.
     pub fn capacity(&self) -> usize {
         self.capacity
@@ -181,95 +132,57 @@ mod tests {
         assert!(i.used() == 0);
         assert!(i.len() == 0);
         let one = i.intern("one");
-        assert!(i.get_string(one).unwrap() == "one");
+        assert!(one.as_string() == "one");
         assert!(i.used() == 3);
         assert!(i.len() == 1);
         let fives = i.intern("fives");
-        assert!(i.get_string(fives).unwrap() == "fives");
+        assert!(fives.as_string() == "fives");
         assert!(i.capacity() == 8);
         assert!(i.used() == 8);
         assert!(i.len() == 2);
         let v1 = i.intern("xxx");
-        assert!(i.get_string(one).unwrap() == "one");
-        assert!(i.get_string(fives).unwrap() == "fives");
-        assert!(i.get_string(v1).unwrap() == "xxx");
+        assert!(one.as_string() == "one");
+        assert!(fives.as_string() == "fives");
+        assert!(v1.as_string() == "xxx");
         assert!(i.capacity() == 24);
         assert!(i.used() == 11);
         assert!(i.len() == 3);
 
         let one2 = i.intern("one");
-        assert!(i.get_string(one).unwrap() == "one");
-        assert!(i.get_string(one2).unwrap() == "one");
+        assert!(one.as_string() == "one");
+        assert!(one2.as_string() == "one");
         assert!(one == one2);
-        assert!(std::ptr::eq(
-            i.get_string(one).unwrap(),
-            i.get_string(one2).unwrap()
-        ));
+        assert!(std::ptr::eq(one.as_string(), one2.as_string()));
         assert!(i.capacity() == 24);
         assert!(i.used() == 11);
         assert!(i.len() == 3);
 
         let v2 = i.intern("1234567890");
-        assert!(i.get_string(one).unwrap() == "one");
-        assert!(i.get_string(fives).unwrap() == "fives");
-        assert!(i.get_string(v1).unwrap() == "xxx");
-        assert!(i.get_string(v2).unwrap() == "1234567890");
+        assert!(one.as_string() == "one");
+        assert!(fives.as_string() == "fives");
+        assert!(v1.as_string() == "xxx");
+        assert!(v2.as_string() == "1234567890");
         assert!(i.capacity() == 24);
         assert!(i.used() == 21);
         assert!(i.len() == 4);
 
         let v3 = i.intern("1234");
-        assert!(i.get_string(one).unwrap() == "one");
-        assert!(i.get_string(fives).unwrap() == "fives");
-        assert!(i.get_string(v1).unwrap() == "xxx");
-        assert!(i.get_string(v2).unwrap() == "1234567890");
-        assert!(i.get_string(v3).unwrap() == "1234");
+        assert!(one.as_string() == "one");
+        assert!(fives.as_string() == "fives");
+        assert!(v1.as_string() == "xxx");
+        assert!(v2.as_string() == "1234567890");
+        assert!(v3.as_string() == "1234");
         assert!(i.capacity() == 56);
         assert!(i.used() == 25);
         assert!(i.len() == 5);
 
         let v2_2 = i.intern("1234567890");
-        assert!(i.get_string(v2).unwrap() == "1234567890");
-        assert!(i.get_string(v2_2).unwrap() == "1234567890");
+        assert!(v2.as_string() == "1234567890");
+        assert!(v2_2.as_string() == "1234567890");
         assert!(v2 == v2_2);
-        assert!(std::ptr::eq(
-            i.get_string(v2).unwrap(),
-            i.get_string(v2_2).unwrap()
-        ));
+        assert!(std::ptr::eq(v2.as_string(), v2_2.as_string()));
         assert!(i.capacity() == 56);
         assert!(i.used() == 25);
         assert!(i.len() == 5);
-    }
-
-    #[test]
-    fn test_hash() {
-        let mut i = Interner::with_capacity(7);
-        assert!(i.capacity() == 8);
-        assert!(i.used() == 0);
-        assert!(i.len() == 0);
-        let mut map = HashMap::with_hasher(BuildInternedHasher::new());
-        let one = i.intern("one");
-        let two = i.intern("two");
-        let three = i.intern("three");
-        map.insert(one, 1);
-        map.insert(two, 2);
-        map.insert(three, 3);
-        let mut hasher = InternedHasher { hash: 0 };
-        one.hash(&mut hasher);
-        assert!(hasher.finish() == 0);
-        two.hash(&mut hasher);
-        assert!(hasher.finish() == 1);
-        three.hash(&mut hasher);
-        assert!(hasher.finish() == 2);
-        one.hash(&mut hasher);
-        assert!(hasher.finish() == 0);
-
-        assert!(*map.get(&one).unwrap() == 1);
-        assert!(*map.get(&two).unwrap() == 2);
-        assert!(*map.get(&three).unwrap() == 3);
-        assert!(*map.get(&i.intern("one")).unwrap() == 1);
-        assert!(*map.get(&i.intern("two")).unwrap() == 2);
-        assert!(*map.get(&i.intern("three")).unwrap() == 3);
-        assert!(map.get(&i.intern("three3")) == None);
     }
 }

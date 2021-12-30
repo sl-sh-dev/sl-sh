@@ -281,10 +281,6 @@ impl Vm {
         self.stack[idx]
     }
 
-    pub fn get_interned(&self, i: Interned) -> &'static str {
-        self.interner.get_string(i).expect("Invalid interned value")
-    }
-
     pub fn intern_static(&mut self, string: &'static str) -> Interned {
         self.interner.intern_static(string)
     }
@@ -777,7 +773,7 @@ impl Vm {
                 Value::StringConst(s1) => {
                     if let Value::Reference(v2) = val2 {
                         if let Object::String(s2) = self.get(v2) {
-                            if self.get_interned(s1) == s2 {
+                            if s1.as_string() == s2 {
                                 val = Value::True;
                             }
                         }
@@ -786,7 +782,7 @@ impl Vm {
                 Value::Reference(h1) => {
                     if let Value::StringConst(s2) = val2 {
                         if let Object::String(s1) = self.get(h1) {
-                            if s1 == self.get_interned(s2) {
+                            if s1 == s2.as_string() {
                                 val = Value::True;
                             }
                         }
@@ -1321,7 +1317,7 @@ impl Vm {
                     let key = get_reg_unref!(registers, key, self);
                     let val = get_reg_unref!(registers, val, self);
                     let key = if let Value::Keyword(i) = key {
-                        self.get_interned(i)
+                        i.as_string()
                     } else {
                         return Err((
                             VMError::new_vm(format!("ERR: key must be a keyword, got {:?}.", key)),
@@ -1332,7 +1328,7 @@ impl Vm {
                         return Err((
                             VMError {
                                 key,
-                                obj: VMErrorObj::Message(self.get_interned(i).to_string()),
+                                obj: VMErrorObj::Message(i.as_string().to_string()),
                             },
                             chunk,
                         ));
