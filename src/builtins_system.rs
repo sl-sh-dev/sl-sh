@@ -1270,6 +1270,7 @@ Example:
 
 #[cfg(test)]
 mod tests {
+    use crate::builtins_system::tests::PermissionOperator::Minus;
     use super::*;
 
     #[test]
@@ -1454,73 +1455,171 @@ mod tests {
         }
     }
 
-    fn parse_symbolic_mode_string2(str: &str, fn_name: &str) -> Result<u32, LispError> {
-        let mode_strings = str.split('+').collect::<Vec<&str>>();
+    fn decode_input(str: &str, split_char: char, fn_name: &str) -> Result<(u32, u32), LispError> {
+        let mode_strings = str.split(split_char).collect::<Vec<&str>>();
         if mode_strings.len() == 2 {
             if let (Some(c), Some(p)) = (mode_strings.get(0), mode_strings.get(1)) {
-                let class = get_class(c, fn_name)?;
-                let perms = get_perms(p, fn_name)?;
-                Ok(class & perms)
+                let class = get_class2(c, fn_name)?;
+                let perms = get_perms2(p, fn_name)?;
+                Ok((class, perms))
             } else {
                 let msg = format!(
-                    "{}: symbolic mode string contains too many '+' characters.",
+                    "{}: symbolic mode string contains too many '{}' characters.",
+                    split_char,
                     fn_name
                 );
                 Err(LispError::new(msg))
             }
         } else {
             let msg = format!(
-                "{}: symbolic mode string contains too many '+' characters.",
+                "{}: symbolic mode string contains too many '{}' characters.",
+                split_char,
                 fn_name
             );
             Err(LispError::new(msg))
         }
     }
 
-    fn symbolic_plus_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+    fn symbolic_plus_to_mode(mode: Mode, str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        let (class, perms) = decode_input(str, '+', fn_name)?;
+        let umask = class & perms;
+        Ok(to_mode(!umask & mode.bits()))
+    }
+
+    fn symbolic_minus_to_mode(mode: Mode, str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        let (class, perms) = decode_input(str, '-', fn_name)?;
+        let umask = class & perms;
+        Ok(to_mode(mode.bits() | umask))
+    }
+
+    fn symbolic_equals_to_mode(mode: Mode, str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        let (class, perms) = decode_input(str, '=', fn_name)?;
+        let umask = class & perms;
+        Ok(to_mode(umask ^ 0o777))
+    }
+    
+    enum PermissionOperator {
+        Plus,
+        Minus,
+        Equal
+    }
+
+    struct MaskType {
+        mask: u32,
+        mask_type: PermissionOperator,
+    }
+    
+    impl MaskType {
+        fn combine(&self, mode: Mode) -> Mode {
+            let m = match &self.mask_type {
+                PermissionOperator::Plus => !self.mask & mode.bits(),
+                PermissionOperator::Minus => mode.bits() | self.mask,
+                PermissionOperator::Equal => self.mask ^ 0o777,
+            };
+            to_mode(m)
+        }
+    }
+
+    fn to_mask_type(str: &str, fn_name: &str) -> Result<MaskType, LispError> {
+        let parse = |split_char| -> Result<u32, LispError> {
+            let (class, perms) = decode_input(str, split_char, fn_name)?;
+            Ok(class & perms)
+        };
         if str.contains('+') {
-            let umask = parse_symbolic_mode_string2(str, fn_name)?;
-            let mode = nix::sys::stat::umask(Mode::empty());
-            nix::sys::stat::umask(mode);
-            Ok(to_mode((mode.bits() ^ umask) & mode.bits()))
+            let mask = parse('+')?;
+            Ok(MaskType {mask, mask_type: PermissionOperator::Plus})
+        } else if str.contains('-') {
+            let mask = parse('-')?;
+            Ok(MaskType {mask, mask_type: PermissionOperator::Minus})
+        } else if str.contains('=') {
+            let mask = parse('=')?;
+            Ok(MaskType {mask, mask_type: PermissionOperator::Equal})
         } else {
             let msg = format!(
-                "{}: symbolic mode string must contain one '+' symbol as there must be bits to \
-                mask.",
+                "{}: symbolic mode string must contain one of '+', '-', or '='.",
                 fn_name
             );
             Err(LispError::new(msg))
         }
     }
 
-    fn symbolic_minus_to_mode(str: &str, fn_name: &str) -> Result<Mode, LispError> {
-        if str.contains('-') {
-            let umask = parse_symbolic_mode_string2(str, fn_name)?;
-            let mode = nix::sys::stat::umask(Mode::empty());
-            nix::sys::stat::umask(mode);
-            Ok(to_mode((mode.bits() ^ umask) & mode.bits()))
-        } else {
-            let msg = format!(
-                "{}: symbolic mode string must contain one '+' symbol as there must be bits to \
-                mask.",
-                fn_name
-            );
-            Err(LispError::new(msg))
+    fn get_umask_tokens(str: &str, fn_name: &str) -> Result<Vec<MaskType>, LispError> {
+        match str.lines().count() {
+            1 => {
+                let mut masks = vec![];
+                for x in str.split(',') {
+                    let mask_type = to_mask_type(x, fn_name)?;
+                    masks.push(mask_type);
+                }
+                Ok(masks)
+            },
+          _ => {
+              let msg = format!(
+                  "{}: whatever",
+                  fn_name
+              );
+              Err(LispError::new(msg))
+          },
         }
     }
+    
+    fn with_umask(mut umask: Mode, masks: Vec<MaskType>, fn_name: &str) -> Mode {
+        for x in masks {
+            umask = x.combine(umask)
+        }
+        umask
+    }
 
+    fn set_umask(str: &str, fn_name: &str) -> Result<Mode, LispError> {
+        let masks = get_umask_tokens(str, fn_name)?;
+        let mut umask = nix::sys::stat::umask(Mode::empty());
+        let umask = with_umask(umask, masks, fn_name);
+        nix::sys::stat::umask(umask);
+        Ok(umask)
+    }
+
+    #[test]
+    fn test_umask_parser() {
+        let fn_name = "umask";
+        let umask = to_mode(0o022);
+
+        let m = with_umask(umask, get_umask_tokens("go+rx", fn_name).unwrap(), fn_name);
+        assert_eq!(0o022, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("+w", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("a-rw", fn_name).unwrap(), fn_name);
+        assert_eq!(0o666, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("g-rw", fn_name).unwrap(), fn_name);
+        assert_eq!(0o062, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("ug=rw", fn_name).unwrap(), fn_name);
+        println!("{:o}", m.bits());
+        assert_eq!(0o0112, m.bits());
+    }
 
     #[test]
     fn test_umask_symbolic_mode_string2() {
         let fn_name = "umask";
-        let m = symbolic_plus_to_mode("ugo+x", fn_name).unwrap();
+        let m = symbolic_plus_to_mode(to_mode(0o022), "ugo+x", fn_name).unwrap();
         assert_eq!(0o022, m.bits());
 
-        let m = symbolic_plus_to_mode("+x", fn_name).unwrap();
+        let m = symbolic_plus_to_mode(to_mode(0o022), "+x", fn_name).unwrap();
         assert_eq!(0o022, m.bits());
 
-        let m = symbolic_plus_to_mode("a+rw", fn_name).unwrap();
+        let m = symbolic_plus_to_mode(to_mode(0o022), "a+rw", fn_name).unwrap();
         assert_eq!(0o0, m.bits());
+
+        let m = symbolic_equals_to_mode(to_mode(0o022), "a=r", fn_name).unwrap();
+        assert_eq!(0o333, m.bits());
+
+        let m = symbolic_plus_to_mode(to_mode(0o022), "ug+rwx", fn_name).unwrap();
+        assert_eq!(0o002, m.bits());
+
+        let m = symbolic_minus_to_mode(to_mode(0o022), "o-rwx", fn_name).unwrap();
+        assert_eq!(0o027, m.bits());
 
         // 0b 000 010 010
         // 0b 110 110 110
