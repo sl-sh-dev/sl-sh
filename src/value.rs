@@ -517,9 +517,9 @@ impl Value {
             Value::Int(i) => format!("{}", i),
             Value::UInt(i) => format!("{}", i),
             Value::Byte(b) => format!("{}", b),
-            Value::Symbol(i) => i.as_string().to_string(),
-            Value::Keyword(i) => format!(":{}", i.as_string()),
-            Value::StringConst(i) => format!("\"{}\"", i.as_string()),
+            Value::Symbol(i) => vm.get_interned(*i).to_string(),
+            Value::Keyword(i) => format!(":{}", vm.get_interned(*i).to_string()),
+            Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i).to_string()),
             Value::CodePoint(ch) => format!("#\\{}", ch),
             Value::CharCluster(l, c) => {
                 format!("#\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
@@ -560,7 +560,7 @@ impl Value {
 
     pub fn pretty_value(&self, vm: &Vm) -> String {
         match self {
-            Value::StringConst(i) => i.as_string().to_string(),
+            Value::StringConst(i) => vm.get_interned(*i).to_string(),
             Value::CodePoint(ch) => format!("{}", ch),
             Value::CharCluster(l, c) => {
                 format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
@@ -637,8 +637,8 @@ impl Value {
 #[derive(Clone, Debug)]
 pub struct Globals {
     objects: Vec<Value>,
-    objects_map: HashMap<Interned, usize>,
-    doc_strings: HashMap<Interned, String>,
+    objects_map: HashMap<Interned, usize, BuildInternedHasher>,
+    doc_strings: HashMap<Interned, String, BuildInternedHasher>,
 }
 
 impl Default for Globals {
@@ -651,8 +651,8 @@ impl Globals {
     pub fn new() -> Self {
         Globals {
             objects: Vec::new(),
-            objects_map: HashMap::new(),
-            doc_strings: HashMap::new(),
+            objects_map: HashMap::with_hasher(BuildInternedHasher::new()),
+            doc_strings: HashMap::with_hasher(BuildInternedHasher::new()),
         }
     }
 
@@ -703,7 +703,7 @@ impl Globals {
         for (k, v) in self.objects_map.iter() {
             println!(
                 "{} ({}): {}",
-                k.as_string(),
+                vm.get_interned(*k),
                 *v,
                 self.objects[*v].display_value(vm)
             );
