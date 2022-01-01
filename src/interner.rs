@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 use std::mem;
 
 #[derive(Clone, Copy, Debug)]
@@ -17,47 +17,6 @@ impl Eq for Interned {}
 impl Hash for Interned {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u32(self.id);
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct InternedHasher {
-    hash: u64,
-}
-
-impl Hasher for InternedHasher {
-    fn finish(&self) -> u64 {
-        self.hash
-    }
-
-    fn write(&mut self, _bytes: &[u8]) {
-        panic!("InternedHasher is being misused- only for Interned values.");
-    }
-
-    fn write_u32(&mut self, i: u32) {
-        self.hash = i as u64;
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct BuildInternedHasher {}
-
-impl BuildInternedHasher {
-    pub fn new() -> BuildInternedHasher {
-        BuildInternedHasher {}
-    }
-}
-
-impl Default for BuildInternedHasher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BuildHasher for BuildInternedHasher {
-    type Hasher = InternedHasher;
-    fn build_hasher(&self) -> Self::Hasher {
-        InternedHasher { hash: 0 }
     }
 }
 
@@ -239,37 +198,5 @@ mod tests {
         assert!(i.capacity() == 56);
         assert!(i.used() == 25);
         assert!(i.len() == 5);
-    }
-
-    #[test]
-    fn test_hash() {
-        let mut i = Interner::with_capacity(7);
-        assert!(i.capacity() == 8);
-        assert!(i.used() == 0);
-        assert!(i.len() == 0);
-        let mut map = HashMap::with_hasher(BuildInternedHasher::new());
-        let one = i.intern("one");
-        let two = i.intern("two");
-        let three = i.intern("three");
-        map.insert(one, 1);
-        map.insert(two, 2);
-        map.insert(three, 3);
-        let mut hasher = InternedHasher { hash: 0 };
-        one.hash(&mut hasher);
-        assert!(hasher.finish() == 0);
-        two.hash(&mut hasher);
-        assert!(hasher.finish() == 1);
-        three.hash(&mut hasher);
-        assert!(hasher.finish() == 2);
-        one.hash(&mut hasher);
-        assert!(hasher.finish() == 0);
-
-        assert!(*map.get(&one).unwrap() == 1);
-        assert!(*map.get(&two).unwrap() == 2);
-        assert!(*map.get(&three).unwrap() == 3);
-        assert!(*map.get(&i.intern("one")).unwrap() == 1);
-        assert!(*map.get(&i.intern("two")).unwrap() == 2);
-        assert!(*map.get(&i.intern("three")).unwrap() == 3);
-        assert!(map.get(&i.intern("three3")) == None);
     }
 }

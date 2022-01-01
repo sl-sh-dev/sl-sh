@@ -637,8 +637,8 @@ impl Value {
 #[derive(Clone, Debug)]
 pub struct Globals {
     objects: Vec<Value>,
-    objects_map: HashMap<Interned, usize, BuildInternedHasher>,
-    doc_strings: HashMap<Interned, String, BuildInternedHasher>,
+    objects_map: HashMap<Interned, usize>,
+    doc_strings: HashMap<Interned, String>,
 }
 
 impl Default for Globals {
@@ -651,8 +651,8 @@ impl Globals {
     pub fn new() -> Self {
         Globals {
             objects: Vec::new(),
-            objects_map: HashMap::with_hasher(BuildInternedHasher::new()),
-            doc_strings: HashMap::with_hasher(BuildInternedHasher::new()),
+            objects_map: HashMap::new(),
+            doc_strings: HashMap::new(),
         }
     }
 
