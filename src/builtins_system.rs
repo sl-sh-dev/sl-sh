@@ -1495,7 +1495,7 @@ mod tests {
     fn symbolic_equals_to_mode(mode: Mode, str: &str, fn_name: &str) -> Result<Mode, LispError> {
         let (class, perms) = decode_input(str, '=', fn_name)?;
         let umask = class & perms;
-        Ok(to_mode(umask ^ 0o777))
+        Ok(to_mode((umask ^ 0o777 ) & ((mode.bits() & !class) ^ class)))
     }
     
     enum PermissionOperator {
@@ -1505,35 +1505,35 @@ mod tests {
     }
 
     struct MaskType {
-        mask: u32,
+        class: u32,
+        perms: u32,
         mask_type: PermissionOperator,
     }
-    
+
     impl MaskType {
         fn combine(&self, mode: Mode) -> Mode {
             let m = match &self.mask_type {
-                PermissionOperator::Plus => !self.mask & mode.bits(),
-                PermissionOperator::Minus => mode.bits() | self.mask,
-                PermissionOperator::Equal => self.mask ^ 0o777,
+                PermissionOperator::Plus => !(self.class & self.perms) & mode.bits(),
+                PermissionOperator::Minus => mode.bits() | (self.class & self.perms),
+                PermissionOperator::Equal => ((self.class & self.perms) ^ 0o777) & ((mode.bits() & !self.class) ^ self.class),
             };
             to_mode(m)
         }
     }
 
     fn to_mask_type(str: &str, fn_name: &str) -> Result<MaskType, LispError> {
-        let parse = |split_char| -> Result<u32, LispError> {
-            let (class, perms) = decode_input(str, split_char, fn_name)?;
-            Ok(class & perms)
+        let decode = |split_char| -> Result<(u32, u32), LispError> {
+            decode_input(str, split_char, fn_name)
         };
         if str.contains('+') {
-            let mask = parse('+')?;
-            Ok(MaskType {mask, mask_type: PermissionOperator::Plus})
+            let (class, perms) = decode('+')?;
+            Ok(MaskType {class, perms, mask_type: PermissionOperator::Plus})
         } else if str.contains('-') {
-            let mask = parse('-')?;
-            Ok(MaskType {mask, mask_type: PermissionOperator::Minus})
+            let (class, perms) = decode('-')?;
+            Ok(MaskType {class, perms, mask_type: PermissionOperator::Minus})
         } else if str.contains('=') {
-            let mask = parse('=')?;
-            Ok(MaskType {mask, mask_type: PermissionOperator::Equal})
+            let (class, perms) = decode('=')?;
+            Ok(MaskType {class, perms, mask_type: PermissionOperator::Equal})
         } else {
             let msg = format!(
                 "{}: symbolic mode string must contain one of '+', '-', or '='.",
@@ -1555,7 +1555,7 @@ mod tests {
             },
           _ => {
               let msg = format!(
-                  "{}: whatever",
+                  "{}: Must supply only one line as input.",
                   fn_name
               );
               Err(LispError::new(msg))
@@ -1596,37 +1596,33 @@ mod tests {
         assert_eq!(0o062, m.bits());
 
         let m = with_umask(umask, get_umask_tokens("ug=rw", fn_name).unwrap(), fn_name);
-        println!("{:o}", m.bits());
         assert_eq!(0o0112, m.bits());
-    }
 
-    #[test]
-    fn test_umask_symbolic_mode_string2() {
-        let fn_name = "umask";
-        let m = symbolic_plus_to_mode(to_mode(0o022), "ugo+x", fn_name).unwrap();
-        assert_eq!(0o022, m.bits());
+        let m = with_umask(umask, get_umask_tokens("a=r,ug=rw", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0113, m.bits());
 
-        let m = symbolic_plus_to_mode(to_mode(0o022), "+x", fn_name).unwrap();
-        assert_eq!(0o022, m.bits());
+        let m = with_umask(umask, get_umask_tokens("a=r,g+w", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0313, m.bits());
+        
+        let m = with_umask(umask, get_umask_tokens("a=r,a-r", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0777, m.bits());
 
-        let m = symbolic_plus_to_mode(to_mode(0o022), "a+rw", fn_name).unwrap();
+        let m = with_umask(umask, get_umask_tokens("ugo+x", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0022, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("+x", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0022, m.bits());
+
+        let m = with_umask(umask, get_umask_tokens("a+rw", fn_name).unwrap(), fn_name);
         assert_eq!(0o0, m.bits());
 
-        let m = symbolic_equals_to_mode(to_mode(0o022), "a=r", fn_name).unwrap();
+        let m = with_umask(umask, get_umask_tokens("a=r", fn_name).unwrap(), fn_name);
         assert_eq!(0o333, m.bits());
 
-        let m = symbolic_plus_to_mode(to_mode(0o022), "ug+rwx", fn_name).unwrap();
+        let m = with_umask(umask, get_umask_tokens("ug+rwx", fn_name).unwrap(), fn_name);
         assert_eq!(0o002, m.bits());
 
-        let m = symbolic_minus_to_mode(to_mode(0o022), "o-rwx", fn_name).unwrap();
-        assert_eq!(0o027, m.bits());
-
-        // 0b 000 010 010
-        // 0b 110 110 110
-        //---------------
-        // 0b 000 000 000
-        let str = "a+ug,a=ug";
-        let csv = str.split(',').collect::<Vec<&str>>();
-        println!("csv [{}]: {:?}.", csv.len(), csv)
+        let m = with_umask(umask, get_umask_tokens("o-rwx", fn_name).unwrap(), fn_name);
+        assert_eq!(0o0027, m.bits());
     }
 }
