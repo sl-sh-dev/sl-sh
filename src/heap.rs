@@ -16,6 +16,7 @@ const TYPE_BYTES: u8 = 0x30;
 const TYPE_PAIR: u8 = 0x40;
 const TYPE_LAMBDA: u8 = 0x50;
 const TYPE_MACRO: u8 = 0x60;
+const TYPE_CONT: u8 = 0x70;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -52,6 +53,23 @@ pub struct Meta {
     pub col: u16,
 }
 
+#[derive(Clone, Debug)]
+pub struct CallFrame {
+    pub chunk: Rc<Chunk>,
+    pub ip: usize,
+    pub current_ip: usize,
+    pub stack_top: usize,
+    pub this_fn: Option<Value>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Continuation {
+    pub frame: CallFrame,
+    pub arg_reg: usize,
+    pub stack: Vec<Value>,
+    pub call_stack: Vec<CallFrame>,
+}
+
 // This is anything that can live on the heap.  Values normally live on the
 // stack or as constants.
 #[derive(Clone, Debug)]
@@ -63,6 +81,7 @@ pub enum Object {
     Lambda(Rc<Chunk>),
     Macro(Rc<Chunk>),
     Closure(Rc<Chunk>, Vec<usize>),
+    Continuation(Box<Continuation>),
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -123,7 +142,7 @@ impl Heap {
     pub fn new() -> Self {
         Heap {
             flags: Vec::with_capacity(512),
-            // Keep one extra slot to do sway on replace.
+            // Keep one extra slot to do swap on replace.
             objects: Vec::with_capacity(512 + 1),
             greys: vec![],
             grow_factor: 2.0,
@@ -157,6 +176,7 @@ impl Heap {
             Object::Lambda(_) => TYPE_LAMBDA,
             Object::Macro(_) => TYPE_MACRO,
             Object::Closure(_, _) => TYPE_LAMBDA,
+            Object::Continuation(_) => TYPE_CONT,
         }
     }
 
@@ -332,6 +352,7 @@ impl Heap {
             Object::Lambda(_) => {}
             Object::Macro(_) => {}
             Object::Closure(_, _) => {}
+            Object::Continuation(_) => {}
         }
     }
 

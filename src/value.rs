@@ -534,6 +534,7 @@ impl Value {
                 Object::Lambda(_) => "#<Lambda>".to_string(),
                 Object::Macro(_) => "#<Macro>".to_string(),
                 Object::Closure(_, _) => "#<Lambda>".to_string(),
+                Object::Continuation(_) => "#<Continuation>".to_string(),
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 Object::Vector(v) => {
@@ -597,6 +598,7 @@ impl Value {
                 Object::Lambda(_) => "Lambda",
                 Object::Macro(_) => "Macro",
                 Object::Closure(_, _) => "Lambda",
+                Object::Continuation(_) => "Continuation",
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 /*Object::Function(f) => {

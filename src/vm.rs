@@ -186,14 +186,6 @@ macro_rules! div_math {
     }};
 }*/
 
-pub struct CallFrame {
-    pub chunk: Rc<Chunk>,
-    pub ip: usize,
-    pub current_ip: usize,
-    pub stack_top: usize,
-    pub this_fn: Option<Value>,
-}
-
 pub struct Vm {
     interner: Interner,
     heap: Heap,
@@ -716,6 +708,24 @@ impl Vm {
                         );
                         clear_opts(&l, registers, first_reg, num_args);
                         Ok(l)
+                    }
+                    Object::Continuation(k) => {
+                        if num_args != 1 {
+                            return Err((
+                                VMError::new_vm("Continuation takes one argument."),
+                                chunk,
+                            ));
+                        }
+                        let arg = registers[first_reg as usize + 1];
+                        self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
+                        self.call_stack.clear();
+                        self.call_stack.extend_from_slice(&k.call_stack[..]);
+                        self.stack[k.arg_reg] = arg;
+                        self.stack_top = k.frame.stack_top;
+                        self.ip = k.frame.ip;
+                        self.current_ip = k.frame.current_ip;
+                        self.this_fn = k.frame.this_fn;
+                        Ok(k.frame.chunk.clone())
                     }
                     _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
                 }
@@ -1345,6 +1355,33 @@ impl Vm {
                             chunk,
                         ));
                     }
+                }
+                CCC => {
+                    let (lambda, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
+                    let lambda = get_reg_unref!(registers, lambda, self);
+                    let frame = CallFrame {
+                        chunk: chunk.clone(),
+                        ip: self.ip,
+                        current_ip: self.current_ip,
+                        stack_top: self.stack_top,
+                        this_fn: self.this_fn,
+                    };
+                    let stack_len = self.stack_top + first_reg as usize;
+                    let mut stack = Vec::with_capacity(stack_len);
+                    stack.resize(stack_len, Value::Undefined);
+                    stack[..].copy_from_slice(&self.stack[0..stack_len]);
+                    let mut call_stack = Vec::with_capacity(self.call_stack.len());
+                    call_stack.extend_from_slice(&self.call_stack[0..self.call_stack.len()]);
+                    let k = Box::new(Continuation {
+                        frame,
+                        arg_reg: stack_len,
+                        stack,
+                        call_stack,
+                    });
+                    let k_obj = Value::Reference(self.alloc(Object::Continuation(k)));
+                    Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
+                    chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
+                    registers = self.make_registers(self.stack_top);
                 }
                 ADD => binary_math!(
                     self,

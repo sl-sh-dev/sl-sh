@@ -15,6 +15,10 @@ fn main() -> Result<(), VMError> {
     println!("usize: {}", std::mem::size_of::<usize>());
     println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
     println!("Chunk size: {}", std::mem::size_of::<slvm::chunk::Chunk>());
+    println!(
+        "CallFrame size: {}",
+        std::mem::size_of::<slvm::heap::CallFrame>()
+    );
     println!("Vec<Value> size: {}", std::mem::size_of::<Vec<Value>>());
     println!(
         "Cow size: {}",

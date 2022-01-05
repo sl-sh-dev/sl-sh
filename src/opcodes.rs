@@ -83,9 +83,12 @@ pub const EQUAL: OpCode = FLOW_BASE + 23;
 pub const NOT: OpCode = FLOW_BASE + 24;
 // ERR A B - raise error with key R(A) (must be keyword) and value R(B)
 pub const ERR: OpCode = FLOW_BASE + 25;
+// CCC A B - call with continuation, R(A) must be a lambda that takes one arg (the continuation)
+// R(B) is the first reg for the call
+pub const CCC: OpCode = FLOW_BASE + 26;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 26;
+const MATH_BASE: OpCode = FLOW_BASE + 27;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)
