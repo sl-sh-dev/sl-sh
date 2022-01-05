@@ -687,7 +687,6 @@ fn decode_symbolic_mode_string(
                     fn_name, split_char,
                 );
                 Err(LispError::new(msg))
-
             } else {
                 let class = get_class(c, fn_name)?;
                 let perms = get_perms(p, fn_name)?;
@@ -943,7 +942,7 @@ fn builtin_umask(
                     octal_string.into(),
                     None,
                 )))
-            },
+            }
             Err(e) => {
                 // put umask back, no change
                 nix::sys::stat::umask(umask);
@@ -1353,21 +1352,71 @@ Example:
         interner.intern("umask"),
         Expression::make_function(
             builtin_umask,
-            r#"Usage: (umask)
+            r#"Usage: (umask [mask])
 
 usmask
 
 Section: system
 
-Specify umask as an Integer or a String. If input is omitted, the current mask will be returned.
+Takes 0 or 1 argument(s). If no arguments are provided the current file mode creation mask will be
+returned. The value returned is the new value of the mask as an octal string (which can be fed
+back into the umask form if needed).
 
-You can set umask in your slshrc (for you) or /etc/profile (for all users). By default most Linux
-distros will set it to 022 or 002.
+If an argument is provided that value will be interpreted as a mask, applied, and the
+new file mask creation mask will be returned. Specify mask as an integer in octal form,
+or a string in the form of a symbolic mode mask (see fig. a).
 
-If provided mode begins with a digit, it is interpreted as an octal number; if not, it is
-interpreted as a symbolic mode mask.
+When an integer is provided the value replaces the current value of the file creation mode mask.
 
-The value returned is the new value of the mask as an octal string.
+When a string is provided as a symbolic mode mask the current value of the system's umask is used
+to generate the new mask according to the specifications of the provided permissions operator. By
+default most Linux distros will set it to 022 or 002. If provided mode begins with a digit, it is
+interpreted as an octal number; if not, it is interpreted as a symbolic mode mask.
+
+
+You can set umask in your slshrc (for you) or /etc/profile (for all users).
+
+$> umask a+rw,go-x
+=> 0011
+;;; all users can read and write, only user can execute.
+
+$> umask 027
+=> 0027
+;;; user can read, write and execute, group can read and write but not execute, and other has none.
+
+$> umask u-x
+=> 0122
+;;; user can not execute, unspecified permissions are left unchanged from default, 0022.
+
+
+;;; fig. a
+;;;
+;;; symbolic mode mask:
+;;; - [user class symbol(s)][permissions operator][permission symbol(s)][,]...
+;;; - valid user class symbols: 'u', 'g', 'o', 'a'
+;;;     - 'u': the owner user
+;;;     - 'g': the owner group
+;;;     - 'o': others (not 'u' or 'g')
+;;;     - 'a': all users
+;;; - valid permissions operators: '+', '-', '='
+;;;     - '+': enables specified permissions for user classes and leaves unspecified permissions
+;;;     unchanged
+;;;     - '-': disables specified permissions for user classes and leaves unspecified permissions
+;;;     unchanged
+;;;     - '=': allow the specified permisssions for the specified user classes, permissions for
+;;;     unspecified user class remain unchanged.
+;;; - valid permission symbols: 'r', 'w', x'
+;;;     - 'r'
+;;;         - file is viewble
+;;;         - directory's contents can be viewed
+;;;     - 'w'
+;;;         - file can be created, edited, or deleted
+;;;         - directory allows file creation and deletion.
+;;;     - 'x'
+;;;         - file is executable
+;;;         - directory can be entered 'cd' or contents can be executed.
+;;; - one of the user class symbols or valid permission symbols can be left blank to specify all
+;;; symbols.
 
 Example:
 #t
@@ -1508,6 +1557,9 @@ mod tests {
         assert_eq!(0o333, m.bits());
 
         let m = with_umask_tokens(umask, get_umask_tokens("ug+rwx", fn_name).unwrap());
+        assert_eq!(0o002, m.bits());
+
+        let m = with_umask_tokens(umask, get_umask_tokens("ug+", fn_name).unwrap());
         assert_eq!(0o002, m.bits());
 
         let m = with_umask_tokens(umask, get_umask_tokens("o-rwx", fn_name).unwrap());
