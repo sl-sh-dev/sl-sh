@@ -44,6 +44,9 @@ pub use crate::builtins::*;
 pub mod builtins_system;
 pub use crate::builtins_system::*;
 
+pub mod builtins_umask;
+pub use crate::builtins_umask::*;
+
 pub mod builtins_util;
 pub use crate::builtins_util::*;
 
