@@ -14,6 +14,13 @@ Note on tests, they are currently sparse.  The intension is to use a compiler to
 exercise the bytecode when it is more complete as well well as run the Lisp test
 suite from sl-sh.
 
+Features:
+- Supports a pair base type (cons cell) as well as basic opcodes for Lisp list operations
+- Supports tail call optimization (opcodes for tail calls)
+- Supports continuations
+- Closures
+- Garbage Collection (still WIP)
+
 Links:
 - sl-sh shell: https://github.com/sl-sh-dev/sl-sh
 - prototype lisp compiler: https://github.com/sstanfield/sl-compiler
