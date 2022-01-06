@@ -4,6 +4,7 @@
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use nix::{
+    libc,
     sys::signal::{self, Signal},
     unistd,
 };
@@ -17,7 +18,7 @@ fn main() -> Result<(), LispError> {
     if let Some(config) = get_config() {
         if config.command.is_none() && config.script.is_none() {
             /* See if we are running interactively.  */
-            let shell_terminal = nix::libc::STDIN_FILENO;
+            let shell_terminal = libc::STDIN_FILENO;
             if let Ok(true) = unistd::isatty(shell_terminal) {
                 /* Loop until we are in the foreground.  */
                 let mut shell_pgid = unistd::getpgrp();
@@ -35,7 +36,7 @@ fn main() -> Result<(), LispError> {
                 let pgid = unistd::getpid();
                 if let Err(err) = unistd::setpgid(pgid, pgid) {
                     match err {
-                        nix::Error::Sys(nix::errno::Errno::EPERM) => { /* ignore */ }
+                        nix::errno::Errno::EPERM => { /* ignore */ }
                         _ => {
                             eprintln!("Couldn't put the shell in its own process group: {}\n", err)
                         }

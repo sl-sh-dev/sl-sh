@@ -143,6 +143,8 @@
 
 ;; java helpers {{{
 
+(export 'JVM_REMOTE_DEBUG "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")
+
 ;;gradle build
 (defn g
         "gradle alias that writes all output to \"last_build.log\" and triggers a

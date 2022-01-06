@@ -9,10 +9,9 @@ edition = "2018"
 [dependencies]
 cfg-if = "1.0"
 sl-liner = { git = "https://github.com/sl-sh-dev/sl-liner.git" }
-#sl-liner = { path = "../liner" }
+#sl-liner = { path = "../sl-liner" }
 glob = "0.3"
-nix = "0.20.0"
-libc = "0.2"
+nix = "0.23.1"
 unicode-segmentation = "1.7.1"
 unicode_reader = "1"
 rand = "0.8.3"

@@ -1,6 +1,8 @@
 use nix::{
+    libc,
     sys::{
         signal::{self, Signal},
+        stat::Mode,
         termios,
     },
     unistd::{self, Pid},
@@ -18,6 +20,7 @@ use crate::interner::*;
 use crate::process::*;
 use crate::types::*;
 use crate::unix::*;
+use crate::{to_octal_string, with_umask};
 use std::time::SystemTime;
 
 fn builtin_syscall(
@@ -286,12 +289,12 @@ fn builtin_fg(
     };
     let opid = get_stopped_pid(environment, arg);
     if let Some(pid) = opid {
-        let term_settings = termios::tcgetattr(nix::libc::STDIN_FILENO).unwrap();
+        let term_settings = termios::tcgetattr(libc::STDIN_FILENO).unwrap();
         let ppid = Pid::from_raw(pid as i32);
         if let Err(err) = signal::kill(ppid, Signal::SIGCONT) {
             eprintln!("Error sending sigcont to wake up process: {}.", err);
         } else {
-            if let Err(err) = unistd::tcsetpgrp(nix::libc::STDIN_FILENO, ppid) {
+            if let Err(err) = unistd::tcsetpgrp(libc::STDIN_FILENO, ppid) {
                 let msg = format!("Error making {} foreground in parent: {}", pid, err);
                 eprintln!("{}", msg);
             }
@@ -588,6 +591,43 @@ fn builtin_get_pid(
         ))))
     } else {
         Err(LispError::new("get-pid: takes no arguments"))
+    }
+}
+
+fn builtin_umask(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "umask";
+    let arg = param_eval_optional(environment, args)?;
+    params_done(args, fn_name)?;
+    let umask = nix::sys::stat::umask(Mode::empty());
+    if let Some(arg) = arg {
+        let arg_d = arg.get();
+        match with_umask(umask, &arg_d.data, fn_name) {
+            Ok(umask) => {
+                // update umask
+                nix::sys::stat::umask(umask);
+                let octal_string = to_octal_string(umask, fn_name)?;
+                Ok(Expression::alloc_data(ExpEnum::String(
+                    octal_string.into(),
+                    None,
+                )))
+            }
+            Err(e) => {
+                // put umask back, no change
+                nix::sys::stat::umask(umask);
+                Err(e)
+            }
+        }
+    } else {
+        // put umask back, no change
+        nix::sys::stat::umask(umask);
+        let octal_string = to_octal_string(umask, fn_name)?;
+        Ok(Expression::alloc_data(ExpEnum::String(
+            octal_string.into(),
+            None,
+        )))
     }
 }
 
@@ -976,6 +1016,77 @@ Section: system
 
 Example:
 (test::assert-true (int? (get-pid)))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("umask"),
+        Expression::make_function(
+            builtin_umask,
+            r#"Usage: (umask [mask])
+
+Takes 0 or 1 argument(s). If no arguments are provided the current file mode creation mask will be
+returned. The value returned is the new value of the mask as an octal string (which can be fed
+back into the umask form if needed).
+
+If an argument is provided that value will be interpreted as a mask, applied, and the
+new file mask creation mask will be returned. Specify mask as an integer in octal form,
+or a string in the form of a symbolic mode mask (see fig. a).
+
+When an integer is provided the value replaces the current value of the file creation mode mask.
+
+When a string is provided as a symbolic mode mask the current value of the system's umask is used
+to generate the new mask according to the specifications of the provided permissions operator. By
+default most Linux distros will set it to 022 or 002. If provided mode begins with a digit, it is
+interpreted as an octal number; if not, it is interpreted as a symbolic mode mask.
+
+
+$> umask a+rw,go-x
+=> 0011
+;;; all users can read and write, only user can execute.
+
+$> umask 027
+=> 0027
+;;; user can read, write and execute, group can read and write but not execute, and other has none.
+
+$> umask u-x
+=> 0122
+;;; user can not execute, unspecified permissions are left unchanged from default, 0022.
+
+
+;;; fig. a
+;;;
+;;; symbolic mode mask:
+;;; - [user class symbol(s)][permissions operator][permission symbol(s)][,]...
+;;; - valid user class symbols: 'u', 'g', 'o', 'a'
+;;;     - 'u': the owner user
+;;;     - 'g': the owner group
+;;;     - 'o': others (not 'u' or 'g')
+;;;     - 'a': all users
+;;; - valid permissions operators: '+', '-', '='
+;;;     - '+': enables specified permissions for user classes and leaves unspecified permissions
+;;;     unchanged
+;;;     - '-': disables specified permissions for user classes and leaves unspecified permissions
+;;;     unchanged
+;;;     - '=': allow the specified permisssions for the specified user classes, permissions for
+;;;     unspecified user class remain unchanged.
+;;; - valid permission symbols: 'r', 'w', x'
+;;;     - 'r'
+;;;         - file is viewble
+;;;         - directory's contents can be viewed
+;;;     - 'w'
+;;;         - file can be created, edited, or deleted
+;;;         - directory allows file creation and deletion.
+;;;     - 'x'
+;;;         - file is executable
+;;;         - directory can be entered 'cd' or contents can be executed.
+;;; - one of the user class symbols or valid permission symbols can be left blank to specify all
+;;; symbols.
+
+Section: system
+
+Example:
+#t
 "#,
         ),
     );

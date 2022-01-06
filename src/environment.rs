@@ -1,3 +1,4 @@
+use nix::libc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;

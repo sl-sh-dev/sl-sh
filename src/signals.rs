@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use nix::{
+    libc,
     sys::signal::{self, sigaction, SigHandler, Signal},
-    Error,
 };
 
 static SIG_INT: AtomicBool = AtomicBool::new(false);
@@ -21,13 +21,9 @@ pub fn install_sigint_handler() -> bool {
         sigaction(signal::SIGINT, &sig_action)
     };
 
-    if let Err(err) = result {
+    if let Err(errno) = result {
         eprint!("ERROR Failed to install SIGINT handler due to: ");
-
-        match err {
-            Error::Sys(errno) => eprintln!("{} ({}).", errno.desc(), errno),
-            _ => eprintln!("unexpected cause."),
-        };
+        eprintln!("{} ({}).", errno.desc(), errno);
         false
     } else {
         true
