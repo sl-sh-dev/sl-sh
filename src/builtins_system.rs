@@ -723,10 +723,11 @@ struct MaskType {
 impl MaskType {
     fn combine(&self, mode: Mode) -> Mode {
         let m = match &self.mask_type {
-            PermissionOperator::Plus => !(self.class & self.perms) & mode.bits(),
-            PermissionOperator::Minus => mode.bits() | (self.class & self.perms),
+            PermissionOperator::Plus => !(self.class & self.perms) & mode.bits() as u32,
+            PermissionOperator::Minus => mode.bits() as u32 | (self.class & self.perms),
             PermissionOperator::Equal => {
-                ((self.class & self.perms) ^ 0o777) & ((mode.bits() & !self.class) ^ self.class)
+                ((self.class & self.perms) ^ 0o777)
+                    & ((mode.bits() as u32 & !self.class) ^ self.class)
             }
         };
         to_mode(m)
@@ -862,7 +863,7 @@ fn octal_string_to_u32(str: &str, fn_name: &str) -> Result<u32, LispError> {
 
 fn to_mode(i: u32) -> Mode {
     NIX_PERMISSIONS.iter().fold(Mode::empty(), |acc, x| {
-        if x.bits() & i == x.bits() {
+        if (x.bits() as u32 & i) == x.bits() as u32 {
             acc | *x
         } else {
             acc
@@ -1374,8 +1375,6 @@ default most Linux distros will set it to 022 or 002. If provided mode begins wi
 interpreted as an octal number; if not, it is interpreted as a symbolic mode mask.
 
 
-You can set umask in your slshrc (for you) or /etc/profile (for all users).
-
 $> umask a+rw,go-x
 => 0011
 ;;; all users can read and write, only user can execute.
@@ -1486,25 +1485,25 @@ mod tests {
         let fn_name = "umask";
         let bs = 0b001001001;
         let m = to_mode(bs);
-        assert_eq!(m.bits(), bs);
+        assert_eq!(bs, m.bits() as u32);
 
         let m = octal_string_to_mode("0522", fn_name).unwrap();
-        assert_eq!(338, m.bits());
+        assert_eq!(338, m.bits() as u32);
 
         let m = octal_string_to_mode("522", fn_name).unwrap();
-        assert_eq!(338, m.bits());
+        assert_eq!(338, m.bits() as u32);
 
         let m = octal_string_to_mode("713", fn_name).unwrap();
-        assert_eq!(0b111001011, m.bits());
+        assert_eq!(0b111001011, m.bits() as u32);
 
         let m = octal_string_to_mode("466", fn_name).unwrap();
-        assert_eq!(0b100110110, m.bits());
+        assert_eq!(0b100110110, m.bits() as u32);
 
         let m = octal_string_to_mode("0", fn_name).unwrap();
-        assert_eq!(0b000000000, m.bits());
+        assert_eq!(0b000000000, m.bits() as u32);
 
         let m = octal_string_to_mode("45", fn_name).unwrap();
-        assert_eq!(0b000100101, m.bits());
+        assert_eq!(0b000100101, m.bits() as u32);
 
         assert!(octal_string_to_mode("a+n", fn_name).is_err());
 
@@ -1521,52 +1520,52 @@ mod tests {
         let umask = to_mode(0o022);
 
         let m = with_umask_tokens(umask, get_umask_tokens("go+rx", fn_name).unwrap());
-        assert_eq!(0o022, m.bits());
+        assert_eq!(0o022, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("+w", fn_name).unwrap());
-        assert_eq!(0o0, m.bits());
+        assert_eq!(0o0, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a-rw", fn_name).unwrap());
-        assert_eq!(0o666, m.bits());
+        assert_eq!(0o666, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("g-rw", fn_name).unwrap());
-        assert_eq!(0o062, m.bits());
+        assert_eq!(0o062, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("ug=rw", fn_name).unwrap());
-        assert_eq!(0o0112, m.bits());
+        assert_eq!(0o0112, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a=r,ug=rw", fn_name).unwrap());
-        assert_eq!(0o0113, m.bits());
+        assert_eq!(0o0113, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a=r,g+w", fn_name).unwrap());
-        assert_eq!(0o0313, m.bits());
+        assert_eq!(0o0313, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a=r,a-r", fn_name).unwrap());
-        assert_eq!(0o0777, m.bits());
+        assert_eq!(0o0777, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("ugo+x", fn_name).unwrap());
-        assert_eq!(0o0022, m.bits());
+        assert_eq!(0o0022, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("+x", fn_name).unwrap());
-        assert_eq!(0o0022, m.bits());
+        assert_eq!(0o0022, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a+rw", fn_name).unwrap());
-        assert_eq!(0o0, m.bits());
+        assert_eq!(0o0, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("a=r", fn_name).unwrap());
-        assert_eq!(0o333, m.bits());
+        assert_eq!(0o333, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("ug+rwx", fn_name).unwrap());
-        assert_eq!(0o002, m.bits());
+        assert_eq!(0o002, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("ug+", fn_name).unwrap());
-        assert_eq!(0o002, m.bits());
+        assert_eq!(0o002, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("o-rwx", fn_name).unwrap());
-        assert_eq!(0o0027, m.bits());
+        assert_eq!(0o0027, m.bits() as u32);
 
         let m = with_umask_tokens(umask, get_umask_tokens("u-x,g=r,o+w", fn_name).unwrap());
-        assert_eq!(0o0130, m.bits());
+        assert_eq!(0o0130, m.bits() as u32);
 
         assert!(get_umask_tokens("glo+rx", fn_name).is_err());
 
