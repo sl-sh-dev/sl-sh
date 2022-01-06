@@ -1025,10 +1025,6 @@ Example:
             builtin_umask,
             r#"Usage: (umask [mask])
 
-usmask
-
-Section: system
-
 Takes 0 or 1 argument(s). If no arguments are provided the current file mode creation mask will be
 returned. The value returned is the new value of the mask as an octal string (which can be fed
 back into the umask form if needed).
@@ -1086,6 +1082,8 @@ $> umask u-x
 ;;;         - directory can be entered 'cd' or contents can be executed.
 ;;; - one of the user class symbols or valid permission symbols can be left blank to specify all
 ;;; symbols.
+
+Section: system
 
 Example:
 #t
