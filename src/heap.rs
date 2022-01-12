@@ -17,6 +17,7 @@ const TYPE_PAIR: u8 = 0x40;
 const TYPE_LAMBDA: u8 = 0x50;
 const TYPE_MACRO: u8 = 0x60;
 const TYPE_CONT: u8 = 0x70;
+const TYPE_CALLFRAME: u8 = 0x80;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -67,7 +68,6 @@ pub struct Continuation {
     pub frame: CallFrame,
     pub arg_reg: usize,
     pub stack: Vec<Value>,
-    pub call_stack: Vec<CallFrame>,
 }
 
 // This is anything that can live on the heap.  Values normally live on the
@@ -82,6 +82,7 @@ pub enum Object {
     Macro(Rc<Chunk>),
     Closure(Rc<Chunk>, Vec<usize>),
     Continuation(Box<Continuation>),
+    CallFrame(Box<CallFrame>),
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -177,6 +178,7 @@ impl Heap {
             Object::Macro(_) => TYPE_MACRO,
             Object::Closure(_, _) => TYPE_LAMBDA,
             Object::Continuation(_) => TYPE_CONT,
+            Object::CallFrame(_) => TYPE_CALLFRAME,
         }
     }
 
@@ -353,6 +355,7 @@ impl Heap {
             Object::Macro(_) => {}
             Object::Closure(_, _) => {}
             Object::Continuation(_) => {}
+            Object::CallFrame(_) => {}
         }
     }
 

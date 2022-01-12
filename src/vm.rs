@@ -186,11 +186,44 @@ macro_rules! div_math {
     }};
 }*/
 
+pub struct CallStackIter<'vm> {
+    vm: &'vm Vm,
+    current: usize,
+    last_current: usize,
+}
+
+impl<'vm> CallStackIter<'vm> {
+    pub fn new(vm: &'vm Vm) -> Self {
+        CallStackIter {
+            vm,
+            current: vm.stack_top,
+            last_current: 1,
+        }
+    }
+}
+
+impl<'vm> Iterator for CallStackIter<'vm> {
+    type Item = &'vm CallFrame;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(frame) = self.vm.call_frame_idx(self.current) {
+            if self.last_current == 0 {
+                None
+            } else {
+                self.last_current = self.current;
+                self.current = frame.stack_top;
+                Some(frame)
+            }
+        } else {
+            None
+        }
+    }
+}
+
 pub struct Vm {
     interner: Interner,
     heap: Heap,
     stack: Vec<Value>,
-    call_stack: Vec<CallFrame>,
     globals: Globals,
     upvals: Vec<Value>, // XXX these need to be GCed...
     this_fn: Option<Value>,
@@ -216,7 +249,6 @@ impl Vm {
             interner: Interner::with_capacity(8192),
             heap: Heap::new(),
             stack,
-            call_stack: Vec::new(),
             globals,
             upvals: Vec::new(),
             this_fn: None,
@@ -233,10 +265,6 @@ impl Vm {
 
     pub fn err_frame(&self) -> &Option<CallFrame> {
         &self.err_frame
-    }
-
-    pub fn get_call_stack(&self) -> &[CallFrame] {
-        &self.call_stack[..]
     }
 
     pub fn get_registers(&self, start: usize, end: usize) -> &[Value] {
@@ -323,6 +351,10 @@ impl Vm {
         println!();
     }
 
+    pub fn get_call_stack(&self) -> CallStackIter {
+        CallStackIter::new(self)
+    }
+
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
@@ -337,6 +369,22 @@ impl Vm {
     #[inline]
     fn mov_register(registers: &mut [Value], idx: usize, val: Value) {
         registers[idx] = val;
+    }
+
+    fn call_frame(&self) -> Option<&CallFrame> {
+        self.call_frame_idx(self.stack_top)
+    }
+
+    fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
+        match self.stack[idx] {
+            Value::Reference(h) => match self.get(h) {
+                Object::CallFrame(cf) => Some(cf),
+                _ => None,
+                //_ => panic!("Invalid stack, not a call frame."),
+            },
+            _ => None,
+            //_ => panic!("Invalid stack, not a call frame."),
+        }
     }
 
     fn list(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
@@ -623,18 +671,26 @@ impl Vm {
                 let last_reg = (first_reg + num_args + 1) as usize;
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])
                     .map_err(|e| (e, chunk.clone()))?;
-                Self::mov_register(registers, first_reg as usize, res);
+                let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
-                    // Go to last call frame so the SRET does not mess up the return of a builtin.
-                    if let Some(frame) = self.call_stack.pop() {
+                    // Go to last call frame so SRET does not mess up the return of a builtin.
+                    if let Some(frame) = self.call_frame() {
+                        // Need to break the call frame lifetime from self to avoid extra work.
+                        // This is safe because the stack and heap are not touched so the reference is
+                        // stable.  The unwrap() is OK because the frame can not be NULL.
+                        let frame: &CallFrame =
+                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
                         self.stack_top = frame.stack_top;
                         self.ip = frame.ip;
                         self.this_fn = frame.this_fn;
-                        Ok(frame.chunk)
+                        self.stack[res_reg] = res;
+                        Ok(frame.chunk.clone())
                     } else {
+                        self.stack[res_reg] = res;
                         Ok(chunk)
                     }
                 } else {
+                    self.stack[res_reg] = res;
                     Ok(chunk)
                 }
             }
@@ -644,23 +700,22 @@ impl Vm {
                     Object::Lambda(l) => {
                         let l = l.clone();
                         if !tail_call {
-                            let frame = CallFrame {
+                            let frame = Object::CallFrame(Box::new(CallFrame {
                                 chunk,
                                 ip: self.ip,
                                 current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
-                            };
-                            self.call_stack.push(frame);
+                            }));
+                            Self::mov_register(
+                                registers,
+                                first_reg.into(),
+                                Value::Reference(self.alloc(frame)),
+                            );
                             self.stack_top += first_reg as usize;
                         }
                         self.this_fn = Some(lambda);
                         self.ip = 0;
-                        Self::mov_register(
-                            registers,
-                            first_reg.into(),
-                            Value::UInt(num_args as u64),
-                        );
                         if l.rest {
                             let (rest_reg, v) =
                                 Self::setup_rest(&l, registers, first_reg, num_args);
@@ -674,17 +729,19 @@ impl Vm {
                     }
                     Object::Closure(l, caps) => {
                         let l = l.clone();
-                        if !tail_call {
-                            let frame = CallFrame {
+                        let frame = if !tail_call {
+                            let frame = Object::CallFrame(Box::new(CallFrame {
                                 chunk,
                                 ip: self.ip,
                                 current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
-                            };
-                            self.call_stack.push(frame);
+                            }));
                             self.stack_top += first_reg as usize;
-                        }
+                            Some(frame)
+                        } else {
+                            None
+                        };
                         self.this_fn = Some(lambda);
                         self.ip = 0;
                         let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
@@ -701,11 +758,13 @@ impl Vm {
                                 Self::mov_register(registers, cap_first + i, Value::Binding(*c));
                             }
                         }
-                        Self::mov_register(
-                            registers,
-                            first_reg.into(),
-                            Value::UInt(num_args as u64),
-                        );
+                        if let Some(frame) = frame {
+                            Self::mov_register(
+                                registers,
+                                first_reg.into(),
+                                Value::Reference(self.alloc(frame)),
+                            );
+                        }
                         clear_opts(&l, registers, first_reg, num_args);
                         Ok(l)
                     }
@@ -718,8 +777,6 @@ impl Vm {
                         }
                         let arg = registers[first_reg as usize + 1];
                         self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
-                        self.call_stack.clear();
-                        self.call_stack.extend_from_slice(&k.call_stack[..]);
                         self.stack[k.arg_reg] = arg;
                         self.stack_top = k.frame.stack_top;
                         self.ip = k.frame.ip;
@@ -882,21 +939,29 @@ impl Vm {
     }
 
     pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
-        self.stack[0] = Value::UInt(params.len() as u64);
-        if !params.is_empty() {
-            self.stack[1..=params.len()].copy_from_slice(params);
-        }
-        self.execute(chunk)?;
-        Ok(self.stack[0])
-    }
-
-    pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         let stack_top = self.stack_top;
         let ip = self.ip;
         let this_fn = self.this_fn;
         self.this_fn = None;
+        self.stack_top = 0;
+        self.stack[0] = Value::UInt(params.len() as u64);
+        if !params.is_empty() {
+            self.stack[1..=params.len()].copy_from_slice(params);
+        }
+        let res = if let Err(e) = self.execute(chunk) {
+            Err(e)
+        } else {
+            Ok(self.stack[0])
+        };
+        self.stack_top = stack_top;
+        self.ip = ip;
+        self.this_fn = this_fn;
+        res
+    }
+
+    pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         let result = self.execute_internal(chunk);
-        let result = if let Err((e, chunk)) = result {
+        if let Err((e, chunk)) = result {
             self.err_frame = Some(CallFrame {
                 chunk,
                 stack_top: self.stack_top,
@@ -908,15 +973,10 @@ impl Vm {
         } else {
             self.err_frame = None;
             Ok(())
-        };
-        self.stack_top = stack_top;
-        self.ip = ip;
-        self.this_fn = this_fn;
-        result
+        }
     }
 
     fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
-        self.stack_top = 0; // XXX this is probably very wrong...
         let mut registers = self.make_registers(self.stack_top);
         let mut chunk = chunk;
         self.ip = 0;
@@ -937,7 +997,12 @@ impl Vm {
                     return Err((VMError::new_vm("HALT: VM halted and on fire!"), chunk));
                 }
                 RET => {
-                    if let Some(frame) = self.call_stack.pop() {
+                    if let Some(frame) = self.call_frame() {
+                        // Need to break the call frame lifetime from self to avoid extra work.
+                        // This is safe because the stack and heap are not touched so the reference is
+                        // stable.  The unwrap() is OK because the frame can not be NULL.
+                        let frame: &CallFrame =
+                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
                         self.stack_top = frame.stack_top;
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
@@ -951,15 +1016,22 @@ impl Vm {
                 SRET => {
                     let src = decode1!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
-                    self.set_register(registers, 0, val);
-                    if let Some(frame) = self.call_stack.pop() {
+                    let old_top = self.stack_top;
+                    if let Some(frame) = self.call_frame() {
+                        // Need to break the call frame lifetime from self to avoid extra work.
+                        // This is safe because the stack and heap are not touched so the reference is
+                        // stable.  The unwrap() is OK because the frame can not be NULL.
+                        let frame: &CallFrame =
+                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
                         self.stack_top = frame.stack_top;
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
                         self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
+                        registers[old_top] = val;
                     } else {
+                        registers[old_top] = val;
                         return Ok(());
                     }
                 }
@@ -1370,13 +1442,10 @@ impl Vm {
                     let mut stack = Vec::with_capacity(stack_len);
                     stack.resize(stack_len, Value::Undefined);
                     stack[..].copy_from_slice(&self.stack[0..stack_len]);
-                    let mut call_stack = Vec::with_capacity(self.call_stack.len());
-                    call_stack.extend_from_slice(&self.call_stack[0..self.call_stack.len()]);
                     let k = Box::new(Continuation {
                         frame,
                         arg_reg: stack_len,
                         stack,
-                        call_stack,
                     });
                     let k_obj = Value::Reference(self.alloc(Object::Continuation(k)));
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
@@ -2245,16 +2314,16 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
-        chunk.encode0(RET, line)?;
+        chunk.encode3(ADD, 3, 1, 2, line).unwrap();
+        chunk.encode1(SRET, 3, line)?;
         let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const1 = chunk.add_constant(Value::Int(10)) as u16;
         chunk.encode2(CONST, 2, const1, line).unwrap();
-        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
-        chunk.encode0(RET, line)?;
+        chunk.encode3(ADD, 3, 1, 2, line).unwrap();
+        chunk.encode1(SRET, 3, line)?;
         let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -2285,8 +2354,8 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
-        chunk.encode3(ADD, 0, 1, 2, line).unwrap();
-        chunk.encode0(RET, line)?;
+        chunk.encode3(ADD, 3, 1, 2, line).unwrap();
+        chunk.encode1(SRET, 3, line)?;
         let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -2308,14 +2377,14 @@ mod tests {
         vm.stack[50] = add;
         vm.stack[60] = add_ten;
         chunk.encode3(CALL, 60, 1, 3, line).unwrap();
-        chunk.encode2(TCALL, 50, 2, line).unwrap();
-        // The TCALL will keep HALT from executing.
-        chunk.encode0(HALT, line)?;
+        // tail call at the top level does not make sense
+        //chunk.encode2(TCALL, 50, 2, line).unwrap();
+        chunk.encode0(RET, line)?;
 
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
-        assert!(result == 7);
+        //let result = vm.stack[0].get_int()?;
+        //assert!(result == 7);
         let result = vm.stack[3].get_int()?;
         assert!(result == 12);
 
@@ -2350,8 +2419,10 @@ mod tests {
         let line = 1;
         let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_b })) as u16;
         chunk.encode2(CONST, 10, const1, line).unwrap();
-        chunk.encode3(CALL, 10, 2, 0, line).unwrap();
-        chunk.encode0(RET, line)?;
+        chunk.encode2(MOV, 4, 1, line).unwrap();
+        chunk.encode2(MOV, 5, 2, line).unwrap();
+        chunk.encode3(CALL, 10, 2, 3, line).unwrap();
+        chunk.encode1(SRET, 3, line)?;
         let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -2365,9 +2436,10 @@ mod tests {
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
         let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: add_10 })) as u16;
-        chunk.encode2(CONST, 3, const1, line).unwrap();
-        chunk.encode3(CALL, 3, 1, 0, line).unwrap();
-        chunk.encode0(RET, line)?;
+        chunk.encode2(CONST, 4, const1, line).unwrap();
+        chunk.encode2(MOV, 3, 1, line).unwrap();
+        chunk.encode3(CALL, 4, 1, 2, line).unwrap();
+        chunk.encode1(SRET, 2, line)?;
         let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
@@ -2376,27 +2448,26 @@ mod tests {
         vm.stack[1] = add_ten;
         vm.stack[3] = Value::Int(6);
         vm.stack[4] = Value::Int(3);
-        vm.stack[6] = Value::Int(12);
+        vm.stack[8] = Value::Int(12);
         let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
         chunk.encode3(CALL, 0, 2, 2, line).unwrap();
-        chunk.encode3(CALL, 1, 1, 5, line).unwrap();
-        chunk.encode2(CONST, 8, const1, line).unwrap();
-        chunk.encode3(CALL, 8, 0, 9, line).unwrap();
+        chunk.encode3(CALL, 1, 1, 7, line).unwrap();
+        chunk.encode2(CONST, 15, const1, line).unwrap();
+        chunk.encode3(CALL, 15, 0, 15, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[2].get_int()?;
         assert!(result == 9);
-        let result = vm.stack[5].get_int()?;
+        let result = vm.stack[7].get_int()?;
         assert!(result == 22);
-        match vm.stack[9] {
+        match vm.stack[15] {
             Value::Reference(h) => match vm.heap.get(h) {
                 Object::String(s) => assert!(s == "builtin hello"),
                 _ => panic!("bad make_str call."),
             },
             _ => panic!("bad make_str call"),
         }
-        assert!(vm.call_stack.is_empty());
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2411,8 +2482,8 @@ mod tests {
         let const1 = chunk.add_constant(Value::Builtin(CallFunc { func: make_str })) as u16;
         chunk.encode3(CALL, 0, 2, 2, line).unwrap();
         chunk.encode3(CALL, 1, 1, 5, line).unwrap();
-        chunk.encode2(CONST, 8, const1, line).unwrap();
-        chunk.encode3(CALL, 8, 0, 9, line).unwrap();
+        chunk.encode2(CONST, 10, const1, line).unwrap();
+        chunk.encode3(CALL, 10, 0, 11, line).unwrap();
         chunk.encode0(RET, line)?;
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
@@ -2420,7 +2491,7 @@ mod tests {
         assert!(result == 9);
         let result = vm.stack[5].get_int()?;
         assert!(result == 22);
-        match vm.stack[9] {
+        match vm.stack[11] {
             Value::Reference(h) => match vm.heap.get(h) {
                 Object::String(s) => assert!(s == "builtin hello"),
                 _ => panic!("bad make_str call."),

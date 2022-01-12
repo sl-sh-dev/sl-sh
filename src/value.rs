@@ -535,6 +535,7 @@ impl Value {
                 Object::Macro(_) => "#<Macro>".to_string(),
                 Object::Closure(_, _) => "#<Lambda>".to_string(),
                 Object::Continuation(_) => "#<Continuation>".to_string(),
+                Object::CallFrame(_) => "#<CallFrame>".to_string(),
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 Object::Vector(v) => {
@@ -599,6 +600,7 @@ impl Value {
                 Object::Macro(_) => "Macro",
                 Object::Closure(_, _) => "Lambda",
                 Object::Continuation(_) => "Continuation",
+                Object::CallFrame(_) => "CallFrame",
                 //Object::Macro(_) => "Macro".to_string(),
                 //Object::Process(_) => "Process".to_string(),
                 /*Object::Function(f) => {
@@ -640,7 +642,7 @@ impl Value {
 pub struct Globals {
     objects: Vec<Value>,
     objects_map: HashMap<Interned, usize>,
-    doc_strings: HashMap<Interned, String>,
+    _doc_strings: HashMap<Interned, String>,
 }
 
 impl Default for Globals {
@@ -654,7 +656,7 @@ impl Globals {
         Globals {
             objects: Vec::new(),
             objects_map: HashMap::new(),
-            doc_strings: HashMap::new(),
+            _doc_strings: HashMap::new(),
         }
     }
 
