@@ -232,6 +232,8 @@ pub struct Vm {
     stack_top: usize,
     ip: usize,
     current_ip: usize,
+    callframe_id: usize,
+    defers: Vec<Value>,
 }
 
 impl Default for Vm {
@@ -256,6 +258,8 @@ impl Vm {
             stack_top: 0,
             ip: 0,
             current_ip: 0,
+            callframe_id: 0,
+            defers: Vec::new(),
         }
     }
 
@@ -371,7 +375,7 @@ impl Vm {
         registers[idx] = val;
     }
 
-    fn call_frame(&self) -> Option<&CallFrame> {
+    fn _call_frame(&self) -> Option<&CallFrame> {
         self.call_frame_idx(self.stack_top)
     }
 
@@ -379,6 +383,18 @@ impl Vm {
         match self.stack[idx] {
             Value::Reference(h) => match self.get(h) {
                 Object::CallFrame(cf) => Some(cf),
+                _ => None,
+                //_ => panic!("Invalid stack, not a call frame."),
+            },
+            _ => None,
+            //_ => panic!("Invalid stack, not a call frame."),
+        }
+    }
+
+    fn call_frame_mut(&mut self) -> Option<&mut CallFrame> {
+        match self.stack[self.stack_top] {
+            Value::Reference(h) => match self.get_mut(h) {
+                Object::CallFrame(cf) => Some(&mut *cf),
                 _ => None,
                 //_ => panic!("Invalid stack, not a call frame."),
             },
@@ -674,16 +690,17 @@ impl Vm {
                 let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
                     // Go to last call frame so SRET does not mess up the return of a builtin.
-                    if let Some(frame) = self.call_frame() {
+                    if let Some(frame) = self.call_frame_mut() {
                         // Need to break the call frame lifetime from self to avoid extra work.
                         // This is safe because the stack and heap are not touched so the reference is
                         // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &CallFrame =
-                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
+                        let frame: &mut CallFrame =
+                            unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
                         self.stack_top = frame.stack_top;
                         self.ip = frame.ip;
                         self.this_fn = frame.this_fn;
                         self.stack[res_reg] = res;
+                        std::mem::swap(&mut self.defers, &mut frame.defers);
                         Ok(frame.chunk.clone())
                     } else {
                         self.stack[res_reg] = res;
@@ -700,13 +717,17 @@ impl Vm {
                     Object::Lambda(l) => {
                         let l = l.clone();
                         if !tail_call {
+                            let defers = std::mem::take(&mut self.defers);
                             let frame = Object::CallFrame(Box::new(CallFrame {
+                                id: self.callframe_id,
                                 chunk,
                                 ip: self.ip,
                                 current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
+                                defers,
                             }));
+                            self.callframe_id += 1;
                             Self::mov_register(
                                 registers,
                                 first_reg.into(),
@@ -730,13 +751,17 @@ impl Vm {
                     Object::Closure(l, caps) => {
                         let l = l.clone();
                         let frame = if !tail_call {
+                            let defers = std::mem::take(&mut self.defers);
                             let frame = Object::CallFrame(Box::new(CallFrame {
+                                id: self.callframe_id,
                                 chunk,
                                 ip: self.ip,
                                 current_ip: self.current_ip,
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
+                                defers,
                             }));
+                            self.callframe_id += 1;
                             self.stack_top += first_reg as usize;
                             Some(frame)
                         } else {
@@ -963,11 +988,13 @@ impl Vm {
         let result = self.execute_internal(chunk);
         if let Err((e, chunk)) = result {
             self.err_frame = Some(CallFrame {
+                id: 0,
                 chunk,
                 stack_top: self.stack_top,
                 ip: self.ip,
                 current_ip: self.current_ip,
                 this_fn: self.this_fn,
+                defers: std::mem::take(&mut self.defers),
             });
             Err(e)
         } else {
@@ -997,42 +1024,56 @@ impl Vm {
                     return Err((VMError::new_vm("HALT: VM halted and on fire!"), chunk));
                 }
                 RET => {
-                    if let Some(frame) = self.call_frame() {
+                    if let Some(defer) = self.defers.pop() {
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip -= 1;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
+                        registers = self.make_registers(self.stack_top);
+                    } else if let Some(frame) = self.call_frame_mut() {
                         // Need to break the call frame lifetime from self to avoid extra work.
                         // This is safe because the stack and heap are not touched so the reference is
                         // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &CallFrame =
-                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
+                        let frame: &mut CallFrame =
+                            unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
                         self.stack_top = frame.stack_top;
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
                         self.ip = frame.ip;
                         self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
+                        std::mem::swap(&mut self.defers, &mut frame.defers);
                     } else {
                         return Ok(());
                     }
                 }
                 SRET => {
-                    let src = decode1!(chunk.code, &mut self.ip, wide);
-                    let val = get_reg_unref!(registers, src, self);
-                    let old_top = self.stack_top;
-                    if let Some(frame) = self.call_frame() {
-                        // Need to break the call frame lifetime from self to avoid extra work.
-                        // This is safe because the stack and heap are not touched so the reference is
-                        // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &CallFrame =
-                            unsafe { (frame as *const CallFrame).as_ref().unwrap() };
-                        self.stack_top = frame.stack_top;
+                    if let Some(defer) = self.defers.pop() {
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip -= 1;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
-                        chunk = frame.chunk.clone();
-                        self.ip = frame.ip;
-                        self.current_ip = frame.current_ip;
-                        self.this_fn = frame.this_fn;
-                        registers[old_top] = val;
                     } else {
-                        registers[old_top] = val;
-                        return Ok(());
+                        let src = decode1!(chunk.code, &mut self.ip, wide);
+                        let val = get_reg_unref!(registers, src, self);
+                        let old_top = self.stack_top;
+                        if let Some(frame) = self.call_frame_mut() {
+                            // Need to break the call frame lifetime from self to avoid extra work.
+                            // This is safe because the stack and heap are not touched so the reference is
+                            // stable.  The unwrap() is OK because the frame can not be NULL.
+                            let frame: &mut CallFrame =
+                                unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
+                            self.stack_top = frame.stack_top;
+                            registers = self.make_registers(self.stack_top);
+                            chunk = frame.chunk.clone();
+                            self.ip = frame.ip;
+                            self.current_ip = frame.current_ip;
+                            self.this_fn = frame.this_fn;
+                            std::mem::swap(&mut self.defers, &mut frame.defers);
+                            registers[old_top] = val;
+                        } else {
+                            registers[old_top] = val;
+                            return Ok(());
+                        }
                     }
                 }
                 WIDE => wide = true,
@@ -1209,21 +1250,37 @@ impl Vm {
                     registers = self.make_registers(self.stack_top);
                 }
                 TCALL => {
-                    let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
-                    let lambda = get_reg_unref!(registers, lambda, self);
-                    chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                    registers = self.make_registers(self.stack_top); // In case of a builtin call
+                    if let Some(defer) = self.defers.pop() {
+                        // Tail call so do defers first.
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip -= 1;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
+                        registers = self.make_registers(self.stack_top);
+                    } else {
+                        let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
+                        let lambda = get_reg_unref!(registers, lambda, self);
+                        chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                        registers = self.make_registers(self.stack_top); // In case of a builtin call
+                    }
                 }
                 TCALLG => {
-                    let idx = if wide {
-                        decode_u32!(chunk.code, &mut self.ip)
+                    if let Some(defer) = self.defers.pop() {
+                        // Tail call so do defers first.
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip -= 1;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
+                        registers = self.make_registers(self.stack_top);
                     } else {
-                        decode_u16!(chunk.code, &mut self.ip) as u32
-                    };
-                    let num_args = decode1!(chunk.code, &mut self.ip, wide);
-                    let lambda = self.get_global(idx);
-                    chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                    registers = self.make_registers(self.stack_top); // In case of a builtin call
+                        let idx = if wide {
+                            decode_u32!(chunk.code, &mut self.ip)
+                        } else {
+                            decode_u16!(chunk.code, &mut self.ip) as u32
+                        };
+                        let num_args = decode1!(chunk.code, &mut self.ip, wide);
+                        let lambda = self.get_global(idx);
+                        chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
+                        registers = self.make_registers(self.stack_top); // In case of a builtin call
+                    }
                 }
                 CALLM => {
                     let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
@@ -1247,23 +1304,31 @@ impl Vm {
                     }
                 }
                 TCALLM => {
-                    let num_args = decode1!(chunk.code, &mut self.ip, wide);
-                    if let Some(this_fn) = self.this_fn {
-                        chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
-                        registers = self.make_registers(self.stack_top); // In case of a builtin call
+                    if let Some(defer) = self.defers.pop() {
+                        // Tail call so do defers first.
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip -= 1;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
+                        registers = self.make_registers(self.stack_top);
                     } else {
-                        let line = if wide {
-                            chunk.offset_to_line(self.ip - 4)
+                        let num_args = decode1!(chunk.code, &mut self.ip, wide);
+                        if let Some(this_fn) = self.this_fn {
+                            chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
+                            registers = self.make_registers(self.stack_top); // In case of a builtin call
                         } else {
-                            chunk.offset_to_line(self.ip - 2)
-                        };
-                        return Err((
-                            VMError::new_vm(format!(
-                                "TCALLM: Not in an existing lambda call, line {}.",
-                                line.unwrap_or(0)
-                            )),
-                            chunk,
-                        ));
+                            let line = if wide {
+                                chunk.offset_to_line(self.ip - 4)
+                            } else {
+                                chunk.offset_to_line(self.ip - 2)
+                            };
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "TCALLM: Not in an existing lambda call, line {}.",
+                                    line.unwrap_or(0)
+                                )),
+                                chunk,
+                            ));
+                        }
                     }
                 }
                 JMP => {
@@ -1432,11 +1497,13 @@ impl Vm {
                     let (lambda, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
                     let frame = CallFrame {
+                        id: 0,
                         chunk: chunk.clone(),
                         ip: self.ip,
                         current_ip: self.current_ip,
                         stack_top: self.stack_top,
                         this_fn: self.this_fn,
+                        defers: Vec::new(),
                     };
                     let stack_len = self.stack_top + first_reg as usize;
                     let mut stack = Vec::with_capacity(stack_len);
@@ -1451,6 +1518,18 @@ impl Vm {
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
                     registers = self.make_registers(self.stack_top);
+                }
+                DFR => {
+                    let lambda = decode1!(chunk.code, &mut self.ip, wide);
+                    let lambda = get_reg_unref!(registers, lambda, self);
+                    self.defers.push(lambda);
+                }
+                DFRPOP => {
+                    if let Some(defer) = self.defers.pop() {
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
+                        registers = self.make_registers(self.stack_top);
+                    }
                 }
                 ADD => binary_math!(
                     self,

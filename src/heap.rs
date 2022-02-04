@@ -56,11 +56,13 @@ pub struct Meta {
 
 #[derive(Clone, Debug)]
 pub struct CallFrame {
+    pub id: usize,
     pub chunk: Rc<Chunk>,
     pub ip: usize,
     pub current_ip: usize,
     pub stack_top: usize,
     pub this_fn: Option<Value>,
+    pub defers: Vec<Value>,
 }
 
 #[derive(Clone, Debug)]
