@@ -230,6 +230,7 @@ pub struct Vm {
 
     err_frame: Option<CallFrame>,
     stack_top: usize,
+    stack_max: usize,
     ip: usize,
     current_ip: usize,
     callframe_id: usize,
@@ -256,6 +257,7 @@ impl Vm {
             this_fn: None,
             err_frame: None,
             stack_top: 0,
+            stack_max: 0,
             ip: 0,
             current_ip: 0,
             callframe_id: 0,
@@ -630,6 +632,7 @@ impl Vm {
     // The underlying stack should never be deleted or reallocated for the life
     // of Vm so this should be safe.
     fn make_registers(&mut self, start: usize) -> &'static mut [Value] {
+        // XXX Don't need to pass start and use stack_max?
         unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
     }
 
@@ -655,6 +658,59 @@ impl Vm {
             v
         };
         (rest_reg.into(), v)
+    }
+
+    fn k_unshared_stack(&self, stack_top: usize, k: &Continuation) -> Option<(usize, &Vec<Value>)> {
+        if k.frame.stack_top >= stack_top {
+            if let Value::Reference(h) = self.stack[stack_top] {
+                if let Object::CallFrame(frame) = self.get(h) {
+                    if let Value::Reference(k_h) = k.stack[stack_top] {
+                        if let Object::CallFrame(k_frame) = self.get(k_h) {
+                            if frame.id != k_frame.id {
+                                return Some((frame.stack_top, &frame.defers));
+                            }
+                        }
+                    }
+                }
+            }
+        } else if let Value::Reference(h) = self.stack[stack_top] {
+            if let Object::CallFrame(frame) = self.get(h) {
+                return Some((frame.stack_top, &frame.defers));
+            }
+        }
+        None
+    }
+
+    fn k_defers(&self, k: &Continuation) -> Option<Option<usize>> {
+        let mut stack_top = self.stack_top;
+        if stack_top > 0 {
+            while let Some((next_stack_top, defers)) = self.k_unshared_stack(stack_top, k) {
+                if !self.defers.is_empty() {
+                    return Some(None);
+                }
+                if !defers.is_empty() {
+                    return Some(Some(stack_top));
+                }
+                stack_top = next_stack_top;
+            }
+        }
+        None
+    }
+
+    fn k_pop_next_defer(&mut self, next: Option<usize>) -> Option<Value> {
+        if let Some(stack_top) = next {
+            if let Value::Reference(h) = self.stack[stack_top] {
+                if let Object::CallFrame(frame) = self.get_mut(h) {
+                    frame.defers.pop()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            self.defers.pop()
+        }
     }
 
     fn make_call(
@@ -697,6 +753,8 @@ impl Vm {
                         let frame: &mut CallFrame =
                             unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
                         self.stack_top = frame.stack_top;
+                        self.stack_max =
+                            self.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs;
                         self.ip = frame.ip;
                         self.this_fn = frame.this_fn;
                         self.stack[res_reg] = res;
@@ -735,6 +793,7 @@ impl Vm {
                             );
                             self.stack_top += first_reg as usize;
                         }
+                        self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                         self.this_fn = Some(lambda);
                         self.ip = 0;
                         if l.rest {
@@ -767,6 +826,7 @@ impl Vm {
                         } else {
                             None
                         };
+                        self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                         self.this_fn = Some(lambda);
                         self.ip = 0;
                         let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
@@ -794,6 +854,18 @@ impl Vm {
                         Ok(l)
                     }
                     Object::Continuation(k) => {
+                        if let Some(defers) = self.k_defers(k) {
+                            if let Some(defer) = self.k_pop_next_defer(defers) {
+                                let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                                self.ip = self.current_ip;
+                                return self
+                                    .make_call(defer, chunk, registers, first_reg, 0, false);
+                            }
+                            // If k_defers returns Some then k_pop_next_defer better
+                            // return something.  Need this to make the borrow checker
+                            // happy.
+                            panic!("No defers but need a defer!");
+                        }
                         if num_args != 1 {
                             return Err((
                                 VMError::new_vm("Continuation takes one argument."),
@@ -804,15 +876,23 @@ impl Vm {
                         self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
                         self.stack[k.arg_reg] = arg;
                         self.stack_top = k.frame.stack_top;
+                        self.stack_max =
+                            self.stack_top + k.frame.chunk.input_regs + k.frame.chunk.extra_regs;
                         self.ip = k.frame.ip;
                         self.current_ip = k.frame.current_ip;
                         self.this_fn = k.frame.this_fn;
                         Ok(k.frame.chunk.clone())
                     }
-                    _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
+                    _ => Err((
+                        VMError::new_vm(format!("CALL: Not a callable {:?}/{:?}.", lambda, rf)),
+                        chunk,
+                    )),
                 }
             }
-            _ => Err((VMError::new_vm("CALL: Not a callable."), chunk)),
+            _ => Err((
+                VMError::new_vm(format!("CALL: Not a callable {:?}.", lambda)),
+                chunk,
+            )),
         }
     }
 
@@ -965,13 +1045,15 @@ impl Vm {
 
     pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
         let stack_top = self.stack_top;
+        let stack_max = self.stack_max;
         let ip = self.ip;
         let this_fn = self.this_fn;
         self.this_fn = None;
-        self.stack_top = 0;
-        self.stack[0] = Value::UInt(params.len() as u64);
+        self.stack_top = self.stack_max;
+        self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+        self.stack[self.stack_top] = Value::UInt(params.len() as u64);
         if !params.is_empty() {
-            self.stack[1..=params.len()].copy_from_slice(params);
+            self.stack[self.stack_top + 1..=params.len()].copy_from_slice(params);
         }
         let res = if let Err(e) = self.execute(chunk) {
             Err(e)
@@ -979,14 +1061,22 @@ impl Vm {
             Ok(self.stack[0])
         };
         self.stack_top = stack_top;
+        self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
         res
     }
 
     pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
-        let result = self.execute_internal(chunk);
-        if let Err((e, chunk)) = result {
+        let stack_top = self.stack_top;
+        let stack_max = self.stack_max;
+        let ip = self.ip;
+        let this_fn = self.this_fn;
+        self.this_fn = None;
+        self.stack_top = self.stack_max;
+        self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+
+        let result = if let Err((e, chunk)) = self.execute_internal(chunk) {
             self.err_frame = Some(CallFrame {
                 id: 0,
                 chunk,
@@ -1000,7 +1090,13 @@ impl Vm {
         } else {
             self.err_frame = None;
             Ok(())
-        }
+        };
+
+        self.stack_top = stack_top;
+        self.stack_max = stack_max;
+        self.ip = ip;
+        self.this_fn = this_fn;
+        result
     }
 
     fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
@@ -1026,7 +1122,7 @@ impl Vm {
                 RET => {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip -= 1;
+                        self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
                     } else if let Some(frame) = self.call_frame_mut() {
@@ -1038,6 +1134,7 @@ impl Vm {
                         self.stack_top = frame.stack_top;
                         registers = self.make_registers(self.stack_top);
                         chunk = frame.chunk.clone();
+                        self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
                         self.ip = frame.ip;
                         self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
@@ -1049,7 +1146,7 @@ impl Vm {
                 SRET => {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip -= 1;
+                        self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
                     } else {
@@ -1065,6 +1162,7 @@ impl Vm {
                             self.stack_top = frame.stack_top;
                             registers = self.make_registers(self.stack_top);
                             chunk = frame.chunk.clone();
+                            self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
                             self.ip = frame.ip;
                             self.current_ip = frame.current_ip;
                             self.this_fn = frame.this_fn;
@@ -1213,10 +1311,9 @@ impl Vm {
                             (l.clone(), caps)
                         } else {
                             return Err((
-                                VMError::new_vm(format!(
-                                    "CLOSE: requires a lambda, got {:?}.",
-                                    lambda
-                                )),
+                                VMError::new_vm(
+                                    format!("CLOSE: requires a lambda, got {:?}.", lr,),
+                                ),
                                 chunk,
                             ));
                         }
@@ -1253,7 +1350,7 @@ impl Vm {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip -= 1;
+                        self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
                     } else {
@@ -1267,7 +1364,7 @@ impl Vm {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip -= 1;
+                        self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
                     } else {
@@ -1307,7 +1404,7 @@ impl Vm {
                     if let Some(defer) = self.defers.pop() {
                         // Tail call so do defers first.
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                        self.ip -= 1;
+                        self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers(self.stack_top);
                     } else {
@@ -1505,13 +1602,12 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers: Vec::new(),
                     };
-                    let stack_len = self.stack_top + first_reg as usize;
-                    let mut stack = Vec::with_capacity(stack_len);
-                    stack.resize(stack_len, Value::Undefined);
-                    stack[..].copy_from_slice(&self.stack[0..stack_len]);
+                    let mut stack = Vec::with_capacity(self.stack_max);
+                    stack.resize(self.stack_max, Value::Undefined);
+                    stack[..].copy_from_slice(&self.stack[0..self.stack_max]);
                     let k = Box::new(Continuation {
                         frame,
-                        arg_reg: stack_len,
+                        arg_reg: self.stack_top + first_reg as usize, //stack_len,
                         stack,
                     });
                     let k_obj = Value::Reference(self.alloc(Object::Continuation(k)));
