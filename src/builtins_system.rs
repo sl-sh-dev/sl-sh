@@ -188,13 +188,7 @@ fn builtin_jobs(
         // Update the list before printing.
         reap_procs(environment)?;
         for (i, job) in environment.jobs.borrow().iter().enumerate() {
-            println!(
-                "[{}]\t{}\t{:?}\t{:?}",
-                i,
-                job.status.to_string(),
-                job.pids,
-                job.names
-            );
+            println!("[{}]\t{}\t{:?}\t{:?}", i, job.status, job.pids, job.names);
         }
         Ok(Expression::alloc_data(ExpEnum::Nil))
     }

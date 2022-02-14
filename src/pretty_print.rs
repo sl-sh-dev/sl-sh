@@ -41,10 +41,10 @@ impl fmt::Display for Expression {
             }
             match &l.body {
                 MultiExpression::None => {}
-                MultiExpression::Single(body) => write!(f, "{}", body.to_string())?,
+                MultiExpression::Single(body) => write!(f, "{}", body)?,
                 MultiExpression::Multiple(body) => {
                     for b in body {
-                        write!(f, "{}", b.to_string())?;
+                        write!(f, "{}", b)?;
                     }
                 }
             }
@@ -140,7 +140,7 @@ impl fmt::Display for Expression {
                         }
                     }
                 } else {
-                    write!(f, "({} . {})", e1.to_string(), e2.to_string())
+                    write!(f, "({} . {})", e1, e2)
                 }
             }
             ExpEnum::Nil => f.write_str("nil"),
@@ -244,7 +244,7 @@ fn pretty_print_int(
                 }
                 writer.write_all(b")")?;
             } else {
-                write!(writer, "({} . {})", e1.to_string(), e2.to_string())?;
+                write!(writer, "({} . {})", e1, e2)?;
             }
         }
         ExpEnum::Nil => write!(writer, "nil")?,
@@ -263,13 +263,13 @@ fn pretty_print_int(
             }
         }
         ExpEnum::String(_, _) => {
-            write!(writer, "{}", expression.to_string())?;
+            write!(writer, "{}", expression)?;
         }
         ExpEnum::Char(_c) => {
-            write!(writer, "{}", expression.to_string())?;
+            write!(writer, "{}", expression)?;
         }
         ExpEnum::CodePoint(_c) => {
-            write!(writer, "{}", expression.to_string())?;
+            write!(writer, "{}", expression)?;
         }
         ExpEnum::Lambda(l) => {
             if l.no_recur {

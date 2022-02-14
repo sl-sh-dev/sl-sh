@@ -964,19 +964,19 @@ impl Expression {
                 drop(procs);
                 wait_pid(environment, *pid, None);
             }
-            ExpEnum::Function(_) => write!(writer, "{}", self.to_string())?,
-            ExpEnum::Vector(_) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Function(_) => write!(writer, "{}", self)?,
+            ExpEnum::Vector(_) => write!(writer, "{}", self)?,
             ExpEnum::Values(v) => {
                 if v.is_empty() {
-                    write!(writer, "{}", self.to_string())?;
+                    write!(writer, "{}", self)?;
                 } else {
                     let v: Expression = (&v[0]).clone();
                     v.writef(environment, writer)?;
                 }
             }
-            ExpEnum::Pair(_, _) => write!(writer, "{}", self.to_string())?,
-            ExpEnum::Nil => write!(writer, "{}", self.to_string())?,
-            ExpEnum::HashMap(_map) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::Pair(_, _) => write!(writer, "{}", self)?,
+            ExpEnum::Nil => write!(writer, "{}", self)?,
+            ExpEnum::HashMap(_map) => write!(writer, "{}", self)?,
             ExpEnum::File(file) => {
                 let mut file_d = file.try_borrow_mut().map_err(|_| {
                     LispError::new("Invalid file, are you trying to read and write the same file?")
@@ -1011,11 +1011,11 @@ impl Expression {
                     }
                     _ => {
                         drop(file_d);
-                        write!(writer, "{}", self.to_string())?;
+                        write!(writer, "{}", self)?;
                     }
                 }
             }
-            ExpEnum::LazyFn(_, _) => write!(writer, "{}", self.to_string())?,
+            ExpEnum::LazyFn(_, _) => write!(writer, "{}", self)?,
             ExpEnum::Wrapper(exp) => {
                 let exp: Expression = exp.clone();
                 exp.writef(environment, writer)?;
@@ -1023,7 +1023,7 @@ impl Expression {
             ExpEnum::String(s, _) => write!(writer, "{}", s)?, // Do not quote strings.
             ExpEnum::Char(c) => write!(writer, "{}", c)?,
             ExpEnum::CodePoint(c) => write!(writer, "{}", c)?,
-            _ => write!(writer, "{}", self.to_string())?,
+            _ => write!(writer, "{}", self)?,
         }
         writer.flush()?;
         Ok(())
