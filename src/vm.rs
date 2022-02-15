@@ -394,7 +394,11 @@ impl Vm {
     }
 
     fn call_frame_mut(&mut self) -> Option<&mut CallFrame> {
-        match self.stack[self.stack_top] {
+        self.call_frame_mut_idx(self.stack_top)
+    }
+
+    fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
+        match self.stack[idx] {
             Value::Reference(h) => match self.get_mut(h) {
                 Object::CallFrame(cf) => Some(&mut *cf),
                 _ => None,
@@ -669,7 +673,11 @@ impl Vm {
                             if frame.id != k_frame.id {
                                 return Some((frame.stack_top, &frame.defers));
                             }
+                        } else {
+                            return Some((frame.stack_top, &frame.defers));
                         }
+                    } else {
+                        return Some((frame.stack_top, &frame.defers));
                     }
                 }
             }
@@ -681,36 +689,25 @@ impl Vm {
         None
     }
 
-    fn k_defers(&self, k: &Continuation) -> Option<Option<usize>> {
+    fn k_defers(&self, k: &Continuation) -> (bool, Option<usize>) {
+        if !self.defers.is_empty() {
+            return (true, None);
+        }
         let mut stack_top = self.stack_top;
-        if stack_top > 0 {
-            while let Some((next_stack_top, defers)) = self.k_unshared_stack(stack_top, k) {
-                if !self.defers.is_empty() {
-                    return Some(None);
-                }
-                if !defers.is_empty() {
-                    return Some(Some(stack_top));
-                }
-                stack_top = next_stack_top;
+        while let Some((next_stack_top, defers)) = self.k_unshared_stack(stack_top, k) {
+            if stack_top == next_stack_top {
+                break;
             }
-        }
-        None
-    }
-
-    fn k_pop_next_defer(&mut self, next: Option<usize>) -> Option<Value> {
-        if let Some(stack_top) = next {
-            if let Value::Reference(h) = self.stack[stack_top] {
-                if let Object::CallFrame(frame) = self.get_mut(h) {
-                    frame.defers.pop()
+            if !defers.is_empty() {
+                return if self.k_unshared_stack(next_stack_top, k).is_none() {
+                    (false, Some(stack_top))
                 } else {
-                    None
-                }
-            } else {
-                None
+                    (true, Some(stack_top))
+                };
             }
-        } else {
-            self.defers.pop()
+            stack_top = next_stack_top;
         }
+        (false, None)
     }
 
     fn make_call(
@@ -723,8 +720,7 @@ impl Vm {
         tail_call: bool,
     ) -> Result<Rc<Chunk>, (VMError, Rc<Chunk>)> {
         // Clear out the unused optional regs.
-        // Execute will clear working set to avoid writing to globals or closures by
-        // accident.
+        // Will clear working set to avoid writing to globals or closures by accident.
         fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
             // First clear any optional arguments.
             if num_args < (l.args + l.opt_args) {
@@ -738,7 +734,8 @@ impl Vm {
             }
         }
 
-        match lambda {
+        let mut do_cont = false;
+        let result = match lambda {
             Value::Builtin(f) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
                 let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])
@@ -854,34 +851,39 @@ impl Vm {
                         Ok(l)
                     }
                     Object::Continuation(k) => {
-                        if let Some(defers) = self.k_defers(k) {
-                            if let Some(defer) = self.k_pop_next_defer(defers) {
-                                let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                                self.ip = self.current_ip;
-                                return self
-                                    .make_call(defer, chunk, registers, first_reg, 0, false);
-                            }
-                            // If k_defers returns Some then k_pop_next_defer better
-                            // return something.  Need this to make the borrow checker
-                            // happy.
-                            panic!("No defers but need a defer!");
-                        }
                         if num_args != 1 {
                             return Err((
                                 VMError::new_vm("Continuation takes one argument."),
                                 chunk,
                             ));
                         }
-                        let arg = registers[first_reg as usize + 1];
-                        self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
-                        self.stack[k.arg_reg] = arg;
-                        self.stack_top = k.frame.stack_top;
-                        self.stack_max =
-                            self.stack_top + k.frame.chunk.input_regs + k.frame.chunk.extra_regs;
-                        self.ip = k.frame.ip;
-                        self.current_ip = k.frame.current_ip;
-                        self.this_fn = k.frame.this_fn;
-                        Ok(k.frame.chunk.clone())
+                        let (defered, from) = self.k_defers(k);
+                        if let Some(from) = from {
+                            // expect ok because this will be a call frame.
+                            let frame =
+                                self.call_frame_mut_idx(from).expect("Invalid frame index!");
+                            // Need to break the call frame lifetime from self to avoid extra work.
+                            // This is safe because the stack and heap are not touched so the reference is
+                            // stable.  The unwrap() is OK because the frame can not be NULL.
+                            let frame: &mut CallFrame =
+                                unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
+                            std::mem::swap(&mut self.defers, &mut frame.defers);
+                        }
+                        if defered {
+                            if let Some(defer) = self.defers.pop() {
+                                let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                                self.ip = self.current_ip;
+                                self.make_call(defer, chunk, registers, first_reg, 0, false)
+                            } else {
+                                // If k_defers returns true than self.defers.pop() better
+                                // return something.  Need this to make the borrow checker
+                                // happy.
+                                panic!("No defers but need a defer!");
+                            }
+                        } else {
+                            do_cont = true;
+                            Ok(chunk)
+                        }
                     }
                     _ => Err((
                         VMError::new_vm(format!("CALL: Not a callable {:?}/{:?}.", lambda, rf)),
@@ -893,6 +895,34 @@ impl Vm {
                 VMError::new_vm(format!("CALL: Not a callable {:?}.", lambda)),
                 chunk,
             )),
+        };
+        if do_cont {
+            // Had to break this out for continuations. Handling defers makes this necessary.
+            match lambda {
+                Value::Reference(h) => {
+                    let rf = self.heap.get(h);
+                    match rf {
+                        Object::Continuation(k) => {
+                            let arg = registers[first_reg as usize + 1];
+                            self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
+                            self.stack[k.arg_reg] = arg;
+                            self.stack_top = k.frame.stack_top;
+                            self.stack_max = self.stack_top
+                                + k.frame.chunk.input_regs
+                                + k.frame.chunk.extra_regs;
+                            self.ip = k.frame.ip;
+                            self.current_ip = k.frame.current_ip;
+                            self.this_fn = k.frame.this_fn;
+                            let chunk = k.frame.chunk.clone();
+                            Ok(chunk)
+                        }
+                        _ => panic!("Must be a continuation!"),
+                    }
+                }
+                _ => panic!("Must be a continuation!"),
+            }
+        } else {
+            result
         }
     }
 
