@@ -7,6 +7,8 @@ use crate::interner::*;
 use crate::opcodes::*;
 use crate::value::*;
 
+const STACK_CAP: usize = 1024;
+
 macro_rules! decode_u16 {
     ($code:expr, $ip:expr) => {{
         let idx1 = $code[*$ip];
@@ -246,7 +248,7 @@ impl Default for Vm {
 impl Vm {
     pub fn new() -> Self {
         let globals = Globals::new();
-        let mut stack = Vec::with_capacity(1024);
+        let mut stack = Vec::with_capacity(STACK_CAP);
         stack.resize(1024, Value::Undefined);
         Vm {
             interner: Interner::with_capacity(8192),
@@ -635,9 +637,8 @@ impl Vm {
     // Need to break the registers lifetime away from self or we can not do much...
     // The underlying stack should never be deleted or reallocated for the life
     // of Vm so this should be safe.
-    fn make_registers(&mut self, start: usize) -> &'static mut [Value] {
-        // XXX Don't need to pass start and use stack_max?
-        unsafe { &mut *(&mut self.stack[start..] as *mut [Value]) }
+    fn make_registers(&mut self) -> &'static mut [Value] {
+        unsafe { &mut *(&mut self.stack[self.stack_top..] as *mut [Value]) }
     }
 
     fn setup_rest(
@@ -1130,7 +1131,7 @@ impl Vm {
     }
 
     fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
-        let mut registers = self.make_registers(self.stack_top);
+        let mut registers = self.make_registers();
         let mut chunk = chunk;
         self.ip = 0;
         let mut wide = false;
@@ -1154,7 +1155,7 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else if let Some(frame) = self.call_frame_mut() {
                         // Need to break the call frame lifetime from self to avoid extra work.
                         // This is safe because the stack and heap are not touched so the reference is
@@ -1162,7 +1163,7 @@ impl Vm {
                         let frame: &mut CallFrame =
                             unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
                         self.stack_top = frame.stack_top;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                         chunk = frame.chunk.clone();
                         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
                         self.ip = frame.ip;
@@ -1178,7 +1179,7 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else {
                         let src = decode1!(chunk.code, &mut self.ip, wide);
                         let val = get_reg_unref!(registers, src, self);
@@ -1190,7 +1191,7 @@ impl Vm {
                             let frame: &mut CallFrame =
                                 unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
                             self.stack_top = frame.stack_top;
-                            registers = self.make_registers(self.stack_top);
+                            registers = self.make_registers();
                             chunk = frame.chunk.clone();
                             self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
                             self.ip = frame.ip;
@@ -1363,7 +1364,7 @@ impl Vm {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, lambda, self);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
-                    registers = self.make_registers(self.stack_top);
+                    registers = self.make_registers();
                 }
                 CALLG => {
                     let idx = if wide {
@@ -1374,7 +1375,7 @@ impl Vm {
                     let (num_args, first_reg) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = self.get_global(idx);
                     chunk = self.make_call(lambda, chunk, registers, first_reg, num_args, false)?;
-                    registers = self.make_registers(self.stack_top);
+                    registers = self.make_registers();
                 }
                 TCALL => {
                     if let Some(defer) = self.defers.pop() {
@@ -1382,12 +1383,12 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else {
                         let (lambda, num_args) = decode2!(chunk.code, &mut self.ip, wide);
                         let lambda = get_reg_unref!(registers, lambda, self);
                         chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                        registers = self.make_registers(self.stack_top); // In case of a builtin call
+                        registers = self.make_registers(); // In case of a builtin call
                     }
                 }
                 TCALLG => {
@@ -1396,7 +1397,7 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else {
                         let idx = if wide {
                             decode_u32!(chunk.code, &mut self.ip)
@@ -1406,7 +1407,7 @@ impl Vm {
                         let num_args = decode1!(chunk.code, &mut self.ip, wide);
                         let lambda = self.get_global(idx);
                         chunk = self.make_call(lambda, chunk, registers, 0, num_args, true)?;
-                        registers = self.make_registers(self.stack_top); // In case of a builtin call
+                        registers = self.make_registers(); // In case of a builtin call
                     }
                 }
                 CALLM => {
@@ -1414,7 +1415,7 @@ impl Vm {
                     if let Some(this_fn) = self.this_fn {
                         chunk =
                             self.make_call(this_fn, chunk, registers, first_reg, num_args, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else {
                         let line = if wide {
                             chunk.offset_to_line(self.ip - 4)
@@ -1436,12 +1437,12 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     } else {
                         let num_args = decode1!(chunk.code, &mut self.ip, wide);
                         if let Some(this_fn) = self.this_fn {
                             chunk = self.make_call(this_fn, chunk, registers, 0, num_args, true)?;
-                            registers = self.make_registers(self.stack_top); // In case of a builtin call
+                            registers = self.make_registers(); // In case of a builtin call
                         } else {
                             let line = if wide {
                                 chunk.offset_to_line(self.ip - 4)
@@ -1643,7 +1644,7 @@ impl Vm {
                     let k_obj = Value::Reference(self.alloc(Object::Continuation(k)));
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
-                    registers = self.make_registers(self.stack_top);
+                    registers = self.make_registers();
                 }
                 DFR => {
                     let lambda = decode1!(chunk.code, &mut self.ip, wide);
@@ -1654,7 +1655,7 @@ impl Vm {
                     if let Some(defer) = self.defers.pop() {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
-                        registers = self.make_registers(self.stack_top);
+                        registers = self.make_registers();
                     }
                 }
                 ADD => binary_math!(
