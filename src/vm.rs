@@ -229,6 +229,7 @@ pub struct Vm {
     globals: Globals,
     upvals: Vec<Value>, // XXX these need to be GCed...
     this_fn: Option<Value>,
+    on_error: Option<Value>,
 
     err_frame: Option<CallFrame>,
     stack_top: usize,
@@ -257,6 +258,7 @@ impl Vm {
             globals,
             upvals: Vec::new(),
             this_fn: None,
+            on_error: None,
             err_frame: None,
             stack_top: 0,
             stack_max: 0,
@@ -782,6 +784,7 @@ impl Vm {
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
                                 defers,
+                                on_error: self.on_error,
                             }));
                             self.callframe_id += 1;
                             Self::mov_register(
@@ -817,6 +820,7 @@ impl Vm {
                                 stack_top: self.stack_top,
                                 this_fn: self.this_fn,
                                 defers,
+                                on_error: self.on_error,
                             }));
                             self.callframe_id += 1;
                             self.stack_top += first_reg as usize;
@@ -914,6 +918,7 @@ impl Vm {
                             self.ip = k.frame.ip;
                             self.current_ip = k.frame.current_ip;
                             self.this_fn = k.frame.this_fn;
+                            self.on_error = k.frame.on_error;
                             let chunk = k.frame.chunk.clone();
                             Ok(chunk)
                         }
@@ -1103,30 +1108,60 @@ impl Vm {
         let stack_max = self.stack_max;
         let ip = self.ip;
         let this_fn = self.this_fn;
+        let on_error = self.on_error;
         self.this_fn = None;
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+        let mut chunk = chunk;
 
-        let result = if let Err((e, chunk)) = self.execute_internal(chunk) {
-            self.err_frame = Some(CallFrame {
-                id: 0,
-                chunk,
-                stack_top: self.stack_top,
-                ip: self.ip,
-                current_ip: self.current_ip,
-                this_fn: self.this_fn,
-                defers: std::mem::take(&mut self.defers),
-            });
-            Err(e)
-        } else {
-            self.err_frame = None;
-            Ok(())
-        };
+        let mut done = false;
+        let mut result = Ok(());
+        while !done {
+            result = if let Err((e, echunk)) = self.execute_internal(chunk.clone()) {
+                self.err_frame = Some(CallFrame {
+                    id: 0,
+                    chunk: echunk,
+                    stack_top: self.stack_top,
+                    ip: self.ip,
+                    current_ip: self.current_ip,
+                    this_fn: self.this_fn,
+                    defers: std::mem::take(&mut self.defers),
+                    on_error: self.on_error,
+                });
+                if let Some(on_error) = self.on_error {
+                    let registers = self.make_registers();
+                    registers[1] = Value::Keyword(self.intern(e.key));
+                    registers[2] = match &e.obj {
+                        VMErrorObj::Message(msg) => Value::StringConst(self.intern(msg)),
+                        VMErrorObj::Object(v) => *v,
+                    };
+                    self.on_error = None;
+                    match self.make_call(on_error, chunk.clone(), registers, 0, 2, true) {
+                        Ok(c) => {
+                            chunk = c;
+                            Err(e)
+                        }
+                        Err((ne, _c)) => {
+                            done = true;
+                            Err(ne)
+                        }
+                    }
+                } else {
+                    done = true;
+                    Err(e)
+                }
+            } else {
+                self.err_frame = None;
+                done = true;
+                Ok(())
+            };
+        }
 
         self.stack_top = stack_top;
         self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
+        self.on_error = on_error;
         result
     }
 
@@ -1169,6 +1204,7 @@ impl Vm {
                         self.ip = frame.ip;
                         self.current_ip = frame.current_ip;
                         self.this_fn = frame.this_fn;
+                        self.on_error = frame.on_error;
                         std::mem::swap(&mut self.defers, &mut frame.defers);
                     } else {
                         return Ok(());
@@ -1197,6 +1233,7 @@ impl Vm {
                             self.ip = frame.ip;
                             self.current_ip = frame.current_ip;
                             self.this_fn = frame.this_fn;
+                            self.on_error = frame.on_error;
                             std::mem::swap(&mut self.defers, &mut frame.defers);
                             registers[old_top] = val;
                         } else {
@@ -1632,6 +1669,7 @@ impl Vm {
                         stack_top: self.stack_top,
                         this_fn: self.this_fn,
                         defers: Vec::new(),
+                        on_error: self.on_error,
                     };
                     let mut stack = Vec::with_capacity(self.stack_max);
                     stack.resize(self.stack_max, Value::Undefined);
@@ -1656,6 +1694,20 @@ impl Vm {
                         let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers();
+                    }
+                }
+                ONERR => {
+                    let on_error_reg = decode1!(chunk.code, &mut self.ip, wide);
+                    let on_error = get_reg_unref!(registers, on_error_reg, self);
+                    if let Some(oe) = self.on_error {
+                        Self::mov_register(registers, on_error_reg as usize, oe);
+                    } else {
+                        Self::mov_register(registers, on_error_reg as usize, Value::Nil);
+                    }
+                    if let Value::Nil = on_error {
+                        self.on_error = None;
+                    } else {
+                        self.on_error = Some(on_error);
                     }
                 }
                 ADD => binary_math!(

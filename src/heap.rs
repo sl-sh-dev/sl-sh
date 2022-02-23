@@ -63,6 +63,7 @@ pub struct CallFrame {
     pub stack_top: usize,
     pub this_fn: Option<Value>,
     pub defers: Vec<Value>,
+    pub on_error: Option<Value>,
 }
 
 #[derive(Clone, Debug)]

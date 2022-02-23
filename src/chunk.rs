@@ -724,6 +724,12 @@ impl Chunk {
                 println!("DFRPOP");
                 Ok(false)
             }
+            ONERR => {
+                print!("ONERR  \t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             JMP => {
                 print!("JMP    \t");
                 disassemble_immediate!(code, wide);
