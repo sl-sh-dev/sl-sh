@@ -757,6 +757,7 @@ impl Vm {
                             self.stack_top + frame.chunk.input_regs + frame.chunk.extra_regs;
                         self.ip = frame.ip;
                         self.this_fn = frame.this_fn;
+                        self.on_error = frame.on_error;
                         self.stack[res_reg] = res;
                         std::mem::swap(&mut self.defers, &mut frame.defers);
                         Ok(frame.chunk.clone())
