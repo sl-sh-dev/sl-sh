@@ -644,25 +644,28 @@ impl Vm {
     }
 
     fn setup_rest(
+        &mut self,
         chunk: &Rc<Chunk>,
         registers: &mut [Value],
         first_reg: u16,
         num_args: u16,
-    ) -> (usize, Vec<Value>) {
+    ) -> (usize, Value) {
         let rest_reg = first_reg + chunk.args + chunk.opt_args;
         let v = if num_args < (chunk.args + chunk.opt_args) {
-            Vec::with_capacity(0)
+            Value::Nil
         } else {
+            let mut last = Value::Nil;
             let rest_len = (num_args - (chunk.args + chunk.opt_args)) as usize + 1;
-            let mut v = Vec::with_capacity(rest_len);
             for item in registers
                 .iter()
                 .take(rest_reg as usize + rest_len)
                 .skip(rest_reg.into())
+                .rev()
             {
-                v.push(*item);
+                let old_last = last;
+                last = Value::Reference(self.alloc(Object::Pair(*item, old_last, None)));
             }
-            v
+            last
         };
         (rest_reg.into(), v)
     }
@@ -771,6 +774,10 @@ impl Vm {
                 }
             }
             Value::Reference(h) => {
+                // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
+                // This is safe because it does not touch caps, it needs a &mut self so it
+                // can heap allocate.
+                let unsafe_vm: &mut Vm = unsafe { (self as *mut Vm).as_mut().unwrap() };
                 let rf = self.heap.get(h);
                 match rf {
                     Object::Lambda(l) => {
@@ -799,10 +806,8 @@ impl Vm {
                         self.this_fn = Some(lambda);
                         self.ip = 0;
                         if l.rest {
-                            let (rest_reg, v) =
-                                Self::setup_rest(&l, registers, first_reg, num_args);
-                            let h = self.alloc(Object::Vector(v));
-                            Self::mov_register(registers, rest_reg, Value::Reference(h));
+                            let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
+                            Self::mov_register(registers, rest_reg, h);
                         }
                         // XXX TODO- double check num args.
                         // XXX TODO- maybe test for stack overflow vs waiting for a panic.
@@ -834,13 +839,12 @@ impl Vm {
                         self.ip = 0;
                         let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
                         if l.rest {
-                            let (rest_reg, v) =
-                                Self::setup_rest(&l, registers, first_reg, num_args);
+                            let (rest_reg, h) =
+                                unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
                             for (i, c) in caps.iter().enumerate() {
                                 Self::mov_register(registers, cap_first + i, Value::Binding(*c));
                             }
-                            let h = self.alloc(Object::Vector(v));
-                            Self::mov_register(registers, rest_reg, Value::Reference(h));
+                            Self::mov_register(registers, rest_reg, h);
                         } else {
                             for (i, c) in caps.iter().enumerate() {
                                 Self::mov_register(registers, cap_first + i, Value::Binding(*c));
@@ -1085,14 +1089,21 @@ impl Vm {
         let stack_max = self.stack_max;
         let ip = self.ip;
         let this_fn = self.this_fn;
+        let on_error = self.on_error;
         self.this_fn = None;
+        self.on_error = None;
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
         self.stack[self.stack_top] = Value::UInt(params.len() as u64);
         if !params.is_empty() {
             self.stack[self.stack_top + 1..=params.len()].copy_from_slice(params);
         }
-        let res = if let Err(e) = self.execute(chunk) {
+        if chunk.rest {
+            let registers = self.make_registers();
+            let (rest_reg, h) = self.setup_rest(&chunk, registers, 0, params.len() as u16);
+            Self::mov_register(registers, rest_reg, h);
+        }
+        let res = if let Err(e) = self.execute2(chunk) {
             Err(e)
         } else {
             Ok(self.stack[0])
@@ -1101,6 +1112,7 @@ impl Vm {
         self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
+        self.on_error = on_error;
         res
     }
 
@@ -1113,6 +1125,18 @@ impl Vm {
         self.this_fn = None;
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+
+        let result = self.execute2(chunk);
+
+        self.stack_top = stack_top;
+        self.stack_max = stack_max;
+        self.ip = ip;
+        self.this_fn = this_fn;
+        self.on_error = on_error;
+        result
+    }
+
+    fn execute2(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
         let mut chunk = chunk;
 
         let mut done = false;
@@ -1158,11 +1182,6 @@ impl Vm {
             };
         }
 
-        self.stack_top = stack_top;
-        self.stack_max = stack_max;
-        self.ip = ip;
-        self.this_fn = this_fn;
-        self.on_error = on_error;
         result
     }
 
