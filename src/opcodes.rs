@@ -23,9 +23,10 @@ pub const REGB: OpCode = STACK_BASE + 13; // REGB A B - R(A) = Byte(B)
 pub const REGI: OpCode = STACK_BASE + 14; // REGI A B - R(A) = Int(B)
 pub const REGU: OpCode = STACK_BASE + 15; // REGU A B - R(A) = UInt(B)
 pub const CLOSE: OpCode = STACK_BASE + 16; // CLOSE A B - R(A) = closure derived from lambda in R(B)
+pub const BMOV: OpCode = STACK_BASE + 17; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 17;
+const FLOW_BASE: OpCode = STACK_BASE + 18;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs

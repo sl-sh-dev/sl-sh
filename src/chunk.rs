@@ -616,6 +616,16 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            BMOV => {
+                print!("BMOV   \t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                println!();
+                Ok(false)
+            }
             CALL => {
                 print!("CALL   \t");
                 disassemble_operand!(code, true, wide);

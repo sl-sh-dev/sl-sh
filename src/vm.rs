@@ -1270,6 +1270,12 @@ impl Vm {
                     //let val = get_reg!(registers, src);
                     Self::mov_register(registers, dest as usize, val);
                 }
+                BMOV => {
+                    let (dest, src, len) = decode3!(chunk.code, &mut self.ip, wide);
+                    for i in 0..len as usize {
+                        registers[dest as usize + i] = registers[src as usize + i];
+                    }
+                }
                 SET => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);
