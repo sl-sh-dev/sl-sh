@@ -282,7 +282,23 @@ impl Vm {
     }
 
     pub fn alloc(&mut self, obj: Object) -> Handle {
-        self.heap.alloc(obj, |_heap| Ok(()))
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc(obj, |heap| {
+            self.globals.mark(heap);
+            for i in 0..self.stack_max {
+                if let Value::Reference(handle) = self.stack[i] {
+                    heap.mark(handle);
+                }
+            }
+            for upval in &self.upvals {
+                if let Value::Reference(handle) = upval {
+                    heap.mark(*handle);
+                }
+            }
+            Ok(())
+        })
     }
 
     pub fn get(&self, handle: Handle) -> HandleRef<'_> {

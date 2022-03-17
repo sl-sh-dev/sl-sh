@@ -703,6 +703,14 @@ impl Globals {
             .map_or_else(|| Value::Undefined, |v| *v)
     }
 
+    pub fn mark(&self, heap: &mut Heap) {
+        for obj in &self.objects {
+            if let Value::Reference(handle) = obj {
+                heap.mark(*handle);
+            }
+        }
+    }
+
     pub fn dump(&self, vm: &Vm) {
         for (k, v) in self.objects_map.iter() {
             println!(
