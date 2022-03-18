@@ -330,6 +330,29 @@ impl Heap {
         }
     }
 
+    fn mark_chunk(&mut self, chunk: &Chunk, current: usize) {
+        for constant in &chunk.constants {
+            if let Value::Reference(handle) = constant {
+                self.mark_trace(*handle, current);
+            }
+        }
+    }
+
+    fn mark_call_frame(&mut self, call_frame: &CallFrame, current: usize) {
+        self.mark_chunk(&call_frame.chunk, current);
+        if let Some(Value::Reference(handle)) = call_frame.this_fn {
+            self.mark_trace(handle, current);
+        }
+        for defer in &call_frame.defers {
+            if let Value::Reference(handle) = defer {
+                self.mark_trace(*handle, current);
+            }
+        }
+        if let Some(Value::Reference(handle)) = call_frame.on_error {
+            self.mark_trace(handle, current);
+        }
+    }
+
     fn trace(&mut self, idx: usize, current: usize) {
         // This unsafe avoids cloning the object to avoid having a mutable and immutable self.
         // This should be fine because we are not touching objects in a mark, only flags.
@@ -353,12 +376,18 @@ impl Heap {
             Object::Pair(Value::Reference(car), _, _) => self.mark_trace(*car, current),
             Object::Pair(_, Value::Reference(cdr), _) => self.mark_trace(*cdr, current),
             Object::Pair(_, _, _) => {}
-            // XXX TODO- these need some tracing (for instance const).
-            Object::Lambda(_) => {}
-            Object::Macro(_) => {}
-            Object::Closure(_, _) => {}
-            Object::Continuation(_) => {}
-            Object::CallFrame(_) => {}
+            Object::Lambda(chunk) => self.mark_chunk(chunk, current),
+            Object::Macro(chunk) => self.mark_chunk(chunk, current),
+            Object::Closure(chunk, _) => self.mark_chunk(chunk, current),
+            Object::Continuation(continuation) => {
+                self.mark_call_frame(&continuation.frame, current);
+                for obj in &continuation.stack {
+                    if let Value::Reference(handle) = obj {
+                        self.mark_trace(*handle, current);
+                    }
+                }
+            }
+            Object::CallFrame(call_frame) => self.mark_call_frame(call_frame, current),
         }
     }
 
