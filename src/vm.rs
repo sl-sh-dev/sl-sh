@@ -227,7 +227,6 @@ pub struct Vm {
     heap: Heap,
     stack: Vec<Value>,
     globals: Globals,
-    upvals: Vec<Value>, // XXX these need to be GCed...
     this_fn: Option<Value>,
     on_error: Option<Value>,
 
@@ -256,7 +255,6 @@ impl Vm {
             heap: Heap::new(),
             stack,
             globals,
-            upvals: Vec::new(),
             this_fn: None,
             on_error: None,
             err_frame: None,
@@ -292,11 +290,6 @@ impl Vm {
                     heap.mark(handle);
                 }
             }
-            for upval in &self.upvals {
-                if let Value::Reference(handle) = upval {
-                    heap.mark(*handle);
-                }
-            }
             Ok(())
         })
     }
@@ -313,14 +306,16 @@ impl Vm {
         self.globals.get(idx)
     }
 
-    pub fn get_upval(&self, idx: usize) -> Value {
-        self.upvals[idx]
+    pub fn get_upval(&self, handle: Handle) -> Value {
+        if let Object::Upval(val) = self.heap.get(handle) {
+            *val
+        } else {
+            panic!("Invalid closed over value (Upvalue) on heap!")
+        }
     }
 
-    pub fn new_upval(&mut self, val: Value) -> usize {
-        let r = self.upvals.len();
-        self.upvals.push(val);
-        r
+    pub fn new_upval(&mut self, val: Value) -> Handle {
+        self.alloc(Object::Upval(val))
     }
 
     pub fn get_stack(&self, idx: usize) -> Value {
@@ -384,8 +379,8 @@ impl Vm {
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
-            Value::Binding(idx) => {
-                self.upvals[*idx] = val;
+            Value::Binding(handle) => {
+                self.heap.replace(*handle, Object::Upval(val));
             }
             //Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
@@ -1297,8 +1292,8 @@ impl Vm {
                     let val = get_reg_unref!(registers, src, self);
                     //            self.set_register(registers, dest as usize, val);
                     match &get_reg!(registers, dest) {
-                        Value::Binding(idx) => {
-                            self.upvals[*idx] = val;
+                        Value::Binding(handle) => {
+                            self.heap.replace(*handle, Object::Upval(val));
                         }
                         Value::Global(dest) => self.globals.set(*dest, val),
                         _ => registers[dest as usize] = val,

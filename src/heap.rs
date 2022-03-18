@@ -18,6 +18,7 @@ const TYPE_LAMBDA: u8 = 0x50;
 const TYPE_MACRO: u8 = 0x60;
 const TYPE_CONT: u8 = 0x70;
 const TYPE_CALLFRAME: u8 = 0x80;
+const TYPE_UPVAL: u8 = 0x90;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -83,9 +84,11 @@ pub enum Object {
     Pair(Value, Value, Option<Meta>),
     Lambda(Rc<Chunk>),
     Macro(Rc<Chunk>),
-    Closure(Rc<Chunk>, Vec<usize>),
+    Closure(Rc<Chunk>, Vec<Handle>),
     Continuation(Box<Continuation>),
     CallFrame(Box<CallFrame>),
+    // Track something that was closed over.
+    Upval(Value),
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -182,6 +185,7 @@ impl Heap {
             Object::Closure(_, _) => TYPE_LAMBDA,
             Object::Continuation(_) => TYPE_CONT,
             Object::CallFrame(_) => TYPE_CALLFRAME,
+            Object::Upval(_) => TYPE_UPVAL,
         }
     }
 
@@ -378,7 +382,12 @@ impl Heap {
             Object::Pair(_, _, _) => {}
             Object::Lambda(chunk) => self.mark_chunk(chunk, current),
             Object::Macro(chunk) => self.mark_chunk(chunk, current),
-            Object::Closure(chunk, _) => self.mark_chunk(chunk, current),
+            Object::Closure(chunk, closures) => {
+                self.mark_chunk(chunk, current);
+                for close in closures {
+                    self.mark_trace(*close, current);
+                }
+            }
             Object::Continuation(continuation) => {
                 self.mark_call_frame(&continuation.frame, current);
                 for obj in &continuation.stack {
@@ -388,6 +397,11 @@ impl Heap {
                 }
             }
             Object::CallFrame(call_frame) => self.mark_call_frame(call_frame, current),
+            Object::Upval(val) => {
+                if let Value::Reference(handle) = val {
+                    self.mark_trace(*handle, current);
+                }
+            }
         }
     }
 

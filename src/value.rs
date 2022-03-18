@@ -114,7 +114,7 @@ pub enum Value {
     Keyword(Interned),
     StringConst(Interned),
     Reference(Handle),
-    Binding(usize),
+    Binding(Handle),
     Global(u32),
     Builtin(CallFunc), // XXX TODO, special form?
     True,
@@ -350,7 +350,7 @@ impl Value {
             return self;
         }
         match &self {
-            Value::Binding(idx) => vm.get_upval(*idx),
+            Value::Binding(handle) => vm.get_upval(*handle),
             Value::Global(idx) => vm.get_global(*idx),
             _ => self,
         }
@@ -554,8 +554,9 @@ impl Value {
                 }
                 Object::String(s) => format!("\"{}\"", s),
                 Object::Bytes(_) => "Bytes".to_string(), // XXX TODO
-                                                         //Object::HashMap(_) => "HashMap".to_string(),
-                                                         //Object::File(_) => "File".to_string(),
+                Object::Upval(val) => val.display_value(vm),
+                //Object::HashMap(_) => "HashMap".to_string(),
+                //Object::File(_) => "File".to_string(),
             },
         }
     }
@@ -614,6 +615,7 @@ impl Value {
                 Object::Pair(_, _, _) => "Pair",
                 Object::String(_) => "String",
                 Object::Bytes(_) => "Bytes",
+                Object::Upval(val) => val.display_type(vm),
                 //Object::HashMap(_) => "HashMap".to_string(),
                 //Object::File(_) => "File".to_string(),
             },
