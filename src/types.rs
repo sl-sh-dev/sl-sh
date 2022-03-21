@@ -97,7 +97,7 @@ pub struct Lambda {
 impl Lambda {
     pub fn copy(&self) -> Self {
         Lambda {
-            params: self.params.iter().copied().collect(),
+            params: self.params.to_vec(),
             num_params: self.num_params,
             has_rest: self.has_rest,
             body: self.body.copy(),

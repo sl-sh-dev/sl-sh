@@ -585,7 +585,7 @@ fn read_symbol(
         let ch = next_ch.unwrap();
         let peek_ch = if let Some(pch) = chars.peek() {
             has_peek = true;
-            &pch
+            pch
         } else {
             has_peek = false;
             " "

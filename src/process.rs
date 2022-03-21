@@ -86,7 +86,7 @@ pub fn wait_pid(
             result = status;
             if let Some(status) = status {
                 if environment.save_exit_status {
-                    env::set_var("LAST_STATUS".to_string(), format!("{}", status));
+                    env::set_var("LAST_STATUS", format!("{}", status));
                     environment.root_scope.borrow_mut().insert_exp_data(
                         environment.interner.intern("*last-status*"),
                         ExpEnum::Int(i64::from(status)),

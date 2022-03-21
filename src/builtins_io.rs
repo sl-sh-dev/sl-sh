@@ -521,12 +521,11 @@ fn builtin_rm(
     if let Some(path) = get_file(environment, fp) {
         let p = path.as_path();
         if p.exists() {
-            let removed;
-            if p.is_dir() {
-                removed = fs::remove_dir_all(p).is_ok();
+            let removed = if p.is_dir() {
+                fs::remove_dir_all(p).is_ok()
             } else {
-                removed = fs::remove_file(p).is_ok();
-            }
+                fs::remove_file(p).is_ok()
+            };
             Ok(Expression::alloc_data(match removed {
                 true => ExpEnum::True,
                 false => ExpEnum::False,

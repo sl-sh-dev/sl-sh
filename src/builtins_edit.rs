@@ -1,9 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::hash::BuildHasher;
 use std::io::{self, ErrorKind};
+use std::iter::FromIterator;
 
-use sl_liner::{keymap, Buffer, ColorClosure, Context, Prompt};
+use sl_liner::vi::AlphanumericAndVariableKeywordRule;
+use sl_liner::{
+    keymap, last_non_ws_char_was_not_backslash, Buffer, ColorClosure, Context, DefaultEditorRules,
+    NewlineRule, Prompt, WordDivideRule,
+};
 
 use crate::builtins_util::*;
 use crate::completions::*;
@@ -11,10 +16,11 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::ExpEnum::HashMap as NativeHashMap;
 
 fn load_repl_settings(repl_settings: &Expression) -> ReplSettings {
     let mut ret = ReplSettings::default();
-    if let ExpEnum::HashMap(repl_settings) = &repl_settings.get().data {
+    if let NativeHashMap(repl_settings) = &repl_settings.get().data {
         if let Some(keybindings) = repl_settings.get(":keybindings") {
             if let ExpEnum::Symbol(keybindings, _) = &keybindings.get().data {
                 match &keybindings[..] {
@@ -133,6 +139,10 @@ fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
     let keymap: Box<dyn keymap::KeyMap> = match repl_settings.key_bindings {
         Keys::Vi => {
             let mut vi = keymap::Vi::new();
+            let vi_keywords = vec!["_", "-"];
+            vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+                vi_keywords,
+            )));
             if let Some((ch1, ch2, timeout)) = repl_settings.vi_esc_sequence {
                 vi.set_esc_sequence(ch1, ch2, timeout);
             }
@@ -148,11 +158,187 @@ fn apply_repl_settings(con: &mut Context, repl_settings: &ReplSettings) {
     con.history.set_max_history_size(repl_settings.max_history);
 }
 
+fn map_right_to_left_delimiters<'a>(
+    delimiters: &[(&'a str, &'a str)],
+) -> HashMap<&'a str, &'a str> {
+    let mut delim_map = HashMap::new();
+    for (left, right) in delimiters {
+        delim_map.insert(*right, *left);
+    }
+    delim_map
+}
+
+pub fn check_balanced_delimiters(
+    buf: &Buffer,
+    delimiters: &[(&str, &str)],
+    string_delimiter: &str,
+    multiline_delimiters: &[(&str, &str)],
+) -> bool {
+    let delim_map = map_right_to_left_delimiters(delimiters);
+    let left_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(left, _)| *left));
+    let right_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(_, right)| *right));
+    let mut open_delims = HashMap::new();
+    let buf_vec = buf.range_graphemes_all();
+    let mut outside_string_delimiter = true;
+    if (buf_vec.slice().match_indices(string_delimiter).count() % 2) != 0 {
+        false // string_delimiter is unbalanced
+    } else {
+        let open_multiline_delimiters =
+            has_open_multi_delimiters(buf_vec.slice(), multiline_delimiters, string_delimiter);
+        for c in buf_vec {
+            match c {
+                c if outside_string_delimiter && left_delimiters.contains(c) => {
+                    if let Some(&count) = open_delims.get(c) {
+                        open_delims.insert(c, count + 1);
+                    } else {
+                        open_delims.insert(c, 1);
+                    }
+                }
+                c if outside_string_delimiter && right_delimiters.contains(c) => {
+                    let opposite = delim_map.get(c);
+                    if let Some(opposite) = opposite {
+                        if let Some(&count) = open_delims.get(opposite) {
+                            if count == 1 {
+                                open_delims.remove(opposite);
+                            } else {
+                                open_delims.insert(opposite, count - 1);
+                            }
+                        }
+                    }
+                }
+                _ if c == string_delimiter => {
+                    outside_string_delimiter = !outside_string_delimiter;
+                }
+                _ => {}
+            }
+        }
+        outside_string_delimiter && open_delims.is_empty() && !open_multiline_delimiters
+    }
+}
+
+#[derive(PartialOrd, Ord, PartialEq, Eq, Debug, Clone, Copy)]
+enum DelimiterType {
+    Open(usize),
+    Close(usize),
+}
+
+/// Checks `buf` to see if vec of `multiline_delimiters` of form (open delimiter, close delimiter) are
+/// balanced, assumes that the string_delimiter is balanced!
+fn has_open_multi_delimiters(
+    buf: &str,
+    multiline_delimiters: &[(&str, &str)],
+    string_delimiter: &str,
+) -> bool {
+    let mut changed = false;
+    let filtered_str = buf.split(string_delimiter).step_by(2).collect::<String>();
+    let mut count = 0;
+    for delimiter_pair in multiline_delimiters {
+        let (open, close) = delimiter_pair;
+        let mut open_indices = filtered_str
+            .match_indices(open)
+            .map(|(i, _)| DelimiterType::Open(i));
+        let mut close_indices = filtered_str
+            .match_indices(close)
+            .map(|(i, _)| DelimiterType::Close(i));
+        let mut vec = vec![];
+        let (mut open_curr, mut close_curr) = (open_indices.next(), close_indices.next());
+        loop {
+            match (open_curr, close_curr) {
+                (Some(open), Some(close)) => {
+                    if open <= close {
+                        vec.push(open);
+                        open_curr = open_indices.next();
+                    } else {
+                        vec.push(close);
+                        close_curr = close_indices.next();
+                    }
+                }
+                (Some(open), None) => {
+                    vec.push(open);
+                    open_curr = open_indices.next();
+                }
+                (None, Some(close)) => {
+                    vec.push(close);
+                    close_curr = close_indices.next();
+                }
+                (None, None) => {
+                    break;
+                }
+            }
+        }
+        changed = !vec.is_empty();
+        for delim in vec {
+            match delim {
+                DelimiterType::Open(_) => {
+                    count += 1;
+                }
+                DelimiterType::Close(_) => {
+                    if count > 0 {
+                        count -= 1;
+                    }
+                }
+            }
+        }
+    }
+    count != 0 && changed
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn atest() {
+        let str = "ok now here \" this is #| |# |# #| #| |# |# |#\" we go #| doing things in comments |# sometimes";
+        let vec = vec![("#|", "|#")];
+        let ret = has_open_multi_delimiters(str, &vec, "\"");
+        println!("ret: {}.", ret)
+    }
+}
+
+pub struct NewlineForBackslashAndOpenDelimRule<'a> {
+    string_delimiter: &'a str,
+    delimiters: Vec<(&'a str, &'a str)>,
+    multichar_delimiters: Vec<(&'a str, &'a str)>,
+}
+
+pub struct LinerWordDividerRule {}
+
+impl WordDivideRule for LinerWordDividerRule {
+    fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
+        get_liner_words(buf)
+    }
+}
+
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule<'_> {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        last_non_ws_char_was_not_backslash(buf)
+            && check_balanced_delimiters(
+                buf,
+                &self.delimiters,
+                self.string_delimiter,
+                &self.multichar_delimiters,
+            )
+    }
+}
+
 fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
     let mut con = Context::new();
     // Do this before a history file load...
     apply_repl_settings(&mut con, &environment.repl_settings);
-    con.set_word_divider(Box::new(get_liner_words));
+    let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
+    let multichar_delimiters = vec![("#|", "|#")];
+    let string_delimiter = "\"";
+    let editor_rules = DefaultEditorRules::custom(
+        LinerWordDividerRule {},
+        NewlineForBackslashAndOpenDelimRule {
+            delimiters,
+            string_delimiter,
+            multichar_delimiters,
+        },
+    );
+    con.set_editor_rules(Box::new(editor_rules));
     let mut home = match env::var("HOME") {
         Ok(val) => val,
         Err(_) => ".".to_string(),
