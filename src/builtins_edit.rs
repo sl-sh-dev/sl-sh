@@ -220,14 +220,15 @@ fn order_delimiters_in_str(str: &str, open: &str, close: &str) -> Vec<DelimiterI
 }
 
 #[derive(Debug, Copy, Clone)]
-enum DelimiterType {
-    MultilineComment,
-    StringDelimiter,
+enum DelimiterType<'a> {
+    MultilineComment(&'a str),
+    StringDelimiter(&'a str),
+    BalancedDelimiter(&'a str),
 }
 
 #[derive(Debug, Copy, Clone)]
-struct Delimiter {
-    delimiter_type: DelimiterType,
+struct Delimiter<'a> {
+    delimiter_type: DelimiterType<'a>,
     delimiter_place: DelimiterIdx,
 }
 
@@ -237,7 +238,7 @@ impl AsRef<DelimiterIdx> for DelimiterIdx {
     }
 }
 
-impl AsRef<DelimiterIdx> for Delimiter {
+impl AsRef<DelimiterIdx> for Delimiter<'_> {
     fn as_ref(&self) -> &DelimiterIdx {
         &self.delimiter_place
     }
@@ -248,19 +249,19 @@ impl AsRef<DelimiterIdx> for Delimiter {
 /// string_delimiter instances are ignored until a multiline_comment is found.
 fn strip_string_delimited_multiline_comment<'a>(
     buf: &'a Buffer,
-    multiline_comment: &(&str, &str),
-    string_delimiter: &str,
-) -> Vec<Delimiter> {
+    multiline_comment: &'a (&str, &str),
+    string_delimiter: &'a str,
+) -> Vec<Delimiter<'a>> {
     let str = buf.range_graphemes_all().slice();
     let (open , close) = multiline_comment;
-    let open_indices = str.match_indices(open).map(|(i, _)| Delimiter { delimiter_type: DelimiterType::MultilineComment, delimiter_place: DelimiterIdx::Open(i) }).collect::<Vec<Delimiter>>();
+    let open_indices = str.match_indices(open).map(|(i, _)| Delimiter { delimiter_type: DelimiterType::MultilineComment(open), delimiter_place: DelimiterIdx::Open(i) }).collect::<Vec<Delimiter>>();
     let close_indices = str
         .match_indices(close)
-        .map(|(i, _)| Delimiter {delimiter_type: DelimiterType::MultilineComment, delimiter_place: DelimiterIdx::Close(i)}).collect::<Vec<Delimiter>>();
+        .map(|(i, _)| Delimiter {delimiter_type: DelimiterType::MultilineComment(close), delimiter_place: DelimiterIdx::Close(i)}).collect::<Vec<Delimiter>>();
     let multiline_idx = order_sorted_lists(open_indices, close_indices);
     let string_indices = str
         .match_indices(string_delimiter)
-        .map(|(i, _)| Delimiter {delimiter_type: DelimiterType::StringDelimiter, delimiter_place: DelimiterIdx::Identical(i)}).collect::<Vec<Delimiter>>();
+        .map(|(i, _)| Delimiter {delimiter_type: DelimiterType::StringDelimiter(string_delimiter), delimiter_place: DelimiterIdx::Identical(i)}).collect::<Vec<Delimiter>>();
     order_sorted_lists(multiline_idx, string_indices)
 }
 
@@ -939,9 +940,10 @@ mod test {
         simple_logging::log_to_stderr(LevelFilter::Debug);
         let string_delimiter = "\"";
         let multiline_comment = ("#|", "|#");
-        let buf = Buffer::from("outside double quotes\" inside double_quotes\" and this.");
-        strip_string_delimited_multiline_comment(&buf, &multiline_comment, string_delimiter);
-        //debug!("{:?}", str);
+        //let delimiters = vec![("(", ")"), ("[", "]"), ("{", "}")];
+        let buf = Buffer::from("ok #| outside double quotes\" inside double_quotes|#\" and this.");
+        let vec = strip_string_delimited_multiline_comment(&buf, &multiline_comment, string_delimiter);
+        debug!("{:?}", vec);
         //assert_eq!(buf.range_graphemes_all(), str);
     }
 }
