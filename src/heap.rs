@@ -18,7 +18,7 @@ const TYPE_LAMBDA: u8 = 0x50;
 const TYPE_MACRO: u8 = 0x60;
 const TYPE_CONT: u8 = 0x70;
 const TYPE_CALLFRAME: u8 = 0x80;
-const TYPE_UPVAL: u8 = 0x90;
+const TYPE_VALUE: u8 = 0x90;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -87,8 +87,9 @@ pub enum Object {
     Closure(Rc<Chunk>, Vec<Handle>),
     Continuation(Box<Continuation>),
     CallFrame(Box<CallFrame>),
+    Value(Value),
     // Track something that was closed over.
-    Upval(Value),
+    //Upval(Value),
 }
 
 pub type HandleRef<'a> = &'a Object;
@@ -185,7 +186,7 @@ impl Heap {
             Object::Closure(_, _) => TYPE_LAMBDA,
             Object::Continuation(_) => TYPE_CONT,
             Object::CallFrame(_) => TYPE_CALLFRAME,
-            Object::Upval(_) => TYPE_UPVAL,
+            Object::Value(_) => TYPE_VALUE,
         }
     }
 
@@ -272,6 +273,86 @@ impl Heap {
         }
     }
 
+    pub fn get_string(&self, handle: Handle) -> &Cow<'static, str> {
+        if let Some(Object::String(cow)) = self.objects.get(handle.idx) {
+            cow
+        } else {
+            panic!("Handle {} is not a string!", handle.idx);
+        }
+    }
+
+    pub fn get_vector(&self, handle: Handle) -> &[Value] {
+        if let Some(Object::Vector(v)) = self.objects.get(handle.idx) {
+            v
+        } else {
+            panic!("Handle {} is not a vector!", handle.idx);
+        }
+    }
+
+    pub fn get_bytes(&self, handle: Handle) -> &[u8] {
+        if let Some(Object::Bytes(v)) = self.objects.get(handle.idx) {
+            v
+        } else {
+            panic!("Handle {} is not bytes!", handle.idx);
+        }
+    }
+
+    pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
+        if let Some(Object::Pair(car, cdr, meta)) = self.objects.get(handle.idx) {
+            (*car, *cdr, meta)
+        } else {
+            panic!("Handle {} is not a pair!", handle.idx);
+        }
+    }
+
+    pub fn get_lambda(&self, handle: Handle) -> Rc<Chunk> {
+        if let Some(Object::Lambda(lambda)) = self.objects.get(handle.idx) {
+            lambda.clone()
+        } else {
+            panic!("Handle {} is not a lambda!", handle.idx);
+        }
+    }
+
+    pub fn get_macro(&self, handle: Handle) -> Rc<Chunk> {
+        if let Some(Object::Macro(lambda)) = self.objects.get(handle.idx) {
+            lambda.clone()
+        } else {
+            panic!("Handle {} is not a macro!", handle.idx);
+        }
+    }
+
+    pub fn get_closure(&self, handle: Handle) -> (Rc<Chunk>, &[Handle]) {
+        if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx) {
+            (lambda.clone(), captures)
+        } else {
+            panic!("Handle {} is not a closure!", handle.idx);
+        }
+    }
+
+    pub fn get_continuation(&self, handle: Handle) -> &Continuation {
+        if let Some(Object::Continuation(cont)) = self.objects.get(handle.idx) {
+            cont
+        } else {
+            panic!("Handle {} is not a continuation!", handle.idx);
+        }
+    }
+
+    pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
+        if let Some(Object::CallFrame(call_frame)) = self.objects.get(handle.idx) {
+            call_frame
+        } else {
+            panic!("Handle {} is not a continuation!", handle.idx);
+        }
+    }
+
+    pub fn get_value(&self, handle: Handle) -> Value {
+        if let Some(Object::Value(value)) = self.objects.get(handle.idx) {
+            *value
+        } else {
+            panic!("Handle {} is not a value!", handle.idx);
+        }
+    }
+
     pub fn replace(&mut self, handle: Handle, obj: Object) -> Object {
         let type_flag = Self::type_flag(&obj);
         self.objects.push(obj);
@@ -336,24 +417,28 @@ impl Heap {
 
     fn mark_chunk(&mut self, chunk: &Chunk, current: usize) {
         for constant in &chunk.constants {
-            if let Value::Reference(handle) = constant {
-                self.mark_trace(*handle, current);
+            if let Some(handle) = constant.get_handle() {
+                self.mark_trace(handle, current);
             }
         }
     }
 
     fn mark_call_frame(&mut self, call_frame: &CallFrame, current: usize) {
         self.mark_chunk(&call_frame.chunk, current);
-        if let Some(Value::Reference(handle)) = call_frame.this_fn {
-            self.mark_trace(handle, current);
-        }
-        for defer in &call_frame.defers {
-            if let Value::Reference(handle) = defer {
-                self.mark_trace(*handle, current);
+        if let Some(this_fn) = call_frame.this_fn {
+            if let Some(handle) = this_fn.get_handle() {
+                self.mark_trace(handle, current);
             }
         }
-        if let Some(Value::Reference(handle)) = call_frame.on_error {
-            self.mark_trace(handle, current);
+        for defer in &call_frame.defers {
+            if let Some(handle) = defer.get_handle() {
+                self.mark_trace(handle, current);
+            }
+        }
+        if let Some(on_error) = call_frame.on_error {
+            if let Some(handle) = on_error.get_handle() {
+                self.mark_trace(handle, current);
+            }
         }
     }
 
@@ -366,20 +451,22 @@ impl Heap {
             Object::String(_) => {}
             Object::Vector(vec) => {
                 for v in vec {
-                    if let Value::Reference(h) = v {
-                        let h = *h;
+                    if let Some(h) = v.get_handle() {
+                        let h = h;
                         self.mark_trace(h, current);
                     }
                 }
             }
             Object::Bytes(_) => {}
-            Object::Pair(Value::Reference(car), Value::Reference(cdr), _) => {
-                self.mark_trace(*car, current);
-                self.mark_trace(*cdr, current);
-            }
-            Object::Pair(Value::Reference(car), _, _) => self.mark_trace(*car, current),
-            Object::Pair(_, Value::Reference(cdr), _) => self.mark_trace(*cdr, current),
-            Object::Pair(_, _, _) => {}
+            Object::Pair(car, cdr, _) => match (car.get_handle(), cdr.get_handle()) {
+                (Some(car), Some(cdr)) => {
+                    self.mark_trace(car, current);
+                    self.mark_trace(cdr, current);
+                }
+                (Some(car), None) => self.mark_trace(car, current),
+                (None, Some(cdr)) => self.mark_trace(cdr, current),
+                (None, None) => {}
+            },
             Object::Lambda(chunk) => self.mark_chunk(chunk, current),
             Object::Macro(chunk) => self.mark_chunk(chunk, current),
             Object::Closure(chunk, closures) => {
@@ -391,15 +478,15 @@ impl Heap {
             Object::Continuation(continuation) => {
                 self.mark_call_frame(&continuation.frame, current);
                 for obj in &continuation.stack {
-                    if let Value::Reference(handle) = obj {
-                        self.mark_trace(*handle, current);
+                    if let Some(handle) = obj.get_handle() {
+                        self.mark_trace(handle, current);
                     }
                 }
             }
             Object::CallFrame(call_frame) => self.mark_call_frame(call_frame, current),
-            Object::Upval(val) => {
-                if let Value::Reference(handle) = val {
-                    self.mark_trace(*handle, current);
+            Object::Value(val) => {
+                if let Some(handle) = val.get_handle() {
+                    self.mark_trace(handle, current);
                 }
             }
         }
@@ -550,7 +637,7 @@ mod tests {
         for x in 0..256 {
             let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
             outers.borrow_mut().push(heap.alloc(
-                Object::Pair(Value::Reference(inner), Value::Nil, None),
+                Object::Pair(Value::Pair(inner), Value::Nil, None),
                 mark_roots,
             ));
         }
@@ -559,7 +646,7 @@ mod tests {
         let mut i = 0;
         for h in outers.borrow().iter() {
             let obj = heap.get(*h);
-            if let Object::Pair(Value::Reference(inner), Value::Nil, _) = obj {
+            if let Object::Pair(Value::Pair(inner), Value::Nil, _) = obj {
                 let obj = heap.get(*inner);
                 if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                     assert!(i == *v as usize);
@@ -609,7 +696,7 @@ mod tests {
         let mut v = vec![];
         for x in 0..256 {
             let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
-            v.push(Value::Reference(inner));
+            v.push(Value::Pair(inner));
         }
         outers
             .borrow_mut()
@@ -621,7 +708,7 @@ mod tests {
             if let Object::Vector(v) = obj {
                 let mut i = 0;
                 for hv in v {
-                    if let Value::Reference(hv) = hv {
+                    if let Value::Pair(hv) = hv {
                         let obj = heap.get(*hv);
                         if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                             assert!(i == *v as usize);
@@ -645,7 +732,7 @@ mod tests {
             if let Object::Vector(v) = obj {
                 let mut i = 0;
                 for hv in v {
-                    if let Value::Reference(hv) = hv {
+                    if let Value::Pair(hv) = hv {
                         let obj = heap.get(*hv);
                         if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
                             assert!(i == *v as usize);
@@ -697,15 +784,15 @@ mod tests {
         let car_h = heap.alloc(Object::Pair(Value::Int(3), Value::Nil, None), mark_roots);
         let cdr_h = heap.alloc(Object::Pair(Value::Int(4), Value::Nil, None), mark_roots);
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Reference(car_h), Value::Int(2), None),
+            Object::Pair(Value::Pair(car_h), Value::Int(2), None),
             mark_roots,
         ));
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Int(1), Value::Reference(cdr_h), None),
+            Object::Pair(Value::Int(1), Value::Pair(cdr_h), None),
             mark_roots,
         ));
         outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Reference(car_h), Value::Reference(cdr_h), None),
+            Object::Pair(Value::Pair(car_h), Value::Pair(cdr_h), None),
             mark_roots,
         ));
         assert!(heap.capacity() == 512);
@@ -730,7 +817,7 @@ mod tests {
                     assert!(car == 1);
                     assert!(cdr == 2);
                 } else if i == 1 {
-                    let (car, cdr) = if let Value::Reference(car_h) = car {
+                    let (car, cdr) = if let Value::Pair(car_h) = car {
                         if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
                             if let Value::Int(cdr) = cdr {
                                 (*car, *cdr)
@@ -746,7 +833,7 @@ mod tests {
                     assert!(car == 3);
                     assert!(cdr == 2);
                 } else if i == 2 {
-                    let (car, cdr) = if let Value::Reference(cdr_h) = cdr {
+                    let (car, cdr) = if let Value::Pair(cdr_h) = cdr {
                         if let Object::Pair(Value::Int(cdr), Value::Nil, _) = heap.get(*cdr_h) {
                             if let Value::Int(car) = car {
                                 (*car, *cdr)
@@ -762,9 +849,9 @@ mod tests {
                     assert!(car == 1);
                     assert!(cdr == 4);
                 } else if i == 3 {
-                    let (car, cdr) = if let Value::Reference(car_h) = car {
+                    let (car, cdr) = if let Value::Pair(car_h) = car {
                         if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
-                            if let Value::Reference(cdr_h) = cdr {
+                            if let Value::Pair(cdr_h) = cdr {
                                 if let Object::Pair(Value::Int(cdr), Value::Nil, _) =
                                     heap.get(*cdr_h)
                                 {

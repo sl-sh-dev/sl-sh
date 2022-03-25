@@ -1195,8 +1195,8 @@ impl Chunk {
         for (i, v) in self.constants.iter().enumerate() {
             indent(indent_level);
             println!("{}: {}", i, v.display_value(vm));
-            if let Value::Reference(h) = v {
-                match vm.get(*h) {
+            if let Some(h) = v.get_handle() {
+                match vm.get(h) {
                     Object::Lambda(l) => {
                         l.disassemble_chunk(vm, indent_level + 1)?;
                     }

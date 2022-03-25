@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::rc::Rc;
 
 use crate::chunk::*;
@@ -286,7 +287,7 @@ impl Vm {
         heap.alloc(obj, |heap| {
             self.globals.mark(heap);
             for i in 0..self.stack_max {
-                if let Value::Reference(handle) = self.stack[i] {
+                if let Some(handle) = self.stack[i].get_handle() {
                     heap.mark(handle);
                 }
             }
@@ -306,16 +307,48 @@ impl Vm {
         self.globals.get(idx)
     }
 
-    pub fn get_upval(&self, handle: Handle) -> Value {
-        if let Object::Upval(val) = self.heap.get(handle) {
-            *val
-        } else {
-            panic!("Invalid closed over value (Upvalue) on heap!")
-        }
+    pub fn get_string(&self, handle: Handle) -> &Cow<'static, str> {
+        self.heap.get_string(handle)
+    }
+
+    pub fn get_vector(&self, handle: Handle) -> &[Value] {
+        self.heap.get_vector(handle)
+    }
+
+    pub fn get_bytes(&self, handle: Handle) -> &[u8] {
+        self.heap.get_bytes(handle)
+    }
+
+    pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
+        self.heap.get_pair(handle)
+    }
+
+    pub fn get_lambda(&self, handle: Handle) -> Rc<Chunk> {
+        self.heap.get_lambda(handle)
+    }
+
+    pub fn get_macro(&self, handle: Handle) -> Rc<Chunk> {
+        self.heap.get_macro(handle)
+    }
+
+    pub fn get_closure(&self, handle: Handle) -> (Rc<Chunk>, &[Handle]) {
+        self.heap.get_closure(handle)
+    }
+
+    pub fn get_continuation(&self, handle: Handle) -> &Continuation {
+        self.heap.get_continuation(handle)
+    }
+
+    pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
+        self.heap.get_callframe(handle)
+    }
+
+    pub fn get_value(&self, handle: Handle) -> Value {
+        self.heap.get_value(handle)
     }
 
     pub fn new_upval(&mut self, val: Value) -> Handle {
-        self.alloc(Object::Upval(val))
+        self.alloc(Object::Value(val))
     }
 
     pub fn get_stack(&self, idx: usize) -> Value {
@@ -379,8 +412,8 @@ impl Vm {
     #[inline]
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
-            Value::Binding(handle) => {
-                self.heap.replace(*handle, Object::Upval(val));
+            Value::Value(handle) => {
+                self.heap.replace(*handle, Object::Value(val));
             }
             //Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
@@ -398,7 +431,7 @@ impl Vm {
 
     fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
         match self.stack[idx] {
-            Value::Reference(h) => match self.get(h) {
+            Value::CallFrame(handle) => match self.get(handle) {
                 Object::CallFrame(cf) => Some(cf),
                 _ => None,
                 //_ => panic!("Invalid stack, not a call frame."),
@@ -414,7 +447,7 @@ impl Vm {
 
     fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
         match self.stack[idx] {
-            Value::Reference(h) => match self.get_mut(h) {
+            Value::CallFrame(handle) => match self.get_mut(handle) {
                 Object::CallFrame(cf) => Some(&mut *cf),
                 _ => None,
                 //_ => panic!("Invalid stack, not a call frame."),
@@ -433,7 +466,7 @@ impl Vm {
             for i in (start..=end).rev() {
                 let car = get_reg_unref!(registers, i, self);
                 let cdr = last_cdr;
-                last_cdr = Value::Reference(self.alloc(Object::Pair(car, cdr, None)));
+                last_cdr = Value::Pair(self.alloc(Object::Pair(car, cdr, None)));
             }
             self.set_register(registers, dest as usize, last_cdr);
         }
@@ -452,135 +485,72 @@ impl Vm {
                 let lst = get_reg_unref!(registers, i, self);
                 match lst {
                     Value::Nil => {}
-                    Value::Reference(h) => match self.get(h) {
-                        Object::Pair(car, cdr, _) => {
-                            loop_cdr = *cdr;
-                            let cdr = last_cdr;
-                            let obj = Object::Pair(*car, Value::Nil, None);
-                            last_cdr = Value::Reference(self.alloc(obj));
-                            match cdr {
-                                Value::Nil => head = last_cdr,
-                                Value::Reference(h) => {
-                                    let cons_d = self.heap.get(h);
-                                    if let Object::Pair(car, _cdr, meta) = &*cons_d {
-                                        let car = *car;
-                                        let meta = *meta;
-                                        self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                    Value::Pair(handle) => {
+                        let (car, cdr, _) = self.heap.get_pair(handle);
+                        loop_cdr = cdr;
+                        let cdr = last_cdr;
+                        last_cdr = Value::Pair(self.alloc(Object::Pair(car, Value::Nil, None)));
+                        match cdr {
+                            Value::Nil => head = last_cdr,
+                            Value::Pair(h) => {
+                                let (car, _, meta) = self.heap.get_pair(h);
+                                let meta = *meta;
+                                self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                            }
+                            _ => {}
+                        }
+                        loop {
+                            if let Value::Nil = loop_cdr {
+                                break;
+                            }
+                            match loop_cdr {
+                                Value::Pair(h) => {
+                                    let (car, ncdr, _) = self.heap.get_pair(h);
+                                    loop_cdr = ncdr;
+                                    let cdr = last_cdr;
+                                    last_cdr = Value::Pair(self.alloc(Object::Pair(
+                                        car,
+                                        Value::Nil,
+                                        None,
+                                    )));
+                                    match cdr {
+                                        Value::Nil => head = last_cdr,
+                                        Value::Pair(h) => {
+                                            let (car, _, meta) = self.heap.get_pair(h);
+                                            let meta = *meta;
+                                            self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                                        }
+                                        _ => {}
                                     }
                                 }
-                                _ => {}
-                            }
-                            loop {
-                                if let Value::Nil = loop_cdr {
+                                _ => {
+                                    if i == end {
+                                        match last_cdr {
+                                            Value::Nil => head = loop_cdr,
+                                            Value::Pair(h) => {
+                                                let (car, _, meta) = self.heap.get_pair(h);
+                                                let meta = *meta;
+                                                self.heap
+                                                    .replace(h, Object::Pair(car, loop_cdr, meta));
+                                            }
+                                            _ => {}
+                                        }
+                                    } else {
+                                        return Err(VMError::new_vm("APND: Param not a list."));
+                                    }
                                     break;
                                 }
-                                match loop_cdr {
-                                    Value::Reference(h) => match self.get(h) {
-                                        Object::Pair(car, ncdr, _) => {
-                                            loop_cdr = *ncdr;
-                                            let cdr = last_cdr;
-                                            let obj = Object::Pair(*car, Value::Nil, None);
-                                            last_cdr = Value::Reference(self.alloc(obj));
-                                            match cdr {
-                                                Value::Nil => head = last_cdr,
-                                                Value::Reference(h) => {
-                                                    let cons_d = self.heap.get(h);
-                                                    if let Object::Pair(car, _cdr, meta) = &*cons_d
-                                                    {
-                                                        let car = *car;
-                                                        let meta = *meta;
-                                                        self.heap.replace(
-                                                            h,
-                                                            Object::Pair(car, last_cdr, meta),
-                                                        );
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-                                        }
-                                        _ => {
-                                            if i == end {
-                                                match last_cdr {
-                                                    Value::Nil => head = loop_cdr,
-                                                    Value::Reference(h) => {
-                                                        let cons_d = self.heap.get(h);
-                                                        if let Object::Pair(car, _cdr, meta) =
-                                                            &*cons_d
-                                                        {
-                                                            let car = *car;
-                                                            let meta = *meta;
-                                                            self.heap.replace(
-                                                                h,
-                                                                Object::Pair(car, loop_cdr, meta),
-                                                            );
-                                                        }
-                                                    }
-                                                    _ => {}
-                                                }
-                                            } else {
-                                                return Err(VMError::new_vm(
-                                                    "APND: Param not a list.",
-                                                ));
-                                            }
-                                            break;
-                                        }
-                                    },
-                                    _ => {
-                                        if i == end {
-                                            match last_cdr {
-                                                Value::Nil => head = loop_cdr,
-                                                Value::Reference(h) => {
-                                                    let cons_d = self.heap.get(h);
-                                                    if let Object::Pair(car, _cdr, meta) = &*cons_d
-                                                    {
-                                                        let car = *car;
-                                                        let meta = *meta;
-                                                        self.heap.replace(
-                                                            h,
-                                                            Object::Pair(car, loop_cdr, meta),
-                                                        );
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-                                        } else {
-                                            return Err(VMError::new_vm("APND: Param not a list."));
-                                        }
-                                        break;
-                                    }
-                                }
                             }
                         }
-                        _ => {
-                            if i == end {
-                                match last_cdr {
-                                    Value::Nil => head = lst,
-                                    Value::Reference(h) => {
-                                        let cons_d = self.heap.get(h);
-                                        if let Object::Pair(car, _cdr, meta) = &*cons_d {
-                                            let car = *car;
-                                            let meta = *meta;
-                                            self.heap.replace(h, Object::Pair(car, lst, meta));
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            } else {
-                                return Err(VMError::new_vm("APND: Param not a list."));
-                            }
-                        }
-                    },
+                    }
                     _ => {
                         if i == end {
                             match last_cdr {
                                 Value::Nil => head = lst,
-                                Value::Reference(h) => {
-                                    let cons_d = self.heap.get(h);
-                                    if let Object::Pair(car, _cdr, meta) = &*cons_d {
-                                        let car = *car;
-                                        let meta = *meta;
-                                        self.heap.replace(h, Object::Pair(car, lst, meta));
-                                    }
+                                Value::Pair(h) => {
+                                    let (car, _, meta) = self.heap.get_pair(h);
+                                    let meta = *meta;
+                                    self.heap.replace(h, Object::Pair(car, lst, meta));
                                 }
                                 _ => {}
                             }
@@ -600,18 +570,13 @@ impl Vm {
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
-            Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(*cons_handle);
-                if let Object::Pair(_car, cdr, _) = &*cons_d {
-                    let cdr = *cdr;
-                    self.heap
-                        .replace(*cons_handle, Object::Pair(val, cdr, None));
-                } else {
-                    return Err(VMError::new_vm("XAR: Not a pair/conscell."));
-                }
+            Value::Pair(cons_handle) => {
+                let (_, cdr, _) = self.heap.get_pair(*cons_handle);
+                self.heap
+                    .replace(*cons_handle, Object::Pair(val, cdr, None));
             }
             Value::Nil => {
-                let pair = Value::Reference(self.alloc(Object::Pair(val, Value::Nil, None)));
+                let pair = Value::Pair(self.alloc(Object::Pair(val, Value::Nil, None)));
                 self.set_register(registers, pair_reg as usize, pair);
             }
             _ => {
@@ -626,18 +591,13 @@ impl Vm {
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
-            Value::Reference(cons_handle) => {
-                let cons_d = self.heap.get(*cons_handle);
-                if let Object::Pair(car, _cdr, _) = &*cons_d {
-                    let car = *car;
-                    self.heap
-                        .replace(*cons_handle, Object::Pair(car, val, None));
-                } else {
-                    return Err(VMError::new_vm("XDR: Not a pair/conscell."));
-                }
+            Value::Pair(cons_handle) => {
+                let (car, _, _) = self.heap.get_pair(*cons_handle);
+                self.heap
+                    .replace(*cons_handle, Object::Pair(car, val, None));
             }
             Value::Nil => {
-                let pair = Value::Reference(self.alloc(Object::Pair(Value::Nil, val, None)));
+                let pair = Value::Pair(self.alloc(Object::Pair(Value::Nil, val, None)));
                 self.set_register(registers, pair_reg as usize, pair);
             }
             _ => {
@@ -674,7 +634,7 @@ impl Vm {
                 .rev()
             {
                 let old_last = last;
-                last = Value::Reference(self.alloc(Object::Pair(*item, old_last, None)));
+                last = Value::Pair(self.alloc(Object::Pair(*item, old_last, None)));
             }
             last
         };
@@ -683,25 +643,20 @@ impl Vm {
 
     fn k_unshared_stack(&self, stack_top: usize, k: &Continuation) -> Option<(usize, &Vec<Value>)> {
         if k.frame.stack_top >= stack_top {
-            if let Value::Reference(h) = self.stack[stack_top] {
-                if let Object::CallFrame(frame) = self.get(h) {
-                    if let Value::Reference(k_h) = k.stack[stack_top] {
-                        if let Object::CallFrame(k_frame) = self.get(k_h) {
-                            if frame.id != k_frame.id {
-                                return Some((frame.stack_top, &frame.defers));
-                            }
-                        } else {
-                            return Some((frame.stack_top, &frame.defers));
-                        }
-                    } else {
+            if let Value::CallFrame(h) = self.stack[stack_top] {
+                let frame = self.heap.get_callframe(h);
+                if let Value::CallFrame(k_h) = k.stack[stack_top] {
+                    let k_frame = self.heap.get_callframe(k_h);
+                    if frame.id != k_frame.id {
                         return Some((frame.stack_top, &frame.defers));
                     }
+                } else {
+                    return Some((frame.stack_top, &frame.defers));
                 }
             }
-        } else if let Value::Reference(h) = self.stack[stack_top] {
-            if let Object::CallFrame(frame) = self.get(h) {
-                return Some((frame.stack_top, &frame.defers));
-            }
+        } else if let Value::CallFrame(h) = self.stack[stack_top] {
+            let frame = self.heap.get_callframe(h);
+            return Some((frame.stack_top, &frame.defers));
         }
         None
     }
@@ -784,132 +739,119 @@ impl Vm {
                     Ok(chunk)
                 }
             }
-            Value::Reference(h) => {
+            Value::Lambda(handle) => {
+                let l = self.heap.get_lambda(handle);
+                if !tail_call {
+                    let defers = std::mem::take(&mut self.defers);
+                    let frame = Object::CallFrame(Box::new(CallFrame {
+                        id: self.callframe_id,
+                        chunk,
+                        ip: self.ip,
+                        current_ip: self.current_ip,
+                        stack_top: self.stack_top,
+                        this_fn: self.this_fn,
+                        defers,
+                        on_error: self.on_error,
+                    }));
+                    self.callframe_id += 1;
+                    Self::mov_register(
+                        registers,
+                        first_reg.into(),
+                        Value::CallFrame(self.alloc(frame)),
+                    );
+                    self.stack_top += first_reg as usize;
+                }
+                self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
+                self.this_fn = Some(lambda);
+                self.ip = 0;
+                if l.rest {
+                    let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
+                    Self::mov_register(registers, rest_reg, h);
+                }
+                // XXX TODO- double check num args.
+                // XXX TODO- maybe test for stack overflow vs waiting for a panic.
+                clear_opts(&l, registers, first_reg, num_args);
+                Ok(l)
+            }
+            Value::Closure(handle) => {
                 // Make a self (vm) with it's lifetime broken away so we can call setup_rest.
                 // This is safe because it does not touch caps, it needs a &mut self so it
                 // can heap allocate.
                 let unsafe_vm: &mut Vm = unsafe { (self as *mut Vm).as_mut().unwrap() };
-                let rf = self.heap.get(h);
-                match rf {
-                    Object::Lambda(l) => {
-                        let l = l.clone();
-                        if !tail_call {
-                            let defers = std::mem::take(&mut self.defers);
-                            let frame = Object::CallFrame(Box::new(CallFrame {
-                                id: self.callframe_id,
-                                chunk,
-                                ip: self.ip,
-                                current_ip: self.current_ip,
-                                stack_top: self.stack_top,
-                                this_fn: self.this_fn,
-                                defers,
-                                on_error: self.on_error,
-                            }));
-                            self.callframe_id += 1;
-                            Self::mov_register(
-                                registers,
-                                first_reg.into(),
-                                Value::Reference(self.alloc(frame)),
-                            );
-                            self.stack_top += first_reg as usize;
-                        }
-                        self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
-                        self.this_fn = Some(lambda);
-                        self.ip = 0;
-                        if l.rest {
-                            let (rest_reg, h) = self.setup_rest(&l, registers, first_reg, num_args);
-                            Self::mov_register(registers, rest_reg, h);
-                        }
-                        // XXX TODO- double check num args.
-                        // XXX TODO- maybe test for stack overflow vs waiting for a panic.
-                        clear_opts(&l, registers, first_reg, num_args);
-                        Ok(l)
-                    }
-                    Object::Closure(l, caps) => {
-                        let l = l.clone();
-                        let frame = if !tail_call {
-                            let defers = std::mem::take(&mut self.defers);
-                            let frame = Object::CallFrame(Box::new(CallFrame {
-                                id: self.callframe_id,
-                                chunk,
-                                ip: self.ip,
-                                current_ip: self.current_ip,
-                                stack_top: self.stack_top,
-                                this_fn: self.this_fn,
-                                defers,
-                                on_error: self.on_error,
-                            }));
-                            self.callframe_id += 1;
-                            self.stack_top += first_reg as usize;
-                            Some(frame)
-                        } else {
-                            None
-                        };
-                        self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
-                        self.this_fn = Some(lambda);
-                        self.ip = 0;
-                        let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
-                        if l.rest {
-                            let (rest_reg, h) =
-                                unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
-                            for (i, c) in caps.iter().enumerate() {
-                                Self::mov_register(registers, cap_first + i, Value::Binding(*c));
-                            }
-                            Self::mov_register(registers, rest_reg, h);
-                        } else {
-                            for (i, c) in caps.iter().enumerate() {
-                                Self::mov_register(registers, cap_first + i, Value::Binding(*c));
-                            }
-                        }
-                        if let Some(frame) = frame {
-                            Self::mov_register(
-                                registers,
-                                first_reg.into(),
-                                Value::Reference(self.alloc(frame)),
-                            );
-                        }
-                        clear_opts(&l, registers, first_reg, num_args);
-                        Ok(l)
-                    }
-                    Object::Continuation(k) => {
-                        if num_args != 1 {
-                            return Err((
-                                VMError::new_vm("Continuation takes one argument."),
-                                chunk,
-                            ));
-                        }
-                        let (defered, from) = self.k_defers(k);
-                        if let Some(from) = from {
-                            // expect ok because this will be a call frame.
-                            let frame =
-                                self.call_frame_mut_idx(from).expect("Invalid frame index!");
-                            // Need to break the call frame lifetime from self to avoid extra work.
-                            // This is safe because the stack and heap are not touched so the reference is
-                            // stable.  The unwrap() is OK because the frame can not be NULL.
-                            let frame: &mut CallFrame =
-                                unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                            std::mem::swap(&mut self.defers, &mut frame.defers);
-                        }
-                        if defered {
-                            if let Some(defer) = self.defers.pop() {
-                                let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
-                                self.ip = self.current_ip;
-                                self.make_call(defer, chunk, registers, first_reg, 0, false)
-                            } else {
-                                // If k_defers returns true than self.defers.pop() better
-                                // return something.  Need this to make the borrow checker
-                                // happy.
-                                panic!("No defers but need a defer!");
-                            }
-                        } else {
-                            do_cont = true;
-                            Ok(chunk)
-                        }
-                    }
-                    _ => Err((
-                        VMError::new_vm(format!("CALL: Not a callable {:?}/{:?}.", lambda, rf)),
+                let (l, caps) = self.heap.get_closure(handle);
+                let frame = if !tail_call {
+                    let defers = std::mem::take(&mut self.defers);
+                    let frame = Object::CallFrame(Box::new(CallFrame {
+                        id: self.callframe_id,
                         chunk,
-                    )),
+                        ip: self.ip,
+                        current_ip: self.current_ip,
+                        stack_top: self.stack_top,
+                        this_fn: self.this_fn,
+                        defers,
+                        on_error: self.on_error,
+                    }));
+                    self.callframe_id += 1;
+                    self.stack_top += first_reg as usize;
+                    Some(frame)
+                } else {
+                    None
+                };
+                self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
+                self.this_fn = Some(lambda);
+                self.ip = 0;
+                let cap_first = (first_reg + l.args + l.opt_args + 1) as usize;
+                if l.rest {
+                    let (rest_reg, h) = unsafe_vm.setup_rest(&l, registers, first_reg, num_args);
+                    for (i, c) in caps.iter().enumerate() {
+                        Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                    }
+                    Self::mov_register(registers, rest_reg, h);
+                } else {
+                    for (i, c) in caps.iter().enumerate() {
+                        Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                    }
+                }
+                if let Some(frame) = frame {
+                    Self::mov_register(
+                        registers,
+                        first_reg.into(),
+                        Value::CallFrame(self.alloc(frame)),
+                    );
+                }
+                clear_opts(&l, registers, first_reg, num_args);
+                Ok(l)
+            }
+            Value::Continuation(handle) => {
+                let k = self.heap.get_continuation(handle);
+                if num_args != 1 {
+                    return Err((VMError::new_vm("Continuation takes one argument."), chunk));
+                }
+                let (defered, from) = self.k_defers(k);
+                if let Some(from) = from {
+                    // expect ok because this will be a call frame.
+                    let frame = self.call_frame_mut_idx(from).expect("Invalid frame index!");
+                    // Need to break the call frame lifetime from self to avoid extra work.
+                    // This is safe because the stack and heap are not touched so the reference is
+                    // stable.  The unwrap() is OK because the frame can not be NULL.
+                    let frame: &mut CallFrame =
+                        unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
+                    std::mem::swap(&mut self.defers, &mut frame.defers);
+                }
+                if defered {
+                    if let Some(defer) = self.defers.pop() {
+                        let first_reg = (chunk.input_regs + chunk.extra_regs + 1) as u16;
+                        self.ip = self.current_ip;
+                        self.make_call(defer, chunk, registers, first_reg, 0, false)
+                    } else {
+                        // If k_defers returns true than self.defers.pop() better
+                        // return something.  Need this to make the borrow checker
+                        // happy.
+                        panic!("No defers but need a defer!");
+                    }
+                } else {
+                    do_cont = true;
+                    Ok(chunk)
                 }
             }
             _ => Err((
@@ -920,26 +862,20 @@ impl Vm {
         if do_cont {
             // Had to break this out for continuations. Handling defers makes this necessary.
             match lambda {
-                Value::Reference(h) => {
-                    let rf = self.heap.get(h);
-                    match rf {
-                        Object::Continuation(k) => {
-                            let arg = registers[first_reg as usize + 1];
-                            self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
-                            self.stack[k.arg_reg] = arg;
-                            self.stack_top = k.frame.stack_top;
-                            self.stack_max = self.stack_top
-                                + k.frame.chunk.input_regs
-                                + k.frame.chunk.extra_regs;
-                            self.ip = k.frame.ip;
-                            self.current_ip = k.frame.current_ip;
-                            self.this_fn = k.frame.this_fn;
-                            self.on_error = k.frame.on_error;
-                            let chunk = k.frame.chunk.clone();
-                            Ok(chunk)
-                        }
-                        _ => panic!("Must be a continuation!"),
-                    }
+                Value::Continuation(h) => {
+                    let k = self.heap.get_continuation(h);
+                    let arg = registers[first_reg as usize + 1];
+                    self.stack[..k.stack.len()].copy_from_slice(&k.stack[..]);
+                    self.stack[k.arg_reg] = arg;
+                    self.stack_top = k.frame.stack_top;
+                    self.stack_max =
+                        self.stack_top + k.frame.chunk.input_regs + k.frame.chunk.extra_regs;
+                    self.ip = k.frame.ip;
+                    self.current_ip = k.frame.current_ip;
+                    self.this_fn = k.frame.this_fn;
+                    self.on_error = k.frame.on_error;
+                    let chunk = k.frame.chunk.clone();
+                    Ok(chunk)
                 }
                 _ => panic!("Must be a continuation!"),
             }
@@ -954,7 +890,7 @@ impl Vm {
             let v = get_reg_unref!(registers, reg, self);
             val.push_str(&v.pretty_value(self));
         }
-        let val = Value::Reference(self.alloc(Object::String(val.into())));
+        let val = Value::String(self.alloc(Object::String(val.into())));
         Ok(val)
     }
 
@@ -999,75 +935,68 @@ impl Vm {
         } else {
             match val1 {
                 Value::StringConst(s1) => {
-                    if let Value::Reference(v2) = val2 {
-                        if let Object::String(s2) = self.get(v2) {
-                            if self.get_interned(s1) == s2 {
+                    if let Value::String(v2) = val2 {
+                        let s2 = self.heap.get_string(v2);
+                        if self.get_interned(s1) == s2 {
+                            val = Value::True;
+                        }
+                    }
+                }
+                Value::String(h1) => {
+                    let s1 = self.heap.get_string(h1);
+                    if let Value::StringConst(s2) = val2 {
+                        if s1 == self.get_interned(s2) {
+                            val = Value::True;
+                        }
+                    }
+                }
+                Value::Vector(h1) => {
+                    if let Value::Vector(h2) = val2 {
+                        let v1 = self.heap.get_vector(h1);
+                        let v2 = self.heap.get_vector(h2);
+                        if v1.len() == v2.len() {
+                            if v1.is_empty() {
                                 val = Value::True;
+                            } else {
+                                for i in 0..v1.len() {
+                                    val = self.is_equal_pair(v1[i], v2[i])?;
+                                    if val == Value::False {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                Value::Reference(h1) => {
-                    if let Value::StringConst(s2) = val2 {
-                        if let Object::String(s1) = self.get(h1) {
-                            if s1 == self.get_interned(s2) {
+                Value::Bytes(h1) => {
+                    if let Value::Bytes(h2) = val2 {
+                        let b1 = self.heap.get_bytes(h1);
+                        let b2 = self.heap.get_bytes(h2);
+                        if b1.len() == b2.len() {
+                            if b1.is_empty() {
                                 val = Value::True;
+                            } else {
+                                for i in 0..b1.len() {
+                                    if b1[i] == b2[i] {
+                                        val = Value::True;
+                                    } else {
+                                        val = Value::False;
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    } else if let Value::Reference(h2) = val2 {
-                        match self.get(h1) {
-                            Object::String(s1) => {
-                                if let Object::String(s2) = self.get(h2) {
-                                    if s1 == s2 {
-                                        val = Value::True;
-                                    }
-                                }
-                            }
-                            Object::Vector(v1) => {
-                                if let Object::Vector(v2) = self.get(h2) {
-                                    if v1.len() == v2.len() {
-                                        if v1.is_empty() {
-                                            val = Value::True;
-                                        } else {
-                                            for i in 0..v1.len() {
-                                                val = self.is_equal_pair(v1[i], v2[i])?;
-                                                if val == Value::False {
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Object::Bytes(b1) => {
-                                if let Object::Bytes(b2) = self.get(h2) {
-                                    if b1.len() == b2.len() {
-                                        if b1.is_empty() {
-                                            val = Value::True;
-                                        } else {
-                                            for i in 0..b1.len() {
-                                                if b1[i] == b2[i] {
-                                                    val = Value::True;
-                                                } else {
-                                                    val = Value::False;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Object::Pair(car1, cdr1, _) => {
-                                // XXX use iterators to reduce recursion?
-                                // Make sure pair iter will work for non-lists...
-                                if let Object::Pair(car2, cdr2, _) = self.get(h2) {
-                                    val = self.is_equal_pair(*car1, *car2)?;
-                                    if val == Value::True {
-                                        val = self.is_equal_pair(*cdr1, *cdr2)?;
-                                    }
-                                }
-                            }
-                            _ => {}
+                    }
+                }
+                Value::Pair(h1) => {
+                    // XXX use iterators to reduce recursion?
+                    // Make sure pair iter will work for non-lists...
+                    if let Value::Pair(h2) = val2 {
+                        let (car1, cdr1, _) = self.heap.get_pair(h1);
+                        let (car2, cdr2, _) = self.heap.get_pair(h2);
+                        val = self.is_equal_pair(car1, car2)?;
+                        if val == Value::True {
+                            val = self.is_equal_pair(cdr1, cdr2)?;
                         }
                     }
                 }
@@ -1292,8 +1221,8 @@ impl Vm {
                     let val = get_reg_unref!(registers, src, self);
                     //            self.set_register(registers, dest as usize, val);
                     match &get_reg!(registers, dest) {
-                        Value::Binding(handle) => {
-                            self.heap.replace(*handle, Object::Upval(val));
+                        Value::Value(handle) => {
+                            self.heap.replace(*handle, Object::Value(val));
                         }
                         Value::Global(dest) => self.globals.set(*dest, val),
                         _ => registers[dest as usize] = val,
@@ -1392,36 +1321,27 @@ impl Vm {
                 CLOSE => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let lambda = get_reg_unref!(registers, src, self);
-                    let (lambda, caps) = if let Value::Reference(h) = lambda {
-                        let lr = self.get(h);
-                        if let Object::Lambda(l) = lr {
-                            let l = l.clone();
-                            let mut caps = Vec::new();
-                            if let Some(captures) = &l.captures {
-                                for c in captures {
-                                    let r = get_reg!(registers, *c);
-                                    if let Value::Binding(b) = r {
-                                        caps.push(b);
-                                    } else {
-                                        let slot = self.new_upval(r);
-                                        Self::mov_register(
-                                            registers,
-                                            *c as usize,
-                                            Value::Binding(slot),
-                                        );
-                                        caps.push(slot);
-                                    }
+                    let (lambda, caps) = if let Value::Lambda(h) = lambda {
+                        let l = self.heap.get_lambda(h);
+                        let l = l.clone();
+                        let mut caps = Vec::new();
+                        if let Some(captures) = &l.captures {
+                            for c in captures {
+                                let r = get_reg!(registers, *c);
+                                if let Value::Value(b) = r {
+                                    caps.push(b);
+                                } else {
+                                    let handle = self.new_upval(r);
+                                    Self::mov_register(
+                                        registers,
+                                        *c as usize,
+                                        Value::Value(handle),
+                                    );
+                                    caps.push(handle);
                                 }
                             }
-                            (l.clone(), caps)
-                        } else {
-                            return Err((
-                                VMError::new_vm(
-                                    format!("CLOSE: requires a lambda, got {:?}.", lr,),
-                                ),
-                                chunk,
-                            ));
                         }
+                        (l.clone(), caps)
                     } else {
                         return Err((
                             VMError::new_vm(format!("CLOSE: requires a lambda, got {:?}.", lambda)),
@@ -1431,7 +1351,7 @@ impl Vm {
                     Self::mov_register(
                         registers,
                         dest as usize,
-                        Value::Reference(self.alloc(Object::Closure(lambda, caps))),
+                        Value::Closure(self.alloc(Object::Closure(lambda, caps))),
                     );
                 }
                 CALL => {
@@ -1716,7 +1636,7 @@ impl Vm {
                         arg_reg: self.stack_top + first_reg as usize, //stack_len,
                         stack,
                     });
-                    let k_obj = Value::Reference(self.alloc(Object::Continuation(k)));
+                    let k_obj = Value::Continuation(self.alloc(Object::Continuation(k)));
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
                     registers = self.make_registers();
@@ -1901,21 +1821,16 @@ impl Vm {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut self.ip, wide);
                     let car = get_reg_unref!(registers, op2, self);
                     let cdr = get_reg_unref!(registers, op3, self);
-                    let pair = Value::Reference(self.alloc(Object::Pair(car, cdr, None)));
+                    let pair = Value::Pair(self.alloc(Object::Pair(car, cdr, None)));
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
-                        Value::Reference(handle) => {
-                            let handle_d = self.heap.get(handle);
-                            if let Object::Pair(car, _, _) = &*handle_d {
-                                let car = *car;
-                                self.set_register(registers, dest as usize, car);
-                            } else {
-                                return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk));
-                            }
+                        Value::Pair(handle) => {
+                            let (car, _, _) = self.heap.get_pair(handle);
+                            self.set_register(registers, dest as usize, car);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
                         _ => return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk)),
@@ -1925,14 +1840,9 @@ impl Vm {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
-                        Value::Reference(handle) => {
-                            let handle_d = self.heap.get(handle);
-                            if let Object::Pair(_, cdr, _) = &*handle_d {
-                                let cdr = *cdr;
-                                self.set_register(registers, dest as usize, cdr);
-                            } else {
-                                return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk));
-                            }
+                        Value::Pair(handle) => {
+                            let (_, cdr, _) = self.heap.get_pair(handle);
+                            self.set_register(registers, dest as usize, cdr);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
                         _ => return Err((VMError::new_vm("CDR: Not a pair/conscell."), chunk)),
@@ -1954,14 +1864,14 @@ impl Vm {
                     let (dest, start, end) = decode3!(chunk.code, &mut self.ip, wide);
                     if end == start {
                         let vh = self.alloc(Object::Vector(Vec::new()));
-                        self.set_register(registers, dest as usize, Value::Reference(vh));
+                        self.set_register(registers, dest as usize, Value::Vector(vh));
                     } else {
                         let mut v = Vec::new();
                         for i in start..end {
                             v.push(get_reg_unref!(registers, i, self));
                         }
                         let vh = self.alloc(Object::Vector(v));
-                        self.set_register(registers, dest as usize, Value::Reference(vh));
+                        self.set_register(registers, dest as usize, Value::Vector(vh));
                     }
                 }
                 VECMK => {
@@ -1969,9 +1879,8 @@ impl Vm {
                     let len = get_reg_unref!(registers, op, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))?;
-                    let val = Value::Reference(
-                        self.alloc(Object::Vector(Vec::with_capacity(len as usize))),
-                    );
+                    let val =
+                        Value::Vector(self.alloc(Object::Vector(Vec::with_capacity(len as usize))));
                     self.set_register(registers, dest as usize, val);
                 }
                 VECELS => {
@@ -2066,7 +1975,7 @@ impl Vm {
                     for _ in 0..len {
                         v.push(dfn);
                     }
-                    let val = Value::Reference(self.alloc(Object::Vector(v)));
+                    let val = Value::Vector(self.alloc(Object::Vector(v)));
                     self.set_register(registers, dest as usize, val);
                 }
                 VECLEN => {
@@ -2262,25 +2171,16 @@ mod tests {
         let chunk = Rc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
-        if let Value::Reference(h) = result {
-            if let Object::Pair(car, cdr, _) = &*vm.heap.get(*h) {
-                assert!(get_int(&vm, car)? == 1);
-                if let Value::Reference(cdr) = cdr {
-                    if let Object::Pair(car, cdr, _) = &*vm.heap.get(*cdr) {
-                        assert!(get_int(&vm, car)? == 2);
-                        if let Value::Reference(cdr) = cdr {
-                            if let Object::Pair(car, cdr, _) = &*vm.heap.get(*cdr) {
-                                assert!(get_int(&vm, car)? == 3);
-                                assert!(is_nil(&vm, cdr)?);
-                            } else {
-                                assert!(false);
-                            }
-                        } else {
-                            assert!(false);
-                        }
-                    } else {
-                        assert!(false);
-                    }
+        if let Value::Pair(h) = result {
+            let (car, cdr, _) = vm.heap.get_pair(*h);
+            assert!(get_int(&vm, &car)? == 1);
+            if let Value::Pair(h2) = cdr {
+                let (car, cdr, _) = vm.heap.get_pair(h2);
+                assert!(get_int(&vm, &car)? == 2);
+                if let Value::Pair(h3) = cdr {
+                    let (car, cdr, _) = vm.heap.get_pair(h3);
+                    assert!(get_int(&vm, &car)? == 3);
+                    assert!(is_nil(&vm, &cdr)?);
                 } else {
                     assert!(false);
                 }
@@ -2343,7 +2243,7 @@ mod tests {
         assert!(result == 255 + 256);
 
         let mut vm = Vm::new();
-        vm.stack[0] = Value::Binding(vm.new_upval(Value::Int(1)));
+        vm.stack[0] = Value::Value(vm.new_upval(Value::Int(1)));
         vm.stack[1] = Value::Int(10);
         vm.stack[2] = Value::Int(1);
         let mut chunk = Rc::try_unwrap(chunk).unwrap();
@@ -2611,7 +2511,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2619,7 +2519,7 @@ mod tests {
         chunk.encode2(CONST, 2, const1, line).unwrap();
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2651,7 +2551,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2662,7 +2562,7 @@ mod tests {
         chunk.encode2(TCALL, 3, 2, line).unwrap();
         // The TCALL will keep HALT from executing.
         chunk.encode0(HALT, line)?;
-        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2706,7 +2606,7 @@ mod tests {
             if registers.len() != 0 {
                 return Err(VMError::new_vm("test make_str: wrong number of args."));
             }
-            let s = Value::Reference(vm.alloc(Object::String("builtin hello".into())));
+            let s = Value::String(vm.alloc(Object::String("builtin hello".into())));
             Ok(s)
         }
         let mut vm = Vm::new();
@@ -2718,7 +2618,7 @@ mod tests {
         chunk.encode2(MOV, 5, 2, line).unwrap();
         chunk.encode3(CALL, 10, 2, 3, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2726,7 +2626,7 @@ mod tests {
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode2(TCALL, 10, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let tadd = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let tadd = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2735,7 +2635,7 @@ mod tests {
         chunk.encode2(MOV, 3, 1, line).unwrap();
         chunk.encode3(CALL, 4, 1, 2, line).unwrap();
         chunk.encode1(SRET, 2, line)?;
-        let add_ten = Value::Reference(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2757,10 +2657,7 @@ mod tests {
         let result = vm.stack[7].get_int()?;
         assert!(result == 22);
         match vm.stack[15] {
-            Value::Reference(h) => match vm.heap.get(h) {
-                Object::String(s) => assert!(s == "builtin hello"),
-                _ => panic!("bad make_str call."),
-            },
+            Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
             _ => panic!("bad make_str call"),
         }
 
@@ -2787,10 +2684,7 @@ mod tests {
         let result = vm.stack[5].get_int()?;
         assert!(result == 22);
         match vm.stack[11] {
-            Value::Reference(h) => match vm.heap.get(h) {
-                Object::String(s) => assert!(s == "builtin hello"),
-                _ => panic!("bad make_str call."),
-            },
+            Value::String(h) => assert!(vm.heap.get_string(h) == "builtin hello"),
             _ => panic!("bad make_str call"),
         }
 

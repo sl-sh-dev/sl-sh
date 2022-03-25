@@ -31,6 +31,12 @@ impl Hash for CallFunc {
     }
 }
 
+impl fmt::Debug for CallFunc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "...")
+    }
+}
+
 pub struct PairIter<'vm> {
     vm: &'vm Vm,
     current: Option<Value>,
@@ -57,18 +63,11 @@ impl<'vm> Iterator for PairIter<'vm> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current {
             match current {
-                Value::Reference(h) => match self.vm.get(h) {
-                    Object::Pair(car, cdr, _) => {
-                        self.current = Some(*cdr);
-                        Some(*car)
-                    }
-                    _ => {
-                        let cur = Some(current);
-                        self.current = None;
-                        self.dotted = true;
-                        cur
-                    }
-                },
+                Value::Pair(h) => {
+                    let (car, cdr, _) = self.vm.get_pair(h);
+                    self.current = Some(cdr);
+                    Some(car)
+                }
                 Value::Nil => None,
                 _ => {
                     let cur = Some(current);
@@ -84,7 +83,7 @@ impl<'vm> Iterator for PairIter<'vm> {
 }
 
 // Do this wrap nonsense so that Value is hashable...
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct F64Wrap(pub f64);
 
 impl PartialEq for F64Wrap {
@@ -101,7 +100,7 @@ impl Hash for F64Wrap {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Value {
     Byte(u8),
     Int(i64),
@@ -113,217 +112,23 @@ pub enum Value {
     Symbol(Interned),
     Keyword(Interned),
     StringConst(Interned),
-    Reference(Handle),
-    Binding(Handle),
     Global(u32),
     Builtin(CallFunc), // XXX TODO, special form?
     True,
     False,
     Nil,
     Undefined,
-}
 
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Self::Byte(v1) => {
-                if let Self::Byte(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Int(v1) => {
-                if let Self::Int(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::UInt(v1) => {
-                if let Self::UInt(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Float(v1) => {
-                if let Self::Float(v2) = other {
-                    v1.0.to_bits() == v2.0.to_bits()
-                } else {
-                    false
-                }
-            }
-            Self::CodePoint(v1) => {
-                if let Self::CodePoint(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::CharCluster(l1, v1) => {
-                if let Self::CharCluster(l2, v2) = other {
-                    l1 == l2 && v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::CharClusterLong(v1) => {
-                if let Self::CharClusterLong(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Symbol(v1) => {
-                if let Self::Symbol(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Keyword(v1) => {
-                if let Self::Keyword(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::StringConst(v1) => {
-                if let Self::StringConst(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Reference(v1) => {
-                if let Self::Reference(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Binding(v1) => {
-                if let Self::Binding(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Global(v1) => {
-                if let Self::Global(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::Builtin(v1) => {
-                if let Self::Builtin(v2) = other {
-                    v1 == v2
-                } else {
-                    false
-                }
-            }
-            Self::True => matches!(other, Self::True),
-            Self::False => matches!(other, Self::False),
-            Self::Nil => matches!(other, Self::Nil),
-            Self::Undefined => matches!(other, Self::Undefined),
-        }
-    }
-}
-
-impl Eq for Value {}
-
-impl Hash for Value {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            Value::Float(f) => {
-                f.0.to_bits().hash(state);
-            }
-            Value::Byte(b) => {
-                1.hash(state);
-                b.hash(state);
-            }
-            Value::Int(i) => {
-                (1 << 1).hash(state);
-                i.hash(state);
-            }
-            Value::UInt(i) => {
-                (1 << 2).hash(state);
-                i.hash(state);
-            }
-            Value::CodePoint(c) => {
-                (1 << 3).hash(state);
-                c.hash(state);
-            }
-            Value::CharCluster(l, a) => {
-                (1 << 4).hash(state);
-                l.hash(state);
-                a.hash(state);
-            }
-            Value::CharClusterLong(l) => {
-                (1 << 5).hash(state);
-                l.hash(state);
-            }
-            Value::Symbol(i) => {
-                (1 << 6).hash(state);
-                i.hash(state);
-            }
-            Value::StringConst(i) => {
-                (1 << 7).hash(state);
-                i.hash(state);
-            }
-            Value::Reference(r) => {
-                (1 << 8).hash(state);
-                r.hash(state);
-            }
-            Value::Binding(b) => {
-                (1 << 9).hash(state);
-                b.hash(state);
-            }
-            Value::Global(g) => {
-                (1 << 10).hash(state);
-                g.hash(state);
-            }
-            Value::Builtin(c) => {
-                (1 << 11).hash(state);
-                c.hash(state);
-            }
-            Value::True => (1 << 12).hash(state),
-            Value::False => (1 << 13).hash(state),
-            Value::Nil => (1 << 14).hash(state),
-            Value::Undefined => (1 << 15).hash(state),
-            Value::Keyword(i) => {
-                (1 << 16).hash(state);
-                i.hash(state);
-            }
-        }
-    }
-}
-
-impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Byte(b) => write!(f, "Byte({})", b),
-            Self::Int(i) => write!(f, "Int({})", i),
-            Self::UInt(i) => write!(f, "UInt({})", i),
-            Self::Float(v) => write!(f, "Float({})", v.0),
-            Self::CodePoint(c) => write!(f, "CodePoint({})", c),
-            Self::CharCluster(_, c) => write!(f, "CharCluster({:?})", c),
-            Self::CharClusterLong(c) => write!(f, "CharClusterLong({:?})", c),
-            Self::Symbol(s) => write!(f, "Symbol({:?})", s),
-            Self::Keyword(s) => write!(f, "Keyword({:?})", s),
-            Self::StringConst(s) => write!(f, "StringConst({:?})", s),
-            Self::Reference(r) => write!(f, "Reference({:?})", r),
-            Self::Binding(r) => write!(f, "Binding({:?})", r),
-            Self::Global(g) => write!(f, "Global({})", g),
-            Self::Builtin(_) => write!(f, "Builtin(...)"),
-            Self::True => write!(f, "True"),
-            Self::False => write!(f, "False"),
-            Self::Nil => write!(f, "Nil"),
-            Self::Undefined => write!(f, "Undefined"),
-        }
-    }
+    String(Handle),
+    Vector(Handle),
+    Bytes(Handle),
+    Pair(Handle),
+    Lambda(Handle),
+    Macro(Handle),
+    Closure(Handle),
+    Continuation(Handle),
+    CallFrame(Handle),
+    Value(Handle),
 }
 
 impl Default for Value {
@@ -350,7 +155,7 @@ impl Value {
             return self;
         }
         match &self {
-            Value::Binding(handle) => vm.get_upval(*handle),
+            Value::Value(handle) => vm.get_value(*handle),
             Value::Global(idx) => vm.get_global(*idx),
             _ => self,
         }
@@ -372,15 +177,11 @@ impl Value {
         }
     }
 
-    pub fn is_ref(&self) -> bool {
-        matches!(self, Value::Reference(_))
-    }
-
     pub fn is_indirect(&self) -> bool {
         matches!(
             self,
             //Value::Reference(_) | Value::Binding(_) | Value::Global(_)
-            Value::Binding(_) | Value::Global(_)
+            Value::Value(_) | Value::Global(_)
         )
     }
 
@@ -440,28 +241,52 @@ impl Value {
 
     pub fn get_object<'vm>(&self, vm: &'vm mut Vm) -> VMResult<HandleRefMut<'vm>> {
         match &self {
-            Value::Reference(h) => Ok(vm.get_mut(*h)),
+            Value::CharClusterLong(handle) => Ok(vm.get_mut(*handle)),
+            Value::String(handle) => Ok(vm.get_mut(*handle)),
+            Value::Vector(handle) => Ok(vm.get_mut(*handle)),
+            Value::Bytes(handle) => Ok(vm.get_mut(*handle)),
+            Value::Pair(handle) => Ok(vm.get_mut(*handle)),
+            Value::Lambda(handle) => Ok(vm.get_mut(*handle)),
+            Value::Macro(handle) => Ok(vm.get_mut(*handle)),
+            Value::Closure(handle) => Ok(vm.get_mut(*handle)),
+            Value::Continuation(handle) => Ok(vm.get_mut(*handle)),
+            Value::CallFrame(handle) => Ok(vm.get_mut(*handle)),
+            Value::Value(handle) => Ok(vm.get_mut(*handle)),
             _ => Err(VMError::new_value("Not an object")),
+        }
+    }
+
+    pub fn get_handle(&self) -> Option<Handle> {
+        match &self {
+            Value::CharClusterLong(handle) => Some(*handle),
+            Value::String(handle) => Some(*handle),
+            Value::Vector(handle) => Some(*handle),
+            Value::Bytes(handle) => Some(*handle),
+            Value::Pair(handle) => Some(*handle),
+            Value::Lambda(handle) => Some(*handle),
+            Value::Macro(handle) => Some(*handle),
+            Value::Closure(handle) => Some(*handle),
+            Value::Continuation(handle) => Some(*handle),
+            Value::CallFrame(handle) => Some(*handle),
+            Value::Value(handle) => Some(*handle),
+            _ => None,
         }
     }
 
     pub fn get_pair(&self, vm: &Vm) -> Option<(Value, Value)> {
         match &self {
-            Value::Reference(h) => match vm.get(*h) {
-                Object::Pair(car, cdr, _) => Some((*car, *cdr)),
-                _ => None,
-            },
+            Value::Pair(handle) => {
+                let (car, cdr, _) = vm.get_pair(*handle);
+                Some((car, cdr))
+            }
             _ => None,
         }
     }
 
     pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
-            Value::Reference(h) => match vm.get(*h) {
-                Object::Pair(_, _, _) => Box::new(PairIter::new(vm, *self)),
-                Object::Vector(v) => Box::new(v.iter().copied()),
-                _ => Box::new(iter::empty()),
-            },
+            Value::Pair(_) => Box::new(PairIter::new(vm, *self)),
+            Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
             _ => Box::new(iter::empty()),
         }
     }
@@ -491,17 +316,11 @@ impl Value {
                     first = false;
                 }
                 match cdr {
-                    Value::Reference(h) => match vm.get(h) {
-                        Object::Pair(car, ncdr, _) => {
-                            res.push_str(&car.display_value(vm));
-                            cdr = *ncdr;
-                        }
-                        _ => {
-                            res.push_str(". ");
-                            res.push_str(&cdr.display_value(vm));
-                            break;
-                        }
-                    },
+                    Value::Pair(handle) => {
+                        let (car, ncdr, _) = vm.get_pair(handle);
+                        res.push_str(&car.display_value(vm));
+                        cdr = ncdr;
+                    }
                     _ => {
                         res.push_str(". ");
                         res.push_str(&cdr.display_value(vm));
@@ -518,46 +337,40 @@ impl Value {
             Value::UInt(i) => format!("{}", i),
             Value::Byte(b) => format!("{}", b),
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
-            Value::Keyword(i) => format!(":{}", vm.get_interned(*i).to_string()),
-            Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i).to_string()),
+            Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
+            Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
             Value::CodePoint(ch) => format!("#\\{}", ch),
             Value::CharCluster(l, c) => {
                 format!("#\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
             Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
             Value::Builtin(_) => "#<Function>".to_string(),
-            Value::Binding(_) => self.unref(vm).display_value(vm),
             Value::Global(_) => self.unref(vm).display_value(vm),
             Value::Nil => "nil".to_string(),
             Value::Undefined => "#<Undefined>".to_string(), //panic!("Tried to get type for undefined!"),
-            Value::Reference(h) => match vm.get(*h) {
-                Object::Lambda(_) => "#<Lambda>".to_string(),
-                Object::Macro(_) => "#<Macro>".to_string(),
-                Object::Closure(_, _) => "#<Lambda>".to_string(),
-                Object::Continuation(_) => "#<Continuation>".to_string(),
-                Object::CallFrame(_) => "#<CallFrame>".to_string(),
-                //Object::Macro(_) => "Macro".to_string(),
-                //Object::Process(_) => "Process".to_string(),
-                Object::Vector(v) => {
-                    let mut res = String::new();
-                    res.push_str("#(");
-                    list_out_iter(vm, &mut res, &mut v.iter().copied());
-                    res.push(')');
-                    res
-                }
-                Object::Pair(_, _, _) => {
-                    let mut res = String::new();
-                    res.push('(');
-                    list_out(vm, &mut res, *self);
-                    res.push(')');
-                    res
-                }
-                Object::String(s) => format!("\"{}\"", s),
-                Object::Bytes(_) => "Bytes".to_string(), // XXX TODO
-                Object::Upval(val) => val.display_value(vm),
-                //Object::HashMap(_) => "HashMap".to_string(),
-                //Object::File(_) => "File".to_string(),
-            },
+            Value::Lambda(_) => "#<Lambda>".to_string(),
+            Value::Macro(_) => "#<Macro>".to_string(),
+            Value::Closure(_) => "#<Lambda>".to_string(),
+            Value::Continuation(_) => "#<Continuation>".to_string(),
+            Value::CallFrame(_) => "#<CallFrame>".to_string(),
+            Value::Vector(handle) => {
+                let v = vm.get_vector(*handle);
+                let mut res = String::new();
+                res.push_str("#(");
+                list_out_iter(vm, &mut res, &mut v.iter().copied());
+                res.push(')');
+                res
+            }
+            Value::Pair(_) => {
+                let mut res = String::new();
+                res.push('(');
+                list_out(vm, &mut res, *self);
+                res.push(')');
+                res
+            }
+            Value::String(handle) => format!("\"{}\"", vm.get_string(*handle)),
+            Value::Bytes(_) => "Bytes".to_string(), // XXX TODO
+            Value::Value(handle) => vm.get_value(*handle).display_value(vm),
         }
     }
 
@@ -569,10 +382,7 @@ impl Value {
                 format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
             Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
-            Value::Reference(h) => match vm.get(*h) {
-                Object::String(s) => format!("{}", s),
-                _ => self.display_value(vm),
-            },
+            Value::String(handle) => format!("{}", vm.get_string(*handle)),
             _ => self.display_value(vm),
         }
     }
@@ -592,47 +402,30 @@ impl Value {
             Value::CharClusterLong(_) => "Char",
             Value::Builtin(_) => "Builtin",
             Value::Byte(_) => "Byte",
-            Value::Binding(_) => self.unref(vm).display_type(vm),
             Value::Global(_) => self.unref(vm).display_type(vm),
             Value::Nil => "Nil",
             Value::Undefined => "Undefined", //panic!("Tried to get type for undefined!"),
-            Value::Reference(h) => match vm.get(*h) {
-                Object::Lambda(_) => "Lambda",
-                Object::Macro(_) => "Macro",
-                Object::Closure(_, _) => "Lambda",
-                Object::Continuation(_) => "Continuation",
-                Object::CallFrame(_) => "CallFrame",
-                //Object::Macro(_) => "Macro".to_string(),
-                //Object::Process(_) => "Process".to_string(),
-                /*Object::Function(f) => {
-                    if f.is_special_form {
-                        "SpecialForm".to_string()
-                    } else {
-                        "Function".to_string()
-                    }
-                }*/
-                Object::Vector(_) => "Vector",
-                Object::Pair(_, _, _) => "Pair",
-                Object::String(_) => "String",
-                Object::Bytes(_) => "Bytes",
-                Object::Upval(val) => val.display_type(vm),
-                //Object::HashMap(_) => "HashMap".to_string(),
-                //Object::File(_) => "File".to_string(),
-            },
+            Value::Lambda(_) => "Lambda",
+            Value::Macro(_) => "Macro",
+            Value::Closure(_) => "Lambda",
+            Value::Continuation(_) => "Continuation",
+            Value::CallFrame(_) => "CallFrame",
+            Value::Vector(_) => "Vector",
+            Value::Pair(_) => "Pair",
+            Value::String(_) => "String",
+            Value::Bytes(_) => "Bytes",
+            Value::Value(handle) => vm.get_value(*handle).display_type(vm),
         }
     }
 
     pub fn is_proper_list(&self, vm: &Vm) -> bool {
         // does not detect empty (nil) lists on purpose.
-        if let Value::Reference(h) = self {
-            if let Object::Pair(_car, cdr, _) = vm.get(*h) {
-                if cdr.is_nil() {
-                    true
-                } else {
-                    cdr.is_proper_list(vm)
-                }
+        if let Value::Pair(handle) = self {
+            let (_car, cdr, _) = vm.get_pair(*handle);
+            if cdr.is_nil() {
+                true
             } else {
-                false
+                cdr.is_proper_list(vm)
             }
         } else {
             false
@@ -707,8 +500,19 @@ impl Globals {
 
     pub fn mark(&self, heap: &mut Heap) {
         for obj in &self.objects {
-            if let Value::Reference(handle) = obj {
-                heap.mark(*handle);
+            match obj {
+                Value::CharClusterLong(handle) => heap.mark(*handle),
+                Value::String(handle) => heap.mark(*handle),
+                Value::Vector(handle) => heap.mark(*handle),
+                Value::Bytes(handle) => heap.mark(*handle),
+                Value::Pair(handle) => heap.mark(*handle),
+                Value::Lambda(handle) => heap.mark(*handle),
+                Value::Macro(handle) => heap.mark(*handle),
+                Value::Closure(handle) => heap.mark(*handle),
+                Value::Continuation(handle) => heap.mark(*handle),
+                Value::CallFrame(handle) => heap.mark(*handle),
+                Value::Value(handle) => heap.mark(*handle),
+                _ => {}
             }
         }
     }
