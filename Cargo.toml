@@ -32,6 +32,8 @@ panic = "abort"
 
 [dev-dependencies]
 criterion = "0.3"
+log = "0.4.16"
+simple-logging = "2.0.2"
 
 [[bench]]
 name = "start_benchmark"

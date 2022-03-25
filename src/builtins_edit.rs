@@ -174,12 +174,12 @@ fn has_balanced_string_delimiter(buf: &Buffer, string_delimiter: &str) -> bool {
         == 0
 }
 
-fn order_delimiters_in_str(str: &str, open: &str, close: &str) -> Vec<DelimiterType> {
+fn order_sorted_lists<T, U>(open_indices: T, close_indices: T) -> Vec<U> where
+ T: IntoIterator<Item = U>,
+ U: Eq + PartialEq + Ord + PartialOrd + Copy {
     let mut vec = vec![];
-    let mut open_indices = str.match_indices(open).map(|(i, _)| DelimiterType::Open(i));
-    let mut close_indices = str
-        .match_indices(close)
-        .map(|(i, _)| DelimiterType::Close(i));
+    let mut open_indices = open_indices.into_iter();
+    let mut close_indices = close_indices.into_iter();
     let (mut open_curr, mut close_curr) = (open_indices.next(), close_indices.next());
     loop {
         match (open_curr, close_curr) {
@@ -208,16 +208,35 @@ fn order_delimiters_in_str(str: &str, open: &str, close: &str) -> Vec<DelimiterT
     vec
 }
 
+fn order_delimiters_in_str(str: &str, open: &str, close: &str) -> Vec<DelimiterType> {
+    let open_indices = str.match_indices(open).map(|(i, _)| DelimiterType::Open(i)).collect::<Vec<DelimiterType>>();
+    let close_indices = str
+        .match_indices(close)
+        .map(|(i, _)| DelimiterType::Close(i)).collect::<Vec<DelimiterType>>();
+    order_sorted_lists(open_indices, close_indices)
+}
+
+/// any multiline_comment surrounded by string_delimiter should be stripped to avoid errors in the
+/// next processing step, unless the open multiline_comment is active, in which case all
+/// string_delimiter instances are ignored until a multiline_comment is found.
+fn strip_string_delimited_multiline_comment<'a>(
+    buf: &'a Buffer,
+    multiline_comment: &(&str, &str),
+    string_delimiter: &str,
+) -> &'a str {
+    buf.range_graphemes_all().slice()
+}
+
 /// Checks buf to see if vec of multi grapheme cluster &str pairs are balanced. Precondition for
 /// evaluation ensures that string_delimiter is balanced, as only delimiter pairs outside
 /// string_delimiter are searched.
-fn has_balanced_multi_delimiters(
+fn has_multiline_comment(
     buf: &Buffer,
-    multiline_delimiters: &[(&str, &str)],
+    multiline_comment: &(&str, &str),
     string_delimiter: &str,
-) -> bool {
+) -> Option<Vec<(usize, usize)>> {
     if !has_balanced_string_delimiter(buf, string_delimiter) {
-        false
+        None
     } else {
         let filtered_str = buf
             .range_graphemes_all()
@@ -226,23 +245,31 @@ fn has_balanced_multi_delimiters(
             .step_by(2)
             .collect::<String>();
         let mut count = 0;
-        for delimiter_pair in multiline_delimiters {
-            let (open, close) = delimiter_pair;
-            let vec = order_delimiters_in_str(&filtered_str, open, close);
-            for delim in vec {
-                match delim {
-                    DelimiterType::Open(_) => {
-                        count += 1;
-                    }
-                    DelimiterType::Close(_) => {
-                        if count > 0 {
-                            count -= 1;
+        let mut open_count: Vec<(Option<usize>, Option<usize>)> = vec![];
+        let mut matched_multiline_comment_idx = vec![];
+        let (open, close) = multiline_comment;
+        let delimiters = order_delimiters_in_str(&filtered_str, open, close);
+        for delim in delimiters {
+            match delim {
+                DelimiterType::Open(i) => {
+                    count += 1;
+                    open_count.push((Some(i), None))
+                }
+                DelimiterType::Close(i) => {
+                    if count > 0 {
+                        count -= 1;
+                        if let (Some(open), None) = open_count.pop().unwrap_or_else(|| (None, None)) {
+                            matched_multiline_comment_idx.push((open, i));
                         }
                     }
                 }
             }
         }
-        count == 0
+        if open_count.is_empty() {
+            Some(matched_multiline_comment_idx)
+        } else {
+            None
+        }
     }
 }
 
@@ -306,18 +333,18 @@ pub fn check_balanced_delimiters(
     buf: &Buffer,
     string_delimiter: &str,
     delimiters: &[(&str, &str)],
-    multiline_delimiters: &[(&str, &str)],
+    multiline_comment: &(&str, &str),
 ) -> bool {
     let has_balanced_delimiters = has_balanced_delimiters(buf, delimiters, string_delimiter);
     let has_balanced_multi_delimiters =
-        has_balanced_multi_delimiters(buf, multiline_delimiters, string_delimiter);
+        has_multiline_comment(buf, multiline_comment, string_delimiter).is_some();
     has_balanced_delimiters && has_balanced_multi_delimiters
 }
 
 pub struct NewlineForBackslashAndOpenDelimRule<'a> {
     string_delimiter: &'a str,
     delimiters: Vec<(&'a str, &'a str)>,
-    multichar_delimiters: Vec<(&'a str, &'a str)>,
+    multiline_comment: (&'a str, &'a str),
 }
 
 impl NewlineRule for NewlineForBackslashAndOpenDelimRule<'_> {
@@ -327,7 +354,7 @@ impl NewlineRule for NewlineForBackslashAndOpenDelimRule<'_> {
                 buf,
                 self.string_delimiter,
                 &self.delimiters,
-                &self.multichar_delimiters,
+                &self.multiline_comment,
             )
     }
 }
@@ -345,14 +372,14 @@ fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
     // Do this before a history file load...
     apply_repl_settings(&mut con, &environment.repl_settings);
     let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
-    let multichar_delimiters = vec![("#|", "|#")];
+    let multiline_comment = ("#|", "|#");
     let string_delimiter = "\"";
     let editor_rules = DefaultEditorRules::custom(
         LinerWordDividerRule {},
         NewlineForBackslashAndOpenDelimRule {
             delimiters,
             string_delimiter,
-            multichar_delimiters,
+            multiline_comment,
         },
     );
     con.set_editor_rules(Box::new(editor_rules));
@@ -825,6 +852,9 @@ Example:
 
 #[cfg(test)]
 mod test {
+    use log::debug;
+    use log::LevelFilter;
+
     use super::*;
 
     #[test]
@@ -842,26 +872,38 @@ mod test {
     }
 
     #[test]
-    fn test_has_balanced_multi_delimiters() {
+    fn has_balanced_multiline_comment() {
+        simple_logging::log_to_stderr(LevelFilter::Debug);
         let string_delimiter = "\"";
-        let vec = vec![("#|", "|#")];
+        let multiline_comment = ("#|", "|#");
 
         let buf = Buffer::from("ok now here \" this is #| |# |# #| #| |# |# |#\" we go #| doing things in comments |# sometimes");
-        let ret = has_balanced_multi_delimiters(&buf, &vec, string_delimiter);
-        assert!(ret);
+        let ret = has_multiline_comment(&buf, &multiline_comment, string_delimiter);
+        assert!(ret.is_some());
 
         let buf = Buffer::from("#|ok now here \" this is #| |# |# #| #| |# |# |#\" we go #| doing things in comments |# sometimes");
-        let ret = has_balanced_multi_delimiters(&buf, &vec, string_delimiter);
-        assert!(!ret);
+        let ret = has_multiline_comment(&buf, &multiline_comment, string_delimiter);
+        assert!(ret.is_none());
     }
 
     #[test]
     fn test_string_delimiter_balanced() {
         let string_delimiter = "\"";
         let buf = Buffer::from("outside double quotes\" inside double_quotes\" and this.");
-        assert!(has_balanced_string_delimiter(buf, string_delimiter));
+        assert!(has_balanced_string_delimiter(&buf, string_delimiter));
 
         let buf = Buffer::from("outside double quotes\" inside double_quotes\" ok \"");
-        assert!(!has_balanced_string_delimiter(buf, string_delimiter));
+        assert!(!has_balanced_string_delimiter(&buf, string_delimiter));
+    }
+
+    #[test]
+    fn test_strip_interaction_between_multiline_comment_and_string_delimiter() {
+        simple_logging::log_to_stderr(LevelFilter::Debug);
+        let string_delimiter = "\"";
+        let multiline_comment = ("#|", "|#");
+        let buf = Buffer::from("outside double quotes\" inside double_quotes\" and this.");
+        let str = strip_string_delimited_multiline_comment(&buf, &multiline_comment, string_delimiter);
+        debug!("{:?}", str);
+        assert_eq!(buf.range_graphemes_all(), str);
     }
 }
