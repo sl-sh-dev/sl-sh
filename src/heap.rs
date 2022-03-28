@@ -77,7 +77,7 @@ pub struct Continuation {
 // This is anything that can live on the heap.  Values normally live on the
 // stack or as constants.
 #[derive(Clone, Debug)]
-pub enum Object {
+enum Object {
     String(Cow<'static, str>),
     Vector(Vec<Value>),
     Bytes(Vec<u8>),
@@ -92,8 +92,9 @@ pub enum Object {
     //Upval(Value),
 }
 
-pub type HandleRef<'a> = &'a Object;
-pub type HandleRefMut<'a> = &'a mut Object;
+#[cfg(test)]
+type HandleRef<'a> = &'a Object;
+//type HandleRefMut<'a> = &'a mut Object;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
@@ -190,9 +191,9 @@ impl Heap {
         }
     }
 
-    pub fn alloc<MarkFunc>(&mut self, obj: Object, mark_roots: MarkFunc) -> Handle
+    fn alloc<MarkFunc>(&mut self, obj: Object, mark_roots: MarkFunc) -> Handle
     where
-        MarkFunc: Fn(&mut Heap) -> VMResult<()>,
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         if self.stats.live_objects() >= self.capacity() {
             self.collect(mark_roots);
@@ -225,48 +226,90 @@ impl Heap {
         }
     }
 
-    pub fn is_string(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx) {
-            (flag & 0xf0) == TYPE_STRING
-        } else {
-            false
-        }
+    pub fn alloc_pair<MarkFunc>(
+        &mut self,
+        car: Value,
+        cdr: Value,
+        meta: Option<Meta>,
+        mark_roots: MarkFunc,
+    ) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Pair(car, cdr, meta), mark_roots)
     }
 
-    pub fn is_vector(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx) {
-            (flag & 0xf0) == TYPE_VECTOR
-        } else {
-            false
-        }
+    pub fn alloc_string<MarkFunc>(&mut self, s: Cow<'static, str>, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::String(s), mark_roots)
     }
 
-    pub fn is_bytes(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx) {
-            (flag & 0xf0) == TYPE_BYTES
-        } else {
-            false
-        }
+    pub fn alloc_vector<MarkFunc>(&mut self, v: Vec<Value>, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Vector(v), mark_roots)
     }
 
-    pub fn is_pair(&self, handle: Handle) -> bool {
-        if let Some(flag) = self.flags.get(handle.idx) {
-            (flag & 0xf0) == TYPE_PAIR
-        } else {
-            false
-        }
+    pub fn alloc_bytes<MarkFunc>(&mut self, v: Vec<u8>, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Bytes(v), mark_roots)
     }
 
-    pub fn get(&self, handle: Handle) -> HandleRef<'_> {
+    pub fn alloc_lambda<MarkFunc>(&mut self, l: Rc<Chunk>, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Lambda(l), mark_roots)
+    }
+
+    pub fn alloc_macro<MarkFunc>(&mut self, l: Rc<Chunk>, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Macro(l), mark_roots)
+    }
+
+    pub fn alloc_closure<MarkFunc>(
+        &mut self,
+        l: Rc<Chunk>,
+        v: Vec<Handle>,
+        mark_roots: MarkFunc,
+    ) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Closure(l, v), mark_roots)
+    }
+
+    pub fn alloc_continuation<MarkFunc>(&mut self, k: Continuation, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Continuation(Box::new(k)), mark_roots)
+    }
+
+    pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::CallFrame(Box::new(frame)), mark_roots)
+    }
+
+    pub fn alloc_value<MarkFunc>(&mut self, val: Value, mark_roots: MarkFunc) -> Handle
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        self.alloc(Object::Value(val), mark_roots)
+    }
+
+    #[cfg(test)]
+    fn get(&self, handle: Handle) -> HandleRef<'_> {
         if let Some(data) = self.objects.get(handle.idx) {
-            data
-        } else {
-            panic!("Invalid object handle!");
-        }
-    }
-
-    pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
-        if let Some(data) = self.objects.get_mut(handle.idx) {
             data
         } else {
             panic!("Invalid object handle!");
@@ -289,6 +332,14 @@ impl Heap {
         }
     }
 
+    pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
+        if let Some(Object::Vector(v)) = self.objects.get_mut(handle.idx) {
+            v
+        } else {
+            panic!("Handle {} is not a vector!", handle.idx);
+        }
+    }
+
     pub fn get_bytes(&self, handle: Handle) -> &[u8] {
         if let Some(Object::Bytes(v)) = self.objects.get(handle.idx) {
             v
@@ -300,6 +351,14 @@ impl Heap {
     pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
         if let Some(Object::Pair(car, cdr, meta)) = self.objects.get(handle.idx) {
             (*car, *cdr, meta)
+        } else {
+            panic!("Handle {} is not a pair!", handle.idx);
+        }
+    }
+
+    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value, &mut Option<Meta>) {
+        if let Some(Object::Pair(car, cdr, meta)) = self.objects.get_mut(handle.idx) {
+            (car, cdr, meta)
         } else {
             panic!("Handle {} is not a pair!", handle.idx);
         }
@@ -345,6 +404,14 @@ impl Heap {
         }
     }
 
+    pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
+        if let Some(Object::CallFrame(call_frame)) = self.objects.get_mut(handle.idx) {
+            call_frame
+        } else {
+            panic!("Handle {} is not a continuation!", handle.idx);
+        }
+    }
+
     pub fn get_value(&self, handle: Handle) -> Value {
         if let Some(Object::Value(value)) = self.objects.get(handle.idx) {
             *value
@@ -353,7 +420,16 @@ impl Heap {
         }
     }
 
-    pub fn replace(&mut self, handle: Handle, obj: Object) -> Object {
+    pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
+        if let Some(Object::Value(value)) = self.objects.get_mut(handle.idx) {
+            value
+        } else {
+            panic!("Handle {} is not a value!", handle.idx);
+        }
+    }
+
+    #[cfg(test)]
+    fn replace(&mut self, handle: Handle, obj: Object) -> Object {
         let type_flag = Self::type_flag(&obj);
         self.objects.push(obj);
         let old = self.objects.swap_remove(handle.idx);
@@ -492,9 +568,9 @@ impl Heap {
         }
     }
 
-    pub fn collect<MarkFunc>(&mut self, mark_roots: MarkFunc)
+    fn collect<MarkFunc>(&mut self, mut mark_roots: MarkFunc)
     where
-        MarkFunc: Fn(&mut Heap) -> VMResult<()>,
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         self.stats.live_objects = self.stats.sticky_objects;
         for flag in self.flags.iter_mut() {

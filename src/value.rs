@@ -239,23 +239,6 @@ impl Value {
         }
     }
 
-    pub fn get_object<'vm>(&self, vm: &'vm mut Vm) -> VMResult<HandleRefMut<'vm>> {
-        match &self {
-            Value::CharClusterLong(handle) => Ok(vm.get_mut(*handle)),
-            Value::String(handle) => Ok(vm.get_mut(*handle)),
-            Value::Vector(handle) => Ok(vm.get_mut(*handle)),
-            Value::Bytes(handle) => Ok(vm.get_mut(*handle)),
-            Value::Pair(handle) => Ok(vm.get_mut(*handle)),
-            Value::Lambda(handle) => Ok(vm.get_mut(*handle)),
-            Value::Macro(handle) => Ok(vm.get_mut(*handle)),
-            Value::Closure(handle) => Ok(vm.get_mut(*handle)),
-            Value::Continuation(handle) => Ok(vm.get_mut(*handle)),
-            Value::CallFrame(handle) => Ok(vm.get_mut(*handle)),
-            Value::Value(handle) => Ok(vm.get_mut(*handle)),
-            _ => Err(VMError::new_value("Not an object")),
-        }
-    }
-
     pub fn get_handle(&self) -> Option<Handle> {
         match &self {
             Value::CharClusterLong(handle) => Some(*handle),

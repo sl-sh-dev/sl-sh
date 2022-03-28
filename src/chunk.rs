@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 
 use crate::error::*;
-use crate::heap::*;
 use crate::interner::Interned;
 use crate::opcodes::*;
 use crate::value::*;
@@ -1195,19 +1194,11 @@ impl Chunk {
         for (i, v) in self.constants.iter().enumerate() {
             indent(indent_level);
             println!("{}: {}", i, v.display_value(vm));
-            if let Some(h) = v.get_handle() {
-                match vm.get(h) {
-                    Object::Lambda(l) => {
-                        l.disassemble_chunk(vm, indent_level + 1)?;
-                    }
-                    Object::Macro(l) => {
-                        l.disassemble_chunk(vm, indent_level + 1)?;
-                    }
-                    Object::Closure(l, _) => {
-                        l.disassemble_chunk(vm, indent_level + 1)?;
-                    }
-                    _ => {}
-                }
+            match v {
+                Value::Lambda(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
+                Value::Macro(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
+                Value::Closure(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
+                _ => {}
             }
         }
         println!();

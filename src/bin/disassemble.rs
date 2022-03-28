@@ -1,6 +1,7 @@
 //use std::iter::Iterator;
 //use std::borrow::Borrow;
 
+use std::sync::Arc;
 use slvm::chunk::*;
 use slvm::error::*;
 use slvm::interner::*;
@@ -8,12 +9,19 @@ use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
 
+enum Testing {
+    Shared(Arc<usize>),
+    Owned(usize),
+    RO(usize),
+    Val(Value),
+    None,
+}
 fn main() -> Result<(), VMError> {
     let mut interner = Interner::with_capacity(8);
     let mut chunk = Chunk::with_namespace("no_file", 1, interner.intern("disassemble"));
     println!("Value size: {}", std::mem::size_of::<Value>());
     println!("usize: {}", std::mem::size_of::<usize>());
-    println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
+    //println!("Object size: {}", std::mem::size_of::<slvm::heap::Object>());
     println!("Chunk size: {}", std::mem::size_of::<slvm::chunk::Chunk>());
     println!(
         "CallFrame size: {}",
@@ -24,6 +32,8 @@ fn main() -> Result<(), VMError> {
         "Cow size: {}",
         std::mem::size_of::<std::borrow::Cow<'static, str>>()
     );
+    println!("Arc<usize> size: {}", std::mem::size_of::<Arc<usize>>());
+    println!("Testing size: {}", std::mem::size_of::<Testing>());
     println!("Max opcode: {}", MAX_OP_CODE);
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;

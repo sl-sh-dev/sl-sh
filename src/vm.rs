@@ -280,28 +280,93 @@ impl Vm {
         &self.stack[start..end]
     }
 
-    pub fn alloc(&mut self, obj: Object) -> Handle {
+    fn mark_roots(&mut self, heap: &mut Heap) -> VMResult<()> {
+        self.globals.mark(heap);
+        for i in 0..self.stack_max {
+            if let Some(handle) = self.stack[i].get_handle() {
+                heap.mark(handle);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn alloc_pair(&mut self, car: Value, cdr: Value, meta: Option<Meta>) -> Handle {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc(obj, |heap| {
-            self.globals.mark(heap);
-            for i in 0..self.stack_max {
-                if let Some(handle) = self.stack[i].get_handle() {
-                    heap.mark(handle);
-                }
-            }
-            Ok(())
-        })
+        heap.alloc_pair(car, cdr, meta, |heap| self.mark_roots(heap))
     }
 
-    pub fn get(&self, handle: Handle) -> HandleRef<'_> {
+    pub fn alloc_string(&mut self, s: Cow<'static, str>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_string(s, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_vector(&mut self, v: Vec<Value>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_vector(v, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_bytes(&mut self, v: Vec<u8>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_bytes(v, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_lambda(&mut self, l: Rc<Chunk>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_lambda(l, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_macro(&mut self, l: Rc<Chunk>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_macro(l, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_closure(&mut self, l: Rc<Chunk>, v: Vec<Handle>) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_closure(l, v, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_continuation(&mut self, k: Continuation) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_continuation(k, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_callframe(&mut self, frame: CallFrame) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_callframe(frame, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_value(&mut self, val: Value) -> Handle {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_value(val, |heap| self.mark_roots(heap))
+    }
+
+    /*pub fn get(&self, handle: Handle) -> HandleRef<'_> {
         self.heap.get(handle)
-    }
+    }*/
 
-    pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
+    /*pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
         self.heap.get_mut(handle)
-    }
+    }*/
 
     pub fn get_global(&self, idx: u32) -> Value {
         self.globals.get(idx)
@@ -315,12 +380,20 @@ impl Vm {
         self.heap.get_vector(handle)
     }
 
+    pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
+        self.heap.get_vector_mut(handle)
+    }
+
     pub fn get_bytes(&self, handle: Handle) -> &[u8] {
         self.heap.get_bytes(handle)
     }
 
     pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
         self.heap.get_pair(handle)
+    }
+
+    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value, &mut Option<Meta>) {
+        self.heap.get_pair_mut(handle)
     }
 
     pub fn get_lambda(&self, handle: Handle) -> Rc<Chunk> {
@@ -343,12 +416,20 @@ impl Vm {
         self.heap.get_callframe(handle)
     }
 
+    pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
+        self.heap.get_callframe_mut(handle)
+    }
+
     pub fn get_value(&self, handle: Handle) -> Value {
         self.heap.get_value(handle)
     }
 
+    pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
+        self.heap.get_value_mut(handle)
+    }
+
     pub fn new_upval(&mut self, val: Value) -> Handle {
-        self.alloc(Object::Value(val))
+        self.alloc_value(val)
     }
 
     pub fn get_stack(&self, idx: usize) -> Value {
@@ -413,7 +494,7 @@ impl Vm {
     fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
         match &get_reg!(registers, idx) {
             Value::Value(handle) => {
-                self.heap.replace(*handle, Object::Value(val));
+                *(self.get_value_mut(*handle)) = val;
             }
             //Value::Global(idx) => self.globals.set(*idx, val),
             _ => registers[idx] = val,
@@ -431,11 +512,10 @@ impl Vm {
 
     fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
         match self.stack[idx] {
-            Value::CallFrame(handle) => match self.get(handle) {
-                Object::CallFrame(cf) => Some(cf),
-                _ => None,
-                //_ => panic!("Invalid stack, not a call frame."),
-            },
+            Value::CallFrame(handle) => {
+                let frame = self.get_callframe(handle);
+                Some(frame)
+            }
             _ => None,
             //_ => panic!("Invalid stack, not a call frame."),
         }
@@ -447,11 +527,7 @@ impl Vm {
 
     fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
         match self.stack[idx] {
-            Value::CallFrame(handle) => match self.get_mut(handle) {
-                Object::CallFrame(cf) => Some(&mut *cf),
-                _ => None,
-                //_ => panic!("Invalid stack, not a call frame."),
-            },
+            Value::CallFrame(handle) => Some(self.get_callframe_mut(handle)),
             _ => None,
             //_ => panic!("Invalid stack, not a call frame."),
         }
@@ -466,7 +542,7 @@ impl Vm {
             for i in (start..=end).rev() {
                 let car = get_reg_unref!(registers, i, self);
                 let cdr = last_cdr;
-                last_cdr = Value::Pair(self.alloc(Object::Pair(car, cdr, None)));
+                last_cdr = Value::Pair(self.alloc_pair(car, cdr, None));
             }
             self.set_register(registers, dest as usize, last_cdr);
         }
@@ -489,13 +565,12 @@ impl Vm {
                         let (car, cdr, _) = self.heap.get_pair(handle);
                         loop_cdr = cdr;
                         let cdr = last_cdr;
-                        last_cdr = Value::Pair(self.alloc(Object::Pair(car, Value::Nil, None)));
+                        last_cdr = Value::Pair(self.alloc_pair(car, Value::Nil, None));
                         match cdr {
                             Value::Nil => head = last_cdr,
                             Value::Pair(h) => {
-                                let (car, _, meta) = self.heap.get_pair(h);
-                                let meta = *meta;
-                                self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                                let (_, cdr, _) = self.get_pair_mut(h);
+                                *cdr = last_cdr;
                             }
                             _ => {}
                         }
@@ -508,17 +583,12 @@ impl Vm {
                                     let (car, ncdr, _) = self.heap.get_pair(h);
                                     loop_cdr = ncdr;
                                     let cdr = last_cdr;
-                                    last_cdr = Value::Pair(self.alloc(Object::Pair(
-                                        car,
-                                        Value::Nil,
-                                        None,
-                                    )));
+                                    last_cdr = Value::Pair(self.alloc_pair(car, Value::Nil, None));
                                     match cdr {
                                         Value::Nil => head = last_cdr,
                                         Value::Pair(h) => {
-                                            let (car, _, meta) = self.heap.get_pair(h);
-                                            let meta = *meta;
-                                            self.heap.replace(h, Object::Pair(car, last_cdr, meta));
+                                            let (_, cdr, _) = self.get_pair_mut(h);
+                                            *cdr = last_cdr;
                                         }
                                         _ => {}
                                     }
@@ -528,10 +598,8 @@ impl Vm {
                                         match last_cdr {
                                             Value::Nil => head = loop_cdr,
                                             Value::Pair(h) => {
-                                                let (car, _, meta) = self.heap.get_pair(h);
-                                                let meta = *meta;
-                                                self.heap
-                                                    .replace(h, Object::Pair(car, loop_cdr, meta));
+                                                let (_, cdr, _) = self.get_pair_mut(h);
+                                                *cdr = loop_cdr;
                                             }
                                             _ => {}
                                         }
@@ -548,9 +616,8 @@ impl Vm {
                             match last_cdr {
                                 Value::Nil => head = lst,
                                 Value::Pair(h) => {
-                                    let (car, _, meta) = self.heap.get_pair(h);
-                                    let meta = *meta;
-                                    self.heap.replace(h, Object::Pair(car, lst, meta));
+                                    let (_, cdr, _) = self.get_pair_mut(h);
+                                    *cdr = lst;
                                 }
                                 _ => {}
                             }
@@ -570,13 +637,12 @@ impl Vm {
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
-            Value::Pair(cons_handle) => {
-                let (_, cdr, _) = self.heap.get_pair(*cons_handle);
-                self.heap
-                    .replace(*cons_handle, Object::Pair(val, cdr, None));
+            Value::Pair(handle) => {
+                let (car, _, _) = self.get_pair_mut(*handle);
+                *car = val;
             }
             Value::Nil => {
-                let pair = Value::Pair(self.alloc(Object::Pair(val, Value::Nil, None)));
+                let pair = Value::Pair(self.alloc_pair(val, Value::Nil, None));
                 self.set_register(registers, pair_reg as usize, pair);
             }
             _ => {
@@ -591,13 +657,12 @@ impl Vm {
         let pair = get_reg_unref!(registers, pair_reg, self);
         let val = get_reg_unref!(registers, val, self);
         match &pair {
-            Value::Pair(cons_handle) => {
-                let (car, _, _) = self.heap.get_pair(*cons_handle);
-                self.heap
-                    .replace(*cons_handle, Object::Pair(car, val, None));
+            Value::Pair(handle) => {
+                let (_, cdr, _) = self.get_pair_mut(*handle);
+                *cdr = val;
             }
             Value::Nil => {
-                let pair = Value::Pair(self.alloc(Object::Pair(Value::Nil, val, None)));
+                let pair = Value::Pair(self.alloc_pair(Value::Nil, val, None));
                 self.set_register(registers, pair_reg as usize, pair);
             }
             _ => {
@@ -634,7 +699,7 @@ impl Vm {
                 .rev()
             {
                 let old_last = last;
-                last = Value::Pair(self.alloc(Object::Pair(*item, old_last, None)));
+                last = Value::Pair(self.alloc_pair(*item, old_last, None));
             }
             last
         };
@@ -743,7 +808,7 @@ impl Vm {
                 let l = self.heap.get_lambda(handle);
                 if !tail_call {
                     let defers = std::mem::take(&mut self.defers);
-                    let frame = Object::CallFrame(Box::new(CallFrame {
+                    let frame = CallFrame {
                         id: self.callframe_id,
                         chunk,
                         ip: self.ip,
@@ -752,12 +817,12 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers,
                         on_error: self.on_error,
-                    }));
+                    };
                     self.callframe_id += 1;
                     Self::mov_register(
                         registers,
                         first_reg.into(),
-                        Value::CallFrame(self.alloc(frame)),
+                        Value::CallFrame(self.alloc_callframe(frame)),
                     );
                     self.stack_top += first_reg as usize;
                 }
@@ -781,7 +846,7 @@ impl Vm {
                 let (l, caps) = self.heap.get_closure(handle);
                 let frame = if !tail_call {
                     let defers = std::mem::take(&mut self.defers);
-                    let frame = Object::CallFrame(Box::new(CallFrame {
+                    let frame = CallFrame {
                         id: self.callframe_id,
                         chunk,
                         ip: self.ip,
@@ -790,7 +855,7 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers,
                         on_error: self.on_error,
-                    }));
+                    };
                     self.callframe_id += 1;
                     self.stack_top += first_reg as usize;
                     Some(frame)
@@ -816,7 +881,7 @@ impl Vm {
                     Self::mov_register(
                         registers,
                         first_reg.into(),
-                        Value::CallFrame(self.alloc(frame)),
+                        Value::CallFrame(self.alloc_callframe(frame)),
                     );
                 }
                 clear_opts(&l, registers, first_reg, num_args);
@@ -890,7 +955,7 @@ impl Vm {
             let v = get_reg_unref!(registers, reg, self);
             val.push_str(&v.pretty_value(self));
         }
-        let val = Value::String(self.alloc(Object::String(val.into())));
+        let val = Value::String(self.alloc_string(val.into()));
         Ok(val)
     }
 
@@ -1222,7 +1287,7 @@ impl Vm {
                     //            self.set_register(registers, dest as usize, val);
                     match &get_reg!(registers, dest) {
                         Value::Value(handle) => {
-                            self.heap.replace(*handle, Object::Value(val));
+                            *(self.get_value_mut(*handle)) = val;
                         }
                         Value::Global(dest) => self.globals.set(*dest, val),
                         _ => registers[dest as usize] = val,
@@ -1351,7 +1416,7 @@ impl Vm {
                     Self::mov_register(
                         registers,
                         dest as usize,
-                        Value::Closure(self.alloc(Object::Closure(lambda, caps))),
+                        Value::Closure(self.alloc_closure(lambda, caps)),
                     );
                 }
                 CALL => {
@@ -1631,12 +1696,12 @@ impl Vm {
                     let mut stack = Vec::with_capacity(self.stack_max);
                     stack.resize(self.stack_max, Value::Undefined);
                     stack[..].copy_from_slice(&self.stack[0..self.stack_max]);
-                    let k = Box::new(Continuation {
+                    let k = Continuation {
                         frame,
                         arg_reg: self.stack_top + first_reg as usize, //stack_len,
                         stack,
-                    });
-                    let k_obj = Value::Continuation(self.alloc(Object::Continuation(k)));
+                    };
+                    let k_obj = Value::Continuation(self.alloc_continuation(k));
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
                     registers = self.make_registers();
@@ -1821,7 +1886,7 @@ impl Vm {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut self.ip, wide);
                     let car = get_reg_unref!(registers, op2, self);
                     let cdr = get_reg_unref!(registers, op3, self);
-                    let pair = Value::Pair(self.alloc(Object::Pair(car, cdr, None)));
+                    let pair = Value::Pair(self.alloc_pair(car, cdr, None));
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
@@ -1863,14 +1928,14 @@ impl Vm {
                 VEC => {
                     let (dest, start, end) = decode3!(chunk.code, &mut self.ip, wide);
                     if end == start {
-                        let vh = self.alloc(Object::Vector(Vec::new()));
+                        let vh = self.alloc_vector(Vec::new());
                         self.set_register(registers, dest as usize, Value::Vector(vh));
                     } else {
                         let mut v = Vec::new();
                         for i in start..end {
                             v.push(get_reg_unref!(registers, i, self));
                         }
-                        let vh = self.alloc(Object::Vector(v));
+                        let vh = self.alloc_vector(v);
                         self.set_register(registers, dest as usize, Value::Vector(vh));
                     }
                 }
@@ -1879,8 +1944,7 @@ impl Vm {
                     let len = get_reg_unref!(registers, op, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))?;
-                    let val =
-                        Value::Vector(self.alloc(Object::Vector(Vec::with_capacity(len as usize))));
+                    let val = Value::Vector(self.alloc_vector(Vec::with_capacity(len as usize)));
                     self.set_register(registers, dest as usize, val);
                 }
                 VECELS => {
@@ -1888,29 +1952,23 @@ impl Vm {
                     let len = get_reg_unref!(registers, op, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))?;
-                    if let Object::Vector(v) = get_reg_unref!(registers, dest, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    if let Value::Vector(h) = get_reg_unref!(registers, dest, self) {
+                        let v = self.get_vector_mut(h);
                         v.resize(len as usize, Value::Undefined);
                     }
                 }
                 VECPSH => {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, op, self);
-                    if let Object::Vector(v) = get_reg_unref!(registers, dest, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    if let Value::Vector(h) = get_reg_unref!(registers, dest, self) {
+                        let v = self.get_vector_mut(h);
                         v.push(val);
                     }
                 }
                 VECPOP => {
                     let (vc, dest) = decode2!(chunk.code, &mut self.ip, wide);
-                    let val = if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    let val = if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
+                        let v = self.get_vector_mut(h);
                         if let Some(val) = v.pop() {
                             val
                         } else {
@@ -1926,10 +1984,8 @@ impl Vm {
                     let i = get_reg_unref!(registers, i, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))? as usize;
-                    let val = if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    let val = if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
+                        let v = self.get_vector_mut(h);
                         if let Some(val) = v.get(i) {
                             *val
                         } else {
@@ -1953,10 +2009,8 @@ impl Vm {
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg_unref!(registers, src, self);
-                    if let Object::Vector(v) = get_reg_unref!(registers, vc, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
+                        let v = self.get_vector_mut(h);
                         if i >= v.len() {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
@@ -1975,25 +2029,21 @@ impl Vm {
                     for _ in 0..len {
                         v.push(dfn);
                     }
-                    let val = Value::Vector(self.alloc(Object::Vector(v)));
+                    let val = Value::Vector(self.alloc_vector(v));
                     self.set_register(registers, dest as usize, val);
                 }
                 VECLEN => {
                     let (dest, v) = decode2!(chunk.code, &mut self.ip, wide);
-                    if let Object::Vector(v) = get_reg_unref!(registers, v, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    if let Value::Vector(h) = get_reg_unref!(registers, v, self) {
+                        let v = self.get_vector_mut(h);
                         let len = Value::UInt(v.len() as u64);
                         self.set_register(registers, dest as usize, len);
                     }
                 }
                 VECCLR => {
                     let v = decode1!(chunk.code, &mut self.ip, wide);
-                    if let Object::Vector(v) = get_reg_unref!(registers, v, self)
-                        .get_object(self)
-                        .map_err(|e| (e, chunk.clone()))?
-                    {
+                    if let Value::Vector(h) = get_reg_unref!(registers, v, self) {
+                        let v = self.get_vector_mut(h);
                         v.clear();
                     }
                 }
@@ -2511,7 +2561,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2519,7 +2569,7 @@ mod tests {
         chunk.encode2(CONST, 2, const1, line).unwrap();
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2551,7 +2601,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2562,7 +2612,7 @@ mod tests {
         chunk.encode2(TCALL, 3, 2, line).unwrap();
         // The TCALL will keep HALT from executing.
         chunk.encode0(HALT, line)?;
-        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2606,7 +2656,7 @@ mod tests {
             if registers.len() != 0 {
                 return Err(VMError::new_vm("test make_str: wrong number of args."));
             }
-            let s = Value::String(vm.alloc(Object::String("builtin hello".into())));
+            let s = Value::String(vm.alloc_string("builtin hello".into()));
             Ok(s)
         }
         let mut vm = Vm::new();
@@ -2618,7 +2668,7 @@ mod tests {
         chunk.encode2(MOV, 5, 2, line).unwrap();
         chunk.encode3(CALL, 10, 2, 3, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2626,7 +2676,7 @@ mod tests {
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode2(TCALL, 10, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let tadd = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let tadd = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2635,7 +2685,7 @@ mod tests {
         chunk.encode2(MOV, 3, 1, line).unwrap();
         chunk.encode3(CALL, 4, 1, 2, line).unwrap();
         chunk.encode1(SRET, 2, line)?;
-        let add_ten = Value::Lambda(vm.alloc(Object::Lambda(Rc::new(chunk))));
+        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2832,18 +2882,21 @@ mod tests {
         assert!(vm.stack[17].get_int()? == 1);
         assert!(vm.stack[18].get_int()? == 0);
         let vc = vm.stack[1];
-        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+        if let Value::Vector(h) = vc {
+            let v = vm.get_vector_mut(h);
             assert!(v.len() == 101);
             assert!(v[0].get_int()? == 0);
         }
         let vc = vm.stack[10];
-        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+        if let Value::Vector(h) = vc {
+            let v = vm.get_vector_mut(h);
             assert!(v.len() == 2);
             assert!(v[0].get_int()? == 0);
             assert!(v[1].get_int()? == 1);
         }
         let vc = vm.stack[20];
-        if let Object::Vector(v) = vc.get_object(&mut vm)? {
+        if let Value::Vector(h) = vc {
+            let v = vm.get_vector_mut(h);
             assert!(v.len() == 100);
             assert!(v[0].get_int()? == 0);
             assert!(v[1].is_undef());
