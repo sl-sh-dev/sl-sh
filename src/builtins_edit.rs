@@ -928,14 +928,11 @@ Example:
 
 #[cfg(test)]
 mod test {
-    use log::debug;
-    use log::LevelFilter;
 
     use super::*;
 
     #[test]
     fn test_check_balanced_delimiters() {
-        simple_logging::log_to_stderr(LevelFilter::Debug);
         let string_delimiter = "\"";
         let multiline_comment = ("#|", "|#");
         let delimiters = vec![("(", ")"), ("[", "]"), ("{", "}")];
