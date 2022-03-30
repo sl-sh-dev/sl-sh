@@ -88,13 +88,7 @@ enum Object {
     Continuation(Box<Continuation>),
     CallFrame(Box<CallFrame>),
     Value(Value),
-    // Track something that was closed over.
-    //Upval(Value),
 }
-
-#[cfg(test)]
-type HandleRef<'a> = &'a Object;
-//type HandleRefMut<'a> = &'a mut Object;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
@@ -307,15 +301,6 @@ impl Heap {
         self.alloc(Object::Value(val), mark_roots)
     }
 
-    #[cfg(test)]
-    fn get(&self, handle: Handle) -> HandleRef<'_> {
-        if let Some(data) = self.objects.get(handle.idx) {
-            data
-        } else {
-            panic!("Invalid object handle!");
-        }
-    }
-
     pub fn get_string(&self, handle: Handle) -> &Cow<'static, str> {
         if let Some(Object::String(cow)) = self.objects.get(handle.idx) {
             cow
@@ -428,6 +413,7 @@ impl Heap {
         }
     }
 
+    // Used for a couple of tests, DO NOT try this on real code you WILL break the heap./
     #[cfg(test)]
     fn replace(&mut self, handle: Handle, obj: Object) -> Object {
         let type_flag = Self::type_flag(&obj);
@@ -612,14 +598,13 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
+            heap.alloc_pair(Value::Int(x), Value::Nil, None, mark_roots);
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
-            let obj = heap.get(Handle { idx: x });
-            if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
-                assert!(x == *v as usize);
+            if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: x }) {
+                assert!(x == v as usize);
             } else {
                 assert!(false);
             }
@@ -627,9 +612,8 @@ mod tests {
         heap.alloc(Object::Pair(Value::Int(512), Value::Nil, None), mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
-        let obj = heap.get(Handle { idx: 0 });
-        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
-            assert!(512 == *v);
+        if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: 0 }) {
+            assert!(512 == v);
         } else {
             assert!(false);
         }
@@ -645,12 +629,11 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
-            let obj = heap.get(Handle { idx: x });
-            if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
+            if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: x }) {
                 if x == 0 {
-                    assert!(512 == *v);
+                    assert!(512 == v);
                 } else {
-                    assert!(x - 1 == *v as usize);
+                    assert!(x - 1 == v as usize);
                 }
             } else {
                 assert!(false);
@@ -721,11 +704,9 @@ mod tests {
         assert!(heap.live_objects() == 512);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::Pair(Value::Pair(inner), Value::Nil, _) = obj {
-                let obj = heap.get(*inner);
-                if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
-                    assert!(i == *v as usize);
+            if let (Value::Pair(inner), Value::Nil, _) = heap.get_pair(*h) {
+                if let (Value::Int(v), Value::Nil, _) = heap.get_pair(inner) {
+                    assert!(i == v as usize);
                 } else {
                     assert!(false);
                 }
@@ -744,12 +725,8 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 256);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::String(sstr) = obj {
-                assert!(sstr == "bloop");
-            } else {
-                assert!(false);
-            }
+            let sstr = heap.get_string(*h);
+            assert!(sstr == "bloop");
             i += 1;
         }
         Ok(())
@@ -780,48 +757,38 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::Vector(v) = obj {
-                let mut i = 0;
-                for hv in v {
-                    if let Value::Pair(hv) = hv {
-                        let obj = heap.get(*hv);
-                        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
-                            assert!(i == *v as usize);
-                        } else {
-                            assert!(false);
-                        }
+            let v = heap.get_vector(*h);
+            let mut i = 0;
+            for hv in v {
+                if let Value::Pair(hv) = hv {
+                    if let (Value::Int(v), Value::Nil, _) = heap.get_pair(*hv) {
+                        assert!(i == v as usize);
                     } else {
                         assert!(false);
                     }
-                    i += 1;
+                } else {
+                    assert!(false);
                 }
-            } else {
-                assert!(false);
+                i += 1;
             }
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::Vector(v) = obj {
-                let mut i = 0;
-                for hv in v {
-                    if let Value::Pair(hv) = hv {
-                        let obj = heap.get(*hv);
-                        if let Object::Pair(Value::Int(v), Value::Nil, _) = obj {
-                            assert!(i == *v as usize);
-                        } else {
-                            assert!(false);
-                        }
+            let v = heap.get_vector(*h);
+            let mut i = 0;
+            for hv in v {
+                if let Value::Pair(hv) = hv {
+                    if let (Value::Int(v), Value::Nil, _) = heap.get_pair(*hv) {
+                        assert!(i == v as usize);
                     } else {
                         assert!(false);
                     }
-                    i += 1;
+                } else {
+                    assert!(false);
                 }
-            } else {
-                assert!(false);
+                i += 1;
             }
         }
         for h in outers.borrow().iter() {
@@ -831,12 +798,8 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::String(sstr) = obj {
-                assert!(sstr == "bloop");
-            } else {
-                assert!(false);
-            }
+            let sstr = heap.get_string(*h);
+            assert!(sstr == "bloop");
         }
         Ok(())
     }
@@ -878,77 +841,71 @@ mod tests {
         assert!(heap.live_objects() == 6);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            let obj = heap.get(*h);
-            if let Object::Pair(car, cdr, _) = obj {
-                if i == 0 {
-                    let (car, cdr) = if let Value::Int(car) = car {
-                        if let Value::Int(cdr) = cdr {
-                            (*car, *cdr)
-                        } else {
-                            (*car, 0)
-                        }
+            let (car, cdr, _) = heap.get_pair(*h);
+            if i == 0 {
+                let (car, cdr) = if let Value::Int(car) = car {
+                    if let Value::Int(cdr) = cdr {
+                        (car, cdr)
                     } else {
-                        (0, 0)
-                    };
-                    assert!(car == 1);
-                    assert!(cdr == 2);
-                } else if i == 1 {
-                    let (car, cdr) = if let Value::Pair(car_h) = car {
-                        if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
-                            if let Value::Int(cdr) = cdr {
-                                (*car, *cdr)
-                            } else {
-                                (*car, 0)
-                            }
-                        } else {
-                            (0, 0)
-                        }
-                    } else {
-                        (0, 0)
-                    };
-                    assert!(car == 3);
-                    assert!(cdr == 2);
-                } else if i == 2 {
-                    let (car, cdr) = if let Value::Pair(cdr_h) = cdr {
-                        if let Object::Pair(Value::Int(cdr), Value::Nil, _) = heap.get(*cdr_h) {
-                            if let Value::Int(car) = car {
-                                (*car, *cdr)
-                            } else {
-                                (0, *cdr)
-                            }
-                        } else {
-                            (0, 0)
-                        }
-                    } else {
-                        (0, 0)
-                    };
-                    assert!(car == 1);
-                    assert!(cdr == 4);
-                } else if i == 3 {
-                    let (car, cdr) = if let Value::Pair(car_h) = car {
-                        if let Object::Pair(Value::Int(car), Value::Nil, _) = heap.get(*car_h) {
-                            if let Value::Pair(cdr_h) = cdr {
-                                if let Object::Pair(Value::Int(cdr), Value::Nil, _) =
-                                    heap.get(*cdr_h)
-                                {
-                                    (*car, *cdr)
-                                } else {
-                                    (*car, 0)
-                                }
-                            } else {
-                                (0, 0)
-                            }
-                        } else {
-                            (0, 0)
-                        }
-                    } else {
-                        (0, 0)
-                    };
-                    assert!(car == 3);
-                    assert!(cdr == 4);
+                        (car, 0)
+                    }
                 } else {
-                    assert!(false);
-                }
+                    (0, 0)
+                };
+                assert!(car == 1);
+                assert!(cdr == 2);
+            } else if i == 1 {
+                let (car, cdr) = if let Value::Pair(car_h) = car {
+                    if let (Value::Int(car), Value::Nil, _) = heap.get_pair(car_h) {
+                        if let Value::Int(cdr) = cdr {
+                            (car, cdr)
+                        } else {
+                            (car, 0)
+                        }
+                    } else {
+                        (0, 0)
+                    }
+                } else {
+                    (0, 0)
+                };
+                assert!(car == 3);
+                assert!(cdr == 2);
+            } else if i == 2 {
+                let (car, cdr) = if let Value::Pair(cdr_h) = cdr {
+                    if let (Value::Int(cdr), Value::Nil, _) = heap.get_pair(cdr_h) {
+                        if let Value::Int(car) = car {
+                            (car, cdr)
+                        } else {
+                            (0, cdr)
+                        }
+                    } else {
+                        (0, 0)
+                    }
+                } else {
+                    (0, 0)
+                };
+                assert!(car == 1);
+                assert!(cdr == 4);
+            } else if i == 3 {
+                let (car, cdr) = if let Value::Pair(car_h) = car {
+                    if let (Value::Int(car), Value::Nil, _) = heap.get_pair(car_h) {
+                        if let Value::Pair(cdr_h) = cdr {
+                            if let (Value::Int(cdr), Value::Nil, _) = heap.get_pair(cdr_h) {
+                                (car, cdr)
+                            } else {
+                                (car, 0)
+                            }
+                        } else {
+                            (0, 0)
+                        }
+                    } else {
+                        (0, 0)
+                    }
+                } else {
+                    (0, 0)
+                };
+                assert!(car == 3);
+                assert!(cdr == 4);
             } else {
                 assert!(false);
             }
