@@ -600,9 +600,10 @@ Section: user-shell"
 (def sidebar-page-name "mydoc_sidebar.yml")
 (def api-page (str "pages/mydoc/" api-page-name))
 (def sidebar-page (str "_data/sidebars/" sidebar-page-name))
+(def docs-error-ret nil)
 (when (fs-exists? $SLSH_DOC_PATH) (do
 (shell::pushd $SLSH_DOC_PATH)
-(def docs-error-ret
+(set! docs-error-ret
     (get-error (when (or
         (nil? (fs-exists? api-page))
         (= api-page (str-trim (str $(find $api-page -type f -mmin "+1440"))))) (do

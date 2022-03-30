@@ -309,13 +309,12 @@ pub fn with_umask(umask: Mode, exp_enum: &ExpEnum, fn_name: &str) -> Result<Mode
         }
         ExpEnum::String(s, _) => {
             if s.len() > 0 {
-                let mode;
-                if is_digit(s.chars().next().unwrap()) {
-                    mode = octal_string_to_mode(s.as_ref(), fn_name)?;
+                let mode = if is_digit(s.chars().next().unwrap()) {
+                    octal_string_to_mode(s.as_ref(), fn_name)?
                 } else {
                     let masks = get_umask_tokens(s.as_ref(), fn_name)?;
-                    mode = with_umask_tokens(umask, masks);
-                }
+                    with_umask_tokens(umask, masks)
+                };
                 Ok(mode)
             } else {
                 let msg = format!("{}: no input.", fn_name);
