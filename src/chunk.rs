@@ -18,8 +18,8 @@ macro_rules! decode_u8_enum {
     }};
 }
 
-#[macro_export]
-macro_rules! decode_u16 {
+#[cfg(test)]
+macro_rules! decode_chunk_u16 {
     ($code:expr) => {{
         if let Some(idx1) = $code.next() {
             if let Some(idx2) = $code.next() {
@@ -50,40 +50,6 @@ macro_rules! decode_u16_enum {
         } else {
             Err(VMError::new_chunk(
                 "Error decoding a u16 from chunk stream.",
-            ))
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! decode_u32 {
-    ($code:expr) => {{
-        if let Some(idx1) = $code.next() {
-            if let Some(idx2) = $code.next() {
-                if let Some(idx3) = $code.next() {
-                    if let Some(idx4) = $code.next() {
-                        Ok(((*idx1 as u32) << 24)
-                            | ((*idx2 as u32) << 16)
-                            | ((*idx3 as u32) << 8)
-                            | (*idx4 as u32))
-                    } else {
-                        Err(VMError::new_chunk(
-                            "Error decoding a u32 from chunk stream.",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_chunk(
-                        "Error decoding a u32 from chunk stream.",
-                    ))
-                }
-            } else {
-                Err(VMError::new_chunk(
-                    "Error decoding a u32 from chunk stream.",
-                ))
-            }
-        } else {
-            Err(VMError::new_chunk(
-                "Error decoding a u32 from chunk stream.",
             ))
         }
     }};
@@ -1270,15 +1236,15 @@ mod tests {
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CAR);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CAR);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CAR);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
     }
 
     #[test]
@@ -1308,28 +1274,28 @@ mod tests {
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == MOV);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == MOV);
-        assert!(decode_u16!(code).unwrap() == 2);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 2);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == MOV);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 1);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 1);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == MOV);
-        assert!(decode_u16!(code).unwrap() == 257);
-        assert!(decode_u16!(code).unwrap() == 257);
+        assert!(decode_chunk_u16!(code).unwrap() == 257);
+        assert!(decode_chunk_u16!(code).unwrap() == 257);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == MOV);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
     }
 
     #[test]
@@ -1364,33 +1330,33 @@ mod tests {
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CONS);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CONS);
-        assert!(decode_u16!(code).unwrap() == 2);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 2);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CONS);
-        assert!(decode_u16!(code).unwrap() == 256);
-        assert!(decode_u16!(code).unwrap() == 1);
-        assert!(decode_u16!(code).unwrap() == 1);
+        assert!(decode_chunk_u16!(code).unwrap() == 256);
+        assert!(decode_chunk_u16!(code).unwrap() == 1);
+        assert!(decode_chunk_u16!(code).unwrap() == 1);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CONS);
-        assert!(decode_u16!(code).unwrap() == 257);
-        assert!(decode_u16!(code).unwrap() == 257);
-        assert!(decode_u16!(code).unwrap() == 257);
+        assert!(decode_chunk_u16!(code).unwrap() == 257);
+        assert!(decode_chunk_u16!(code).unwrap() == 257);
+        assert!(decode_chunk_u16!(code).unwrap() == 257);
 
         assert!(*code.next().unwrap() == WIDE);
         assert!(*code.next().unwrap() == CONS);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
-        assert!(decode_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
+        assert!(decode_chunk_u16!(code).unwrap() == u16::MAX);
     }
 
     #[test]

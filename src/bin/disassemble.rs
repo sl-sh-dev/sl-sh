@@ -1,19 +1,33 @@
 //use std::iter::Iterator;
 //use std::borrow::Borrow;
 
-use std::sync::Arc;
 use slvm::chunk::*;
 use slvm::error::*;
+use slvm::heap::*;
 use slvm::interner::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
+use std::sync::Arc;
 
-enum Testing {
-    Shared(Arc<usize>),
-    Owned(usize),
-    RO(usize),
-    Val(Value),
+pub enum Testing {
+    StringShared(Arc<usize>), //Cow<'static, str>),
+    String(usize),
+    VectorShared(Arc<usize>),
+    Vector(usize),
+    BytesShared(Arc<usize>),
+    Bytes(usize),
+    PairShared(Arc<usize>),
+    Pair(usize),
+
+    //Value(usize), //Value),
+    Value(Value),
+    Lambda(Arc<Chunk>),
+    Macro(Arc<Chunk>),
+    //Closure(Arc<(Arc<Chunk>, Arc<Vec<Handle>>)>),
+    Closure(Arc<Chunk>, Arc<Vec<Handle>>),
+    Continuation(Arc<Continuation>),
+    CallFrame(Arc<CallFrame>),
     None,
 }
 fn main() -> Result<(), VMError> {

@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
@@ -8,221 +7,15 @@ use crate::interner::*;
 use crate::opcodes::*;
 use crate::value::*;
 
+pub mod cons;
+pub mod print;
+pub mod storage;
+#[macro_use]
+pub mod macros;
+
 const STACK_CAP: usize = 1024;
 
-macro_rules! decode_u16 {
-    ($code:expr, $ip:expr) => {{
-        let idx1 = $code[*$ip];
-        let idx2 = $code[*$ip + 1];
-        *$ip += 2;
-        ((idx1 as u16) << 8) | (idx2 as u16)
-    }};
-}
-
-macro_rules! decode_u32 {
-    ($code:expr, $ip:expr) => {{
-        let idx1 = $code[*$ip];
-        let idx2 = $code[*$ip + 1];
-        let idx3 = $code[*$ip + 2];
-        let idx4 = $code[*$ip + 3];
-        *$ip += 4;
-        ((idx1 as u32) << 24) | ((idx2 as u32) << 16) | ((idx3 as u32) << 8) | (idx4 as u32)
-    }};
-}
-
-macro_rules! decode1 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            decode_u16!($code, $ip)
-        } else {
-            let oip = *$ip;
-            *$ip += 1;
-            $code[oip] as u16
-        }
-    }};
-}
-
-macro_rules! decode2 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            (decode_u16!($code, $ip), decode_u16!($code, $ip))
-        } else {
-            let oip = *$ip;
-            *$ip += 2;
-            ($code[oip] as u16, $code[oip + 1] as u16)
-        }
-    }};
-}
-
-macro_rules! decode3 {
-    ($code:expr, $ip:expr, $wide:expr) => {{
-        if $wide {
-            (
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-                decode_u16!($code, $ip),
-            )
-        } else {
-            let oip = *$ip;
-            *$ip += 3;
-            (
-                $code[oip] as u16,
-                $code[oip + 1] as u16,
-                $code[oip + 2] as u16,
-            )
-        }
-    }};
-}
-
-macro_rules! get_reg_unref {
-    ($regs:expr, $idx:expr, $vm:expr) => {{
-        $regs[$idx as usize].unref($vm)
-    }};
-}
-
-macro_rules! get_reg {
-    ($regs:expr, $idx:expr) => {{
-        $regs[$idx as usize]
-    }};
-}
-
-macro_rules! compare_int {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr,
-     $compf_fn:expr, $wide:expr, $move:expr, $not:expr) => {{
-        let (dest, reg1, reg2) = decode3!($chunk.code, $ip, $wide);
-        let mut val = false;
-        for reg in reg1..reg2 {
-            let op1 = get_reg_unref!($registers, reg, $vm);
-            let op2 = get_reg_unref!($registers, reg + 1, $vm);
-            val = if op1.is_int() && op2.is_int() {
-                $comp_fn(
-                    op1.get_int().map_err(|e| (e, $chunk.clone()))?,
-                    op2.get_int().map_err(|e| (e, $chunk.clone()))?,
-                )
-            } else {
-                $compf_fn(
-                    op1.get_float().map_err(|e| (e, $chunk.clone()))?,
-                    op2.get_float().map_err(|e| (e, $chunk.clone()))?,
-                )
-            };
-            if !val {
-                break;
-            }
-        }
-        if $not {
-            val = !val;
-        }
-        let val = if val { Value::True } else { Value::False };
-        if $move {
-            Vm::mov_register($registers, dest as usize, val);
-        } else {
-            $vm.set_register($registers, dest as usize, val);
-        }
-    }};
-}
-
-macro_rules! compare {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $comp_fn:expr, $wide:expr, $move:expr) => {{
-        compare_int!($vm, $chunk, $ip, $registers, $comp_fn, $comp_fn, $wide, $move, false)
-    }};
-}
-
-macro_rules! binary_math {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $bin_fn:expr, $wide:expr, $move:expr) => {{
-        let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = get_reg_unref!($registers, op2, $vm);
-        let op3 = get_reg_unref!($registers, op3, $vm);
-        let val = if op2.is_int() && op3.is_int() {
-            Value::Int($bin_fn(
-                op2.get_int().map_err(|e| (e, $chunk.clone()))?,
-                op3.get_int().map_err(|e| (e, $chunk.clone()))?,
-            ))
-        } else {
-            Value::Float(F64Wrap($bin_fn(
-                op2.get_float().map_err(|e| (e, $chunk.clone()))?,
-                op3.get_float().map_err(|e| (e, $chunk.clone()))?,
-            )))
-        };
-        if $move {
-            Vm::mov_register($registers, dest as usize, val);
-        } else {
-            $vm.set_register($registers, dest as usize, val);
-        }
-    }};
-}
-
-macro_rules! div_math {
-    ($vm:expr, $chunk:expr, $ip:expr, $registers:expr, $wide:expr, $move:expr) => {{
-        let (dest, op2, op3) = decode3!($chunk.code, $ip, $wide);
-        let op2 = get_reg_unref!($registers, op2, $vm);
-        let op3 = get_reg_unref!($registers, op3, $vm);
-        let val = if op2.is_int() && op3.is_int() {
-            let op3 = op3.get_int().map_err(|e| (e, $chunk.clone()))?;
-            if op3 == 0 {
-                return Err((VMError::new_vm("Divide by zero error."), $chunk));
-            }
-            Value::Int(op2.get_int().map_err(|e| (e, $chunk.clone()))? / op3)
-        } else {
-            let op3 = op3.get_float().map_err(|e| (e, $chunk.clone()))?;
-            if op3 == 0.0 {
-                return Err((VMError::new_vm("Divide by zero error."), $chunk));
-            }
-            Value::Float(F64Wrap(
-                op2.get_float().map_err(|e| (e, $chunk.clone()))? / op3,
-            ))
-        };
-        if $move {
-            Vm::mov_register($registers, dest as usize, val);
-        } else {
-            $vm.set_register($registers, dest as usize, val);
-        }
-    }};
-}
-
-/*macro_rules! set_register {
-    ($registers:expr, $idx:expr, $val:expr) => {{
-        $registers[$idx as usize] = $val;
-        /*unsafe {
-            let r = $registers.get_unchecked_mut($idx as usize);
-            *r = $val;
-        }*/
-    }};
-}*/
-
-pub struct CallStackIter<'vm> {
-    vm: &'vm Vm,
-    current: usize,
-    last_current: usize,
-}
-
-impl<'vm> CallStackIter<'vm> {
-    pub fn new(vm: &'vm Vm) -> Self {
-        CallStackIter {
-            vm,
-            current: vm.stack_top,
-            last_current: 1,
-        }
-    }
-}
-
-impl<'vm> Iterator for CallStackIter<'vm> {
-    type Item = &'vm CallFrame;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(frame) = self.vm.call_frame_idx(self.current) {
-            if self.last_current == 0 {
-                None
-            } else {
-                self.last_current = self.current;
-                self.current = frame.stack_top;
-                Some(frame)
-            }
-        } else {
-            None
-        }
-    }
-}
-
+#[derive(Clone, Debug)]
 pub struct Vm {
     interner: Interner,
     heap: Heap,
@@ -268,410 +61,6 @@ impl Vm {
         }
     }
 
-    pub fn clear_err_frame(&mut self) {
-        self.err_frame = None;
-    }
-
-    pub fn err_frame(&self) -> &Option<CallFrame> {
-        &self.err_frame
-    }
-
-    pub fn get_registers(&self, start: usize, end: usize) -> &[Value] {
-        &self.stack[start..end]
-    }
-
-    fn mark_roots(&mut self, heap: &mut Heap) -> VMResult<()> {
-        self.globals.mark(heap);
-        for i in 0..self.stack_max {
-            if let Some(handle) = self.stack[i].get_handle() {
-                heap.mark(handle);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn alloc_pair(&mut self, car: Value, cdr: Value, meta: Option<Meta>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_pair(car, cdr, meta, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_string(&mut self, s: Cow<'static, str>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_string(s, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_vector(&mut self, v: Vec<Value>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_vector(v, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_bytes(&mut self, v: Vec<u8>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_bytes(v, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_lambda(&mut self, l: Rc<Chunk>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_lambda(l, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_macro(&mut self, l: Rc<Chunk>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_macro(l, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_closure(&mut self, l: Rc<Chunk>, v: Vec<Handle>) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_closure(l, v, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_continuation(&mut self, k: Continuation) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_continuation(k, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_callframe(&mut self, frame: CallFrame) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_callframe(frame, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_value(&mut self, val: Value) -> Handle {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_value(val, |heap| self.mark_roots(heap))
-    }
-
-    /*pub fn get(&self, handle: Handle) -> HandleRef<'_> {
-        self.heap.get(handle)
-    }*/
-
-    /*pub fn get_mut(&mut self, handle: Handle) -> HandleRefMut<'_> {
-        self.heap.get_mut(handle)
-    }*/
-
-    pub fn get_global(&self, idx: u32) -> Value {
-        self.globals.get(idx)
-    }
-
-    pub fn get_string(&self, handle: Handle) -> &Cow<'static, str> {
-        self.heap.get_string(handle)
-    }
-
-    pub fn get_vector(&self, handle: Handle) -> &[Value] {
-        self.heap.get_vector(handle)
-    }
-
-    pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
-        self.heap.get_vector_mut(handle)
-    }
-
-    pub fn get_bytes(&self, handle: Handle) -> &[u8] {
-        self.heap.get_bytes(handle)
-    }
-
-    pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
-        self.heap.get_pair(handle)
-    }
-
-    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value, &mut Option<Meta>) {
-        self.heap.get_pair_mut(handle)
-    }
-
-    pub fn get_lambda(&self, handle: Handle) -> Rc<Chunk> {
-        self.heap.get_lambda(handle)
-    }
-
-    pub fn get_macro(&self, handle: Handle) -> Rc<Chunk> {
-        self.heap.get_macro(handle)
-    }
-
-    pub fn get_closure(&self, handle: Handle) -> (Rc<Chunk>, &[Handle]) {
-        self.heap.get_closure(handle)
-    }
-
-    pub fn get_continuation(&self, handle: Handle) -> &Continuation {
-        self.heap.get_continuation(handle)
-    }
-
-    pub fn get_callframe(&self, handle: Handle) -> &CallFrame {
-        self.heap.get_callframe(handle)
-    }
-
-    pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
-        self.heap.get_callframe_mut(handle)
-    }
-
-    pub fn get_value(&self, handle: Handle) -> Value {
-        self.heap.get_value(handle)
-    }
-
-    pub fn get_value_mut(&mut self, handle: Handle) -> &mut Value {
-        self.heap.get_value_mut(handle)
-    }
-
-    pub fn new_upval(&mut self, val: Value) -> Handle {
-        self.alloc_value(val)
-    }
-
-    pub fn get_stack(&self, idx: usize) -> Value {
-        self.stack[idx]
-    }
-
-    pub fn get_interned(&self, i: Interned) -> &'static str {
-        self.interner.get_string(i).expect("Invalid interned value")
-    }
-
-    pub fn intern_static(&mut self, string: &'static str) -> Interned {
-        self.interner.intern_static(string)
-    }
-
-    pub fn intern(&mut self, string: &str) -> Interned {
-        self.interner.intern(string)
-    }
-
-    pub fn get_if_interned(&self, string: &str) -> Option<Interned> {
-        self.interner.get_if_interned(string)
-    }
-
-    pub fn reserve_symbol(&mut self, string: &str) -> Value {
-        let sym = self.interner.intern(string);
-        Value::Global(self.globals.reserve(sym))
-    }
-
-    pub fn reserve_interned(&mut self, i: Interned) -> Value {
-        Value::Global(self.globals.reserve(i))
-    }
-
-    pub fn reserve_index(&mut self, i: Interned) -> u32 {
-        self.globals.reserve(i)
-    }
-
-    pub fn set_global(&mut self, string: &str, value: Value) -> Value {
-        let sym = self.interner.intern(string);
-        let slot = self.globals.reserve(sym);
-        self.globals.set(slot, value);
-        Value::Global(slot)
-    }
-
-    pub fn intern_to_global(&self, i: Interned) -> Option<Value> {
-        self.globals.get_if_interned(i)
-    }
-
-    pub fn global_intern_slot(&self, i: Interned) -> Option<usize> {
-        self.globals.interned_slot(i)
-    }
-
-    pub fn dump_globals(&self) {
-        println!("GLOBALS:");
-        self.globals.dump(self);
-        println!();
-    }
-
-    pub fn get_call_stack(&self) -> CallStackIter {
-        CallStackIter::new(self)
-    }
-
-    #[inline]
-    fn set_register(&mut self, registers: &mut [Value], idx: usize, val: Value) {
-        match &get_reg!(registers, idx) {
-            Value::Value(handle) => {
-                *(self.get_value_mut(*handle)) = val;
-            }
-            //Value::Global(idx) => self.globals.set(*idx, val),
-            _ => registers[idx] = val,
-        }
-    }
-
-    #[inline]
-    fn mov_register(registers: &mut [Value], idx: usize, val: Value) {
-        registers[idx] = val;
-    }
-
-    fn _call_frame(&self) -> Option<&CallFrame> {
-        self.call_frame_idx(self.stack_top)
-    }
-
-    fn call_frame_idx(&self, idx: usize) -> Option<&CallFrame> {
-        match self.stack[idx] {
-            Value::CallFrame(handle) => {
-                let frame = self.get_callframe(handle);
-                Some(frame)
-            }
-            _ => None,
-            //_ => panic!("Invalid stack, not a call frame."),
-        }
-    }
-
-    fn call_frame_mut(&mut self) -> Option<&mut CallFrame> {
-        self.call_frame_mut_idx(self.stack_top)
-    }
-
-    fn call_frame_mut_idx(&mut self, idx: usize) -> Option<&mut CallFrame> {
-        match self.stack[idx] {
-            Value::CallFrame(handle) => Some(self.get_callframe_mut(handle)),
-            _ => None,
-            //_ => panic!("Invalid stack, not a call frame."),
-        }
-    }
-
-    fn list(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
-        let (dest, start, end) = decode3!(code, &mut self.ip, wide);
-        if end < start {
-            self.set_register(registers, dest as usize, Value::Nil);
-        } else {
-            let mut last_cdr = Value::Nil;
-            for i in (start..=end).rev() {
-                let car = get_reg_unref!(registers, i, self);
-                let cdr = last_cdr;
-                last_cdr = Value::Pair(self.alloc_pair(car, cdr, None));
-            }
-            self.set_register(registers, dest as usize, last_cdr);
-        }
-        Ok(())
-    }
-
-    fn append(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
-        let (dest, start, end) = decode3!(code, &mut self.ip, wide);
-        if end < start {
-            self.set_register(registers, dest as usize, Value::Nil);
-        } else {
-            let mut last_cdr = Value::Nil;
-            let mut head = Value::Nil;
-            let mut loop_cdr;
-            for i in start..=end {
-                let lst = get_reg_unref!(registers, i, self);
-                match lst {
-                    Value::Nil => {}
-                    Value::Pair(handle) => {
-                        let (car, cdr, _) = self.heap.get_pair(handle);
-                        loop_cdr = cdr;
-                        let cdr = last_cdr;
-                        last_cdr = Value::Pair(self.alloc_pair(car, Value::Nil, None));
-                        match cdr {
-                            Value::Nil => head = last_cdr,
-                            Value::Pair(h) => {
-                                let (_, cdr, _) = self.get_pair_mut(h);
-                                *cdr = last_cdr;
-                            }
-                            _ => {}
-                        }
-                        loop {
-                            if let Value::Nil = loop_cdr {
-                                break;
-                            }
-                            match loop_cdr {
-                                Value::Pair(h) => {
-                                    let (car, ncdr, _) = self.heap.get_pair(h);
-                                    loop_cdr = ncdr;
-                                    let cdr = last_cdr;
-                                    last_cdr = Value::Pair(self.alloc_pair(car, Value::Nil, None));
-                                    match cdr {
-                                        Value::Nil => head = last_cdr,
-                                        Value::Pair(h) => {
-                                            let (_, cdr, _) = self.get_pair_mut(h);
-                                            *cdr = last_cdr;
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                _ => {
-                                    if i == end {
-                                        match last_cdr {
-                                            Value::Nil => head = loop_cdr,
-                                            Value::Pair(h) => {
-                                                let (_, cdr, _) = self.get_pair_mut(h);
-                                                *cdr = loop_cdr;
-                                            }
-                                            _ => {}
-                                        }
-                                    } else {
-                                        return Err(VMError::new_vm("APND: Param not a list."));
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if i == end {
-                            match last_cdr {
-                                Value::Nil => head = lst,
-                                Value::Pair(h) => {
-                                    let (_, cdr, _) = self.get_pair_mut(h);
-                                    *cdr = lst;
-                                }
-                                _ => {}
-                            }
-                        } else {
-                            return Err(VMError::new_vm("APND: Param not a list."));
-                        }
-                    }
-                }
-            }
-            self.set_register(registers, dest as usize, head);
-        }
-        Ok(())
-    }
-
-    fn xar(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
-        let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
-        let pair = get_reg_unref!(registers, pair_reg, self);
-        let val = get_reg_unref!(registers, val, self);
-        match &pair {
-            Value::Pair(handle) => {
-                let (car, _, _) = self.get_pair_mut(*handle);
-                *car = val;
-            }
-            Value::Nil => {
-                let pair = Value::Pair(self.alloc_pair(val, Value::Nil, None));
-                self.set_register(registers, pair_reg as usize, pair);
-            }
-            _ => {
-                return Err(VMError::new_vm("XAR: Not a pair/conscell."));
-            }
-        }
-        Ok(())
-    }
-
-    fn xdr(&mut self, code: &[u8], registers: &mut [Value], wide: bool) -> VMResult<()> {
-        let (pair_reg, val) = decode2!(code, &mut self.ip, wide);
-        let pair = get_reg_unref!(registers, pair_reg, self);
-        let val = get_reg_unref!(registers, val, self);
-        match &pair {
-            Value::Pair(handle) => {
-                let (_, cdr, _) = self.get_pair_mut(*handle);
-                *cdr = val;
-            }
-            Value::Nil => {
-                let pair = Value::Pair(self.alloc_pair(Value::Nil, val, None));
-                self.set_register(registers, pair_reg as usize, pair);
-            }
-            _ => {
-                return Err(VMError::new_vm("XDR: Not a pair/conscell."));
-            }
-        }
-        Ok(())
-    }
-
     // Need to break the registers lifetime away from self or we can not do much...
     // The underlying stack should never be deleted or reallocated for the life
     // of Vm so this should be safe.
@@ -681,7 +70,7 @@ impl Vm {
 
     fn setup_rest(
         &mut self,
-        chunk: &Rc<Chunk>,
+        chunk: &Arc<Chunk>,
         registers: &mut [Value],
         first_reg: u16,
         num_args: u16,
@@ -699,7 +88,7 @@ impl Vm {
                 .rev()
             {
                 let old_last = last;
-                last = Value::Pair(self.alloc_pair(*item, old_last, None));
+                last = self.alloc_pair(*item, old_last);
             }
             last
         };
@@ -750,12 +139,12 @@ impl Vm {
     fn make_call(
         &mut self,
         lambda: Value,
-        chunk: Rc<Chunk>,
+        chunk: Arc<Chunk>,
         registers: &mut [Value],
         first_reg: u16,
         num_args: u16,
         tail_call: bool,
-    ) -> Result<Rc<Chunk>, (VMError, Rc<Chunk>)> {
+    ) -> Result<Arc<Chunk>, (VMError, Arc<Chunk>)> {
         // Clear out the unused optional regs.
         // Will clear working set to avoid writing to globals or closures by accident.
         fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
@@ -819,11 +208,7 @@ impl Vm {
                         on_error: self.on_error,
                     };
                     self.callframe_id += 1;
-                    Self::mov_register(
-                        registers,
-                        first_reg.into(),
-                        Value::CallFrame(self.alloc_callframe(frame)),
-                    );
+                    Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
                     self.stack_top += first_reg as usize;
                 }
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
@@ -878,11 +263,7 @@ impl Vm {
                     }
                 }
                 if let Some(frame) = frame {
-                    Self::mov_register(
-                        registers,
-                        first_reg.into(),
-                        Value::CallFrame(self.alloc_callframe(frame)),
-                    );
+                    Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
                 }
                 clear_opts(&l, registers, first_reg, num_args);
                 Ok(l)
@@ -955,11 +336,11 @@ impl Vm {
             let v = get_reg_unref!(registers, reg, self);
             val.push_str(&v.pretty_value(self));
         }
-        let val = Value::String(self.alloc_string(val.into()));
+        let val = self.alloc_string(val.into());
         Ok(val)
     }
 
-    fn is_eq(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+    fn is_eq(&self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
             val = Value::True;
@@ -1057,8 +438,8 @@ impl Vm {
                     // XXX use iterators to reduce recursion?
                     // Make sure pair iter will work for non-lists...
                     if let Value::Pair(h2) = val2 {
-                        let (car1, cdr1, _) = self.heap.get_pair(h1);
-                        let (car2, cdr2, _) = self.heap.get_pair(h2);
+                        let (car1, cdr1) = self.heap.get_pair(h1);
+                        let (car2, cdr2) = self.heap.get_pair(h2);
                         val = self.is_equal_pair(car1, car2)?;
                         if val == Value::True {
                             val = self.is_equal_pair(cdr1, cdr2)?;
@@ -1071,7 +452,7 @@ impl Vm {
         Ok(val)
     }
 
-    fn is_equal(&mut self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
+    fn is_equal(&self, registers: &mut [Value], reg1: u16, reg2: u16) -> VMResult<Value> {
         let mut val = Value::False;
         if reg1 == reg2 {
             val = Value::True
@@ -1089,7 +470,7 @@ impl Vm {
         Ok(val)
     }
 
-    pub fn do_call(&mut self, chunk: Rc<Chunk>, params: &[Value]) -> VMResult<Value> {
+    pub fn do_call(&mut self, chunk: Arc<Chunk>, params: &[Value]) -> VMResult<Value> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
         let ip = self.ip;
@@ -1121,7 +502,7 @@ impl Vm {
         res
     }
 
-    pub fn execute(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
+    pub fn execute(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
         let ip = self.ip;
@@ -1141,7 +522,7 @@ impl Vm {
         result
     }
 
-    fn execute2(&mut self, chunk: Rc<Chunk>) -> VMResult<()> {
+    fn execute2(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
         let mut chunk = chunk;
 
         let mut done = false;
@@ -1190,7 +571,7 @@ impl Vm {
         result
     }
 
-    fn execute_internal(&mut self, chunk: Rc<Chunk>) -> Result<(), (VMError, Rc<Chunk>)> {
+    fn execute_internal(&mut self, chunk: Arc<Chunk>) -> Result<(), (VMError, Arc<Chunk>)> {
         let mut registers = self.make_registers();
         let mut chunk = chunk;
         self.ip = 0;
@@ -1396,13 +777,9 @@ impl Vm {
                                 if let Value::Value(b) = r {
                                     caps.push(b);
                                 } else {
-                                    let handle = self.new_upval(r);
-                                    Self::mov_register(
-                                        registers,
-                                        *c as usize,
-                                        Value::Value(handle),
-                                    );
-                                    caps.push(handle);
+                                    let val = self.new_upval(r);
+                                    Self::mov_register(registers, *c as usize, val);
+                                    caps.push(val.get_handle().unwrap());
                                 }
                             }
                         }
@@ -1413,11 +790,7 @@ impl Vm {
                             chunk,
                         ));
                     };
-                    Self::mov_register(
-                        registers,
-                        dest as usize,
-                        Value::Closure(self.alloc_closure(lambda, caps)),
-                    );
+                    Self::mov_register(registers, dest as usize, self.alloc_closure(lambda, caps));
                 }
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut self.ip, wide);
@@ -1701,7 +1074,7 @@ impl Vm {
                         arg_reg: self.stack_top + first_reg as usize, //stack_len,
                         stack,
                     };
-                    let k_obj = Value::Continuation(self.alloc_continuation(k));
+                    let k_obj = self.alloc_continuation(k);
                     Self::mov_register(registers, (first_reg + 1) as usize, k_obj);
                     chunk = self.make_call(lambda, chunk, registers, first_reg as u16, 1, false)?;
                     registers = self.make_registers();
@@ -1886,7 +1259,7 @@ impl Vm {
                     let (dest, op2, op3) = decode3!(chunk.code, &mut self.ip, wide);
                     let car = get_reg_unref!(registers, op2, self);
                     let cdr = get_reg_unref!(registers, op3, self);
-                    let pair = Value::Pair(self.alloc_pair(car, cdr, None));
+                    let pair = self.alloc_pair(car, cdr);
                     self.set_register(registers, dest as usize, pair);
                 }
                 CAR => {
@@ -1894,7 +1267,7 @@ impl Vm {
                     let op = get_reg_unref!(registers, op, self);
                     match op {
                         Value::Pair(handle) => {
-                            let (car, _, _) = self.heap.get_pair(handle);
+                            let (car, _) = self.heap.get_pair(handle);
                             self.set_register(registers, dest as usize, car);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
@@ -1906,7 +1279,7 @@ impl Vm {
                     let op = get_reg_unref!(registers, op, self);
                     match op {
                         Value::Pair(handle) => {
-                            let (_, cdr, _) = self.heap.get_pair(handle);
+                            let (_, cdr) = self.heap.get_pair(handle);
                             self.set_register(registers, dest as usize, cdr);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
@@ -1929,14 +1302,14 @@ impl Vm {
                     let (dest, start, end) = decode3!(chunk.code, &mut self.ip, wide);
                     if end == start {
                         let vh = self.alloc_vector(Vec::new());
-                        self.set_register(registers, dest as usize, Value::Vector(vh));
+                        self.set_register(registers, dest as usize, vh);
                     } else {
                         let mut v = Vec::new();
                         for i in start..end {
                             v.push(get_reg_unref!(registers, i, self));
                         }
                         let vh = self.alloc_vector(v);
-                        self.set_register(registers, dest as usize, Value::Vector(vh));
+                        self.set_register(registers, dest as usize, vh);
                     }
                 }
                 VECMK => {
@@ -1944,7 +1317,7 @@ impl Vm {
                     let len = get_reg_unref!(registers, op, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))?;
-                    let val = Value::Vector(self.alloc_vector(Vec::with_capacity(len as usize)));
+                    let val = self.alloc_vector(Vec::with_capacity(len as usize));
                     self.set_register(registers, dest as usize, val);
                 }
                 VECELS => {
@@ -2029,7 +1402,7 @@ impl Vm {
                     for _ in 0..len {
                         v.push(dfn);
                     }
-                    let val = Value::Vector(self.alloc_vector(v));
+                    let val = self.alloc_vector(v);
                     self.set_register(registers, dest as usize, val);
                 }
                 VECLEN => {
@@ -2107,82 +1480,82 @@ mod tests {
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
         chunk.add_constant(Value::Nil);
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 2);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CAR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 1);
 
         // car with nil
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
         // car with nil on heap
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
         // cdr with nil
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
         // cdr with nil on heap
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].is_nil());
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 2, line).unwrap();
         chunk.encode2(XAR, 1, 2, line).unwrap();
         chunk.encode2(CAR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 3);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 3, line).unwrap();
         chunk.encode2(XDR, 1, 2, line).unwrap();
         chunk.encode2(CDR, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 4);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CONST, 3, 2, line).unwrap();
@@ -2190,13 +1563,13 @@ mod tests {
         chunk.encode2(CAR, 0, 2, line).unwrap();
         chunk.encode2(CDR, 3, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 3);
         assert!(vm.stack[3].is_nil());
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, line).unwrap();
         chunk.encode2(CONST, 3, 3, line).unwrap();
@@ -2204,31 +1577,31 @@ mod tests {
         chunk.encode2(CDR, 0, 2, line).unwrap();
         chunk.encode2(CAR, 3, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 4);
         assert!(vm.stack[3].is_nil());
 
         // Test a list with elements.
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 0, 0, line).unwrap();
         chunk.encode2(CONST, 1, 1, line).unwrap();
         chunk.encode2(CONST, 2, 2, line).unwrap();
         chunk.encode3(LIST, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         if let Value::Pair(h) = result {
-            let (car, cdr, _) = vm.heap.get_pair(*h);
+            let (car, cdr) = vm.heap.get_pair(*h);
             assert!(get_int(&vm, &car)? == 1);
             if let Value::Pair(h2) = cdr {
-                let (car, cdr, _) = vm.heap.get_pair(h2);
+                let (car, cdr) = vm.heap.get_pair(h2);
                 assert!(get_int(&vm, &car)? == 2);
                 if let Value::Pair(h3) = cdr {
-                    let (car, cdr, _) = vm.heap.get_pair(h3);
+                    let (car, cdr) = vm.heap.get_pair(h3);
                     assert!(get_int(&vm, &car)? == 3);
                     assert!(is_nil(&vm, &cdr)?);
                 } else {
@@ -2241,11 +1614,11 @@ mod tests {
             assert!(false);
         }
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode3(LIST, 0, 1, 0, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack.get(0).unwrap();
         assert!(result.is_nil());
@@ -2265,45 +1638,45 @@ mod tests {
         chunk.encode0(RET, line)?;
 
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 255);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 1, 256, line).unwrap();
         chunk.encode3(ADD, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
 
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].get_int()?;
         assert!(result == 255 + 256);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let result = vm.stack[1].get_int()?;
         assert!(result == 256);
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[1].get_int()?;
         assert!(result == 255 + 256);
 
         let mut vm = Vm::new();
-        vm.stack[0] = Value::Value(vm.new_upval(Value::Int(1)));
+        vm.stack[0] = vm.new_upval(Value::Int(1));
         vm.stack[1] = Value::Int(10);
         vm.stack[2] = Value::Int(1);
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(MOV, 1, 0, line).unwrap();
         chunk.encode3(ADD, 1, 1, 2, line).unwrap();
         chunk.encode3(ADD, 1, 1, 2, line).unwrap();
         chunk.encode3(ADD, 1, 1, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[0].unref(&vm).get_int()?;
         assert!(result == 1);
@@ -2329,32 +1702,32 @@ mod tests {
         chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         assert!(vm.execute(chunk.clone()).is_err());
 
         vm.clear_err_frame();
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
         chunk.encode2(CONST, 0, const1, line)?;
         chunk.encode2(REF, 1, 0, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[1].unref(&vm).get_int()? == 11);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 0, const3, line)?;
         chunk.encode2(CONST, 1, const2, line)?;
         chunk.encode2(DEF, 0, 1, line)?;
         chunk.encode2(REF, 2, 0, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[2].unref(&vm).get_int()? == 42);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         vm.globals.set(slot, Value::Int(11));
         let slot = vm.globals.interned_slot(sym2).unwrap() as u32;
@@ -2370,11 +1743,11 @@ mod tests {
         chunk.encode2(DEFV, 0, 3, line)?;
         chunk.encode2(REF, 2, 4, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[2].unref(&vm).get_int()? == 43);
 
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.interned_slot(sym2).unwrap() as u32;
         vm.globals.set(slot, Value::Int(11));
@@ -2393,14 +1766,14 @@ mod tests {
         chunk.encode2(REF, 5, 4, line)?;
         chunk.encode2(SET, 5, 3, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[2].unref(&vm).get_int()? == 53);
         assert!(vm.stack[5].unref(&vm).get_int()? == 53);
         assert!(vm.globals.get(slot).get_int()? == 53);
 
         let mut vm = Vm::new();
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
         let const1 = chunk.add_constant(Value::Global(slot)) as u16;
@@ -2415,12 +1788,12 @@ mod tests {
         chunk.encode2(DEFV, 1, 3, line)?;
         chunk.encode2(REF, 0, 4, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].unref(&vm).get_int()? == 44);
 
         let mut vm = Vm::new();
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
         let const1 = chunk.add_constant(Value::Global(slot)) as u16;
@@ -2435,12 +1808,12 @@ mod tests {
         chunk.encode2(DEF, 1, 3, line)?;
         chunk.encode2(REF, 0, 4, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].unref(&vm).get_int()? == 55);
 
         let mut vm = Vm::new();
-        let mut chunk = Rc::try_unwrap(chunk).unwrap();
+        let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         let slot = vm.globals.reserve(sym2);
         let const1 = chunk.add_constant(Value::Global(slot)) as u16;
@@ -2459,7 +1832,7 @@ mod tests {
         chunk.encode3(ADD, 5, 5, 3, line)?;
         chunk.encode3(ADD, 5, 5, 3, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].unref(&vm).get_int()? == 1);
         assert!(vm.stack[5].unref(&vm).get_int()? == 3);
@@ -2546,7 +1919,7 @@ mod tests {
         //chunk.disassemble_chunk(&vm)?;
         //assert!(false);
 
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[5].get_float()?;
         assert!(result == 12500.0);
@@ -2561,7 +1934,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2569,7 +1942,7 @@ mod tests {
         chunk.encode2(CONST, 2, const1, line).unwrap();
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2582,7 +1955,7 @@ mod tests {
         chunk.encode3(CALL, 1, 1, 5, line).unwrap();
         chunk.encode0(RET, line)?;
 
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[2].get_int()?;
         assert!(result == 7);
@@ -2601,7 +1974,7 @@ mod tests {
         let line = 1;
         chunk.encode3(ADD, 3, 1, 2, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2612,7 +1985,7 @@ mod tests {
         chunk.encode2(TCALL, 3, 2, line).unwrap();
         // The TCALL will keep HALT from executing.
         chunk.encode0(HALT, line)?;
-        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2626,7 +1999,7 @@ mod tests {
         //chunk.encode2(TCALL, 50, 2, line).unwrap();
         chunk.encode0(RET, line)?;
 
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         //let result = vm.stack[0].get_int()?;
         //assert!(result == 7);
@@ -2656,7 +2029,7 @@ mod tests {
             if registers.len() != 0 {
                 return Err(VMError::new_vm("test make_str: wrong number of args."));
             }
-            let s = Value::String(vm.alloc_string("builtin hello".into()));
+            let s = vm.alloc_string("builtin hello".into());
             Ok(s)
         }
         let mut vm = Vm::new();
@@ -2668,7 +2041,7 @@ mod tests {
         chunk.encode2(MOV, 5, 2, line).unwrap();
         chunk.encode3(CALL, 10, 2, 3, line).unwrap();
         chunk.encode1(SRET, 3, line)?;
-        let add = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2676,7 +2049,7 @@ mod tests {
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode2(TCALL, 10, 2, line).unwrap();
         chunk.encode0(RET, line)?;
-        let tadd = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let tadd = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2685,7 +2058,7 @@ mod tests {
         chunk.encode2(MOV, 3, 1, line).unwrap();
         chunk.encode3(CALL, 4, 1, 2, line).unwrap();
         chunk.encode1(SRET, 2, line)?;
-        let add_ten = Value::Lambda(vm.alloc_lambda(Rc::new(chunk)));
+        let add_ten = vm.alloc_lambda(Arc::new(chunk));
 
         let mut chunk = Chunk::new("no_file", 1);
         let line = 1;
@@ -2700,7 +2073,7 @@ mod tests {
         chunk.encode2(CONST, 15, const1, line).unwrap();
         chunk.encode3(CALL, 15, 0, 15, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[2].get_int()?;
         assert!(result == 9);
@@ -2727,7 +2100,7 @@ mod tests {
         chunk.encode2(CONST, 10, const1, line).unwrap();
         chunk.encode3(CALL, 10, 0, 11, line).unwrap();
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let result = vm.stack[2].get_int()?;
         assert!(result == 9);
@@ -2809,7 +2182,7 @@ mod tests {
         chunk.encode2(CONST, 25, const1, line)?;
 
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[4].get_int()? == 2);
         assert!(vm.stack[5].get_int()? == 3);
@@ -2870,7 +2243,7 @@ mod tests {
         chunk.encode2(VECELS, 20, 2, line)?;
         chunk.encode3(VECSTH, 20, 3, 3, line)?;
         chunk.encode0(RET, line)?;
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[5].get_int()? == 1);
         assert!(vm.stack[6].get_int()? == 0);
@@ -2919,7 +2292,7 @@ mod tests {
         chunk.encode3(ADD, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 6);
 
@@ -2934,7 +2307,7 @@ mod tests {
         chunk.encode3(ADD, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
@@ -2954,7 +2327,7 @@ mod tests {
         chunk.encode3(ADD, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
@@ -2978,7 +2351,7 @@ mod tests {
         chunk.encode3(SUB, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == -2);
 
@@ -2993,7 +2366,7 @@ mod tests {
         chunk.encode3(SUB, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
@@ -3013,7 +2386,7 @@ mod tests {
         chunk.encode3(SUB, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
@@ -3037,7 +2410,7 @@ mod tests {
         chunk.encode3(MUL, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 6);
 
@@ -3052,7 +2425,7 @@ mod tests {
         chunk.encode3(MUL, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
@@ -3072,7 +2445,7 @@ mod tests {
         chunk.encode3(MUL, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
@@ -3096,7 +2469,7 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         assert!(vm.stack[0].get_int()? == 3);
 
@@ -3111,7 +2484,7 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 2, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         assert!(!item.is_int());
@@ -3131,7 +2504,7 @@ mod tests {
         chunk.encode3(DIV, 1, 500, 0, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         vm.execute(chunk.clone())?;
         let item = vm.stack[0];
         let item2 = vm.stack[1];
@@ -3147,7 +2520,7 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
@@ -3160,7 +2533,7 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");
@@ -3173,7 +2546,7 @@ mod tests {
         chunk.encode3(DIV, 0, 0, 1, line).unwrap();
         chunk.encode0(RET, line)?;
         let mut vm = Vm::new();
-        let chunk = Rc::new(chunk);
+        let chunk = Arc::new(chunk);
         let res = vm.execute(chunk.clone());
         assert!(res.is_err());
         assert!(res.unwrap_err().to_string() == "[rt]: Divide by zero error.");

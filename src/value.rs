@@ -64,7 +64,7 @@ impl<'vm> Iterator for PairIter<'vm> {
         if let Some(current) = self.current {
             match current {
                 Value::Pair(h) => {
-                    let (car, cdr, _) = self.vm.get_pair(h);
+                    let (car, cdr) = self.vm.get_pair(h);
                     self.current = Some(cdr);
                     Some(car)
                 }
@@ -259,7 +259,7 @@ impl Value {
     pub fn get_pair(&self, vm: &Vm) -> Option<(Value, Value)> {
         match &self {
             Value::Pair(handle) => {
-                let (car, cdr, _) = vm.get_pair(*handle);
+                let (car, cdr) = vm.get_pair(*handle);
                 Some((car, cdr))
             }
             _ => None,
@@ -300,7 +300,7 @@ impl Value {
                 }
                 match cdr {
                     Value::Pair(handle) => {
-                        let (car, ncdr, _) = vm.get_pair(handle);
+                        let (car, ncdr) = vm.get_pair(handle);
                         res.push_str(&car.display_value(vm));
                         cdr = ncdr;
                     }
@@ -365,7 +365,7 @@ impl Value {
                 format!("{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
             Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
-            Value::String(handle) => format!("{}", vm.get_string(*handle)),
+            Value::String(handle) => vm.get_string(*handle).to_string(),
             _ => self.display_value(vm),
         }
     }
@@ -404,7 +404,7 @@ impl Value {
     pub fn is_proper_list(&self, vm: &Vm) -> bool {
         // does not detect empty (nil) lists on purpose.
         if let Value::Pair(handle) = self {
-            let (_car, cdr, _) = vm.get_pair(*handle);
+            let (_car, cdr) = vm.get_pair(*handle);
             if cdr.is_nil() {
                 true
             } else {
@@ -420,7 +420,6 @@ impl Value {
 pub struct Globals {
     objects: Vec<Value>,
     objects_map: HashMap<Interned, usize>,
-    _doc_strings: HashMap<Interned, String>,
 }
 
 impl Default for Globals {
@@ -434,7 +433,6 @@ impl Globals {
         Globals {
             objects: Vec::new(),
             objects_map: HashMap::new(),
-            _doc_strings: HashMap::new(),
         }
     }
 

@@ -1,5 +1,5 @@
-use std::borrow::Cow;
-use std::rc::Rc;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::chunk::*;
 use crate::error::*;
@@ -8,17 +8,7 @@ use crate::value::*;
 const FLAG_MARK: u8 = 0x01;
 const FLAG_TRACE: u8 = 0x02;
 const FLAG_STICKY: u8 = 0x04;
-//const FLAG_NEW: u8 = 0x08;
-
-const TYPE_STRING: u8 = 0x10;
-const TYPE_VECTOR: u8 = 0x20;
-const TYPE_BYTES: u8 = 0x30;
-const TYPE_PAIR: u8 = 0x40;
-const TYPE_LAMBDA: u8 = 0x50;
-const TYPE_MACRO: u8 = 0x60;
-const TYPE_CONT: u8 = 0x70;
-const TYPE_CALLFRAME: u8 = 0x80;
-const TYPE_VALUE: u8 = 0x90;
+const FLAG_MUT: u8 = 0x08;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -48,17 +38,10 @@ fn need_trace(flag: u8) -> bool {
     is_marked(flag) && is_bit_set!(flag, FLAG_TRACE)
 }
 
-#[derive(Clone, Copy, Debug)]
-//#[repr(packed(1))]
-pub struct Meta {
-    pub line: u32,
-    pub col: u16,
-}
-
 #[derive(Clone, Debug)]
 pub struct CallFrame {
     pub id: usize,
-    pub chunk: Rc<Chunk>,
+    pub chunk: Arc<Chunk>,
     pub ip: usize,
     pub current_ip: usize,
     pub stack_top: usize,
@@ -78,16 +61,32 @@ pub struct Continuation {
 // stack or as constants.
 #[derive(Clone, Debug)]
 enum Object {
-    String(Cow<'static, str>),
-    Vector(Vec<Value>),
-    Bytes(Vec<u8>),
-    Pair(Value, Value, Option<Meta>),
-    Lambda(Rc<Chunk>),
-    Macro(Rc<Chunk>),
-    Closure(Rc<Chunk>, Vec<Handle>),
-    Continuation(Box<Continuation>),
-    CallFrame(Box<CallFrame>),
+    String(Arc<String>),
+    Vector(Arc<Vec<Value>>),
+    Bytes(Arc<Vec<u8>>),
+    Pair(Arc<(Value, Value)>),
     Value(Value),
+    // CallFrame can be mutable for internal purposes.
+    CallFrame(Arc<CallFrame>),
+    // Everything below here is always read only.
+    Lambda(Arc<Chunk>),
+    Macro(Arc<Chunk>),
+    Closure(Arc<Chunk>, Arc<Vec<Handle>>),
+    Continuation(Arc<Continuation>),
+}
+
+pub enum MutState {
+    Mutable,
+    Immutable,
+}
+
+impl MutState {
+    fn flag(&self) -> u8 {
+        match self {
+            Self::Mutable => FLAG_MUT,
+            Self::Immutable => 0,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -126,9 +125,11 @@ impl Default for HeapStats {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Heap {
     flags: Vec<u8>,
     objects: Vec<Object>,
+    props: HashMap<Handle, Arc<HashMap<&'static str, Value>>>,
     greys: Vec<usize>,
     grow_factor: f64,
     capacity: usize,
@@ -147,6 +148,7 @@ impl Heap {
             flags: Vec::with_capacity(512),
             // Keep one extra slot to do swap on replace.
             objects: Vec::with_capacity(512 + 1),
+            props: HashMap::new(),
             greys: vec![],
             grow_factor: 2.0,
             capacity: 512,
@@ -159,6 +161,7 @@ impl Heap {
             flags: Vec::with_capacity(capacity),
             // Keep one extra slot to do sway on replace.
             objects: Vec::with_capacity(capacity + 1),
+            props: HashMap::new(),
             greys: vec![],
             grow_factor: 2.0,
             capacity,
@@ -170,22 +173,7 @@ impl Heap {
         self.grow_factor = grow_factor;
     }
 
-    fn type_flag(obj: &Object) -> u8 {
-        match obj {
-            Object::String(_) => TYPE_STRING,
-            Object::Vector(_) => TYPE_VECTOR | FLAG_TRACE,
-            Object::Bytes(_) => TYPE_BYTES,
-            Object::Pair(_, _, _) => TYPE_PAIR | FLAG_TRACE,
-            Object::Lambda(_) => TYPE_LAMBDA,
-            Object::Macro(_) => TYPE_MACRO,
-            Object::Closure(_, _) => TYPE_LAMBDA,
-            Object::Continuation(_) => TYPE_CONT,
-            Object::CallFrame(_) => TYPE_CALLFRAME,
-            Object::Value(_) => TYPE_VALUE,
-        }
-    }
-
-    fn alloc<MarkFunc>(&mut self, obj: Object, mark_roots: MarkFunc) -> Handle
+    fn alloc<MarkFunc>(&mut self, obj: Object, flags: u8, mark_roots: MarkFunc) -> Handle
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
@@ -199,18 +187,16 @@ impl Heap {
             }
         }
         if self.objects.len() < self.capacity() {
-            let type_flag = Self::type_flag(&obj);
             let idx = self.objects.len();
             self.objects.push(obj);
-            self.flags.push(type_flag | FLAG_MARK);
+            self.flags.push(flags | FLAG_MARK);
             self.stats.live_objects += 1;
             Handle { idx }
         } else {
             for (idx, flag) in self.flags.iter_mut().enumerate() {
                 if !is_marked(*flag) {
                     self.stats.live_objects += 1;
-                    let type_flag = Self::type_flag(&obj);
-                    *flag = type_flag | FLAG_MARK;
+                    *flag = flags | FLAG_MARK;
                     self.objects.push(obj);
                     self.objects.swap_remove(idx);
                     return Handle { idx };
@@ -224,86 +210,155 @@ impl Heap {
         &mut self,
         car: Value,
         cdr: Value,
-        meta: Option<Meta>,
+        mutable: MutState,
         mark_roots: MarkFunc,
-    ) -> Handle
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Pair(car, cdr, meta), mark_roots)
+        Value::Pair(self.alloc(
+            Object::Pair(Arc::new((car, cdr))),
+            mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ))
     }
 
-    pub fn alloc_string<MarkFunc>(&mut self, s: Cow<'static, str>, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_string<MarkFunc>(
+        &mut self,
+        s: String,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::String(s), mark_roots)
+        Value::String(self.alloc(Object::String(Arc::new(s)), mutable.flag(), mark_roots))
     }
 
-    pub fn alloc_vector<MarkFunc>(&mut self, v: Vec<Value>, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_vector<MarkFunc>(
+        &mut self,
+        v: Vec<Value>,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Vector(v), mark_roots)
+        Value::Vector(self.alloc(
+            Object::Vector(Arc::new(v)),
+            mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ))
     }
 
-    pub fn alloc_bytes<MarkFunc>(&mut self, v: Vec<u8>, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_bytes<MarkFunc>(
+        &mut self,
+        v: Vec<u8>,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Bytes(v), mark_roots)
+        Value::Bytes(self.alloc(Object::Bytes(Arc::new(v)), mutable.flag(), mark_roots))
     }
 
-    pub fn alloc_lambda<MarkFunc>(&mut self, l: Rc<Chunk>, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_lambda<MarkFunc>(
+        &mut self,
+        l: Arc<Chunk>,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Lambda(l), mark_roots)
+        Value::Lambda(self.alloc(Object::Lambda(l), mutable.flag() | FLAG_TRACE, mark_roots))
     }
 
-    pub fn alloc_macro<MarkFunc>(&mut self, l: Rc<Chunk>, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_macro<MarkFunc>(
+        &mut self,
+        l: Arc<Chunk>,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Macro(l), mark_roots)
+        Value::Macro(self.alloc(Object::Macro(l), mutable.flag() | FLAG_TRACE, mark_roots))
     }
 
     pub fn alloc_closure<MarkFunc>(
         &mut self,
-        l: Rc<Chunk>,
+        l: Arc<Chunk>,
         v: Vec<Handle>,
+        mutable: MutState,
         mark_roots: MarkFunc,
-    ) -> Handle
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Closure(l, v), mark_roots)
+        Value::Closure(self.alloc(
+            Object::Closure(l, Arc::new(v)),
+            mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ))
     }
 
-    pub fn alloc_continuation<MarkFunc>(&mut self, k: Continuation, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_continuation<MarkFunc>(
+        &mut self,
+        k: Continuation,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Continuation(Box::new(k)), mark_roots)
+        Value::Continuation(self.alloc(
+            Object::Continuation(Arc::new(k)),
+            mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ))
     }
 
-    pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_callframe<MarkFunc>(
+        &mut self,
+        frame: CallFrame,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::CallFrame(Box::new(frame)), mark_roots)
+        Value::CallFrame(self.alloc(
+            Object::CallFrame(Arc::new(frame)),
+            mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ))
     }
 
-    pub fn alloc_value<MarkFunc>(&mut self, val: Value, mark_roots: MarkFunc) -> Handle
+    pub fn alloc_value<MarkFunc>(
+        &mut self,
+        val: Value,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.alloc(Object::Value(val), mark_roots)
+        Value::Value(self.alloc(Object::Value(val), mutable.flag() | FLAG_TRACE, mark_roots))
     }
 
-    pub fn get_string(&self, handle: Handle) -> &Cow<'static, str> {
-        if let Some(Object::String(cow)) = self.objects.get(handle.idx) {
-            cow
+    pub fn get_string(&self, handle: Handle) -> &str {
+        if let Some(Object::String(ptr)) = self.objects.get(handle.idx) {
+            &*ptr
+        } else {
+            panic!("Handle {} is not a string!", handle.idx);
+        }
+    }
+
+    pub fn get_string_mut(&mut self, handle: Handle) -> &mut String {
+        if let Some(Object::String(ptr)) = self.objects.get_mut(handle.idx) {
+            Arc::make_mut(ptr)
         } else {
             panic!("Handle {} is not a string!", handle.idx);
         }
@@ -319,7 +374,7 @@ impl Heap {
 
     pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
         if let Some(Object::Vector(v)) = self.objects.get_mut(handle.idx) {
-            v
+            Arc::make_mut(v)
         } else {
             panic!("Handle {} is not a vector!", handle.idx);
         }
@@ -333,23 +388,24 @@ impl Heap {
         }
     }
 
-    pub fn get_pair(&self, handle: Handle) -> (Value, Value, &Option<Meta>) {
-        if let Some(Object::Pair(car, cdr, meta)) = self.objects.get(handle.idx) {
-            (*car, *cdr, meta)
+    pub fn get_pair(&self, handle: Handle) -> (Value, Value) {
+        if let Some(Object::Pair(ptr)) = self.objects.get(handle.idx) {
+            (ptr.0, ptr.1)
         } else {
             panic!("Handle {} is not a pair!", handle.idx);
         }
     }
 
-    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value, &mut Option<Meta>) {
-        if let Some(Object::Pair(car, cdr, meta)) = self.objects.get_mut(handle.idx) {
-            (car, cdr, meta)
+    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
+        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx) {
+            let data = Arc::make_mut(ptr);
+            (&mut data.0, &mut data.1)
         } else {
             panic!("Handle {} is not a pair!", handle.idx);
         }
     }
 
-    pub fn get_lambda(&self, handle: Handle) -> Rc<Chunk> {
+    pub fn get_lambda(&self, handle: Handle) -> Arc<Chunk> {
         if let Some(Object::Lambda(lambda)) = self.objects.get(handle.idx) {
             lambda.clone()
         } else {
@@ -357,7 +413,7 @@ impl Heap {
         }
     }
 
-    pub fn get_macro(&self, handle: Handle) -> Rc<Chunk> {
+    pub fn get_macro(&self, handle: Handle) -> Arc<Chunk> {
         if let Some(Object::Macro(lambda)) = self.objects.get(handle.idx) {
             lambda.clone()
         } else {
@@ -365,7 +421,7 @@ impl Heap {
         }
     }
 
-    pub fn get_closure(&self, handle: Handle) -> (Rc<Chunk>, &[Handle]) {
+    pub fn get_closure(&self, handle: Handle) -> (Arc<Chunk>, &[Handle]) {
         if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx) {
             (lambda.clone(), captures)
         } else {
@@ -391,7 +447,7 @@ impl Heap {
 
     pub fn get_callframe_mut(&mut self, handle: Handle) -> &mut CallFrame {
         if let Some(Object::CallFrame(call_frame)) = self.objects.get_mut(handle.idx) {
-            call_frame
+            Arc::make_mut(call_frame)
         } else {
             panic!("Handle {} is not a continuation!", handle.idx);
         }
@@ -413,13 +469,12 @@ impl Heap {
         }
     }
 
-    // Used for a couple of tests, DO NOT try this on real code you WILL break the heap./
+    // Used for a couple of tests, DO NOT try this on real code you WILL break the heap.
     #[cfg(test)]
     fn replace(&mut self, handle: Handle, obj: Object) -> Object {
-        let type_flag = Self::type_flag(&obj);
         self.objects.push(obj);
         let old = self.objects.swap_remove(handle.idx);
-        self.flags[handle.idx] = type_flag | (self.flags[handle.idx] & 0x0f);
+        self.flags[handle.idx] = self.flags[handle.idx] & 0x0f;
         old
     }
 
@@ -512,7 +567,7 @@ impl Heap {
         match obj {
             Object::String(_) => {}
             Object::Vector(vec) => {
-                for v in vec {
+                for v in vec.iter() {
                     if let Some(h) = v.get_handle() {
                         let h = h;
                         self.mark_trace(h, current);
@@ -520,7 +575,7 @@ impl Heap {
                 }
             }
             Object::Bytes(_) => {}
-            Object::Pair(car, cdr, _) => match (car.get_handle(), cdr.get_handle()) {
+            Object::Pair(data) => match (data.0.get_handle(), data.1.get_handle()) {
                 (Some(car), Some(cdr)) => {
                     self.mark_trace(car, current);
                     self.mark_trace(cdr, current);
@@ -533,7 +588,7 @@ impl Heap {
             Object::Macro(chunk) => self.mark_chunk(chunk, current),
             Object::Closure(chunk, closures) => {
                 self.mark_chunk(chunk, current);
-                for close in closures {
+                for close in closures.iter() {
                     self.mark_trace(*close, current);
                 }
             }
@@ -585,11 +640,42 @@ impl Heap {
     pub fn live_objects(&self) -> usize {
         self.stats.live_objects()
     }
+
+    pub fn get_property(&self, handle: Handle, prop: &str) -> Option<Value> {
+        if let Some(map) = self.props.get(&handle) {
+            if let Some(val) = map.get(prop) {
+                return Some(*val);
+            }
+        }
+        None
+    }
+
+    pub fn set_property(&mut self, handle: Handle, prop: &'static str, value: Value) {
+        if let Some(map) = self.props.get_mut(&handle) {
+            let map = Arc::make_mut(map);
+            map.insert(prop, value);
+        } else {
+            let mut map = HashMap::new();
+            map.insert(prop, value);
+            self.props.insert(handle, Arc::new(map));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_send_sync<T>(_t: T)
+    where
+        T: Send + Sync,
+    {
+    }
+
+    #[test]
+    fn test_obj_send_sync() {
+        test_send_sync(Object::Value(Value::Nil));
+    }
 
     #[test]
     fn test_basic() -> VMResult<()> {
@@ -598,21 +684,21 @@ mod tests {
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            heap.alloc_pair(Value::Int(x), Value::Nil, None, mark_roots);
+            heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         for x in 0..512 {
-            if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: x }) {
+            if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle { idx: x }) {
                 assert!(x == v as usize);
             } else {
                 assert!(false);
             }
         }
-        heap.alloc(Object::Pair(Value::Int(512), Value::Nil, None), mark_roots);
+        heap.alloc_pair(Value::Int(512), Value::Nil, MutState::Mutable, mark_roots);
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 1);
-        if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: 0 }) {
+        if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle { idx: 0 }) {
             assert!(512 == v);
         } else {
             assert!(false);
@@ -624,12 +710,12 @@ mod tests {
             Ok(())
         };
         for x in 0..512 {
-            heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
+            heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
         }
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 513);
         for x in 0..513 {
-            if let (Value::Int(v), Value::Nil, _) = heap.get_pair(Handle { idx: x }) {
+            if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle { idx: x }) {
                 if x == 0 {
                     assert!(512 == v);
                 } else {
@@ -655,14 +741,14 @@ mod tests {
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 0);
         for x in 0..512 {
-            let h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
-            heap.sticky(h);
+            let h = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
+            heap.sticky(h.get_handle().unwrap());
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 512);
         for x in 512..1024 {
-            let _h = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
+            let _h = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..1024 {
@@ -673,7 +759,7 @@ mod tests {
         heap.collect(mark_roots);
         assert!(heap.capacity() == 1024);
         assert!(heap.live_objects() == 1024);
-        heap.alloc(Object::String("steve".into()), mark_roots);
+        heap.alloc_string("steve".into(), MutState::Mutable, mark_roots);
         assert!(heap.capacity() == 2048);
         assert!(heap.live_objects() == 1025);
         Ok(())
@@ -694,18 +780,19 @@ mod tests {
             Ok(())
         };
         for x in 0..256 {
-            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
-            outers.borrow_mut().push(heap.alloc(
-                Object::Pair(Value::Pair(inner), Value::Nil, None),
-                mark_roots,
-            ));
+            let inner = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
+            outers.borrow_mut().push(
+                heap.alloc_pair(inner, Value::Nil, MutState::Mutable, mark_roots)
+                    .get_handle()
+                    .unwrap(),
+            );
         }
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 512);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            if let (Value::Pair(inner), Value::Nil, _) = heap.get_pair(*h) {
-                if let (Value::Int(v), Value::Nil, _) = heap.get_pair(inner) {
+            if let (Value::Pair(inner), Value::Nil) = heap.get_pair(*h) {
+                if let (Value::Int(v), Value::Nil) = heap.get_pair(inner) {
                     assert!(i == v as usize);
                 } else {
                     assert!(false);
@@ -716,10 +803,12 @@ mod tests {
             i += 1;
         }
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 512);
-        assert!(heap.live_objects() == 512);
+        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.live_objects(), 512);
         for h in outers.borrow().iter() {
-            heap.replace(*h, Object::String("bloop".into()));
+            //let data = Box::new("bloop".to_string());
+            //let d = Box::into_raw(data) as usize;
+            heap.replace(*h, Object::String(Arc::new("bloop".into())));
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
@@ -748,12 +837,14 @@ mod tests {
         };
         let mut v = vec![];
         for x in 0..256 {
-            let inner = heap.alloc(Object::Pair(Value::Int(x), Value::Nil, None), mark_roots);
-            v.push(Value::Pair(inner));
+            let inner = heap.alloc_pair(Value::Int(x), Value::Nil, MutState::Mutable, mark_roots);
+            v.push(inner);
         }
-        outers
-            .borrow_mut()
-            .push(heap.alloc(Object::Vector(v), mark_roots));
+        outers.borrow_mut().push(heap.alloc(
+            Object::Vector(Arc::new(v)),
+            MutState::Mutable.flag() | FLAG_TRACE,
+            mark_roots,
+        ));
         assert!(heap.capacity() == 512);
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
@@ -761,7 +852,7 @@ mod tests {
             let mut i = 0;
             for hv in v {
                 if let Value::Pair(hv) = hv {
-                    if let (Value::Int(v), Value::Nil, _) = heap.get_pair(*hv) {
+                    if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
                         assert!(i == v as usize);
                     } else {
                         assert!(false);
@@ -773,14 +864,14 @@ mod tests {
             }
         }
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 512);
-        assert!(heap.live_objects() == 257);
+        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.live_objects(), 257);
         for h in outers.borrow().iter() {
             let v = heap.get_vector(*h);
             let mut i = 0;
             for hv in v {
                 if let Value::Pair(hv) = hv {
-                    if let (Value::Int(v), Value::Nil, _) = heap.get_pair(*hv) {
+                    if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
                         assert!(i == v as usize);
                     } else {
                         assert!(false);
@@ -792,7 +883,10 @@ mod tests {
             }
         }
         for h in outers.borrow().iter() {
-            heap.replace(*h, Object::String("bloop".into()));
+            //let data = Box::new("bloop".to_string());
+            //let d = Box::into_raw(data) as usize;
+            //heap.replace(*h, Object::StringMut(d));
+            heap.replace(*h, Object::String(Arc::new("bloop".into())));
         }
         heap.collect(mark_roots);
         assert!(heap.capacity() == 512);
@@ -817,31 +911,36 @@ mod tests {
             }
             Ok(())
         };
-        outers
-            .borrow_mut()
-            .push(heap.alloc(Object::Pair(Value::Int(1), Value::Int(2), None), mark_roots));
-        let car_h = heap.alloc(Object::Pair(Value::Int(3), Value::Nil, None), mark_roots);
-        let cdr_h = heap.alloc(Object::Pair(Value::Int(4), Value::Nil, None), mark_roots);
-        outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Pair(car_h), Value::Int(2), None),
-            mark_roots,
-        ));
-        outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Int(1), Value::Pair(cdr_h), None),
-            mark_roots,
-        ));
-        outers.borrow_mut().push(heap.alloc(
-            Object::Pair(Value::Pair(car_h), Value::Pair(cdr_h), None),
-            mark_roots,
-        ));
-        assert!(heap.capacity() == 512);
-        assert!(heap.live_objects() == 6);
+        outers.borrow_mut().push(
+            heap.alloc_pair(Value::Int(1), Value::Int(2), MutState::Mutable, mark_roots)
+                .get_handle()
+                .unwrap(),
+        );
+        let car_h = heap.alloc_pair(Value::Int(3), Value::Nil, MutState::Mutable, mark_roots);
+        let cdr_h = heap.alloc_pair(Value::Int(4), Value::Nil, MutState::Mutable, mark_roots);
+        outers.borrow_mut().push(
+            heap.alloc_pair(car_h, Value::Int(2), MutState::Mutable, mark_roots)
+                .get_handle()
+                .unwrap(),
+        );
+        outers.borrow_mut().push(
+            heap.alloc_pair(Value::Int(1), cdr_h, MutState::Mutable, mark_roots)
+                .get_handle()
+                .unwrap(),
+        );
+        outers.borrow_mut().push(
+            heap.alloc_pair(car_h, cdr_h, MutState::Mutable, mark_roots)
+                .get_handle()
+                .unwrap(),
+        );
+        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.live_objects(), 6);
         heap.collect(mark_roots);
-        assert!(heap.capacity() == 512);
-        assert!(heap.live_objects() == 6);
+        assert_eq!(heap.capacity(), 512);
+        assert_eq!(heap.live_objects(), 6);
         let mut i = 0;
         for h in outers.borrow().iter() {
-            let (car, cdr, _) = heap.get_pair(*h);
+            let (car, cdr) = heap.get_pair(*h);
             if i == 0 {
                 let (car, cdr) = if let Value::Int(car) = car {
                     if let Value::Int(cdr) = cdr {
@@ -856,7 +955,7 @@ mod tests {
                 assert!(cdr == 2);
             } else if i == 1 {
                 let (car, cdr) = if let Value::Pair(car_h) = car {
-                    if let (Value::Int(car), Value::Nil, _) = heap.get_pair(car_h) {
+                    if let (Value::Int(car), Value::Nil) = heap.get_pair(car_h) {
                         if let Value::Int(cdr) = cdr {
                             (car, cdr)
                         } else {
@@ -868,11 +967,11 @@ mod tests {
                 } else {
                     (0, 0)
                 };
-                assert!(car == 3);
-                assert!(cdr == 2);
+                assert_eq!(car, 3);
+                assert_eq!(cdr, 2);
             } else if i == 2 {
                 let (car, cdr) = if let Value::Pair(cdr_h) = cdr {
-                    if let (Value::Int(cdr), Value::Nil, _) = heap.get_pair(cdr_h) {
+                    if let (Value::Int(cdr), Value::Nil) = heap.get_pair(cdr_h) {
                         if let Value::Int(car) = car {
                             (car, cdr)
                         } else {
@@ -888,9 +987,9 @@ mod tests {
                 assert!(cdr == 4);
             } else if i == 3 {
                 let (car, cdr) = if let Value::Pair(car_h) = car {
-                    if let (Value::Int(car), Value::Nil, _) = heap.get_pair(car_h) {
+                    if let (Value::Int(car), Value::Nil) = heap.get_pair(car_h) {
                         if let Value::Pair(cdr_h) = cdr {
-                            if let (Value::Int(cdr), Value::Nil, _) = heap.get_pair(cdr_h) {
+                            if let (Value::Int(cdr), Value::Nil) = heap.get_pair(cdr_h) {
                                 (car, cdr)
                             } else {
                                 (car, 0)
