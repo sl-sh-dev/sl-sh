@@ -189,9 +189,9 @@ fn builtin_is_def(
 ) -> Result<Expression, LispError> {
     fn get_ret(environment: &mut Environment, name: &str) -> Expression {
         if is_expression(environment, name) {
-            Expression::alloc_data(ExpEnum::True)
+            Expression::make_true()
         } else {
-            Expression::alloc_data(ExpEnum::Nil)
+            Expression::make_nil()
         }
     }
     fn do_list(environment: &mut Environment, key: Expression) -> Result<Expression, LispError> {

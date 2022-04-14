@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, Hasher};
+use regex::Regex;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -396,13 +397,56 @@ fn builtin_str_empty(
                 _ => true,
             };
             return if empty {
-                Ok(Expression::alloc_data(ExpEnum::True))
+                Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
             };
         }
     }
     Err(LispError::new("str-empty? takes a string"))
+}
+
+enum ColorApplication {
+    Foreground,
+    Background,
+}
+impl ColorApplication {
+    fn color_code(&self) -> u8 {
+        match *self {
+            ColorApplication::Foreground => {38u8}
+            ColorApplication::Background => {48u8}
+        }
+    }
+}
+const FOREGROUND_DEFUALT: &str = "\x1b[39m";
+const BACKGROUNDGROUND_DEFUALT: &str = "\x1b[49m";
+
+fn rgb(r: u8, g: u8, b: u8, apply: ColorApplication) -> String {
+    format!("\x1b[{};2;{};{};{}m", apply.color_code(), r, g, b)
+}
+
+fn builtin_str_regex(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
+    if let Some(string) = args.next() {
+        if args.next().is_none() {
+            match &eval(environment, string)?.get().data {
+                ExpEnum::String(string, _) => {
+                    for caps in re.captures_iter(string) {
+                        println!("\x1b[38;2;0;255;255myear: {}, month: {}, day: {}",
+                                 caps.get(1).unwrap().as_str(),
+                                 caps.get(2).unwrap().as_str(),
+                                 caps.get(3).unwrap().as_str());
+                    }
+                    return Ok(Expression::make_true())
+                },
+                _ => return Ok(Expression::make_nil()),
+            }
+        }
+    }
+    Err(LispError::new("str-regex takes a string"))
 }
 
 fn builtin_str_nth(
@@ -1133,6 +1177,21 @@ Example:
 (test::assert-equal "string 50" (str "string" " " 50))
 (test::assert-equal "string 50 test
 " (str "string" " " 50 " " (syscall 'echo "test")))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("str-regex"),
+        Expression::make_function(
+            builtin_str_regex,
+            r#"Usage: (str-regex todo) -> t/nil
+
+todo
+
+Section: string
+
+Example:
+#f
 "#,
         ),
     );
