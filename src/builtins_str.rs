@@ -1,7 +1,7 @@
+use regex::{Captures, Regex};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, Hasher};
-use regex::Regex;
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -406,47 +406,101 @@ fn builtin_str_empty(
     Err(LispError::new("str-empty? takes a string"))
 }
 
-enum ColorApplication {
-    Foreground,
-    Background,
-}
-impl ColorApplication {
-    fn color_code(&self) -> u8 {
-        match *self {
-            ColorApplication::Foreground => {38u8}
-            ColorApplication::Background => {48u8}
-        }
-    }
-}
 const FOREGROUND_DEFUALT: &str = "\x1b[39m";
-const BACKGROUNDGROUND_DEFUALT: &str = "\x1b[49m";
 
-fn rgb(r: u8, g: u8, b: u8, apply: ColorApplication) -> String {
-    format!("\x1b[{};2;{};{};{}m", apply.color_code(), r, g, b)
+fn rgb(r: u8, g: u8, b: u8) -> String {
+    format!("\x1b[38;2;{};{};{}m", r, g, b)
 }
 
-fn builtin_str_regex(
+fn color(str: &str) -> String {
+    let mut s = DefaultHasher::new();
+    str.hash(&mut s);
+    let hash = s.finish();
+    let r = (hash & 0xFF) as u8;
+    let g = (hash >> 8 & 0xFF) as u8;
+    let b = (hash >> 16 & 0xFF) as u8;
+    rgb(r, g, b)
+}
+
+//TODO per capture group s.t. identical str's in different
+// capture groups can optionally be different colors,
+// just use hash and sample different bytes offset by capture
+// group...
+fn colorize_capture(str: &str) -> String {
+    format!("{}{}{}", color(str), str, FOREGROUND_DEFUALT)
+}
+
+//TODO
+// - colorize_string_with_regex_unique... makes same values that
+// occur in different capture groups different colors
+// - colorize_string_from_group... colorize whole line based
+// on value from one capture group, possible do background instead
+// of foreground.
+fn colorize_string_with_regex(sample: &str, regex: &str) -> String {
+    let re = Regex::new(regex).unwrap();
+    let mut offset = 0;
+    re.replace_all(sample, |caps: &Captures| {
+        if caps.len() > 1 {
+            let mut offsets = vec![];
+            for (idx, cap) in caps.iter().enumerate() {
+                if let Some(cap) = cap {
+                    if idx == 0 {
+                        offset = cap.start();
+                    } else {
+                        let start = cap.start() - offset;
+                        let end = cap.end() - offset;
+                        offsets.push((start, end));
+                    }
+                }
+            }
+            let mut strings = vec![];
+            let mut last_end: Option<usize> = None;
+            let capture = String::from(&caps[0]);
+            for (idx, (start, end)) in offsets.iter().enumerate() {
+                let slice = &capture[*start..*end];
+                if idx == 0 && *start == 0 {
+                    strings.push(colorize_capture(slice));
+                } else if idx == 0 {
+                    let begin = &capture[0..*start];
+                    strings.push(begin.to_owned());
+                    strings.push(colorize_capture(&capture));
+                } else if let Some(last_end) = last_end {
+                    let begin = &capture[last_end..*start];
+                    strings.push(begin.to_owned());
+                    strings.push(colorize_capture(slice));
+                }
+                last_end = Some(*end);
+            }
+            strings.join("")
+        } else {
+            colorize_capture(&caps[0])
+        }
+    })
+    .into()
+}
+
+fn builtin_regex_color(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
-    if let Some(string) = args.next() {
+    if let (Some(regex), Some(string)) = (args.next(), args.next()) {
         if args.next().is_none() {
-            match &eval(environment, string)?.get().data {
-                ExpEnum::String(string, _) => {
-                    for caps in re.captures_iter(string) {
-                        println!("\x1b[38;2;0;255;255myear: {}, month: {}, day: {}",
-                                 caps.get(1).unwrap().as_str(),
-                                 caps.get(2).unwrap().as_str(),
-                                 caps.get(3).unwrap().as_str());
-                    }
-                    return Ok(Expression::make_true())
-                },
-                _ => return Ok(Expression::make_nil()),
-            }
+            return match (
+                &eval(environment, string)?.get().data,
+                &eval(environment, regex)?.get().data,
+            ) {
+                (ExpEnum::String(string, _), ExpEnum::String(regex, _)) => {
+                    let replaced = colorize_string_with_regex(string, regex);
+                    Ok(Expression::alloc_data(ExpEnum::String(
+                        replaced.into(),
+                        None,
+                    )))
+                }
+                (_, _) => Ok(Expression::make_nil()),
+            };
         }
     }
-    Err(LispError::new("str-regex takes a string"))
+    Err(LispError::new("str-regex takes a string and a regex"))
 }
 
 fn builtin_str_nth(
@@ -1183,10 +1237,14 @@ Example:
     data.insert(
         interner.intern("str-regex"),
         Expression::make_function(
-            builtin_str_regex,
-            r#"Usage: (str-regex todo) -> t/nil
+            builtin_regex_color,
+            r#"Usage: (regex-color regex string) -> t/nil
 
-todo
+Given a regex and a string, colorize the portions of string that matches regex.
+Colors are chosen deterministically based on the hash of the target strings's
+value. If no capture groups are provided the whole string is colorized uniquely
+based on its value. If capture groups are provided each group is uniquely
+colorized.
 
 Section: string
 
@@ -1649,4 +1707,19 @@ Example:
 ",
         ),
     );
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use regex::{Replacer, ReplacerRef};
+
+    #[test]
+    fn test_colorize() {
+        let sample = "2020-20-20 and then again on 2021-20-18 but not on 2020-18-20";
+        let regex = "(\\d{4})-(\\d{2})-(\\d{2})";
+        let replaced = colorize_string_with_regex(sample, regex);
+        let expected = "\x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m and then again on \x1b[38;2;75;146;223m2021\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m but not on \x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m";
+        assert_eq!(expected, replaced);
+    }
 }

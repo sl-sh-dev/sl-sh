@@ -9,6 +9,7 @@ use crate::builtins_util::*;
 use crate::environment::*;
 use crate::interner::*;
 use crate::types::*;
+use rand::rngs::ThreadRng;
 use std::borrow::Cow;
 
 fn builtin_random(
@@ -52,8 +53,7 @@ fn builtin_get_random_str(
     }
 }
 
-pub fn rand_alphanumeric_str(len: u64) -> Cow<'static, str> {
-    let mut rng = rand::thread_rng();
+pub fn rand_alphanumeric_str(len: u64, rng: &mut ThreadRng) -> Cow<'static, str> {
     iter::repeat(())
         .map(|()| rng.sample(Alphanumeric))
         .map(char::from)
@@ -81,7 +81,7 @@ fn get_random_str(
                 None,
             ))),
             ":alnum" => Ok(Expression::alloc_data(ExpEnum::String(
-                rand_alphanumeric_str(len),
+                rand_alphanumeric_str(len, &mut rng),
                 None,
             ))),
             ":hex" => Ok(Expression::alloc_data(ExpEnum::String(
@@ -245,7 +245,7 @@ Example:
             "Usage: (random-str str-length [char-set])
 
 Takes a positive integer, str-length, and one of :hex, :ascii, :alnum, or
-a string. Returns random string of provided str-length composed of second argument:
+a string. Returns random string of provided str-length composed of second argument,
 :hex results in random hex string, :ascii results in random string of all printable
 ascii characters, :alnum results in random string of all alphanumeric characters,
 and providing a string results in a random string composed by sampling input.
