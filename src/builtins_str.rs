@@ -430,6 +430,25 @@ fn colorize_capture(str: &str) -> String {
     format!("{}{}{}", color(str), str, FOREGROUND_DEFUALT)
 }
 
+fn regex_filter(sample: &str, regex: &Regex) -> String {
+    let mut matches = String::from("");
+    for caps in regex.captures_iter(sample) {
+        if caps.len() > 1 {
+            for c in caps.iter().skip(1) {
+                if let Some(c) = c {
+                    matches = matches + c.as_str();
+                    matches = matches + " ";
+                }
+            }
+        } else {
+            matches = caps[0].to_string();
+            break;
+        }
+    }
+    matches
+}
+
+
 //TODO
 // - colorize_string_with_regex_unique... makes same values that
 // occur in different capture groups different colors
@@ -499,6 +518,43 @@ fn builtin_make_regex(
             }
         }
         _ => Err(LispError::new("make-regex takes a string")),
+    }
+}
+fn builtin_regex_filter(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "regex-color";
+    let regex = param_eval(environment, args, fn_name)?;
+    let regex = &regex.get().data;
+    let string = param_eval(environment, args, fn_name)?;
+    let string = &string.get().data;
+    params_done(args, fn_name)?;
+    match (regex, string) {
+        (ExpEnum::String(regex, _), ExpEnum::String(string, _)) => {
+            let regex = Regex::new(regex);
+            match regex {
+                Ok(regex) => {
+                    let replaced = regex_filter(string, &regex);
+                    Ok(Expression::alloc_data(ExpEnum::String(
+                        replaced.into(),
+                        None,
+                    )))
+                }
+                Err(e) => Err(LispError::new(format!(
+                    "regex-color requires a valid regular expression.\n{}",
+                    e
+                ))),
+            }
+        }
+        (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => {
+            let replaced = regex_filter(string, regex);
+            Ok(Expression::alloc_data(ExpEnum::String(
+                replaced.into(),
+                None,
+            )))
+        }
+        (_, _) => Err(LispError::new("regex-color takes a string and a regex")),
     }
 }
 
@@ -1278,6 +1334,21 @@ Example:
             r#"Usage: (make-regex regex) -> Regex
 
 Given a valid regex as a string return a sl-sh Regex.
+
+Section: string
+
+Example:
+#f
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("regex-filter"),
+        Expression::make_function(
+            builtin_regex_filter,
+            r#"Usage: (regex-color regex string) -> t/nil
+
+Given a regex and a string,
 
 Section: string
 
