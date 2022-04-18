@@ -436,71 +436,108 @@ fn colorize_capture(str: &str) -> String {
 // - colorize_string_from_group... colorize whole line based
 // on value from one capture group, possible do background instead
 // of foreground.
-fn colorize_string_with_regex(sample: &str, regex: &str) -> String {
-    let re = Regex::new(regex).unwrap();
+fn colorize_string_with_regex(sample: &str, regex: &Regex) -> String {
     let mut offset = 0;
-    re.replace_all(sample, |caps: &Captures| {
-        if caps.len() > 1 {
-            let mut offsets = vec![];
-            for (idx, cap) in caps.iter().enumerate() {
-                if let Some(cap) = cap {
-                    if idx == 0 {
-                        offset = cap.start();
-                    } else {
-                        let start = cap.start() - offset;
-                        let end = cap.end() - offset;
-                        offsets.push((start, end));
+    regex
+        .replace_all(sample, |caps: &Captures| {
+            if caps.len() > 1 {
+                let mut offsets = vec![];
+                for (idx, cap) in caps.iter().enumerate() {
+                    if let Some(cap) = cap {
+                        if idx == 0 {
+                            offset = cap.start();
+                        } else {
+                            let start = cap.start() - offset;
+                            let end = cap.end() - offset;
+                            offsets.push((start, end));
+                        }
                     }
                 }
-            }
-            let mut strings = vec![];
-            let mut last_end: Option<usize> = None;
-            let capture = String::from(&caps[0]);
-            for (idx, (start, end)) in offsets.iter().enumerate() {
-                let slice = &capture[*start..*end];
-                if idx == 0 && *start == 0 {
-                    strings.push(colorize_capture(slice));
-                } else if idx == 0 {
-                    let begin = &capture[0..*start];
-                    strings.push(begin.to_owned());
-                    strings.push(colorize_capture(&capture));
-                } else if let Some(last_end) = last_end {
-                    let begin = &capture[last_end..*start];
-                    strings.push(begin.to_owned());
-                    strings.push(colorize_capture(slice));
+                let mut strings = vec![];
+                let mut last_end: Option<usize> = None;
+                let capture = String::from(&caps[0]);
+                for (idx, (start, end)) in offsets.iter().enumerate() {
+                    let slice = &capture[*start..*end];
+                    if idx == 0 && *start == 0 {
+                        strings.push(colorize_capture(slice));
+                    } else if idx == 0 {
+                        let begin = &capture[0..*start];
+                        strings.push(begin.to_owned());
+                        strings.push(colorize_capture(&capture));
+                    } else if let Some(last_end) = last_end {
+                        let begin = &capture[last_end..*start];
+                        strings.push(begin.to_owned());
+                        strings.push(colorize_capture(slice));
+                    }
+                    last_end = Some(*end);
                 }
-                last_end = Some(*end);
+                strings.join("")
+            } else {
+                colorize_capture(&caps[0])
             }
-            strings.join("")
-        } else {
-            colorize_capture(&caps[0])
+        })
+        .into()
+}
+
+fn builtin_make_regex(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "make-regex";
+    let string = param_eval(environment, args, fn_name)?;
+    let string = &string.get().data;
+    params_done(args, fn_name)?;
+    match string {
+        ExpEnum::String(string, _) => {
+            let re = Regex::new(string);
+            match re {
+                Ok(re) => Ok(Expression::alloc_data(ExpEnum::Regex(re))),
+                Err(e) => Err(LispError::new(format!(
+                    "make-regex requires a valid regular expression.\n{}",
+                    e
+                ))),
+            }
         }
-    })
-    .into()
+        _ => Err(LispError::new("make-regex takes a string")),
+    }
 }
 
 fn builtin_regex_color(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    if let (Some(regex), Some(string)) = (args.next(), args.next()) {
-        if args.next().is_none() {
-            return match (
-                &eval(environment, string)?.get().data,
-                &eval(environment, regex)?.get().data,
-            ) {
-                (ExpEnum::String(string, _), ExpEnum::String(regex, _)) => {
-                    let replaced = colorize_string_with_regex(string, regex);
+    let fn_name = "regex-color";
+    let regex = param_eval(environment, args, fn_name)?;
+    let regex = &regex.get().data;
+    let string = param_eval(environment, args, fn_name)?;
+    let string = &string.get().data;
+    params_done(args, fn_name)?;
+    match (regex, string) {
+        (ExpEnum::String(regex, _), ExpEnum::String(string, _)) => {
+            let regex = Regex::new(regex);
+            match regex {
+                Ok(regex) => {
+                    let replaced = colorize_string_with_regex(string, &regex);
                     Ok(Expression::alloc_data(ExpEnum::String(
                         replaced.into(),
                         None,
                     )))
                 }
-                (_, _) => Ok(Expression::make_nil()),
-            };
+                Err(e) => Err(LispError::new(format!(
+                    "regex-color requires a valid regular expression.\n{}",
+                    e
+                ))),
+            }
         }
+        (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => {
+            let replaced = colorize_string_with_regex(string, regex);
+            Ok(Expression::alloc_data(ExpEnum::String(
+                replaced.into(),
+                None,
+            )))
+        }
+        (_, _) => Err(LispError::new("regex-color takes a string and a regex")),
     }
-    Err(LispError::new("str-regex takes a string and a regex"))
 }
 
 fn builtin_str_nth(
@@ -1235,7 +1272,22 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("str-regex"),
+        interner.intern("make-regex"),
+        Expression::make_function(
+            builtin_make_regex,
+            r#"Usage: (make-regex regex) -> Regex
+
+Given a valid regex as a string return a sl-sh Regex.
+
+Section: string
+
+Example:
+#f
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("regex-color"),
         Expression::make_function(
             builtin_regex_color,
             r#"Usage: (regex-color regex string) -> t/nil
@@ -1712,13 +1764,13 @@ Example:
 #[cfg(test)]
 mod test {
     use super::*;
-    use regex::{Replacer, ReplacerRef};
 
     #[test]
     fn test_colorize() {
         let sample = "2020-20-20 and then again on 2021-20-18 but not on 2020-18-20";
         let regex = "(\\d{4})-(\\d{2})-(\\d{2})";
-        let replaced = colorize_string_with_regex(sample, regex);
+        let regex = Regex::new(regex).unwrap();
+        let replaced = colorize_string_with_regex(sample, &regex);
         let expected = "\x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m and then again on \x1b[38;2;75;146;223m2021\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m but not on \x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m";
         assert_eq!(expected, replaced);
     }

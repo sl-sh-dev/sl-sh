@@ -59,6 +59,7 @@ impl fmt::Display for Expression {
             ExpEnum::Symbol(s, _) => write!(f, "{}", s),
             ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
             ExpEnum::Char(c) => write!(f, "#\\{}", c),
+            ExpEnum::Regex(c) => write!(f, "r\"{:?}\"", c),
             ExpEnum::CodePoint(c) => write!(f, "#{}", c.escape_unicode()),
             ExpEnum::Lambda(l) => lambda_out(f, l),
             ExpEnum::Macro(m) => lambda_out(f, m),
@@ -263,6 +264,9 @@ fn pretty_print_int(
             }
         }
         ExpEnum::String(_, _) => {
+            write!(writer, "{}", expression)?;
+        }
+        ExpEnum::Regex(_) => {
             write!(writer, "{}", expression)?;
         }
         ExpEnum::Char(_c) => {
