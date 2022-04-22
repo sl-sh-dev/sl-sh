@@ -430,6 +430,34 @@ fn colorize_capture(str: &str) -> String {
     format!("{}{}{}", color(str), str, FOREGROUND_DEFUALT)
 }
 
+fn regex_replace(sample: &str, regex: &Regex, replacement: &str) -> String {
+    regex.replace_all(sample, replacement).into()
+}
+
+fn get_regex_captures(sample: &str, regex: &Regex) -> Vec<Expression> {
+    let mut capture_groups: Vec<Expression> = Vec::new();
+    for caps in regex.captures_iter(sample) {
+        let mut captures: Vec<Expression> = Vec::new();
+        if caps.len() > 1 {
+            for c in caps.iter().skip(1) {
+                if let Some(c) = c {
+                    captures.push(Expression::alloc_data(ExpEnum::String(
+                        c.as_str().to_string().into(),
+                        None,
+                    )));
+                }
+            }
+        } else {
+            captures.push(Expression::alloc_data(ExpEnum::String(
+                caps[0].to_string().into(),
+                None,
+            )));
+        }
+        capture_groups.push(Expression::alloc_data(ExpEnum::Vector(captures)));
+    }
+    capture_groups
+}
+
 fn regex_filter(sample: &str, regex: &Regex) -> String {
     let mut matches = String::from("");
     for caps in regex.captures_iter(sample) {
@@ -520,11 +548,82 @@ fn builtin_make_regex(
         _ => Err(LispError::new("make-regex takes a string")),
     }
 }
+
+fn builtin_regex_replace(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "regex-replace";
+    let regex = param_eval(environment, args, fn_name)?;
+    let regex = &regex.get().data;
+    let string = param_eval(environment, args, fn_name)?;
+    let string = &string.get().data;
+    let replacement = param_eval(environment, args, fn_name)?;
+    let replacement = &replacement.get().data;
+    params_done(args, fn_name)?;
+    match (regex, string, replacement) {
+        (ExpEnum::String(regex, _), ExpEnum::String(string, _), ExpEnum::String(replacement, _)) => {
+            let regex = Regex::new(regex);
+            match regex {
+                Ok(regex) => {
+                    let replaced = regex_replace(string, &regex, replacement);
+                    Ok(Expression::alloc_data(ExpEnum::String(
+                        replaced.into(),
+                        None,
+                    )))
+                }
+                Err(e) => Err(LispError::new(format!(
+                    "regex-replace requires a valid regular expression.\n{}",
+                    e
+                ))),
+            }
+        }
+        (ExpEnum::Regex(regex), ExpEnum::String(string, _), ExpEnum::String(replacement, _)) => {
+            let replaced = regex_replace(string, &regex, replacement);
+            Ok(Expression::alloc_data(ExpEnum::String(
+                replaced.into(),
+                None,
+            )))
+        }
+        (_, _, _) => Err(LispError::new("regex-replace takes a string, a regex, and a replacement string")),
+    }
+}
+
+fn builtin_regex_search(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    let fn_name = "regex-search";
+    let regex = param_eval(environment, args, fn_name)?;
+    let regex = &regex.get().data;
+    let string = param_eval(environment, args, fn_name)?;
+    let string = &string.get().data;
+    params_done(args, fn_name)?;
+    match (regex, string) {
+        (ExpEnum::String(regex, _), ExpEnum::String(string, _)) => {
+            let regex = Regex::new(regex);
+            match regex {
+                Ok(regex) => {
+                    Ok(Expression::alloc_data(ExpEnum::Vector(get_regex_captures(string,&regex))))
+                }
+                Err(e) => Err(LispError::new(format!(
+                    "regex-filter requires a valid regular expression.\n{}",
+                    e
+                ))),
+            }
+        }
+        (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => {
+            Ok(Expression::alloc_data(ExpEnum::Vector(get_regex_captures(string,&regex))))
+        }
+        (_, _) => Err(LispError::new("regex-filter takes a string and a regex")),
+    }
+}
+
 fn builtin_regex_filter(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "regex-color";
+    let fn_name = "regex-filter";
     let regex = param_eval(environment, args, fn_name)?;
     let regex = &regex.get().data;
     let string = param_eval(environment, args, fn_name)?;
@@ -542,7 +641,7 @@ fn builtin_regex_filter(
                     )))
                 }
                 Err(e) => Err(LispError::new(format!(
-                    "regex-color requires a valid regular expression.\n{}",
+                    "regex-filter requires a valid regular expression.\n{}",
                     e
                 ))),
             }
@@ -554,7 +653,7 @@ fn builtin_regex_filter(
                 None,
             )))
         }
-        (_, _) => Err(LispError::new("regex-color takes a string and a regex")),
+        (_, _) => Err(LispError::new("regex-filter takes a string and a regex")),
     }
 }
 
@@ -1349,6 +1448,34 @@ Example:
             r#"Usage: (regex-color regex string) -> t/nil
 
 Given a regex and a string,
+
+Section: string
+
+Example:
+#f
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("regex-replace"),
+        Expression::make_function(
+            builtin_regex_replace,
+            r#"Usage: (regex-replace regex string replacement) -> t/nil
+
+Given a regex, a string, and a replacement string
+
+Section: string
+
+Example:
+#f
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("regex-search"),
+        Expression::make_function(
+            builtin_regex_search,
+            r#"Usage: (regex-search regex string) -> #([String, ..])
 
 Section: string
 
