@@ -8,7 +8,7 @@ use crate::types::*;
 use crate::{param_eval, params_done};
 use std::collections::hash_map::DefaultHasher;
 
-const FOREGROUND_DEFUALT: &str = "\x1b[39m";
+const FOREGROUND_DEFAULT: &str = "\x1b[39m";
 
 fn rgb(r: u8, g: u8, b: u8) -> String {
     format!("\x1b[38;2;{};{};{}m", r, g, b)
@@ -34,7 +34,7 @@ fn colorize_capture(str: &str, capture_group: usize, unique_colors: bool) -> Str
     if !unique_colors {
         capture_group = 0;
     }
-    format!("{}{}{}", color(str, capture_group), str, FOREGROUND_DEFUALT)
+    format!("{}{}{}", color(str, capture_group), str, FOREGROUND_DEFAULT)
 }
 
 fn matches(sample: &str, regex: &Regex) -> Expression {
@@ -45,7 +45,7 @@ fn matches(sample: &str, regex: &Regex) -> Expression {
     }
 }
 
-fn captures_to_array(caps: &Captures) -> Vec<Expression> {
+fn captures_to_vec(caps: &Captures) -> Vec<Expression> {
     let mut captures: Vec<Expression> = Vec::new();
     for c in caps.iter().flatten() {
         captures.push(Expression::alloc_data(ExpEnum::String(
@@ -58,7 +58,7 @@ fn captures_to_array(caps: &Captures) -> Vec<Expression> {
 
 fn find_with_regex(sample: &str, regex: &Regex) -> Expression {
     if let Some(caps) = regex.captures_iter(sample).next() {
-        Expression::alloc_data(ExpEnum::Vector(captures_to_array(&caps)))
+        Expression::alloc_data(ExpEnum::Vector(captures_to_vec(&caps)))
     } else {
         Expression::make_nil()
     }
@@ -66,7 +66,7 @@ fn find_with_regex(sample: &str, regex: &Regex) -> Expression {
 fn get_regex_captures(sample: &str, regex: &Regex) -> Vec<Expression> {
     let mut capture_groups: Vec<Expression> = Vec::new();
     for caps in regex.captures_iter(sample) {
-        let captures = captures_to_array(&caps);
+        let captures = captures_to_vec(&caps);
         capture_groups.push(Expression::alloc_data(ExpEnum::Vector(captures)));
     }
     capture_groups
@@ -209,11 +209,11 @@ fn builtin_regex_match(
     }
 }
 
-fn builtin_regex_search(
+fn builtin_regex_find(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "re-search";
+    let fn_name = "re-find";
     let regex = param_eval(environment, args, fn_name)?;
     let regex = &regex.get().data;
     let string = param_eval(environment, args, fn_name)?;
@@ -238,11 +238,11 @@ fn builtin_regex_search(
     }
 }
 
-fn builtin_regex_search_all(
+fn builtin_regex_find_all(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
 ) -> Result<Expression, LispError> {
-    let fn_name = "re-search-all";
+    let fn_name = "re-find-all";
     let regex = param_eval(environment, args, fn_name)?;
     let regex = &regex.get().data;
     let string = param_eval(environment, args, fn_name)?;
@@ -338,12 +338,14 @@ pub fn add_regex_builtins<S: BuildHasher>(
             builtin_make_regex,
             r#"Usage: (make-regex regex) -> Regex
 
-Given a valid regex as a string return a sl-sh Regex.
+Given a valid regex string, return a sl-sh Regex. The syntax for regular
+expressions in sl-sh is borrowed from the Rust regex library and is specified
+[here](https://docs.rs/regex/latest/regex/#syntax).
 
 Section: regex
 
 Example:
-#f
+(test::assert-equal "Regex" (type (make-regex ".*")))
 "#,
         ),
     );
@@ -351,14 +353,24 @@ Example:
         interner.intern("re-replace"),
         Expression::make_function(
             builtin_regex_replace,
-            r#"Usage: (re-replace regex string replacement) -> t/nil
+            r#"Usage: (re-replace regex string replacement) -> String
 
-Given a regex, a string, and a replacement string
+Given a regex, a string, and a replacement string, return a modified version of
+string where all occurrences of regex are edited according to the replacement
+syntax. The replacement string syntax is borrowed from the Rust regex library
+and is specified [here](https://docs.rs/regex/latest/regex/struct.Regex.html#replacement-string-syntax).
+The regex argument can either be a regex string or a regex type
+obtained from [make-regex](#regex::make-regex).
 
 Section: regex
 
 Example:
-#f
+(test::assert-equal
+    "Thon connection takes"
+    (re-replace "is (.*) (.*)" "This connection takes on" "\$2 \$1"))
+(test::assert-equal
+    "10-20-2020 and then again on 12-18-2021 but not on 11-20-2020"
+    (re-replace (make-regex "(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})") "2020-10-20 and then again on 2021-12-18 but not on 2020-11-20" "\$m-\$d-\$y"))
 "#,
         ),
     );
@@ -368,36 +380,70 @@ Example:
             builtin_regex_match,
             r#"Usage: (re-match regex string) -> boolean?
 
+Given a regex and a string, return true if regex is found in string, false
+otherwise. The regex argument can either be a regex string or a regex type
+obtained from [make-regex](#regex::make-regex).
+
 Section: regex
 
 Example:
-#f
+(test::assert-true
+    (re-match (make-regex "(\d{4})-(\d{2})-(\d{2})") "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
+(test::assert-false
+    (re-match "(\d{4})-(\d{2})-(\d{20})" "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
 "#,
         ),
     );
     data.insert(
-        interner.intern("re-search"),
+        interner.intern("re-find"),
         Expression::make_function(
-            builtin_regex_search,
-            r#"Usage: (re-search regex string) -> #([String, ..])
+            builtin_regex_find,
+            r#"Usage: (re-find regex string) -> #([String, ..])
+
+Given a regex and a string, find the first matching occurrence of regex in string 
+and return a vector of capture groups. The 0th element of the vector is always a
+string of the whole match. If N capture groups are provided, the Nth group's
+value is placed in the Nth element of the vector, where N is 1 indexed. The regex
+argument can either be a regex string or a regex type obtained from [make-regex](#regex::make-regex).
 
 Section: regex
 
 Example:
-#f
+(def found-capture (re-find (make-regex "(\d{4})-(\d{2})-(\d{2})") "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
+(test::assert-equal 4 (length found-capture))
+(test::assert-equal '#("2020-12-20" "2020" "12" "20") found-capture))
+
+(def found (re-find "\d{4}-\d{2}-\d{2}" "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
+(test::assert-equal 1 (length found))
+(test::assert-equal '#("2020-12-20") found))
 "#,
         ),
     );
     data.insert(
-        interner.intern("re-search-all"),
+        interner.intern("re-find-all"),
         Expression::make_function(
-            builtin_regex_search_all,
-            r#"Usage: (re-search-all regex string) -> #([String, ..])
+            builtin_regex_find_all,
+            r#"Usage: (re-find-all regex string) -> #(#([String, ..])..)
+
+Given a regex and a string, find all matching occurrences of regex in string and
+return a vector of a vector of capture groups. The 0th element of each nested vector
+is always a string of the whole match. If N capture groups are provided, the
+Nth group's value is placed in the Nth element of its respective match vector, where
+N is 1 indexed. The regex argument can either be a regex string or a regex type
+obtained from [make-regex](#regex::make-regex).
 
 Section: regex
 
 Example:
-#f
+(def found (re-find-all (make-regex "(\d{4})-(\d{2})-(\d{2})") "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
+(test::assert-equal 3 (length found))
+(test::assert-equal '#("2020-12-20" "2020" "12" "20") (vec-nth found 0))
+(test::assert-equal '#("2021-12-18" "2021" "12" "18") (vec-nth found 1))
+(test::assert-equal '#("2020-11-20" "2020" "11" "20") (vec-nth found 2))
+
+(def found-one (re-find-all "(\d{4})-(\d{2})-(\d{2})" "2020-12-20 and then again on"))
+(test::assert-equal 1 (length found-one))
+(test::assert-equal '#("2020-12-20" "2020" "12" "20") (vec-nth found-one 0))
 "#,
         ),
     );
@@ -407,16 +453,19 @@ Example:
             builtin_regex_color,
             r#"Usage: (re-color regex string) -> t/nil
 
-Given a regex and a string, colorize the portions of string that matches regex.
-Colors are chosen deterministically based on the hash of the target strings's
-value. If no capture groups are provided the whole string is colorized uniquely
-based on its value. If capture groups are provided each group is uniquely
-colorized.
+Given a regex and a string, colorize the portions of string that match regex,
+giving unique capture group's values unique colors. Colors are chosen
+deterministically based on the hash of the capture group's value. If no
+capture groups are provided the whole regex is colorized uniquely based
+on its value. Overlapping capture groups are not supported. The regex
+argument can either be a regex string or a regex type obtained from [make-regex](#regex::make-regex).
 
 Section: regex
 
 Example:
-#f
+(test::assert-equal
+    (str "This c" (fg-color-rgb 35 98 130) "onnection takes on" shell::*fg-default*)
+    (re-color (make-regex "is c(.*)") "This connection takes on"))
 "#,
         ),
     );
