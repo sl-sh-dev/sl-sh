@@ -35,6 +35,9 @@ pub use crate::builtins_rand::*;
 pub mod builtins_str;
 pub use crate::builtins_str::*;
 
+pub mod builtins_regex;
+pub use crate::builtins_regex::*;
+
 pub mod builtins_vector;
 pub use crate::builtins_vector::*;
 
