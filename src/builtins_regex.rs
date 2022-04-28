@@ -63,7 +63,8 @@ fn find_with_regex(sample: &str, regex: &Regex) -> Expression {
         Expression::make_nil()
     }
 }
-fn get_regex_captures(sample: &str, regex: &Regex) -> Vec<Expression> {
+
+fn find_all_with_regex(sample: &str, regex: &Regex) -> Vec<Expression> {
     let mut capture_groups: Vec<Expression> = Vec::new();
     for caps in regex.captures_iter(sample) {
         let captures = captures_to_vec(&caps);
@@ -252,9 +253,9 @@ fn builtin_regex_find_all(
         (ExpEnum::String(regex, _), ExpEnum::String(string, _)) => {
             let regex = Regex::new(regex);
             match regex {
-                Ok(regex) => Ok(Expression::alloc_data(ExpEnum::Vector(get_regex_captures(
-                    string, &regex,
-                )))),
+                Ok(regex) => Ok(Expression::alloc_data(ExpEnum::Vector(
+                    find_all_with_regex(string, &regex),
+                ))),
                 Err(e) => Err(LispError::new(format!(
                     "{} requires a valid regular expression.\n{}",
                     fn_name, e
@@ -262,7 +263,7 @@ fn builtin_regex_find_all(
             }
         }
         (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => Ok(Expression::alloc_data(
-            ExpEnum::Vector(get_regex_captures(string, regex)),
+            ExpEnum::Vector(find_all_with_regex(string, regex)),
         )),
         (_, _) => Err(LispError::new(format!(
             "{} takes a string and a regex",
@@ -380,8 +381,8 @@ Example:
             builtin_regex_match,
             r#"Usage: (re-match regex string) -> boolean?
 
-Given a regex and a string, return true if regex is found in string, false
-otherwise. The regex argument can either be a regex string or a regex type
+Given a regex and a string, return true if regex is found in string, and return
+false otherwise. The regex argument can either be a regex string or a regex type
 obtained from [make-regex](#regex::make-regex).
 
 Section: regex
@@ -403,7 +404,7 @@ Example:
 Given a regex and a string, find the first matching occurrence of regex in string 
 and return a vector of capture groups. The 0th element of the vector is always a
 string of the whole match. If N capture groups are provided, the Nth group's
-value is placed in the Nth element of the vector, where N is 1 indexed. The regex
+value is placed in the Nth element of the vector, where N is one indexed. The regex
 argument can either be a regex string or a regex type obtained from [make-regex](#regex::make-regex).
 
 Section: regex
@@ -416,6 +417,9 @@ Example:
 (def found (re-find "\d{4}-\d{2}-\d{2}" "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
 (test::assert-equal 1 (length found))
 (test::assert-equal '#("2020-12-20") found))
+
+(def found-none (re-find "\d{40}-\d{2}-\d{2}" "2020-12-20 and then again on 2021-12-18 but not on 2020-11-20"))
+(test::assert-equal '#() found-none)
 "#,
         ),
     );
@@ -429,7 +433,7 @@ Given a regex and a string, find all matching occurrences of regex in string and
 return a vector of a vector of capture groups. The 0th element of each nested vector
 is always a string of the whole match. If N capture groups are provided, the
 Nth group's value is placed in the Nth element of its respective match vector, where
-N is 1 indexed. The regex argument can either be a regex string or a regex type
+N is one indexed. The regex argument can either be a regex string or a regex type
 obtained from [make-regex](#regex::make-regex).
 
 Section: regex
@@ -444,6 +448,9 @@ Example:
 (def found-one (re-find-all "(\d{4})-(\d{2})-(\d{2})" "2020-12-20 and then again on"))
 (test::assert-equal 1 (length found-one))
 (test::assert-equal '#("2020-12-20" "2020" "12" "20") (vec-nth found-one 0))
+
+(def found-none (re-find-all "(\d{40})-(\d{2})-(\d{2})" "2020-12-20 and then again on"))
+(test::assert-equal '#() found-none)
 "#,
         ),
     );
