@@ -78,6 +78,9 @@ fn colorize_string_with_regex(sample: &str, regex: &Regex, unique_colors: bool) 
     regex
         .replace_all(sample, |caps: &Captures| {
             if caps.len() > 1 {
+            // get the offset of each individual capture group into a vec.
+            // this vec can then be used to cut the string and insert color
+            // codes around a new output version of the sample.
                 let mut offsets = vec![];
                 for (idx, cap) in caps.iter().enumerate() {
                     if let Some(cap) = cap {
@@ -90,25 +93,35 @@ fn colorize_string_with_regex(sample: &str, regex: &Regex, unique_colors: bool) 
                         }
                     }
                 }
-                let mut strings = vec![];
+                let mut strings = String::with_capacity(&caps[0].len() + (offsets.len() * (FOREGROUND_DEFAULT.len() + rgb(255, 255, 255).len())));
                 let mut last_end: Option<usize> = None;
+                // store the whole capture group in capture, this string will be indexed according
+                // to the offset array. If the portion of capture is within an offset it will be
+                // assigned a unique color, otherwise it is just appeneded to the vector that
+                // will be appeneded into the final output string
                 let capture = String::from(&caps[0]);
                 for (idx, (start, end)) in offsets.iter().enumerate() {
                     let slice = &capture[*start..*end];
                     if idx == 0 && *start == 0 {
-                        strings.push(colorize_capture(slice, idx, unique_colors));
+                        strings.push_str(&colorize_capture(slice, idx, unique_colors));
                     } else if idx == 0 {
                         let begin = &capture[0..*start];
-                        strings.push(begin.to_owned());
-                        strings.push(colorize_capture(slice, idx, unique_colors));
+                        strings.push_str(begin);
+                        strings.push_str(&colorize_capture(slice, idx, unique_colors));
                     } else if let Some(last_end) = last_end {
                         let begin = &capture[last_end..*start];
-                        strings.push(begin.to_owned());
-                        strings.push(colorize_capture(slice, idx, unique_colors));
+                        strings.push_str(begin);
+                        strings.push_str(&colorize_capture(slice, idx, unique_colors));
                     }
                     last_end = Some(*end);
                 }
-                strings.join("")
+                if let Some(last_end) = last_end {
+                    if last_end < capture.len() {
+                        let end = &capture[last_end..];
+                        strings.push_str(end);
+                    }
+                }
+                strings
             } else {
                 colorize_capture(&caps[0], 0, unique_colors)
             }
