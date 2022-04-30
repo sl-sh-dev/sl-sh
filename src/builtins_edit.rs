@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::hash::BuildHasher;
 use std::io::{self, ErrorKind};
+use unicode_width::UnicodeWidthStr;
 
 use sl_liner::vi::AlphanumericAndVariableKeywordRule;
 use sl_liner::{
@@ -182,6 +183,16 @@ impl DelimiterIdx {
     }
 }
 
+impl DelimiterIdx {
+    fn get_idx(&self) -> usize {
+        match self {
+            DelimiterIdx::Identical(i) => *i,
+            DelimiterIdx::Open(i) => *i,
+            DelimiterIdx::Close(i) => *i,
+        }
+    }
+}
+
 impl PartialEq<Self> for DelimiterIdx {
     fn eq(&self, other: &Self) -> bool {
         let (this, other) = self.idx(other);
@@ -235,6 +246,7 @@ where
 
 #[derive(Debug, Copy, Clone)]
 enum DelimiterType<'a> {
+    EscapeSequence(&'a str),
     MultilineComment(&'a str),
     StringDelimiter(&'a str),
     BalancedDelimiter(&'a str),
@@ -277,6 +289,7 @@ fn get_indices_of_tokens<'a>(
     delimiters: &[(&'a str, &'a str)],
     multiline_comment: &'a (&str, &str),
     string_delimiter: &'a str,
+    escape_sequence: &'a str,
 ) -> Vec<Delimiter<'a>> {
     let (open, close) = multiline_comment;
     let open_indices = get_delimiters(str, open, &|| DelimiterType::MultilineComment(open), &|i| {
@@ -288,14 +301,23 @@ fn get_indices_of_tokens<'a>(
         &|| DelimiterType::MultilineComment(close),
         &DelimiterIdx::Close,
     );
-    let multiline_idx = order_sorted_lists(open_indices, close_indices);
+    let all_delimiters = order_sorted_lists(open_indices, close_indices);
     let string_indices = get_delimiters(
         str,
         string_delimiter,
         &|| DelimiterType::StringDelimiter(string_delimiter),
         &DelimiterIdx::Identical,
     );
-    let mut vec = order_sorted_lists(multiline_idx, string_indices);
+
+    let all_delimiters = order_sorted_lists(all_delimiters, string_indices);
+    let backslash_indices = get_delimiters(
+        str,
+        escape_sequence,
+        &|| DelimiterType::EscapeSequence(escape_sequence),
+        &DelimiterIdx::Identical,
+    );
+    let mut all_delimiters = order_sorted_lists(all_delimiters, backslash_indices);
+
     for (open, close) in delimiters {
         let open_indices = get_delimiters(
             str,
@@ -310,9 +332,9 @@ fn get_indices_of_tokens<'a>(
             &DelimiterIdx::Close,
         );
         let ordered_balanced = order_sorted_lists(open_indices, close_indices);
-        vec = order_sorted_lists(ordered_balanced, vec);
+        all_delimiters = order_sorted_lists(ordered_balanced, all_delimiters);
     }
-    vec
+    all_delimiters
 }
 
 fn map_right_to_left_delimiters<'a>(
@@ -332,16 +354,21 @@ enum DelimiterState {
     Outside,
 }
 
-fn should_count_delimiters(delimiter: Delimiter, state: DelimiterState) -> DelimiterState {
-    match state {
-        DelimiterState::InStringDelimiter => {
+fn should_count_delimiters(
+    delimiter: Delimiter,
+    prev_delimiter: Option<Delimiter>,
+    state: DelimiterState,
+) -> DelimiterState {
+    let is_escaped = is_preceded_by_escape_character(delimiter, prev_delimiter);
+    match (state, is_escaped) {
+        (DelimiterState::InStringDelimiter, false) => {
             if let DelimiterType::StringDelimiter(_) = delimiter.delimiter_type {
                 DelimiterState::Outside
             } else {
                 DelimiterState::InStringDelimiter
             }
         }
-        DelimiterState::InMultilineComment(x) => {
+        (DelimiterState::InMultilineComment(x), false) => {
             if let DelimiterType::MultilineComment(_) = delimiter.delimiter_type {
                 match delimiter.delimiter_place {
                     DelimiterIdx::Open(_) => DelimiterState::InMultilineComment(x + 1),
@@ -360,16 +387,35 @@ fn should_count_delimiters(delimiter: Delimiter, state: DelimiterState) -> Delim
                 DelimiterState::InMultilineComment(1)
             }
         }
-        DelimiterState::Outside => match (delimiter.delimiter_type, delimiter.delimiter_place) {
-            (DelimiterType::MultilineComment(_), DelimiterIdx::Open(_)) => {
-                DelimiterState::InMultilineComment(1)
+        (DelimiterState::Outside, false) => {
+            match (delimiter.delimiter_type, delimiter.delimiter_place) {
+                (DelimiterType::MultilineComment(_), DelimiterIdx::Open(_)) => {
+                    DelimiterState::InMultilineComment(1)
+                }
+                (DelimiterType::StringDelimiter(_), DelimiterIdx::Identical(_)) => {
+                    DelimiterState::InStringDelimiter
+                }
+                _ => state,
             }
-            (DelimiterType::StringDelimiter(_), DelimiterIdx::Identical(_)) => {
-                DelimiterState::InStringDelimiter
-            }
-            _ => state,
-        },
+        }
+        _ => state,
     }
+}
+
+fn is_preceded_by_escape_character(
+    delimiter: Delimiter,
+    prev_delimiter: Option<Delimiter>,
+) -> bool {
+    if let Some(prev_delimiter) = prev_delimiter {
+        if let DelimiterType::EscapeSequence(escape) = prev_delimiter.delimiter_type {
+            let after_escape = prev_delimiter.delimiter_place.get_idx() + escape.width();
+            let next_delimiter_start_idx = delimiter.delimiter_place.get_idx();
+            if after_escape.eq(&next_delimiter_start_idx) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// ensures all provided delimiters are balanced.
@@ -378,16 +424,23 @@ fn check_balanced_delimiters(
     delimiters: &[(&str, &str)],
     multiline_comment: &(&str, &str),
     string_delimiter: &str,
+    escape_sequence: &str,
 ) -> bool {
     let delim_map = map_right_to_left_delimiters(delimiters);
-    let all_delimiters =
-        get_indices_of_tokens(str, delimiters, multiline_comment, string_delimiter);
+    let all_delimiters = get_indices_of_tokens(
+        str,
+        delimiters,
+        multiline_comment,
+        string_delimiter,
+        escape_sequence,
+    );
 
     let mut open_delims = HashMap::new();
 
     let mut prev_state = DelimiterState::Outside;
+    let mut prev_delimiter = None;
     for delimiter in all_delimiters {
-        let new_state = should_count_delimiters(delimiter, prev_state);
+        let new_state = should_count_delimiters(delimiter, prev_delimiter, prev_state);
         if let DelimiterState::Outside = new_state {
             match (delimiter.delimiter_type, delimiter.delimiter_place) {
                 (DelimiterType::BalancedDelimiter(str), DelimiterIdx::Open(_)) => {
@@ -413,11 +466,13 @@ fn check_balanced_delimiters(
             }
         }
         prev_state = new_state;
+        prev_delimiter = Some(delimiter);
     }
     prev_state == DelimiterState::Outside && open_delims.is_empty()
 }
 
 pub struct NewlineForBackSlashAndSlShSyntaxRule<'a> {
+    escape_character: &'a str,
     string_delimiter: &'a str,
     delimiters: Vec<(&'a str, &'a str)>,
     multiline_comment: (&'a str, &'a str),
@@ -431,6 +486,7 @@ impl NewlineRule for NewlineForBackSlashAndSlShSyntaxRule<'_> {
                 &self.delimiters,
                 &self.multiline_comment,
                 self.string_delimiter,
+                self.escape_character,
             )
     }
 }
@@ -450,9 +506,11 @@ fn make_con(environment: &mut Environment, history: Option<&str>) -> Context {
     let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
     let multiline_comment = ("#|", "|#");
     let string_delimiter = "\"";
+    let escape_character = "\\";
     let editor_rules = DefaultEditorRules::custom(
         LinerWordDividerRule {},
         NewlineForBackSlashAndSlShSyntaxRule {
+            escape_character,
             delimiters,
             string_delimiter,
             multiline_comment,
@@ -933,9 +991,21 @@ mod test {
 
     #[test]
     fn test_check_balanced_delimiters() {
+        let escape_sequence = "\"";
         let string_delimiter = "\"";
         let multiline_comment = ("#|", "|#");
         let delimiters = vec![("(", ")"), ("[", "]"), ("{", "}")];
+
+        let buf = Buffer::from("\"\\\"\"");
+        let is_balanced = check_balanced_delimiters(
+            buf.range_graphemes_all().slice(),
+            &delimiters,
+            &multiline_comment,
+            string_delimiter,
+            escape_sequence,
+        );
+        assert!(is_balanced);
+
         let buf =
             Buffer::from("(ok #| outside (double quotes\" inside) double_quotes|#\" and )this.");
         let is_balanced = check_balanced_delimiters(
@@ -943,6 +1013,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(!is_balanced);
 
@@ -952,6 +1023,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(is_balanced);
 
@@ -961,6 +1033,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(!is_balanced);
 
@@ -970,6 +1043,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(is_balanced);
 
@@ -979,6 +1053,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(!is_balanced);
 
@@ -988,6 +1063,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(is_balanced);
 
@@ -997,6 +1073,7 @@ mod test {
             &delimiters,
             &multiline_comment,
             string_delimiter,
+            escape_sequence,
         );
         assert!(!is_balanced);
     }

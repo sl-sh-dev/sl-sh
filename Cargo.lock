@@ -670,6 +670,7 @@ dependencies = [
  "same-file",
  "sl-liner",
  "unicode-segmentation",
+ "unicode-width",
  "unicode_reader",
  "walkdir",
 ]
