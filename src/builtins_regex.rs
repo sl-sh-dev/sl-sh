@@ -78,9 +78,9 @@ fn colorize_string_with_regex(sample: &str, regex: &Regex, unique_colors: bool) 
     regex
         .replace_all(sample, |caps: &Captures| {
             if caps.len() > 1 {
-            // get the offset of each individual capture group into a vec.
-            // this vec can then be used to cut the string and insert color
-            // codes around a new output version of the sample.
+                // get the offset of each individual capture group into a vec.
+                // this vec can then be used to cut the string and insert color
+                // codes around a new output version of the sample.
                 let mut offsets = vec![];
                 for (idx, cap) in caps.iter().enumerate() {
                     if let Some(cap) = cap {
@@ -93,12 +93,15 @@ fn colorize_string_with_regex(sample: &str, regex: &Regex, unique_colors: bool) 
                         }
                     }
                 }
-                let mut strings = String::with_capacity(&caps[0].len() + (offsets.len() * (FOREGROUND_DEFAULT.len() + rgb(255, 255, 255).len())));
+                let mut strings = String::with_capacity(
+                    caps[0].len()
+                        + (offsets.len() * (FOREGROUND_DEFAULT.len() + rgb(255, 255, 255).len())),
+                );
                 let mut last_end: Option<usize> = None;
                 // store the whole capture group in capture, this string will be indexed according
                 // to the offset array. If the portion of capture is within an offset it will be
                 // assigned a unique color, otherwise it is just appeneded to the vector that
-                // will be appeneded into the final output string
+                // will be appended into the final output string
                 let capture = String::from(&caps[0]);
                 for (idx, (start, end)) in offsets.iter().enumerate() {
                     let slice = &capture[*start..*end];
@@ -498,11 +501,74 @@ mod test {
     #[test]
     fn test_colorize() {
         let sample = "2020-20-20 and then again on 2021-20-18 but not on 2020-18-20";
-        let regex = "(\\d{4})-(\\d{2})-(\\d{2})";
-        let regex = Regex::new(regex).unwrap();
+        let regex = Regex::new("(\\d{4})-(\\d{2})-(\\d{2})").unwrap();
         let unique_colors = false;
         let replaced = colorize_string_with_regex(sample, &regex, unique_colors);
-        let expected = "\x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m and then again on \x1b[38;2;75;146;223m2021\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m but not on \x1b[38;2;12;154;58m2020\x1b[39m-\x1b[38;2;217;27;83m18\x1b[39m-\x1b[38;2;103;93;109m20\x1b[39m";
+        let expected = format!("{}2020{}-{}20{}-{}20{} and then again on {}2021{}-{}20{}-{}18{} but not on {}2020{}-{}18{}-{}20{}",
+                               "\x1b[38;2;12;154;58m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;103;93;109m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;103;93;109m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;75;146;223m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;103;93;109m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;217;27;83m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;12;154;58m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;217;27;83m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;103;93;109m",
+                               FOREGROUND_DEFAULT,
+        );
+        assert_eq!(expected, replaced);
+    }
+
+    #[test]
+    fn test_colorize_unique() {
+        let sample = "2020-20-20 and then again on 2021-20-18 but not on 2020-18-20";
+        let regex = Regex::new("(\\d{4})-(\\d{2})-(\\d{2})").unwrap();
+        let unique_colors = true;
+        let replaced = colorize_string_with_regex(sample, &regex, unique_colors);
+        let expected = format!("{}2020{}-{}20{}-{}20{} and then again on {}2021{}-{}20{}-{}18{} but not on {}2020{}-{}18{}-{}20{}",
+                               "\x1b[38;2;12;154;58m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;179;174;182m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;89;87;219m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;75;146;223m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;179;174;182m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;246;198;212m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;12;154;58m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;236;141;169m",
+                               FOREGROUND_DEFAULT,
+                               "\x1b[38;2;89;87;219m",
+                               FOREGROUND_DEFAULT,
+        );
+        assert_eq!(expected, replaced);
+    }
+
+    #[test]
+    fn test_colorize_inner_capture_groups() {
+        let sample = "\"name = eeestart_benchmarkeee\"";
+        let regex = Regex::new(r" (=) eee(.*)eee").unwrap();
+        let unique_colors = false;
+        let replaced = colorize_string_with_regex(sample, &regex, unique_colors);
+        let expected = format!(
+            "\"name {}={} eee{}start_benchmark{}eee\"",
+            "\x1b[38;2;165;86;20m",
+            FOREGROUND_DEFAULT,
+            "\x1b[38;2;140;144;179m",
+            FOREGROUND_DEFAULT
+        );
         assert_eq!(expected, replaced);
     }
 }
