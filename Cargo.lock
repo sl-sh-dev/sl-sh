@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "sl-sh"
-version = "0.9.64"
+version = "0.9.65"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -670,6 +670,7 @@ dependencies = [
  "same-file",
  "sl-liner",
  "unicode-segmentation",
+ "unicode-width",
  "unicode_reader",
  "walkdir",
 ]
