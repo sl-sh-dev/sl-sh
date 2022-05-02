@@ -485,11 +485,15 @@ Example:
             r#"Usage: (re-color regex string) -> t/nil
 
 Given a regex and a string, colorize the portions of string that match regex,
-giving unique capture group's values unique colors. Colors are chosen
-deterministically based on the hash of the capture group's value. If no
-capture groups are provided the whole regex is colorized uniquely based
-on its value. Overlapping capture groups are not supported. The regex
-argument can either be a regex string or a regex type obtained from [make-regex](#regex::make-regex).
+giving unique values unique colors. Colors are chosen deterministically based
+on the hash of the capture group's value. If no capture groups are provided
+the whole regex is colorized uniquely based on its value. Overlapping capture
+groups are not supported. The regex argument can either be a regex string or
+a regex type obtained from [make-regex](#regex::make-regex).
+
+An optional third keyword argument is accepted, :default, or :unique.
+ - :default preserves the default color behavior
+ - :unique tries to give unique capture group's values unique colors. (see example for more information).
 
 Section: regex
 
@@ -497,6 +501,20 @@ Example:
 (test::assert-equal
     (str "This c" (fg-color-rgb 35 98 130) "onnection takes on" shell::*fg-default*)
     (re-color (make-regex "is c(.*)") "This connection takes on"))
+
+(def simple-time-regex (make-regex "(\d{2}):(\d{2})"))
+
+(test::assert-equal
+    (str (fg-color-rgb 234 27 39) "11" shell::*fg-default* ":" (fg-color-rgb 234 27 39) "11" shell::*fg-default*)
+    (re-color "(\d{2}):(\d{2})" "11:11"))
+
+(test::assert-equal
+    (str (fg-color-rgb 234 27 39) "11" shell::*fg-default* ":" (fg-color-rgb 234 27 39) "11" shell::*fg-default*)
+    (re-color "(\d{2}):(\d{2})" "11:11" :default))
+
+(test::assert-equal
+    (str (fg-color-rgb 234 27 39) "11" shell::*fg-default* ":" (fg-color-rgb 245 141 19) "11" shell::*fg-default*)
+    (re-color "(\d{2}):(\d{2})" "11:11" :unique))
 "#,
         ),
     );
