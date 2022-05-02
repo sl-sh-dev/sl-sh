@@ -14,14 +14,14 @@ fn rgb(r: u8, g: u8, b: u8) -> String {
     format!("\x1b[38;2;{};{};{}m", r, g, b)
 }
 
-fn color(str: &str, capture_group: usize) -> String {
+fn color(value: &str, capture_group: usize) -> String {
     // can create unique colors for up to 32 capture groups
     // given the bits from the str hash. as implemented means
     // that identical values for the 1st and 33rd capture groups
     // will have the same color.
     let shift = capture_group % 32;
     let mut s = DefaultHasher::new();
-    str.hash(&mut s);
+    value.hash(&mut s);
     let hash = s.finish();
     let r = (hash >> shift & 0xFF) as u8;
     let g = (hash >> (shift + 8) & 0xFF) as u8;
@@ -29,12 +29,17 @@ fn color(str: &str, capture_group: usize) -> String {
     rgb(r, g, b)
 }
 
-fn colorize_capture(str: &str, capture_group: usize, unique_colors: bool) -> String {
+fn colorize_capture(value: &str, capture_group: usize, unique_colors: bool) -> String {
     let mut capture_group = capture_group;
     if !unique_colors {
         capture_group = 0;
     }
-    format!("{}{}{}", color(str, capture_group), str, FOREGROUND_DEFAULT)
+    format!(
+        "{}{}{}",
+        color(value, capture_group),
+        value,
+        FOREGROUND_DEFAULT
+    )
 }
 
 fn matches(sample: &str, regex: &Regex) -> Expression {
@@ -191,7 +196,7 @@ fn builtin_regex_replace(
             Ok(regex_replace(string, regex, replacement))
         }
         (_, _, _) => Err(LispError::new(format!(
-            "{} takes a string, a regex, and a replacement string",
+            "{} takes a regex, a string, and a replacement string",
             fn_name
         ))),
     }
@@ -220,7 +225,7 @@ fn builtin_regex_match(
         }
         (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => Ok(matches(string, regex)),
         (_, _) => Err(LispError::new(format!(
-            "{} takes a string and a regex",
+            "{} takes a regex and a string",
             fn_name
         ))),
     }
@@ -249,7 +254,7 @@ fn builtin_regex_find(
         }
         (ExpEnum::Regex(regex), ExpEnum::String(string, _)) => Ok(find_with_regex(string, regex)),
         (_, _) => Err(LispError::new(format!(
-            "{} takes a string and a regex",
+            "{} takes a regex and a string",
             fn_name
         ))),
     }
@@ -282,7 +287,7 @@ fn builtin_regex_find_all(
             ExpEnum::Vector(find_all_with_regex(string, regex)),
         )),
         (_, _) => Err(LispError::new(format!(
-            "{} takes a string and a regex",
+            "{} takes a regex and a string",
             fn_name
         ))),
     }
@@ -339,7 +344,7 @@ fn builtin_regex_color(
             )))
         }
         (_, _) => Err(LispError::new(format!(
-            "{} takes a string and a regex",
+            "{} takes a regex and a string",
             fn_name
         ))),
     }
