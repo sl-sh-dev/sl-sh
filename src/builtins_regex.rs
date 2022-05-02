@@ -388,6 +388,9 @@ Section: regex
 
 Example:
 (test::assert-equal
+    "Thon connection takes on"
+    (re-replace (make-regex "This") "This connection takes on" "Thon"))
+(test::assert-equal
     "Thon connection takes"
     (re-replace "is (.*) (.*)" "This connection takes on" "\$2 \$1"))
 (test::assert-equal

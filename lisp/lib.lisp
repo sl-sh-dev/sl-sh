@@ -513,6 +513,8 @@ Example:
         (test-collate a-dir))))
 "
 	(file-or-dir-to-watch)
+	(if (not (fs-exists? file-or-dir-to-watch))
+	  (err (str "fs-collate: Requires a valid file or directory."))
 	(let* ((get-file-md (fn (file)
 					(chain (make-hash) (hash-set! _ :modified (fs-modified file)))))
 			(add-file-md (fn (file-map file) (hash-set! file-map file (get-file-md file))))
@@ -541,7 +543,7 @@ Example:
 			(iterator::for file in (hash-keys prev-map)
 				(vec-push! (hash-get changes :deleted) (str file)))
 			(set! prev-map new-map)
-			changes))))
+			changes)))))
 
 (defn fs-notify
 "fs-notify is designed to notify the caller of changes to a file or

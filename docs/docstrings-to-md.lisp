@@ -6,6 +6,9 @@
 (ns-import 'shell)
 (ns-import 'docstruct)
 
+(def *regex-less-than* (make-regex "<"))
+(def *regex-greater-than* (make-regex ">"))
+
 (defn create-jekyll-header (index-file)
 	(let ((new-file (open index-file :create :truncate)))
 		(write-string new-file "---
@@ -216,7 +219,13 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
 			(do
 				(write-line file "<details style=\"cursor: pointer; padding-bottom: 15px; padding-left: 10px\">")
 				(write-line file "<code>")
-				(for line in (str-split "\n" doc-example) (write-line file (str line "<br>")))
+				(for line in (str-split "\n" doc-example)
+					(write-line
+						file
+						(str (chain line
+								(re-replace *regex-less-than* _ "&lt;")
+								(re-replace *regex-greater-than* _ "&gt;"))
+							"<br>")))
 				(write-line file "</code>")
 				(write-line file "</details>")
 				(write-line file "<br>"))
@@ -225,16 +234,15 @@ code (i.e. '#(1 2 3) or #(+ 1 2)).")
               (write-line file "<br>")))))
 
 (defn write-md-table (section-name docstrings file-name) (let
-    ((file (open file-name :append))
-     (name (make-section-name section-name)))
+	((file (open file-name :append))
+	 (name (make-section-name section-name)))
 	(write-line file (str "### "
 				(create-anchor (make-section-body-id section-name))
 				(make-md-link-able name (make-section-contents-link section-name))))
 	(write-line file (let
-    ((data (get-section-metadata section-name)))
+	((data (get-section-metadata section-name)))
 		(if (nil? data) "" data)))
 	(for doc-struct in docstrings (write-doc-struct-to-file doc-struct file))
-	(close file)
 	file-name))
 
 (defn gen-std-lib-md-with-sections
