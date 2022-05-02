@@ -564,7 +564,8 @@ fn builtin_get_temp_dir(
 
 fn random_name(prefix: &str, suffix: &str, len: u64) -> String {
     let prefix = if prefix.is_empty() { ".tmp" } else { prefix };
-    let name = rand_alphanumeric_str(len);
+    let mut rng = rand::thread_rng();
+    let name = rand_alphanumeric_str(len, &mut rng);
     format!("{}{}{}", prefix, name, suffix)
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "sl-sh"
-version = "0.9.63"
+version = "0.9.64"
 authors = ["Steven Stanfield <stanfield@scarecrowtech.com>"]
 edition = "2018"
 
@@ -19,6 +19,7 @@ walkdir = "2"
 same-file = "1.0.6"
 remove_dir_all = "0.5.3"
 #jemallocator = "0.3.2"
+regex = "1.5"
 
 [build-dependencies]
 chrono = "0.4.7"

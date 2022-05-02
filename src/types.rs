@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
@@ -251,6 +252,7 @@ pub enum ExpEnum {
     String(Cow<'static, str>, Option<CharIter>),
     Char(Cow<'static, str>),
     CodePoint(char),
+    Regex(Regex),
 
     // Lambda and macros and builtins
     Lambda(Lambda),
@@ -348,6 +350,7 @@ impl ExpEnum {
             ExpEnum::Quote => ExpEnum::Quote,
             ExpEnum::BackQuote => ExpEnum::BackQuote,
             ExpEnum::Undefined => ExpEnum::Undefined,
+            ExpEnum::Regex(regex) => ExpEnum::Regex(regex.clone()),
         }
     }
 }
@@ -382,6 +385,7 @@ impl Clone for ExpEnum {
             ExpEnum::Quote => ExpEnum::Quote,
             ExpEnum::BackQuote => ExpEnum::BackQuote,
             ExpEnum::Undefined => ExpEnum::Undefined,
+            ExpEnum::Regex(regex) => ExpEnum::Regex(regex.clone()),
         }
     }
 }
@@ -429,6 +433,9 @@ impl fmt::Debug for ExpEnum {
             ExpEnum::Quote => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::BackQuote => write!(f, "ExpEnum::Function(_)"),
             ExpEnum::Undefined => write!(f, "ExpEnum::Undefined"),
+            ExpEnum::Regex(regex) => {
+                write!(f, "ExpEnum::Regex({:?})", regex)
+            }
         }
     }
 }
@@ -763,6 +770,7 @@ impl Expression {
             ExpEnum::DeclareMacro => "SpecialForm".to_string(),
             ExpEnum::Quote => "SpecialForm".to_string(),
             ExpEnum::BackQuote => "SpecialForm".to_string(),
+            ExpEnum::Regex(_) => "Regex".to_string(),
             ExpEnum::Undefined => "Undefined".to_string(), //panic!("Tried to get type for undefined!"),
         }
     }

@@ -396,7 +396,7 @@ fn builtin_str_empty(
                 _ => true,
             };
             return if empty {
-                Ok(Expression::alloc_data(ExpEnum::True))
+                Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_nil())
             };

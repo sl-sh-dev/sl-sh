@@ -258,6 +258,20 @@
 
 (println)
 
+(defn print-medium-face ()
+	(println)
+	(println (shell::fg-color-rgb 220 220 220) " - - " shell::*fg-default*)
+	(println (shell::fg-color-rgb 220 220 220) " --- " shell::*bg-default*))
+
+(defn print-sad-face ()
+	(println)
+	(println (shell::fg-color-rgb 255 0 0) " -  - " shell::*fg-default*)
+	(println (shell::fg-color-rgb 255 0 0) "  /\\ " shell::*fg-default*))
+
+(defn print-happy-face ()
+	(println)
+	(println (shell::fg-color-rgb 0 255 0) " +  + " shell::*fg-default*)
+	(println (bhell::fg-color-rgb 0 255 0) "  \\/ " shell::*fg-default*))
 
 (def *global-failed* 0)
 (defn pprint-final-test-report (report-list) (do
@@ -290,6 +304,11 @@
 		(println "failed: " *global-failed*)
 		(println "passed: " global-passed)
 		(println "no test " global-notest)
+		(if (> *global-failed* 0)
+			(print-sad-face)
+			(if (> global-notest 0)
+				(print-medium-face)
+				(print-happy-face)))
 	(println (str shell::*fg-default* shell::*bg-default*))))
 
 (println)
