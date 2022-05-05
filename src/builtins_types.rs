@@ -158,6 +158,22 @@ fn builtin_is_float(
     Err(LispError::new("float? needs one form"))
 }
 
+fn builtin_is_regex(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Expression, LispError> {
+    if let Some(arg) = args.next() {
+        if args.next().is_none() {
+            let arg = eval_no_values(environment, arg)?;
+            return if let ExpEnum::Regex(_) = arg.get().data {
+                Ok(Expression::make_true())
+            } else {
+                Ok(Expression::make_false())
+            };
+        }
+    }
+    Err(LispError::new("regex? needs one form"))
+}
 fn builtin_is_int(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -705,6 +721,23 @@ Section: type
 Example:
 (test::assert-true (float? 1.5))
 (test::assert-false (float? 1))
+"#,
+        ),
+    );
+    data.insert(
+        interner.intern("regex?"),
+        Expression::make_function(
+            builtin_is_regex,
+            r#"Usage: (regex? expression)
+
+True if the expression is a regex, false otherwise.
+
+Section: type
+
+Example:
+(test::assert-true (regex? (make-regex "\d{2}-\d{2}-\d{4}")))
+(test::assert-true (regex? #/[a-z]+/))
+(test::assert-false (regex? 1.5))
 "#,
         ),
     );

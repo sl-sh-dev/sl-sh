@@ -810,9 +810,6 @@ fn read_regex(
     buffer: &mut String,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
     buffer.clear();
-    //TODO
-    // - do not forget about regex? and the Type forms.
-    // - update reader docs
     let meta = get_meta(
         environment.reader_state.file_name,
         environment.reader_state.line,
