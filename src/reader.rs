@@ -828,12 +828,12 @@ fn read_regex(
             ""
         };
         if ch == "\\" && peek == "/" {
-            buffer.push_str("/");
+            buffer.push('/');
             chars.next();
             continue;
         } else if ch == "/" {
             chars.next();
-            let re = Regex::new(&buffer);
+            let re = Regex::new(buffer);
             return match re {
                 Ok(re) => Ok((make_exp(ExpEnum::Regex(re), meta), chars)),
                 Err(e) => Err((
