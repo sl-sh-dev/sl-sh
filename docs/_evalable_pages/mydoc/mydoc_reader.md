@@ -20,6 +20,10 @@ String are surrounded by "" and can be multiline.  Stings support the following 
 ## String Literals
 String literals are started with #"% and end with %".  The % can be any char and must match on both ends.  Anything between the opening #"% and %" will be part of the resulting string (nothing is escaped or expanded).
 
+## Regex Literals
+Regex literals are started with #/ and end with /".  Anything between the opening #/ and / will be part of the regex string (nothing is escaped or expanded).
+Supports \/ for using a / in regexes, e.g. #/\d{1}\// to match any number followed by a forward slash.
+
 ## Chars
 Chars are read using #\x format (for instance 'S' would be #\S). Char supports the following special cases:
 - #\space: space character

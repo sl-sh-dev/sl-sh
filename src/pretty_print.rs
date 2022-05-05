@@ -60,7 +60,7 @@ impl fmt::Display for Expression {
             ExpEnum::String(s, _) => write!(f, "\"{}\"", s),
             ExpEnum::Char(c) => write!(f, "#\\{}", c),
             ExpEnum::Regex(c) => {
-                write!(f, "(make-regex \"{:?}\")", c)
+                write!(f, "#/{}/", c.to_string().replace('/', "\\/"))
             }
             ExpEnum::CodePoint(c) => write!(f, "#{}", c.escape_unicode()),
             ExpEnum::Lambda(l) => lambda_out(f, l),
