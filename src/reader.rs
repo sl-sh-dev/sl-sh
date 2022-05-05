@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -309,10 +310,10 @@ fn wrap_trim(exp: Expression, meta: Option<ExpMeta>) -> Expression {
 fn read_string(
     environment: &mut Environment,
     mut chars: CharIter,
-    symbol: &mut String,
+    buffer: &mut String,
     read_table: &HashMap<&'static str, Expression>,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    symbol.clear();
+    buffer.clear();
     let mut last_ch_escape = false;
     let mut res_list: Option<Vec<Expression>> = None;
     let meta = get_meta(
@@ -332,14 +333,14 @@ fn read_string(
             let mut do_match = true;
             if read_table.contains_key(&*ch) {
                 do_match = false;
-                symbol.push_str(&ch);
+                buffer.push_str(&ch);
             }
             if do_match {
                 match &*ch {
-                    "n" => symbol.push('\n'),
-                    "r" => symbol.push('\r'),
-                    "t" => symbol.push('\t'),
-                    "\"" => symbol.push('"'),
+                    "n" => buffer.push('\n'),
+                    "r" => buffer.push('\r'),
+                    "t" => buffer.push('\t'),
+                    "\"" => buffer.push('"'),
                     "x" => {
                         let res = escape_to_char(&mut chars, &mut environment.reader_state);
                         // ? seems to confuse the borrow checker here.
@@ -348,10 +349,10 @@ fn read_string(
                         } else {
                             res.unwrap()
                         };
-                        symbol.push(res);
+                        buffer.push(res);
                     }
                     "\\" => {
-                        symbol.push('\\');
+                        buffer.push('\\');
                     }
                     "u" => {
                         let res = read_utf_scalar(&mut chars, &mut environment.reader_state);
@@ -361,11 +362,11 @@ fn read_string(
                         } else {
                             res.unwrap()
                         };
-                        symbol.push(res);
+                        buffer.push(res);
                     }
                     _ => {
-                        symbol.push('\\');
-                        symbol.push_str(&ch);
+                        buffer.push('\\');
+                        buffer.push_str(&ch);
                     }
                 }
             }
@@ -388,19 +389,19 @@ fn read_string(
                             chars = ichars;
                             let exp_d = exp.get();
                             match &exp_d.data {
-                                ExpEnum::String(s, _) => symbol.push_str(s),
-                                ExpEnum::Char(s) => symbol.push_str(s),
-                                ExpEnum::CodePoint(c) => symbol.push(*c),
+                                ExpEnum::String(s, _) => buffer.push_str(s),
+                                ExpEnum::Char(s) => buffer.push_str(s),
+                                ExpEnum::CodePoint(c) => buffer.push(*c),
                                 _ => {
                                     if let Some(l) = res_list.as_mut() {
                                         drop(exp_d);
-                                        if !symbol.is_empty() {
+                                        if !buffer.is_empty() {
                                             l.push(make_exp(
-                                                ExpEnum::String(symbol.clone().into(), None),
+                                                ExpEnum::String(buffer.clone().into(), None),
                                                 meta,
                                             ));
                                         }
-                                        symbol.clear();
+                                        buffer.clear();
                                         l.push(wrap_trim(exp, meta));
                                     } else {
                                         drop(exp_d);
@@ -408,13 +409,13 @@ fn read_string(
                                             ExpEnum::Symbol("str", SymLoc::None),
                                             meta,
                                         )];
-                                        if !symbol.is_empty() {
+                                        if !buffer.is_empty() {
                                             list.push(make_exp(
-                                                ExpEnum::String(symbol.clone().into(), None),
+                                                ExpEnum::String(buffer.clone().into(), None),
                                                 meta,
                                             ));
                                         }
-                                        symbol.clear();
+                                        buffer.clear();
                                         list.push(wrap_trim(exp, meta));
                                         res_list = Some(list);
                                     }
@@ -428,7 +429,7 @@ fn read_string(
             if proc_ch {
                 if ch != "\\" {
                     last_ch_escape = false;
-                    symbol.push_str(&ch);
+                    buffer.push_str(&ch);
                 } else {
                     last_ch_escape = true;
                 }
@@ -436,14 +437,14 @@ fn read_string(
         }
     }
     if let Some(mut list) = res_list.take() {
-        if !symbol.is_empty() {
-            list.push(make_exp(ExpEnum::String(symbol.clone().into(), None), meta));
+        if !buffer.is_empty() {
+            list.push(make_exp(ExpEnum::String(buffer.clone().into(), None), meta));
         }
         let fl = Expression::with_list_meta(list, meta);
         Ok((fl, chars))
     } else {
         Ok((
-            make_exp(ExpEnum::String(symbol.clone().into(), None), meta),
+            make_exp(ExpEnum::String(buffer.clone().into(), None), meta),
             chars,
         ))
     }
@@ -452,9 +453,9 @@ fn read_string(
 fn read_string_literal(
     environment: &mut Environment,
     mut chars: CharIter,
-    symbol: &mut String,
+    buffer: &mut String,
 ) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
-    symbol.clear();
+    buffer.clear();
     let meta = get_meta(
         environment.reader_state.file_name,
         environment.reader_state.line,
@@ -487,11 +488,11 @@ fn read_string_literal(
         if ch == end_ch && peek == "\"" {
             chars.next();
             return Ok((
-                make_exp(ExpEnum::String(symbol.clone().into(), None), meta),
+                make_exp(ExpEnum::String(buffer.clone().into(), None), meta),
                 chars,
             ));
         }
-        symbol.push_str(&ch);
+        buffer.push_str(&ch);
     }
     Err((
         ReadError {
@@ -801,6 +802,59 @@ fn read_num_radix(
             chars,
         )),
     }
+}
+
+fn read_regex(
+    environment: &mut Environment,
+    mut chars: CharIter, // Pass ownership in and out for reader macro support.
+    buffer: &mut String,
+) -> Result<(Expression, CharIter), (ReadError, CharIter)> {
+    buffer.clear();
+    //TODO
+    // - do not forget about regex? and the Type forms.
+    // - update reader docs
+    let meta = get_meta(
+        environment.reader_state.file_name,
+        environment.reader_state.line,
+        environment.reader_state.column,
+    );
+    while let Some(ch) = chars.next() {
+        if ch == "\n" {
+            environment.reader_state.line += 1;
+            environment.reader_state.column = 0;
+        } else {
+            environment.reader_state.column += 1;
+        }
+        let peek = if let Some(pch) = chars.peek() {
+            pch
+        } else {
+            ""
+        };
+        if ch == "\\" && peek == "/" {
+            buffer.push_str("/");
+            chars.next();
+            continue;
+        } else if ch == "/" {
+            chars.next();
+            let re = Regex::new(&buffer);
+            return match re {
+                Ok(re) => Ok((make_exp(ExpEnum::Regex(re), meta), chars)),
+                Err(e) => Err((
+                    ReadError {
+                        reason: e.to_string(),
+                    },
+                    chars,
+                )),
+            };
+        }
+        buffer.push_str(&ch);
+    }
+    Err((
+        ReadError {
+            reason: "Unexpected end of regex literal".to_string(),
+        },
+        chars,
+    ))
 }
 
 fn read_vector(
@@ -1201,6 +1255,11 @@ fn read_inner(
                 chars.next();
                 match &*peek_ch {
                     "|" => consume_block_comment(&mut chars, &mut environment.reader_state),
+                    // read regex literal
+                    "/" => {
+                        let (exp, chars) = read_regex(environment, chars, buffer)?;
+                        return Ok((Some(exp), chars));
+                    }
                     "\\" => {
                         buffer.clear();
                         read_symbol(
