@@ -474,7 +474,7 @@ impl Heap {
     fn replace(&mut self, handle: Handle, obj: Object) -> Object {
         self.objects.push(obj);
         let old = self.objects.swap_remove(handle.idx);
-        self.flags[handle.idx] = self.flags[handle.idx] & 0x0f;
+        self.flags[handle.idx] &= 0x0f;
         old
     }
 
@@ -692,7 +692,7 @@ mod tests {
             if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle { idx: x }) {
                 assert!(x == v as usize);
             } else {
-                assert!(false);
+                panic!();
             }
         }
         heap.alloc_pair(Value::Int(512), Value::Nil, MutState::Mutable, mark_roots);
@@ -701,7 +701,7 @@ mod tests {
         if let (Value::Int(v), Value::Nil) = heap.get_pair(Handle { idx: 0 }) {
             assert!(512 == v);
         } else {
-            assert!(false);
+            panic!();
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
             for idx in 0..512 {
@@ -722,7 +722,7 @@ mod tests {
                     assert!(x - 1 == v as usize);
                 }
             } else {
-                assert!(false);
+                panic!();
             }
         }
         let mark_roots = |heap: &mut Heap| -> VMResult<()> {
@@ -795,10 +795,10 @@ mod tests {
                 if let (Value::Int(v), Value::Nil) = heap.get_pair(inner) {
                     assert!(i == v as usize);
                 } else {
-                    assert!(false);
+                    panic!();
                 }
             } else {
-                assert!(false);
+                panic!();
             }
             i += 1;
         }
@@ -849,18 +849,16 @@ mod tests {
         assert!(heap.live_objects() == 257);
         for h in outers.borrow().iter() {
             let v = heap.get_vector(*h);
-            let mut i = 0;
-            for hv in v {
+            for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
                     if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
                         assert!(i == v as usize);
                     } else {
-                        assert!(false);
+                        panic!();
                     }
                 } else {
-                    assert!(false);
+                    panic!();
                 }
-                i += 1;
             }
         }
         heap.collect(mark_roots);
@@ -868,18 +866,16 @@ mod tests {
         assert_eq!(heap.live_objects(), 257);
         for h in outers.borrow().iter() {
             let v = heap.get_vector(*h);
-            let mut i = 0;
-            for hv in v {
+            for (i, hv) in v.iter().enumerate() {
                 if let Value::Pair(hv) = hv {
                     if let (Value::Int(v), Value::Nil) = heap.get_pair(*hv) {
                         assert!(i == v as usize);
                     } else {
-                        assert!(false);
+                        panic!();
                     }
                 } else {
-                    assert!(false);
+                    panic!();
                 }
-                i += 1;
             }
         }
         for h in outers.borrow().iter() {
@@ -938,8 +934,7 @@ mod tests {
         heap.collect(mark_roots);
         assert_eq!(heap.capacity(), 512);
         assert_eq!(heap.live_objects(), 6);
-        let mut i = 0;
-        for h in outers.borrow().iter() {
+        for (i, h) in outers.borrow().iter().enumerate() {
             let (car, cdr) = heap.get_pair(*h);
             if i == 0 {
                 let (car, cdr) = if let Value::Int(car) = car {
@@ -1006,9 +1001,8 @@ mod tests {
                 assert!(car == 3);
                 assert!(cdr == 4);
             } else {
-                assert!(false);
+                panic!()
             }
-            i += 1;
         }
 
         Ok(())

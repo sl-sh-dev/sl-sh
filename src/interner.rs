@@ -138,7 +138,7 @@ mod tests {
         let mut i = Interner::with_capacity(7);
         assert!(i.capacity() == 8);
         assert!(i.used() == 0);
-        assert!(i.len() == 0);
+        assert!(i.is_empty());
         let one = i.intern("one");
         assert!(i.get_string(one).unwrap() == "one");
         assert!(i.used() == 3);

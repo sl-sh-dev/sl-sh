@@ -134,7 +134,6 @@ pub struct Chunk {
     last_line: u32,
     line_numbers: Vec<u8>,
     pub constants: Vec<Value>,
-    pub namespace: Option<Interned>,
     pub captures: Option<Vec<u32>>,
     // Registers holding input (arguments and closed over values) plus 1 for the result.
     pub input_regs: usize,
@@ -156,26 +155,6 @@ impl Chunk {
             last_line: start_line,
             line_numbers: Vec::new(),
             constants: Vec::new(),
-            namespace: None,
-            captures: None,
-            input_regs: 0,
-            extra_regs: 0,
-            args: 0,
-            opt_args: 0,
-            rest: false,
-            dbg_args: None,
-        }
-    }
-
-    pub fn with_namespace(file_name: &'static str, start_line: u32, namespace: Interned) -> Self {
-        Chunk {
-            code: Vec::new(),
-            file_name,
-            start_line,
-            last_line: start_line,
-            line_numbers: Vec::new(),
-            constants: Vec::new(),
-            namespace: Some(namespace),
             captures: None,
             input_regs: 0,
             extra_regs: 0,
@@ -193,7 +172,12 @@ impl Chunk {
         self.code.push((op & 0x00FF) as u8);
     }
 
-    fn encode_line_number(&mut self, offsets: u8, line_number: u32) -> VMResult<()> {
+    fn encode_line_number(&mut self, offsets: u8, line_number: Option<u32>) -> VMResult<()> {
+        let line_number = if let Some(ln) = line_number {
+            ln
+        } else {
+            self.last_line
+        };
         match line_number.cmp(&self.last_line) {
             Ordering::Equal => {
                 if let Some(line) = self.line_numbers.pop() {
@@ -278,13 +262,13 @@ impl Chunk {
         self.constants.len() - 1
     }
 
-    pub fn encode0(&mut self, op_code: OpCode, line_number: u32) -> VMResult<()> {
+    pub fn encode0(&mut self, op_code: OpCode, line_number: Option<u32>) -> VMResult<()> {
         self.encode_line_number(1, line_number)?;
         self.code.push(op_code);
         Ok(())
     }
 
-    pub fn encode1(&mut self, opcode: OpCode, op1: u16, line_number: u32) -> VMResult<()> {
+    pub fn encode1(&mut self, opcode: OpCode, op1: u16, line_number: Option<u32>) -> VMResult<()> {
         let mut bytes: u8 = 2;
         let mut wide = false;
         if op1 > u8::MAX as u16 {
@@ -306,7 +290,7 @@ impl Chunk {
         opcode: OpCode,
         op1: u16,
         op2: u16,
-        line_number: u32,
+        line_number: Option<u32>,
     ) -> VMResult<()> {
         let mut bytes: u8 = 3;
         let mut wide = false;
@@ -325,7 +309,7 @@ impl Chunk {
         Ok(())
     }
 
-    pub fn encode_refi(&mut self, reg: u16, global: u32, line_number: u32) -> VMResult<()> {
+    pub fn encode_refi(&mut self, reg: u16, global: u32, line_number: Option<u32>) -> VMResult<()> {
         let mut bytes: u8 = 4;
         let mut wide = false;
         if reg > u8::MAX as u16 || global > u16::MAX as u32 {
@@ -353,7 +337,7 @@ impl Chunk {
         global: u32,
         num_args: u16,
         first_reg: u16,
-        line_number: u32,
+        line_number: Option<u32>,
     ) -> VMResult<()> {
         let mut bytes: u8 = 5;
         let mut wide = false;
@@ -378,7 +362,12 @@ impl Chunk {
         Ok(())
     }
 
-    pub fn encode_tcallg(&mut self, global: u32, num_args: u16, line_number: u32) -> VMResult<()> {
+    pub fn encode_tcallg(
+        &mut self,
+        global: u32,
+        num_args: u16,
+        line_number: Option<u32>,
+    ) -> VMResult<()> {
         let mut bytes: u8 = 5;
         let mut wide = false;
         if num_args > u8::MAX as u16 || global > u16::MAX as u32 {
@@ -407,7 +396,7 @@ impl Chunk {
         op1: u16,
         op2: u16,
         op3: u16,
-        line_number: u32,
+        line_number: Option<u32>,
     ) -> VMResult<()> {
         let mut bytes: u8 = 4;
         let mut wide = false;
@@ -1203,9 +1192,9 @@ mod tests {
     #[test]
     fn test_encode0() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode0(RET, 1).unwrap();
-        chunk.encode0(CAR, 1).unwrap();
-        chunk.encode0(RET, 1).unwrap();
+        chunk.encode0(RET, Some(1)).unwrap();
+        chunk.encode0(CAR, None).unwrap();
+        chunk.encode0(RET, None).unwrap();
         let mut code = chunk.code.iter();
 
         assert!(*code.next().unwrap() == RET);
@@ -1217,12 +1206,12 @@ mod tests {
     #[test]
     fn test_encode1() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode1(CAR, 0, 1).unwrap();
-        chunk.encode1(CAR, 128, 1).unwrap();
-        chunk.encode1(CAR, 255, 1).unwrap();
-        chunk.encode1(CAR, 256, 1).unwrap();
-        chunk.encode1(CAR, 256, 1).unwrap();
-        chunk.encode1(CAR, u16::MAX, 1).unwrap();
+        chunk.encode1(CAR, 0, Some(1)).unwrap();
+        chunk.encode1(CAR, 128, None).unwrap();
+        chunk.encode1(CAR, 255, None).unwrap();
+        chunk.encode1(CAR, 256, None).unwrap();
+        chunk.encode1(CAR, 256, None).unwrap();
+        chunk.encode1(CAR, u16::MAX, None).unwrap();
         let mut code = chunk.code.iter();
 
         assert!(*code.next().unwrap() == CAR);
@@ -1250,14 +1239,14 @@ mod tests {
     #[test]
     fn test_encode2() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode2(MOV, 0, 0, 1).unwrap();
-        chunk.encode2(MOV, 128, 128, 1).unwrap();
-        chunk.encode2(MOV, 255, 255, 1).unwrap();
-        chunk.encode2(MOV, 256, 256, 1).unwrap();
-        chunk.encode2(MOV, 2, 256, 1).unwrap();
-        chunk.encode2(MOV, 256, 1, 1).unwrap();
-        chunk.encode2(MOV, 257, 257, 1).unwrap();
-        chunk.encode2(MOV, u16::MAX, u16::MAX, 1).unwrap();
+        chunk.encode2(MOV, 0, 0, Some(1)).unwrap();
+        chunk.encode2(MOV, 128, 128, None).unwrap();
+        chunk.encode2(MOV, 255, 255, None).unwrap();
+        chunk.encode2(MOV, 256, 256, None).unwrap();
+        chunk.encode2(MOV, 2, 256, None).unwrap();
+        chunk.encode2(MOV, 256, 1, None).unwrap();
+        chunk.encode2(MOV, 257, 257, None).unwrap();
+        chunk.encode2(MOV, u16::MAX, u16::MAX, None).unwrap();
         let mut code = chunk.code.iter();
 
         assert!(*code.next().unwrap() == MOV);
@@ -1301,15 +1290,15 @@ mod tests {
     #[test]
     fn test_encode3() {
         let mut chunk = Chunk::new("no_file", 0);
-        chunk.encode3(CONS, 0, 0, 0, 1).unwrap();
-        chunk.encode3(CONS, 128, 128, 128, 1).unwrap();
-        chunk.encode3(CONS, 255, 255, 255, 1).unwrap();
-        chunk.encode3(CONS, 256, 256, 256, 1).unwrap();
-        chunk.encode3(CONS, 2, 256, 256, 1).unwrap();
-        chunk.encode3(CONS, 256, 1, 1, 1).unwrap();
-        chunk.encode3(CONS, 257, 257, 257, 1).unwrap();
+        chunk.encode3(CONS, 0, 0, 0, Some(1)).unwrap();
+        chunk.encode3(CONS, 128, 128, 128, None).unwrap();
+        chunk.encode3(CONS, 255, 255, 255, None).unwrap();
+        chunk.encode3(CONS, 256, 256, 256, None).unwrap();
+        chunk.encode3(CONS, 2, 256, 256, None).unwrap();
+        chunk.encode3(CONS, 256, 1, 1, None).unwrap();
+        chunk.encode3(CONS, 257, 257, 257, None).unwrap();
         chunk
-            .encode3(CONS, u16::MAX, u16::MAX, u16::MAX, 1)
+            .encode3(CONS, u16::MAX, u16::MAX, u16::MAX, Some(1))
             .unwrap();
         let mut code = chunk.code.iter();
 
@@ -1362,13 +1351,13 @@ mod tests {
     #[test]
     fn test_line_numbers() {
         let mut chunk = Chunk::new("no_file", 1);
-        chunk.encode2(MOV, 1, 2, 1).unwrap();
-        chunk.encode2(MOV, 1, 2, 2).unwrap();
-        chunk.encode2(MOV, 1, 2, 3).unwrap();
-        chunk.encode2(MOV, 1, 2, 4).unwrap();
-        chunk.encode2(MOV, 1, 2, 4).unwrap();
-        chunk.encode2(MOV, 1, 2, 30).unwrap();
-        chunk.encode2(MOV, 1, 2, 200).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(1)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(2)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(3)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(4)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(4)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(30)).unwrap();
+        chunk.encode2(MOV, 1, 2, Some(200)).unwrap();
         assert!(chunk.offset_to_line(0).unwrap() == 1);
         assert!(chunk.offset_to_line(1).unwrap() == 1);
         assert!(chunk.offset_to_line(2).unwrap() == 1);
@@ -1407,6 +1396,6 @@ mod tests {
         assert!(chunk.line_to_offset(0).is_none());
         assert!(chunk.line_to_offset(201).is_none());
         assert!(chunk.line_to_offset(101).is_none());
-        assert!(chunk.encode0(RET, 1).is_err());
+        assert!(chunk.encode0(RET, Some(1)).is_err());
     }
 }
