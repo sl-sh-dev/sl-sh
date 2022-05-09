@@ -15,7 +15,7 @@ String are surrounded by "" and can be multiline.  Stings support the following 
 - \t: tab
 - \\: backslash
 - \xnn: A two digit hex up to 7F, becomes the 7 bit ascii code provided (which is utf8 compatible)
-- \u{nnnn} or \unnnn: Second form must be followed by whitespace, embedd a unicode scalar with the value (in hex) of nnnn up to 4 bytes
+- \u{nnnn} or \unnnn: Second form must be followed by whitespace, embed a unicode scalar with the value (in hex) of nnnn up to 4 bytes
 
 ## String Literals
 String literals are started with #"% and end with %".  The % can be any char and must match on both ends.  Anything between the opening #"% and %" will be part of the resulting string (nothing is escaped or expanded).

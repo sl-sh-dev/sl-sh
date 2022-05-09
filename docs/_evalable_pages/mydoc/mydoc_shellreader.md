@@ -11,7 +11,7 @@ permalink: mydoc_shellreader.html
 
 ## from the repl
 The shell reader will be invoked on any input at the repl that is not
-surrounded by parens '(', ')'.  It have an implied $(...) around the input
+surrounded by parens '(', ')'.  It has an implied $(...) around the input
 so their is no need to surround shell commands in boiler plate.
 
 ### shell expressions $(...)

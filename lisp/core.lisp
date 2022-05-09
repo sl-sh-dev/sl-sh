@@ -22,7 +22,7 @@ Example:
                               (and (vec? test-form)
                                    (> (length test-form) 0)
                                    (symbol? (vec-nth test-form 0))
-                                   (= (str (vec-nth test-form 0) "str"))))))
+                                   (= (str (vec-nth test-form 0)) "str")))))
 (def defmacro
   "Usage: (defmacro name doc_string? argument_list body)
 
