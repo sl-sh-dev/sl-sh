@@ -470,7 +470,12 @@ impl Vm {
         Ok(val)
     }
 
-    pub fn do_call(&mut self, chunk: Arc<Chunk>, params: &[Value]) -> VMResult<Value> {
+    pub fn do_call(
+        &mut self,
+        chunk: Arc<Chunk>,
+        params: &[Value],
+        caps: Option<&[Handle]>,
+    ) -> VMResult<Value> {
         let stack_top = self.stack_top;
         let stack_max = self.stack_max;
         let ip = self.ip;
@@ -487,7 +492,19 @@ impl Vm {
         if chunk.rest {
             let registers = self.make_registers();
             let (rest_reg, h) = self.setup_rest(&chunk, registers, 0, params.len() as u16);
+            if let Some(caps) = caps {
+                let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
+                for (i, c) in caps.iter().enumerate() {
+                    Self::mov_register(registers, cap_first + i, Value::Value(*c));
+                }
+            }
             Self::mov_register(registers, rest_reg, h);
+        } else if let Some(caps) = caps {
+            let registers = self.make_registers();
+            let cap_first = (chunk.args + chunk.opt_args + 1) as usize;
+            for (i, c) in caps.iter().enumerate() {
+                Self::mov_register(registers, cap_first + i, Value::Value(*c));
+            }
         }
         let res = if let Err(e) = self.execute2(chunk) {
             Err(e)
