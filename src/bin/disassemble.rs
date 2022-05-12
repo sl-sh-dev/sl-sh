@@ -3,32 +3,11 @@
 
 use slvm::chunk::*;
 use slvm::error::*;
-use slvm::heap::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 use slvm::vm::*;
 use std::sync::Arc;
 
-pub enum Testing {
-    StringShared(Arc<usize>), //Cow<'static, str>),
-    String(usize),
-    VectorShared(Arc<usize>),
-    Vector(usize),
-    BytesShared(Arc<usize>),
-    Bytes(usize),
-    PairShared(Arc<usize>),
-    Pair(usize),
-
-    //Value(usize), //Value),
-    Value(Value),
-    Lambda(Arc<Chunk>),
-    Macro(Arc<Chunk>),
-    //Closure(Arc<(Arc<Chunk>, Arc<Vec<Handle>>)>),
-    Closure(Arc<Chunk>, Arc<Vec<Handle>>),
-    Continuation(Arc<Continuation>),
-    CallFrame(Arc<CallFrame>),
-    None,
-}
 fn main() -> Result<(), VMError> {
     let mut chunk = Chunk::new("no_file", 1);
     println!("Value size: {}", std::mem::size_of::<Value>());
@@ -45,7 +24,6 @@ fn main() -> Result<(), VMError> {
         std::mem::size_of::<std::borrow::Cow<'static, str>>()
     );
     println!("Arc<usize> size: {}", std::mem::size_of::<Arc<usize>>());
-    println!("Testing size: {}", std::mem::size_of::<Testing>());
     println!("Max opcode: {}", MAX_OP_CODE);
     /*    chunk.push_simple(RET, 1)?;
     chunk.push_const(0, 2)?;

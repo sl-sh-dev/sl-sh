@@ -336,7 +336,7 @@ impl Vm {
             let v = get_reg_unref!(registers, reg, self);
             val.push_str(&v.pretty_value(self));
         }
-        let val = self.alloc_string(val.into());
+        let val = self.alloc_string(val);
         Ok(val)
     }
 
@@ -1343,7 +1343,7 @@ impl Vm {
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))?;
                     if let Value::Vector(h) = get_reg_unref!(registers, dest, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         v.resize(len as usize, Value::Undefined);
                     }
                 }
@@ -1351,14 +1351,14 @@ impl Vm {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, op, self);
                     if let Value::Vector(h) = get_reg_unref!(registers, dest, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         v.push(val);
                     }
                 }
                 VECPOP => {
                     let (vc, dest) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         if let Some(val) = v.pop() {
                             val
                         } else {
@@ -1375,7 +1375,7 @@ impl Vm {
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))? as usize;
                     let val = if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         if let Some(val) = v.get(i) {
                             *val
                         } else {
@@ -1400,7 +1400,7 @@ impl Vm {
                         .map_err(|e| (e, chunk.clone()))? as usize;
                     let val = get_reg_unref!(registers, src, self);
                     if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         if i >= v.len() {
                             return Err((VMError::new_vm("VECSTH: Index out of range."), chunk));
                         }
@@ -1425,7 +1425,7 @@ impl Vm {
                 VECLEN => {
                     let (dest, v) = decode2!(chunk.code, &mut self.ip, wide);
                     if let Value::Vector(h) = get_reg_unref!(registers, v, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         let len = Value::UInt(v.len() as u64);
                         self.set_register(registers, dest as usize, len);
                     }
@@ -1433,7 +1433,7 @@ impl Vm {
                 VECCLR => {
                     let v = decode1!(chunk.code, &mut self.ip, wide);
                     if let Value::Vector(h) = get_reg_unref!(registers, v, self) {
-                        let v = self.get_vector_mut(h);
+                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
                         v.clear();
                     }
                 }
@@ -2273,20 +2273,20 @@ mod tests {
         assert!(vm.stack[18].get_int()? == 0);
         let vc = vm.stack[1];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h);
+            let v = vm.get_vector_mut(h).unwrap();
             assert!(v.len() == 101);
             assert!(v[0].get_int()? == 0);
         }
         let vc = vm.stack[10];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h);
+            let v = vm.get_vector_mut(h).unwrap();
             assert!(v.len() == 2);
             assert!(v[0].get_int()? == 0);
             assert!(v[1].get_int()? == 1);
         }
         let vc = vm.stack[20];
         if let Value::Vector(h) = vc {
-            let v = vm.get_vector_mut(h);
+            let v = vm.get_vector_mut(h).unwrap();
             assert!(v.len() == 100);
             assert!(v[0].get_int()? == 0);
             assert!(v[1].is_undef());

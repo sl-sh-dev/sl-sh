@@ -47,7 +47,7 @@ impl Vm {
                         match cdr {
                             Value::Nil => head = last_cdr,
                             Value::Pair(h) => {
-                                let (_, cdr) = self.get_pair_mut(h);
+                                let (_, cdr) = self.get_pair_mut(h)?;
                                 *cdr = last_cdr;
                             }
                             _ => {}
@@ -65,7 +65,7 @@ impl Vm {
                                     match cdr {
                                         Value::Nil => head = last_cdr,
                                         Value::Pair(h) => {
-                                            let (_, cdr) = self.get_pair_mut(h);
+                                            let (_, cdr) = self.get_pair_mut(h)?;
                                             *cdr = last_cdr;
                                         }
                                         _ => {}
@@ -76,7 +76,7 @@ impl Vm {
                                         match last_cdr {
                                             Value::Nil => head = loop_cdr,
                                             Value::Pair(h) => {
-                                                let (_, cdr) = self.get_pair_mut(h);
+                                                let (_, cdr) = self.get_pair_mut(h)?;
                                                 *cdr = loop_cdr;
                                             }
                                             _ => {}
@@ -94,7 +94,7 @@ impl Vm {
                             match last_cdr {
                                 Value::Nil => head = lst,
                                 Value::Pair(h) => {
-                                    let (_, cdr) = self.get_pair_mut(h);
+                                    let (_, cdr) = self.get_pair_mut(h)?;
                                     *cdr = lst;
                                 }
                                 _ => {}
@@ -116,7 +116,7 @@ impl Vm {
         let val = get_reg_unref!(registers, val, self);
         match &pair {
             Value::Pair(handle) => {
-                let (car, _) = self.get_pair_mut(*handle);
+                let (car, _) = self.get_pair_mut(*handle)?;
                 *car = val;
             }
             Value::Nil => {
@@ -136,7 +136,7 @@ impl Vm {
         let val = get_reg_unref!(registers, val, self);
         match &pair {
             Value::Pair(handle) => {
-                let (_, cdr) = self.get_pair_mut(*handle);
+                let (_, cdr) = self.get_pair_mut(*handle)?;
                 *cdr = val;
             }
             Value::Nil => {

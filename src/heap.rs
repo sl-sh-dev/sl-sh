@@ -34,6 +34,10 @@ fn is_marked(flag: u8) -> bool {
     is_bit_set!(flag, FLAG_MARK | FLAG_STICKY)
 }
 
+fn is_mutable(flag: u8) -> bool {
+    is_bit_set!(flag, FLAG_MUT)
+}
+
 fn need_trace(flag: u8) -> bool {
     is_marked(flag) && is_bit_set!(flag, FLAG_TRACE)
 }
@@ -70,7 +74,6 @@ enum Object {
     CallFrame(Arc<CallFrame>),
     // Everything below here is always read only.
     Lambda(Arc<Chunk>),
-    Macro(Arc<Chunk>),
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
     Continuation(Arc<Continuation>),
 }
@@ -263,77 +266,37 @@ impl Heap {
         Value::Bytes(self.alloc(Object::Bytes(Arc::new(v)), mutable.flag(), mark_roots))
     }
 
-    pub fn alloc_lambda<MarkFunc>(
-        &mut self,
-        l: Arc<Chunk>,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
+    pub fn alloc_lambda<MarkFunc>(&mut self, l: Arc<Chunk>, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Lambda(self.alloc(Object::Lambda(l), mutable.flag() | FLAG_TRACE, mark_roots))
-    }
-
-    pub fn alloc_macro<MarkFunc>(
-        &mut self,
-        l: Arc<Chunk>,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
-    where
-        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
-    {
-        Value::Macro(self.alloc(Object::Macro(l), mutable.flag() | FLAG_TRACE, mark_roots))
+        Value::Lambda(self.alloc(Object::Lambda(l), FLAG_TRACE, mark_roots))
     }
 
     pub fn alloc_closure<MarkFunc>(
         &mut self,
         l: Arc<Chunk>,
         v: Vec<Handle>,
-        mutable: MutState,
         mark_roots: MarkFunc,
     ) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Closure(self.alloc(
-            Object::Closure(l, Arc::new(v)),
-            mutable.flag() | FLAG_TRACE,
-            mark_roots,
-        ))
+        Value::Closure(self.alloc(Object::Closure(l, Arc::new(v)), FLAG_TRACE, mark_roots))
     }
 
-    pub fn alloc_continuation<MarkFunc>(
-        &mut self,
-        k: Continuation,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
+    pub fn alloc_continuation<MarkFunc>(&mut self, k: Continuation, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Continuation(self.alloc(
-            Object::Continuation(Arc::new(k)),
-            mutable.flag() | FLAG_TRACE,
-            mark_roots,
-        ))
+        Value::Continuation(self.alloc(Object::Continuation(Arc::new(k)), FLAG_TRACE, mark_roots))
     }
 
-    pub fn alloc_callframe<MarkFunc>(
-        &mut self,
-        frame: CallFrame,
-        mutable: MutState,
-        mark_roots: MarkFunc,
-    ) -> Value
+    pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::CallFrame(self.alloc(
-            Object::CallFrame(Arc::new(frame)),
-            mutable.flag() | FLAG_TRACE,
-            mark_roots,
-        ))
+        Value::CallFrame(self.alloc(Object::CallFrame(Arc::new(frame)), FLAG_TRACE, mark_roots))
     }
 
     pub fn alloc_value<MarkFunc>(
@@ -372,9 +335,12 @@ impl Heap {
         }
     }
 
-    pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
+    pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
+        if !self.is_mutable(handle) {
+            return Err(VMError::new_heap("Vector is not mutable!"));
+        }
         if let Some(Object::Vector(v)) = self.objects.get_mut(handle.idx) {
-            Arc::make_mut(v)
+            Ok(Arc::make_mut(v))
         } else {
             panic!("Handle {} is not a vector!", handle.idx);
         }
@@ -396,7 +362,19 @@ impl Heap {
         }
     }
 
-    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
+    pub fn get_pair_mut(&mut self, handle: Handle) -> VMResult<(&mut Value, &mut Value)> {
+        if !self.is_mutable(handle) {
+            return Err(VMError::new_heap("Pair is not mutable!"));
+        }
+        if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx) {
+            let data = Arc::make_mut(ptr);
+            Ok((&mut data.0, &mut data.1))
+        } else {
+            panic!("Handle {} is not a pair!", handle.idx);
+        }
+    }
+
+    pub fn get_pair_mut_override(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
         if let Some(Object::Pair(ptr)) = self.objects.get_mut(handle.idx) {
             let data = Arc::make_mut(ptr);
             (&mut data.0, &mut data.1)
@@ -410,14 +388,6 @@ impl Heap {
             lambda.clone()
         } else {
             panic!("Handle {} is not a lambda!", handle.idx);
-        }
-    }
-
-    pub fn get_macro(&self, handle: Handle) -> Arc<Chunk> {
-        if let Some(Object::Macro(lambda)) = self.objects.get(handle.idx) {
-            lambda.clone()
-        } else {
-            panic!("Handle {} is not a macro!", handle.idx);
         }
     }
 
@@ -481,6 +451,14 @@ impl Heap {
     pub fn is_marked(&self, handle: Handle) -> bool {
         if let Some(flag) = self.flags.get(handle.idx) {
             is_marked(*flag)
+        } else {
+            false
+        }
+    }
+
+    pub fn is_mutable(&self, handle: Handle) -> bool {
+        if let Some(flag) = self.flags.get(handle.idx) {
+            is_mutable(*flag)
         } else {
             false
         }
@@ -585,7 +563,6 @@ impl Heap {
                 (None, None) => {}
             },
             Object::Lambda(chunk) => self.mark_chunk(chunk, current),
-            Object::Macro(chunk) => self.mark_chunk(chunk, current),
             Object::Closure(chunk, closures) => {
                 self.mark_chunk(chunk, current);
                 for close in closures.iter() {
@@ -622,7 +599,22 @@ impl Heap {
         //for (cur, flag) in self.flags.iter().enumerate() {
         let mut val = self.flags.get(cur);
         while let Some(flag) = val {
-            if need_trace(*flag) {
+            let flag = *flag;
+            if let Some(props) = self.props.get(&Handle { idx: cur }) {
+                // Break the props lifetime loose from self so we can call mark_trace below.
+                // mark_trace does not touch props so should be good.
+                let props: &Arc<HashMap<&'static str, Value>> = unsafe {
+                    (props as *const Arc<HashMap<&'static str, Value>>)
+                        .as_ref()
+                        .unwrap()
+                };
+                for (_, val) in props.iter() {
+                    if let Some(handle) = val.get_handle() {
+                        self.mark_trace(handle, cur);
+                    }
+                }
+            }
+            if need_trace(flag) {
                 self.trace(cur, cur);
                 while let Some(idx) = self.greys.pop() {
                     self.trace(idx, cur);

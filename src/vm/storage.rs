@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::chunk::*;
@@ -117,13 +116,25 @@ impl Vm {
         heap.alloc_pair(car, cdr, MutState::Mutable, |heap| self.mark_roots(heap))
     }
 
-    pub fn alloc_string(&mut self, s: Cow<'static, str>) -> Value {
+    pub fn alloc_pair_ro(&mut self, car: Value, cdr: Value) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_string(s.to_string(), MutState::Mutable, |heap| {
-            self.mark_roots(heap)
-        })
+        heap.alloc_pair(car, cdr, MutState::Immutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_string(&mut self, s: String) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_string(s, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_string_ro(&mut self, s: String) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_string(s, MutState::Immutable, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_vector(&mut self, v: Vec<Value>) -> Value {
@@ -131,6 +142,13 @@ impl Vm {
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_vector(v, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_vector_ro(&mut self, v: Vec<Value>) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_bytes(&mut self, v: Vec<u8>) -> Value {
@@ -144,35 +162,28 @@ impl Vm {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_lambda(l, MutState::Mutable, |heap| self.mark_roots(heap))
-    }
-
-    pub fn alloc_macro(&mut self, l: Arc<Chunk>) -> Value {
-        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
-        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
-        // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_macro(l, MutState::Mutable, |heap| self.mark_roots(heap))
+        heap.alloc_lambda(l, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_closure(&mut self, l: Arc<Chunk>, v: Vec<Handle>) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_closure(l, v, MutState::Mutable, |heap| self.mark_roots(heap))
+        heap.alloc_closure(l, v, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_continuation(&mut self, k: Continuation) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_continuation(k, MutState::Mutable, |heap| self.mark_roots(heap))
+        heap.alloc_continuation(k, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_callframe(&mut self, frame: CallFrame) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
-        heap.alloc_callframe(frame, MutState::Mutable, |heap| self.mark_roots(heap))
+        heap.alloc_callframe(frame, |heap| self.mark_roots(heap))
     }
 
     pub fn alloc_value(&mut self, val: Value) -> Value {
@@ -206,7 +217,7 @@ impl Vm {
         self.heap.get_vector(handle)
     }
 
-    pub fn get_vector_mut(&mut self, handle: Handle) -> &mut Vec<Value> {
+    pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
         self.heap.get_vector_mut(handle)
     }
 
@@ -218,16 +229,16 @@ impl Vm {
         self.heap.get_pair(handle)
     }
 
-    pub fn get_pair_mut(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
+    pub fn get_pair_mut(&mut self, handle: Handle) -> VMResult<(&mut Value, &mut Value)> {
         self.heap.get_pair_mut(handle)
+    }
+
+    pub fn get_pair_mut_override(&mut self, handle: Handle) -> (&mut Value, &mut Value) {
+        self.heap.get_pair_mut_override(handle)
     }
 
     pub fn get_lambda(&self, handle: Handle) -> Arc<Chunk> {
         self.heap.get_lambda(handle)
-    }
-
-    pub fn get_macro(&self, handle: Handle) -> Arc<Chunk> {
-        self.heap.get_macro(handle)
     }
 
     pub fn get_closure(&self, handle: Handle) -> (Arc<Chunk>, &[Handle]) {

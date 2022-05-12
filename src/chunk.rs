@@ -1151,7 +1151,6 @@ impl Chunk {
             println!("{}: {}", i, v.display_value(vm));
             match v {
                 Value::Lambda(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
-                Value::Macro(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
                 Value::Closure(h) => vm.get_lambda(*h).disassemble_chunk(vm, indent_level + 1)?,
                 _ => {}
             }
