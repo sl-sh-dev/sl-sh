@@ -50,11 +50,11 @@ pub const JMP_T: OpCode = FLOW_BASE + 9;
 // JMP_F A B - Jump to B if R(A) is falsy (nil or false)
 pub const JMP_F: OpCode = FLOW_BASE + 10;
 
-// JMPEQ A B C - compare B and C and jump to IP C if they are equal
+// JMPEQ A B C - compare A and B and jump to IP C if they are equal
 pub const JMPEQ: OpCode = FLOW_BASE + 11;
-// JMPLT A B C - compare B and C and jump to IP C if R(A) < R(B)
+// JMPLT A B C - compare A and B and jump to IP C if R(A) < R(B)
 pub const JMPLT: OpCode = FLOW_BASE + 12;
-// JMPGT A B C - compare B and C and jump to IP C if R(A) > R(B)
+// JMPGT A B C - compare A and B and jump to IP C if R(A) > R(B)
 pub const JMPGT: OpCode = FLOW_BASE + 13;
 
 // JMPFU A B - Jump to current IP + B if R(A) is undefined
