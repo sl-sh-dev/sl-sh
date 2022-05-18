@@ -703,19 +703,35 @@ impl Chunk {
                 Ok(false)
             }
             CAR => {
-                println!("CAR");
+                print!("CAR    ");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(false)
             }
             CDR => {
-                println!("CDR");
+                print!("CDR    ");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(false)
             }
             XAR => {
-                println!("XAR");
+                print!("XAR    ");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(false)
             }
             XDR => {
-                println!("XDR");
+                print!("XDR    ");
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
                 Ok(false)
             }
             LIST => {

@@ -73,11 +73,11 @@ impl Vm {
                             self.this_fn = frame.this_fn;
                             self.on_error = frame.on_error;
                             std::mem::swap(&mut self.defers, &mut frame.defers);
-                            registers[old_top] = val;
                         } else {
-                            registers[old_top] = val;
+                            self.stack[old_top] = val;
                             return Ok(());
                         }
+                        self.stack[old_top] = val;
                     }
                 }
                 WIDE => wide = true,
