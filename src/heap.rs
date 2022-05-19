@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::chunk::*;
 use crate::error::*;
 use crate::value::*;
+use crate::Interned;
 
 const FLAG_MARK: u8 = 0x01;
 const FLAG_TRACE: u8 = 0x02;
@@ -132,7 +133,7 @@ impl Default for HeapStats {
 pub struct Heap {
     flags: Vec<u8>,
     objects: Vec<Object>,
-    props: HashMap<Handle, Arc<HashMap<&'static str, Value>>>,
+    props: HashMap<Handle, Arc<HashMap<Interned, Value>>>,
     greys: Vec<usize>,
     grow_factor: f64,
     capacity: usize,
@@ -603,8 +604,8 @@ impl Heap {
             if let Some(props) = self.props.get(&Handle { idx: cur }) {
                 // Break the props lifetime loose from self so we can call mark_trace below.
                 // mark_trace does not touch props so should be good.
-                let props: &Arc<HashMap<&'static str, Value>> = unsafe {
-                    (props as *const Arc<HashMap<&'static str, Value>>)
+                let props: &Arc<HashMap<Interned, Value>> = unsafe {
+                    (props as *const Arc<HashMap<Interned, Value>>)
                         .as_ref()
                         .unwrap()
                 };
@@ -633,16 +634,16 @@ impl Heap {
         self.stats.live_objects()
     }
 
-    pub fn get_property(&self, handle: Handle, prop: &str) -> Option<Value> {
+    pub fn get_property(&self, handle: Handle, prop: Interned) -> Option<Value> {
         if let Some(map) = self.props.get(&handle) {
-            if let Some(val) = map.get(prop) {
+            if let Some(val) = map.get(&prop) {
                 return Some(*val);
             }
         }
         None
     }
 
-    pub fn set_property(&mut self, handle: Handle, prop: &'static str, value: Value) {
+    pub fn set_property(&mut self, handle: Handle, prop: Interned, value: Value) {
         if let Some(map) = self.props.get_mut(&handle) {
             let map = Arc::make_mut(map);
             map.insert(prop, value);

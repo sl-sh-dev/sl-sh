@@ -194,11 +194,32 @@ impl Vm {
     }
 
     pub fn get_heap_property(&self, handle: Handle, prop: &str) -> Option<Value> {
+        if let Some(interned) = self.get_if_interned(prop) {
+            self.heap.get_property(handle, interned)
+        } else {
+            None
+        }
+    }
+
+    pub fn set_heap_property(&mut self, handle: Handle, prop: &str, value: Value) {
+        let str_ref = self.intern(prop);
+        self.heap.set_property(handle, str_ref, value)
+    }
+
+    pub fn get_heap_property_interned(&self, handle: Handle, prop: Interned) -> Option<Value> {
         self.heap.get_property(handle, prop)
     }
 
-    pub fn set_heap_property(&mut self, handle: Handle, prop: &'static str, value: Value) {
+    pub fn set_heap_property_interned(&mut self, handle: Handle, prop: Interned, value: Value) {
         self.heap.set_property(handle, prop, value)
+    }
+
+    pub fn get_global_property(&self, global: u32, prop: Interned) -> Option<Value> {
+        self.globals.get_property(global, prop)
+    }
+
+    pub fn set_global_property(&mut self, global: u32, prop: Interned, value: Value) {
+        self.globals.set_property(global, prop, value)
     }
 
     pub fn get_global(&self, idx: u32) -> Value {

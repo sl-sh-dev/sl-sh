@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter;
+use std::sync::Arc;
 
 use crate::error::*;
 use crate::heap::*;
@@ -416,6 +417,7 @@ impl Value {
 pub struct Globals {
     objects: Vec<Value>,
     objects_map: HashMap<Interned, usize>,
+    props: HashMap<u32, Arc<HashMap<Interned, Value>>>,
 }
 
 impl Default for Globals {
@@ -429,6 +431,7 @@ impl Globals {
         Globals {
             objects: Vec::new(),
             objects_map: HashMap::new(),
+            props: HashMap::new(),
         }
     }
 
@@ -501,6 +504,26 @@ impl Globals {
                 *v,
                 self.objects[*v].display_value(vm)
             );
+        }
+    }
+
+    pub fn get_property(&self, global: u32, prop: Interned) -> Option<Value> {
+        if let Some(map) = self.props.get(&global) {
+            if let Some(val) = map.get(&prop) {
+                return Some(*val);
+            }
+        }
+        None
+    }
+
+    pub fn set_property(&mut self, global: u32, prop: Interned, value: Value) {
+        if let Some(map) = self.props.get_mut(&global) {
+            let map = Arc::make_mut(map);
+            map.insert(prop, value);
+        } else {
+            let mut map = HashMap::new();
+            map.insert(prop, value);
+            self.props.insert(global, Arc::new(map));
         }
     }
 }
