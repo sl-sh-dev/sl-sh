@@ -92,21 +92,23 @@ impl Vm {
     }
 
     fn k_unshared_stack(&self, stack_top: usize, k: &Continuation) -> Option<(usize, &Vec<Value>)> {
-        if k.frame.stack_top >= stack_top {
-            if let Value::CallFrame(h) = self.stack[stack_top] {
-                let frame = self.heap.get_callframe(h);
-                if let Value::CallFrame(k_h) = k.stack[stack_top] {
-                    let k_frame = self.heap.get_callframe(k_h);
-                    if frame.id != k_frame.id {
+        if !k.stack.is_empty() {
+            if k.frame.stack_top >= stack_top {
+                if let Value::CallFrame(h) = self.stack[stack_top] {
+                    let frame = self.heap.get_callframe(h);
+                    if let Value::CallFrame(k_h) = k.stack[stack_top] {
+                        let k_frame = self.heap.get_callframe(k_h);
+                        if frame.id != k_frame.id {
+                            return Some((frame.stack_top, &frame.defers));
+                        }
+                    } else {
                         return Some((frame.stack_top, &frame.defers));
                     }
-                } else {
-                    return Some((frame.stack_top, &frame.defers));
                 }
+            } else if let Value::CallFrame(h) = self.stack[stack_top] {
+                let frame = self.heap.get_callframe(h);
+                return Some((frame.stack_top, &frame.defers));
             }
-        } else if let Value::CallFrame(h) = self.stack[stack_top] {
-            let frame = self.heap.get_callframe(h);
-            return Some((frame.stack_top, &frame.defers));
         }
         None
     }
