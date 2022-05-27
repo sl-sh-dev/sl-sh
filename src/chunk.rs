@@ -191,6 +191,32 @@ impl Chunk {
         Ok(())
     }
 
+    pub fn reencode_jump_offset(&mut self, ip: usize, offset: i32) -> VMResult<()> {
+        let (neg_bit, offset) = if offset < 0 {
+            (0x80, -offset as u32)
+        } else {
+            (0x00, offset as u32)
+        };
+        if (0xff_80_00_00 & offset) != 0 {
+            return Err(VMError::new_chunk(
+                "Jump offset is to large must fit in 24 bits with sign).",
+            ));
+        }
+        self.encode_line_number(3, None)?;
+        self.code[ip] = ((offset & 0x00_7f_00_00) >> 16) as u8 | neg_bit;
+        self.code[ip + 1] = ((offset & 0x00_00_ff_00) >> 8) as u8;
+        self.code[ip + 2] = (offset & 0x00_00_00_ff) as u8;
+        Ok(())
+    }
+
+    pub fn encode_jump_offset(&mut self, offset: i32) -> VMResult<()> {
+        let ip = self.code.len();
+        self.code.push(0);
+        self.code.push(0);
+        self.code.push(0);
+        self.reencode_jump_offset(ip, offset)
+    }
+
     pub fn encode_refi(&mut self, reg: u16, global: u32, line_number: Option<u32>) -> VMResult<()> {
         let mut bytes: u8 = 4;
         let mut wide = false;

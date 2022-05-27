@@ -18,14 +18,8 @@ macro_rules! decode_u8_enum {
 #[macro_export]
 macro_rules! decode_chunk_u16 {
     ($code:expr) => {{
-        if let Some(idx1) = $code.next() {
-            if let Some(idx2) = $code.next() {
-                Ok(((*idx1 as u16) << 8) | (*idx2 as u16))
-            } else {
-                Err(VMError::new_chunk(
-                    "Error decoding a u16 from chunk stream.",
-                ))
-            }
+        if let (Some(idx1), Some(idx2)) = ($code.next(), $code.next()) {
+            Ok(((*idx1 as u16) << 8) | (*idx2 as u16))
         } else {
             Err(VMError::new_chunk(
                 "Error decoding a u16 from chunk stream.",
@@ -37,14 +31,8 @@ macro_rules! decode_chunk_u16 {
 #[macro_export]
 macro_rules! decode_u16_enum {
     ($code:expr) => {{
-        if let Some((_, idx1)) = $code.next() {
-            if let Some((_, idx2)) = $code.next() {
-                Ok(((idx1 as u16) << 8) | (idx2 as u16))
-            } else {
-                Err(VMError::new_chunk(
-                    "Error decoding a u16 from chunk stream.",
-                ))
-            }
+        if let (Some((_, idx1)), Some((_, idx2))) = ($code.next(), $code.next()) {
+            Ok(((idx1 as u16) << 8) | (idx2 as u16))
         } else {
             Err(VMError::new_chunk(
                 "Error decoding a u16 from chunk stream.",
@@ -56,32 +44,39 @@ macro_rules! decode_u16_enum {
 #[macro_export]
 macro_rules! decode_u32_enum {
     ($code:expr) => {{
-        if let Some((_, idx1)) = $code.next() {
-            if let Some((_, idx2)) = $code.next() {
-                if let Some((_, idx3)) = $code.next() {
-                    if let Some((_, idx4)) = $code.next() {
-                        Ok(((idx1 as u32) << 24)
-                            | ((idx2 as u32) << 16)
-                            | ((idx3 as u32) << 8)
-                            | (idx4 as u32))
-                    } else {
-                        Err(VMError::new_chunk(
-                            "Error decoding a u32 from chunk stream.",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_chunk(
-                        "Error decoding a u32 from chunk stream.",
-                    ))
-                }
-            } else {
-                Err(VMError::new_chunk(
-                    "Error decoding a u32 from chunk stream.",
-                ))
-            }
+        if let (Some((_, idx1)), Some((_, idx2)), Some((_, idx3)), Some((_, idx4))) =
+            ($code.next(), $code.next(), $code.next(), $code.next())
+        {
+            Ok(
+                ((idx1 as u32) << 24)
+                    | ((idx2 as u32) << 16)
+                    | ((idx3 as u32) << 8)
+                    | (idx4 as u32),
+            )
         } else {
             Err(VMError::new_chunk(
                 "Error decoding a u32 from chunk stream.",
+            ))
+        }
+    }};
+}
+
+macro_rules! decode_i24_enum {
+    ($code:expr) => {{
+        if let (Some((_, idx1)), Some((_, idx2)), Some((pnip, idx3))) =
+            ($code.next(), $code.next(), $code.next())
+        {
+            let negative = (idx1 & 0x80) == 0x80;
+            let num =
+                ((((idx1 & 0x7f) as u32) << 16) | ((idx2 as u32) << 8) | (idx3 as u32)) as i32;
+            if negative {
+                Ok((-num, (pnip + 1) as i32))
+            } else {
+                Ok((num, (pnip + 1) as i32))
+            }
+        } else {
+            Err(VMError::new_chunk(
+                "Error decoding a i24 from chunk stream.",
             ))
         }
     }};
@@ -122,6 +117,13 @@ macro_rules! disassemble_immediate_big {
         } else {
             print!("{:#06x}", decode_u16_enum!($code)?);
         }
+    }};
+}
+
+macro_rules! disassemble_jump_offset {
+    ($code:expr) => {{
+        let (offset, nip) = decode_i24_enum!($code)?;
+        print!("{} -> {:#010x}", offset, nip + offset);
     }};
 }
 
@@ -406,67 +408,23 @@ impl Chunk {
             }
             JMP => {
                 print!("JMP({:#04x})    \t", JMP);
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
+                println!();
+                Ok(false)
+            }
+            JMPT => {
+                print!("JMPT({:#04x})   \t", JMPT);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
             JMPF => {
                 print!("JMPF({:#04x})   \t", JMPF);
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPB => {
-                print!("JMPB({:#04x})   \t", JMPB);
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPFT => {
-                print!("JMPFT({:#04x})  \t", JMPFT);
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPBT => {
-                print!("JMPBT({:#04x})  \t", JMPBT);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPFF => {
-                print!("JMPFF({:#04x})  \t", JMPFF);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPBF => {
-                print!("JMPBF({:#04x})  \t", JMPBF);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMP_T => {
-                print!("JMP_T({:#04x})  \t", JMP_T);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMP_F => {
-                print!("JMP_F({:#04x})  \t", JMP_F);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
@@ -476,7 +434,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
@@ -486,7 +444,7 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
@@ -496,39 +454,23 @@ impl Chunk {
                 print!("\t");
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
-            JMPFU => {
-                print!("JMPFU({:#04x})  \t", JMPFU);
+            JMPU => {
+                print!("JMPU({:#04x})   \t", JMPU);
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }
-            JMPBU => {
-                print!("JMPBU({:#04x})  \t", JMPBU);
+            JMPNU => {
+                print!("JMPNU({:#04x})  \t", JMPNU);
                 disassemble_operand!(code, true, wide);
                 print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPFNU => {
-                print!("JMPFNU({:#04x}) \t", JMPFNU);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
-                println!();
-                Ok(false)
-            }
-            JMPBNU => {
-                print!("JMPBNU({:#04x}) \t", JMPBNU);
-                disassemble_operand!(code, true, wide);
-                print!("\t");
-                disassemble_immediate!(code, wide);
+                disassemble_jump_offset!(code);
                 println!();
                 Ok(false)
             }

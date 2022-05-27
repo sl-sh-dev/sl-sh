@@ -1042,7 +1042,8 @@ mod tests {
         chunk.encode3(VECSTH, 10, 4, 7, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
-        chunk.encode3(JMPLT, 7, 100, 0x2b, Some(line))?;
+        chunk.encode2(JMPLT, 7, 100, Some(line))?;
+        chunk.encode_jump_offset(-21)?;
 
         chunk.encode2(CONST, 7, zero, Some(line))?; // j
                                                     // (dotimes-i j 100 (j2)
@@ -1052,12 +1053,14 @@ mod tests {
         chunk.encode3(ADD, 3, 50, 51, Some(line))?;
 
         chunk.encode2(INC, 7, 1, Some(line))?;
-        chunk.encode3(JMPLT, 7, 100, 0x41, Some(line))?;
+        chunk.encode2(JMPLT, 7, 100, Some(line))?;
+        chunk.encode_jump_offset(-21)?;
         // (set! pu (+ pu su))))
         chunk.encode3(ADD, 5, 5, 3, Some(line))?;
 
         chunk.encode2(INC, 6, 1, Some(line))?;
-        chunk.encode3(JMPLT, 6, 1, 0x25, Some(line))?;
+        chunk.encode2(JMPLT, 6, 1, Some(line))?;
+        chunk.encode_jump_offset(-64)?;
 
         chunk.encode0(RET, Some(line))?;
         //chunk.disassemble_chunk(&vm)?;
@@ -1270,58 +1273,71 @@ mod tests {
         vm.stack[3] = Value::Int(0);
         let line = 1;
         chunk.encode2(CONST, 4, const0, Some(line))?;
-        chunk.encode1(JMP, 8, Some(line))?;
+        chunk.encode0(JMP, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 4, const1, Some(line))?;
         chunk.encode2(CONST, 5, const1, Some(line))?;
 
         chunk.encode2(CONST, 6, const0, Some(line))?;
-        chunk.encode1(JMPF, 3, Some(line))?;
+        chunk.encode0(JMP, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 6, const1, Some(line))?;
         chunk.encode2(CONST, 7, const1, Some(line))?;
 
-        chunk.encode1(JMPF, 5, Some(line))?;
+        chunk.encode0(JMP, Some(line))?;
+        chunk.encode_jump_offset(7)?;
         chunk.encode2(CONST, 8, const0, Some(line))?;
-        chunk.encode1(JMPF, 2, Some(line))?;
-        chunk.encode1(JMPB, 7, Some(line))?;
+        chunk.encode0(JMP, Some(line))?;
+        chunk.encode_jump_offset(4)?;
+        chunk.encode0(JMP, Some(line))?;
+        chunk.encode_jump_offset(-11)?;
         chunk.encode2(CONST, 9, const1, Some(line))?;
 
         chunk.encode2(CONST, 10, const0, Some(line))?;
-        chunk.encode2(JMPFT, 0, 3, Some(line))?;
+        chunk.encode1(JMPT, 0, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 10, const1, Some(line))?;
         chunk.encode2(CONST, 11, const1, Some(line))?;
 
         chunk.encode2(CONST, 12, const0, Some(line))?;
-        chunk.encode2(JMPFT, 3, 3, Some(line))?;
+        chunk.encode1(JMPT, 3, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 12, const1, Some(line))?;
         chunk.encode2(CONST, 13, const1, Some(line))?;
 
         chunk.encode2(CONST, 14, const0, Some(line))?;
-        chunk.encode2(JMPFF, 1, 3, Some(line))?;
+        chunk.encode1(JMPF, 1, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 14, const1, Some(line))?;
         chunk.encode2(CONST, 15, const1, Some(line))?;
 
         chunk.encode2(CONST, 16, const0, Some(line))?;
-        chunk.encode2(JMPFF, 2, 3, Some(line))?;
+        chunk.encode1(JMPF, 2, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 16, const1, Some(line))?;
         chunk.encode2(CONST, 17, const1, Some(line))?;
 
         chunk.encode2(CONST, 18, const0, Some(line))?;
-        chunk.encode2(JMPFT, 1, 3, Some(line))?;
+        chunk.encode1(JMPT, 1, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 18, const1, Some(line))?;
         chunk.encode2(CONST, 19, const1, Some(line))?;
 
         chunk.encode2(CONST, 20, const0, Some(line))?;
-        chunk.encode2(JMPFT, 2, 3, Some(line))?;
+        chunk.encode1(JMPT, 2, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 20, const1, Some(line))?;
         chunk.encode2(CONST, 21, const1, Some(line))?;
 
         chunk.encode2(CONST, 22, const0, Some(line))?;
-        chunk.encode2(JMPFF, 0, 3, Some(line))?;
+        chunk.encode1(JMPF, 0, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 22, const1, Some(line))?;
         chunk.encode2(CONST, 23, const1, Some(line))?;
 
         chunk.encode2(CONST, 24, const0, Some(line))?;
-        chunk.encode2(JMPFF, 3, 3, Some(line))?;
+        chunk.encode1(JMPF, 3, Some(line))?;
+        chunk.encode_jump_offset(3)?;
         chunk.encode2(CONST, 24, const1, Some(line))?;
         chunk.encode2(CONST, 25, const1, Some(line))?;
 

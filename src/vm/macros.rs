@@ -21,6 +21,23 @@ macro_rules! decode_u32 {
 }
 
 #[macro_export]
+macro_rules! decode_i24 {
+    ($code:expr, $ip:expr) => {{
+        let idx1 = $code[*$ip];
+        let idx2 = $code[*$ip + 1];
+        let idx3 = $code[*$ip + 2];
+        *$ip += 3;
+        let negative = (idx1 & 0x80) == 0x80;
+        let num = ((((idx1 & 0x7f) as u32) << 16) | ((idx2 as u32) << 8) | (idx3 as u32)) as i32;
+        if negative {
+            -num as isize
+        } else {
+            num as isize
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! decode1 {
     ($code:expr, $ip:expr, $wide:expr) => {{
         if $wide {

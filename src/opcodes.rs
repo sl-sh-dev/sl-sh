@@ -31,72 +31,58 @@ const FLOW_BASE: OpCode = STACK_BASE + 18;
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
 pub const TCALL: OpCode = FLOW_BASE + 1;
-// JMP A - Jump to IP A
-pub const JMP: OpCode = FLOW_BASE + 2;
-// JMPF A - Jump to current IP + A
-pub const JMPF: OpCode = FLOW_BASE + 3;
-// JMPB A - Jump to current IP - A
-pub const JMPB: OpCode = FLOW_BASE + 4;
-// JMPFT A B - Jump to current IP + B if R(A) is truthy (not nil or false)
-pub const JMPFT: OpCode = FLOW_BASE + 5;
-// JMPBT A B - Jump to current IP - B if R(A) is truthy (not nil or false)
-pub const JMPBT: OpCode = FLOW_BASE + 6;
-// JMPFF A B - Jump to current IP + B if R(A) is falsy (nil or false)
-pub const JMPFF: OpCode = FLOW_BASE + 7;
-// JMPBF A B - Jump to current IP - B if R(A) is falsy (nil or false)
-pub const JMPBF: OpCode = FLOW_BASE + 8;
-// JMP_T A B - Jump to B if R(A) is truthy (not nil or false)
-pub const JMP_T: OpCode = FLOW_BASE + 9;
-// JMP_F A B - Jump to B if R(A) is falsy (nil or false)
-pub const JMP_F: OpCode = FLOW_BASE + 10;
-
-// JMPEQ A B C - compare A and B and jump to IP C if they are equal
-pub const JMPEQ: OpCode = FLOW_BASE + 11;
-// JMPLT A B C - compare A and B and jump to IP C if R(A) < R(B)
-pub const JMPLT: OpCode = FLOW_BASE + 12;
-// JMPGT A B C - compare A and B and jump to IP C if R(A) > R(B)
-pub const JMPGT: OpCode = FLOW_BASE + 13;
-
-// JMPFU A B - Jump to current IP + B if R(A) is undefined
-pub const JMPFU: OpCode = FLOW_BASE + 14;
-// JMPBU A B - Jump to current IP - B if R(A) is undefined
-pub const JMPBU: OpCode = FLOW_BASE + 15;
-// JMPFNU A B - Jump to current IP + B if R(A) is NOT undefined
-pub const JMPFNU: OpCode = FLOW_BASE + 16;
-// JMPBNU A B - Jump to current IP - B if R(A) is NOT undefined
-pub const JMPBNU: OpCode = FLOW_BASE + 17;
-
 // CALLG A B C - Call fn G[A] with B args with R(C) as first reg/param
-pub const CALLG: OpCode = FLOW_BASE + 18;
+pub const CALLG: OpCode = FLOW_BASE + 2;
 // TCALLG A B - Tail Call fn G[A] with B args with existing stack/regs
-pub const TCALLG: OpCode = FLOW_BASE + 19;
+pub const TCALLG: OpCode = FLOW_BASE + 3;
 // CALLM A B - Call current fn with B args with R(C) as first reg/param
-pub const CALLM: OpCode = FLOW_BASE + 20;
+pub const CALLM: OpCode = FLOW_BASE + 4;
 // TCALLM B - Tail Call current fn with B args with existing stack/regs
-pub const TCALLM: OpCode = FLOW_BASE + 21;
+pub const TCALLM: OpCode = FLOW_BASE + 5;
+
+// Jumps, all jumps use a signed 24 bit OFFSET (high bit is sign and next 23 are integer).
+// This means all jumps are forward or back (negative target).
+// JMP OFFSET - Jump to IP + OFFSET
+pub const JMP: OpCode = FLOW_BASE + 6;
+// JMPT A OFFSET - Jump to current IP + OFFSET if R(A) is truthy (not (nil or false))
+pub const JMPT: OpCode = FLOW_BASE + 7;
+// JMPF A OFFSET - Jump to current IP + OFFSET if R(A) is falsy (nil or false)
+pub const JMPF: OpCode = FLOW_BASE + 8;
+
+// JMPEQ A B OFFSET - compare A and B and jump to IP + OFFSET if they are equal
+pub const JMPEQ: OpCode = FLOW_BASE + 9;
+// JMPLT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) < R(B)
+pub const JMPLT: OpCode = FLOW_BASE + 10;
+// JMPGT A B OFFSET - compare A and B and jump to IP + OFFSET if R(A) > R(B)
+pub const JMPGT: OpCode = FLOW_BASE + 11;
+
+// JMPU A OFFSET - Jump to current IP + OFFSET if R(A) is undefined
+pub const JMPU: OpCode = FLOW_BASE + 12;
+// JMPNU A OFFSET - Jump to current IP + OFFSET if R(A) is NOT undefined
+pub const JMPNU: OpCode = FLOW_BASE + 13;
 
 // EQ A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects
-pub const EQ: OpCode = FLOW_BASE + 22;
+pub const EQ: OpCode = FLOW_BASE + 14;
 // EQUAL A B C - R[A] is #t if objects in R[B] - R[C] (inclusive) are the same objects, values or
 // containers with equal values (must be the same container type)
-pub const EQUAL: OpCode = FLOW_BASE + 23;
+pub const EQUAL: OpCode = FLOW_BASE + 15;
 // NOT A B - R[A] is #t if R[B] is falsey and #f otherwise
-pub const NOT: OpCode = FLOW_BASE + 24;
+pub const NOT: OpCode = FLOW_BASE + 16;
 // ERR A B - raise error with key R(A) (must be keyword) and value R(B)
-pub const ERR: OpCode = FLOW_BASE + 25;
+pub const ERR: OpCode = FLOW_BASE + 17;
 // CCC A B - call with continuation, R(A) must be a lambda that takes one arg (the continuation)
 // R(B) is the first reg for the call
-pub const CCC: OpCode = FLOW_BASE + 26;
+pub const CCC: OpCode = FLOW_BASE + 18;
 // DFR A - Add a lambda, R(A) to the deferred list.
-pub const DFR: OpCode = FLOW_BASE + 27;
+pub const DFR: OpCode = FLOW_BASE + 19;
 // DFRPOP - Pop and call the last deferred lambda.
-pub const DFRPOP: OpCode = FLOW_BASE + 28;
+pub const DFRPOP: OpCode = FLOW_BASE + 20;
 // ONERR A - Make R(A) the current error handler and put the previous error handler in R(A).
 // If R(A) is nil then remove error handler.
-pub const ONERR: OpCode = FLOW_BASE + 29;
+pub const ONERR: OpCode = FLOW_BASE + 21;
 
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 30;
+const MATH_BASE: OpCode = FLOW_BASE + 22;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)

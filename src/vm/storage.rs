@@ -193,6 +193,26 @@ impl Vm {
         heap.alloc_value(val, MutState::Mutable, |heap| self.mark_roots(heap))
     }
 
+    pub fn heap_sticky(&mut self, handle: Handle) {
+        self.heap.sticky(handle);
+    }
+
+    pub fn heap_unsticky(&mut self, handle: Handle) {
+        self.heap.unsticky(handle);
+    }
+
+    /// Pause garbage collection.
+    /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
+    pub fn pause_gc(&mut self) {
+        self.heap.pause_gc();
+    }
+
+    /// UnPause garbage collection.
+    /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
+    pub fn unpause_gc(&mut self) {
+        self.heap.unpause_gc();
+    }
+
     pub fn get_heap_property(&self, handle: Handle, prop: &str) -> Option<Value> {
         if let Some(interned) = self.get_if_interned(prop) {
             self.heap.get_property(handle, interned)

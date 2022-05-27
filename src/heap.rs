@@ -7,9 +7,8 @@ use crate::value::*;
 use crate::Interned;
 
 const FLAG_MARK: u8 = 0x01;
-const FLAG_TRACE: u8 = 0x02;
-const FLAG_STICKY: u8 = 0x04;
-const FLAG_MUT: u8 = 0x08;
+const FLAG_STICKY: u8 = 0x02;
+const FLAG_MUT: u8 = 0x04;
 
 macro_rules! is_bit_set {
     ($val:expr, $bit:expr) => {{
@@ -31,16 +30,16 @@ macro_rules! clear_bit {
     }};
 }
 
-fn is_marked(flag: u8) -> bool {
+fn is_live(flag: u8) -> bool {
     is_bit_set!(flag, FLAG_MARK | FLAG_STICKY)
+}
+
+fn is_marked(flag: u8) -> bool {
+    is_bit_set!(flag, FLAG_MARK)
 }
 
 fn is_mutable(flag: u8) -> bool {
     is_bit_set!(flag, FLAG_MUT)
-}
-
-fn need_trace(flag: u8) -> bool {
-    is_marked(flag) && is_bit_set!(flag, FLAG_TRACE)
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +76,8 @@ enum Object {
     Lambda(Arc<Chunk>),
     Closure(Arc<Chunk>, Arc<Vec<Handle>>),
     Continuation(Arc<Continuation>),
+    // Place holder for an empty object slot.
+    Empty,
 }
 
 pub enum MutState {
@@ -138,6 +139,7 @@ pub struct Heap {
     grow_factor: f64,
     capacity: usize,
     stats: HeapStats,
+    paused: u32,
 }
 
 impl Default for Heap {
@@ -157,6 +159,7 @@ impl Heap {
             grow_factor: 2.0,
             capacity: 512,
             stats: HeapStats::default(),
+            paused: 0,
         }
     }
 
@@ -170,7 +173,20 @@ impl Heap {
             grow_factor: 2.0,
             capacity,
             stats: HeapStats::default(),
+            paused: 0,
         }
+    }
+
+    /// Pause garbage collection.
+    /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
+    pub fn pause_gc(&mut self) {
+        self.paused += 1;
+    }
+
+    /// UnPause garbage collection.
+    /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
+    pub fn unpause_gc(&mut self) {
+        self.paused -= 1;
     }
 
     pub fn set_grow_factor(&mut self, grow_factor: f64) {
@@ -182,7 +198,9 @@ impl Heap {
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         if self.stats.live_objects() >= self.capacity() {
-            self.collect(mark_roots);
+            if self.paused == 0 {
+                self.collect(mark_roots);
+            }
             let new_min = (self.stats.live_objects() as f64 * self.grow_factor) as usize;
             if new_min > self.capacity() {
                 self.capacity = new_min;
@@ -198,7 +216,7 @@ impl Heap {
             Handle { idx }
         } else {
             for (idx, flag) in self.flags.iter_mut().enumerate() {
-                if !is_marked(*flag) {
+                if !is_live(*flag) {
                     self.stats.live_objects += 1;
                     *flag = flags | FLAG_MARK;
                     self.objects.push(obj);
@@ -222,7 +240,7 @@ impl Heap {
     {
         Value::Pair(self.alloc(
             Object::Pair(Arc::new((car, cdr))),
-            mutable.flag() | FLAG_TRACE,
+            mutable.flag(),
             mark_roots,
         ))
     }
@@ -248,11 +266,7 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Vector(self.alloc(
-            Object::Vector(Arc::new(v)),
-            mutable.flag() | FLAG_TRACE,
-            mark_roots,
-        ))
+        Value::Vector(self.alloc(Object::Vector(Arc::new(v)), mutable.flag(), mark_roots))
     }
 
     pub fn alloc_bytes<MarkFunc>(
@@ -271,7 +285,7 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Lambda(self.alloc(Object::Lambda(l), FLAG_TRACE, mark_roots))
+        Value::Lambda(self.alloc(Object::Lambda(l), 0, mark_roots))
     }
 
     pub fn alloc_closure<MarkFunc>(
@@ -283,21 +297,21 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Closure(self.alloc(Object::Closure(l, Arc::new(v)), FLAG_TRACE, mark_roots))
+        Value::Closure(self.alloc(Object::Closure(l, Arc::new(v)), 0, mark_roots))
     }
 
     pub fn alloc_continuation<MarkFunc>(&mut self, k: Continuation, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Continuation(self.alloc(Object::Continuation(Arc::new(k)), FLAG_TRACE, mark_roots))
+        Value::Continuation(self.alloc(Object::Continuation(Arc::new(k)), 0, mark_roots))
     }
 
     pub fn alloc_callframe<MarkFunc>(&mut self, frame: CallFrame, mark_roots: MarkFunc) -> Value
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::CallFrame(self.alloc(Object::CallFrame(Arc::new(frame)), FLAG_TRACE, mark_roots))
+        Value::CallFrame(self.alloc(Object::CallFrame(Arc::new(frame)), 0, mark_roots))
     }
 
     pub fn alloc_value<MarkFunc>(
@@ -309,7 +323,7 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        Value::Value(self.alloc(Object::Value(val), mutable.flag() | FLAG_TRACE, mark_roots))
+        Value::Value(self.alloc(Object::Value(val), mutable.flag(), mark_roots))
     }
 
     pub fn get_string(&self, handle: Handle) -> &str {
@@ -449,6 +463,14 @@ impl Heap {
         old
     }
 
+    pub fn is_live(&self, handle: Handle) -> bool {
+        if let Some(flag) = self.flags.get(handle.idx) {
+            is_live(*flag)
+        } else {
+            false
+        }
+    }
+
     pub fn is_marked(&self, handle: Handle) -> bool {
         if let Some(flag) = self.flags.get(handle.idx) {
             is_marked(*flag)
@@ -480,7 +502,6 @@ impl Heap {
         if let Some(flag) = self.flags.get_mut(handle.idx) {
             if !is_bit_set!(*flag, FLAG_STICKY) {
                 self.stats.sticky_objects += 1;
-                self.stats.live_objects += 1;
                 set_bit!(*flag, FLAG_STICKY);
             }
         } else {
@@ -492,7 +513,6 @@ impl Heap {
         if let Some(flag) = self.flags.get_mut(handle.idx) {
             if is_bit_set!(*flag, FLAG_STICKY) {
                 self.stats.sticky_objects -= 1;
-                self.stats.live_objects -= 1;
                 clear_bit!(*flag, FLAG_STICKY);
             }
         } else {
@@ -539,6 +559,21 @@ impl Heap {
     }
 
     fn trace(&mut self, idx: usize, current: usize) {
+        // First trace any properties for the object.
+        if let Some(props) = self.props.get(&Handle { idx }) {
+            // Break the props lifetime loose from self so we can call mark_trace below.
+            // mark_trace does not touch props so should be good.
+            let props: &Arc<HashMap<Interned, Value>> = unsafe {
+                (props as *const Arc<HashMap<Interned, Value>>)
+                    .as_ref()
+                    .unwrap()
+            };
+            for (_, val) in props.iter() {
+                if let Some(handle) = val.get_handle() {
+                    self.mark_trace(handle, current);
+                }
+            }
+        }
         // This unsafe avoids cloning the object to avoid having a mutable and immutable self.
         // This should be fine because we are not touching objects in a mark, only flags.
         // idx should also have been validated before it gets here (by mark if nothing else).
@@ -584,6 +619,7 @@ impl Heap {
                     self.mark_trace(handle, current);
                 }
             }
+            Object::Empty => panic!("An empty object can not be live!"),
         }
     }
 
@@ -591,7 +627,7 @@ impl Heap {
     where
         MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
-        self.stats.live_objects = self.stats.sticky_objects;
+        self.stats.live_objects = 0; //self.stats.sticky_objects;
         for flag in self.flags.iter_mut() {
             clear_bit!(*flag, FLAG_MARK);
         }
@@ -600,22 +636,11 @@ impl Heap {
         //for (cur, flag) in self.flags.iter().enumerate() {
         let mut val = self.flags.get(cur);
         while let Some(flag) = val {
-            let flag = *flag;
-            if let Some(props) = self.props.get(&Handle { idx: cur }) {
-                // Break the props lifetime loose from self so we can call mark_trace below.
-                // mark_trace does not touch props so should be good.
-                let props: &Arc<HashMap<Interned, Value>> = unsafe {
-                    (props as *const Arc<HashMap<Interned, Value>>)
-                        .as_ref()
-                        .unwrap()
-                };
-                for (_, val) in props.iter() {
-                    if let Some(handle) = val.get_handle() {
-                        self.mark_trace(handle, cur);
-                    }
+            if is_live(*flag) {
+                // if it just sticky mark it as well
+                if !is_marked(*flag) {
+                    self.mark(Handle { idx: cur });
                 }
-            }
-            if need_trace(flag) {
                 self.trace(cur, cur);
                 while let Some(idx) = self.greys.pop() {
                     self.trace(idx, cur);
@@ -623,6 +648,13 @@ impl Heap {
             }
             cur += 1;
             val = self.flags.get(cur);
+        }
+        // Free any objects that are no longer live
+        for (cur, flag) in self.flags.iter().enumerate() {
+            if !is_live(*flag) {
+                self.objects.push(Object::Empty);
+                self.objects.swap_remove(cur);
+            }
         }
     }
 
@@ -835,7 +867,7 @@ mod tests {
         }
         outers.borrow_mut().push(heap.alloc(
             Object::Vector(Arc::new(v)),
-            MutState::Mutable.flag() | FLAG_TRACE,
+            MutState::Mutable.flag(),
             mark_roots,
         ));
         assert!(heap.capacity() == 512);
