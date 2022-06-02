@@ -1,13 +1,13 @@
 [package]
 name = "sl-compiler"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-unicode-segmentation = "1.7.1"
+unicode-segmentation = "1.9"
 slvm = { path = "../vm" }
 
 [build-dependencies]
-chrono = "0.4.7"
+chrono = "0.4"
