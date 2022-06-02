@@ -1,13 +1,14 @@
-# sl-compiler
+# slvm
 
-Simple Lisp Compiler for slvm
+Simple Lisp Compiler And Virtual Machine
 
 This compiles Lisp to slvm bytecode.  It is intended to eventually
 become part of sl-sh (simple lisp shell).
 
-Contains two projects:
-- sl-compiler: the core compiler code
-- slosh: a REPL with debugger and extensions that use sl-compiler
+Contains three projects:
+- vm: This is the bytecode VM that is target of the compiler.
+- compiler: the core compiler code
+- slosh: a REPL with debugger and extensions that use compiler
 
 ## Running
 cargo run -p slosh
@@ -79,12 +80,12 @@ Note: These are all compiled to bytecode and once compiled are not dynamic anymo
 - Tail call optimization
 - Continuations (call/cc)
 - Lambda/Closures
-- Garbage collection (still WIP)
+- Garbage collection (basic but should function)
 - Lisp back quotes (including nested back quotes)
 - Macros
 
 ## slosh
-Slosh is the prototype language and REPL using sl-compiler and slvm.
+Slosh is the prototype language and REPL using compiler and vm.
 
 ### Built-in Forms
 These forms (written in Rust but callable from Lisp) are supported.
@@ -99,4 +100,3 @@ These forms (written in Rust but callable from Lisp) are supported.
 
 ## Links
 - sl-sh shell: https://github.com/sl-sh-dev/sl-sh
-- slvm: https://github.com/sstanfield/slvm

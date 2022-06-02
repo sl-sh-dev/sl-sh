@@ -1,4 +1,4 @@
-# slvm
+# vm
 
 Simple Lisp Byte Code VM
 
@@ -19,8 +19,7 @@ Features:
 - Tail call optimization (opcodes for tail calls)
 - Continuations
 - Closures
-- Garbage collection (still WIP)
+- Garbage collection (basic but functional)
 
 Links:
 - sl-sh shell: https://github.com/sl-sh-dev/sl-sh
-- prototype Lisp compiler: https://github.com/sstanfield/sl-compiler
