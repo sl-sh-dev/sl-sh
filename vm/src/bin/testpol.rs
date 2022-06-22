@@ -62,7 +62,8 @@ fn main() -> Result<(), VMError> {
     chunk.encode3(VECSTH, 10, 4, 7, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
-    chunk.encode3(JMPLT, 7, 100, 0x2b, None)?;
+    chunk.encode2(JMPLT, 7, 100, None)?;
+    chunk.encode_jump_offset(-21)?;
 
     chunk.encode2(CONST, 7, zero, None)?; // j
                                           // (dotimes-i j 100 (j2)
@@ -72,16 +73,18 @@ fn main() -> Result<(), VMError> {
     chunk.encode3(ADD, 3, 50, 51, None)?;
 
     chunk.encode2(INC, 7, 1, None)?;
-    chunk.encode3(JMPLT, 7, 100, 0x41, None)?;
+    chunk.encode2(JMPLT, 7, 100, None)?;
+    chunk.encode_jump_offset(-21)?;
     // (set! pu (+ pu su))))
     chunk.encode3(ADD, 5, 5, 3, None)?;
 
     chunk.encode2(INC, 6, 1, None)?;
-    chunk.encode3(JMPLT, 6, 1, 0x25, None)?;
+    chunk.encode2(JMPLT, 6, 1, None)?;
+    chunk.encode_jump_offset(-64)?;
 
     chunk.encode0(RET, None)?;
 
-    //chunk.disassemble_chunk()?;
+    //chunk.disassemble_chunk(&vm, 1)?;
     //assert!(false);
 
     let chunk = Arc::new(chunk);
