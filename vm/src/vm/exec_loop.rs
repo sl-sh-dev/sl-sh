@@ -460,6 +460,7 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers: Vec::new(),
                         on_error: self.on_error,
+                        called: Value::Undefined,
                     };
                     let mut stack = Vec::with_capacity(self.stack_max);
                     stack.resize(self.stack_max, Value::Undefined);

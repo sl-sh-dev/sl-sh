@@ -110,12 +110,14 @@ macro_rules! disassemble_immediate {
     }};
 }
 
-macro_rules! disassemble_immediate_big {
-    ($code:expr, $wide:expr) => {{
+macro_rules! disassemble_immediate_global {
+    ($code:expr, $wide:expr, $vm:expr) => {{
         if $wide {
-            print!("{:#010x}", decode_u32_enum!($code)?);
+            let idx = decode_u32_enum!($code)?;
+            print!("{:#010x}:{}", idx, $vm.global_name(idx as usize));
         } else {
-            print!("{:#06x}", decode_u16_enum!($code)?);
+            let idx = decode_u16_enum!($code)?;
+            print!("{:#06x}:{}", idx, $vm.global_name(idx as usize));
         }
     }};
 }
@@ -128,7 +130,7 @@ macro_rules! disassemble_jump_offset {
 }
 
 impl Chunk {
-    fn disassemble_instruction<I>(chunk: I, op: OpCode, wide: bool) -> VMResult<bool>
+    fn disassemble_instruction<I>(chunk: I, op: OpCode, wide: bool, vm: &Vm) -> VMResult<bool>
     where
         I: IntoIterator<Item = (usize, u8)>,
     {
@@ -215,7 +217,7 @@ impl Chunk {
                 disassemble_operand!(code, true, wide);
                 print!("\t");
                 print!("G[");
-                disassemble_immediate_big!(code, wide);
+                disassemble_immediate_global!(code, wide, vm);
                 print!("]");
                 println!();
                 Ok(false)
@@ -305,7 +307,7 @@ impl Chunk {
             CALLG => {
                 print!("CALLG({:#04x})  \t", CALLG);
                 print!("G[");
-                disassemble_immediate_big!(code, wide);
+                disassemble_immediate_global!(code, wide, vm);
                 print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -325,7 +327,7 @@ impl Chunk {
             TCALLG => {
                 print!("TCALLG({:#04x}) \t", TCALLG);
                 print!("G[");
-                disassemble_immediate_big!(code, wide);
+                disassemble_immediate_global!(code, wide, vm);
                 print!("]");
                 print!("\t");
                 disassemble_immediate!(code, wide);
@@ -845,7 +847,7 @@ impl Chunk {
             } else {
                 print!("     | ");
             }
-            wide = Chunk::disassemble_instruction(&mut code, curr_op, wide)?;
+            wide = Chunk::disassemble_instruction(&mut code, curr_op, wide, vm)?;
             op = code.next();
         }
         Ok(())

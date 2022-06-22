@@ -137,15 +137,22 @@ fn compile_call_myself(
     Ok(())
 }
 
-fn set_line(vm: &Vm, handle: Handle, line: &mut Option<&mut u32>) {
-    if let (Some(Value::UInt(dline)), Some(line)) = (vm.get_heap_property(handle, "dbg-line"), line)
-    {
-        **line = dline as u32;
+fn set_line(vm: &Vm, state: &mut CompileState, handle: Handle, line: &mut Option<&mut u32>) {
+    if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern)), Some(line)) = (
+        vm.get_heap_property(handle, "dbg-line"),
+        vm.get_heap_property(handle, "dbg-file"),
+        line,
+    ) {
+        let file_name = vm.get_interned(file_intern);
+        if file_name == state.chunk.file_name && dline as u32 > **line {
+            **line = dline as u32;
+        }
     }
 }
 
 fn get_args_iter<'vm>(
     vm: &'vm Vm,
+    state: &mut CompileState,
     args: Value,
     name: &str,
     line: &mut Option<&mut u32>,
@@ -153,7 +160,7 @@ fn get_args_iter<'vm>(
     match args {
         Value::Pair(handle) => {
             let (_, _) = vm.get_pair(handle);
-            set_line(vm, handle, line);
+            set_line(vm, state, handle, line);
             Ok(args.iter(vm))
         }
         Value::Vector(_v) => Ok(args.iter(vm)),
@@ -176,7 +183,7 @@ fn mk_state(
         own_line(line).unwrap_or(1),
         Some(state.symbols.clone()),
     );
-    let args_iter = get_args_iter(vm, args, "fn", line)?;
+    let args_iter = get_args_iter(vm, &mut new_state, args, "fn", line)?;
     let mut opt = false;
     let mut rest = false;
     let mut opt_comps = Vec::new();
@@ -188,7 +195,7 @@ fn mk_state(
                     rest = true;
                 } else {
                     new_state.symbols.borrow_mut().data.borrow_mut().add_sym(i);
-                    if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
+                    if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
                         dbg_args.push(i);
                     }
                     if opt {
@@ -199,11 +206,11 @@ fn mk_state(
                 }
             }
             Value::Pair(_) | Value::Vector(_) => {
-                let mut args_iter = get_args_iter(vm, a, "fn", line)?;
+                let mut args_iter = get_args_iter(vm, &mut new_state, a, "fn", line)?;
                 opt = true;
                 if let Some(Value::Symbol(i)) = args_iter.next() {
                     new_state.symbols.borrow_mut().data.borrow_mut().add_sym(i);
-                    if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
+                    if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
                         dbg_args.push(i);
                     }
                     new_state.chunk.opt_args += 1;
@@ -237,7 +244,13 @@ fn compile_fn(
     line: &mut Option<&mut u32>,
     is_macro: bool,
 ) -> VMResult<()> {
-    let (mut new_state, opt_comps) = mk_state(vm, state, args, line)?;
+    let mut new_owned_line = own_line(line).unwrap_or(1);
+    let mut new_line = if line.is_some() {
+        Some(&mut new_owned_line)
+    } else {
+        None
+    };
+    let (mut new_state, opt_comps) = mk_state(vm, state, args, &mut new_line)?;
     for r in cdr.iter() {
         pass1(vm, &mut new_state, *r).unwrap();
     }
@@ -247,14 +260,17 @@ fn compile_fn(
             let target_reg = new_state.chunk.args as usize + i + 1;
             new_state
                 .chunk
-                .encode1(JMPNU, target_reg as u16, own_line(line))?;
+                .encode1(JMPNU, target_reg as u16, own_line(&new_line))?;
             let encode_offset = new_state.chunk.code.len();
             new_state.chunk.encode_jump_offset(0)?;
             let start_offset = new_state.chunk.code.len();
-            compile(vm, &mut new_state, r, reserved, line)?;
-            new_state
-                .chunk
-                .encode2(MOV, target_reg as u16, reserved as u16, own_line(line))?;
+            compile(vm, &mut new_state, r, reserved, &mut new_line)?;
+            new_state.chunk.encode2(
+                MOV,
+                target_reg as u16,
+                reserved as u16,
+                own_line(&new_line),
+            )?;
             new_state.chunk.reencode_jump_offset(
                 encode_offset,
                 (new_state.chunk.code.len() - start_offset) as i32,
@@ -266,11 +282,11 @@ fn compile_fn(
         if i == last_thing {
             new_state.tail = true;
         }
-        compile(vm, &mut new_state, *r, reserved, line)?;
+        compile(vm, &mut new_state, *r, reserved, &mut new_line)?;
     }
     new_state
         .chunk
-        .encode1(SRET, reserved as u16, own_line(line))
+        .encode1(SRET, reserved as u16, own_line(&new_line))
         .unwrap();
     let mut closure = false;
     if !new_state.symbols.borrow().captures.borrow().is_empty() {
@@ -1051,16 +1067,25 @@ fn compile_let(
         let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
         let mut opt_comps: Vec<(usize, Value)> = Vec::new();
         let mut used_regs = 0;
-        let args_iter = get_args_iter(vm, *args, "let", line)?;
+        let scratch = vm.intern("[SCRATCH]");
+        let args_iter = get_args_iter(vm, state, *args, "let", line)?;
         // XXX fixme
         //new_state.chunk.dbg_args = Some(Vec::new());
         for a in args_iter {
             used_regs += 1;
-            let mut args_iter = get_args_iter(vm, a, "let", line)?;
+            let mut args_iter = get_args_iter(vm, state, a, "let", line)?;
             if let Some(Value::Symbol(i)) = args_iter.next() {
                 let reg = symbols.borrow_mut().insert(i) + 1;
                 if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
-                    dbg_args.push(i);
+                    if dbg_args.len() < reg - 1 {
+                        dbg_args.resize(reg - 1, scratch);
+                    }
+                    if reg < dbg_args.len() {
+                        // This register will have multiple names, maybe concat them or something.
+                        dbg_args[reg] = i;
+                    } else {
+                        dbg_args.push(i);
+                    }
                 }
                 if let Some(r) = args_iter.next() {
                     opt_comps.push((reg, r));
@@ -1076,6 +1101,7 @@ fn compile_let(
         if !star {
             state.symbols = symbols;
         }
+        // TODO XXX check for underflow...
         let last_thing = cdr.len() - 2;
         for (i, r) in cdr_iter.enumerate() {
             if i == last_thing {
@@ -1193,12 +1219,6 @@ fn compile_list(
                 backquote(vm, state, cdr[0], result, line)?;
             }
             Value::Symbol(i) if i == state.specials.recur => {
-                /*if !state.tail {
-                    return Err(VMError::new_compile(format!(
-                        "recur not in tail position, line {}",
-                        line
-                    )));
-                }*/
                 compile_call_myself(vm, state, cdr, result, line, true)?
             }
             Value::Symbol(i) if i == state.specials.this_fn => {
@@ -1353,7 +1373,7 @@ fn compile_list(
                                 let exp = vm.do_call(mac, cdr, None)?;
                                 vm.unpause_gc();
                                 pass1(vm, state, exp)?;
-                                compile(vm, state, exp, result, &mut None)?
+                                compile(vm, state, exp, result, line)?
                             }
                             Value::Closure(h) => {
                                 let (mac, caps) = vm.get_closure(h);
@@ -1362,7 +1382,7 @@ fn compile_list(
                                 let exp = vm.do_call(mac, cdr, Some(&caps))?;
                                 vm.unpause_gc();
                                 pass1(vm, state, exp)?;
-                                compile(vm, state, exp, result, &mut None)?
+                                compile(vm, state, exp, result, line)?
                             }
                             _ => panic!("Invalid macro!"),
                         }
@@ -1377,7 +1397,7 @@ fn compile_list(
             Value::Lambda(h) => compile_call(vm, state, Value::Lambda(h), cdr, result, line)?,
             Value::Pair(h) => {
                 let (ncar, ncdr) = vm.get_pair(h);
-                set_line(vm, h, line);
+                set_line(vm, state, h, line);
                 let ncdr: Vec<Value> = ncdr.iter(vm).collect();
                 compile_list(vm, state, ncar, &ncdr[..], result, line)?;
                 compile_call_reg(vm, state, result as u16, cdr, result, line)?
@@ -1516,7 +1536,7 @@ pub fn compile(
     match exp {
         Value::Pair(handle) => {
             let (car, cdr) = vm.get_pair(handle);
-            set_line(vm, handle, line);
+            set_line(vm, state, handle, line);
             let cdr: Vec<Value> = cdr.iter(vm).collect();
             compile_list(vm, state, car, &cdr[..], result, line)?;
         }

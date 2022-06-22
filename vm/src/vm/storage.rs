@@ -61,6 +61,14 @@ impl Vm {
         self.stack[idx]
     }
 
+    pub fn stack_max(&self) -> usize {
+        self.stack_max
+    }
+
+    pub fn stack(&self) -> &[Value] {
+        &self.stack
+    }
+
     pub fn get_interned(&self, i: Interned) -> &'static str {
         self.interner.get_string(i).expect("Invalid interned value")
     }
@@ -357,6 +365,24 @@ impl Vm {
         self.globals.mark(heap);
         for i in 0..self.stack_max {
             if let Some(handle) = self.stack[i].get_handle() {
+                heap.mark(handle);
+            }
+        }
+        if let Some(this_fn) = self.this_fn {
+            if let Some(handle) = this_fn.get_handle() {
+                heap.mark(handle);
+            }
+        }
+        if let Some(on_error) = self.on_error {
+            if let Some(handle) = on_error.get_handle() {
+                heap.mark(handle);
+            }
+        }
+        // TODO: XXX do we need this?  Probably but maybe not.
+        //if let Some(err_frame) = &self.err_frame {
+        //}
+        for defer in &self.defers {
+            if let Some(handle) = defer.get_handle() {
                 heap.mark(handle);
             }
         }

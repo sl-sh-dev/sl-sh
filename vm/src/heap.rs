@@ -52,6 +52,7 @@ pub struct CallFrame {
     pub this_fn: Option<Value>,
     pub defers: Vec<Value>,
     pub on_error: Option<Value>,
+    pub called: Value,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +98,12 @@ impl MutState {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle {
     idx: usize,
+}
+
+impl Handle {
+    pub fn idx(&self) -> usize {
+        self.idx
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -413,6 +420,13 @@ impl Heap {
             panic!("Handle {} is not a closure!", handle.idx);
         }
     }
+    pub fn try_get_closure(&self, handle: Handle) -> VMResult<(Arc<Chunk>, &[Handle])> {
+        if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx) {
+            Ok((lambda.clone(), captures))
+        } else {
+            Err(VMError::new_heap("Not a closure!"))
+        }
+    }
 
     pub fn get_continuation(&self, handle: Handle) -> &Continuation {
         if let Some(Object::Continuation(cont)) = self.objects.get(handle.idx) {
@@ -555,6 +569,9 @@ impl Heap {
             if let Some(handle) = on_error.get_handle() {
                 self.mark_trace(handle, current);
             }
+        }
+        if let Some(handle) = call_frame.called.get_handle() {
+            self.mark_trace(handle, current);
         }
     }
 

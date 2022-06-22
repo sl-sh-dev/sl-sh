@@ -21,11 +21,6 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
-struct Meta {
-    line: u64,
-    col: u64,
-}
-
 #[derive(Clone, Debug)]
 pub struct ReadError {
     pub reason: String,
@@ -41,6 +36,7 @@ impl fmt::Display for ReadError {
 
 #[derive(Clone, Debug)]
 pub struct ReaderState {
+    pub file_name: &'static str,
     pub line: usize,
     pub column: usize,
     pub clear_state: bool,
@@ -63,6 +59,7 @@ impl ReaderState {
 impl Default for ReaderState {
     fn default() -> Self {
         ReaderState {
+            file_name: "",
             column: 0,
             line: 1,
             clear_state: false,
@@ -71,12 +68,14 @@ impl Default for ReaderState {
     }
 }
 
-fn alloc_pair(vm: &mut Vm, car: Value, cdr: Value, meta: &Meta) -> Value {
+fn alloc_pair(vm: &mut Vm, car: Value, cdr: Value, reader_state: &ReaderState) -> Value {
     let result = vm.alloc_pair_ro(car, cdr);
     // Just allocated this so the unwrap is safe.
     let handle = result.get_handle().unwrap();
-    vm.set_heap_property(handle, "dbg-line", Value::UInt(meta.line));
-    vm.set_heap_property(handle, "dbg-col", Value::UInt(meta.col));
+    let file_name = vm.intern_static(reader_state.file_name);
+    vm.set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
+    vm.set_heap_property(handle, "dbg-line", Value::UInt(reader_state.line as u64));
+    vm.set_heap_property(handle, "dbg-col", Value::UInt(reader_state.column as u64));
     result
 }
 
@@ -174,12 +173,7 @@ fn is_digit(ch: &str) -> bool {
     )
 }
 
-fn do_char(
-    vm: &mut Vm,
-    reader_state: &mut ReaderState,
-    symbol: &str,
-    //meta: Option<ExpMeta>,
-) -> Result<Value, ReadError> {
+fn do_char(vm: &mut Vm, reader_state: &mut ReaderState, symbol: &str) -> Result<Value, ReadError> {
     match &symbol.to_lowercase()[..] {
         "space" => return Ok(Value::CodePoint(' ')),
         "tab" => return Ok(Value::CodePoint('\t')),
@@ -308,15 +302,7 @@ fn read_utf_scalar(
         finish(char_u32)
     }
 }
-/*
-fn wrap_trim(exp: Expression, meta: Option<ExpMeta>) -> Expression {
-    let trim_list = vec![
-        make_exp(ExpEnum::Symbol("str-trim"), meta),
-        exp,
-    ];
-    Expression::with_list_meta(trim_list, None)
-}
-*/
+
 fn read_string<'sym>(
     _vm: &mut Vm,
     reader_state: &mut ReaderState,
@@ -326,12 +312,6 @@ fn read_string<'sym>(
 ) -> Result<(&'sym mut String, CharIter), (ReadError, CharIter)> {
     symbol.clear();
     let mut last_ch_escape = false;
-    //let res_list: Option<Vec<Value>> = None;
-    /*let meta = get_meta(
-        environment.reader_state.file_name,
-        environment.reader_state.line,
-        environment.reader_state.column,
-    );*/
 
     while let Some(ch) = chars.next() {
         if ch == "\n" {
@@ -468,11 +448,6 @@ fn read_string_literal<'sym>(
     symbol: &'sym mut String,
 ) -> Result<(&'sym mut String, CharIter), (ReadError, CharIter)> {
     symbol.clear();
-    /*let meta = get_meta(
-        environment.reader_state.file_name,
-        environment.reader_state.line,
-        environment.reader_state.column,
-    );*/
     let end_ch = if let Some(ch) = chars.next() {
         reader_state.column += 1;
         ch
@@ -515,12 +490,7 @@ fn read_string_literal<'sym>(
     ))
 }
 
-fn do_atom(
-    vm: &mut Vm,
-    symbol: &str,
-    is_number: bool,
-    //meta: Option<ExpMeta>,
-) -> Value {
+fn do_atom(vm: &mut Vm, symbol: &str, is_number: bool) -> Value {
     if is_number {
         let mut num_str = symbol.to_string();
         num_str.retain(|ch| ch != '_');
@@ -664,7 +634,6 @@ fn read_num_radix(
     mut chars: CharIter, // Pass ownership in and out for reader macro support.
     buffer: &mut String,
     radix: u32,
-    //meta: Option<ExpMeta>,
     read_table_term: &HashMap<&'static str, Value>,
 ) -> Result<(i64, CharIter), (ReadError, CharIter)> {
     buffer.clear();
@@ -695,11 +664,6 @@ fn read_vector(
     in_back_quote: bool,
 ) -> Result<(Vec<Value>, CharIter), (ReadError, CharIter)> {
     let mut v: Vec<Value> = Vec::new();
-    /*let meta = get_meta(
-        reader_state.file_name,
-        reader_state.line,
-        reader_state.column,
-    );*/
     let mut cont = true;
 
     let close_intern = vm.intern(")");
@@ -786,10 +750,6 @@ fn read_list(
 ) -> Result<(Value, CharIter), (ReadError, CharIter)> {
     let mut head = Value::Nil;
     let mut tail = Value::Nil;
-    let meta = Meta {
-        line: reader_state.line as u64,
-        col: reader_state.column as u64,
-    };
     let mut cont = true;
     let mut dot = false;
     let mut dot_count = 0;
@@ -826,7 +786,7 @@ fn read_list(
                         ichars,
                     ));
                 }
-                head = alloc_pair(vm, exp, Value::Nil, &meta);
+                head = alloc_pair(vm, exp, Value::Nil, reader_state);
                 tail = head;
             } else if dot {
                 if is_unquote_splice(vm, exp) {
@@ -863,7 +823,7 @@ fn read_list(
                     *cdr = exp;
                 }
             } else {
-                let new_tail = alloc_pair(vm, exp, Value::Nil, &meta);
+                let new_tail = alloc_pair(vm, exp, Value::Nil, reader_state);
                 if let Value::Pair(h) = tail {
                     let (_, cdr) = vm.get_pair_mut_override(h);
                     *cdr = new_tail;
@@ -964,15 +924,6 @@ fn read_inner(
                 }
             }
         }*/
-        /*let meta = get_meta(
-            environment.reader_state.file_name,
-            environment.reader_state.line,
-            environment.reader_state.column,
-        );*/
-        let meta = Meta {
-            line: reader_state.line as u64,
-            col: reader_state.column as u64,
-        };
         match &*ch {
             "\"" => {
                 match read_string(vm, reader_state, chars, buffer, /*str_*/ &read_table) {
@@ -982,8 +933,8 @@ fn read_inner(
             }
             "'" => match read_inner(vm, reader_state, chars, buffer, in_back_quote, false) {
                 Ok((Some(exp), ichars)) => {
-                    let cdr = alloc_pair(vm, exp, Value::Nil, &meta);
-                    let qlist = alloc_pair(vm, Value::Symbol(i_quote), cdr, &meta);
+                    let cdr = alloc_pair(vm, exp, Value::Nil, reader_state);
+                    let qlist = alloc_pair(vm, Value::Symbol(i_quote), cdr, reader_state);
                     return Ok((Some(qlist), ichars));
                 }
                 Ok((None, ichars)) => {
@@ -1000,8 +951,8 @@ fn read_inner(
             },
             "`" => match read_inner(vm, reader_state, chars, buffer, true, false) {
                 Ok((Some(exp), ichars)) => {
-                    let cdr = alloc_pair(vm, exp, Value::Nil, &meta);
-                    let qlist = alloc_pair(vm, Value::Symbol(i_backquote), cdr, &meta);
+                    let cdr = alloc_pair(vm, exp, Value::Nil, reader_state);
+                    let qlist = alloc_pair(vm, Value::Symbol(i_backquote), cdr, reader_state);
                     return Ok((Some(qlist), ichars));
                 }
                 Ok((None, ichars)) => {
@@ -1028,8 +979,8 @@ fn read_inner(
                 };
                 match read_inner(vm, reader_state, chars, buffer, in_back_quote, false) {
                     Ok((Some(exp), ichars)) => {
-                        let cdr = alloc_pair(vm, exp, Value::Nil, &meta);
-                        return Ok((Some(alloc_pair(vm, sym, cdr, &meta)), ichars));
+                        let cdr = alloc_pair(vm, exp, Value::Nil, reader_state);
+                        return Ok((Some(alloc_pair(vm, sym, cdr, reader_state)), ichars));
                     }
                     Ok((None, ichars)) => {
                         return Err((
@@ -1267,7 +1218,6 @@ fn read_all_inner(
         );
         return Err(ReadError { reason });
     }
-    //let exp_meta = get_meta(environment.reader_state.file_name, 0, 0);
     reader_state.clear_state = true;
 
     Ok(exps)

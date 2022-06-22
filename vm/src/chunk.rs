@@ -63,17 +63,22 @@ impl Chunk {
         match line_number.cmp(&self.last_line) {
             Ordering::Equal => {
                 if let Some(line) = self.line_numbers.pop() {
-                    let current_offsets: u16 = (line & 0x3f) as u16;
-                    if current_offsets + offsets as u16 > 0x3f {
-                        self.line_numbers.push(0x3f);
-                        self.line_numbers
-                            .push((offsets - (0x3f - current_offsets) as u8) | 0x80);
+                    if (line & 0x40) == 0 {
+                        let current_offsets: u16 = (line & 0x3f) as u16;
+                        if current_offsets + offsets as u16 > 0x3f {
+                            self.line_numbers.push(0x3f);
+                            self.line_numbers
+                                .push((offsets - (0x3f - current_offsets) as u8) | (line & 0x80));
+                        } else {
+                            self.line_numbers
+                                .push((current_offsets as u8 + offsets) | (line & 0x80));
+                        }
                     } else {
-                        self.line_numbers
-                            .push((current_offsets as u8 + offsets) | 0x80);
+                        self.line_numbers.push(line);
+                        self.line_numbers.push(offsets);
                     }
                 } else {
-                    self.line_numbers.push(offsets | 0x80);
+                    self.line_numbers.push(offsets);
                 }
                 Ok(())
             }
@@ -82,7 +87,7 @@ impl Chunk {
                 let mut delta = line_number - self.last_line;
                 while delta > 1 {
                     if delta > 0x3f {
-                        self.line_numbers.push(0x7f); // 0x3f plus the 3rd bit of the high byte.
+                        self.line_numbers.push(0x7f); // 0x3f plus the 3rd bit of the high nibble.
                         delta -= 0x3f;
                     } else {
                         self.line_numbers.push((delta - 1) as u8 | 0x40);
@@ -105,20 +110,26 @@ impl Chunk {
             } else {
                 current += (o & 0x3f) as usize;
             }
-            if offset < current {
-                return Some(line);
-            }
             if (o & 0x80) > 0 {
                 line += 1;
+            }
+            if offset < current {
+                return Some(line);
             }
         }
         None
     }
 
     pub fn line_to_offset(&self, line: u32) -> Option<usize> {
+        if line > self.last_line {
+            return None;
+        }
         let mut current_line = self.start_line;
         let mut offset: usize = 0;
         for o in &self.line_numbers {
+            if (o & 0x80) > 0 {
+                current_line += 1;
+            }
             if current_line == line {
                 return Some(offset);
             }
@@ -126,9 +137,6 @@ impl Chunk {
                 current_line += (o & 0x3f) as u32;
             } else {
                 offset += (o & 0x3f) as usize;
-            }
-            if (o & 0x80) > 0 {
-                current_line += 1;
             }
         }
         None
@@ -202,7 +210,6 @@ impl Chunk {
                 "Jump offset is to large must fit in 24 bits with sign).",
             ));
         }
-        self.encode_line_number(3, None)?;
         self.code[ip] = ((offset & 0x00_7f_00_00) >> 16) as u8 | neg_bit;
         self.code[ip + 1] = ((offset & 0x00_00_ff_00) >> 8) as u8;
         self.code[ip + 2] = (offset & 0x00_00_00_ff) as u8;
@@ -214,6 +221,7 @@ impl Chunk {
         self.code.push(0);
         self.code.push(0);
         self.code.push(0);
+        self.encode_line_number(3, None)?;
         self.reencode_jump_offset(ip, offset)
     }
 
@@ -276,11 +284,11 @@ impl Chunk {
         num_args: u16,
         line_number: Option<u32>,
     ) -> VMResult<()> {
-        let mut bytes: u8 = 5;
+        let mut bytes: u8 = 4;
         let mut wide = false;
         if num_args > u8::MAX as u16 || global > u16::MAX as u32 {
             wide = true;
-            bytes = 9;
+            bytes = 7;
             self.encode_line_number(1, line_number)?;
             self.code.push(WIDE);
         }
@@ -502,9 +510,9 @@ mod tests {
         assert!(chunk.offset_to_line(1).unwrap() == 1);
         assert!(chunk.offset_to_line(2).unwrap() == 1);
 
-        assert!(chunk.offset_to_line(3).unwrap() == 2);
-        assert!(chunk.offset_to_line(4).unwrap() == 2);
-        assert!(chunk.offset_to_line(5).unwrap() == 2);
+        assert_eq!(chunk.offset_to_line(3).unwrap(), 2);
+        assert_eq!(chunk.offset_to_line(4).unwrap(), 2);
+        assert_eq!(chunk.offset_to_line(5).unwrap(), 2);
 
         assert!(chunk.offset_to_line(6).unwrap() == 3);
         assert!(chunk.offset_to_line(7).unwrap() == 3);
@@ -522,16 +530,16 @@ mod tests {
         assert!(chunk.offset_to_line(16).unwrap() == 30);
         assert!(chunk.offset_to_line(17).unwrap() == 30);
 
-        assert!(chunk.offset_to_line(18).unwrap() == 200);
-        assert!(chunk.offset_to_line(19).unwrap() == 200);
-        assert!(chunk.offset_to_line(20).unwrap() == 200);
+        assert_eq!(chunk.offset_to_line(18).unwrap(), 200);
+        assert_eq!(chunk.offset_to_line(19).unwrap(), 200);
+        assert_eq!(chunk.offset_to_line(20).unwrap(), 200);
 
-        assert!(chunk.line_to_offset(1).unwrap() == 0);
-        assert!(chunk.line_to_offset(2).unwrap() == 3);
-        assert!(chunk.line_to_offset(3).unwrap() == 6);
-        assert!(chunk.line_to_offset(4).unwrap() == 9);
-        assert!(chunk.line_to_offset(30).unwrap() == 15);
-        assert!(chunk.line_to_offset(200).unwrap() == 18);
+        assert_eq!(chunk.line_to_offset(1).unwrap(), 0);
+        assert_eq!(chunk.line_to_offset(2).unwrap(), 3);
+        assert_eq!(chunk.line_to_offset(3).unwrap(), 6);
+        assert_eq!(chunk.line_to_offset(4).unwrap(), 9);
+        assert_eq!(chunk.line_to_offset(30).unwrap(), 15);
+        assert_eq!(chunk.line_to_offset(200).unwrap(), 18);
         assert!(chunk.line_to_offset(15).is_none());
         assert!(chunk.line_to_offset(0).is_none());
         assert!(chunk.line_to_offset(201).is_none());

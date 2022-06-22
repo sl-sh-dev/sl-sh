@@ -80,12 +80,24 @@ fn load_one_expression(
     name: &'static str,
     mut line: &mut Option<&mut u32>,
 ) -> VMResult<Arc<Chunk>> {
-    if let Value::Pair(h) = exp {
+    /*if let Value::Pair(h) = exp {
         let (_, _) = vm.get_pair(h);
         if let (Some(line), Some(Value::UInt(dline))) =
             (&mut line, vm.get_heap_property(h, "dbg-line"))
         {
             **line = dline as u32;
+        }
+    }*/
+    if let Some(handle) = exp.get_handle() {
+        if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern)), Some(line)) = (
+            vm.get_heap_property(handle, "dbg-line"),
+            vm.get_heap_property(handle, "dbg-file"),
+            &mut line,
+        ) {
+            let file_name = vm.get_interned(file_intern);
+            if file_name == name && dline as u32 > **line {
+                **line = dline as u32;
+            }
         }
     }
     let mut state = CompileState::new_state(vm, name, line_num(line), None);
@@ -147,6 +159,7 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     );
 
     let mut reader_state = ReaderState::new();
+    reader_state.file_name = name;
     let mut linenum = 1;
     let mut line = Some(&mut linenum);
     let mut last = Value::Nil;
@@ -155,11 +168,9 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         if let Some(handle) = exp.get_handle() {
             vm.heap_sticky(handle);
         }
-        //vm.pause_gc();
 
         let chunk = load_one_expression(vm, exp, name, &mut line);
 
-        //vm.unpause_gc();
         if let Some(handle) = exp.get_handle() {
             vm.heap_unsticky(handle);
         }
@@ -306,6 +317,7 @@ fn main() {
     vm.set_global("get-prop", Value::Builtin(CallFunc { func: get_prop }));
     vm.set_global("set-prop", Value::Builtin(CallFunc { func: set_prop }));
     //vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
+    //vm.pause_gc();
     loop {
         let res = match con.read_line(Prompt::from("slosh> "), None) {
             Ok(input) => input,

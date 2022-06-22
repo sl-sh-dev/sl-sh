@@ -204,6 +204,7 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers,
                         on_error: self.on_error,
+                        called: lambda,
                     };
                     self.callframe_id += 1;
                     Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
@@ -226,7 +227,10 @@ impl Vm {
                 // This is safe because it does not touch caps, it needs a &mut self so it
                 // can heap allocate.
                 let unsafe_vm: &mut Vm = unsafe { (self as *mut Vm).as_mut().unwrap() };
-                let (l, caps) = self.heap.get_closure(handle);
+                let (l, caps) = self
+                    .heap
+                    .try_get_closure(handle)
+                    .map_err(|e| (e, chunk.clone()))?;
                 let frame = if !tail_call {
                     let defers = std::mem::take(&mut self.defers);
                     let frame = CallFrame {
@@ -238,6 +242,7 @@ impl Vm {
                         this_fn: self.this_fn,
                         defers,
                         on_error: self.on_error,
+                        called: lambda,
                     };
                     self.callframe_id += 1;
                     self.stack_top += first_reg as usize;
@@ -527,14 +532,14 @@ impl Vm {
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
 
-        let result = self.execute2(chunk);
+        let result = self.execute2(chunk)?;
 
         self.stack_top = stack_top;
         self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
         self.on_error = on_error;
-        result
+        Ok(result)
     }
 
     fn execute2(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
@@ -553,6 +558,7 @@ impl Vm {
                     this_fn: self.this_fn,
                     defers: std::mem::take(&mut self.defers),
                     on_error: self.on_error,
+                    called: Value::Undefined,
                 });
                 if let Some(on_error) = self.on_error {
                     let registers = self.make_registers();

@@ -68,6 +68,8 @@ fn main() {
     vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
     vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
     let mut reader_state = ReaderState::new();
+    let file_intern = vm.intern(&config.script);
+    reader_state.file_name = vm.get_interned(file_intern);
     //let mut state = CompileState::new();
     let txt = std::fs::read_to_string(&config.script).unwrap();
     let exps = read_all(&mut vm, &mut reader_state, &txt).unwrap();

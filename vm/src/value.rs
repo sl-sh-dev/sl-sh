@@ -251,7 +251,22 @@ impl Value {
             Value::Continuation(handle) => Some(*handle),
             Value::CallFrame(handle) => Some(*handle),
             Value::Value(handle) => Some(*handle),
-            _ => None,
+
+            Value::Byte(_) => None,
+            Value::Int(_) => None,
+            Value::UInt(_) => None,
+            Value::Float(_) => None,
+            Value::CodePoint(_) => None,
+            Value::CharCluster(_, _) => None,
+            Value::Symbol(_) => None,
+            Value::Keyword(_) => None,
+            Value::StringConst(_) => None,
+            Value::Global(_) => None,
+            Value::Builtin(_) => None,
+            Value::True => None,
+            Value::False => None,
+            Value::Nil => None,
+            Value::Undefined => None,
         }
     }
 
@@ -479,32 +494,36 @@ impl Globals {
     }
 
     pub fn mark(&self, heap: &mut Heap) {
-        for obj in &self.objects {
-            match obj {
-                Value::CharClusterLong(handle) => heap.mark(*handle),
-                Value::String(handle) => heap.mark(*handle),
-                Value::Vector(handle) => heap.mark(*handle),
-                Value::Bytes(handle) => heap.mark(*handle),
-                Value::Pair(handle) => heap.mark(*handle),
-                Value::Lambda(handle) => heap.mark(*handle),
-                Value::Closure(handle) => heap.mark(*handle),
-                Value::Continuation(handle) => heap.mark(*handle),
-                Value::CallFrame(handle) => heap.mark(*handle),
-                Value::Value(handle) => heap.mark(*handle),
-                _ => {}
+        self.objects.iter().for_each(|obj| {
+            if let Some(handle) = obj.get_handle() {
+                heap.mark(handle);
             }
-        }
+        });
     }
 
     pub fn dump(&self, vm: &Vm) {
+        let mut ordered_keys = Vec::with_capacity(self.objects_map.len());
+        ordered_keys.resize(self.objects_map.len(), "");
         for (k, v) in self.objects_map.iter() {
+            ordered_keys[*v] = vm.get_interned(*k);
+        }
+        for (i, k) in ordered_keys.iter().enumerate() {
             println!(
-                "{} ({}): {}",
-                vm.get_interned(*k),
-                *v,
-                self.objects[*v].display_value(vm)
+                "({:#010x})/{}: {}",
+                i,
+                *k,
+                self.objects[i].display_value(vm)
             );
         }
+    }
+
+    pub fn index_to_name(&self, vm: &Vm, idx: usize) -> &'static str {
+        for (k, v) in self.objects_map.iter() {
+            if *v == idx {
+                return vm.get_interned(*k);
+            }
+        }
+        "#<N/A>"
     }
 
     pub fn get_property(&self, global: u32, prop: Interned) -> Option<Value> {
