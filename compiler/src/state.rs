@@ -192,6 +192,7 @@ pub struct Specials {
     pub call_cc: Interned,
     pub defer: Interned,
     pub on_error: Interned,
+    pub while_: Interned,
 
     pub rest: Interned,
 }
@@ -249,6 +250,7 @@ impl Specials {
             call_cc: vm.intern_static("call/cc"),
             defer: vm.intern_static("defer"),
             on_error: vm.intern_static("on-error"),
+            while_: vm.intern_static("while"),
 
             rest: vm.intern_static("&rest"),
         }

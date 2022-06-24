@@ -866,6 +866,36 @@ fn compile_if(
     Ok(())
 }
 
+fn compile_while(
+    vm: &mut Vm,
+    state: &mut CompileState,
+    cdr: &[Value],
+    result: usize,
+    line: &mut Option<&mut u32>,
+) -> VMResult<()> {
+    let mut cdr_i = cdr.iter();
+    if let Some(conditional) = cdr_i.next() {
+        let loop_start = state.chunk.code.len();
+        compile(vm, state, *conditional, result, line)?;
+        state.chunk.encode1(JMPF, result as u16, own_line(line))?;
+        let encode_offset = state.chunk.code.len();
+        state.chunk.encode_jump_offset(0)?;
+        let jmp_ip = state.chunk.code.len();
+        while let Some(r) = cdr_i.next() {
+            compile(vm, state, *r, result, line)?;
+        }
+        state.chunk.encode0(JMP, own_line(line))?;
+        state.chunk.encode_jump_offset(-(((state.chunk.code.len() + 3) - loop_start) as i32))?;
+        state.chunk.reencode_jump_offset(encode_offset, (state.chunk.code.len() - jmp_ip) as i32)?;
+        Ok(())
+    } else {
+        Err(VMError::new_compile(format!(
+            "requires at least one argument, got 0, line {}",
+            line_num(line)
+        )))
+    }
+}
+
 fn compile_and(
     vm: &mut Vm,
     state: &mut CompileState,
@@ -1176,6 +1206,12 @@ fn compile_list(
             }
             Value::Symbol(i) if i == state.specials.if_ => {
                 compile_if(vm, state, cdr, result, line)?;
+            }
+            Value::Symbol(i) if i == state.specials.while_ => {
+                let tail = state.tail;
+                state.tail = false;
+                compile_while(vm, state, cdr, result, line)?;
+                state.tail = tail;
             }
             Value::Symbol(i) if i == state.specials.do_ => {
                 let last_thing = cdr.len() - 1;
