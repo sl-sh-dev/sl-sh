@@ -116,13 +116,12 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let builtin_name = "builtin_".to_string() + &name;
     let ident = Ident::new(&builtin_name, Span::call_site());
     fn_item.block.stmts.insert(0,syn::parse(quote!(println!("hello world!");).into()).unwrap());
+    let origin_fn_name = Ident::new(&name, Span::call_site());
     code.push(item.into_token_stream().into());
     let tokens = quote! {
-        //fn #ident() -> ::LispResult<::types::Expression> {
-        fn #ident() {
+        fn #ident() -> LispResult<sl_sh::types::Expression> {
             println!("hello macro! {}.", #name);
-            //Ok(::types::Expression::alloc_data(::ExpEnum::Int(#name(8))))
-            //Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i)))
+            Ok(sl_sh::types::Expression::alloc_data(sl_sh::ExpEnum::Int(#origin_fn_name(8))))
         }
         #(#code)*
     };
