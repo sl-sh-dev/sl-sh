@@ -3,18 +3,21 @@
 //#[global_allocator]
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+use ::sl_sh::config::*;
+use ::sl_sh::shell::*;
+use ::sl_sh::signals::*;
+use ::sl_sh::types::LispError;
 use nix::{
     libc,
     sys::signal::{self, Signal},
     unistd,
 };
 
-use ::sl_sh::config::*;
-use ::sl_sh::shell::*;
-use ::sl_sh::signals::*;
-use ::sl_sh::types::LispError;
+type LispResult<T> = Result<T, LispError>;
 
 fn main() -> Result<(), LispError> {
+    sl_sh_me(8);
+    println!("{:?}", builtin_sl_sh_me(7));
     if let Some(config) = get_config() {
         if config.command.is_none() && config.script.is_none() {
             /* See if we are running interactively.  */
@@ -73,4 +76,9 @@ fn main() -> Result<(), LispError> {
         }
     }
     Ok(())
+}
+
+#[sl_sh_proc_macros::sl_sh_fn]
+fn sl_sh_me(fun: i64) -> i64 {
+    1 + fun
 }

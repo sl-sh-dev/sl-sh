@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::num::{ParseFloatError, ParseIntError};
@@ -398,6 +399,13 @@ fn builtin_is_list(
     }
     Err(LispError::new("list? needs one form"))
 }
+
+//
+//fn str_to_int(in_str: &Cow<str>) -> std::io::Result<i64> {
+//    crate::environment::Environment;
+//    std::prelude::rust_2021::Iterator;
+//    in_str.parse()?
+//}
 
 fn builtin_str_to_int(
     environment: &mut Environment,
