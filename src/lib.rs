@@ -111,9 +111,19 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
         syn::Item::Fn(fn_item) => fn_item,
         _ => panic!("Only works on functions!")
     };
+    let sig_ident = &fn_item.sig.ident;
+    let name = sig_ident.to_string();
+    let builtin_name = "builtin_".to_string() + &name;
+    let ident = Ident::new(&builtin_name, Span::call_site());
     fn_item.block.stmts.insert(0,syn::parse(quote!(println!("hello world!");).into()).unwrap());
     code.push(item.into_token_stream().into());
     let tokens = quote! {
+        //fn #ident() -> ::LispResult<::types::Expression> {
+        fn #ident() {
+            println!("hello macro! {}.", #name);
+            //Ok(::types::Expression::alloc_data(::ExpEnum::Int(#name(8))))
+            //Expression::alloc_data(ExpEnum::Int(rng.gen_range(0..*i)))
+        }
         #(#code)*
     };
     TokenStream::from(tokens)
