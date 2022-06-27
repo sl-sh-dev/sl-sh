@@ -77,7 +77,7 @@ impl Vm {
     ) -> (usize, Value) {
         let rest_reg = first_reg + chunk.args + chunk.opt_args;
         let v = if num_args < (chunk.args + chunk.opt_args) {
-            self.alloc_vector(Vec::new())
+            Value::Nil
         } else {
             let rest_len = (num_args - (chunk.args + chunk.opt_args)) as usize + 1;
             let r = registers
@@ -86,7 +86,7 @@ impl Vm {
                 .skip(rest_reg.into())
                 .copied()
                 .collect();
-            self.alloc_vector(r)
+            self.alloc_list_ro(r)
         };
         (rest_reg.into(), v)
     }

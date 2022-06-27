@@ -9,8 +9,8 @@ use crate::state::*;
 macro_rules! is_tag {
     ($vm:expr, $exp:expr, $form:expr) => {{
         match $exp {
-            Value::Pair(handle) => {
-                let (car, _) = $vm.get_pair(handle);
+            Value::Pair(_) | Value::List(_, _) => {
+                let (car, _) = $exp.get_pair($vm).expect("List/Pair not a List/Pair?");
                 if car.is_symbol($form) {
                     return true;
                 }
@@ -32,10 +32,10 @@ macro_rules! is_tag {
 macro_rules! get_data {
     ($vm:expr, $exp:expr) => {{
         match $exp {
-            Value::Pair(handle) => {
-                let (_, cdr) = $vm.get_pair(handle);
-                if let Value::Pair(cdr_handle) = cdr {
-                    let (ncar, ncdr) = $vm.get_pair(cdr_handle);
+            Value::Pair(_) | Value::List(_, _) => {
+                let (_, cdr) = $exp.get_pair($vm).expect("List/Pair not a List/Pair?");
+                if let Value::Pair(handle) | Value::List(handle, _) = cdr {
+                    let (ncar, ncdr) = cdr.get_pair($vm).expect("List/Pair not a List/Pair?");
                     if ncdr.is_nil() {
                         return Ok(ncar);
                     } else {
@@ -202,8 +202,8 @@ fn qq_expand(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Value> 
         Ok(back_quote(vm, inner))
     } else {
         match exp {
-            Value::Pair(handle) => {
-                let (car, cdr) = vm.get_pair(handle);
+            Value::Pair(_) | Value::List(_, _) => {
+                let (car, cdr) = exp.get_pair(vm).expect("Pair/List not a Pair or List?");
                 let l1 = qq_expand_list(vm, car, line, depth)?;
                 if cdr.is_nil() {
                     Ok(l1)
@@ -258,8 +258,8 @@ fn qq_expand_list(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Va
         Ok(list(vm, inner))
     } else {
         match exp {
-            Value::Pair(handle) => {
-                let (car, cdr) = vm.get_pair(handle);
+            Value::Pair(_) | Value::List(_, _) => {
+                let (car, cdr) = exp.get_pair(vm).expect("List/Pair not a List/Pair?");
                 let l1 = qq_expand_list(vm, car, line, depth)?;
                 if cdr.is_nil() {
                     Ok(list(vm, l1))

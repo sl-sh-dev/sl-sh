@@ -300,6 +300,24 @@ fn set_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
+fn sizeof_heap_object(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-heap-object: takes no arguments".to_string(),
+        ));
+    }
+    Ok(Value::UInt(Vm::sizeof_heap_object() as u64))
+}
+
+fn sizeof_value(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    if !registers.is_empty() {
+        return Err(VMError::new_vm(
+            "sizeof-value: takes no arguments".to_string(),
+        ));
+    }
+    Ok(Value::UInt(std::mem::size_of::<Value>() as u64))
+}
+
 const PROMPT_FN: &str = "prompt";
 fn main() {
     let mut con = Context::new();
@@ -316,6 +334,16 @@ fn main() {
     vm.set_global("vec->list", Value::Builtin(CallFunc { func: vec_to_list }));
     vm.set_global("get-prop", Value::Builtin(CallFunc { func: get_prop }));
     vm.set_global("set-prop", Value::Builtin(CallFunc { func: set_prop }));
+    vm.set_global(
+        "sizeof-heap-object",
+        Value::Builtin(CallFunc {
+            func: sizeof_heap_object,
+        }),
+    );
+    vm.set_global(
+        "sizeof-value",
+        Value::Builtin(CallFunc { func: sizeof_value }),
+    );
     //vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
     //vm.pause_gc();
     loop {

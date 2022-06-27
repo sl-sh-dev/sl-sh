@@ -39,8 +39,8 @@ impl Vm {
                 let lst = get_reg_unref!(registers, i, self);
                 match lst {
                     Value::Nil => {}
-                    Value::Pair(handle) => {
-                        let (car, cdr) = self.heap.get_pair(handle);
+                    Value::Pair(_) | Value::List(_, _) => {
+                        let (car, cdr) = lst.get_pair(self).expect("Pair/List not a Pair or List?");
                         loop_cdr = cdr;
                         let cdr = last_cdr;
                         last_cdr = self.alloc_pair(car, Value::Nil);
@@ -50,6 +50,9 @@ impl Vm {
                                 let (_, cdr) = self.get_pair_mut(h)?;
                                 *cdr = last_cdr;
                             }
+                            Value::List(_, _) => {
+                                return Err(VMError::new_heap("Pair is not mutable!"))
+                            }
                             _ => {}
                         }
                         loop {
@@ -57,8 +60,10 @@ impl Vm {
                                 break;
                             }
                             match loop_cdr {
-                                Value::Pair(h) => {
-                                    let (car, ncdr) = self.heap.get_pair(h);
+                                Value::Pair(_) | Value::List(_, _) => {
+                                    let (car, ncdr) = loop_cdr
+                                        .get_pair(self)
+                                        .expect("Pair/List not a Pair or List?");
                                     loop_cdr = ncdr;
                                     let cdr = last_cdr;
                                     last_cdr = self.alloc_pair(car, Value::Nil);
@@ -67,6 +72,9 @@ impl Vm {
                                         Value::Pair(h) => {
                                             let (_, cdr) = self.get_pair_mut(h)?;
                                             *cdr = last_cdr;
+                                        }
+                                        Value::List(_, _) => {
+                                            return Err(VMError::new_heap("Pair is not mutable!"))
                                         }
                                         _ => {}
                                     }
@@ -78,6 +86,11 @@ impl Vm {
                                             Value::Pair(h) => {
                                                 let (_, cdr) = self.get_pair_mut(h)?;
                                                 *cdr = loop_cdr;
+                                            }
+                                            Value::List(_, _) => {
+                                                return Err(VMError::new_heap(
+                                                    "Pair is not mutable!",
+                                                ))
                                             }
                                             _ => {}
                                         }
@@ -96,6 +109,9 @@ impl Vm {
                                 Value::Pair(h) => {
                                     let (_, cdr) = self.get_pair_mut(h)?;
                                     *cdr = lst;
+                                }
+                                Value::List(_, _) => {
+                                    return Err(VMError::new_heap("Pair is not mutable!"))
                                 }
                                 _ => {}
                             }
@@ -123,9 +139,8 @@ impl Vm {
                 let pair = self.alloc_pair(val, Value::Nil);
                 self.set_register(registers, pair_reg as usize, pair);
             }
-            _ => {
-                return Err(VMError::new_vm("XAR: Not a pair/conscell."));
-            }
+            Value::List(_, _) => return Err(VMError::new_vm("XAR: Pair is read only.")),
+            _ => return Err(VMError::new_vm("XAR: Not a pair/conscell.")),
         }
         Ok(())
     }
@@ -143,9 +158,8 @@ impl Vm {
                 let pair = self.alloc_pair(Value::Nil, val);
                 self.set_register(registers, pair_reg as usize, pair);
             }
-            _ => {
-                return Err(VMError::new_vm("XDR: Not a pair/conscell."));
-            }
+            Value::List(_, _) => return Err(VMError::new_vm("XDR: Pair is read only.")),
+            _ => return Err(VMError::new_vm("XDR: Not a pair/conscell.")),
         }
         Ok(())
     }

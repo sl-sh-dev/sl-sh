@@ -117,6 +117,10 @@ impl Vm {
         CallStackIter::new(self)
     }
 
+    pub fn sizeof_heap_object() -> usize {
+        Heap::sizeof_object()
+    }
+
     pub fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
@@ -157,6 +161,18 @@ impl Vm {
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
         // alloc must not save mark_roots (it does not) since we broke heap away from self.
         heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_list_ro(&mut self, v: Vec<Value>) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        Value::List(
+            heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
+                .get_handle()
+                .expect("Allocated vector not a vector?"),
+            0,
+        )
     }
 
     pub fn alloc_bytes(&mut self, v: Vec<u8>) -> Value {

@@ -666,6 +666,10 @@ impl Vm {
                             let (car, _) = self.heap.get_pair(handle);
                             self.set_register(registers, dest as usize, car);
                         }
+                        Value::List(_, _) => {
+                            let (car, _) = op.get_pair(self).expect("List value not a list?");
+                            self.set_register(registers, dest as usize, car);
+                        }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
                         _ => return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk)),
                     }
@@ -676,6 +680,10 @@ impl Vm {
                     match op {
                         Value::Pair(handle) => {
                             let (_, cdr) = self.heap.get_pair(handle);
+                            self.set_register(registers, dest as usize, cdr);
+                        }
+                        Value::List(_, _) => {
+                            let (_, cdr) = op.get_pair(self).expect("List value not a list?");
                             self.set_register(registers, dest as usize, cdr);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
@@ -753,22 +761,40 @@ impl Vm {
                     let i = get_reg_unref!(registers, i, self)
                         .get_int()
                         .map_err(|e| (e, chunk.clone()))? as usize;
-                    let val = if let Value::Vector(h) = get_reg_unref!(registers, vc, self) {
-                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
-                        if let Some(val) = v.get(i) {
-                            *val
-                        } else {
-                            return Err((
-                                VMError::new_vm(format!(
-                                    "VECNTH: index out of bounds, {}/{}.",
-                                    i,
-                                    v.len()
-                                )),
-                                chunk,
-                            ));
+                    let val = match get_reg_unref!(registers, vc, self) {
+                        Value::Vector(h) => {
+                            let v = self.get_vector(h);
+                            if let Some(val) = v.get(i) {
+                                *val
+                            } else {
+                                return Err((
+                                    VMError::new_vm(format!(
+                                        "VECNTH: index out of bounds, {}/{}.",
+                                        i,
+                                        v.len()
+                                    )),
+                                    chunk,
+                                ));
+                            }
                         }
-                    } else {
-                        return Err((VMError::new_vm("VECNTH: Not a vector."), chunk));
+                        Value::List(h, start) => {
+                            let v = self.get_vector(h);
+                            if let Some(val) = v.get(start as usize + i) {
+                                *val
+                            } else {
+                                return Err((
+                                    VMError::new_vm(format!(
+                                        "VECNTH: index out of bounds, {}/{}.",
+                                        i,
+                                        v.len()
+                                    )),
+                                    chunk,
+                                ));
+                            }
+                        }
+                        _ => {
+                            return Err((VMError::new_vm("VECNTH: Not a vector."), chunk));
+                        }
                     };
                     self.set_register(registers, dest as usize, val);
                 }
@@ -803,10 +829,18 @@ impl Vm {
                 }
                 VECLEN => {
                     let (dest, v) = decode2!(chunk.code, &mut self.ip, wide);
-                    if let Value::Vector(h) = get_reg_unref!(registers, v, self) {
-                        let v = self.get_vector_mut(h).map_err(|e| (e, chunk.clone()))?;
-                        let len = Value::UInt(v.len() as u64);
-                        self.set_register(registers, dest as usize, len);
+                    match get_reg_unref!(registers, v, self) {
+                        Value::Vector(h) => {
+                            let v = self.get_vector(h);
+                            let len = Value::UInt(v.len() as u64);
+                            self.set_register(registers, dest as usize, len);
+                        }
+                        Value::List(h, start) => {
+                            let v = self.get_vector(h);
+                            let len = Value::UInt((v.len() - start as usize) as u64);
+                            self.set_register(registers, dest as usize, len);
+                        }
+                        _ => return Err((VMError::new_vm("VECLEN: Not a vector."), chunk)),
                     }
                 }
                 VECCLR => {

@@ -124,6 +124,7 @@ pub enum Value {
     Vector(Handle),
     Bytes(Handle),
     Pair(Handle),
+    List(Handle, u32),
     Lambda(Handle),
     Closure(Handle),
     Continuation(Handle),
@@ -246,6 +247,7 @@ impl Value {
             Value::Vector(handle) => Some(*handle),
             Value::Bytes(handle) => Some(*handle),
             Value::Pair(handle) => Some(*handle),
+            Value::List(handle, _) => Some(*handle),
             Value::Lambda(handle) => Some(*handle),
             Value::Closure(handle) => Some(*handle),
             Value::Continuation(handle) => Some(*handle),
@@ -276,6 +278,21 @@ impl Value {
                 let (car, cdr) = vm.get_pair(*handle);
                 Some((car, cdr))
             }
+            Value::List(handle, start_u32) => {
+                let start = *start_u32 as usize;
+                let v = vm.get_vector(*handle);
+                let car = if start < v.len() {
+                    v[start]
+                } else {
+                    Value::Nil
+                };
+                let cdr = if start + 1 < v.len() {
+                    Value::List(*handle, start_u32 + 1)
+                } else {
+                    Value::Nil
+                };
+                Some((car, cdr))
+            }
             _ => None,
         }
     }
@@ -283,6 +300,9 @@ impl Value {
     pub fn iter<'vm>(&self, vm: &'vm Vm) -> Box<dyn Iterator<Item = Value> + 'vm> {
         match &self.unref(vm) {
             Value::Pair(_) => Box::new(PairIter::new(vm, *self)),
+            Value::List(handle, start) => {
+                Box::new(vm.get_vector(*handle)[*start as usize..].iter().copied())
+            }
             Value::Vector(handle) => Box::new(vm.get_vector(*handle).iter().copied()),
             _ => Box::new(iter::empty()),
         }
@@ -364,6 +384,14 @@ impl Value {
                 res.push(')');
                 res
             }
+            Value::List(handle, start) => {
+                let v = vm.get_vector(*handle);
+                let mut res = String::new();
+                res.push('(');
+                list_out_iter(vm, &mut res, &mut v[*start as usize..].iter().copied());
+                res.push(')');
+                res
+            }
             Value::String(handle) => format!("\"{}\"", vm.get_string(*handle)),
             Value::Bytes(_) => "Bytes".to_string(), // XXX TODO
             Value::Value(handle) => vm.get_value(*handle).display_value(vm),
@@ -407,6 +435,7 @@ impl Value {
             Value::CallFrame(_) => "CallFrame",
             Value::Vector(_) => "Vector",
             Value::Pair(_) => "Pair",
+            Value::List(_, _) => "Pair",
             Value::String(_) => "String",
             Value::Bytes(_) => "Bytes",
             Value::Value(handle) => vm.get_value(*handle).display_type(vm),
@@ -423,7 +452,7 @@ impl Value {
                 cdr.is_proper_list(vm)
             }
         } else {
-            false
+            matches!(self, Value::List(_, _))
         }
     }
 }

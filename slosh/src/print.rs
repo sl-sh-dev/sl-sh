@@ -123,6 +123,14 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
             }
             res
         }
+        Value::List(h, start) => {
+            let v = vm.get_vector(*h);
+            let mut res = String::new();
+            res.push('(');
+            list_out_iter(vm, &mut res, &mut v[*start as usize..].iter().copied());
+            res.push(')');
+            res
+        }
         Value::String(h) => format!("\"{}\"", vm.get_string(*h)),
         Value::Bytes(_) => "Bytes".to_string(), // XXX TODO
         Value::Value(h) => display_value(vm, vm.get_value(*h)),

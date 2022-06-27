@@ -184,6 +184,10 @@ impl Heap {
         }
     }
 
+    pub fn sizeof_object() -> usize {
+        std::mem::size_of::<Object>()
+    }
+
     /// Pause garbage collection.
     /// Each pause_gc must have an unpause_gc before GC resumes (it is a counter that must be 0).
     pub fn pause_gc(&mut self) {

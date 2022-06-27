@@ -881,12 +881,16 @@ fn compile_while(
         let encode_offset = state.chunk.code.len();
         state.chunk.encode_jump_offset(0)?;
         let jmp_ip = state.chunk.code.len();
-        while let Some(r) = cdr_i.next() {
+        for r in cdr_i {
             compile(vm, state, *r, result, line)?;
         }
         state.chunk.encode0(JMP, own_line(line))?;
-        state.chunk.encode_jump_offset(-(((state.chunk.code.len() + 3) - loop_start) as i32))?;
-        state.chunk.reencode_jump_offset(encode_offset, (state.chunk.code.len() - jmp_ip) as i32)?;
+        state
+            .chunk
+            .encode_jump_offset(-(((state.chunk.code.len() + 3) - loop_start) as i32))?;
+        state
+            .chunk
+            .reencode_jump_offset(encode_offset, (state.chunk.code.len() - jmp_ip) as i32)?;
         Ok(())
     } else {
         Err(VMError::new_compile(format!(
