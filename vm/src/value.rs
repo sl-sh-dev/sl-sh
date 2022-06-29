@@ -69,6 +69,7 @@ impl<'vm> Iterator for PairIter<'vm> {
                     self.current = Some(cdr);
                     Some(car)
                 }
+                // TODO: Handle List?
                 Value::Nil => None,
                 _ => {
                     let cur = Some(current);

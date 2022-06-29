@@ -158,12 +158,10 @@ fn get_args_iter<'vm>(
     line: &mut Option<&mut u32>,
 ) -> VMResult<Box<dyn Iterator<Item = Value> + 'vm>> {
     match args {
-        Value::Pair(handle) => {
-            let (_, _) = vm.get_pair(handle);
+        Value::Pair(handle) | Value::List(handle, _) => {
             set_line(vm, state, handle, line);
             Ok(args.iter(vm))
         }
-        Value::Vector(_v) => Ok(args.iter(vm)),
         Value::Nil => Ok(args.iter(vm)),
         _ => {
             return Err(VMError::new_compile(format!("{}, invalid args", name)));
@@ -205,7 +203,7 @@ fn mk_state(
                     }
                 }
             }
-            Value::Pair(_) | Value::Vector(_) => {
+            Value::Pair(_) | Value::List(_, _) => {
                 let mut args_iter = get_args_iter(vm, &mut new_state, a, "fn", line)?;
                 opt = true;
                 if let Some(Value::Symbol(i)) = args_iter.next() {
@@ -1435,25 +1433,12 @@ fn compile_list(
                 compile_call(vm, state, Value::Builtin(builtin), cdr, result, line)?
             }
             Value::Lambda(h) => compile_call(vm, state, Value::Lambda(h), cdr, result, line)?,
-            Value::Pair(h) => {
-                let (ncar, ncdr) = vm.get_pair(h);
+            Value::Pair(h) | Value::List(h, _) => {
+                let (ncar, ncdr) = car.get_pair(vm).expect("Pair/List not a Pair or List?");
                 set_line(vm, state, h, line);
                 let ncdr: Vec<Value> = ncdr.iter(vm).collect();
                 compile_list(vm, state, ncar, &ncdr[..], result, line)?;
                 compile_call_reg(vm, state, result as u16, cdr, result, line)?
-            }
-            Value::Vector(h) => {
-                let v = vm.get_vector(h);
-                if let Some(ncar) = v.get(0) {
-                    let ncar = *ncar;
-                    if v.len() > 1 {
-                        let ncdr = make_vec_cdr(&v[1..]);
-                        compile_list(vm, state, ncar, ncdr, result, line)?;
-                    } else {
-                        compile_list(vm, state, ncar, &[], result, line)?;
-                    }
-                    compile_call_reg(vm, state, result as u16, cdr, result, line)?
-                }
             }
             _ => {
                 println!("Boo, {}", car.display_value(vm));
@@ -1466,9 +1451,10 @@ fn compile_list(
 pub fn pass1(vm: &mut Vm, state: &mut CompileState, exp: Value) -> VMResult<()> {
     let fn_ = vm.intern("fn");
     let mac_ = vm.intern("macro");
+    //let def_ = vm.intern("def");
     match exp {
-        Value::Pair(handle) => {
-            let (car, _) = vm.get_pair(handle);
+        Value::Pair(_) | Value::List(_, _) => {
+            let (car, _) = exp.get_pair(vm).expect("Pair/List not a Pair or List?");
             // short circuit on an fn form, will be handled with it's own state.
             if let Value::Symbol(i) = car {
                 if i == fn_ || i == mac_ {
@@ -1477,14 +1463,6 @@ pub fn pass1(vm: &mut Vm, state: &mut CompileState, exp: Value) -> VMResult<()> 
             }
             // XXX boo on this collect.
             for r in exp.iter(vm).collect::<Vec<Value>>() {
-                pass1(vm, state, r)?;
-            }
-        }
-        Value::Vector(handle) => {
-            // This is ugly, break the lifetime of v from vm safely.
-            // Maybe just use unsafe or not compile vectors...
-            let v: Vec<Value> = vm.get_vector(handle).to_vec();
-            for r in v {
                 pass1(vm, state, r)?;
             }
         }
@@ -1517,15 +1495,6 @@ pub fn pass1(vm: &mut Vm, state: &mut CompileState, exp: Value) -> VMResult<()> 
         }
     }
     Ok(())
-}
-
-// Need to break the cdr lifetime away from the vm for a call or we have
-// to reallocate stuff for no reason.
-// Should be safe because compiling code should not be manipulating values on
-// the heap (where the underlying vector lives).
-// XXX double check this invariant....
-fn make_vec_cdr(cdr: &[Value]) -> &'static [Value] {
-    unsafe { &*(cdr as *const [Value]) }
 }
 
 pub fn mkconst(
@@ -1574,36 +1543,11 @@ pub fn compile(
         state.max_regs = result;
     }
     match exp {
-        Value::Pair(handle) => {
-            let (car, cdr) = vm.get_pair(handle);
+        Value::Pair(handle) | Value::List(handle, _) => {
+            let (car, cdr) = exp.get_pair(vm).expect("Pair/List not a Pair or List?");
             set_line(vm, state, handle, line);
             let cdr: Vec<Value> = cdr.iter(vm).collect();
             compile_list(vm, state, car, &cdr[..], result, line)?;
-        }
-        Value::List(handle, start) => {
-            let start = start as usize;
-            let v = vm.get_vector(handle);
-            if let Some(car) = v.get(start) {
-                let car = *car;
-                if v.len() > start + 1 {
-                    let cdr = make_vec_cdr(&v[start + 1..]);
-                    compile_list(vm, state, car, cdr, result, line)?;
-                } else {
-                    compile_list(vm, state, car, &[], result, line)?;
-                }
-            }
-        }
-        Value::Vector(handle) => {
-            let v = vm.get_vector(handle);
-            if let Some(car) = v.get(0) {
-                let car = *car;
-                if v.len() > 1 {
-                    let cdr = make_vec_cdr(&v[1..]);
-                    compile_list(vm, state, car, cdr, result, line)?;
-                } else {
-                    compile_list(vm, state, car, &[], result, line)?;
-                }
-            }
         }
         Value::Symbol(i) => {
             if let Some(idx) = state.get_symbol(i) {
