@@ -1580,6 +1580,19 @@ pub fn compile(
             let cdr: Vec<Value> = cdr.iter(vm).collect();
             compile_list(vm, state, car, &cdr[..], result, line)?;
         }
+        Value::List(handle, start) => {
+            let start = start as usize;
+            let v = vm.get_vector(handle);
+            if let Some(car) = v.get(start) {
+                let car = *car;
+                if v.len() > start + 1 {
+                    let cdr = make_vec_cdr(&v[start + 1..]);
+                    compile_list(vm, state, car, cdr, result, line)?;
+                } else {
+                    compile_list(vm, state, car, &[], result, line)?;
+                }
+            }
+        }
         Value::Vector(handle) => {
             let v = vm.get_vector(handle);
             if let Some(car) = v.get(0) {

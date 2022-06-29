@@ -74,6 +74,10 @@ fn line_num(line: &Option<&mut u32>) -> u32 {
     }
 }
 
+fn own_line(line: &Option<&mut u32>) -> Option<u32> {
+    line.as_ref().map(|l| **l)
+}
+
 fn load_one_expression(
     vm: &mut Vm,
     exp: Value,
@@ -318,6 +322,24 @@ fn sizeof_value(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     Ok(Value::UInt(std::mem::size_of::<Value>() as u64))
 }
 
+fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
+        let mut linenum = 1;
+        let mut line = Some(&mut linenum);
+        let mut state = CompileState::new_state(vm, "none/eval", line_num(&line), None);
+        state.chunk.dbg_args = Some(Vec::new());
+        pass1(vm, &mut state, *exp).unwrap();
+        compile(vm, &mut state, *exp, 0, &mut line).unwrap();
+        state.chunk.encode0(RET, own_line(&line)).unwrap();
+        let chunk = Arc::new(state.chunk.clone());
+        Ok(vm.do_call(chunk, &[Value::Nil], None)?)
+    } else {
+        Err(VMError::new_compile(
+            "compile: wrong number of args, expected one",
+        ))
+    }
+}
+
 const PROMPT_FN: &str = "prompt";
 fn main() {
     let mut con = Context::new();
@@ -334,6 +356,7 @@ fn main() {
     vm.set_global("vec->list", Value::Builtin(CallFunc { func: vec_to_list }));
     vm.set_global("get-prop", Value::Builtin(CallFunc { func: get_prop }));
     vm.set_global("set-prop", Value::Builtin(CallFunc { func: set_prop }));
+    vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
     vm.set_global(
         "sizeof-heap-object",
         Value::Builtin(CallFunc {
