@@ -10,17 +10,6 @@ use sl_compiler::config::*;
 use sl_compiler::reader::*;
 use sl_compiler::state::*;
 
-fn line_num(line: &Option<&mut u32>) -> u32 {
-    match line {
-        Some(line) => **line,
-        None => 0,
-    }
-}
-
-fn own_line(line: &Option<&mut u32>) -> Option<u32> {
-    line.as_ref().map(|l| **l)
-}
-
 fn pr(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     for v in registers {
         print!("{}", v.pretty_value(vm));
@@ -43,13 +32,12 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         ));
     }
     if let Some(exp) = registers.get(0) {
-        let mut linenum = 1;
-        let mut line = Some(&mut linenum);
-        let mut state = CompileState::new_state(vm, "none", line_num(&line), None);
+        let mut state = CompileState::new_state(vm, "none", 1, None);
         state.chunk.dbg_args = Some(Vec::new());
-        pass1(vm, &mut state, *exp).unwrap();
-        compile(vm, &mut state, *exp, 0, &mut line).unwrap();
-        state.chunk.encode0(RET, own_line(&line)).unwrap();
+        let mut env = CompileEnvironment::new(vm);
+        pass1(&mut env, &mut state, *exp).unwrap();
+        compile(&mut env, &mut state, *exp, 0).unwrap();
+        state.chunk.encode0(RET, env.own_line()).unwrap();
         let chunk = Arc::new(state.chunk.clone());
         Ok(vm.do_call(chunk, &[Value::Nil], None)?)
     } else {
@@ -64,41 +52,37 @@ fn main() {
         return;
     };
     let mut vm = Vm::new();
-    vm.set_global("pr", Value::Builtin(CallFunc { func: pr }));
-    vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
-    vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
+    let mut env = CompileEnvironment::new(&mut vm);
+    env.vm_mut()
+        .set_global("pr", Value::Builtin(CallFunc { func: pr }));
+    env.vm_mut()
+        .set_global("prn", Value::Builtin(CallFunc { func: prn }));
+    env.vm_mut()
+        .set_global("eval", Value::Builtin(CallFunc { func: eval }));
     let mut reader_state = ReaderState::new();
-    let file_intern = vm.intern(&config.script);
-    reader_state.file_name = vm.get_interned(file_intern);
+    let file_intern = env.vm_mut().intern(&config.script);
+    reader_state.file_name = env.vm().get_interned(file_intern);
     //let mut state = CompileState::new();
     let txt = std::fs::read_to_string(&config.script).unwrap();
-    let exps = read_all(&mut vm, &mut reader_state, &txt).unwrap();
-    let mut linenum = 1;
-    let mut line = Some(&mut linenum);
-    let file_i = vm.intern(&config.script);
+    let exps = read_all(env.vm_mut(), &mut reader_state, &txt).unwrap();
+    let file_i = env.vm_mut().intern(&config.script);
     for exp in exps {
-        if let Value::Pair(h) = exp {
-            let (_, _) = vm.get_pair(h);
-            if let (Some(line), Some(Value::UInt(dline))) =
-                (&mut line, vm.get_heap_property(h, "dbg-line"))
-            {
-                **line = dline as u32;
-            }
-        }
-        let file_name = vm.get_interned(file_i);
-        let mut state = CompileState::new_state(&mut vm, file_name, line_num(&line), None);
+        let file_name = env.vm().get_interned(file_i);
+        let line_num = env.line_num();
+        let mut state = CompileState::new_state(env.vm_mut(), file_name, line_num, None);
+        env.set_line_val(&mut state, exp);
         state.chunk.dbg_args = Some(Vec::new());
-        pass1(&mut vm, &mut state, exp).unwrap();
-        compile(&mut vm, &mut state, exp, 0, &mut line).unwrap();
-        state.chunk.encode0(RET, own_line(&line)).unwrap();
+        pass1(&mut env, &mut state, exp).unwrap();
+        compile(&mut env, &mut state, exp, 0).unwrap();
+        state.chunk.encode0(RET, env.own_line()).unwrap();
         if config.dump {
-            state.chunk.disassemble_chunk(&vm, 0).unwrap();
+            state.chunk.disassemble_chunk(env.vm(), 0).unwrap();
         }
         if config.run {
             let chunk = Arc::new(state.chunk.clone());
-            if let Err(err) = vm.execute(chunk) {
+            if let Err(err) = env.vm_mut().execute(chunk) {
                 println!("ERROR: {}", err);
-                vm.dump_globals();
+                env.vm().dump_globals();
                 //state.chunk.disassemble_chunk(&vm).unwrap();
             }
         }

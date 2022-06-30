@@ -287,20 +287,17 @@ fn qq_expand_list(vm: &mut Vm, exp: Value, line: u32, depth: u32) -> VMResult<Va
 }
 
 pub fn backquote(
-    vm: &mut Vm,
+    env: &mut CompileEnvironment,
     state: &mut CompileState,
     exp: Value,
     result: usize,
-    line: &mut Option<&mut u32>,
 ) -> VMResult<()> {
-    let line_num = match line {
-        Some(l) => **l,
-        None => 0,
-    };
-    vm.pause_gc();
-    let result = qq_expand(vm, exp, line_num, 0).and_then(|expand| {
-        pass1(vm, state, expand).and_then(|_| compile(vm, state, expand, result, &mut None))
+    env.vm_mut().pause_gc();
+    let line = env.line_num();
+    let result = qq_expand(env.vm_mut(), exp, line, 0).and_then(|expand| {
+        // XXX disable line numbering?
+        pass1(env, state, expand).and_then(|_| compile(env, state, expand, result))
     });
-    vm.unpause_gc();
+    env.vm_mut().unpause_gc();
     result
 }

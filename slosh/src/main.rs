@@ -67,17 +67,6 @@ fn dasm(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn line_num(line: &Option<&mut u32>) -> u32 {
-    match line {
-        Some(line) => **line,
-        None => 0,
-    }
-}
-
-fn own_line(line: &Option<&mut u32>) -> Option<u32> {
-    line.as_ref().map(|l| **l)
-}
-
 fn load_one_expression(
     vm: &mut Vm,
     exp: Value,
@@ -104,29 +93,31 @@ fn load_one_expression(
             }
         }
     }
-    let mut state = CompileState::new_state(vm, name, line_num(line), None);
+    let mut env = CompileEnvironment::new(vm);
+    let line_num = env.line_num();
+    let mut state = CompileState::new_state(env.vm_mut(), name, line_num, None);
     state.chunk.dbg_args = Some(Vec::new());
-    if let Err(e) = pass1(vm, &mut state, exp) {
+    if let Err(e) = pass1(&mut env, &mut state, exp) {
         println!(
             "Compile error (pass one), {}, line {}: {}",
             name,
-            line_num(line),
+            env.line_num(),
             e
         );
         return Err(e);
     }
-    if let Err(e) = compile(vm, &mut state, exp, 0, line) {
+    if let Err(e) = compile(&mut env, &mut state, exp, 0) {
         println!(
             "Compile error, {} line {}: {} exp: {}",
             name,
-            line_num(line),
+            env.line_num(),
             e,
-            exp.display_value(vm)
+            exp.display_value(env.vm())
         );
         return Err(e);
     }
-    if let Err(e) = state.chunk.encode0(RET, Some(line_num(line))) {
-        println!("Compile error, {} line {}: {}", name, line_num(line), e);
+    if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
+        println!("Compile error, {} line {}: {}", name, env.line_num(), e);
         return Err(e);
     }
     state.chunk.extra_regs = state.max_regs;
@@ -324,13 +315,13 @@ fn sizeof_value(_vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 
 fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     if let (Some(exp), None) = (registers.get(0), registers.get(1)) {
-        let mut linenum = 1;
-        let mut line = Some(&mut linenum);
-        let mut state = CompileState::new_state(vm, "none/eval", line_num(&line), None);
+        let mut env = CompileEnvironment::new(vm);
+        let line_num = env.line_num();
+        let mut state = CompileState::new_state(env.vm_mut(), "none/eval", line_num, None);
         state.chunk.dbg_args = Some(Vec::new());
-        pass1(vm, &mut state, *exp).unwrap();
-        compile(vm, &mut state, *exp, 0, &mut line).unwrap();
-        state.chunk.encode0(RET, own_line(&line)).unwrap();
+        pass1(&mut env, &mut state, *exp)?;
+        compile(&mut env, &mut state, *exp, 0)?;
+        state.chunk.encode0(RET, env.own_line())?;
         let chunk = Arc::new(state.chunk.clone());
         Ok(vm.do_call(chunk, &[Value::Nil], None)?)
     } else {
@@ -369,6 +360,7 @@ fn main() {
     );
     //vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
     //vm.pause_gc();
+    let mut env = CompileEnvironment::new(&mut vm);
     loop {
         let res = match con.read_line(Prompt::from("slosh> "), None) {
             Ok(input) => input,
@@ -392,11 +384,9 @@ fn main() {
 
         con.history.push(&res).expect("Failed to push history.");
         let mut reader_state = ReaderState::new();
-        let exps = read_all(&mut vm, &mut reader_state, &res);
+        let exps = read_all(env.vm_mut(), &mut reader_state, &res);
         match exps {
             Ok(exps) => {
-                let mut linenum = 1;
-                let mut line = Some(&mut linenum);
                 for exp in exps {
                     /*if let Value::Pair(h) = exp {
                         let (_, _) = vm.get_pair(h);
@@ -404,21 +394,22 @@ fn main() {
                             line = dline as u32;
                         }
                     }*/
+                    let line_num = env.line_num();
                     let mut state =
-                        CompileState::new_state(&mut vm, PROMPT_FN, line_num(&line), None);
-                    if let Err(e) = pass1(&mut vm, &mut state, exp) {
-                        println!("Compile error, line {}: {}", line_num(&line), e);
+                        CompileState::new_state(env.vm_mut(), PROMPT_FN, line_num, None);
+                    if let Err(e) = pass1(&mut env, &mut state, exp) {
+                        println!("Compile error, line {}: {}", env.line_num(), e);
                     }
-                    if let Err(e) = compile(&mut vm, &mut state, exp, 0, &mut line) {
-                        println!("Compile error, line {}: {}", line_num(&line), e);
+                    if let Err(e) = compile(&mut env, &mut state, exp, 0) {
+                        println!("Compile error, line {}: {}", env.line_num(), e);
                     }
-                    if let Err(e) = state.chunk.encode0(RET, Some(line_num(&line))) {
-                        println!("Compile error, line {}: {}", line_num(&line), e);
+                    if let Err(e) = state.chunk.encode0(RET, env.own_line()) {
+                        println!("Compile error, line {}: {}", env.line_num(), e);
                     }
                     let chunk = Arc::new(state.chunk.clone());
-                    if let Err(err) = vm.execute(chunk) {
-                        println!("ERROR: {}", err.display(&vm));
-                        if let Some(err_frame) = vm.err_frame() {
+                    if let Err(err) = env.vm_mut().execute(chunk) {
+                        println!("ERROR: {}", err.display(env.vm()));
+                        if let Some(err_frame) = env.vm().err_frame() {
                             let ip = err_frame.current_ip;
                             let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
                             println!(
@@ -426,11 +417,11 @@ fn main() {
                                 err_frame.chunk.file_name, line, ip
                             );
                         }
-                        debug(&mut vm);
+                        debug(env.vm_mut());
                     } else {
                         //println!("{}", vm.get_stack(0).display_value(&vm));
-                        let reg = vm.get_stack(0);
-                        println!("{}", value_dsp_str(&mut vm, reg));
+                        let reg = env.vm().get_stack(0);
+                        println!("{}", value_dsp_str(env.vm_mut(), reg));
                     }
                 }
             }
