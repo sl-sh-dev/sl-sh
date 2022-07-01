@@ -480,8 +480,8 @@ impl Globals {
         }
     }
 
-    pub fn interned_slot(&self, symbol: Interned) -> Option<usize> {
-        self.objects_map.get(&symbol).copied()
+    pub fn interned_slot(&self, symbol: Interned) -> Option<u32> {
+        self.objects_map.get(&symbol).copied().map(|i| i as u32)
     }
 
     pub fn reserve(&mut self, symbol: Interned) -> u32 {

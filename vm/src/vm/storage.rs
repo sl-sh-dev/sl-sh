@@ -109,7 +109,7 @@ impl Vm {
         self.globals.get_if_interned(i)
     }
 
-    pub fn global_intern_slot(&self, i: Interned) -> Option<usize> {
+    pub fn global_intern_slot(&self, i: Interned) -> Option<u32> {
         self.globals.interned_slot(i)
     }
 

@@ -390,12 +390,14 @@ fn compile_math(
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx + 1
-                } else {
-                    let const_i = env.vm.reserve_index(si);
+                } else if let Some(slot) = env.vm.global_intern_slot(i) {
                     state
                         .chunk
-                        .encode_refi(result as u16, const_i, env.own_line())?;
+                        .encode_refi(result as u16, slot, env.own_line())?;
                     result
+                } else {
+                    let sym = env.vm.get_interned(i);
+                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {
                 return Err(VMError::new_compile("inc!: expected symbol"));
@@ -424,12 +426,14 @@ fn compile_math(
             let dest = if let Value::Symbol(si) = cdr[0] {
                 if let Some(idx) = state.get_symbol(si) {
                     idx + 1
-                } else {
-                    let const_i = env.vm.reserve_index(si);
+                } else if let Some(slot) = env.vm.global_intern_slot(i) {
                     state
                         .chunk
-                        .encode_refi(result as u16, const_i, env.own_line())?;
+                        .encode_refi(result as u16, slot, env.own_line())?;
                     result
+                } else {
+                    let sym = env.vm.get_interned(i);
+                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             } else {
                 return Err(VMError::new_compile("dec!: expected symbol"));
@@ -1010,23 +1014,24 @@ fn compile_def(
     cdr: &[Value],
     result: usize,
 ) -> VMResult<()> {
-    if cdr.len() == 2 {
-        if let Value::Symbol(si) = cdr[0] {
+    match (cdr.len(), cdr.get(0)) {
+        (_, None) => return Err(VMError::new_compile("def: expected symbol")),
+        (1, Some(Value::Symbol(si))) => {
+            // 'def symbol' predeclares a symbol to be used later, no bytecode.
+            let _ = env.vm.reserve_index(*si);
+        }
+        (2, Some(Value::Symbol(si))) => {
             compile(env, state, cdr[1], result + 1)?;
-            let si_const = env.vm.reserve_index(si);
+            let si_const = env.vm.reserve_index(*si);
             state
                 .chunk
                 .encode_refi(result as u16, si_const, env.own_line())?;
             state
                 .chunk
                 .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
-        } else {
-            return Err(VMError::new_compile("def: expected symbol"));
         }
-    } else if cdr.len() == 3 {
-        // XXX implement docstrings
-        if let Value::Symbol(si) = cdr[0] {
-            let si_const = env.vm.reserve_index(si);
+        (3, Some(Value::Symbol(si))) => {
+            let si_const = env.vm.reserve_index(*si);
             // Set docstring
             let set_prop = env.vm.intern("set-prop");
             if let Some(set_prop) = env.vm.global_intern_slot(set_prop) {
@@ -1055,11 +1060,8 @@ fn compile_def(
             state
                 .chunk
                 .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
-        } else {
-            return Err(VMError::new_compile("def: expected symbol"));
         }
-    } else {
-        return Err(VMError::new_compile("def: malformed"));
+        _ => return Err(VMError::new_compile("def: malformed")),
     }
     Ok(())
 }
@@ -1077,15 +1079,17 @@ fn compile_set(
                 state
                     .chunk
                     .encode2(SET, (idx + 1) as u16, result as u16, env.own_line())?;
-            } else {
+            } else if let Some(si_const) = env.vm.global_intern_slot(si) {
                 compile(env, state, cdr[1], result + 1)?;
-                let si_const = env.vm.reserve_index(si);
                 state
                     .chunk
                     .encode_refi(result as u16, si_const, env.own_line())?;
                 state
                     .chunk
                     .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
+            } else {
+                let sym = env.vm.get_interned(si);
+                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
         } else {
             return Err(VMError::new_compile("set!: expected symbol"));
@@ -1420,10 +1424,8 @@ fn compile_list(
             Value::Symbol(i) => {
                 if let Some(idx) = state.get_symbol(i) {
                     compile_call_reg(env, state, (idx + 1) as u16, cdr, result)?
-                } else {
-                    let slot = env.vm.reserve_index(i);
-                    // Is a global so set up a call and will error at runtime if
-                    // not callable (dynamic is fun).
+                } else if let Some(slot) = env.vm.global_intern_slot(i) {
+                    // Have to at least pre-declare a global.
                     let global = env.vm.get_global(slot);
                     if let Value::Undefined = global {
                         eprintln!("Warning: {} not defined.", env.vm.get_interned(i));
@@ -1452,6 +1454,9 @@ fn compile_list(
                     } else {
                         compile_callg(env, state, slot as u32, cdr, result)?
                     }
+                } else {
+                    let sym = env.vm.get_interned(i);
+                    return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
                 }
             }
             Value::Builtin(builtin) => {
@@ -1579,11 +1584,13 @@ pub fn compile(
                         .chunk
                         .encode2(MOV, result as u16, (idx + 1) as u16, env.own_line())?;
                 }
-            } else {
-                let const_i = env.vm.reserve_index(i);
+            } else if let Some(slot) = env.vm.global_intern_slot(i) {
                 state
                     .chunk
-                    .encode_refi(result as u16, const_i, env.own_line())?;
+                    .encode_refi(result as u16, slot, env.own_line())?;
+            } else {
+                let sym = env.vm.get_interned(i);
+                return Err(VMError::new_compile(format!("Symbol {sym} not defined (maybe you need to use 'def {sym}' to pre-declare it).")));
             }
         }
         Value::True => state.chunk.encode1(REGT, result as u16, env.own_line())?,
