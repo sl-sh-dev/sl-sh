@@ -671,7 +671,15 @@ impl Vm {
                             self.set_register(registers, dest as usize, car);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
-                        _ => return Err((VMError::new_vm("CAR: Not a pair/conscell."), chunk)),
+                        _ => {
+                            return Err((
+                                VMError::new_vm(format!(
+                                    "CAR: Not a pair/conscell. {}",
+                                    op.display_value(self)
+                                )),
+                                chunk,
+                            ))
+                        }
                     }
                 }
                 CDR => {

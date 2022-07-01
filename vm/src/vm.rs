@@ -80,12 +80,8 @@ impl Vm {
             Value::Nil
         } else {
             let rest_len = (num_args - (chunk.args + chunk.opt_args)) as usize + 1;
-            let r = registers
-                .iter()
-                .take(rest_reg as usize + rest_len)
-                .skip(rest_reg.into())
-                .copied()
-                .collect();
+            let mut r = vec![Value::Undefined; rest_len];
+            r.copy_from_slice(&registers[rest_reg as usize..(rest_reg as usize + rest_len)]);
             self.alloc_list_ro(r)
         };
         (rest_reg.into(), v)
@@ -147,6 +143,12 @@ impl Vm {
         // Will clear working set to avoid writing to globals or closures by accident.
         fn clear_opts(l: &Chunk, registers: &mut [Value], first_reg: u16, num_args: u16) {
             // First clear any optional arguments.
+            let num_args = if l.rest && num_args == 0 {
+                // Always have at least 1 arg if we have a rest argument.
+                1
+            } else {
+                num_args
+            };
             if num_args < (l.args + l.opt_args) {
                 for r in num_args..(l.args + l.opt_args) {
                     Vm::mov_register(
