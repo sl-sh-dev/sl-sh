@@ -3,7 +3,7 @@ use std::error::Error;
 use quote::ToTokens;
 use std::fmt;
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput, Ident, Data, Fields, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit};
+use syn::{parse_macro_input, DeriveInput, Ident, Data, Fields, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit, ItemFn};
 use syn::spanned::Spanned;
 use syn::__private::{Span, TokenStream2};
 
@@ -107,7 +107,7 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
             unimplemented!();
         }
     };
-    let fn_item = match &mut item {
+    let fn_item: &mut ItemFn = match &mut item {
         syn::Item::Fn(fn_item) => fn_item,
         _ => panic!("Only works on functions!")
     };
@@ -119,11 +119,15 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let origin_fn_name = Ident::new(&name, Span::call_site());
     code.push(item.into_token_stream().into());
     let tokens = quote! {
-        fn #ident() -> LispResult<sl_sh::types::Expression> {
-            println!("hello macro! {}.", #name);
-            Ok(sl_sh::types::Expression::alloc_data(sl_sh::ExpEnum::Int(#origin_fn_name(8))))
-        }
         #(#code)*
+        fn #ident(arg: i64) -> LispResult<sl_sh::types::Expression> {
+            println!("hello macro! {}.", #name);
+            if 9 == #origin_fn_name(arg) {
+                Ok(sl_sh::types::Expression::alloc_data(sl_sh::ExpEnum::Int(#origin_fn_name(8))))
+            } else {
+                Err(sl_sh::types::LispError::new("must input 9."));
+            }
+        }
     };
     TokenStream::from(tokens)
 }
