@@ -114,19 +114,25 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
-    let ident = Ident::new(&builtin_name, Span::call_site());
+    let builtin_name = Ident::new(&builtin_name, Span::call_site());
     fn_item.block.stmts.insert(0,syn::parse(quote!(println!("hello world!");).into()).unwrap());
     let origin_fn_name = Ident::new(&name, Span::call_site());
+    // keep original function
+    //let len = fn_item.sig.inputs.len().to_string();
+    //let len = Ident::new(&len, Span::call_site());
     code.push(item.into_token_stream().into());
+    // add builtin that accepts sl-sh style arguments
     let tokens = quote! {
+        use std::convert::TryInto;
+        use std::convert::TryFrom;
         #(#code)*
-        fn #ident(arg: i64) -> LispResult<sl_sh::types::Expression> {
-            println!("hello macro! {}.", #name);
-            if 9 == #origin_fn_name(arg) {
-                Ok(sl_sh::types::Expression::alloc_data(sl_sh::ExpEnum::Int(#origin_fn_name(8))))
-            } else {
-                Err(sl_sh::types::LispError::new("must input 9."));
-            }
+        // fn builtin_int_to_float(
+        //    environment: &mut Environment,
+        //args: &mut dyn Iterator<Item = Expression>,
+        fn #builtin_name(arg: sl_sh::ExpEnum) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            let result = #origin_fn_name(arg.try_into()?);
+            let result: ExpEnum = result.into();
+            Ok(result.into())
         }
     };
     TokenStream::from(tokens)
