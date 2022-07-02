@@ -2,6 +2,8 @@ use regex::Regex;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -1092,9 +1094,108 @@ impl From<&mut ExpEnum> for Expression {
     }
 }
 
+impl From<i64> for ExpEnum {
+    fn from(num: i64) -> Self {
+        ExpEnum::Int(num)
+    }
+}
+
+impl From<f64> for ExpEnum {
+    fn from(num: f64) -> Self {
+        ExpEnum::Float(num)
+    }
+}
+
+impl TryFrom<ExpEnum> for f64 {
+    type Error = LispError;
+    fn try_from(num: ExpEnum) -> Result<Self, Self::Error> {
+        match num {
+            ExpEnum::Float(num) => Ok(num),
+            ExpEnum::Int(num) => Ok(num as f64),
+            _ => Err(LispError::new(
+                "Can only convert f64 from ExpEnum::Float or ExpEnum::Int.",
+            )),
+        }
+    }
+}
+
+impl TryFrom<ExpEnum> for i64 {
+    type Error = LispError;
+    fn try_from(num: ExpEnum) -> Result<Self, Self::Error> {
+        match num {
+            ExpEnum::Float(num) => Ok(num as i64),
+            ExpEnum::Int(num) => Ok(num),
+            _ => Err(LispError::new(
+                "Can only convert i64 from ExpEnum::Float or ExpEnum::Int.",
+            )),
+        }
+    }
+}
+
+impl PartialEq<Self> for ExpEnum {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ExpEnum::True, ExpEnum::True) => true,
+            (ExpEnum::False, ExpEnum::False) => true,
+            (ExpEnum::Nil, ExpEnum::Nil) => true,
+            (ExpEnum::Float(lf), ExpEnum::Float(rt)) => lf == rt,
+            (ExpEnum::Int(lf), ExpEnum::Int(rt)) => lf == rt,
+            (ExpEnum::Char(lf), ExpEnum::Char(rt)) => lf == rt,
+            (ExpEnum::CodePoint(lf), ExpEnum::CodePoint(rt)) => lf == rt,
+            (_, _) => false,
+        }
+        //(ExpEnum::String(lf_s, lf_i), ExpEnum::String(rt_s, rt_i) => {}
+        //(ExpEnum::Symbol(_, _), ExpEnum::Symbol(_, _)) => {}
+        //(ExpEnum::Regex(_), ExpEnum::Regex(_)) => {}
+        //ExpEnum::Symbol(_, _) => {}
+        //ExpEnum::Lambda(_) => {}
+        //ExpEnum::Macro(_) => {}
+        //ExpEnum::Function(_) => {}
+        //ExpEnum::LazyFn(_, _) => {}
+        //ExpEnum::Vector(_) => {}
+        //ExpEnum::Values(_) => {}
+        //ExpEnum::Pair(_, _) => {}
+        //ExpEnum::HashMap(_) => {}
+        //ExpEnum::Process(_) => {}
+        //ExpEnum::File(_) => {}
+        //ExpEnum::Wrapper(_) => {}
+        //ExpEnum::DeclareDef => {}
+        //ExpEnum::DeclareVar => {}
+        //ExpEnum::DeclareFn => {}
+        //ExpEnum::DeclareMacro => {}
+        //ExpEnum::Quote => {}
+        //ExpEnum::BackQuote => {}
+        //ExpEnum::Undefined => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_from_numerical() {
+        let result = ExpEnum::from(42i64);
+        assert_eq!(result, ExpEnum::Int(42i64));
+
+        let result: ExpEnum = 42i64.into();
+        assert_eq!(result, ExpEnum::Int(42i64));
+
+        let result = i64::try_from(ExpEnum::Int(7)).unwrap();
+        assert_eq!(7, result);
+
+        let result: f64 = ExpEnum::Int(7).try_into().unwrap();
+        assert_eq!(7f64, result);
+
+        let result: f64 = ExpEnum::Float(7f64).try_into().unwrap();
+        assert_eq!(7f64, result);
+
+        let result: f64 = ExpEnum::Float(7f64).try_into().unwrap();
+        assert_eq!(7f64, result);
+
+        let result = f64::try_from(ExpEnum::Int(7i64)).unwrap();
+        assert_eq!(7f64, result);
+    }
 
     #[test]
     fn test_one() {
