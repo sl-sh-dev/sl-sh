@@ -3,7 +3,7 @@ use std::error::Error;
 use quote::ToTokens;
 use std::fmt;
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput, Ident, Data, Fields, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit, ItemFn};
+use syn::{parse_macro_input, DeriveInput, Ident, Data, Fields, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit, ItemFn, Path, Attribute, AttributeArgs};
 use syn::spanned::Spanned;
 use syn::__private::{Span, TokenStream2};
 
@@ -61,42 +61,37 @@ impl Error for BuilderError {
     }
 }
 
-fn get_attribute_name(attr_name: &str, f: &Field) -> Option<String> {
-    if let Some(attr) = f.attrs.first() {
-        if attr.path.segments.first().unwrap().ident == attr_name {
-            match attr.parse_meta() {
-                Ok(Meta::List(meta)) => {
-                    for x in meta.nested {
-                        match x {
-                            NestedMeta::Meta(y) => {
-                                match y {
-                                    Meta::Path(_) => {}
-                                    Meta::List(_) => {}
-                                    Meta::NameValue(pair) => {
-                                        let lit = pair.lit;
-                                        match lit {
-                                            Lit::Str(partial_name) => {
-                                                return Some(partial_name.value());
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                            }
-                            NestedMeta::Lit(_) => {}
+fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)> {
+    match nested_meta {
+        NestedMeta::Meta(meta) => {
+            match meta {
+                Meta::NameValue(pair) => {
+                    let path = &pair.path;
+                    let lit = &pair.lit;
+                    match (path.get_ident(), lit) {
+                        (Some(ident), Lit::Str(partial_name)) => {
+                            return Some((ident.to_string(), partial_name.value()));
+                        }
+                        (_, _) => {
+                            unimplemented!("0 Only support attributes of form (name = \"value\")");
                         }
                     }
-                },
+                }
                 _ => {
+                    unimplemented!("1 Only support attributes of form (name = \"value\")");
                 }
             }
+        }
+        NestedMeta::Lit(_) => {
+            unimplemented!("2 Only support attributes of form (name = \"value\")");
         }
     }
     None
 }
 
 #[proc_macro_attribute]
-pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attr as AttributeArgs);
     let mut code: Vec<TokenStream2> = vec![];
     let mut item = match syn::parse::<syn::Item>(input) {
         Ok(item) => {
@@ -111,11 +106,19 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
         syn::Item::Fn(fn_item) => fn_item,
         _ => panic!("Only works on functions!")
     };
+    let vals = attr_args.iter().map(get_attribute_name_pair).filter(|val| val.is_some()).map(|val| val.unwrap()).collect::<Vec<(String, String)>>();
+    let len = vals.len();
+    let len = "len_of_attrs_".to_string() + &len.to_string();
+    let len = Ident::new(&len, Span::call_site());
+    let first_pair = vals.get(0).unwrap();
+    let pair0 = &first_pair.0;
+    let pair1 = &first_pair.1;
+    let pair0 = Ident::new(&pair0, Span::call_site());
+    let pair1 = Ident::new(&pair1, Span::call_site());
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
-    fn_item.block.stmts.insert(0,syn::parse(quote!(println!("hello world!");).into()).unwrap());
     let origin_fn_name = Ident::new(&name, Span::call_site());
     // keep original function
     //let len = fn_item.sig.inputs.len().to_string();
@@ -132,6 +135,9 @@ pub fn sl_sh_fn(_attr: TokenStream, input: TokenStream) -> TokenStream {
         fn #builtin_name(arg: sl_sh::ExpEnum) -> sl_sh::LispResult<sl_sh::types::Expression> {
             let result = #origin_fn_name(arg.try_into()?);
             let result: ExpEnum = result.into();
+            let #len = "";
+            let #pair0 = "";
+            let #pair1 = "";
             Ok(result.into())
         }
     };
