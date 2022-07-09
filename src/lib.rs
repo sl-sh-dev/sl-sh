@@ -67,6 +67,42 @@ impl Error for BuilderError {
     }
 }
 
+fn verify_return_type(fn_item: &ItemFn) -> Type {
+    let return_type = match &fn_item.sig.output {
+        ReturnType::Default => {
+            unimplemented!("Functions with attribute must return a value.");
+        }
+        ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
+    };
+    let supported_type = is_supported_sl_sh_type(&return_type);
+    if !supported_type.0{
+        unimplemented!("Unsupported return type {:?} for function", supported_type.1);
+    }
+    return_type
+}
+
+fn is_supported_sl_sh_type(ty: &Type) -> (bool, String) {
+    match ty {
+        Type::Path(type_path) => {
+            let type_path = type_path.clone().into_token_stream().to_string();
+            return if type_path == "i64" || type_path == "f64" {
+                (true, type_path)
+            } else {
+                (false, type_path)
+            }
+        }
+        _ => {
+            let ts = ty.to_token_stream();
+            (false, ts.to_string())
+        }
+    }
+}
+
+fn get_attribute_value_with_key(key: &str, values: &[(String, String)]) -> Option<String> {
+    let pair = values.iter().filter(|k| &k.0 == key).take(1).next();
+    pair.map(|pair| pair.1.to_string())
+}
+
 fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)> {
     match nested_meta {
         NestedMeta::Meta(meta) => match meta {
@@ -92,11 +128,6 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
     }
 }
 
-fn get_attribute_value_with_key(key: &str, values: &[(String, String)]) -> Option<String> {
-    let pair = values.iter().filter(|k| &k.0 == key).take(1).next();
-    pair.map(|pair| pair.1.to_string())
-}
-
 #[proc_macro_attribute]
 pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as AttributeArgs);
@@ -119,10 +150,10 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     };
     let fn_item: &mut ItemFn = match &mut item {
         syn::Item::Fn(fn_item) => fn_item,
-        _ => unimplemented!("Only works on functions!"),
+        _ => unimplemented!("sl_sh_fn proc_macro_attribute only works on functions."),
     };
 
-    let _return_type = verify_return_type(&fn_item);
+    let return_type = verify_return_type(&fn_item);
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
@@ -137,7 +168,7 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         use std::convert::TryFrom;
         #(#code)*
         fn #builtin_name(arg: sl_sh::ExpEnum) -> sl_sh::LispResult<sl_sh::types::Expression> {
-            let result = #origin_fn_name(arg.try_into()?);
+            let result: #return_type = #origin_fn_name(arg.try_into()?);
             let result: ExpEnum = result.into();
             let #fn_name_attr = #fn_name;
             Ok(result.into())
@@ -146,34 +177,6 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(tokens)
 }
 
-fn verify_return_type(fn_item: &ItemFn) -> Type {
-    let return_type = match &fn_item.sig.output {
-        ReturnType::Default => {
-            unimplemented!("Functions with attribute must return a value.");
-        }
-        ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
-    };
-    let supported_type = is_supported_sl_sh_type(&return_type);
-    if !supported_type.0{
-        unimplemented!("Unsupported return type {:?} for function", supported_type.1);
-    }
-    return_type
-}
-
-fn is_supported_sl_sh_type(ty: &Type) -> (bool, String) {
-    match ty {
-        Type::Path(type_path) => {
-            let type_path = type_path.clone().into_token_stream().to_string();
-            if type_path == "i64" || type_path == "f64" {
-                return (true, type_path);
-            } else {
-                return (false, type_path);
-            }
-        }
-        _ => {}
-    }
-    (false, format!("{:?}", ty.span()))
-}
 //TODO
 //  - functions that do not return anything
 //  - functions that take actual expenums, s.t. doing into on them might... be redundant?
