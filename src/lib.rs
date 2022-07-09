@@ -2,9 +2,8 @@ use proc_macro::TokenStream;
 use std::error::Error;
 use quote::ToTokens;
 use std::fmt;
-use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput, Ident, Data, Fields, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit, ItemFn, Path, Attribute, AttributeArgs};
-use syn::spanned::Spanned;
+use quote::quote;
+use syn::{parse_macro_input, Ident, Type, PathArguments, Field, GenericArgument, Meta, NestedMeta, Lit, ItemFn, AttributeArgs};
 use syn::__private::{Span, TokenStream2};
 
 fn get_inner_type<'a>(f: &'a Field, type_name: &str) -> Option<&'a GenericArgument> {
@@ -86,13 +85,21 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
             unimplemented!("2 Only support attributes of form (name = \"value\")");
         }
     }
-    None
+}
+
+fn get_attribute_value_with_key(key: &str, values: &[(String, String)]) -> Option<String> {
+    let pair = values.iter().filter(|k| &k.0 == key).take(1).next();
+    pair.map(|pair| pair.1.to_string())
 }
 
 #[proc_macro_attribute]
 pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as AttributeArgs);
-    let mut code: Vec<TokenStream2> = vec![];
+    let vals = attr_args.iter().map(get_attribute_name_pair).filter_map(|val| val).collect::<Vec<(String, String)>>();
+    let fn_name_attr = "fn_name".to_string();
+    let fn_name= get_attribute_value_with_key(&fn_name_attr, &vals).expect("Attribute {fn_name_attr} must be set.");
+    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
+
     let mut item = match syn::parse::<syn::Item>(input) {
         Ok(item) => {
             item
@@ -106,38 +113,24 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         syn::Item::Fn(fn_item) => fn_item,
         _ => panic!("Only works on functions!")
     };
-    let vals = attr_args.iter().map(get_attribute_name_pair).filter(|val| val.is_some()).map(|val| val.unwrap()).collect::<Vec<(String, String)>>();
-    let len = vals.len();
-    let len = "len_of_attrs_".to_string() + &len.to_string();
-    let len = Ident::new(&len, Span::call_site());
-    let first_pair = vals.get(0).unwrap();
-    let pair0 = &first_pair.0;
-    let pair1 = &first_pair.1;
-    let pair0 = Ident::new(&pair0, Span::call_site());
-    let pair1 = Ident::new(&pair1, Span::call_site());
+
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
     let origin_fn_name = Ident::new(&name, Span::call_site());
-    // keep original function
-    //let len = fn_item.sig.inputs.len().to_string();
-    //let len = Ident::new(&len, Span::call_site());
+
+    let mut code: Vec<TokenStream2> = vec![];
     code.push(item.into_token_stream().into());
     // add builtin that accepts sl-sh style arguments
     let tokens = quote! {
         use std::convert::TryInto;
         use std::convert::TryFrom;
         #(#code)*
-        // fn builtin_int_to_float(
-        //    environment: &mut Environment,
-        //args: &mut dyn Iterator<Item = Expression>,
         fn #builtin_name(arg: sl_sh::ExpEnum) -> sl_sh::LispResult<sl_sh::types::Expression> {
             let result = #origin_fn_name(arg.try_into()?);
             let result: ExpEnum = result.into();
-            let #len = "";
-            let #pair0 = "";
-            let #pair1 = "";
+            let #fn_name_attr = #fn_name;
             Ok(result.into())
         }
     };
