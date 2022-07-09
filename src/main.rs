@@ -82,7 +82,7 @@ fn main() -> Result<(), LispError> {
     Ok(())
 }
 
-#[sl_sh_proc_macros::sl_sh_fn]
+#[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
 fn sl_sh_me(fun: i64) -> f64 {
     fun as f64
 }
