@@ -192,17 +192,14 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
-    let origin_fn_name = Ident::new(&name, Span::call_site());
-
-    let mut code: Vec<TokenStream2> = vec![];
-    code.push(item.into_token_stream().into());
-    // add builtin that accepts sl-sh style arguments
+    let original_fn_name = Ident::new(&name, Span::call_site());
+    let original_fn = item.into_token_stream();
     let tokens = quote! {
+        #original_fn
         use std::convert::TryInto;
         use std::convert::TryFrom;
-        #(#code)*
         fn #builtin_name(#(#fn_args: #fn_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
-            let result: #return_type = #origin_fn_name(#(#fn_args.try_into()?),*);
+            let result: #return_type = #original_fn_name(#(#fn_args.try_into()?),*);
             let result: ExpEnum = result.into();
             let #fn_name_attr = #fn_name;
             Ok(result.into())
