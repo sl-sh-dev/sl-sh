@@ -5,11 +5,10 @@ use std::any::Any;
 use std::error::Error;
 use std::fmt;
 use syn::__private::{Span, TokenStream2};
-use syn::{
-    parse_macro_input, AttributeArgs, Field, GenericArgument, Ident, ItemFn, Lit, Meta, NestedMeta,
-    PathArguments, ReturnType, Type,
-};
+use syn::{parse_macro_input, AttributeArgs, Field, GenericArgument, Ident, ItemFn, Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, FnArg, TypePath, Path, PathSegment};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+use syn::token::{Colon2, Comma};
 
 fn get_inner_type<'a>(f: &'a Field, type_name: &str) -> Option<&'a GenericArgument> {
     let ty = &f.ty;
@@ -55,6 +54,7 @@ impl BuilderError {
     }
 }
 
+//TODO how to use BuilderError properly over unimplemented calls.
 impl fmt::Display for BuilderError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.details)
@@ -65,6 +65,37 @@ impl Error for BuilderError {
     fn description(&self) -> &str {
         &self.details
     }
+}
+
+fn generate_builtin_arg_list(inputs: &Punctuated<FnArg, Comma>) -> (Vec<Ident>, Vec<Type>) {
+    let len = inputs.len();
+    let mut fn_args = vec![];
+    let mut fn_types = vec![];
+    for i in 0..len {
+        let arg_name = "arg".to_string();
+        let arg = Ident::new(&arg_name, Span::call_site());
+        fn_args.push(arg);
+        let sl_sh_path_segment = PathSegment {
+            ident: Ident::new("sl_sh", Span::call_site()),
+            arguments: PathArguments::None,
+        };
+        let exp_enum_path_segment = PathSegment {
+            ident: Ident::new("ExpEnum", Span::call_site()),
+            arguments: PathArguments::None,
+        };
+        let mut pun_seq = Punctuated::new();
+        pun_seq.push(sl_sh_path_segment);
+        pun_seq.push(exp_enum_path_segment);
+        let ty: Type = Type::Path(TypePath {
+            qself: None,
+            path: Path {
+                leading_colon: None,
+                segments: pun_seq,
+            }
+        });
+        fn_types.push(ty);
+    }
+    (fn_args, fn_types)
 }
 
 fn verify_return_type(fn_item: &ItemFn) -> Type {
@@ -154,6 +185,9 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     let return_type = verify_return_type(&fn_item);
+    let inputs = &fn_item.sig.inputs;
+    let (fn_args, fn_types) = generate_builtin_arg_list(inputs);
+
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let builtin_name = "builtin_".to_string() + &name;
@@ -167,8 +201,8 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         use std::convert::TryInto;
         use std::convert::TryFrom;
         #(#code)*
-        fn #builtin_name(arg: sl_sh::ExpEnum) -> sl_sh::LispResult<sl_sh::types::Expression> {
-            let result: #return_type = #origin_fn_name(arg.try_into()?);
+        fn #builtin_name(#(#fn_args: #fn_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            let result: #return_type = #origin_fn_name(#(#fn_args.try_into()?),*);
             let result: ExpEnum = result.into();
             let #fn_name_attr = #fn_name;
             Ok(result.into())
