@@ -1,4 +1,3 @@
-
 #[test]
 fn tests() {
     let test_cases = trybuild::TestCases::new();

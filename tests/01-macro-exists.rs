@@ -24,6 +24,5 @@
 use derive_sl_sh::sl_sh_fn;
 
 #[sl_sh_fn]
-fn attribute_me() {
-}
+fn attribute_me() {}
 fn main() {}
