@@ -14,13 +14,10 @@ use nix::{
 };
 use sl_sh::ExpEnum;
 use std::borrow::Cow;
-
-fn print_type_of<T>(_: &T) {
-    println!("type: {}", std::any::type_name::<T>())
-}
+extern crate static_assertions;
 
 fn main() -> Result<(), LispError> {
-    let result = builtin_sl_sh_me(8i64.into())?;
+    let result = builtin_sl_sh_me(8i64.into(), 7i64.into())?;
     println!("{:?}", result);
     if let Some(config) = get_config() {
         if config.command.is_none() && config.script.is_none() {
@@ -83,6 +80,6 @@ fn main() -> Result<(), LispError> {
 }
 
 #[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
-fn sl_sh_me(fun: i64) -> f64 {
-    fun as f64
+fn sl_sh_me(arg_0: i64, arg_1: i64) -> f64 {
+    arg_0 as f64 + arg_1 as f64
 }
