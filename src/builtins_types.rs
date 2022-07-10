@@ -400,7 +400,6 @@ fn builtin_is_list(
     Err(LispError::new("list? needs one form"))
 }
 
-//
 //fn str_to_int(in_str: &Cow<str>) -> std::io::Result<i64> {
 //    crate::environment::Environment;
 //    std::prelude::rust_2021::Iterator;
@@ -455,6 +454,11 @@ fn builtin_int_to_float(
         }
     }
     Err(LispError::new("int->float: requires an int"))
+}
+
+#[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
+fn sl_sh_me(arg_0: i64) -> f64 {
+    arg_0 as f64
 }
 
 fn builtin_float_to_int(
@@ -1024,6 +1028,24 @@ Example:
 (test::assert-error (str->float "not int"))
 (test::assert-error (str->float "--10"))
 "#,
+        ),
+    );
+    data.insert(
+        interner.intern("int-to-float"),
+        Expression::make_function(
+            parse_sl_sh_me,
+            r#"Usage: (int-to-float int) -> float
+
+    Cast an int as a float.
+
+    Section: type
+
+    Example:
+    (test::assert-equal 0 (int->float 0))
+    (test::assert-equal 10 (int->float 10))
+    (test::assert-equal -101 (int->float -101))
+    (test::assert-error (int->float "not int"))
+    "#,
         ),
     );
     data.insert(

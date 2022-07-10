@@ -171,3 +171,16 @@ pub fn make_args(
     }
     Ok(list)
 }
+
+pub fn make_args_exp_enums(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Vec<ExpEnum>, LispError> {
+    let mut list: Vec<ExpEnum> = Vec::new();
+    for arg in args {
+        let exp = eval(environment, arg)?;
+        let data = exp.get();
+        list.push(data.data.clone());
+    }
+    Ok(list)
+}
