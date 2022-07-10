@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
+use quote::quote;
 use quote::ToTokens;
-use quote::{format_ident, quote};
 use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
@@ -56,8 +56,8 @@ fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
 }
 
 fn build_sl_sh_exp_enum_type() -> Type {
-    let sl_sh_path_segment = PathSegment {
-        ident: Ident::new("sl_sh", Span::call_site()),
+    let crate_path_segment = PathSegment {
+        ident: Ident::new("crate", Span::call_site()),
         arguments: PathArguments::None,
     };
     let exp_enum_path_segment = PathSegment {
@@ -65,7 +65,7 @@ fn build_sl_sh_exp_enum_type() -> Type {
         arguments: PathArguments::None,
     };
     let mut pun_seq = Punctuated::new();
-    pun_seq.push(sl_sh_path_segment);
+    pun_seq.push(crate_path_segment);
     pun_seq.push(exp_enum_path_segment);
     Type::Path(TypePath {
         qself: None,
@@ -84,13 +84,13 @@ fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident) {
     let original_fn_name = Ident::new(&name, Span::call_site());
     let builtin_name = "builtin_".to_string() + &name;
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
-    let arg_parse_name = "arg_parse_".to_string() + &name;
-    let arg_parse_name = Ident::new(&arg_parse_name, Span::call_site());
-    (original_fn_name, builtin_name, arg_parse_name)
+    let parse_name = "parse_".to_string() + &name;
+    let parse_name = Ident::new(&parse_name, Span::call_site());
+    (original_fn_name, builtin_name, parse_name)
 }
 
 /// given the length of the rust native args list, create two lists of argument names
-/// and sl_sh::ExpEnum types for generating the builtin function signature.
+/// and crate::ExpEnum types for generating the builtin function signature.
 fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
     let mut fn_args = vec![];
     let mut fn_types = vec![];
@@ -229,30 +229,79 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let args_len = fn_item.sig.inputs.len();
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
-    let (original_fn_name, builtin_name, arg_parse_name) = get_fn_names(&fn_item);
+    let (original_fn_name, builtin_name, parse_name) = get_fn_names(&fn_item);
     let original_fn_code = item.into_token_stream();
 
     let tokens = quote! {
+        trait ExpandVecToArgs<Args> {
+            type Output;
+
+            fn call_expand_args(&self, args: Args) -> Self::Output;
+        }
+
+        impl<F, T, R> ExpandVecToArgs<[T; 0]> for F
+        where
+            F: Fn() -> R,
+        {
+            type Output = R;
+
+            fn call_expand_args(&self, _args: [T; 0]) -> R {
+                self()
+            }
+        }
+
+        impl<F, T, R> ExpandVecToArgs<[T; 1]> for F
+        where
+            F: Fn(T) -> R,
+        {
+            type Output = R;
+
+            fn call_expand_args(&self, args: [T; 1]) -> R {
+                // Expand array of arguments
+                let [arg0] = args;
+
+                // Call function
+                self(arg0)
+            }
+        }
+
+        impl<F, T, R> ExpandVecToArgs<[T; 2]> for F
+        where
+            F: Fn(T, T) -> R,
+        {
+            type Output = R;
+
+            fn call_expand_args(&self, args: [T; 2]) -> R {
+                // Expand array of arguments
+                let [arg0, arg1] = args;
+
+                // Call function
+                self(arg0, arg1)
+            }
+        }
+
         #original_fn_code
 
         use std::convert::TryInto;
         use std::convert::TryFrom;
-        fn #builtin_name(#(#fn_args: #fn_types),*) -> sl_sh::LispResult<sl_sh::types::Expression> {
+        fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
             #(#conversions_assertions_code)*
+            // need the fn_name in the error in the try_into calls... these MUST have that metadata
+            // because that's where we're offloading our error checking.
             let result = #original_fn_name(#(#fn_args.try_into()?),*);
             let result: ExpEnum = result.into();
             Ok(result.into())
         }
 
-        fn #arg_parse_name(
-            environment: &mut sl_sh::environment::Environment,
-            args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
-        ) -> sl_sh::LispResult<sl_sh::types::Expression> {
-            let args = sl_sh::builtins_util::make_args_exp_enums(environment, args)?;
+        fn #parse_name(
+            environment: &mut crate::environment::Environment,
+            args: &mut dyn Iterator<Item = crate::types::Expression>,
+        ) -> crate::LispResult<crate::types::Expression> {
+            let args = crate::builtins_util::make_args_exp_enums(environment, args)?;
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
             if args.len() == args_len {
-                let params: [sl_sh::types::ExpEnum; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
+                let params: [crate::types::ExpEnum; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
                 #builtin_name.call_expand_args(params)
             } else if args.len() > args_len {
                 Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
