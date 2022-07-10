@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
-use quote::quote;
 use quote::ToTokens;
+use quote::{format_ident, quote};
 use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
@@ -44,7 +44,9 @@ fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     let mut types = vec![];
     for input in inputs {
         match input {
-            FnArg::Receiver(_) => {}
+            FnArg::Receiver(_) => {
+                unimplemented!("FnArg::Receiver is not yet implemented.")
+            }
             FnArg::Typed(ty) => {
                 types.push(ty.ty.deref().clone());
             }
@@ -74,15 +76,21 @@ fn build_sl_sh_exp_enum_type() -> Type {
     })
 }
 
-fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident) {
+/// return the function names the macro will create. Given a base name, "base"
+/// return (base, builtin_base, arg_parse_base) tuple of Idents
+fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident) {
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
+    let original_fn_name = Ident::new(&name, Span::call_site());
     let builtin_name = "builtin_".to_string() + &name;
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
-    let original_fn_name = Ident::new(&name, Span::call_site());
-    (builtin_name, original_fn_name)
+    let arg_parse_name = "arg_parse_".to_string() + &name;
+    let arg_parse_name = Ident::new(&arg_parse_name, Span::call_site());
+    (original_fn_name, builtin_name, arg_parse_name)
 }
 
+/// given the length of the rust native args list, create two lists of argument names
+/// and sl_sh::ExpEnum types for generating the builtin function signature.
 fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
     let mut fn_args = vec![];
     let mut fn_types = vec![];
@@ -96,6 +104,8 @@ fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
     (fn_args, fn_types)
 }
 
+/// given a type and the string value of a trait in std::convert::<convert_trait>
+/// returned the given type wrapped with the std::convert::<convert_trait>
 fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     let std_path_segment = PathSegment {
         ident: Ident::new("std", Span::call_site()),
@@ -217,8 +227,9 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let conversions_assertions_code = generate_assertions_code_for_type_conversions(&fn_item);
 
-    let (fn_args, fn_types) = generate_builtin_arg_list(fn_item.sig.inputs.len());
-    let (builtin_name, original_fn_name) = get_fn_names(&fn_item);
+    let args_len = fn_item.sig.inputs.len();
+    let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
+    let (original_fn_name, builtin_name, arg_parse_name) = get_fn_names(&fn_item);
     let original_fn_code = item.into_token_stream();
 
     let tokens = quote! {
@@ -230,8 +241,24 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             #(#conversions_assertions_code)*
             let result = #original_fn_name(#(#fn_args.try_into()?),*);
             let result: ExpEnum = result.into();
-            let #fn_name_attr = #fn_name;
             Ok(result.into())
+        }
+
+        fn #arg_parse_name(
+            environment: &mut sl_sh::environment::Environment,
+            args: &mut dyn Iterator<Item = sl_sh::types::Expression>,
+        ) -> sl_sh::LispResult<sl_sh::types::Expression> {
+            let args = sl_sh::builtins_util::make_args_exp_enums(environment, args)?;
+            let #fn_name_attr = #fn_name;
+            const args_len: usize = #args_len;
+            if args.len() == args_len {
+                let params: [sl_sh::types::ExpEnum; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
+                #builtin_name.call_expand_args(params)
+            } else if args.len() > args_len {
+                Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+            } else {
+                Err(LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
+            }
         }
     };
     TokenStream::from(tokens)
@@ -240,3 +267,4 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
 //TODO
 //  - functions that do not return anything
 //  - functions that take actual expenums, s.t. doing into on them might... be redundant?
+//  - variadic functions
