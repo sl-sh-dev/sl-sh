@@ -232,7 +232,6 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let tokens = quote! {
         trait ExpandVecToArgs<Args> {
             type Output;
-
             fn call_expand_args(&self, args: Args) -> Self::Output;
         }
 
@@ -241,7 +240,6 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             F: Fn() -> R,
         {
             type Output = R;
-
             fn call_expand_args(&self, _args: [T; 0]) -> R {
                 self()
             }
@@ -254,10 +252,7 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             type Output = R;
 
             fn call_expand_args(&self, args: [T; 1]) -> R {
-                // Expand array of arguments
                 let [arg0] = args;
-
-                // Call function
                 self(arg0)
             }
         }
@@ -267,12 +262,8 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             F: Fn(T, T) -> R,
         {
             type Output = R;
-
             fn call_expand_args(&self, args: [T; 2]) -> R {
-                // Expand array of arguments
                 let [arg0, arg1] = args;
-
-                // Call function
                 self(arg0, arg1)
             }
         }
