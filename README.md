@@ -1,3 +1,1 @@
-playground for experimenting with proc-macros for work in sl-sh
-
-useful because of `cargo expand`
+sl-sh proc macro attributes to eliminate need for boilerplate in creating builtin functions
