@@ -250,7 +250,6 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             F: Fn(T) -> R,
         {
             type Output = R;
-
             fn call_expand_args(&self, args: [T; 1]) -> R {
                 let [arg0] = args;
                 self(arg0)
