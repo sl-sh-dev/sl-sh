@@ -21,9 +21,7 @@ struct BuilderError {
 
 impl BuilderError {
     fn new(msg: String) -> BuilderError {
-        BuilderError {
-            details: msg.to_string(),
-        }
+        BuilderError { details: msg }
     }
 }
 
@@ -162,7 +160,7 @@ fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenS
           static_assertions::assert_impl_all!(#exp_enum: #try_into);
         });
     }
-    let return_type = get_return_type(&fn_item);
+    let return_type = get_return_type(fn_item);
     let to_return_type = wrap_with_std_convert(build_sl_sh_exp_enum_type(), "Into");
     conversion_assertions_code.push(quote! {
       static_assertions::assert_impl_all!(#return_type: #to_return_type);
@@ -171,7 +169,7 @@ fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenS
 }
 
 fn get_attribute_value_with_key(key: &str, values: &[(String, String)]) -> Option<String> {
-    let pair = values.iter().filter(|k| &k.0 == key).take(1).next();
+    let pair = values.iter().filter(|k| k.0 == key).take(1).next();
     pair.map(|pair| pair.1.to_string())
 }
 
@@ -183,7 +181,7 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
                 let lit = &pair.lit;
                 match (path.get_ident(), lit) {
                     (Some(ident), Lit::Str(partial_name)) => {
-                        return Some((ident.to_string(), partial_name.value()));
+                        Some((ident.to_string(), partial_name.value()))
                     }
                     (_, _) => {
                         unimplemented!("0 Only support attributes of form (name = \"value\")");
@@ -205,8 +203,7 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as AttributeArgs);
     let vals = attr_args
         .iter()
-        .map(get_attribute_name_pair)
-        .filter_map(|val| val)
+        .filter_map(get_attribute_name_pair)
         .collect::<Vec<(String, String)>>();
     let fn_name_attr = "fn_name".to_string();
     let fn_name = get_attribute_value_with_key(&fn_name_attr, &vals)
@@ -225,11 +222,11 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         _ => unimplemented!("sl_sh_fn proc_macro_attribute only works on functions."),
     };
 
-    let conversions_assertions_code = generate_assertions_code_for_type_conversions(&fn_item);
+    let conversions_assertions_code = generate_assertions_code_for_type_conversions(fn_item);
 
     let args_len = fn_item.sig.inputs.len();
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
-    let (original_fn_name, builtin_name, parse_name) = get_fn_names(&fn_item);
+    let (original_fn_name, builtin_name, parse_name) = get_fn_names(fn_item);
     let original_fn_code = item.into_token_stream();
 
     let tokens = quote! {
