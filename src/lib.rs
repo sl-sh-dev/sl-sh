@@ -53,13 +53,13 @@ fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     types
 }
 
-fn build_sl_sh_exp_enum_type() -> Type {
+fn build_sl_sh_expression_type() -> Type {
     let crate_path_segment = PathSegment {
         ident: Ident::new("crate", Span::call_site()),
         arguments: PathArguments::None,
     };
     let exp_enum_path_segment = PathSegment {
-        ident: Ident::new("ExpEnum", Span::call_site()),
+        ident: Ident::new("Expression", Span::call_site()),
         arguments: PathArguments::None,
     };
     let mut pun_seq = Punctuated::new();
@@ -96,7 +96,7 @@ fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
         let arg_name = "arg_".to_string() + &i.to_string();
         let arg = Ident::new(&arg_name, Span::call_site());
         fn_args.push(arg);
-        let ty = build_sl_sh_exp_enum_type();
+        let ty = build_sl_sh_expression_type();
         fn_types.push(ty);
     }
     (fn_args, fn_types)
@@ -155,13 +155,13 @@ fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenS
     let mut conversion_assertions_code = vec![];
     for input_type in input_types {
         let try_into = wrap_with_std_convert(input_type, "TryInto");
-        let exp_enum = build_sl_sh_exp_enum_type();
+        let exp_enum = build_sl_sh_expression_type();
         conversion_assertions_code.push(quote! {
           static_assertions::assert_impl_all!(#exp_enum: #try_into);
         });
     }
     let return_type = get_return_type(fn_item);
-    let to_return_type = wrap_with_std_convert(build_sl_sh_exp_enum_type(), "Into");
+    let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
     conversion_assertions_code.push(quote! {
       static_assertions::assert_impl_all!(#return_type: #to_return_type);
     });
@@ -234,11 +234,11 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
 
         fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
+            use std::convert::Into;
             #(#conversions_assertions_code)*
             // need the fn_name in the error in the try_into calls... these MUST have that metadata
             // because that's where we're offloading our error checking.
             let result = #original_fn_name(#(#fn_args.try_into()?),*);
-            let result: ExpEnum = result.into();
             Ok(result.into())
         }
 
@@ -248,11 +248,11 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         ) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
             use crate::builtins_util::ExpandVecToArgs;
-            let args = crate::builtins_util::make_args_exp_enums(environment, args)?;
+            let args = crate::builtins_util::make_args(environment, args)?;
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
             if args.len() == args_len {
-                let params: [crate::types::ExpEnum; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
+                let params: [crate::types::Expression; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
                 #builtin_name.call_expand_args(params)
             } else if args.len() > args_len {
                 Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
