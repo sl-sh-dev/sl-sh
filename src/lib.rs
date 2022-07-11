@@ -236,10 +236,11 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             use std::convert::TryInto;
             use std::convert::Into;
             use crate::builtins_util::TryIntoExpression;
+            let #fn_name_attr = #fn_name;
             #(#conversions_assertions_code)*
             // need the fn_name in the error in the try_into calls... these MUST have that metadata
             // because that's where we're offloading our error checking.
-            let result = #original_fn_name(#(#fn_args.try_into_expr()?),*);
+            let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*);
             Ok(result.into())
         }
 
