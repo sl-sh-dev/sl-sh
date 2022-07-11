@@ -269,6 +269,23 @@ pub trait TryIntoExpression<T>: Sized {
     type Error;
 
     fn try_into_expr(self) -> Result<T, Self::Error>;
+
+    fn human_readable_dest_type(&self) -> String;
+
+    fn human_readable_src_type(&self) -> String;
+
+    fn try_into_for(self, fn_name: &str) -> Result<T, LispError> {
+        let hr_src_type = self.human_readable_src_type();
+        let hr_dest_type = self.human_readable_dest_type();
+        let t = self.try_into_expr();
+        match t {
+            Ok(t) => Ok(t),
+            Err(_) => Err(LispError::new(format!(
+                "{}: got the wrong types, expected {}, got {}.",
+                fn_name, hr_dest_type, hr_src_type,
+            ))),
+        }
+    }
 }
 
 impl From<i64> for Expression {
@@ -301,6 +318,14 @@ impl TryIntoExpression<f64> for Expression {
     fn try_into_expr(self) -> Result<f64, Self::Error> {
         self.try_into()
     }
+
+    fn human_readable_dest_type(&self) -> String {
+        Expression::display_type_from_enum(&ExpEnum::Float(Default::default()))
+    }
+
+    fn human_readable_src_type(&self) -> String {
+        self.display_type()
+    }
 }
 
 impl TryFrom<Expression> for i64 {
@@ -320,6 +345,14 @@ impl TryIntoExpression<i64> for Expression {
     type Error = LispError;
     fn try_into_expr(self) -> Result<i64, Self::Error> {
         self.try_into()
+    }
+
+    fn human_readable_dest_type(&self) -> String {
+        Expression::display_type_from_enum(&ExpEnum::Int(Default::default()))
+    }
+
+    fn human_readable_src_type(&self) -> String {
+        self.display_type()
     }
 }
 

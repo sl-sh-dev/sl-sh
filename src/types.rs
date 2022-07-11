@@ -727,7 +727,11 @@ impl Expression {
     }
 
     pub fn display_type(&self) -> String {
-        match &self.get().data {
+        Expression::display_type_from_enum(&self.get().data)
+    }
+
+    pub fn display_type_from_enum(exp_enum: &ExpEnum) -> String {
+        match exp_enum {
             ExpEnum::True => "True".to_string(),
             ExpEnum::False => "False".to_string(),
             ExpEnum::Float(_) => "Float".to_string(),

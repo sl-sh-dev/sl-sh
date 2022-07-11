@@ -441,42 +441,14 @@ fn builtin_str_to_float(
     Err(LispError::new("str->float: requires a string"))
 }
 
-fn builtin_int_to_float(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Int(i) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Float(*i as f64)));
-            }
-        }
-    }
-    Err(LispError::new("int->float: requires an int"))
-}
-
 #[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
-fn my_int_to_float(arg_0: i64) -> f64 {
+fn int_to_float(arg_0: i64) -> f64 {
     arg_0 as f64
 }
 
 #[sl_sh_proc_macros::sl_sh_fn(fn_name = "float-to-int")]
-fn my_float_to_int(arg_0: f64) -> i64 {
+fn float_to_int(arg_0: f64) -> i64 {
     arg_0 as i64
-}
-
-fn builtin_float_to_int(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::Float(f) = &eval(environment, arg)?.get().data {
-                return Ok(Expression::alloc_data(ExpEnum::Int(*f as i64)));
-            }
-        }
-    }
-    Err(LispError::new("float->int: requires a float"))
 }
 
 fn builtin_to_symbol(
@@ -1037,7 +1009,7 @@ Example:
     data.insert(
         interner.intern("int->float"),
         Expression::make_function(
-            builtin_int_to_float,
+            parse_int_to_float,
             r#"Usage: (int-to-float int) -> float
 
     Cast an int as a float.
@@ -1050,51 +1022,12 @@ Example:
     (test::assert-equal -101 (int->float -101))
     (test::assert-error (int->float "not int"))
     "#,
-        ),
-    );
-    data.insert(
-        interner.intern("int-to-float"),
-        Expression::make_function(
-            parse_my_int_to_float,
-            r#"Usage: (int-to-float int) -> float
-
-    Cast an int as a float.
-
-    Section: type
-
-    Example:
-    (test::assert-equal 0 (int->float 0))
-    (test::assert-equal 10 (int->float 10))
-    (test::assert-equal -101 (int->float -101))
-    (test::assert-error (int->float "not int"))
-    "#,
-        ),
-    );
-    data.insert(
-        interner.intern("float-to-int"),
-        Expression::make_function(
-            parse_my_float_to_int,
-            r#"Usage: (float->int float) -> int
-
-Cast a float as an int.  Truncates.
-
-Section: type
-
-Example:
-(test::assert-equal 0 (float->int 0.0))
-(test::assert-equal 10 (float->int 10.0))
-(test::assert-equal 10 (float->int 10.1))
-(test::assert-equal 10 (float->int 10.5))
-(test::assert-equal 10 (float->int 10.9))
-(test::assert-equal -101 (float->int -101.99))
-(test::assert-error (float->int "not int"))
-"#,
         ),
     );
     data.insert(
         interner.intern("float->int"),
         Expression::make_function(
-            builtin_float_to_int,
+            parse_float_to_int,
             r#"Usage: (float->int float) -> int
 
 Cast a float as an int.  Truncates.
