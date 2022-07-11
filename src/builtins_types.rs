@@ -461,6 +461,11 @@ fn sl_sh_me(arg_0: i64) -> f64 {
     arg_0 as f64
 }
 
+#[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
+fn sl_sh_me_proper(arg_0: f64) -> i64 {
+    arg_0 as i64
+}
+
 fn builtin_float_to_int(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
