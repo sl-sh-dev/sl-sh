@@ -230,48 +230,10 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let original_fn_code = item.into_token_stream();
 
     let tokens = quote! {
-        trait ExpandVecToArgs<Args> {
-            type Output;
-            fn call_expand_args(&self, args: Args) -> Self::Output;
-        }
-
-        impl<F, T, R> ExpandVecToArgs<[T; 0]> for F
-        where
-            F: Fn() -> R,
-        {
-            type Output = R;
-            fn call_expand_args(&self, _args: [T; 0]) -> R {
-                self()
-            }
-        }
-
-        impl<F, T, R> ExpandVecToArgs<[T; 1]> for F
-        where
-            F: Fn(T) -> R,
-        {
-            type Output = R;
-            fn call_expand_args(&self, args: [T; 1]) -> R {
-                let [arg0] = args;
-                self(arg0)
-            }
-        }
-
-        impl<F, T, R> ExpandVecToArgs<[T; 2]> for F
-        where
-            F: Fn(T, T) -> R,
-        {
-            type Output = R;
-            fn call_expand_args(&self, args: [T; 2]) -> R {
-                let [arg0, arg1] = args;
-                self(arg0, arg1)
-            }
-        }
-
         #original_fn_code
 
-        use std::convert::TryInto;
-        use std::convert::TryFrom;
         fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
+            use std::convert::TryInto;
             #(#conversions_assertions_code)*
             // need the fn_name in the error in the try_into calls... these MUST have that metadata
             // because that's where we're offloading our error checking.
@@ -284,6 +246,8 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             environment: &mut crate::environment::Environment,
             args: &mut dyn Iterator<Item = crate::types::Expression>,
         ) -> crate::LispResult<crate::types::Expression> {
+            use std::convert::TryInto;
+            use crate::builtins_util::ExpandVecToArgs;
             let args = crate::builtins_util::make_args_exp_enums(environment, args)?;
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
@@ -302,5 +266,6 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 //TODO
 //  - functions that do not return anything
-//  - functions that take actual expenums, s.t. doing into on them might... be redundant?
+//  - functions that take actual ExpEnum's, s.t. doing into on them might... be redundant?
+//  - support Option-al argument
 //  - variadic functions
