@@ -2,7 +2,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::env;
 
 pub fn param_eval_optional(
@@ -265,6 +265,12 @@ where
     }
 }
 
+pub trait TryIntoExpression<T>: Sized {
+    type Error;
+
+    fn try_into_expr(self) -> Result<T, Self::Error>;
+}
+
 impl From<i64> for Expression {
     fn from(num: i64) -> Self {
         Expression::alloc_data(ExpEnum::Int(num))
@@ -290,6 +296,13 @@ impl TryFrom<Expression> for f64 {
     }
 }
 
+impl TryIntoExpression<f64> for Expression {
+    type Error = LispError;
+    fn try_into_expr(self) -> Result<f64, Self::Error> {
+        self.try_into()
+    }
+}
+
 impl TryFrom<Expression> for i64 {
     type Error = LispError;
     fn try_from(num: Expression) -> Result<Self, Self::Error> {
@@ -300,6 +313,13 @@ impl TryFrom<Expression> for i64 {
                 "Can only convert i64 from ExpEnum::Float or ExpEnum::Int.",
             )),
         }
+    }
+}
+
+impl TryIntoExpression<i64> for Expression {
+    type Error = LispError;
+    fn try_into_expr(self) -> Result<i64, Self::Error> {
+        self.try_into()
     }
 }
 
