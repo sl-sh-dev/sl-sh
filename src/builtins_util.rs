@@ -1,6 +1,7 @@
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
+
 use std::convert::TryFrom;
 use std::env;
 
@@ -172,19 +173,6 @@ pub fn make_args(
     Ok(list)
 }
 
-pub fn make_args_exp_enums(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Vec<ExpEnum>, LispError> {
-    let mut list: Vec<ExpEnum> = Vec::new();
-    for arg in args {
-        let exp = eval(environment, arg)?;
-        let data = exp.get();
-        list.push(data.data.clone());
-    }
-    Ok(list)
-}
-
 pub trait ExpandVecToArgs<Args> {
     type Output;
     fn call_expand_args(&self, args: Args) -> Self::Output;
@@ -277,22 +265,22 @@ where
     }
 }
 
-impl From<i64> for ExpEnum {
+impl From<i64> for Expression {
     fn from(num: i64) -> Self {
-        ExpEnum::Int(num)
+        Expression::alloc_data(ExpEnum::Int(num))
     }
 }
 
-impl From<f64> for ExpEnum {
+impl From<f64> for Expression {
     fn from(num: f64) -> Self {
-        ExpEnum::Float(num)
+        Expression::alloc_data(ExpEnum::Float(num))
     }
 }
 
-impl TryFrom<ExpEnum> for f64 {
+impl TryFrom<Expression> for f64 {
     type Error = LispError;
-    fn try_from(num: ExpEnum) -> Result<Self, Self::Error> {
-        match num {
+    fn try_from(num: Expression) -> Result<Self, Self::Error> {
+        match num.get().data {
             ExpEnum::Float(num) => Ok(num),
             ExpEnum::Int(num) => Ok(num as f64),
             _ => Err(LispError::new(
@@ -302,10 +290,10 @@ impl TryFrom<ExpEnum> for f64 {
     }
 }
 
-impl TryFrom<ExpEnum> for i64 {
+impl TryFrom<Expression> for i64 {
     type Error = LispError;
-    fn try_from(num: ExpEnum) -> Result<Self, Self::Error> {
-        match num {
+    fn try_from(num: Expression) -> Result<Self, Self::Error> {
+        match num.get().data {
             ExpEnum::Float(num) => Ok(num as i64),
             ExpEnum::Int(num) => Ok(num),
             _ => Err(LispError::new(
@@ -315,9 +303,9 @@ impl TryFrom<ExpEnum> for i64 {
     }
 }
 
-impl PartialEq<Self> for ExpEnum {
+impl PartialEq<Self> for Expression {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        match (&self.get().data, &other.get().data) {
             (ExpEnum::True, ExpEnum::True) => true,
             (ExpEnum::False, ExpEnum::False) => true,
             (ExpEnum::Nil, ExpEnum::Nil) => true,

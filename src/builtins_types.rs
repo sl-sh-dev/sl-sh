@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::num::{ParseFloatError, ParseIntError};
@@ -457,12 +456,12 @@ fn builtin_int_to_float(
 }
 
 #[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
-fn sl_sh_me(arg_0: i64) -> f64 {
+fn my_int_to_float(arg_0: i64) -> f64 {
     arg_0 as f64
 }
 
-#[sl_sh_proc_macros::sl_sh_fn(fn_name = "int-to-float")]
-fn sl_sh_me_proper(arg_0: f64) -> i64 {
+#[sl_sh_proc_macros::sl_sh_fn(fn_name = "float-to-int")]
+fn my_float_to_int(arg_0: f64) -> i64 {
     arg_0 as i64
 }
 
@@ -1036,9 +1035,9 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("int-to-float"),
+        interner.intern("int->float"),
         Expression::make_function(
-            parse_sl_sh_me,
+            builtin_int_to_float,
             r#"Usage: (int-to-float int) -> float
 
     Cast an int as a float.
@@ -1054,20 +1053,41 @@ Example:
         ),
     );
     data.insert(
-        interner.intern("int->float"),
+        interner.intern("int-to-float"),
         Expression::make_function(
-            builtin_int_to_float,
-            r#"Usage: (int->float int) -> float
+            parse_my_int_to_float,
+            r#"Usage: (int-to-float int) -> float
 
-Cast an int as a float.
+    Cast an int as a float.
+
+    Section: type
+
+    Example:
+    (test::assert-equal 0 (int->float 0))
+    (test::assert-equal 10 (int->float 10))
+    (test::assert-equal -101 (int->float -101))
+    (test::assert-error (int->float "not int"))
+    "#,
+        ),
+    );
+    data.insert(
+        interner.intern("float-to-int"),
+        Expression::make_function(
+            parse_my_float_to_int,
+            r#"Usage: (float->int float) -> int
+
+Cast a float as an int.  Truncates.
 
 Section: type
 
 Example:
-(test::assert-equal 0 (int->float 0))
-(test::assert-equal 10 (int->float 10))
-(test::assert-equal -101 (int->float -101))
-(test::assert-error (int->float "not int"))
+(test::assert-equal 0 (float->int 0.0))
+(test::assert-equal 10 (float->int 10.0))
+(test::assert-equal 10 (float->int 10.1))
+(test::assert-equal 10 (float->int 10.5))
+(test::assert-equal 10 (float->int 10.9))
+(test::assert-equal -101 (float->int -101.99))
+(test::assert-error (float->int "not int"))
 "#,
         ),
     );

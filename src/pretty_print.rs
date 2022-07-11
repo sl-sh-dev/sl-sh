@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::Write as _;
 use std::io::{self, Write};
 
 use crate::builtins_util::is_proper_list;
@@ -151,7 +152,7 @@ impl fmt::Display for Expression {
                 let mut res = String::new();
                 res.push_str("(make-hash (");
                 for (key, val) in map.iter() {
-                    res.push_str(&format!("({} . {})", key, val));
+                    write!(res, "({} . {})", key, val)?;
                 }
                 res.push_str("))");
                 write!(f, "{}", res)

@@ -2,8 +2,6 @@ use regex::Regex;
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -1097,28 +1095,34 @@ impl From<&mut ExpEnum> for Expression {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::convert::TryFrom;
+    use std::convert::TryInto;
 
     #[test]
     fn test_from_numerical() {
-        let result = ExpEnum::from(42i64);
-        assert_eq!(result, ExpEnum::Int(42i64));
+        let result = Expression::from(42i64);
+        assert_eq!(result, Expression::alloc_data(ExpEnum::Int(42i64)));
 
-        let result: ExpEnum = 42i64.into();
-        assert_eq!(result, ExpEnum::Int(42i64));
+        let result: Expression = 42i64.into();
+        assert_eq!(result, Expression::alloc_data(ExpEnum::Int(42i64)));
 
-        let result = i64::try_from(ExpEnum::Int(7)).unwrap();
+        let result = i64::try_from(Expression::alloc_data(ExpEnum::Int(7))).unwrap();
         assert_eq!(7, result);
 
-        let result: f64 = ExpEnum::Int(7).try_into().unwrap();
+        let result: f64 = Expression::alloc_data(ExpEnum::Int(7)).try_into().unwrap();
         assert_eq!(7f64, result);
 
-        let result: f64 = ExpEnum::Float(7f64).try_into().unwrap();
+        let result: f64 = Expression::alloc_data(ExpEnum::Float(7f64))
+            .try_into()
+            .unwrap();
         assert_eq!(7f64, result);
 
-        let result: f64 = ExpEnum::Float(7f64).try_into().unwrap();
+        let result: f64 = Expression::alloc_data(ExpEnum::Float(7f64))
+            .try_into()
+            .unwrap();
         assert_eq!(7f64, result);
 
-        let result = f64::try_from(ExpEnum::Int(7i64)).unwrap();
+        let result = f64::try_from(Expression::alloc_data(ExpEnum::Int(7i64))).unwrap();
         assert_eq!(7f64, result);
     }
 
