@@ -8,9 +8,9 @@ use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, AttributeArgs, FnArg, GenericArgument,
-    Ident, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment, ReturnType, Type,
-    TypePath,
+    parse_macro_input, AngleBracketedGenericArguments, AttrStyle, Attribute, AttributeArgs, FnArg,
+    GenericArgument, Ident, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
+    ReturnType, Type, TypePath,
 };
 extern crate static_assertions;
 
@@ -76,7 +76,7 @@ fn build_sl_sh_expression_type() -> Type {
 
 /// return the function names the macro will create. Given a base name, "base"
 /// return (base, builtin_base, arg_parse_base) tuple of Idents
-fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident) {
+fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident, Ident) {
     let sig_ident = &fn_item.sig.ident;
     let name = sig_ident.to_string();
     let original_fn_name = Ident::new(&name, Span::call_site());
@@ -84,7 +84,9 @@ fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident) {
     let builtin_name = Ident::new(&builtin_name, Span::call_site());
     let parse_name = "parse_".to_string() + &name;
     let parse_name = Ident::new(&parse_name, Span::call_site());
-    (original_fn_name, builtin_name, parse_name)
+    let intern_name = "intern_".to_string() + &name;
+    let intern_name = Ident::new(&intern_name, Span::call_site());
+    (original_fn_name, builtin_name, parse_name, intern_name)
 }
 
 /// given the length of the rust native args list, create two lists of argument names
@@ -149,6 +151,40 @@ fn get_return_type(fn_item: &ItemFn) -> Type {
     return_type
 }
 
+// TODO fix me,
+//  -   this should throw an error if no doc is found, that's required!
+//  -   spacing not preserved? really??
+fn get_documentation_for_fn(fn_item: &ItemFn) -> String {
+    for attr in &fn_item.attrs {
+        for path_segment in attr.path.segments.iter() {
+            if &path_segment.ident.to_string() == "doc" {
+                match attr.parse_meta() {
+                    Ok(meta) => match meta {
+                        Meta::Path(_) => {}
+                        Meta::List(_) => {}
+                        Meta::NameValue(pair) => {
+                            let path = &pair.path;
+                            let lit = &pair.lit;
+                            match (path.get_ident(), lit) {
+                                (_, Lit::Str(partial_name)) => {
+                                    return partial_name.value();
+                                }
+                                (_, _) => {
+                                    unimplemented!(
+                                        "0 Only support attributes of form (name = \"value\")"
+                                    );
+                                }
+                            }
+                        }
+                    },
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+    unimplemented!("Functions with attribute must have a doc comment")
+}
+
 fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenStream2> {
     let inputs = &fn_item.sig.inputs;
     let input_types = get_input_types(inputs);
@@ -201,6 +237,7 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
 #[proc_macro_attribute]
 pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as AttributeArgs);
+
     let vals = attr_args
         .iter()
         .filter_map(get_attribute_name_pair)
@@ -213,20 +250,22 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut item = match syn::parse::<syn::Item>(input) {
         Ok(item) => item,
         _ => {
-            let _e = BuilderError::new("No".to_string());
+            let _e = BuilderError::new("TODO fix me!".to_string());
             unimplemented!();
         }
     };
+
     let fn_item: &mut ItemFn = match &mut item {
         syn::Item::Fn(fn_item) => fn_item,
         _ => unimplemented!("sl_sh_fn proc_macro_attribute only works on functions."),
     };
 
+    let doc_comments = get_documentation_for_fn(fn_item);
     let conversions_assertions_code = generate_assertions_code_for_type_conversions(fn_item);
 
     let args_len = fn_item.sig.inputs.len();
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
-    let (original_fn_name, builtin_name, parse_name) = get_fn_names(fn_item);
+    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(fn_item);
     let original_fn_code = item.into_token_stream();
 
     let tokens = quote! {
@@ -261,6 +300,17 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
             } else {
                 Err(LispError::new(format!("{} not given enough arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             }
+        }
+
+        fn #intern_name<S: std::hash::BuildHasher>(
+            interner: &mut Interner,
+            data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
+        ) {
+            let #fn_name_attr = #fn_name;
+            data.insert(
+                interner.intern(#fn_name_attr),
+                crate::types::Expression::make_function(#parse_name, #doc_comments),
+            );
         }
     };
     TokenStream::from(tokens)
