@@ -281,7 +281,7 @@ pub trait TryIntoExpression<T>: Sized {
         match t {
             Ok(t) => Ok(t),
             Err(_) => Err(LispError::new(format!(
-                "{}: got the wrong types, expected {}, got {}.",
+                "{}: mismatched type input, expected {}, got {}.",
                 fn_name, hr_dest_type, hr_src_type,
             ))),
         }
