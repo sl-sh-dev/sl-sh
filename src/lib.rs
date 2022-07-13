@@ -1,42 +1,15 @@
-use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
-use std::error::Error;
-use std::fmt;
 use std::ops::Deref;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, AttrStyle, Attribute, AttributeArgs, FnArg,
-    GenericArgument, Ident, ItemFn, Lit, Meta, NestedMeta, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypePath,
+    parse_macro_input, AngleBracketedGenericArguments, FnArg, GenericArgument, Ident, Lit, Meta,
+    NestedMeta, Path, PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 extern crate static_assertions;
-
-#[derive(Debug)]
-struct BuilderError {
-    details: String,
-}
-
-impl BuilderError {
-    fn new(msg: String) -> BuilderError {
-        BuilderError { details: msg }
-    }
-}
-
-//TODO how to use BuilderError properly over unimplemented calls.
-impl fmt::Display for BuilderError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-
-impl Error for BuilderError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
 
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     let mut types = vec![];
@@ -76,8 +49,8 @@ fn build_sl_sh_expression_type() -> Type {
 
 /// return the function names the macro will create. Given a base name, "base"
 /// return (base, builtin_base, arg_parse_base) tuple of Idents
-fn get_fn_names(fn_item: &ItemFn) -> (Ident, Ident, Ident, Ident) {
-    let sig_ident = &fn_item.sig.ident;
+fn get_fn_names(item_fn: &syn::ItemFn) -> (Ident, Ident, Ident, Ident) {
+    let sig_ident = &item_fn.sig.ident;
     let name = sig_ident.to_string();
     let original_fn_name = Ident::new(&name, Span::call_site());
     let builtin_name = "builtin_".to_string() + &name;
@@ -141,8 +114,8 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     })
 }
 
-fn get_return_type(fn_item: &ItemFn) -> Type {
-    let return_type = match &fn_item.sig.output {
+fn get_return_type(item_fn: &syn::ItemFn) -> Type {
+    let return_type = match &item_fn.sig.output {
         ReturnType::Default => {
             unimplemented!("Functions with attribute must return a value.");
         }
@@ -154,8 +127,8 @@ fn get_return_type(fn_item: &ItemFn) -> Type {
 // TODO fix me,
 //  -   this should throw an error if no doc is found, that's required!
 //  -   spacing not preserved? really??
-fn get_documentation_for_fn(fn_item: &ItemFn) -> String {
-    for attr in &fn_item.attrs {
+fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> String {
+    for attr in &item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
             if &path_segment.ident.to_string() == "doc" {
                 match attr.parse_meta() {
@@ -185,8 +158,8 @@ fn get_documentation_for_fn(fn_item: &ItemFn) -> String {
     unimplemented!("Functions with attribute must have a doc comment")
 }
 
-fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenStream2> {
-    let inputs = &fn_item.sig.inputs;
+fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<TokenStream2> {
+    let inputs = &item_fn.sig.inputs;
     let input_types = get_input_types(inputs);
     let mut conversion_assertions_code = vec![];
     for input_type in input_types {
@@ -196,7 +169,7 @@ fn generate_assertions_code_for_type_conversions(fn_item: &ItemFn) -> Vec<TokenS
           static_assertions::assert_impl_all!(#exp_enum: #try_into);
         });
     }
-    let return_type = get_return_type(fn_item);
+    let return_type = get_return_type(item_fn);
     let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
     conversion_assertions_code.push(quote! {
       static_assertions::assert_impl_all!(#return_type: #to_return_type);
@@ -234,10 +207,7 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
     }
 }
 
-#[proc_macro_attribute]
-pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(attr as AttributeArgs);
-
+fn generate_sl_sh_fns(item_fn: &syn::ItemFn, attr_args: syn::AttributeArgs) -> TokenStream2 {
     let vals = attr_args
         .iter()
         .filter_map(get_attribute_name_pair)
@@ -247,38 +217,20 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
         .expect("Attribute 'fn_name' name-value pair must be set.");
     let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
 
-    let mut item = match syn::parse::<syn::Item>(input) {
-        Ok(item) => item,
-        _ => {
-            let _e = BuilderError::new("TODO fix me!".to_string());
-            unimplemented!();
-        }
-    };
+    let doc_comments = get_documentation_for_fn(item_fn);
+    let conversions_assertions_code = generate_assertions_code_for_type_conversions(item_fn);
 
-    let fn_item: &mut ItemFn = match &mut item {
-        syn::Item::Fn(fn_item) => fn_item,
-        _ => unimplemented!("sl_sh_fn proc_macro_attribute only works on functions."),
-    };
-
-    let doc_comments = get_documentation_for_fn(fn_item);
-    let conversions_assertions_code = generate_assertions_code_for_type_conversions(fn_item);
-
-    let args_len = fn_item.sig.inputs.len();
+    let args_len = item_fn.sig.inputs.len();
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
-    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(fn_item);
-    let original_fn_code = item.into_token_stream();
+    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(item_fn);
 
-    let tokens = quote! {
-        #original_fn_code
-
+    quote! {
         fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
             use std::convert::Into;
             use crate::builtins_util::TryIntoExpression;
             let #fn_name_attr = #fn_name;
             #(#conversions_assertions_code)*
-            // need the fn_name in the error in the try_into calls... these MUST have that metadata
-            // because that's where we're offloading our error checking.
             let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*);
             Ok(result.into())
         }
@@ -312,12 +264,42 @@ pub fn sl_sh_fn(attr: TokenStream, input: TokenStream) -> TokenStream {
                 crate::types::Expression::make_function(#parse_name, #doc_comments),
             );
         }
+    }
+}
+
+#[proc_macro_attribute]
+pub fn sl_sh_fn(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let attr_args = parse_macro_input!(attr as syn::AttributeArgs);
+
+    let tokens = match syn::parse::<syn::Item>(input) {
+        Ok(item) => match &item {
+            syn::Item::Fn(item_fn) => {
+                let generated_sl_sh_fns: TokenStream2 =
+                    generate_sl_sh_fns(item_fn, attr_args).into();
+                let original_fn_code = item.into_token_stream();
+                quote! {
+                    #original_fn_code
+
+                    #generated_sl_sh_fns
+                }
+            }
+            _ => syn::Error::new(item.span(), "This attribute only supports functions.")
+                .to_compile_error()
+                .into(),
+        },
+        Err(e) => syn::Error::new(e.span(), "Failed to parse proc_macro_attr.")
+            .to_compile_error()
+            .into(),
     };
-    TokenStream::from(tokens)
+
+    proc_macro::TokenStream::from(tokens)
 }
 
 //TODO
 //  - functions that do not return anything
-//  - functions that take actual ExpEnum's, s.t. doing into on them might... be redundant?
+//  - functions that take actual Expressions, s.t. doing into on them might... be redundant?
 //  - support Option-al argument
 //  - variadic functions
