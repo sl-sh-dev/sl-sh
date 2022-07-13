@@ -11,6 +11,8 @@ use syn::{
 };
 extern crate static_assertions;
 
+type MacroResult<T> = Result<T, syn::Error>;
+
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     let mut types = vec![];
     for input in inputs {
@@ -127,7 +129,7 @@ fn get_return_type(item_fn: &syn::ItemFn) -> Type {
 // TODO fix me,
 //  -   this should throw an error if no doc is found, that's required!
 //  -   spacing not preserved? really??
-fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> String {
+fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     for attr in &item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
             if &path_segment.ident.to_string() == "doc" {
@@ -139,14 +141,8 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> String {
                             let path = &pair.path;
                             let lit = &pair.lit;
                             match (path.get_ident(), lit) {
-                                (_, Lit::Str(partial_name)) => {
-                                    return partial_name.value();
-                                }
-                                (_, _) => {
-                                    unimplemented!(
-                                        "0 Only support attributes of form (name = \"value\")"
-                                    );
-                                }
+                                (_, Lit::Str(partial_name)) => return Ok(partial_name.value()),
+                                (_, _) => {}
                             }
                         }
                     },
@@ -155,7 +151,10 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> String {
             }
         }
     }
-    unimplemented!("Functions with attribute must have a doc comment")
+    Err(syn::Error::new(
+        item_fn.span(),
+        "Functions with this attribute included must have documentation.",
+    ))
 }
 
 fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<TokenStream2> {
@@ -177,9 +176,21 @@ fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<T
     conversion_assertions_code
 }
 
-fn get_attribute_value_with_key(key: &str, values: &[(String, String)]) -> Option<String> {
-    let pair = values.iter().filter(|k| k.0 == key).take(1).next();
-    pair.map(|pair| pair.1.to_string())
+fn get_attribute_value_with_key(
+    item_fn: &syn::ItemFn,
+    key: &str,
+    values: &[(String, String)],
+) -> MacroResult<String> {
+    values
+        .iter()
+        .filter(|k| k.0 == key)
+        .take(1)
+        .next()
+        .map(|pair| pair.1.to_string())
+        .ok_or(syn::Error::new(
+            item_fn.span(),
+            "Attribute 'fn_name' name-value pair must be set.",
+        ))
 }
 
 fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)> {
@@ -207,24 +218,26 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
     }
 }
 
-fn generate_sl_sh_fns(item_fn: &syn::ItemFn, attr_args: syn::AttributeArgs) -> TokenStream2 {
+fn generate_sl_sh_fns(
+    item_fn: &syn::ItemFn,
+    attr_args: syn::AttributeArgs,
+) -> MacroResult<TokenStream2> {
     let vals = attr_args
         .iter()
         .filter_map(get_attribute_name_pair)
         .collect::<Vec<(String, String)>>();
     let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(&fn_name_attr, &vals)
-        .expect("Attribute 'fn_name' name-value pair must be set.");
+    let fn_name = get_attribute_value_with_key(item_fn, &fn_name_attr, &vals)?;
     let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
 
-    let doc_comments = get_documentation_for_fn(item_fn);
+    let doc_comments = get_documentation_for_fn(item_fn)?;
     let conversions_assertions_code = generate_assertions_code_for_type_conversions(item_fn);
 
     let args_len = item_fn.sig.inputs.len();
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
     let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(item_fn);
 
-    quote! {
+    let tokens = quote! {
         fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
             use std::convert::Into;
@@ -245,8 +258,15 @@ fn generate_sl_sh_fns(item_fn: &syn::ItemFn, attr_args: syn::AttributeArgs) -> T
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
             if args.len() == args_len {
-                let params: [crate::types::Expression; args_len] = args.try_into().expect("sl_sh_fn proc_macro_attribute has incorrect information about arity of function it decorates.");
-                #builtin_name.call_expand_args(params)
+                match args.try_into() {
+                    Ok(params) => {
+                        let params: [crate::types::Expression; args_len] = params;
+                        #builtin_name.call_expand_args(params)
+                    },
+                    Err(e) => {
+                        Err(LispError::new(format!("{} is broken and can't parse its arguments..", #fn_name_attr, )))
+                    }
+                }
             } else if args.len() > args_len {
                 Err(LispError::new(format!("{} given too many arguments, expected {}, got {}.", #fn_name_attr, args_len, args.len())))
             } else {
@@ -264,7 +284,8 @@ fn generate_sl_sh_fns(item_fn: &syn::ItemFn, attr_args: syn::AttributeArgs) -> T
                 crate::types::Expression::make_function(#parse_name, #doc_comments),
             );
         }
-    }
+    };
+    Ok(tokens)
 }
 
 #[proc_macro_attribute]
@@ -277,8 +298,11 @@ pub fn sl_sh_fn(
     let tokens = match syn::parse::<syn::Item>(input) {
         Ok(item) => match &item {
             syn::Item::Fn(item_fn) => {
-                let generated_sl_sh_fns: TokenStream2 =
-                    generate_sl_sh_fns(item_fn, attr_args).into();
+                let generated_sl_sh_fns: TokenStream2 = match generate_sl_sh_fns(item_fn, attr_args)
+                {
+                    Ok(fns) => fns,
+                    Err(e) => e.to_compile_error().into(),
+                };
                 let original_fn_code = item.into_token_stream();
                 quote! {
                     #original_fn_code
