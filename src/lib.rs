@@ -13,6 +13,7 @@ extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
 
+/// parse and return the rust types of the function parameters
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     let mut types = vec![];
     for input in inputs {
@@ -28,6 +29,8 @@ fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
     types
 }
 
+/// return a fully qualified crate::Expression Type this is the struct that
+/// all sl_sh types are wrapped in, because it's a lisp.
 fn build_sl_sh_expression_type() -> Type {
     let crate_path_segment = PathSegment {
         ident: Ident::new("crate", Span::call_site()),
@@ -116,6 +119,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     })
 }
 
+/// parse the return type of the rust function
 fn get_return_type(item_fn: &syn::ItemFn) -> Type {
     let return_type = match &item_fn.sig.output {
         ReturnType::Default => {
@@ -126,9 +130,8 @@ fn get_return_type(item_fn: &syn::ItemFn) -> Type {
     return_type
 }
 
-// TODO fix me,
-//  -   this should throw an error if no doc is found, that's required!
-//  -   spacing not preserved? really??
+/// Pull out every #doc attribute on the target fn for the proc macro attribute.
+/// Ignore any other attributes and only Err if there are no #doc attributes.
 fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     let mut docs = "".to_string();
     for attr in &item_fn.attrs {
@@ -189,19 +192,29 @@ fn get_attribute_value_with_key(
     key: &str,
     values: &[(String, String)],
 ) -> MacroResult<String> {
-    values
-        .iter()
-        .filter(|k| k.0 == key)
-        .take(1)
-        .next()
-        .map(|pair| pair.1.to_string())
-        .ok_or(syn::Error::new(
+    if values.len() != 1 {
+        Err(syn::Error::new(
             item_fn.span(),
-            "Attribute 'fn_name' name-value pair must be set.",
+            "sl_sh_fn attribute only supports one name-value pair, 'fn_name'.",
         ))
+    } else if let Some(name_value_pair) = values.first() {
+        if name_value_pair.0 == key {
+            Ok(name_value_pair.1.to_string())
+        } else {
+            Err(syn::Error::new(
+                item_fn.span(),
+                format!("sl_sh_fn requires one name-value pair, 'fn_name', received attribute pair ({} = {}) instead.", name_value_pair.0, name_value_pair.1),
+            ))
+        }
+    } else {
+        Err(syn::Error::new(
+            item_fn.span(),
+            "sl_sh_fn requires one name-value pair, 'fn_name'.",
+        ))
+    }
 }
 
-fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)> {
+fn get_attribute_name_pair(nested_meta: &NestedMeta) -> MacroResult<(String, String)> {
     match nested_meta {
         NestedMeta::Meta(meta) => match meta {
             Meta::NameValue(pair) => {
@@ -209,20 +222,23 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> Option<(String, String)>
                 let lit = &pair.lit;
                 match (path.get_ident(), lit) {
                     (Some(ident), Lit::Str(partial_name)) => {
-                        Some((ident.to_string(), partial_name.value()))
+                        Ok((ident.to_string(), partial_name.value()))
                     }
-                    (_, _) => {
-                        unimplemented!("0 Only support attributes of form (name = \"value\")");
-                    }
+                    (_, _) => Err(syn::Error::new(
+                        meta.span(),
+                        "sl_sh_fn requires one name-value pair, 'fn_name'.",
+                    )),
                 }
             }
-            _ => {
-                unimplemented!("1 Only support attributes of form (name = \"value\")");
-            }
+            other => Err(syn::Error::new(
+                other.span(),
+                "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
+            )),
         },
-        NestedMeta::Lit(_) => {
-            unimplemented!("2 Only support attributes of form (name = \"value\")");
-        }
+        other @ _ => Err(syn::Error::new(
+            other.span(),
+            "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
+        )),
     }
 }
 
@@ -232,8 +248,8 @@ fn generate_sl_sh_fns(
 ) -> MacroResult<TokenStream2> {
     let vals = attr_args
         .iter()
-        .filter_map(get_attribute_name_pair)
-        .collect::<Vec<(String, String)>>();
+        .map(get_attribute_name_pair)
+        .collect::<MacroResult<Vec<(String, String)>>>()?;
     let fn_name_attr = "fn_name".to_string();
     let fn_name = get_attribute_value_with_key(item_fn, &fn_name_attr, &vals)?;
     let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
@@ -331,7 +347,6 @@ pub fn sl_sh_fn(
 }
 
 //TODO
-//  - functions that do not return anything
-//  - functions that take actual Expressions, s.t. doing into on them might... be redundant?
-//  - support Option-al argument
+//  - functions that do not return anything... enhance get_return_type
+//  - support Option-al arguments... enhance get_input_types
 //  - variadic functions
