@@ -356,39 +356,74 @@ impl TryIntoExpression<i64> for Expression {
     }
 }
 
-impl PartialEq<Self> for Expression {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.get().data, &other.get().data) {
-            (ExpEnum::True, ExpEnum::True) => true,
-            (ExpEnum::False, ExpEnum::False) => true,
-            (ExpEnum::Nil, ExpEnum::Nil) => true,
-            (ExpEnum::Float(lf), ExpEnum::Float(rt)) => lf == rt,
-            (ExpEnum::Int(lf), ExpEnum::Int(rt)) => lf == rt,
-            (ExpEnum::Char(lf), ExpEnum::Char(rt)) => lf == rt,
-            (ExpEnum::CodePoint(lf), ExpEnum::CodePoint(rt)) => lf == rt,
-            (_, _) => false,
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::convert::TryFrom;
+    use std::convert::TryInto;
+
+    #[test]
+    fn test_from_numerical() {
+        let result = Expression::from(42i64);
+        assert_eq!(result, Expression::alloc_data(ExpEnum::Int(42i64)));
+
+        let result: Expression = 42i64.into();
+        assert_eq!(result, Expression::alloc_data(ExpEnum::Int(42i64)));
+
+        let result = i64::try_from(Expression::alloc_data(ExpEnum::Int(7))).unwrap();
+        assert_eq!(7, result);
+
+        let result: f64 = Expression::alloc_data(ExpEnum::Int(7)).try_into().unwrap();
+        assert_eq!(7f64, result);
+
+        let result: f64 = Expression::alloc_data(ExpEnum::Float(7f64))
+            .try_into()
+            .unwrap();
+        assert_eq!(7f64, result);
+
+        let result: f64 = Expression::alloc_data(ExpEnum::Float(7f64))
+            .try_into()
+            .unwrap();
+        assert_eq!(7f64, result);
+
+        let result = f64::try_from(Expression::alloc_data(ExpEnum::Int(7i64))).unwrap();
+        assert_eq!(7f64, result);
+    }
+
+    impl PartialEq<Self> for Expression {
+        fn eq(&self, other: &Self) -> bool {
+            match (&self.get().data, &other.get().data) {
+                (ExpEnum::True, ExpEnum::True) => true,
+                (ExpEnum::False, ExpEnum::False) => true,
+                (ExpEnum::Nil, ExpEnum::Nil) => true,
+                (ExpEnum::Float(lf), ExpEnum::Float(rt)) => lf == rt,
+                (ExpEnum::Int(lf), ExpEnum::Int(rt)) => lf == rt,
+                (ExpEnum::Char(lf), ExpEnum::Char(rt)) => lf == rt,
+                (ExpEnum::CodePoint(lf), ExpEnum::CodePoint(rt)) => lf == rt,
+                (_, _) => false,
+            }
+            //(ExpEnum::String(lf_s, lf_i), ExpEnum::String(rt_s, rt_i) => {}
+            //(ExpEnum::Symbol(_, _), ExpEnum::Symbol(_, _)) => {}
+            //(ExpEnum::Regex(_), ExpEnum::Regex(_)) => {}
+            //ExpEnum::Symbol(_, _) => {}
+            //ExpEnum::Lambda(_) => {}
+            //ExpEnum::Macro(_) => {}
+            //ExpEnum::Function(_) => {}
+            //ExpEnum::LazyFn(_, _) => {}
+            //ExpEnum::Vector(_) => {}
+            //ExpEnum::Values(_) => {}
+            //ExpEnum::Pair(_, _) => {}
+            //ExpEnum::HashMap(_) => {}
+            //ExpEnum::Process(_) => {}
+            //ExpEnum::File(_) => {}
+            //ExpEnum::Wrapper(_) => {}
+            //ExpEnum::DeclareDef => {}
+            //ExpEnum::DeclareVar => {}
+            //ExpEnum::DeclareFn => {}
+            //ExpEnum::DeclareMacro => {}
+            //ExpEnum::Quote => {}
+            //ExpEnum::BackQuote => {}
+            //ExpEnum::Undefined => {}
         }
-        //(ExpEnum::String(lf_s, lf_i), ExpEnum::String(rt_s, rt_i) => {}
-        //(ExpEnum::Symbol(_, _), ExpEnum::Symbol(_, _)) => {}
-        //(ExpEnum::Regex(_), ExpEnum::Regex(_)) => {}
-        //ExpEnum::Symbol(_, _) => {}
-        //ExpEnum::Lambda(_) => {}
-        //ExpEnum::Macro(_) => {}
-        //ExpEnum::Function(_) => {}
-        //ExpEnum::LazyFn(_, _) => {}
-        //ExpEnum::Vector(_) => {}
-        //ExpEnum::Values(_) => {}
-        //ExpEnum::Pair(_, _) => {}
-        //ExpEnum::HashMap(_) => {}
-        //ExpEnum::Process(_) => {}
-        //ExpEnum::File(_) => {}
-        //ExpEnum::Wrapper(_) => {}
-        //ExpEnum::DeclareDef => {}
-        //ExpEnum::DeclareVar => {}
-        //ExpEnum::DeclareFn => {}
-        //ExpEnum::DeclareMacro => {}
-        //ExpEnum::Quote => {}
-        //ExpEnum::BackQuote => {}
-        //ExpEnum::Undefined => {}
     }
 }

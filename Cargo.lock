@@ -680,7 +680,7 @@ dependencies = [
 [[package]]
 name = "sl-sh-proc-macros"
 version = "0.0.0"
-source = "git+https://github.com/sl-sh-dev/sl-sh-proc-macros.git#f4fbbcf18b3ed577206c54dd9a32a855f441c355"
+source = "git+https://github.com/sl-sh-dev/sl-sh-proc-macros.git#ba7694f8de5d57083375f2bd5817f7e7f4efce47"
 dependencies = [
  "quote",
  "static_assertions",
