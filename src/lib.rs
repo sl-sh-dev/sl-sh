@@ -130,6 +130,7 @@ fn get_return_type(item_fn: &syn::ItemFn) -> Type {
 //  -   this should throw an error if no doc is found, that's required!
 //  -   spacing not preserved? really??
 fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
+    let mut docs = "".to_string();
     for attr in &item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
             if &path_segment.ident.to_string() == "doc" {
@@ -141,7 +142,10 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
                             let path = &pair.path;
                             let lit = &pair.lit;
                             match (path.get_ident(), lit) {
-                                (_, Lit::Str(partial_name)) => return Ok(partial_name.value()),
+                                (_, Lit::Str(partial_name)) => {
+                                    docs += &*partial_name.value();
+                                    docs += "\n";
+                                }
                                 (_, _) => {}
                             }
                         }
@@ -151,10 +155,14 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
             }
         }
     }
-    Err(syn::Error::new(
-        item_fn.span(),
-        "Functions with this attribute included must have documentation.",
-    ))
+    if docs.is_empty() {
+        Err(syn::Error::new(
+            item_fn.span(),
+            "Functions with this attribute included must have documentation.",
+        ))
+    } else {
+        return Ok(docs);
+    }
 }
 
 fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<TokenStream2> {
