@@ -174,23 +174,11 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     for attr in &item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
             if &path_segment.ident.to_string() == "doc" {
-                match attr.parse_meta() {
-                    Ok(meta) => match meta {
-                        Meta::Path(_) => {}
-                        Meta::List(_) => {}
-                        Meta::NameValue(pair) => {
-                            let path = &pair.path;
-                            let lit = &pair.lit;
-                            match (path.get_ident(), lit) {
-                                (_, Lit::Str(partial_name)) => {
-                                    docs += &*partial_name.value();
-                                    docs += "\n";
-                                }
-                                (_, _) => {}
-                            }
-                        }
-                    },
-                    Err(_) => {}
+                if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
+                    if let Lit::Str(partial_name) = &pair.lit {
+                        docs += &*partial_name.value();
+                        docs += "\n";
+                    }
                 }
             }
         }
@@ -201,7 +189,7 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
             "Functions with this attribute included must have documentation.",
         ))
     } else {
-        return Ok(docs);
+        Ok(docs)
     }
 }
 
@@ -274,7 +262,7 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> MacroResult<(String, Str
                 "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
             )),
         },
-        other @ _ => Err(syn::Error::new(
+        other => Err(syn::Error::new(
             other.span(),
             "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
         )),
@@ -364,7 +352,7 @@ pub fn sl_sh_fn(
                 let generated_sl_sh_fns: TokenStream2 = match generate_sl_sh_fns(item_fn, attr_args)
                 {
                     Ok(fns) => fns,
-                    Err(e) => e.to_compile_error().into(),
+                    Err(e) => e.to_compile_error(),
                 };
                 let original_fn_code = item.into_token_stream();
                 quote! {
@@ -374,12 +362,11 @@ pub fn sl_sh_fn(
                 }
             }
             _ => syn::Error::new(item.span(), "This attribute only supports functions.")
-                .to_compile_error()
-                .into(),
+                .to_compile_error(),
         },
-        Err(e) => syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.")
-            .to_compile_error()
-            .into(),
+        Err(e) => {
+            syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error()
+        }
     };
 
     proc_macro::TokenStream::from(tokens)
