@@ -45,8 +45,8 @@ fn int_to_float(int: i64) -> f64 {
 }
 ```
 
-will trigger the generation of three new functions, parse_int_to_float, 
-builtin_int_to_float, and intern_int_to_float.
+will trigger the generation of three new functions, `parse_int_to_float`,
+`builtin_int_to_float`, and `intern_int_to_float`.
 - parse_int_to_float expands to something like:
 
 ```rust
@@ -101,8 +101,8 @@ fn parse_int_to_float(
 }
 ```
 
-- parse_int_to_float's job is to make sure that the signatures match, and, if they do
-it calls the builtin_int_to_float function, otherwise it returns a LispError at runtime.
+- `parse_int_to_float`'s job is to make sure that the signatures match, and, if they do
+it calls the `builtin_int_to_float` function, otherwise it returns a LispError at runtime.
 - the builtin_ function expands to something like this:
 
 ```rust
@@ -128,10 +128,11 @@ fn builtin_int_to_float(arg_0: crate::Expression) -> crate::LispResult<crate::ty
 }
 ```
 
-- builtin_int_to_float's job is to (at compile time) ensure the proper traits are
+- `builtin_int_to_float`'s job is to (at compile time) ensure the proper traits are
 implemented and then coerce the rust types into sl-sh Expressions with the
-appropriate errors.
-- once builtin_int_to_float exists, intern_int_to_float must be manually
+appropriate errors and call the original function, `int_to_float` with rust
+types.
+- once `builtin_int_to_float` exists, `intern_int_to_float` must be manually
 called in the add_buitlins function like:
 
 ```rust
@@ -143,8 +144,8 @@ pub fn add_type_builtins<S: BuildHasher>(
 }
 ```
 
-- this is a bit ugly but calling a procedurally generated function isn't
-too scary. This function tells sl-sh's plumbing to use the builtin_int_to_float
+- this is a bit ugly but necessary given the current architecture. This function
+tells sl-sh's plumbing to use the `builtin_int_to_float`
 method when the `int->float` function is called.
 - great pains were taken to make sure that the errors in development are as nice as
 possible, if the errors are confusing or they are pointing to the wrong code
