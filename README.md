@@ -29,6 +29,7 @@ Macros
 	- the macro must have the name value pair (fn_name = "name-of-sl-sh-fun") so
 	the macro can reference the name of the function in case of an error at runtime.
 	- for example the function:
+
 ```
 /// Usage: (int->float int) -> float
 ///     Cast an int as a float.
@@ -43,9 +44,11 @@ fn int_to_float(int: i64) -> f64 {
 	int as f64
 }
 ```
+
 	will trigger the generation of three new functions, parse_int_to_float, 
 	builtin_int_to_float, and intern_int_to_float.
 	- parse_int_to_float expands to something like:
+
 ```
 fn parse_int_to_float(
     environment: &mut crate::environment::Environment,
@@ -97,9 +100,11 @@ fn parse_int_to_float(
     }
 }
 ```
+
 	- parse_int_to_float's job is to make sure that the signatures match, and, if they do
 	it calls the builtin_int_to_float function, otherwise it returns a LispError at runtime.
 	- the builtin_ function expands to something like this:
+
 ```
 fn builtin_int_to_float(arg_0: crate::Expression) -> crate::LispResult<crate::types::Expression> {
     use std::convert::TryInto;
@@ -122,11 +127,13 @@ fn builtin_int_to_float(arg_0: crate::Expression) -> crate::LispResult<crate::ty
     Ok(result.into())
 }
 ```
+
 	- builtin_int_to_float's job is to (at compile time) ensure the proper traits are
 	implemented and then coerce the rust types into sl-sh Expressions with the
 	appropriate errors.
 	- once builtin_int_to_float exists, intern_int_to_float must be manually
 	called in the add_buitlins function like:
+
 ```
 pub fn add_type_builtins<S: BuildHasher>(
 	interner: &mut Interner,
@@ -135,6 +142,7 @@ pub fn add_type_builtins<S: BuildHasher>(
 	intern_int_to_float(interner, data);
 }
 ```
+
 	- this is a bit ugly but calling a procedurally generated function isn't
 	too scary. This function tells sl-sh's plumbing to use the builtin_int_to_float
 	method when the `int->float` function is called.
