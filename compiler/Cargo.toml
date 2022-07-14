@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 unicode-segmentation = "1.9"
+unicode_reader = "1"
 slvm = { path = "../vm" }
 
 [build-dependencies]

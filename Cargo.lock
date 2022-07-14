@@ -171,6 +171,7 @@ dependencies = [
  "chrono",
  "slvm",
  "unicode-segmentation",
+ "unicode_reader",
 ]
 
 [[package]]

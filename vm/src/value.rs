@@ -115,7 +115,7 @@ pub enum Value {
     Keyword(Interned),
     StringConst(Interned),
     Global(u32),
-    Builtin(CallFunc), // XXX TODO, special form?
+    Builtin(CallFunc),
     True,
     False,
     Nil,

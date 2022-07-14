@@ -2,11 +2,14 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io::{BufReader, Cursor, Read};
 use std::num::{ParseFloatError, ParseIntError};
 
 use slvm::value::*;
 use slvm::vm::*;
 use slvm::Chunk;
+use unicode_reader::Graphemes;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub trait PeekableIterator: std::iter::Iterator {
@@ -39,8 +42,6 @@ pub struct ReaderState {
     pub file_name: &'static str,
     pub line: usize,
     pub column: usize,
-    pub clear_state: bool,
-    pub in_read: bool,
 }
 
 impl ReaderState {
@@ -51,8 +52,6 @@ impl ReaderState {
     pub fn clear(&mut self) {
         self.column = 0;
         self.line = 1;
-        self.clear_state = false;
-        self.in_read = false;
     }
 }
 
@@ -62,8 +61,6 @@ impl Default for ReaderState {
             file_name: "",
             column: 0,
             line: 1,
-            clear_state: false,
-            in_read: false,
         }
     }
 }
@@ -1070,6 +1067,8 @@ fn read_inner(
                     ";" => {
                         match read_inner(vm, reader_state, chars, buffer, in_back_quote, false) {
                             Ok((_, ichars)) => {
+                                // XXX TODO- this is a bug, need to wrap this in a special form or something,
+                                // this indicates the input is done...
                                 return Ok((None, ichars));
                             }
                             Err((err, ichars)) => {
@@ -1123,70 +1122,31 @@ fn read_inner(
     Ok((None, chars))
 }
 
-fn read_form_state(
+fn read_form(
     vm: &mut Vm,
     reader_state: &mut ReaderState,
     chars: CharIter,
-    clear_state: bool,
-) -> Result<(Value, CharIter), (ReadError, CharIter)> {
-    let mut buffer = String::new();
-    let old_in_read = reader_state.in_read;
-    let old_state = if clear_state {
-        let os = reader_state.clone();
-        reader_state.clear();
-        Some(os)
-    } else {
-        None
-    };
-    reader_state.in_read = true;
-    let res = match read_inner(vm, reader_state, chars, &mut buffer, false, false) {
-        Ok((Some(exp), ichars)) => Ok((exp, ichars)),
-        Ok((None, ichars)) => Err((
-            ReadError {
-                reason: "Empty value".to_string(),
-            },
-            ichars,
-        )),
-        Err((err, ichars)) => Err((err, ichars)),
-    };
-    reader_state.in_read = old_in_read;
-    if let Some(old_state) = old_state {
-        reader_state.line = old_state.line;
-        reader_state.column = old_state.column;
-        reader_state.clear_state = old_state.clear_state;
-        reader_state.in_read = old_state.in_read;
-    }
-    res
-}
-
-pub fn read_form(
-    vm: &mut Vm,
-    reader_state: &mut ReaderState,
-    chars: CharIter,
-) -> Result<(Value, CharIter), (ReadError, CharIter)> {
+) -> Result<(Option<Value>, CharIter), (ReadError, CharIter)> {
     vm.pause_gc();
-    let res = read_form_state(vm, reader_state, chars, false);
+    let mut buffer = String::new();
+    let res = read_inner(vm, reader_state, chars, &mut buffer, false, false);
     vm.unpause_gc();
     res
 }
 
-fn read_all_inner(
+fn _read_all_inner(
     vm: &mut Vm,
     reader_state: &mut ReaderState,
-    text: &str,
+    text: &'static str,
 ) -> Result<Vec<Value>, ReadError> {
-    /*if reader_state.clear_state {
-        reader_state.clear();
-        reader_state.file_name = file_name;
-    }*/
     let mut buffer = String::new();
     let mut exps = Vec::new();
 
     // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
     // reference and iterator go away at the end of this function.
-    let ntext = unsafe { &*(text as *const str) };
+    //let ntext = unsafe { &*(text as *const str) };
     let mut chars: CharIter = Box::new(
-        UnicodeSegmentation::graphemes(ntext, true)
+        UnicodeSegmentation::graphemes(text, true)
             .map(Cow::Borrowed)
             .peekable(),
     );
@@ -1196,13 +1156,8 @@ fn read_all_inner(
     }
     let mut cont = true;
     while cont {
-        let (exp, ichars) = match read_inner(vm, reader_state, chars, &mut buffer, false, false) {
-            Ok(r) => r,
-            Err((err, _)) => {
-                reader_state.clear_state = true;
-                return Err(err);
-            }
-        };
+        let (exp, ichars) = read_inner(vm, reader_state, chars, &mut buffer, false, false)
+            .map_err(|(err, _)| err)?;
         if let Some(exp) = exp {
             exps.push(exp);
         } else {
@@ -1211,14 +1166,12 @@ fn read_all_inner(
         chars = ichars;
     }
     if chars.next().is_some() {
-        reader_state.clear_state = true;
         let reason = format!(
             "Premature end (to many ')'?) line: {}, column: {}",
             reader_state.line, reader_state.column
         );
         return Err(ReadError { reason });
     }
-    reader_state.clear_state = true;
 
     Ok(exps)
 }
@@ -1226,45 +1179,103 @@ fn read_all_inner(
 pub fn read_all(
     vm: &mut Vm,
     reader_state: &mut ReaderState,
-    text: &str,
+    text: &'static str,
 ) -> Result<Vec<Value>, ReadError> {
-    vm.pause_gc();
+    /*vm.pause_gc();
     let res = read_all_inner(vm, reader_state, text);
     vm.unpause_gc();
-    res
+    res*/
+    ReadIter::from_string(text.to_string(), vm, reader_state.clone()).collect()
 }
 
-pub fn read(
-    vm: &mut Vm,
-    reader_state: &mut ReaderState,
-    text: &str,
-    list_only: bool,
-) -> Result<Value, ReadError> {
-    let exps = read_all(vm, reader_state, text)?;
-    // Don't exit early without unpausing....
-    vm.pause_gc();
-    let res = if list_only {
-        if exps.len() == 1 {
-            match exps[0] {
-                Value::Pair(_) => Ok(exps[0]),
-                Value::Vector(_) => Ok(exps[0]),
-                Value::Nil => Ok(exps[0]),
-                _ => Ok(vm.alloc_vector_ro(exps)),
+pub struct ReadIter<'vm> {
+    vm: &'vm mut Vm,
+    reader_state: ReaderState,
+    char_iter: Option<CharIter>,
+}
+
+impl<'vm> Iterator for ReadIter<'vm> {
+    type Item = Result<Value, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(mut char_iter) = self.char_iter.take() {
+            if char_iter.peek().is_none() {
+                None
+            } else {
+                let (result, chars) = match read_form(self.vm, &mut self.reader_state, char_iter) {
+                    Ok((None, _chars)) => return None,
+                    Ok((Some(val), chars)) => (Ok(val), chars),
+                    Err((err, chars)) => (Err(err), chars),
+                };
+                self.char_iter = Some(chars);
+                Some(result)
             }
-        } else if exps.is_empty() {
-            Err(ReadError {
-                reason: "Empty value".to_string(),
-            })
         } else {
-            Ok(vm.alloc_vector_ro(exps))
+            None
         }
-    } else if exps.len() == 1 {
-        Ok(exps[0])
-    } else {
-        Ok(vm.alloc_vector_ro(exps))
-    };
-    vm.unpause_gc();
-    res
+    }
+}
+
+impl<'vm> ReadIter<'vm> {
+    pub fn from_read<R: Read + 'static>(
+        src: R,
+        vm: &'vm mut Vm,
+        reader_state: ReaderState,
+    ) -> Self {
+        let char_iter: CharIter = Box::new(
+            Graphemes::from(src)
+                .map(|s| {
+                    if let Ok(s) = s {
+                        Cow::Owned(s)
+                    } else {
+                        Cow::Borrowed("")
+                    }
+                })
+                .peekable(),
+        );
+        Self {
+            vm,
+            reader_state,
+            char_iter: Some(char_iter),
+        }
+    }
+    pub fn from_file(src: File, vm: &'vm mut Vm, reader_state: ReaderState) -> Self {
+        let char_iter: CharIter = Box::new(
+            Graphemes::from(BufReader::new(src))
+                .map(|s| {
+                    if let Ok(s) = s {
+                        Cow::Owned(s)
+                    } else {
+                        Cow::Borrowed("")
+                    }
+                })
+                .peekable(),
+        );
+        Self {
+            vm,
+            reader_state,
+            char_iter: Some(char_iter),
+        }
+    }
+
+    pub fn from_string(src: String, vm: &'vm mut Vm, reader_state: ReaderState) -> Self {
+        let char_iter: CharIter = Box::new(
+            Graphemes::from(BufReader::new(Cursor::new(src.into_bytes())))
+                .map(|s| {
+                    if let Ok(s) = s {
+                        Cow::Owned(s)
+                    } else {
+                        Cow::Borrowed("")
+                    }
+                })
+                .peekable(),
+        );
+        Self {
+            vm,
+            reader_state,
+            char_iter: Some(char_iter),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1309,13 +1320,30 @@ mod tests {
         }
     }
 
+    fn read_test(
+        vm: &mut Vm,
+        reader_state: &mut ReaderState,
+        text: &'static str,
+    ) -> Result<Value, ReadError> {
+        let exps = read_all(vm, reader_state, text)?;
+        // Don't exit early without unpausing....
+        vm.pause_gc();
+        let res = if exps.len() == 1 {
+            Ok(exps[0])
+        } else {
+            Ok(vm.alloc_vector_ro(exps))
+        };
+        vm.unpause_gc();
+        res
+    }
+
     fn tokenize(
         vm: &mut Vm,
         reader_state: &mut ReaderState,
-        input: &str,
+        input: &'static str,
         _name: Option<&'static str>,
     ) -> Vec<String> {
-        let exp = read(vm, reader_state, input, false);
+        let exp = read_test(vm, reader_state, input);
         let mut tokens = Vec::new();
         if let Ok(exp) = exp {
             to_strs(vm, &mut tokens, exp);
@@ -1328,10 +1356,10 @@ mod tests {
     fn tokenize_err(
         vm: &mut Vm,
         reader_state: &mut ReaderState,
-        input: &str,
+        input: &'static str,
         _name: Option<&'static str>,
     ) -> ReadError {
-        let exp = read(vm, reader_state, input, false);
+        let exp = read_test(vm, reader_state, input);
         if let Err(err) = exp {
             err
         } else {
@@ -1339,20 +1367,12 @@ mod tests {
         }
     }
 
-    fn tokenize_wrap(vm: &mut Vm, reader_state: &mut ReaderState, input: &str) -> Vec<String> {
-        // Do this so the chars iterator has a static lifetime.  Should be ok since both the string
-        // reference and iterator go away at the end of this function.
-        let ntext = unsafe { &*(input as *const str) };
-        let mut chars: CharIter = Box::new(
-            UnicodeSegmentation::graphemes(ntext, true)
-                .map(Cow::Borrowed)
-                .peekable(),
-        );
+    fn tokenize_wrap(vm: &mut Vm, reader_state: ReaderState, input: &str) -> Vec<String> {
         let mut tokens = Vec::new();
         let mut token_exps = Vec::new();
-        while let Ok((exp, ichars)) = read_form(vm, reader_state, chars) {
-            chars = ichars;
-            token_exps.push(exp);
+        let read_iter = ReadIter::from_string(input.to_string(), vm, reader_state);
+        for exp in read_iter {
+            token_exps.push(exp.unwrap());
         }
         let val = vm.alloc_vector_ro(token_exps);
         to_strs(vm, &mut tokens, val);
@@ -1626,7 +1646,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "(1 2 3)");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "(1 2 3)");
         assert!(tokens.len() == 7);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1643,7 +1663,7 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "1 2 3");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "1 2 3");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "Int:1");
@@ -1665,7 +1685,7 @@ mod tests {
         assert!(tokens[9] == "Int:6");
         assert!(tokens[10] == ")");
         assert!(tokens[11] == ")");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "(1 2 3) (4 5 6)");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1690,7 +1710,7 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "'(1 2 3)");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "'(1 2 3)");
         assert!(tokens.len() == 10);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "(");
@@ -1709,12 +1729,12 @@ mod tests {
         let tokens = tokenize(&mut vm, &mut reader_state, "()", None);
         assert!(tokens.len() == 1);
         assert!(tokens[0] == "nil");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "nil");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "nil");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");
         assert!(tokens[2] == ")");
-        let tokens = tokenize_wrap(&mut vm, &mut reader_state, "()");
+        let tokens = tokenize_wrap(&mut vm, reader_state.clone(), "()");
         assert!(tokens.len() == 3);
         assert!(tokens[0] == "#(");
         assert!(tokens[1] == "nil");

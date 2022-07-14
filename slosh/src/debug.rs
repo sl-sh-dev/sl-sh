@@ -144,7 +144,13 @@ pub fn debug(vm: &mut Vm) {
             .push(&res)
             .expect("Failed to push debug history.");
         let mut reader_state = ReaderState::new();
-        let exps = read_all(vm, &mut reader_state, &res);
+        // This should be fine, we are abusing the reader to parse debug input so should be no chance
+        // any string pointers are saved.  Could intern these as well for a legit 'static but should
+        // not need that (although a lot of debug commands will be repetitive so may not be a big deal.
+        // TODO- once there is a "secure" mode for the reader use that here.
+        let text: &str = &res;
+        let text = unsafe { &*(text as *const str) };
+        let exps = read_all(vm, &mut reader_state, text);
         match exps {
             Ok(exps) => {
                 let mut exps = exps.iter();

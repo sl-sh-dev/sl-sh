@@ -1,7 +1,6 @@
 extern crate sl_liner;
 
-use std::borrow::Cow;
-use std::io::{BufReader, ErrorKind};
+use std::io::ErrorKind;
 use std::sync::Arc;
 
 use slvm::error::*;
@@ -15,7 +14,6 @@ use sl_compiler::state::*;
 
 use sl_liner::{Context, Prompt};
 use slvm::Chunk;
-use unicode_reader::Graphemes;
 
 pub mod debug;
 use debug::*;
@@ -141,49 +139,30 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         _ => return Err(VMError::new_vm("load: Not a string.")),
     };
     let file = std::fs::File::open(name)?;
-    let mut chars: CharIter = Box::new(
-        Graphemes::from(BufReader::new(file))
-            .map(|s| {
-                if let Ok(s) = s {
-                    Cow::Owned(s)
-                } else {
-                    Cow::Borrowed("")
-                }
-            })
-            .peekable(),
-    );
 
     let mut reader_state = ReaderState::new();
     reader_state.file_name = name;
     let mut linenum = 1;
     let mut line = Some(&mut linenum);
     let mut last = Value::Nil;
-    while let Ok((exp, nchars)) = read_form(vm, &mut reader_state, chars) {
-        chars = nchars;
+    // Break the lifetime of our vm reference away from vm.  We have to hand vm to the read iter but
+    // we still need to use it in the for loop.  This is all single threaded code and this unsafe_vm
+    // is not saved anywhere so this should all be fine.
+    let unsafe_vm: &mut Vm = unsafe { (vm as *mut Vm).as_mut().unwrap() };
+    let reader = ReadIter::from_file(file, vm, reader_state);
+    for exp in reader {
+        let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
         if let Some(handle) = exp.get_handle() {
-            vm.heap_sticky(handle);
+            unsafe_vm.heap_sticky(handle);
         }
 
-        let chunk = load_one_expression(vm, exp, name, &mut line);
+        let chunk = load_one_expression(unsafe_vm, exp, name, &mut line);
 
         if let Some(handle) = exp.get_handle() {
-            vm.heap_unsticky(handle);
+            unsafe_vm.heap_unsticky(handle);
         }
-        vm.execute(chunk?)?;
-        /*            if let Err(err) = vm.execute(chunk) {
-            println!("ERROR: {}", err.display(&vm));
-            if let Some(err_frame) = vm.err_frame() {
-                let ip = err_frame.current_ip;
-                let line = err_frame.chunk.offset_to_line(ip).unwrap_or(0);
-                println!(
-                    "{} line: {} ip: {:#010x}",
-                    err_frame.chunk.file_name, line, ip
-                );
-            }
-            debug(vm);
-            return Err(err);
-        }*/
-        last = vm.get_stack(0);
+        unsafe_vm.execute(chunk?)?;
+        last = unsafe_vm.get_stack(0);
     }
     Ok(last)
 }
@@ -332,6 +311,7 @@ fn eval(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 }
 
 const PROMPT_FN: &str = "prompt";
+
 fn main() {
     let mut con = Context::new();
 
@@ -358,8 +338,6 @@ fn main() {
         "sizeof-value",
         Value::Builtin(CallFunc { func: sizeof_value }),
     );
-    //vm.set_global("eval", Value::Builtin(CallFunc { func: eval }));
-    //vm.pause_gc();
     let mut env = CompileEnvironment::new(&mut vm);
     loop {
         let res = match con.read_line(Prompt::from("slosh> "), None) {
@@ -383,17 +361,12 @@ fn main() {
         }
 
         con.history.push(&res).expect("Failed to push history.");
-        let mut reader_state = ReaderState::new();
-        let exps = read_all(env.vm_mut(), &mut reader_state, &res);
+        let reader_state = ReaderState::new();
+        let reader = ReadIter::from_string(res, env.vm_mut(), reader_state);
+        let exps: Result<Vec<Value>, ReadError> = reader.collect();
         match exps {
             Ok(exps) => {
                 for exp in exps {
-                    /*if let Value::Pair(h) = exp {
-                        let (_, _) = vm.get_pair(h);
-                        if let Some(Value::UInt(dline)) = vm.get_heap_property(h, "dbg-line") {
-                            line = dline as u32;
-                        }
-                    }*/
                     let line_num = env.line_num();
                     let mut state =
                         CompileState::new_state(env.vm_mut(), PROMPT_FN, line_num, None);
@@ -419,7 +392,6 @@ fn main() {
                         }
                         debug(env.vm_mut());
                     } else {
-                        //println!("{}", vm.get_stack(0).display_value(&vm));
                         let reg = env.vm().get_stack(0);
                         println!("{}", value_dsp_str(env.vm_mut(), reg));
                     }
