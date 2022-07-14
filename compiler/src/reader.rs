@@ -1276,6 +1276,10 @@ impl<'vm> ReadIter<'vm> {
             char_iter: Some(char_iter),
         }
     }
+
+    pub fn vm(&mut self) -> &mut Vm {
+        self.vm
+    }
 }
 
 #[cfg(test)]

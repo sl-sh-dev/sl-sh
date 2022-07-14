@@ -145,24 +145,21 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     let mut linenum = 1;
     let mut line = Some(&mut linenum);
     let mut last = Value::Nil;
-    // Break the lifetime of our vm reference away from vm.  We have to hand vm to the read iter but
-    // we still need to use it in the for loop.  This is all single threaded code and this unsafe_vm
-    // is not saved anywhere so this should all be fine.
-    let unsafe_vm: &mut Vm = unsafe { (vm as *mut Vm).as_mut().unwrap() };
-    let reader = ReadIter::from_file(file, vm, reader_state);
-    for exp in reader {
+    let mut reader = ReadIter::from_file(file, vm, reader_state);
+    while let Some(exp) = reader.next() {
+        let reader_vm = reader.vm();
         let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
         if let Some(handle) = exp.get_handle() {
-            unsafe_vm.heap_sticky(handle);
+            reader_vm.heap_sticky(handle);
         }
 
-        let chunk = load_one_expression(unsafe_vm, exp, name, &mut line);
+        let chunk = load_one_expression(reader_vm, exp, name, &mut line);
 
         if let Some(handle) = exp.get_handle() {
-            unsafe_vm.heap_unsticky(handle);
+            reader_vm.heap_unsticky(handle);
         }
-        unsafe_vm.execute(chunk?)?;
-        last = unsafe_vm.get_stack(0);
+        reader_vm.execute(chunk?)?;
+        last = reader_vm.get_stack(0);
     }
     Ok(last)
 }
