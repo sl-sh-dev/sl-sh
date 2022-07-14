@@ -84,6 +84,43 @@ fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
 
 /// given a type and the string value of a trait in std::convert::<convert_trait>
 /// returned the given type wrapped with the std::convert::<convert_trait>
+fn wrap_with_try_into_expression(ty: Type) -> Type {
+    let crate_path_segment = PathSegment {
+        ident: Ident::new("crate", Span::call_site()),
+        arguments: PathArguments::None,
+    };
+    let builtins_util_path_segment = PathSegment {
+        ident: Ident::new("builtins_util", Span::call_site()),
+        arguments: PathArguments::None,
+    };
+    let generic_argument = GenericArgument::Type(ty);
+    let mut generic_pun_seq = Punctuated::new();
+    generic_pun_seq.push(generic_argument);
+    let generic_argument = AngleBracketedGenericArguments {
+        colon2_token: None,
+        lt_token: Default::default(),
+        args: generic_pun_seq,
+        gt_token: Default::default(),
+    };
+    let try_into_expression_path_segment = PathSegment {
+        ident: Ident::new("TryIntoExpression", Span::call_site()),
+        arguments: PathArguments::AngleBracketed(generic_argument),
+    };
+    let mut pun_seq = Punctuated::new();
+    pun_seq.push(crate_path_segment);
+    pun_seq.push(builtins_util_path_segment);
+    pun_seq.push(try_into_expression_path_segment);
+    Type::Path(TypePath {
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: pun_seq,
+        },
+    })
+}
+
+/// given a type and the string value of a trait in std::convert::<convert_trait>
+/// returned the given type wrapped with the std::convert::<convert_trait>
 fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     let std_path_segment = PathSegment {
         ident: Ident::new("std", Span::call_site()),
@@ -173,10 +210,12 @@ fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<T
     let input_types = get_input_types(inputs);
     let mut conversion_assertions_code = vec![];
     for input_type in input_types {
-        let try_into = wrap_with_std_convert(input_type, "TryInto");
-        let exp_enum = build_sl_sh_expression_type();
+        let try_into = wrap_with_std_convert(input_type.clone(), "TryInto");
+        let try_into_expression = wrap_with_try_into_expression(input_type);
+        let expession = build_sl_sh_expression_type();
         conversion_assertions_code.push(quote! {
-          static_assertions::assert_impl_all!(#exp_enum: #try_into);
+          static_assertions::assert_impl_all!(#expession: #try_into);
+          static_assertions::assert_impl_all!(#expession: #try_into_expression);
         });
     }
     let return_type = get_return_type(item_fn);
@@ -338,7 +377,7 @@ pub fn sl_sh_fn(
                 .to_compile_error()
                 .into(),
         },
-        Err(e) => syn::Error::new(e.span(), "Failed to parse proc_macro_attr.")
+        Err(e) => syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.")
             .to_compile_error()
             .into(),
     };
