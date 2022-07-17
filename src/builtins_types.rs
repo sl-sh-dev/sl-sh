@@ -8,6 +8,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::LispResult;
 
 /// Usage: (type expression)
 ///
@@ -442,40 +443,49 @@ fn is_list(exp: Expression) -> bool {
     };
 }
 
-fn builtin_str_to_int(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::String(istr, _) = &eval(environment, arg)?.get().data {
-                let potential_int: Result<i64, ParseIntError> = istr.parse();
-                return match potential_int {
-                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Int(v))),
-                    Err(_) => Err(LispError::new("str->int: string is not a valid integer")),
-                };
-            }
-        }
-    }
-    Err(LispError::new("str->int: requires a string"))
+/// Usage: (str->int string) -> int
+///
+/// If string is a valid representation of an integer return that int.  Error if not.
+///
+/// Section: type
+///
+/// Example:
+/// (test::assert-equal 0 (str->int "0"))
+/// (test::assert-equal 101 (str->int "101"))
+/// (test::assert-equal -101 (str->int "-101"))
+/// (test::assert-error (str->int "not int"))
+/// (test::assert-error (str->int "10.0"))
+/// (test::assert-error (str->int "--10"))
+#[sl_sh_fn(fn_name = "str->int")]
+fn str_to_int(istr: String) -> LispResult<i64> {
+    let potential_int: Result<i64, ParseIntError> = istr.parse();
+    return match potential_int {
+        Ok(v) => Ok(v),
+        Err(_) => Err(LispError::new("str->int: string is not a valid integer")),
+    };
 }
 
-fn builtin_str_to_float(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg) = args.next() {
-        if args.next().is_none() {
-            if let ExpEnum::String(istr, _) = &eval(environment, arg)?.get().data {
-                let potential_float: Result<f64, ParseFloatError> = istr.parse();
-                return match potential_float {
-                    Ok(v) => Ok(Expression::alloc_data(ExpEnum::Float(v))),
-                    Err(_) => Err(LispError::new("str->float: string is not a valid float")),
-                };
-            }
-        }
-    }
-    Err(LispError::new("str->float: requires a string"))
+/// Usage: (str->float string) -> float
+///
+/// If string is a valid representation of a float return that float.  Error if not.
+///
+/// Section: type
+///
+/// Example:
+/// (test::assert-equal 0 (str->float "0"))
+/// (test::assert-equal 10.0 (str->float "10.0"))
+/// (test::assert-equal 10.5 (str->float "10.5"))
+/// (test::assert-equal 101 (str->float "101"))
+/// (test::assert-equal -101.95 (str->float "-101.95"))
+/// (test::assert-error (str->float "not int"))
+/// (test::assert-error (str->float "--10"))
+#[sl_sh_fn(fn_name = "str->float")]
+fn str_to_float(istr: String) -> LispResult<f64> {
+    let potential_float: Result<f64, ParseFloatError> = istr.parse();
+    return match potential_float {
+        Ok(v) => Ok(v),
+        Err(_) => Err(LispError::new("str->float: string is not a valid float")),
+    };
 }
 
 /// Usage: (int->float int) -> float
@@ -527,24 +537,26 @@ fn builtin_to_symbol(
     )))
 }
 
-fn builtin_symbol_to_str(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(arg0) = args.next() {
-        if args.next().is_none() {
-            let arg0 = eval(environment, arg0)?;
-            return match &arg0.get().data {
-                ExpEnum::Symbol(s, _) => {
-                    Ok(Expression::alloc_data(ExpEnum::String((*s).into(), None)))
-                }
-                _ => Err(LispError::new(
-                    "sym->str: can only convert a symbol to a string",
-                )),
-            };
-        }
+/// Usage: (sym->str symbol) -> string
+///
+/// Convert a symbol to the string representation representation of it's name.
+///
+/// The string will be the symbol name as a string.
+///
+/// Section: type
+///
+/// Example:
+/// (def test-sym->str-sym nil)
+/// (test::assert-true (string? (sym->str 'test-sym->str-sym)))
+/// (test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
+#[sl_sh_fn(fn_name = "sym->str")]
+fn symbol_to_str(exp: Expression) -> LispResult<String> {
+    match exp.get().data {
+        ExpEnum::Symbol(s, _) => Ok(s.to_string()),
+        _ => Err(LispError::new(
+            "sym->str: can only convert a symbol to a string",
+        )),
     }
-    Err(LispError::new("sym->str: take one form (a symbol)"))
 }
 
 /// Usage: (falsey? under-test) -> bool
@@ -594,47 +606,8 @@ pub fn add_type_builtins<S: BuildHasher>(
     intern_is_file(interner, data);
     intern_is_hash(interner, data);
     intern_is_list(interner, data);
-    data.insert(
-        interner.intern("str->int"),
-        Expression::make_function(
-            builtin_str_to_int,
-            r#"Usage: (str->int string) -> int
-
-If string is a valid representation of an integer return that int.  Error if not.
-
-Section: type
-
-Example:
-(test::assert-equal 0 (str->int "0"))
-(test::assert-equal 101 (str->int "101"))
-(test::assert-equal -101 (str->int "-101"))
-(test::assert-error (str->int "not int"))
-(test::assert-error (str->int "10.0"))
-(test::assert-error (str->int "--10"))
-"#,
-        ),
-    );
-    data.insert(
-        interner.intern("str->float"),
-        Expression::make_function(
-            builtin_str_to_float,
-            r#"Usage: (str->float string) -> float
-
-If string is a valid representation of a float return that float.  Error if not.
-
-Section: type
-
-Example:
-(test::assert-equal 0 (str->float "0"))
-(test::assert-equal 10.0 (str->float "10.0"))
-(test::assert-equal 10.5 (str->float "10.5"))
-(test::assert-equal 101 (str->float "101"))
-(test::assert-equal -101.95 (str->float "-101.95"))
-(test::assert-error (str->float "not int"))
-(test::assert-error (str->float "--10"))
-"#,
-        ),
-    );
+    intern_str_to_int(interner, data);
+    intern_str_to_float(interner, data);
     intern_int_to_float(interner, data);
     intern_float_to_int(interner, data);
     data.insert(
@@ -661,24 +634,6 @@ Example:
 "#,
         ),
     );
-    data.insert(
-        interner.intern("sym->str"),
-        Expression::make_function(
-            builtin_symbol_to_str,
-            r#"Usage: (sym->str symbol) -> string
-
-Convert a symbol to the string representation representation of it's name.
-
-The string will be the symbol name as a string.
-
-Section: type
-
-Example:
-(def test-sym->str-sym nil)
-(test::assert-true (string? (sym->str 'test-sym->str-sym)))
-(test::assert-equal "test-sym->str-sym" (sym->str 'test-sym->str-sym))
-"#,
-        ),
-    );
+    intern_symbol_to_str(interner, data);
     intern_is_falsey(interner, data);
 }
