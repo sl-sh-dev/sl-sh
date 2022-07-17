@@ -240,7 +240,7 @@ impl SymLoc {
 }
 
 pub enum ExpEnum {
-    // Primatives
+    // Primitives
     True,
     False,
     Nil,

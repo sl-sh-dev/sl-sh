@@ -265,19 +265,18 @@ where
     }
 }
 
-pub trait TryIntoExpression<T>: Sized {
+pub trait TryIntoExpression<T>: Sized
+where
+    Self: ToString + TryInto<T>,
+{
     type Error;
-
-    fn try_into_expr(self) -> Result<T, Self::Error>;
 
     fn human_readable_dest_type(&self) -> String;
 
-    fn human_readable_src_type(&self) -> String;
-
     fn try_into_for(self, fn_name: &str) -> Result<T, LispError> {
-        let hr_src_type = self.human_readable_src_type();
+        let hr_src_type = self.to_string();
         let hr_dest_type = self.human_readable_dest_type();
-        let t = self.try_into_expr();
+        let t = self.try_into();
         match t {
             Ok(t) => Ok(t),
             Err(_) => Err(LispError::new(format!(
@@ -314,16 +313,8 @@ impl TryFrom<Expression> for bool {
 impl TryIntoExpression<bool> for Expression {
     type Error = LispError;
 
-    fn try_into_expr(self) -> Result<bool, Self::Error> {
-        self.try_into()
-    }
-
     fn human_readable_dest_type(&self) -> String {
         ExpEnum::True.to_string() + " or " + &ExpEnum::False.to_string()
-    }
-
-    fn human_readable_src_type(&self) -> String {
-        self.display_type()
     }
 }
 
@@ -348,16 +339,9 @@ impl TryFrom<Expression> for f64 {
 
 impl TryIntoExpression<f64> for Expression {
     type Error = LispError;
-    fn try_into_expr(self) -> Result<f64, Self::Error> {
-        self.try_into()
-    }
 
     fn human_readable_dest_type(&self) -> String {
         ExpEnum::Float(Default::default()).to_string()
-    }
-
-    fn human_readable_src_type(&self) -> String {
-        self.display_type()
     }
 }
 
@@ -382,16 +366,9 @@ impl TryFrom<Expression> for i64 {
 
 impl TryIntoExpression<i64> for Expression {
     type Error = LispError;
-    fn try_into_expr(self) -> Result<i64, Self::Error> {
-        self.try_into()
-    }
 
     fn human_readable_dest_type(&self) -> String {
         ExpEnum::Int(Default::default()).to_string()
-    }
-
-    fn human_readable_src_type(&self) -> String {
-        self.display_type()
     }
 }
 
