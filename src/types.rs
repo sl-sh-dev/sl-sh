@@ -632,7 +632,7 @@ impl Expression {
         matches!(data, ExpEnum::Nil)
     }
 
-    pub fn is_falsy(&self) -> bool {
+    pub fn is_falsey(&self) -> bool {
         let data = &self.get().data;
         matches!(data, ExpEnum::Nil | ExpEnum::False)
     }

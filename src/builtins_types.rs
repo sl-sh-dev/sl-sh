@@ -85,11 +85,7 @@ fn to_type(exp: Expression) -> String {
 /// (test::assert-false (float? test-is-values))
 #[sl_sh_fn(fn_name = "values?")]
 fn is_values(exp: Expression) -> bool {
-    if let ExpEnum::Values(_) = exp.get().data {
-        true
-    } else {
-        false
-    }
+    matches!(exp.get().data, ExpEnum::Values(_))
 }
 
 /// Usage: (nil? expression)
@@ -153,11 +149,7 @@ fn is_some(exp: Expression) -> bool {
 /// (test::assert-false (true? "str"))
 #[sl_sh_fn(fn_name = "true?")]
 fn is_true(exp: Expression) -> bool {
-    return if let ExpEnum::True = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::True)
 }
 
 /// Usage: (false? expression)
@@ -174,11 +166,7 @@ fn is_true(exp: Expression) -> bool {
 /// (test::assert-false (false? "str"))
 #[sl_sh_fn(fn_name = "false?")]
 fn is_false(exp: Expression) -> bool {
-    return if let ExpEnum::True = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::False)
 }
 
 /// Usage: (boolean? expression)
@@ -213,11 +201,7 @@ fn is_boolean(exp: Expression) -> bool {
 /// (test::assert-false (float? 1))
 #[sl_sh_fn(fn_name = "float?")]
 fn is_float(exp: Expression) -> bool {
-    return if let ExpEnum::Float(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Float(_))
 }
 
 /// Usage: (regex? expression)
@@ -232,11 +216,7 @@ fn is_float(exp: Expression) -> bool {
 /// (test::assert-false (regex? 1.5))
 #[sl_sh_fn(fn_name = "regex?")]
 fn is_regex(exp: Expression) -> bool {
-    return if let ExpEnum::Regex(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Regex(_))
 }
 
 /// Usage: (int? expression)
@@ -250,11 +230,7 @@ fn is_regex(exp: Expression) -> bool {
 /// (test::assert-false (int? 1.5))
 #[sl_sh_fn(fn_name = "int?")]
 fn is_int(exp: Expression) -> bool {
-    return if let ExpEnum::Int(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Int(_))
 }
 
 /// Usage: (symbol? expression)
@@ -268,11 +244,7 @@ fn is_int(exp: Expression) -> bool {
 /// (test::assert-false (symbol? 1))
 #[sl_sh_fn(fn_name = "symbol?")]
 fn is_symbol(exp: Expression) -> bool {
-    return if let ExpEnum::Symbol(_, _) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Symbol(_, _))
 }
 
 /// Usage: (string? expression)
@@ -286,11 +258,7 @@ fn is_symbol(exp: Expression) -> bool {
 /// (test::assert-false (string? 1))
 #[sl_sh_fn(fn_name = "string?")]
 fn is_string(exp: Expression) -> bool {
-    return if let ExpEnum::String(_, _) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::String(_, _))
 }
 
 /// Usage: (char? expression)
@@ -305,11 +273,7 @@ fn is_string(exp: Expression) -> bool {
 /// (test::assert-false (char? "a"))
 #[sl_sh_fn(fn_name = "char?")]
 fn is_char(exp: Expression) -> bool {
-    return if let ExpEnum::Char(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Char(_))
 }
 
 /// Usage: (lambda? expression)
@@ -325,11 +289,7 @@ fn is_char(exp: Expression) -> bool {
 /// (test::assert-false (lambda? if))
 #[sl_sh_fn(fn_name = "lambda?")]
 fn is_lambda(exp: Expression) -> bool {
-    return if let ExpEnum::Lambda(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Lambda(_))
 }
 
 /// Usage: (macro? expression)
@@ -345,11 +305,7 @@ fn is_lambda(exp: Expression) -> bool {
 /// (test::assert-false (macro? if))
 #[sl_sh_fn(fn_name = "macro?")]
 fn is_macro(exp: Expression) -> bool {
-    return if let ExpEnum::Macro(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Macro(_))
 }
 
 /// Usage: (vec? expression)
@@ -367,11 +323,7 @@ fn is_macro(exp: Expression) -> bool {
 /// (test::assert-false (vec? (list)))
 #[sl_sh_fn(fn_name = "vec?")]
 fn is_vec(exp: Expression) -> bool {
-    return if let ExpEnum::Vector(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Vector(_))
 }
 
 /// Usage: (pair? expression)
@@ -389,11 +341,7 @@ fn is_vec(exp: Expression) -> bool {
 /// (test::assert-false (pair? (vec)))
 #[sl_sh_fn(fn_name = "pair?")]
 fn is_pair(exp: Expression) -> bool {
-    return if let ExpEnum::Pair(_, _) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Pair(_, _))
 }
 
 /// Usage: (builtin? expression)
@@ -436,11 +384,7 @@ fn is_builtin(exp: Expression) -> bool {
 /// (test::assert-false (process? 1))
 #[sl_sh_fn(fn_name = "process?")]
 fn is_process(exp: Expression) -> bool {
-    return if let ExpEnum::Process(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::Process(_))
 }
 
 /// "Usage: (file? expression)
@@ -456,11 +400,7 @@ fn is_process(exp: Expression) -> bool {
 /// (test::assert-false (file? 1))
 #[sl_sh_fn(fn_name = "file?")]
 fn is_file(exp: Expression) -> bool {
-    return if let ExpEnum::File(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::File(_))
 }
 
 /// Usage: (hash? expression)
@@ -477,11 +417,7 @@ fn is_file(exp: Expression) -> bool {
 /// (test::assert-false (hash? (vec)))
 #[sl_sh_fn(fn_name = "hash?")]
 fn is_hash(exp: Expression) -> bool {
-    return if let ExpEnum::HashMap(_) = exp.get().data {
-        true
-    } else {
-        false
-    };
+    matches!(exp.get().data, ExpEnum::HashMap(_))
 }
 
 /// Usage: (list? expression)
@@ -624,7 +560,7 @@ fn builtin_symbol_to_str(
 /// (test::assert-false (falsey? "false"))
 #[sl_sh_fn(fn_name = "falsey?")]
 fn is_falsey(exp: Expression) -> bool {
-    if exp.is_falsy() {
+    if exp.is_falsey() {
         true
     } else {
         false

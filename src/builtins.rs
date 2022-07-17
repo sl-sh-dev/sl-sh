@@ -385,7 +385,7 @@ fn builtin_if(
     while let Some(arg) = next_arg {
         if args.peek().is_some() {
             let cond = eval(environment, arg)?;
-            if cond.is_falsy() {
+            if cond.is_falsey() {
                 args.next();
             } else {
                 return eval_nr(environment, args.next().unwrap());
@@ -610,7 +610,7 @@ fn builtin_and(
     let mut last_exp = None;
     for arg in args {
         let arg = eval(environment, arg)?;
-        if arg.is_falsy() {
+        if arg.is_falsey() {
             return Ok(Expression::make_false());
         } else {
             last_exp = Some(arg);
@@ -625,7 +625,7 @@ fn builtin_or(
 ) -> Result<Expression, LispError> {
     for arg in args {
         let arg = eval(environment, arg)?;
-        if !arg.is_falsy() {
+        if !arg.is_falsey() {
             return Ok(arg);
         }
     }
@@ -639,7 +639,7 @@ fn builtin_not(
     if let Some(arg0) = args.next() {
         if args.next().is_none() {
             let arg0 = eval(environment, arg0)?;
-            return if arg0.is_falsy() {
+            return if arg0.is_falsey() {
                 Ok(Expression::make_true())
             } else {
                 Ok(Expression::make_false())
@@ -1590,11 +1590,11 @@ Example:
             "Usage: (if p1 a1 p2 a2 ... pn an?) -> [evaled form result]
 
 If conditional.  Will evaluate p1 and if true (i.e. not nil or false) then
-return the evaluation of a1, if falsy(i.e. nil or false) evaluate p2 and so on.
+return the evaluation of a1, if falsey(i.e. nil or false) evaluate p2 and so on.
 On an odd number of arguments (an is missing) then evaluate and return pn.
 Return false(#f) if no predicate is true.  This degenerates into the traditional
 (if predicate then-form else-form).
-NOTE: Both nil and false(#f) are 'falsy' for the purposes of if.
+NOTE: Both nil and false(#f) are 'falsey' for the purposes of if.
 
 Section: conditional
 
@@ -1847,7 +1847,7 @@ Example:
             "Usage: (or exp0 ... expN) -> [false(#f) or first non nil expression]
 
 Evaluates each form until one produces a non-nil/non-false result, produces #f
-if all expressions are 'falsy'.
+if all expressions are 'falsey'.
 
 The or form will stop evaluating when the first expression produces non-nil/false.
 
