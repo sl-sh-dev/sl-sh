@@ -200,10 +200,10 @@ fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<T
     for input_type in input_types {
         let try_into = wrap_with_std_convert(input_type.clone(), "TryInto");
         let try_into_expression = wrap_with_try_into_expression(input_type);
-        let expession = build_sl_sh_expression_type();
+        let expression = build_sl_sh_expression_type();
         conversion_assertions_code.push(quote! {
-          static_assertions::assert_impl_all!(#expession: #try_into);
-          static_assertions::assert_impl_all!(#expession: #try_into_expression);
+          static_assertions::assert_impl_all!(#expression: #try_into);
+          static_assertions::assert_impl_all!(#expression: #try_into_expression);
         });
     }
     let return_type = get_return_type(item_fn);
@@ -376,3 +376,4 @@ pub fn sl_sh_fn(
 //  - functions that do not return anything... enhance get_return_type
 //  - support Option-al arguments... enhance get_input_types
 //  - variadic functions
+//  - support functions that return LispResult<T> by default, not just an primitive
