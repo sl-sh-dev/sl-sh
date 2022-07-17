@@ -1,5 +1,6 @@
 use quote::quote;
 use quote::ToTokens;
+use quote::__private::TokenStream;
 use std::ops::Deref;
 use syn::__private::{Span, TokenStream2};
 use syn::punctuated::Punctuated;
@@ -12,6 +13,8 @@ use syn::{
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
+
+const POSSIBLE_RESULT_TYPES: [&str; 2] = ["LispResult", "Result"];
 
 /// parse and return the rust types of the function parameters
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
@@ -157,14 +160,31 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
 }
 
 /// parse the return type of the rust function
-fn get_return_type(item_fn: &syn::ItemFn) -> Type {
+fn get_return_type(item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
     let return_type = match &item_fn.sig.output {
         ReturnType::Default => {
             unimplemented!("Functions with attribute must return a value.");
         }
         ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
     };
-    return_type
+
+    if let Some(inner_type) = get_inner_type(&return_type) {
+        let wrapper = is_valid_inner_type(&return_type)?;
+        match inner_type {
+            GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
+            _ => {
+                return Err(syn::Error::new(
+                    item_fn.span(),
+                    format!(
+                        "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                        &POSSIBLE_RESULT_TYPES
+                    ),
+                ))
+            }
+        }
+    } else {
+        Ok((return_type, None))
+    }
 }
 
 /// Pull out every #doc attribute on the target fn for the proc macro attribute.
@@ -193,7 +213,54 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     }
 }
 
-fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<TokenStream2> {
+fn is_valid_inner_type(ty: &Type) -> MacroResult<&'static str> {
+    return if let Type::Path(ref type_path) = ty {
+        if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
+            let path_segment = &type_path.path.segments.first().unwrap();
+            let ident = &path_segment.ident;
+            for type_name in &POSSIBLE_RESULT_TYPES {
+                if ident == type_name {
+                    return Ok(type_name);
+                }
+            }
+        }
+        Err(syn::Error::new(
+            ty.span(),
+            format!(
+                "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
+                &POSSIBLE_RESULT_TYPES
+            ),
+        ))
+    } else {
+        Err(syn::Error::new(
+            ty.span(),
+            format!(
+                "Expected type with one of generic arguments type {:?}.",
+                &POSSIBLE_RESULT_TYPES
+            ),
+        ))
+    };
+}
+
+fn get_inner_type(ty: &Type) -> Option<&GenericArgument> {
+    if let Type::Path(ref type_path) = ty {
+        if type_path.path.segments.len() == 1 {
+            let path_segment = &type_path.path.segments.first()?;
+            if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
+                if args.args.len() == 1 {
+                    let ty = args.args.first()?;
+                    return Some(ty);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn generate_assertions_code_for_type_conversions(
+    item_fn: &syn::ItemFn,
+    return_type: &syn::Type,
+) -> MacroResult<Vec<TokenStream2>> {
     let inputs = &item_fn.sig.inputs;
     let input_types = get_input_types(inputs);
     let mut conversion_assertions_code = vec![];
@@ -206,12 +273,11 @@ fn generate_assertions_code_for_type_conversions(item_fn: &syn::ItemFn) -> Vec<T
           static_assertions::assert_impl_all!(#expression: #try_into_expression);
         });
     }
-    let return_type = get_return_type(item_fn);
     let to_return_type = wrap_with_std_convert(build_sl_sh_expression_type(), "Into");
     conversion_assertions_code.push(quote! {
       static_assertions::assert_impl_all!(#return_type: #to_return_type);
     });
-    conversion_assertions_code
+    Ok(conversion_assertions_code)
 }
 
 fn get_attribute_value_with_key(
@@ -269,6 +335,46 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> MacroResult<(String, Str
     }
 }
 
+fn generate_builtin_fn(
+    args_len: usize,
+    item_fn: &syn::ItemFn,
+    fn_name: String,
+    fn_name_attr: syn::Ident,
+    builtin_name: syn::Ident,
+    original_fn_name: syn::Ident,
+) -> MacroResult<TokenStream> {
+    let (return_type, wrapper) = get_return_type(item_fn)?;
+    let conversions_assertions_code =
+        generate_assertions_code_for_type_conversions(item_fn, &return_type)?;
+    let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
+    let tokens = if let Some(_wrapper) = wrapper {
+        quote! {
+            fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
+                use std::convert::TryInto;
+                use std::convert::Into;
+                use crate::builtins_util::TryIntoExpression;
+                let #fn_name_attr = #fn_name;
+                #(#conversions_assertions_code)*
+                let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*)?;
+                Ok(result.into())
+            }
+        }
+    } else {
+        quote! {
+            fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
+                use std::convert::TryInto;
+                use std::convert::Into;
+                use crate::builtins_util::TryIntoExpression;
+                let #fn_name_attr = #fn_name;
+                #(#conversions_assertions_code)*
+                let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*);
+                Ok(result.into())
+            }
+        }
+    };
+    Ok(tokens)
+}
+
 fn generate_sl_sh_fns(
     item_fn: &syn::ItemFn,
     attr_args: syn::AttributeArgs,
@@ -282,22 +388,20 @@ fn generate_sl_sh_fns(
     let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
 
     let doc_comments = get_documentation_for_fn(item_fn)?;
-    let conversions_assertions_code = generate_assertions_code_for_type_conversions(item_fn);
 
     let args_len = item_fn.sig.inputs.len();
-    let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
     let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(item_fn);
+    let builtins_fn_code = generate_builtin_fn(
+        args_len,
+        item_fn,
+        fn_name.clone(),
+        fn_name_attr.clone(),
+        builtin_name.clone(),
+        original_fn_name,
+    )?;
 
     let tokens = quote! {
-        fn #builtin_name(#(#fn_args: #fn_types),*) -> crate::LispResult<crate::types::Expression> {
-            use std::convert::TryInto;
-            use std::convert::Into;
-            use crate::builtins_util::TryIntoExpression;
-            let #fn_name_attr = #fn_name;
-            #(#conversions_assertions_code)*
-            let result = #original_fn_name(#(#fn_args.try_into_for(#fn_name_attr)?),*);
-            Ok(result.into())
-        }
+        #builtins_fn_code
 
         fn #parse_name(
             environment: &mut crate::environment::Environment,
