@@ -288,9 +288,42 @@ pub trait TryIntoExpression<T>: Sized {
     }
 }
 
-impl From<i64> for Expression {
-    fn from(num: i64) -> Self {
-        Expression::alloc_data(ExpEnum::Int(num))
+impl From<bool> for Expression {
+    fn from(val: bool) -> Self {
+        if val {
+            Expression::make_true()
+        } else {
+            Expression::make_false()
+        }
+    }
+}
+
+impl TryFrom<Expression> for bool {
+    type Error = LispError;
+    fn try_from(num: Expression) -> Result<Self, Self::Error> {
+        match num.get().data {
+            ExpEnum::True => Ok(true),
+            ExpEnum::False => Ok(false),
+            _ => Err(LispError::new(
+                "Can only convert bool from ExpEnum::True or ExpEnum::False.",
+            )),
+        }
+    }
+}
+
+impl TryIntoExpression<bool> for Expression {
+    type Error = LispError;
+
+    fn try_into_expr(self) -> Result<bool, Self::Error> {
+        self.try_into()
+    }
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::True.to_string() + " or " + &ExpEnum::False.to_string()
+    }
+
+    fn human_readable_src_type(&self) -> String {
+        self.display_type()
     }
 }
 
@@ -320,11 +353,17 @@ impl TryIntoExpression<f64> for Expression {
     }
 
     fn human_readable_dest_type(&self) -> String {
-        Expression::display_type_from_enum(&ExpEnum::Float(Default::default()))
+        ExpEnum::Float(Default::default()).to_string()
     }
 
     fn human_readable_src_type(&self) -> String {
         self.display_type()
+    }
+}
+
+impl From<i64> for Expression {
+    fn from(num: i64) -> Self {
+        Expression::alloc_data(ExpEnum::Int(num))
     }
 }
 
@@ -348,7 +387,7 @@ impl TryIntoExpression<i64> for Expression {
     }
 
     fn human_readable_dest_type(&self) -> String {
-        Expression::display_type_from_enum(&ExpEnum::Int(Default::default()))
+        ExpEnum::Int(Default::default()).to_string()
     }
 
     fn human_readable_src_type(&self) -> String {

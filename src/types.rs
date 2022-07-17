@@ -290,6 +290,12 @@ pub enum ExpEnum {
     Undefined,
 }
 
+impl ToString for ExpEnum {
+    fn to_string(&self) -> String {
+        Expression::display_type_from_enum(self)
+    }
+}
+
 impl ExpEnum {
     pub fn replace(&mut self, new_data: ExpEnum) {
         *self = new_data;
