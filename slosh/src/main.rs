@@ -115,10 +115,8 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     };
     let file = std::fs::File::open(name)?;
 
-    let mut reader_state = ReaderState::new();
-    reader_state.file_name = name;
     let mut last = Value::Nil;
-    let mut reader = ReadIter::from_file(file, vm, reader_state);
+    let mut reader = Reader::from_file(file, vm, name, 1, 0);
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();
         let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
@@ -331,8 +329,7 @@ fn main() {
         }
 
         con.history.push(&res).expect("Failed to push history.");
-        let reader_state = ReaderState::new();
-        let reader = ReadIter::from_string(res, env.vm_mut(), reader_state);
+        let reader = Reader::from_string(res, env.vm_mut(), "", 1, 0);
         let exps: Result<Vec<Value>, ReadError> = reader.collect();
         match exps {
             Ok(exps) => {

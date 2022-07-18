@@ -143,87 +143,89 @@ pub fn debug(vm: &mut Vm) {
         con.history
             .push(&res)
             .expect("Failed to push debug history.");
-        let mut reader_state = ReaderState::new();
+        //let mut reader_state = ReaderState::new();
         // This should be fine, we are abusing the reader to parse debug input so should be no chance
         // any string pointers are saved.  Could intern these as well for a legit 'static but should
         // not need that (although a lot of debug commands will be repetitive so may not be a big deal.
         // TODO- once there is a "secure" mode for the reader use that here.
-        let text: &str = &res;
-        let text = unsafe { &*(text as *const str) };
-        let exps = read_all(vm, &mut reader_state, text);
-        match exps {
-            Ok(exps) => {
-                let mut exps = exps.iter();
-                match exps.next() {
-                    Some(Value::Keyword(k)) if *k == abort => return,
-                    Some(Value::Keyword(k)) if *k == globals => vm.dump_globals(),
-                    Some(Value::Keyword(k)) if *k == dasm => {
-                        if let Some(parm) = exps.next() {
-                            if let Ok(stk_idx) = parm.get_int() {
-                                let stk_idx = stk_idx.abs() as usize;
-                                for (i, frame) in vm.get_call_stack().enumerate() {
-                                    if i + 1 == stk_idx {
-                                        if let Err(e) = frame.chunk.disassemble_chunk(vm, 0) {
-                                            println!("Error in disassembly: {}", e);
-                                        }
-                                        break;
-                                    }
+        //let text: &str = &res;
+        //let text = unsafe { &*(text as *const str) };
+        //let exps = read_all(vm, &mut reader_state, text);
+        let mut exps = Reader::from_string(res, vm, "", 1, 0);
+        //match exps {
+        //    Ok(exps) => {
+        //let mut exps = exps.iter();
+        match exps.next() {
+            Some(Ok(Value::Keyword(k))) if k == abort => return,
+            Some(Ok(Value::Keyword(k))) if k == globals => vm.dump_globals(),
+            Some(Ok(Value::Keyword(k))) if k == dasm => {
+                if let Some(Ok(parm)) = exps.next() {
+                    if let Ok(stk_idx) = parm.get_int() {
+                        let stk_idx = stk_idx.abs() as usize;
+                        for (i, frame) in vm.get_call_stack().enumerate() {
+                            if i + 1 == stk_idx {
+                                if let Err(e) = frame.chunk.disassemble_chunk(vm, 0) {
+                                    println!("Error in disassembly: {}", e);
                                 }
-                            } else {
-                                println!("Param not an int.");
+                                break;
                             }
-                        } else if let Some(err_frame) = vm.err_frame() {
-                            if let Err(e) = err_frame.chunk.disassemble_chunk(vm, 0) {
-                                println!("Error in disassembly: {}", e);
-                            }
-                        } else {
-                            println!("Nothing to disassemble.");
                         }
+                    } else {
+                        println!("Param not an int.");
                     }
-                    Some(Value::Keyword(k)) if *k == regs => {
-                        if let Some(parm) = exps.next() {
-                            if let Ok(stk_idx) = parm.get_int() {
-                                let stk_idx = stk_idx.abs() as usize;
-                                for (i, frame) in vm.get_call_stack().enumerate() {
-                                    if i + 1 == stk_idx {
-                                        dump_regs(vm, frame);
-                                        break;
-                                    }
-                                }
-                            } else {
-                                println!("Param not an int.");
-                            }
-                        } else if let Some(err_frame) = vm.err_frame() {
-                            dump_regs(vm, err_frame);
-                        } else {
-                            println!("At top level.");
-                        }
+                } else if let Some(err_frame) = vm.err_frame() {
+                    if let Err(e) = err_frame.chunk.disassemble_chunk(vm, 0) {
+                        println!("Error in disassembly: {}", e);
                     }
-                    Some(Value::Keyword(k)) if *k == regs_raw => {
-                        dump_stack(vm);
-                    }
-                    Some(Value::Keyword(k)) if *k == stack => {
-                        if let Some(frame) = vm.err_frame() {
-                            let ip = frame.current_ip;
-                            let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
-                            println!(
-                                "ERROR Frame: {} line: {} ip: {:#010x}",
-                                frame.chunk.file_name, line, ip
-                            );
-                        }
-                        for frame in vm.get_call_stack() {
-                            let ip = frame.current_ip;
-                            let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
-                            println!(
-                                "ID: {} {} line: {} ip: {:#010x}",
-                                frame.id, frame.chunk.file_name, line, ip
-                            );
-                        }
-                    }
-                    _ => {}
+                } else {
+                    println!("Nothing to disassemble.");
                 }
             }
-            Err(err) => println!("Reader error: {}", err),
+            Some(Ok(Value::Keyword(k))) if k == regs => {
+                if let Some(Ok(parm)) = exps.next() {
+                    if let Ok(stk_idx) = parm.get_int() {
+                        let stk_idx = stk_idx.abs() as usize;
+                        for (i, frame) in vm.get_call_stack().enumerate() {
+                            if i + 1 == stk_idx {
+                                dump_regs(vm, frame);
+                                break;
+                            }
+                        }
+                    } else {
+                        println!("Param not an int.");
+                    }
+                } else if let Some(err_frame) = vm.err_frame() {
+                    dump_regs(vm, err_frame);
+                } else {
+                    println!("At top level.");
+                }
+            }
+            Some(Ok(Value::Keyword(k))) if k == regs_raw => {
+                dump_stack(vm);
+            }
+            Some(Ok(Value::Keyword(k))) if k == stack => {
+                if let Some(frame) = vm.err_frame() {
+                    let ip = frame.current_ip;
+                    let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
+                    println!(
+                        "ERROR Frame: {} line: {} ip: {:#010x}",
+                        frame.chunk.file_name, line, ip
+                    );
+                }
+                for frame in vm.get_call_stack() {
+                    let ip = frame.current_ip;
+                    let line = frame.chunk.offset_to_line(ip).unwrap_or(0);
+                    println!(
+                        "ID: {} {} line: {} ip: {:#010x}",
+                        frame.id, frame.chunk.file_name, line, ip
+                    );
+                }
+            }
+            Some(Err(err)) => println!("Reader error: {}", err),
+            _ => {}
         }
+        //}
+        //  Err(err) => println!("Reader error: {}", err),
+        //}
     }
 }
