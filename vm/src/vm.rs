@@ -534,14 +534,14 @@ impl Vm {
         self.stack_top = self.stack_max;
         self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
 
-        let result = self.execute2(chunk)?;
+        self.execute2(chunk)?;
 
         self.stack_top = stack_top;
         self.stack_max = stack_max;
         self.ip = ip;
         self.this_fn = this_fn;
         self.on_error = on_error;
-        Ok(result)
+        Ok(())
     }
 
     fn execute2(&mut self, chunk: Arc<Chunk>) -> VMResult<()> {
@@ -551,17 +551,19 @@ impl Vm {
         let mut result = Ok(());
         while !done {
             result = if let Err((e, echunk)) = self.exec_loop(chunk.clone()) {
-                self.err_frame = Some(CallFrame {
-                    id: 0,
-                    chunk: echunk,
-                    stack_top: self.stack_top,
-                    ip: self.ip,
-                    current_ip: self.current_ip,
-                    this_fn: self.this_fn,
-                    defers: std::mem::take(&mut self.defers),
-                    on_error: self.on_error,
-                    called: Value::Undefined,
-                });
+                if self.err_frame.is_none() {
+                    self.err_frame = Some(CallFrame {
+                        id: 0,
+                        chunk: echunk,
+                        stack_top: self.stack_top,
+                        ip: self.ip,
+                        current_ip: self.current_ip,
+                        this_fn: self.this_fn,
+                        defers: std::mem::take(&mut self.defers),
+                        on_error: self.on_error,
+                        called: Value::Undefined,
+                    });
+                }
                 if let Some(on_error) = self.on_error {
                     let registers = self.make_registers();
                     registers[1] = Value::Keyword(self.intern(e.key));
