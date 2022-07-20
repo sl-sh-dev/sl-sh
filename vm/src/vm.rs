@@ -15,7 +15,7 @@ pub mod exec_loop;
 
 const STACK_CAP: usize = 1024;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Vm {
     interner: Interner,
     heap: Heap,
@@ -130,6 +130,32 @@ impl Vm {
         (false, None)
     }
 
+    fn make_call_frame(
+        &mut self,
+        chunk: Arc<Chunk>,
+        called: Value,
+        with_defers: bool,
+    ) -> CallFrame {
+        let defers = if with_defers {
+            std::mem::take(&mut self.defers)
+        } else {
+            Vec::new()
+        };
+        let frame = CallFrame {
+            id: self.callframe_id,
+            chunk,
+            ip: self.ip,
+            current_ip: self.current_ip,
+            stack_top: self.stack_top,
+            this_fn: self.this_fn,
+            defers,
+            on_error: self.on_error,
+            called,
+        };
+        self.callframe_id += 1;
+        frame
+    }
+
     fn make_call(
         &mut self,
         lambda: Value,
@@ -164,8 +190,21 @@ impl Vm {
         let result = match lambda {
             Value::Builtin(f) => {
                 let last_reg = (first_reg + num_args + 1) as usize;
-                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg])
-                    .map_err(|e| (e, chunk.clone()))?;
+                // Useful if the builtin runs bytecode that errors otherwise a waste...
+                let frame = self.make_call_frame(chunk.clone(), lambda, false);
+                let res = (f.func)(self, &registers[(first_reg + 1) as usize..last_reg]).map_err(
+                    |e| {
+                        if self.err_frame().is_some() {
+                            Self::mov_register(
+                                registers,
+                                first_reg.into(),
+                                self.alloc_callframe(frame),
+                            );
+                            self.stack_top += first_reg as usize;
+                        }
+                        (e, chunk.clone())
+                    },
+                )?;
                 let res_reg = self.stack_top + first_reg as usize;
                 if tail_call {
                     // Go to last call frame so SRET does not mess up the return of a builtin.
@@ -196,19 +235,7 @@ impl Vm {
             Value::Lambda(handle) => {
                 let l = self.heap.get_lambda(handle);
                 if !tail_call {
-                    let defers = std::mem::take(&mut self.defers);
-                    let frame = CallFrame {
-                        id: self.callframe_id,
-                        chunk,
-                        ip: self.ip,
-                        current_ip: self.current_ip,
-                        stack_top: self.stack_top,
-                        this_fn: self.this_fn,
-                        defers,
-                        on_error: self.on_error,
-                        called: lambda,
-                    };
-                    self.callframe_id += 1;
+                    let frame = self.make_call_frame(chunk, lambda, true);
                     Self::mov_register(registers, first_reg.into(), self.alloc_callframe(frame));
                     self.stack_top += first_reg as usize;
                 }
@@ -229,29 +256,14 @@ impl Vm {
                 // This is safe because it does not touch caps, it needs a &mut self so it
                 // can heap allocate.
                 let unsafe_vm: &mut Vm = unsafe { (self as *mut Vm).as_mut().unwrap() };
-                let (l, caps) = self
-                    .heap
-                    .try_get_closure(handle)
-                    .map_err(|e| (e, chunk.clone()))?;
                 let frame = if !tail_call {
-                    let defers = std::mem::take(&mut self.defers);
-                    let frame = CallFrame {
-                        id: self.callframe_id,
-                        chunk,
-                        ip: self.ip,
-                        current_ip: self.current_ip,
-                        stack_top: self.stack_top,
-                        this_fn: self.this_fn,
-                        defers,
-                        on_error: self.on_error,
-                        called: lambda,
-                    };
-                    self.callframe_id += 1;
+                    let frame = self.make_call_frame(chunk, lambda, true);
                     self.stack_top += first_reg as usize;
                     Some(frame)
                 } else {
                     None
                 };
+                let (l, caps) = self.heap.get_closure(handle);
                 self.stack_max = self.stack_top + l.input_regs + l.extra_regs;
                 self.this_fn = Some(lambda);
                 self.ip = 0;

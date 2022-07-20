@@ -64,7 +64,7 @@ pub struct Continuation {
 
 // This is anything that can live on the heap.  Values normally live on the
 // stack or as constants.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
@@ -137,7 +137,7 @@ impl Default for HeapStats {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Heap {
     flags: Vec<u8>,
     objects: Vec<Object>,
@@ -422,13 +422,6 @@ impl Heap {
             (lambda.clone(), captures)
         } else {
             panic!("Handle {} is not a closure!", handle.idx);
-        }
-    }
-    pub fn try_get_closure(&self, handle: Handle) -> VMResult<(Arc<Chunk>, &[Handle])> {
-        if let Some(Object::Closure(lambda, captures)) = self.objects.get(handle.idx) {
-            Ok((lambda.clone(), captures))
-        } else {
-            Err(VMError::new_heap("Not a closure!"))
         }
     }
 
