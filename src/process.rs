@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Write as _;
 use std::io;
 use std::os::unix::io::AsRawFd;
 
@@ -177,11 +178,11 @@ fn run_command(
         }
         Err(e) => {
             let mut err_msg = String::new();
-            err_msg.push_str(&format!("Failed to execute [{}", command));
+            let _ = write!(err_msg, "Failed to execute [{}", command);
             for n in args {
-                err_msg.push_str(&format!(" {}", n));
+                let _ = write!(err_msg, " {}", n);
             }
-            err_msg.push_str(&format!("]: {}", e));
+            let _ = write!(err_msg, "]: {}", e);
             // Recover from the failed spawn...
             // If we were saved terminal settings restore them.
             if let Some(settings) = term_settings {

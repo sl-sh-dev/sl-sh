@@ -2,6 +2,8 @@ extern crate glob;
 extern crate nix;
 extern crate sl_liner;
 
+pub type LispResult<T> = Result<T, LispError>;
+
 pub mod types;
 pub use crate::types::*;
 

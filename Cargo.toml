@@ -21,6 +21,9 @@ same-file = "1.0.6"
 remove_dir_all = "0.5.3"
 #jemallocator = "0.3.2"
 regex = "1.5"
+sl-sh-proc-macros = { git = "https://github.com/sl-sh-dev/sl-sh-proc-macros.git" }
+#sl-sh-proc-macros = { path = "../sl-sh-proc-macros" }
+static_assertions = "1.1.0"
 
 [build-dependencies]
 chrono = "0.4.7"

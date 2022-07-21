@@ -3,16 +3,16 @@
 //#[global_allocator]
 //static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+use ::sl_sh::config::*;
+use ::sl_sh::shell::*;
+use ::sl_sh::signals::*;
+use ::sl_sh::types::LispError;
 use nix::{
     libc,
     sys::signal::{self, Signal},
     unistd,
 };
-
-use ::sl_sh::config::*;
-use ::sl_sh::shell::*;
-use ::sl_sh::signals::*;
-use ::sl_sh::types::LispError;
+extern crate static_assertions;
 
 fn main() -> Result<(), LispError> {
     if let Some(config) = get_config() {
