@@ -208,6 +208,20 @@ impl<'vm> Reader<'vm> {
         result
     }
 
+    fn alloc_list(&mut self, list: Vec<Value>) -> Value {
+        let result = self.vm.alloc_list_ro(list);
+        // Just allocated this so the unwrap is safe.
+        let handle = result.get_handle().unwrap();
+        let file_name = self.vm.intern_static(self.file_name);
+        self.vm
+            .set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
+        self.vm
+            .set_heap_property(handle, "dbg-line", Value::UInt(self.line as u64));
+        self.vm
+            .set_heap_property(handle, "dbg-col", Value::UInt(self.column as u64));
+        result
+    }
+
     fn escape_to_char(&mut self) -> Result<char, ReadError> {
         if let (Some(ch1), Some(ch2)) = (self.chars().next(), self.chars().next()) {
             self.column += 1;
@@ -795,11 +809,11 @@ impl<'vm> Reader<'vm> {
     }
 
     fn read_list(&mut self, buffer: &mut String, in_back_quote: bool) -> Result<Value, ReadError> {
-        let mut head = Value::Nil;
-        let mut tail = Value::Nil;
         let mut cont = true;
         let mut dot = false;
+        let mut closed = false;
         let mut dot_count = 0;
+        let mut list = Vec::new();
         let i_close = self.vm.intern(")");
         let i_dot = self.vm.intern(".");
 
@@ -808,7 +822,9 @@ impl<'vm> Reader<'vm> {
                 Ok(exp) => {
                     if let Some(Value::Symbol(si)) = exp {
                         if si == i_close {
-                            return Ok(head);
+                            closed = true;
+                            cont = false;
+                            continue;
                         } else if si == i_dot {
                             dot = true;
                             continue;
@@ -822,14 +838,10 @@ impl<'vm> Reader<'vm> {
             };
             let pch = self.chars().peek();
             if let Some(exp) = exp {
-                if let Value::Nil = head {
-                    if dot {
-                        return Err(ReadError {
-                            reason: "Invalid dotted pair syntax (nothing before dot).".to_string(),
-                        });
-                    }
-                    head = self.alloc_pair(exp, Value::Nil);
-                    tail = head;
+                if list.is_empty() && dot {
+                    return Err(ReadError {
+                        reason: "Invalid dotted pair syntax (nothing before dot).".to_string(),
+                    });
                 } else if dot {
                     if self.unquote_splice(exp) {
                         return Err(ReadError {
@@ -854,17 +866,9 @@ impl<'vm> Reader<'vm> {
                     } else {
                         exp
                     };
-                    if let Value::Pair(h) = tail {
-                        let (_, cdr) = self.vm.get_pair_mut_override(h);
-                        *cdr = exp;
-                    }
+                    list.push(exp);
                 } else {
-                    let new_tail = self.alloc_pair(exp, Value::Nil);
-                    if let Value::Pair(h) = tail {
-                        let (_, cdr) = self.vm.get_pair_mut_override(h);
-                        *cdr = new_tail;
-                    }
-                    tail = new_tail;
+                    list.push(exp);
                 }
             } else if pch.is_none() {
                 cont = false;
@@ -879,9 +883,26 @@ impl<'vm> Reader<'vm> {
                 });
             }
         }
-        Err(ReadError {
-            reason: "Unclosed list".to_string(),
-        })
+        if !closed {
+            Err(ReadError {
+                reason: "Unclosed list".to_string(),
+            })
+        } else if dot {
+            let mut list_iter = list.iter().rev();
+            if let Some(last) = list_iter.next() {
+                let mut last = *last;
+                for v in list_iter {
+                    last = self.alloc_pair(*v, last);
+                }
+                Ok(last)
+            } else {
+                Ok(Value::Nil)
+            }
+        } else if list.is_empty() {
+            Ok(Value::Nil)
+        } else {
+            Ok(self.alloc_list(list))
+        }
     }
 
     fn read_inner(
@@ -1147,6 +1168,14 @@ mod tests {
                     to_strs(vm, output, e2);
                     output.push(")".to_string());
                 }
+            }
+            Value::List(h, _) => {
+                let list = vm.get_vector(h).to_vec();
+                output.push("(".to_string());
+                for exp in list.iter() {
+                    to_strs(vm, output, *exp);
+                }
+                output.push(")".to_string());
             }
             Value::Vector(h) => {
                 let list = vm.get_vector(h).to_vec();
