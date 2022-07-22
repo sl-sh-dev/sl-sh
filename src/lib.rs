@@ -284,30 +284,23 @@ fn get_attribute_value_with_key(
     item_fn: &syn::ItemFn,
     key: &str,
     values: &[(String, String)],
-) -> MacroResult<String> {
-    if values.len() != 1 {
+) -> MacroResult<Option<String>> {
+    if values.is_empty() {
         Err(syn::Error::new(
             item_fn.span(),
-            "sl_sh_fn attribute only supports one name-value pair, 'fn_name'.",
+            "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
         ))
-    } else if let Some(name_value_pair) = values.first() {
-        if name_value_pair.0 == key {
-            Ok(name_value_pair.1.to_string())
-        } else {
-            Err(syn::Error::new(
-                item_fn.span(),
-                format!("sl_sh_fn requires one name-value pair, 'fn_name', received attribute pair ({} = {}) instead.", name_value_pair.0, name_value_pair.1),
-            ))
-        }
     } else {
-        Err(syn::Error::new(
-            item_fn.span(),
-            "sl_sh_fn requires one name-value pair, 'fn_name'.",
-        ))
+        for name_value in values {
+            if name_value.0 == key {
+                return Ok(Some(name_value.1.to_string()));
+            }
+        }
+        Ok(None)
     }
 }
 
-fn get_attribute_name_pair(nested_meta: &NestedMeta) -> MacroResult<(String, String)> {
+fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, String)> {
     match nested_meta {
         NestedMeta::Meta(meta) => match meta {
             Meta::NameValue(pair) => {
@@ -317,9 +310,12 @@ fn get_attribute_name_pair(nested_meta: &NestedMeta) -> MacroResult<(String, Str
                     (Some(ident), Lit::Str(partial_name)) => {
                         Ok((ident.to_string(), partial_name.value()))
                     }
+                    (Some(ident), Lit::Bool(b)) => {
+                        Ok((ident.to_string(), b.value.to_string()))
+                    }
                     (_, _) => Err(syn::Error::new(
                         meta.span(),
-                        "sl_sh_fn requires one name-value pair, 'fn_name'.",
+                        "sl_sh_fn requires one name-value pair, 'fn_name'. Supports optional name-value pair 'eval_values = true')",
                     )),
                 }
             }
@@ -375,18 +371,39 @@ fn generate_builtin_fn(
     Ok(tokens)
 }
 
+fn parse_attributes(
+    item_fn: &syn::ItemFn,
+    attr_args: syn::AttributeArgs,
+) -> MacroResult<(String, Ident, bool)> {
+    let vals = attr_args
+        .iter()
+        .map(get_attribute_name_value)
+        .collect::<MacroResult<Vec<(String, String)>>>()?;
+    let fn_name_attr = "fn_name".to_string();
+    let fn_name = get_attribute_value_with_key(item_fn, &fn_name_attr, vals.as_slice())?
+        .ok_or_else(|| {
+            syn::Error::new(
+                item_fn.span(),
+                "sl_sh_fn requires name-value pair, 'fn_name'",
+            )
+        })?;
+    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
+
+    let eval_values = if let Some(value) =
+        get_attribute_value_with_key(item_fn, "eval_values", vals.as_slice())?
+    {
+        value == "true"
+    } else {
+        false
+    };
+    Ok((fn_name, fn_name_attr, eval_values))
+}
+
 fn generate_sl_sh_fns(
     item_fn: &syn::ItemFn,
     attr_args: syn::AttributeArgs,
 ) -> MacroResult<TokenStream2> {
-    let vals = attr_args
-        .iter()
-        .map(get_attribute_name_pair)
-        .collect::<MacroResult<Vec<(String, String)>>>()?;
-    let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(item_fn, &fn_name_attr, &vals)?;
-    let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
-
+    let (fn_name, fn_name_attr, eval_values) = parse_attributes(item_fn, attr_args)?;
     let doc_comments = get_documentation_for_fn(item_fn)?;
 
     let args_len = item_fn.sig.inputs.len();
@@ -400,6 +417,16 @@ fn generate_sl_sh_fns(
         original_fn_name,
     )?;
 
+    let make_args = if eval_values {
+        quote! {
+            let args = crate::builtins_util::make_args(environment, args)?;
+        }
+    } else {
+        quote! {
+            let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
+        }
+    };
+
     let tokens = quote! {
         #builtins_fn_code
 
@@ -409,7 +436,7 @@ fn generate_sl_sh_fns(
         ) -> crate::LispResult<crate::types::Expression> {
             use std::convert::TryInto;
             use crate::builtins_util::ExpandVecToArgs;
-            let args = crate::builtins_util::make_args(environment, args)?;
+            #make_args
             let #fn_name_attr = #fn_name;
             const args_len: usize = #args_len;
             if args.len() == args_len {
