@@ -16,8 +16,16 @@ Rust types so the builtin_ version of the function can be type checked properly.
 must implement the traits Into, TryInto, and TryIntoExpression traits defined
 in the sl-sh crate.
 
-- to encourage use of documentation in sl-sh all rust functions that use these
-macros *must* have documentation ;)
+- All rust functions that use these macros *must* have documentation.
+Documentation is structured in the following way:
+/// Usage: (<name-of-sl-sh-fun> <fn_args>)
+///
+/// <description>
+///
+/// Section: <type>
+///
+/// Example:
+/// <example sl-sh code>
 
 - currently only functions are supported.
 
@@ -26,8 +34,37 @@ Macros
 - The sl_sh_fn proc_macro_attribute
 - this attribute is used on rust functions to generate code that is compatible
 with the sl-sh runtime.
-- the macro must have the name value pair (fn_name = "name-of-sl-sh-fun") so
+- the macro must have the name-value pair (fn_name = "<name-of-sl-sh-fun>") so
 the macro can reference the name of the function in case of an error at runtime.
+
+Attribute Name-Value Pairs
+--------------------------
+- macro must have attribute (fn_name = "<name-of-sl-sh-fun>"), e.g.
+
+``` rust
+#[sl_sh_fn(fn_name = "int->float")]
+fn float_to_int(val: i64) -> f64 {
+    ...
+}
+```
+
+- macro supports optional name value attribute (eval_values = "<true|false>"), e.g.
+
+``` rust
+#[sl_sh_fn(fn_name = "int->float", eval_values = false)]
+fn float_to_int(val: i64) -> f64 {
+    ...
+}
+```
+
+the default value is false, which means all sl-sh values objects will be treated
+as equal to (values-nth 0 exp). In sl-sh objects of type values evaluate to their
+first element unless the caller is the values?, values-nth, or values-length functions.
+These three methods are examples of methods where `..., eval_values = true)` is required.
+
+
+Example
+-------
 - for example the function:
 
 ```rust
@@ -147,12 +184,23 @@ pub fn add_type_builtins<S: BuildHasher>(
 - this is a bit ugly but necessary given the current architecture. This function
 tells sl-sh's plumbing to use the `builtin_int_to_float`
 method when the `int->float` function is called.
+
+Errors
+------
 - great pains were taken to make sure that the errors in development are as nice as
-possible, if the errors are confusing or they are pointing to the wrong code
-when compile errors occur look at the usage of the MacroResult type to ensure
-it's error messages are appropriate, and the spans it uses are appropriate.
+possible, if the errors are wrong/confusing and/or using the wrong syn::Span (manifested
+as an error message potentially pointing at the wrong code) when compile errors occur
+look at the usage of the MacroResult type to ensure correctness.
 It's very possible it also isn't being used where it should or is being used
 where it shouldn't, development is iterative!
+
+```rust
+  type MacroResult<T> = Result<T, syn::Error>;
+```
+
+- `syn:Error` is used with an accompanying span to pass invalid, or unsupported syntax
+back to the generated code to report errors at compile time using the syn::Error::to_compile_error
+method.
 
 
 happy sl-shing!
