@@ -163,6 +163,17 @@ pub fn compress_tilde(path: &str) -> Option<String> {
     }
 }
 
+pub fn make_args_eval_no_values(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Vec<Expression>, LispError> {
+    let mut list: Vec<Expression> = Vec::new();
+    for arg in args {
+        list.push(eval_no_values(environment, arg)?);
+    }
+    Ok(list)
+}
+
 pub fn make_args(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,

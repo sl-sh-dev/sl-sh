@@ -84,7 +84,7 @@ fn to_type(exp: Expression) -> String {
 /// (test::assert-true (int? test-is-values))
 /// (test::assert-false (string? test-is-values))
 /// (test::assert-false (float? test-is-values))
-#[sl_sh_fn(fn_name = "values?")]
+#[sl_sh_fn(fn_name = "values?", eval_values = true)]
 fn is_values(exp: Expression) -> bool {
     matches!(exp.get().data, ExpEnum::Values(_))
 }
