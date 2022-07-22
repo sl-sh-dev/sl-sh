@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read};
+use std::io::{BufReader, Cursor};
 use std::num::{ParseFloatError, ParseIntError};
 
 use slvm::value::*;
@@ -23,6 +23,35 @@ impl<I: std::iter::Iterator> PeekableIterator for std::iter::Peekable<I> {
 
 pub type CharIter = Box<dyn PeekableIterator<Item = Cow<'static, str>>>;
 
+struct ReaderCharIter {
+    inner: CharIter,
+    line: usize,
+    column: usize,
+}
+
+impl Iterator for ReaderCharIter {
+    type Item = Cow<'static, str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ch = self.inner.next();
+        if let Some(ch) = &ch {
+            if ch == "\n" {
+                self.line += 1;
+                self.column = 0;
+            } else {
+                self.column += 1;
+            }
+        }
+        ch
+    }
+}
+
+impl PeekableIterator for ReaderCharIter {
+    fn peek(&mut self) -> Option<&Self::Item> {
+        self.inner.peek()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ReadError {
     pub reason: String,
@@ -39,10 +68,8 @@ impl fmt::Display for ReadError {
 //#[derive(Clone, Debug)]
 pub struct Reader<'vm> {
     vm: &'vm mut Vm,
-    char_iter: Option<CharIter>,
+    char_iter: Option<Box<ReaderCharIter>>,
     pub file_name: &'static str,
-    pub line: usize,
-    pub column: usize,
 }
 
 impl<'vm> Iterator for Reader<'vm> {
@@ -106,32 +133,6 @@ fn is_digit(ch: &str) -> bool {
 }
 
 impl<'vm> Reader<'vm> {
-    pub fn from_read<R: Read + 'static>(
-        src: R,
-        vm: &'vm mut Vm,
-        file_name: &'static str,
-        line: usize,
-        column: usize,
-    ) -> Self {
-        let char_iter: CharIter = Box::new(
-            Graphemes::from(src)
-                .map(|s| {
-                    if let Ok(s) = s {
-                        Cow::Owned(s)
-                    } else {
-                        Cow::Borrowed("")
-                    }
-                })
-                .peekable(),
-        );
-        Self {
-            vm,
-            char_iter: Some(char_iter),
-            file_name,
-            line,
-            column,
-        }
-    }
     pub fn from_file(
         src: File,
         vm: &'vm mut Vm,
@@ -150,12 +151,15 @@ impl<'vm> Reader<'vm> {
                 })
                 .peekable(),
         );
+        let char_iter = Box::new(ReaderCharIter {
+            inner: char_iter,
+            line,
+            column,
+        });
         Self {
             vm,
             char_iter: Some(char_iter),
             file_name,
-            line,
-            column,
         }
     }
 
@@ -177,21 +181,32 @@ impl<'vm> Reader<'vm> {
                 })
                 .peekable(),
         );
+        let char_iter = Box::new(ReaderCharIter {
+            inner: char_iter,
+            line,
+            column,
+        });
         Self {
             vm,
             char_iter: Some(char_iter),
             file_name,
-            line,
-            column,
         }
+    }
+
+    fn line(&self) -> usize {
+        self.char_iter.as_ref().expect("Invalid Reader!").line
+    }
+
+    fn column(&self) -> usize {
+        self.char_iter.as_ref().expect("Invalid Reader!").column
     }
 
     pub fn vm(&mut self) -> &mut Vm {
         self.vm
     }
 
-    fn chars(&mut self) -> &mut CharIter {
-        self.char_iter.as_mut().expect("Invalid Reader!")
+    fn chars(&mut self) -> &mut dyn PeekableIterator<Item = Cow<'static, str>> {
+        &mut **self.char_iter.as_mut().expect("Invalid Reader!")
     }
 
     fn alloc_pair(&mut self, car: Value, cdr: Value) -> Value {
@@ -202,9 +217,9 @@ impl<'vm> Reader<'vm> {
         self.vm
             .set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(handle, "dbg-line", Value::UInt(self.line as u64));
+            .set_heap_property(handle, "dbg-line", Value::UInt(self.line() as u64));
         self.vm
-            .set_heap_property(handle, "dbg-col", Value::UInt(self.column as u64));
+            .set_heap_property(handle, "dbg-col", Value::UInt(self.column() as u64));
         result
     }
 
@@ -216,15 +231,14 @@ impl<'vm> Reader<'vm> {
         self.vm
             .set_heap_property(handle, "dbg-file", Value::StringConst(file_name));
         self.vm
-            .set_heap_property(handle, "dbg-line", Value::UInt(self.line as u64));
+            .set_heap_property(handle, "dbg-line", Value::UInt(self.line() as u64));
         self.vm
-            .set_heap_property(handle, "dbg-col", Value::UInt(self.column as u64));
+            .set_heap_property(handle, "dbg-col", Value::UInt(self.column() as u64));
         result
     }
 
     fn escape_to_char(&mut self) -> Result<char, ReadError> {
         if let (Some(ch1), Some(ch2)) = (self.chars().next(), self.chars().next()) {
-            self.column += 1;
             let ch_n: u8 = (char_to_hex_num(&*ch1)? * 16) + (char_to_hex_num(&*ch2)?);
             if ch_n > 0x7f {
                 Err(ReadError {
@@ -243,8 +257,6 @@ impl<'vm> Reader<'vm> {
     fn consume_line_comment(&mut self) {
         for ch in self.chars() {
             if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
                 return;
             }
         }
@@ -255,12 +267,6 @@ impl<'vm> Reader<'vm> {
         let mut last_ch = Cow::Borrowed(" ");
         //for ch in self.chars() {
         while let Some(ch) = self.chars().next() {
-            if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
-            } else {
-                self.column += 1;
-            }
             if last_ch == "|" && ch == "#" {
                 depth -= 1;
             }
@@ -307,7 +313,9 @@ impl<'vm> Reader<'vm> {
                                 _ => {
                                     let reason = format!(
                                         "Not a valid char [{}]: line {}, col: {}",
-                                        buffer, self.line, self.column
+                                        buffer,
+                                        self.line(),
+                                        self.column()
                                     );
                                     return Err(ReadError { reason });
                                 }
@@ -332,7 +340,8 @@ impl<'vm> Reader<'vm> {
         } else {
             let reason = format!(
                 "Not a valid char, missing: line {}, col: {}",
-                self.line, self.column
+                self.line(),
+                self.column()
             );
             Err(ReadError { reason })
         }
@@ -357,8 +366,6 @@ impl<'vm> Reader<'vm> {
         let mut nibbles = 0;
         while let Some(ch) = self.chars().next() {
             if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
                 if has_bracket {
                     return Err(ReadError {
                         reason: "Invalid unicode scalar, unexpected newline.".to_string(),
@@ -366,8 +373,6 @@ impl<'vm> Reader<'vm> {
                 } else {
                     return finish(char_u32);
                 }
-            } else {
-                self.column += 1;
             }
             if first && ch == "{" {
                 has_bracket = true;
@@ -410,12 +415,6 @@ impl<'vm> Reader<'vm> {
         let mut last_ch_escape = false;
 
         while let Some(ch) = self.chars().next() {
-            if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
-            } else {
-                self.column += 1;
-            }
             if last_ch_escape {
                 let mut do_match = true;
                 if read_table.contains_key(&*ch) {
@@ -540,7 +539,6 @@ impl<'vm> Reader<'vm> {
     ) -> Result<&'sym mut String, ReadError> {
         symbol.clear();
         let end_ch = if let Some(ch) = self.chars().next() {
-            self.column += 1;
             ch
         } else {
             return Err(ReadError {
@@ -549,12 +547,6 @@ impl<'vm> Reader<'vm> {
         };
 
         while let Some(ch) = self.chars().next() {
-            if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
-            } else {
-                self.column += 1;
-            }
             let peek = if let Some(pch) = self.chars().peek() {
                 pch
             } else {
@@ -647,12 +639,6 @@ impl<'vm> Reader<'vm> {
         };
         let mut next_ch = self.chars().next();
         while let Some(ch) = next_ch {
-            if ch == "\n" {
-                self.line += 1;
-                self.column = 0;
-            } else {
-                self.column += 1;
-            }
             let pch = self.chars().peek();
             let peek_ch = if let Some(pch) = pch {
                 has_peek = true;
@@ -701,15 +687,7 @@ impl<'vm> Reader<'vm> {
         // Consume whitespace.
         let mut ch = self.chars().peek();
         while ch.is_some() && is_whitespace(ch.unwrap()) {
-            if let Some(ch) = ch {
-                if *ch == "\n" {
-                    self.line += 1;
-                    self.column = 0;
-                } else {
-                    self.column += 1;
-                }
-                self.chars().next();
-            }
+            self.chars().next();
             ch = self.chars().peek();
         }
     }
@@ -948,7 +926,6 @@ impl<'vm> Reader<'vm> {
         let i_quote = self.vm.intern("quote");
         let i_backquote = self.vm.intern("back-quote");
         while let Some((ch, peek_ch)) = self.next2() {
-            self.column += 1;
             /*if read_table.contains_key(&*ch) {
                 if let ExpEnum::Symbol(s) = read_table.get(&*ch).unwrap().get().data {
                     let res = prep_reader_macro(environment, chars, s, &ch);
@@ -1049,7 +1026,8 @@ impl<'vm> Reader<'vm> {
                         "<" => {
                             let reason = format!(
                                 "Found an unreadable token: line {}, col: {}",
-                                self.line, self.column
+                                self.line(),
+                                self.column()
                             );
                             return Err(ReadError { reason });
                         }
@@ -1103,7 +1081,9 @@ impl<'vm> Reader<'vm> {
                         _ => {
                             let reason = format!(
                                 "Found # with invalid char {}: line {}, col: {}",
-                                peek_ch, self.line, self.column
+                                peek_ch,
+                                self.line(),
+                                self.column()
                             );
                             return Err(ReadError { reason });
                         }
@@ -1118,7 +1098,7 @@ impl<'vm> Reader<'vm> {
                         return Ok(Some(Value::Symbol(self.vm.intern(")"))));
                     } else {
                         let reason =
-                            format!("Unexpected ')': line {} col {}", self.line, self.column);
+                            format!("Unexpected ')': line {} col {}", self.line(), self.column());
                         return Err(ReadError { reason });
                     }
                 }
