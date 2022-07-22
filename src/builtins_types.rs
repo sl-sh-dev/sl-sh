@@ -185,10 +185,7 @@ fn is_false(exp: Expression) -> bool {
 /// (test::assert-false (boolean? "str"))
 #[sl_sh_fn(fn_name = "boolean?")]
 fn is_boolean(exp: Expression) -> bool {
-    return match exp.get().data {
-        ExpEnum::True | ExpEnum::False => true,
-        _ => false,
-    };
+    matches!(exp.get().data, ExpEnum::True | ExpEnum::False)
 }
 
 /// Usage: (float? expression)
@@ -359,16 +356,16 @@ fn is_pair(exp: Expression) -> bool {
 /// (test::assert-false (builtin? 1))
 #[sl_sh_fn(fn_name = "builtin?")]
 fn is_builtin(exp: Expression) -> bool {
-    return match exp.get().data {
+    matches!(
+        exp.get().data,
         ExpEnum::Function(_)
-        | ExpEnum::DeclareDef
-        | ExpEnum::DeclareVar
-        | ExpEnum::DeclareFn
-        | ExpEnum::DeclareMacro
-        | ExpEnum::Quote
-        | ExpEnum::BackQuote => true,
-        _ => false,
-    };
+            | ExpEnum::DeclareDef
+            | ExpEnum::DeclareVar
+            | ExpEnum::DeclareFn
+            | ExpEnum::DeclareMacro
+            | ExpEnum::Quote
+            | ExpEnum::BackQuote
+    )
 }
 
 /// Usage: (process? expression)
@@ -436,11 +433,7 @@ fn is_hash(exp: Expression) -> bool {
 /// (test::assert-false (list? '(1 . 2)))
 #[sl_sh_fn(fn_name = "list?")]
 fn is_list(exp: Expression) -> bool {
-    return if exp.is_nil() || is_proper_list(&exp) {
-        true
-    } else {
-        false
-    };
+    exp.is_nil() || is_proper_list(&exp)
 }
 
 /// Usage: (str->int string) -> int
@@ -459,10 +452,10 @@ fn is_list(exp: Expression) -> bool {
 #[sl_sh_fn(fn_name = "str->int")]
 fn str_to_int(istr: String) -> LispResult<i64> {
     let potential_int: Result<i64, ParseIntError> = istr.parse();
-    return match potential_int {
+    match potential_int {
         Ok(v) => Ok(v),
         Err(_) => Err(LispError::new("str->int: string is not a valid integer")),
-    };
+    }
 }
 
 /// Usage: (str->float string) -> float
@@ -482,10 +475,10 @@ fn str_to_int(istr: String) -> LispResult<i64> {
 #[sl_sh_fn(fn_name = "str->float")]
 fn str_to_float(istr: String) -> LispResult<f64> {
     let potential_float: Result<f64, ParseFloatError> = istr.parse();
-    return match potential_float {
+    match potential_float {
         Ok(v) => Ok(v),
         Err(_) => Err(LispError::new("str->float: string is not a valid float")),
-    };
+    }
 }
 
 /// Usage: (int->float int) -> float
@@ -506,7 +499,8 @@ fn int_to_float(int: i64) -> f64 {
 
 /// Usage: (float->int float) -> int
 ///
-///  Cast a float as an int.  Truncates.
+/// Cast a float as an int. Narrows the float if necessary
+/// to the max allowable int. If float is NaN 0 is returned.
 ///
 /// Section: type
 ///
@@ -520,7 +514,12 @@ fn int_to_float(int: i64) -> f64 {
 /// (test::assert-error (float->int "not int"))
 #[sl_sh_fn(fn_name = "float->int")]
 fn float_to_int(float: f64) -> i64 {
-    float as i64
+    match float {
+        float if float.is_nan() => 0,
+        float if float > i64::MAX as f64 || float == f64::INFINITY => i64::MAX,
+        float if float < i64::MIN as f64 || float == f64::NEG_INFINITY => i64::MIN,
+        float => float as i64,
+    }
 }
 
 fn builtin_to_symbol(
@@ -572,11 +571,7 @@ fn symbol_to_str(exp: Expression) -> LispResult<String> {
 /// (test::assert-false (falsey? "false"))
 #[sl_sh_fn(fn_name = "falsey?")]
 fn is_falsey(exp: Expression) -> bool {
-    if exp.is_falsey() {
-        true
-    } else {
-        false
-    }
+    exp.is_falsey()
 }
 
 pub fn add_type_builtins<S: BuildHasher>(
