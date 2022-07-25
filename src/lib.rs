@@ -14,7 +14,7 @@ extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
 
-const POSSIBLE_RESULT_TYPES: [&str; 2] = ["LispResult", "Result"];
+const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
 
 /// parse and return the rust types of the function parameters
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {

@@ -62,6 +62,11 @@ as equal to (values-nth 0 exp). In sl-sh objects of type values evaluate to thei
 first element unless the caller is the values?, values-nth, or values-length functions.
 These three methods are examples of methods where `..., eval_values = true)` is required.
 
+Limitations
+-----------
+1. If a Result return type is needed for simplicity only LispResult is supported.
+2. Does not support variadic args.
+
 
 Example
 -------
