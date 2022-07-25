@@ -7,6 +7,7 @@ use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
 
+// eval_values = true
 fn builtin_values(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -18,6 +19,7 @@ fn builtin_values(
     Ok(Expression::alloc_data(ExpEnum::Values(vals)))
 }
 
+// eval_values = true
 fn builtin_values_nth(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,

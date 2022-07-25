@@ -1,6 +1,7 @@
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
+use std::borrow::Cow;
 
 use std::convert::{TryFrom, TryInto};
 use std::env;
@@ -162,6 +163,17 @@ pub fn compress_tilde(path: &str) -> Option<String> {
     }
 }
 
+pub fn make_args_eval_no_values(
+    environment: &mut Environment,
+    args: &mut dyn Iterator<Item = Expression>,
+) -> Result<Vec<Expression>, LispError> {
+    let mut list: Vec<Expression> = Vec::new();
+    for arg in args {
+        list.push(eval_no_values(environment, arg)?);
+    }
+    Ok(list)
+}
+
 pub fn make_args(
     environment: &mut Environment,
     args: &mut dyn Iterator<Item = Expression>,
@@ -283,6 +295,41 @@ where
                 "{}: mismatched type input, expected {}, got {}.",
                 fn_name, hr_dest_type, hr_src_type,
             ))),
+        }
+    }
+}
+
+impl TryIntoExpression<Expression> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        self.display_type()
+    }
+}
+
+impl TryIntoExpression<String> for Expression {
+    type Error = LispError;
+
+    fn human_readable_dest_type(&self) -> String {
+        ExpEnum::String(Cow::from(String::default()), Default::default()).to_string()
+    }
+}
+
+impl From<String> for Expression {
+    fn from(src: String) -> Self {
+        Expression::alloc_data(ExpEnum::String(src.into(), None))
+    }
+}
+
+impl TryFrom<Expression> for String {
+    type Error = LispError;
+
+    fn try_from(value: Expression) -> Result<Self, Self::Error> {
+        match &value.get().data {
+            ExpEnum::String(cow, _) => Ok(cow.to_string()),
+            _ => Err(LispError::new(
+                "Can only convert String from ExpEnum::String.",
+            )),
         }
     }
 }
