@@ -1,3 +1,4 @@
+use sl_sh_proc_macros::sl_sh_fn;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::{param_eval, params_done, rand_alphanumeric_str};
+use crate::{param_eval, params_done, rand_alphanumeric_str, LispResult};
 use core::iter;
 use same_file;
 use std::ffi::OsStr;
@@ -515,7 +516,7 @@ fn builtin_fs_accessed(
 }
 
 fn temp_dir() -> PathBuf {
-    std::env::temp_dir()
+    env::temp_dir()
 }
 
 fn builtin_get_temp_dir(
@@ -590,6 +591,7 @@ fn get_temp_dir(
         Err(LispError::new(msg))
     }
 }
+
 fn get_temp_name_defaults<'a>(
     environment: &'a mut Environment,
     args: &'a mut dyn Iterator<Item = Expression>,
@@ -749,17 +751,31 @@ fn builtin_with_temp_file(
     }
 }
 
-fn builtin_temp_dir(
-    _environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    let fn_name = "temp-dir";
-    params_done(args, fn_name)?;
+/// Usage: (temp-dir)
+///
+/// Returns a string representing the temporary directory. See [get-temp](root::get-temp) for higher
+/// level temporary directory creation mechanism.
+///
+/// On Unix:
+/// Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it
+/// returns /tmp. If Android, since there is no global temporary folder (it is usually allocated
+/// per-app), it returns /data/local/tmp.
+///
+/// On Windows:
+/// Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set and
+/// not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This behavior
+/// is identical to that of GetTempPath, which this function uses internally.
+///
+/// Section: file
+///
+/// Example:
+#[sl_sh_fn(fn_name = "temp-dir")]
+fn builtin_temp_dir() -> LispResult<Expression> {
     if let Some(path) = temp_dir().to_str() {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
     } else {
-        let msg = format!("{} unable to provide temporary directory", fn_name);
+        let msg = format!("temp-dir: unable to provide temporary directory");
         Err(LispError::new(msg))
     }
 }
@@ -1257,30 +1273,5 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("temp-dir"),
-        Expression::make_function(
-            builtin_temp_dir,
-            "Usage: (temp-dir)
-
-Returns a string representing the temporary directory. See [get-temp](root::get-temp) for higher
-level temporary directory creation mechanism.
-
-On Unix:
-Returns the value of the TMPDIR environment variable if it is set, otherwise for non-Android it
-returns /tmp. If Android, since there is no global temporary folder (it is usually allocated
-per-app), it returns /data/local/tmp.
-
-On Windows:
-Returns the value of, in order, the TMP, TEMP, USERPROFILE environment variable if any are set and
-not the empty string. Otherwise, temp_dir returns the path of the Windows directory. This behavior
-is identical to that of GetTempPath, which this function uses internally.
-
-Section: file
-
-Example:
-#t
-",
-        ),
-    );
+    intern_builtin_temp_dir(interner, data);
 }

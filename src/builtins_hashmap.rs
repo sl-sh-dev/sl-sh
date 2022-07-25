@@ -1,3 +1,4 @@
+use sl_sh_proc_macros::sl_sh_fn;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -6,6 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
+use crate::LispResult;
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -104,10 +106,35 @@ fn builtin_hash_set(
     Err(LispError::new("hash-set! takes a hashmap, key and value"))
 }
 
-fn builtin_hash_remove(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (hash-remove! hashmap key)
+///
+/// Remove a key from a hashmap.  This is a destructive form!
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val two\" (hash-get tst-hash 'key2))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
+/// (hash-remove! tst-hash 'key2)
+/// (test::assert-equal 3 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val one\" (hash-get tst-hash :key1))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
+/// (hash-remove! tst-hash :key1)
+/// (test::assert-equal 2 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
+/// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
+/// (hash-remove! tst-hash \"key3\")
+/// (test::assert-equal 1 (length (hash-keys tst-hash)))
+/// (test::assert-equal \"val S\" (hash-get tst-hash #\\S))
+/// (hash-remove! tst-hash #\\S)
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+#[sl_sh_fn(fn_name = "hash-remove!")]
+fn hash_remove(to_map: Expression, to_val: Expression) -> LispResult<Expression> {
     fn do_rem(map: &mut HashMap<&'static str, Expression>, sym: &str) -> Expression {
         let old = map.remove(sym);
         if let Some(old) = old {
@@ -116,30 +143,22 @@ fn builtin_hash_remove(
             Expression::make_nil()
         }
     }
-    if let Some(map) = args.next() {
-        if let Some(key) = args.next() {
-            if args.next().is_none() {
-                let map = eval(environment, map)?;
-                let key = eval(environment, key)?;
-                let mut map_d = map.get_mut();
-                if let ExpEnum::HashMap(map) = &mut map_d.data {
-                    match &key.get().data {
-                        ExpEnum::Symbol(sym, _) => {
-                            return Ok(do_rem(map, sym));
-                        }
-                        ExpEnum::String(s, _) => {
-                            return Ok(do_rem(map, s));
-                        }
-                        ExpEnum::Char(ch) => {
-                            return Ok(do_rem(map, ch));
-                        }
-                        _ => {
-                            return Err(LispError::new(
-                                "hash-remove! key can only be a symbol or string",
-                            ));
-                        }
-                    }
-                }
+    let mut map_d = to_map.get_mut();
+    if let ExpEnum::HashMap(map) = &mut map_d.data {
+        match &to_val.get().data {
+            ExpEnum::Symbol(sym, _) => {
+                return Ok(do_rem(map, sym));
+            }
+            ExpEnum::String(s, _) => {
+                return Ok(do_rem(map, s));
+            }
+            ExpEnum::Char(ch) => {
+                return Ok(do_rem(map, ch));
+            }
+            _ => {
+                return Err(LispError::new(
+                    "hash-remove! key can only be a symbol or string",
+                ));
             }
         }
     }
@@ -371,40 +390,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("hash-remove!"),
-        Expression::make_function(
-            builtin_hash_remove,
-            "Usage: (hash-remove! hashmap key)
-
-Remove a key from a hashmap.  This is a destructive form!
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :key1))
-(test::assert-equal \"val two\" (hash-get tst-hash 'key2))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
-(hash-remove! tst-hash 'key2)
-(test::assert-equal 3 (length (hash-keys tst-hash)))
-(test::assert-equal \"val one\" (hash-get tst-hash :key1))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
-(hash-remove! tst-hash :key1)
-(test::assert-equal 2 (length (hash-keys tst-hash)))
-(test::assert-equal \"val three\" (hash-get tst-hash \"key3\"))
-(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
-(hash-remove! tst-hash \"key3\")
-(test::assert-equal 1 (length (hash-keys tst-hash)))
-(test::assert-equal \"val S\" (hash-get tst-hash #\\S))
-(hash-remove! tst-hash #\\S)
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-",
-        ),
-    );
+    intern_hash_remove(interner, data);
     data.insert(
         interner.intern("hash-get"),
         Expression::make_special(
