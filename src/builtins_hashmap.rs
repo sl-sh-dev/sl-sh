@@ -219,10 +219,28 @@ fn builtin_hash_get(
     ))
 }
 
-fn builtin_hash_haskey(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
+/// Usage: (hash-haskey hashmap key)
+///
+/// Checks if a key is in a hashmap.
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-true (hash-haskey tst-hash :key1))
+/// (test::assert-true (hash-haskey tst-hash 'key2))
+/// (test::assert-true (hash-haskey tst-hash \"key3\"))
+/// (test::assert-true (hash-haskey tst-hash #\\S))
+/// (test::assert-false (hash-haskey tst-hash 'key1))
+/// (test::assert-false (hash-haskey tst-hash :key2))
+/// (test::assert-false (hash-haskey tst-hash \"keynone\"))
+/// (hash-remove! tst-hash :key1)
+/// (test::assert-false (hash-haskey tst-hash :key1))
+/// (hash-set! tst-hash :key1 \"val one b\")
+/// (test::assert-true (hash-haskey tst-hash :key1))
+#[sl_sh_fn(fn_name = "hash-haskey")]
+fn hash_haskey(to_map: Expression, to_val: Expression) -> LispResult<Expression> {
     fn do_has(map: &HashMap<&'static str, Expression>, sym: &str) -> Expression {
         if map.contains_key(sym) {
             Expression::make_true()
@@ -230,33 +248,21 @@ fn builtin_hash_haskey(
             Expression::make_false()
         }
     }
-    if let Some(map) = args.next() {
-        if let Some(key) = args.next() {
-            if args.next().is_none() {
-                let map = eval(environment, map)?;
-                let key = eval(environment, key)?;
-                let map_d = map.get();
-                if let ExpEnum::HashMap(map) = &map_d.data {
-                    match &key.get().data {
-                        ExpEnum::Symbol(sym, _) => {
-                            return Ok(do_has(map, sym));
-                        }
-                        ExpEnum::String(s, _) => {
-                            return Ok(do_has(map, s));
-                        }
-                        ExpEnum::Char(ch) => {
-                            return Ok(do_has(map, ch));
-                        }
-                        _ => {
-                            let msg =
-                                format!("hash-haskey key can only be a symbol or string {:?}", key);
-                            return Err(LispError::new(
-                                msg,
-                                //"hash-haskey key can only be a symbol or string",
-                            ));
-                        }
-                    }
-                }
+    let map_d = to_map.get();
+    if let ExpEnum::HashMap(map) = &map_d.data {
+        match &to_val.get().data {
+            ExpEnum::Symbol(sym, _) => {
+                return Ok(do_has(map, sym));
+            }
+            ExpEnum::String(s, _) => {
+                return Ok(do_has(map, s));
+            }
+            ExpEnum::Char(ch) => {
+                return Ok(do_has(map, ch));
+            }
+            _ => {
+                let msg = format!("hash-haskey key can only be a symbol or string {:?}", key);
+                return Err(LispError::new(msg));
             }
         }
     }
@@ -415,33 +421,7 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("hash-haskey"),
-        Expression::make_function(
-            builtin_hash_haskey,
-            "Usage: (hash-haskey hashmap key)
-
-Checks if a key is in a hashmap.
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-true (hash-haskey tst-hash :key1))
-(test::assert-true (hash-haskey tst-hash 'key2))
-(test::assert-true (hash-haskey tst-hash \"key3\"))
-(test::assert-true (hash-haskey tst-hash #\\S))
-(test::assert-false (hash-haskey tst-hash 'key1))
-(test::assert-false (hash-haskey tst-hash :key2))
-(test::assert-false (hash-haskey tst-hash \"keynone\"))
-(hash-remove! tst-hash :key1)
-(test::assert-false (hash-haskey tst-hash :key1))
-(hash-set! tst-hash :key1 \"val one b\")
-(test::assert-true (hash-haskey tst-hash :key1))
-",
-        ),
-    );
+    intern_hash_haskey(interner, data);
     data.insert(
         interner.intern("hash-keys"),
         Expression::make_function(
