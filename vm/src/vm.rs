@@ -383,7 +383,7 @@ impl Vm {
         Ok(val)
     }
 
-    fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
+    pub fn is_equal_pair(&self, val1: Value, val2: Value) -> VMResult<Value> {
         let mut val = Value::False;
         if val1 == val2 {
             val = Value::True;
@@ -451,12 +451,12 @@ impl Vm {
                         }
                     }
                 }
-                Value::Pair(h1) => {
+                Value::Pair(_) | Value::List(_, _) => {
                     // XXX use iterators to reduce recursion?
                     // Make sure pair iter will work for non-lists...
-                    if let Value::Pair(h2) = val2 {
-                        let (car1, cdr1) = self.heap.get_pair(h1);
-                        let (car2, cdr2) = self.heap.get_pair(h2);
+                    if matches!(val2, Value::Pair(_) | Value::List(_, _)) {
+                        let (car1, cdr1) = val1.get_pair(self).expect("Must be a pair or list!");
+                        let (car2, cdr2) = val2.get_pair(self).expect("Must be a pair or list!");
                         val = self.is_equal_pair(car1, car2)?;
                         if val == Value::True {
                             val = self.is_equal_pair(cdr1, cdr2)?;

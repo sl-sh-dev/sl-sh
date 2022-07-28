@@ -29,23 +29,27 @@ impl Vm {
                         self.ip = self.current_ip;
                         chunk = self.make_call(defer, chunk, registers, first_reg, 0, false)?;
                         registers = self.make_registers();
-                    } else if let Some(frame) = self.call_frame_mut() {
-                        // Need to break the call frame lifetime from self to avoid extra work.
-                        // This is safe because the stack and heap are not touched so the reference is
-                        // stable.  The unwrap() is OK because the frame can not be NULL.
-                        let frame: &mut CallFrame =
-                            unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
-                        self.stack_top = frame.stack_top;
-                        registers = self.make_registers();
-                        chunk = frame.chunk.clone();
-                        self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
-                        self.ip = frame.ip;
-                        self.current_ip = frame.current_ip;
-                        self.this_fn = frame.this_fn;
-                        self.on_error = frame.on_error;
-                        std::mem::swap(&mut self.defers, &mut frame.defers);
                     } else {
-                        return Ok(());
+                        self.stack[self.stack_top] =
+                            get_reg_unref!(registers, self.stack_top, self);
+                        if let Some(frame) = self.call_frame_mut() {
+                            // Need to break the call frame lifetime from self to avoid extra work.
+                            // This is safe because the stack and heap are not touched so the reference is
+                            // stable.  The unwrap() is OK because the frame can not be NULL.
+                            let frame: &mut CallFrame =
+                                unsafe { (frame as *mut CallFrame).as_mut().unwrap() };
+                            self.stack_top = frame.stack_top;
+                            registers = self.make_registers();
+                            chunk = frame.chunk.clone();
+                            self.stack_max = self.stack_top + chunk.input_regs + chunk.extra_regs;
+                            self.ip = frame.ip;
+                            self.current_ip = frame.current_ip;
+                            self.this_fn = frame.this_fn;
+                            self.on_error = frame.on_error;
+                            std::mem::swap(&mut self.defers, &mut frame.defers);
+                        } else {
+                            return Ok(());
+                        }
                     }
                 }
                 SRET => {
