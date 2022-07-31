@@ -27,6 +27,28 @@ pub fn exec(vm: &mut Vm, input: &'static str) -> Value {
     vm.stack()[0]
 }
 
+pub fn exec_compile_error(vm: &mut Vm, input: &'static str) {
+    let exp = read_test(vm, input);
+    let mut env = CompileEnvironment::new(vm);
+    let mut state = CompileState::new(env.vm_mut());
+    assert!(
+        compile(&mut env, &mut state, exp, 0).is_err(),
+        "expected compile error"
+    );
+}
+
+pub fn exec_runtime_error(vm: &mut Vm, input: &'static str) {
+    let exp = read_test(vm, input);
+    let mut env = CompileEnvironment::new(vm);
+    let mut state = CompileState::new(env.vm_mut());
+    compile(&mut env, &mut state, exp, 0).unwrap();
+    state.chunk.encode0(RET, Some(1)).unwrap();
+    assert!(
+        vm.execute(Arc::new(state.chunk)).is_err(),
+        "expected runtime error"
+    );
+}
+
 pub fn assert_vals(vm: &Vm, val1: Value, val2: Value) {
     let res = vm
         .is_equal_pair(val1, val2)

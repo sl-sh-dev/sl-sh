@@ -7,8 +7,7 @@ pub(crate) fn get_args_iter<'vm>(
     name: &str,
 ) -> VMResult<Box<dyn Iterator<Item = Value> + 'vm>> {
     match args {
-        Value::Pair(_) | Value::List(_, _) => Ok(args.iter(env.vm())),
-        Value::Nil => Ok(args.iter(env.vm())),
+        Value::Pair(_) | Value::List(_, _) | Value::Nil => Ok(args.iter(env.vm())),
         _ => {
             return Err(VMError::new_compile(format!("{}, invalid args", name)));
         }
