@@ -113,7 +113,7 @@ impl Vm {
                 CONST => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = chunk.constants[src as usize];
-                    Self::mov_register(registers, dest as usize, val);
+                    self.set_register(registers, dest as usize, val);
                 }
                 REF => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
@@ -214,7 +214,7 @@ impl Vm {
                                     caps.push(b);
                                 } else {
                                     let val = self.new_upval(r);
-                                    Self::mov_register(registers, *c as usize, val);
+                                    self.set_register(registers, *c as usize, val);
                                     caps.push(val.get_handle().unwrap());
                                 }
                             }
@@ -226,7 +226,8 @@ impl Vm {
                             chunk,
                         ));
                     };
-                    Self::mov_register(registers, dest as usize, self.alloc_closure(lambda, caps));
+                    let new_closure = self.alloc_closure(lambda, caps);
+                    self.set_register(registers, dest as usize, new_closure);
                 }
                 CALL => {
                     let (lambda, num_args, first_reg) = decode3!(chunk.code, &mut self.ip, wide);

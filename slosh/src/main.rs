@@ -18,8 +18,7 @@ use slvm::Chunk;
 pub mod debug;
 use debug::*;
 
-pub mod print;
-use print::*;
+use sl_compiler::print::*;
 
 fn value_str(vm: &mut Vm, val: Value) -> String {
     pretty_value(vm, val)

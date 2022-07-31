@@ -1126,14 +1126,12 @@ fn compile_let(
         let mut cdr_iter = cdr.iter();
         let args = cdr_iter.next().unwrap(); // unwrap safe, length is at least 1
         let mut opt_comps: Vec<(usize, Value)> = Vec::new();
-        let mut used_regs = 0;
         let scratch = env.vm.intern("[SCRATCH]");
         env.set_line_val(state, *args);
         let args_iter: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
         // XXX fixme
         //new_state.chunk.dbg_args = Some(Vec::new());
         for a in args_iter {
-            used_regs += 1;
             env.set_line_val(state, a);
             let mut args_iter = get_args_iter(env, a, "let")?;
             if let Some(Value::Symbol(i)) = args_iter.next() {
@@ -1157,8 +1155,10 @@ fn compile_let(
                 // XXX Check to make sure only two elements...
             }
         }
+        let mut free_reg = result;
         for (reg, val) in opt_comps {
             compile(env, state, val, reg)?;
+            free_reg = reg + 1;
         }
         if !star {
             state.symbols = symbols;
@@ -1169,15 +1169,12 @@ fn compile_let(
             if i == last_thing {
                 state.tail = old_tail;
             }
-            compile(env, state, *r, result + used_regs)?;
+            compile(env, state, *r, free_reg)?;
         }
-        if used_regs > 0 {
-            state.chunk.encode2(
-                MOV,
-                result as u16,
-                (result + used_regs) as u16,
-                env.own_line(),
-            )?;
+        if free_reg != result {
+            state
+                .chunk
+                .encode2(MOV, result as u16, free_reg as u16, env.own_line())?;
         }
         for _ in start_defers..state.defers {
             state.chunk.encode0(DFRPOP, env.own_line())?;
@@ -1620,3 +1617,6 @@ pub fn compile(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod compile_tests;
