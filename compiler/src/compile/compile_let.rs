@@ -99,3 +99,50 @@ pub(crate) fn compile_let(
     state.defers = old_defers;
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{assert_vals, exec, prn, read_test};
+    use slvm::Vm;
+
+    #[test]
+    fn test_let() {
+        let mut vm = Vm::new();
+        vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+
+        let result = exec(&mut vm, "(do (def x 3) (let ((x 10)) (set! x 1)) x)");
+        let expected = read_test(&mut vm, "3");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ((x 10)) x)");
+        let expected = read_test(&mut vm, "10");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ((x 10)) (set! x 5) x)");
+        let expected = read_test(&mut vm, "5");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ((x 10)(y (+ x 10))) (set! x 5) `(,x ,y))");
+        let expected = read_test(&mut vm, "(5 20)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def x 5) (let ((x 10)(y (+ x 10))) (set! x 15) `(,x ,y)))",
+        );
+        let expected = read_test(&mut vm, "(15 20)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(do (def x 5) (let ((x 10)(y (+ x 10))) (set! x 15) `(,x ,y)))",
+        );
+        let expected = read_test(&mut vm, "(15 20)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ((fnx (fn (x) (if (= x 0) #t (fny (- x 1)))))(fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))) (fnx 10))");
+        let expected = read_test(&mut vm, "#t");
+        assert_vals(&vm, expected, result);
+    }
+}
