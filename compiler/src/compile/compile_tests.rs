@@ -3,7 +3,7 @@ mod tests {
     use super::super::*;
     use crate::print::pretty_value;
     use crate::{ReadError, Reader};
-    use slvm::RET;
+    use slvm::{Vm, RET};
     use std::sync::Arc;
 
     fn read_test(vm: &mut Vm, text: &'static str) -> Value {
@@ -82,13 +82,13 @@ mod tests {
         let expected = read_test(&mut vm, "5");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let* ((x 10)(y (+ x 10))) (set! x 5) `(,x ,y))");
+        let result = exec(&mut vm, "(let ((x 10)(y (+ x 10))) (set! x 5) `(,x ,y))");
         let expected = read_test(&mut vm, "(5 20)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(do (def x 5) (let* ((x 10)(y (+ x 10))) (set! x 15) `(,x ,y)))",
+            "(do (def x 5) (let ((x 10)(y (+ x 10))) (set! x 15) `(,x ,y)))",
         );
         let expected = read_test(&mut vm, "(15 20)");
         assert_vals(&vm, expected, result);
@@ -97,10 +97,10 @@ mod tests {
             &mut vm,
             "(do (def x 5) (let ((x 10)(y (+ x 10))) (set! x 15) `(,x ,y)))",
         );
-        let expected = read_test(&mut vm, "(15 15)");
+        let expected = read_test(&mut vm, "(15 20)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let* ((fnx (fn (x) (if (= x 0) #t (fny (- x 1)))))(fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))) (fnx 10))");
+        let result = exec(&mut vm, "(let ((fnx (fn (x) (if (= x 0) #t (fny (- x 1)))))(fny (fn (y) (if (= y 0) #t (fnx (- y 1)))))) (fnx 10))");
         let expected = read_test(&mut vm, "#t");
         assert_vals(&vm, expected, result);
     }

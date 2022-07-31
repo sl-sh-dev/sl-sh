@@ -4,6 +4,7 @@ use slvm::value::*;
 use slvm::vm::*;
 
 use crate::compile::*;
+use crate::pass1::pass1;
 use crate::state::*;
 
 macro_rules! is_tag {

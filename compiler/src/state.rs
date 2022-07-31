@@ -6,6 +6,7 @@ use slvm::chunk::*;
 use slvm::interner::*;
 use slvm::value::*;
 use slvm::vm::*;
+use slvm::Handle;
 
 #[derive(Clone, Debug)]
 pub struct SymbolsInt {
@@ -188,7 +189,6 @@ pub struct Specials {
     pub vec_clr: Interned,
     pub str_: Interned,
     pub let_: Interned,
-    pub letstar: Interned,
     pub call_cc: Interned,
     pub defer: Interned,
     pub on_error: Interned,
@@ -246,7 +246,6 @@ impl Specials {
             vec_clr: vm.intern_static("vec-clear!"),
             str_: vm.intern_static("str"),
             let_: vm.intern_static("let"),
-            letstar: vm.intern_static("let*"),
             call_cc: vm.intern_static("call/cc"),
             defer: vm.intern_static("defer"),
             on_error: vm.intern_static("on-error"),
@@ -325,6 +324,72 @@ impl CompileState {
             let const_i = self.chunk.add_constant(exp);
             self.constants.insert(exp, const_i);
             const_i
+        }
+    }
+}
+
+pub struct CompileEnvironment<'vm> {
+    vm: &'vm mut Vm,
+    use_line: bool,
+    line: u32,
+}
+
+impl<'vm> CompileEnvironment<'vm> {
+    pub fn new(vm: &'vm mut Vm) -> Self {
+        Self {
+            vm,
+            use_line: true,
+            line: 1,
+        }
+    }
+
+    pub fn vm(&self) -> &Vm {
+        self.vm
+    }
+
+    pub fn vm_mut(&mut self) -> &mut Vm {
+        self.vm
+    }
+
+    pub fn set_line(&mut self, state: &mut CompileState, handle: Handle) {
+        if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern))) = (
+            self.vm.get_heap_property(handle, "dbg-line"),
+            self.vm.get_heap_property(handle, "dbg-file"),
+        ) {
+            let file_name = self.vm.get_interned(file_intern);
+            if file_name == state.chunk.file_name && dline as u32 > self.line {
+                self.line = dline as u32;
+            }
+        }
+    }
+
+    pub fn set_line_val(&mut self, state: &mut CompileState, val: Value) {
+        if let Some(handle) = val.get_handle() {
+            if let (Some(Value::UInt(dline)), Some(Value::StringConst(file_intern))) = (
+                self.vm.get_heap_property(handle, "dbg-line"),
+                self.vm.get_heap_property(handle, "dbg-file"),
+            ) {
+                let file_name = self.vm.get_interned(file_intern);
+                if file_name == state.chunk.file_name && dline as u32 > self.line {
+                    self.line = dline as u32;
+                }
+            }
+        }
+    }
+
+    pub fn own_line(&self) -> Option<u32> {
+        if self.use_line {
+            Some(self.line)
+        } else {
+            None
+        }
+    }
+
+    pub fn line_num(&self) -> u32 {
+        if self.use_line {
+            self.line
+        } else {
+            0
         }
     }
 }

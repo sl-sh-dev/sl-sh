@@ -17,6 +17,7 @@ use slvm::Chunk;
 
 pub mod debug;
 use debug::*;
+use sl_compiler::pass1::pass1;
 
 use sl_compiler::print::*;
 
