@@ -11,42 +11,19 @@ pub(crate) fn compile_def(
         (_, None) => return Err(VMError::new_compile("def: expected symbol")),
         (1, Some(Value::Symbol(si))) => {
             // 'def symbol' predeclares a symbol to be used later, no bytecode.
-            let _ = env.vm_mut().reserve_index(*si);
+            let si_const = env.vm_mut().reserve_index(*si);
+            if let Some(doc_string) = state.doc_string {
+                let key = env.vm_mut().intern("doc-string");
+                env.vm_mut().set_global_property(si_const, key, doc_string);
+            }
         }
         (2, Some(Value::Symbol(si))) => {
-            compile(env, state, cdr[1], result + 1)?;
             let si_const = env.vm_mut().reserve_index(*si);
-            state
-                .chunk
-                .encode_refi(result as u16, si_const, env.own_line())?;
-            state
-                .chunk
-                .encode2(DEF, result as u16, (result + 1) as u16, env.own_line())?;
-        }
-        (3, Some(Value::Symbol(si))) => {
-            let si_const = env.vm_mut().reserve_index(*si);
-            // Set docstring
-            let set_prop = env.vm_mut().intern("set-prop");
-            if let Some(set_prop) = env.vm().global_intern_slot(set_prop) {
-                let doc_const = state
-                    .chunk
-                    .add_constant(Value::Keyword(env.vm_mut().intern("doc-string")));
-                state
-                    .chunk
-                    .encode_refi((result + 1) as u16, si_const, env.own_line())?;
-                state.chunk.encode2(
-                    CONST,
-                    (result + 2) as u16,
-                    doc_const as u16,
-                    env.own_line(),
-                )?;
-                compile(env, state, cdr[1], result + 3)?;
-                state
-                    .chunk
-                    .encode_callg(set_prop as u32, 3, result as u16, env.own_line())?;
+            if let Some(doc_string) = state.doc_string {
+                let key = env.vm_mut().intern("doc-string");
+                env.vm_mut().set_global_property(si_const, key, doc_string);
             }
-
-            compile(env, state, cdr[2], result + 1)?;
+            compile(env, state, cdr[1], result + 1)?;
             state
                 .chunk
                 .encode_refi(result as u16, si_const, env.own_line())?;

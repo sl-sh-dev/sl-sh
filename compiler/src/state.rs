@@ -193,6 +193,7 @@ pub struct Specials {
     pub defer: Interned,
     pub on_error: Interned,
     pub while_: Interned,
+    pub doc_string: Interned,
 
     pub rest: Interned,
 }
@@ -250,6 +251,7 @@ impl Specials {
             defer: vm.intern_static("defer"),
             on_error: vm.intern_static("on-error"),
             while_: vm.intern_static("while"),
+            doc_string: vm.intern_static("doc-string"),
 
             rest: vm.intern_static("&rest"),
         }
@@ -264,6 +266,7 @@ pub struct CompileState {
     pub max_regs: usize,
     pub tail: bool,
     pub defers: usize,
+    pub doc_string: Option<Value>,
 }
 
 impl CompileState {
@@ -276,6 +279,7 @@ impl CompileState {
             max_regs: 0,
             tail: false,
             defers: 0,
+            doc_string: None,
         }
     }
 
@@ -294,6 +298,7 @@ impl CompileState {
             max_regs: 0,
             tail: false,
             defers: 0,
+            doc_string: None,
         }
     }
 
@@ -306,6 +311,7 @@ impl CompileState {
             max_regs: state.max_regs,
             tail: state.tail,
             defers: state.defers,
+            doc_string: None,
         }
     }
 

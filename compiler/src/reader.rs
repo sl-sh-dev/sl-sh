@@ -254,6 +254,14 @@ impl<'vm> Reader<'vm> {
         }
     }
 
+    fn read_doc_string<'sym>(
+        &mut self,
+        buffer: &'sym mut String,
+        read_table: &HashMap<&'static str, Chunk>,
+    ) -> Result<&'sym mut String, ReadError> {
+        self.read_string(buffer, read_table, true)
+    }
+
     fn consume_line_comment(&mut self) {
         for ch in self.chars() {
             if ch == "\n" {
@@ -265,7 +273,6 @@ impl<'vm> Reader<'vm> {
     fn consume_block_comment(&mut self) {
         let mut depth = 1;
         let mut last_ch = Cow::Borrowed(" ");
-        //for ch in self.chars() {
         while let Some(ch) = self.chars().next() {
             if last_ch == "|" && ch == "#" {
                 depth -= 1;
@@ -410,6 +417,7 @@ impl<'vm> Reader<'vm> {
         &mut self,
         symbol: &'sym mut String,
         read_table: &HashMap<&'static str, Chunk>,
+        doc_string: bool,
     ) -> Result<&'sym mut String, ReadError> {
         symbol.clear();
         let mut last_ch_escape = false;
@@ -458,7 +466,17 @@ impl<'vm> Reader<'vm> {
                 }
                 last_ch_escape = false;
             } else {
-                if ch == "\"" {
+                if doc_string {
+                    let peek = if let Some(pch) = self.chars().peek() {
+                        pch
+                    } else {
+                        ""
+                    };
+                    if ch == "!" && peek == "#" {
+                        self.chars().next();
+                        break;
+                    }
+                } else if ch == "\"" {
                     break;
                 }
                 let mut proc_ch = true;
@@ -951,7 +969,7 @@ impl<'vm> Reader<'vm> {
             }*/
             match &*ch {
                 "\"" => {
-                    match self.read_string(buffer, &read_table) {
+                    match self.read_string(buffer, &read_table, false) {
                         Ok(s) => return Ok(Some(Value::StringConst(self.vm.intern(s)))),
                         Err(e) => return Err(e),
                     };
@@ -1020,6 +1038,17 @@ impl<'vm> Reader<'vm> {
                     self.chars().next();
                     match &*peek_ch {
                         "|" => self.consume_block_comment(),
+                        "!" => {
+                            match self.read_doc_string(buffer, &read_table) {
+                                Ok(s) => {
+                                    let doc_sym = Value::Symbol(self.vm.intern("doc-string"));
+                                    let doc_string = Value::StringConst(self.vm.intern(s));
+                                    let list = self.alloc_list(vec![doc_sym, doc_string]);
+                                    return Ok(Some(list));
+                                }
+                                Err(e) => return Err(e),
+                            };
+                        }
                         "\\" => {
                             return Ok(Some(self.do_char(buffer, &read_table_term)?));
                         }
@@ -1102,9 +1131,7 @@ impl<'vm> Reader<'vm> {
                         return Err(ReadError { reason });
                     }
                 }
-                ";" => {
-                    self.consume_line_comment();
-                }
+                ";" => self.consume_line_comment(),
                 _ => {
                     buffer.clear();
                     buffer.push_str(&ch);
@@ -1677,5 +1704,45 @@ two""#
         assert!(tokens[8] == "Float:23.123");
         assert!(tokens[9] == "Symbol:0.23.123");
         assert!(tokens[10] == ")");
+    }
+
+    #[test]
+    fn test_doc_string() {
+        let mut vm = build_def_vm();
+        let input = "#! Doc string! !#";
+        let tokens = tokenize(&mut vm, input);
+        println!("XXXX tokens {:?}", tokens);
+        assert!(tokens.len() == 4);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:doc-string");
+        assert!(tokens[2] == "String:\" Doc string! \"");
+        assert!(tokens[3] == ")");
+        let input = "#!Doc string!!#";
+        let tokens = tokenize(&mut vm, input);
+        println!("XXXX tokens {:?}", tokens);
+        assert!(tokens.len() == 4);
+        assert!(tokens[0] == "(");
+        assert!(tokens[1] == "Symbol:doc-string");
+        assert!(tokens[2] == "String:\"Doc string!\"");
+        assert!(tokens[3] == ")");
+        let input = "#!\
+         Doc string!\
+         !#\
+         (defn fnx () (prn x))";
+        let tokens = tokenize(&mut vm, input);
+        println!("XXXX tokens {:?}", tokens);
+        assert!(tokens.len() == 15);
+        assert!(tokens[0] == "#(");
+        assert!(tokens[1] == "(");
+        assert!(tokens[2] == "Symbol:doc-string");
+        assert!(
+            tokens[3]
+                == "String:\"\
+         Doc string!\
+          \""
+        );
+        assert!(tokens[12] == ")");
+        assert!(tokens[13] == ")");
+        assert!(tokens[14] == ")");
     }
 }

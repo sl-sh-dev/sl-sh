@@ -65,11 +65,17 @@ fn dasm(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
 }
 
-fn load_one_expression(vm: &mut Vm, exp: Value, name: &'static str) -> VMResult<Arc<Chunk>> {
+fn load_one_expression(
+    vm: &mut Vm,
+    exp: Value,
+    name: &'static str,
+    doc_string: Option<Value>,
+) -> VMResult<(Arc<Chunk>, Option<Value>)> {
     let mut env = CompileEnvironment::new(vm);
     let line_num = env.line_num();
     let mut state = CompileState::new_state(env.vm_mut(), name, line_num, None);
     state.chunk.dbg_args = Some(Vec::new());
+    state.doc_string = doc_string;
     if let Err(e) = pass1(&mut env, &mut state, exp) {
         println!(
             "Compile error (pass one), {}, line {}: {}",
@@ -94,7 +100,7 @@ fn load_one_expression(vm: &mut Vm, exp: Value, name: &'static str) -> VMResult<
         return Err(e);
     }
     state.chunk.extra_regs = state.max_regs;
-    Ok(Arc::new(state.chunk))
+    Ok((Arc::new(state.chunk), state.doc_string))
 }
 
 fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
@@ -117,6 +123,7 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
 
     let mut last = Value::Nil;
     let mut reader = Reader::from_file(file, vm, name, 1, 0);
+    let mut doc_string = None;
     while let Some(exp) = reader.next() {
         let reader_vm = reader.vm();
         let exp = exp.map_err(|e| VMError::new("read", e.to_string()))?;
@@ -124,12 +131,14 @@ fn load(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
             reader_vm.heap_sticky(handle);
         }
 
-        let chunk = load_one_expression(reader_vm, exp, name);
+        let result = load_one_expression(reader_vm, exp, name, doc_string);
 
         if let Some(handle) = exp.get_handle() {
             reader_vm.heap_unsticky(handle);
         }
-        reader_vm.execute(chunk?)?;
+        let (chunk, new_doc_string) = result?;
+        doc_string = new_doc_string;
+        reader_vm.execute(chunk)?;
         last = reader_vm.get_stack(0);
     }
     Ok(last)
@@ -207,15 +216,23 @@ fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
         Value::Symbol(key) => key,
         _ => return Err(VMError::new_vm("get-prop: key must be a symbol")),
     };
-    if let Value::Global(idx) = registers[0] {
-        Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil))
-    } else {
-        let handle = registers[0].get_handle().ok_or_else(|| {
-            VMError::new_vm("get-prop: Not a heap object or global symbol".to_string())
-        })?;
-        Ok(vm
-            .get_heap_property_interned(handle, key)
-            .unwrap_or(Value::Nil))
+    match registers[0] {
+        Value::Global(idx) => Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil)),
+        Value::Symbol(si) => {
+            if let Some(idx) = vm.global_intern_slot(si) {
+                Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil))
+            } else {
+                Ok(Value::Nil)
+            }
+        }
+        _ => {
+            let handle = registers[0].get_handle().ok_or_else(|| {
+                VMError::new_vm("get-prop: Not a heap object or global symbol".to_string())
+            })?;
+            Ok(vm
+                .get_heap_property_interned(handle, key)
+                .unwrap_or(Value::Nil))
+        }
     }
 }
 

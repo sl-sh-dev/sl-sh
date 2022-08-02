@@ -44,6 +44,14 @@ fn compile_list(
         || compile_vec(env, state, car, cdr, result)?)
     {
         match car {
+            Value::Symbol(i) if i == state.specials.doc_string => {
+                if cdr.len() == 1 {
+                    state.doc_string = Some(cdr[0]);
+                    return Ok(());
+                } else {
+                    return Err(VMError::new_compile("Malformed doc-string form."));
+                }
+            }
             Value::Symbol(i) if i == state.specials.fn_ => {
                 if cdr.len() > 1 {
                     compile_fn(env, state, cdr[0], &cdr[1..], result, false)?
@@ -297,6 +305,7 @@ fn compile_list(
             }
         }
     }
+    state.doc_string = None;
     Ok(())
 }
 
