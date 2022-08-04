@@ -123,6 +123,7 @@ pub enum Value {
 
     String(Handle),
     Vector(Handle),
+    Map(Handle),
     Bytes(Handle),
     Pair(Handle),
     List(Handle, u32),
@@ -246,6 +247,7 @@ impl Value {
             Value::CharClusterLong(handle) => Some(*handle),
             Value::String(handle) => Some(*handle),
             Value::Vector(handle) => Some(*handle),
+            Value::Map(handle) => Some(*handle),
             Value::Bytes(handle) => Some(*handle),
             Value::Pair(handle) => Some(*handle),
             Value::List(handle, _) => Some(*handle),
@@ -378,6 +380,15 @@ impl Value {
                 res.push(')');
                 res
             }
+            Value::Map(handle) => {
+                let mut res = String::new();
+                res.push('{');
+                for (key, val) in vm.get_map(*handle).iter() {
+                    res.push_str(&format!("{} {}\n", key.display_value(vm), val.display_value(vm)));
+                }
+                res.push('}');
+                res
+            }
             Value::Pair(_) => {
                 let mut res = String::new();
                 res.push('(');
@@ -435,6 +446,7 @@ impl Value {
             Value::Continuation(_) => "Continuation",
             Value::CallFrame(_) => "CallFrame",
             Value::Vector(_) => "Vector",
+            Value::Map(_) => "Map",
             Value::Pair(_) => "Pair",
             Value::List(_, _) => "Pair",
             Value::String(_) => "String",

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::chunk::*;
@@ -163,6 +164,20 @@ impl Vm {
         heap.alloc_vector(v, MutState::Immutable, |heap| self.mark_roots(heap))
     }
 
+    pub fn alloc_map(&mut self, map: HashMap<Value, Value>) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_map(map, MutState::Mutable, |heap| self.mark_roots(heap))
+    }
+
+    pub fn alloc_map_ro(&mut self, map: HashMap<Value, Value>) -> Value {
+        // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
+        let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
+        // alloc must not save mark_roots (it does not) since we broke heap away from self.
+        heap.alloc_map(map, MutState::Immutable, |heap| self.mark_roots(heap))
+    }
+
     pub fn alloc_list_ro(&mut self, v: Vec<Value>) -> Value {
         // Break the lifetime of heap away from self for this call so we can mark_roots if needed.
         let heap: &mut Heap = unsafe { (&mut self.heap as *mut Heap).as_mut().unwrap() };
@@ -284,6 +299,14 @@ impl Vm {
 
     pub fn get_vector_mut(&mut self, handle: Handle) -> VMResult<&mut Vec<Value>> {
         self.heap.get_vector_mut(handle)
+    }
+
+    pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
+        self.heap.get_map(handle)
+    }
+
+    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
+        self.heap.get_map_mut(handle)
     }
 
     pub fn get_bytes(&self, handle: Handle) -> &[u8] {

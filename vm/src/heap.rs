@@ -68,6 +68,7 @@ pub struct Continuation {
 enum Object {
     String(Arc<String>),
     Vector(Arc<Vec<Value>>),
+    Map(Arc<HashMap<Value, Value>>),
     Bytes(Arc<Vec<u8>>),
     Pair(Arc<(Value, Value)>),
     Value(Value),
@@ -280,6 +281,18 @@ impl Heap {
         Value::Vector(self.alloc(Object::Vector(Arc::new(v)), mutable.flag(), mark_roots))
     }
 
+    pub fn alloc_map<MarkFunc>(
+        &mut self,
+        map: HashMap<Value, Value>,
+        mutable: MutState,
+        mark_roots: MarkFunc,
+    ) -> Value
+        where
+            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    {
+        Value::Map(self.alloc(Object::Map(Arc::new(map)), mutable.flag(), mark_roots))
+    }
+
     pub fn alloc_bytes<MarkFunc>(
         &mut self,
         v: Vec<u8>,
@@ -369,6 +382,25 @@ impl Heap {
             Ok(Arc::make_mut(v))
         } else {
             panic!("Handle {} is not a vector!", handle.idx);
+        }
+    }
+
+    pub fn get_map(&self, handle: Handle) -> &HashMap<Value, Value> {
+        if let Some(Object::Map(map)) = self.objects.get(handle.idx) {
+            map
+        } else {
+            panic!("Handle {} is not a map!", handle.idx);
+        }
+    }
+
+    pub fn get_map_mut(&mut self, handle: Handle) -> VMResult<&mut HashMap<Value, Value>> {
+        if !self.is_mutable(handle) {
+            return Err(VMError::new_heap("Map is not mutable!"));
+        }
+        if let Some(Object::Map(map)) = self.objects.get_mut(handle.idx) {
+            Ok(Arc::make_mut(map))
+        } else {
+            panic!("Handle {} is not a map!", handle.idx);
         }
     }
 
@@ -597,7 +629,16 @@ impl Heap {
             Object::Vector(vec) => {
                 for v in vec.iter() {
                     if let Some(h) = v.get_handle() {
-                        let h = h;
+                        self.mark_trace(h, current);
+                    }
+                }
+            }
+            Object::Map(map) => {
+                for (key, val) in map.iter() {
+                    if let Some(h) = key.get_handle() {
+                        self.mark_trace(h, current);
+                    }
+                    if let Some(h) = val.get_handle() {
                         self.mark_trace(h, current);
                     }
                 }

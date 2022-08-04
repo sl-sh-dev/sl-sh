@@ -107,6 +107,15 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
             res.push(')');
             res
         }
+        Value::Map(handle) => {
+            let mut res = String::new();
+            res.push('{');
+            for (key, val) in vm.get_map(*handle).iter() {
+                res.push_str(&format!("{} {}\n", key.display_value(vm), val.display_value(vm)));
+            }
+            res.push('}');
+            res
+        }
         Value::Pair(h) => {
             let (car, cdr) = vm.get_pair(*h);
             let mut res = String::new();
