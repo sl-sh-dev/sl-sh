@@ -287,8 +287,8 @@ impl Heap {
         mutable: MutState,
         mark_roots: MarkFunc,
     ) -> Value
-        where
-            MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
+    where
+        MarkFunc: FnMut(&mut Heap) -> VMResult<()>,
     {
         Value::Map(self.alloc(Object::Map(Arc::new(map)), mutable.flag(), mark_roots))
     }

@@ -111,7 +111,11 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
             let mut res = String::new();
             res.push('{');
             for (key, val) in vm.get_map(*handle).iter() {
-                res.push_str(&format!("{} {}\n", key.display_value(vm), val.display_value(vm)));
+                res.push_str(&format!(
+                    "{} {}\n",
+                    key.display_value(vm),
+                    val.display_value(vm)
+                ));
             }
             res.push('}');
             res

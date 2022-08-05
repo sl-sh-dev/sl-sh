@@ -121,7 +121,10 @@ fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Value>) -> bool 
     if is_whitespace(ch) || read_table_term.contains_key(ch) {
         true
     } else {
-        matches!(ch, "(" | ")" | "#" | "\"" | "," | "'" | "`")
+        matches!(
+            ch,
+            "(" | ")" | "#" | "\"" | "," | "'" | "`" | "[" | "]" | "{" | "}" | "\\"
+        )
     }
 }
 
@@ -130,6 +133,13 @@ fn is_digit(ch: &str) -> bool {
         ch,
         "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
     )
+}
+
+enum ReadReturn {
+    None,
+    List,
+    Vector,
+    Map,
 }
 
 impl<'vm> Reader<'vm> {
@@ -734,9 +744,9 @@ impl<'vm> Reader<'vm> {
         let mut v: Vec<Value> = Vec::new();
         let mut cont = true;
 
-        let close_intern = self.vm.intern(")");
+        let close_intern = self.vm.intern("]");
         while cont {
-            let exp = match self.read_inner(buffer, in_back_quote, true) {
+            let exp = match self.read_inner(buffer, in_back_quote, ReadReturn::Vector) {
                 Ok(exp) => {
                     if let Some(Value::Symbol(i)) = &exp {
                         if *i == close_intern {
@@ -758,6 +768,56 @@ impl<'vm> Reader<'vm> {
         }
         Err(ReadError {
             reason: "Unclosed vector".to_string(),
+        })
+    }
+
+    fn read_map(
+        &mut self,
+        buffer: &mut String,
+        in_back_quote: bool,
+    ) -> Result<HashMap<Value, Value>, ReadError> {
+        let mut map: HashMap<Value, Value> = HashMap::new();
+        let mut cont = true;
+
+        let close_intern = self.vm.intern("}");
+        while cont {
+            let key = match self.read_inner(buffer, in_back_quote, ReadReturn::Map) {
+                Ok(exp) => {
+                    if let Some(Value::Symbol(i)) = &exp {
+                        if *i == close_intern {
+                            return Ok(map);
+                        }
+                    }
+                    exp
+                }
+                Err(err) => {
+                    return Err(err);
+                }
+            };
+            let val = match self.read_inner(buffer, in_back_quote, ReadReturn::Map) {
+                Ok(exp) => {
+                    if let Some(Value::Symbol(i)) = &exp {
+                        if *i == close_intern {
+                            return Err(ReadError {
+                                reason: "Map missing value".to_string(),
+                            });
+                        }
+                    }
+                    exp
+                }
+                Err(err) => {
+                    return Err(err);
+                }
+            };
+            let pch = self.chars().peek();
+            if let (Some(key), Some(val)) = (key, val) {
+                map.insert(key, val);
+            } else if pch.is_none() {
+                cont = false;
+            }
+        }
+        Err(ReadError {
+            reason: "Unclosed map".to_string(),
         })
     }
 
@@ -814,7 +874,7 @@ impl<'vm> Reader<'vm> {
         let i_dot = self.vm.intern(".");
 
         while cont {
-            let exp = match self.read_inner(buffer, in_back_quote, true) {
+            let exp = match self.read_inner(buffer, in_back_quote, ReadReturn::List) {
                 Ok(exp) => {
                     if let Some(Value::Symbol(si)) = exp {
                         if si == i_close {
@@ -905,7 +965,7 @@ impl<'vm> Reader<'vm> {
         &mut self,
         buffer: &mut String,
         in_back_quote: bool,
-        return_close_paren: bool,
+        return_close: ReadReturn,
     ) -> Result<Option<Value>, ReadError> {
         /*let read_table_out;
         let read_table_d;
@@ -974,7 +1034,7 @@ impl<'vm> Reader<'vm> {
                         Err(e) => return Err(e),
                     };
                 }
-                "'" => match self.read_inner(buffer, in_back_quote, false) {
+                "'" => match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
                     Ok(Some(exp)) => {
                         let cdr = self.alloc_pair(exp, Value::Nil);
                         let qlist = self.alloc_pair(Value::Symbol(i_quote), cdr);
@@ -989,7 +1049,7 @@ impl<'vm> Reader<'vm> {
                         return Err(err);
                     }
                 },
-                "`" => match self.read_inner(buffer, true, false) {
+                "`" => match self.read_inner(buffer, true, ReadReturn::None) {
                     Ok(Some(exp)) => {
                         let cdr = self.alloc_pair(exp, Value::Nil);
                         let qlist = self.alloc_pair(Value::Symbol(i_backquote), cdr);
@@ -1014,7 +1074,7 @@ impl<'vm> Reader<'vm> {
                     } else {
                         Value::Symbol(self.vm.intern("unquote"))
                     };
-                    match self.read_inner(buffer, in_back_quote, false) {
+                    match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
                         Ok(Some(exp)) => {
                             let cdr = self.alloc_pair(exp, Value::Nil);
                             return Ok(Some(self.alloc_pair(sym, cdr)));
@@ -1060,10 +1120,6 @@ impl<'vm> Reader<'vm> {
                             );
                             return Err(ReadError { reason });
                         }
-                        "(" => {
-                            let exp = self.read_vector(buffer, in_back_quote)?;
-                            return Ok(Some(self.vm.alloc_vector_ro(exp)));
-                        }
                         "t" => {
                             return Ok(Some(Value::True));
                         }
@@ -1093,14 +1149,10 @@ impl<'vm> Reader<'vm> {
                             return Ok(Some(Value::Int(exp)));
                         }
                         ";" => {
-                            match self.read_inner(buffer, in_back_quote, false) {
+                            match self.read_inner(buffer, in_back_quote, ReadReturn::None) {
                                 Ok(_) => {
                                     // Consumed and threw away one form so return the next.
-                                    return self.read_inner(
-                                        buffer,
-                                        in_back_quote,
-                                        return_close_paren,
-                                    );
+                                    return self.read_inner(buffer, in_back_quote, return_close);
                                 }
                                 Err(err) => {
                                     return Err(err);
@@ -1122,14 +1174,40 @@ impl<'vm> Reader<'vm> {
                     let exp = self.read_list(buffer, in_back_quote)?;
                     return Ok(Some(exp));
                 }
+                ")" if matches!(return_close, ReadReturn::List) => {
+                    return Ok(Some(Value::Symbol(self.vm.intern(")"))));
+                }
                 ")" => {
-                    if return_close_paren {
-                        return Ok(Some(Value::Symbol(self.vm.intern(")"))));
-                    } else {
-                        let reason =
-                            format!("Unexpected ')': line {} col {}", self.line(), self.column());
-                        return Err(ReadError { reason });
-                    }
+                    let reason =
+                        format!("Unexpected ')': line {} col {}", self.line(), self.column());
+                    return Err(ReadError { reason });
+                }
+                "{" => {
+                    let exp = self.read_map(buffer, in_back_quote)?;
+                    return Ok(Some(self.vm.alloc_map_ro(exp)));
+                }
+                "}" if matches!(return_close, ReadReturn::Map) => {
+                    return Ok(Some(Value::Symbol(self.vm.intern("}"))));
+                }
+                "}" => {
+                    let reason = format!(
+                        "Unexpected '}}': line {} col {}",
+                        self.line(),
+                        self.column()
+                    );
+                    return Err(ReadError { reason });
+                }
+                "[" => {
+                    let exp = self.read_vector(buffer, in_back_quote)?;
+                    return Ok(Some(self.vm.alloc_vector_ro(exp)));
+                }
+                "]" if matches!(return_close, ReadReturn::Vector) => {
+                    return Ok(Some(Value::Symbol(self.vm.intern("]"))));
+                }
+                "]" => {
+                    let reason =
+                        format!("Unexpected ']': line {} col {}", self.line(), self.column());
+                    return Err(ReadError { reason });
                 }
                 ";" => self.consume_line_comment(),
                 _ => {
@@ -1147,7 +1225,7 @@ impl<'vm> Reader<'vm> {
     fn read_form(&mut self) -> Result<Option<Value>, ReadError> {
         self.vm.pause_gc();
         let mut buffer = String::new();
-        let res = self.read_inner(&mut buffer, false, false);
+        let res = self.read_inner(&mut buffer, false, ReadReturn::None);
         self.vm.unpause_gc();
         res
     }
@@ -1186,11 +1264,11 @@ mod tests {
             }
             Value::Vector(h) => {
                 let list = vm.get_vector(h).to_vec();
-                output.push("#(".to_string());
+                output.push("[".to_string());
                 for exp in list.iter() {
                     to_strs(vm, output, *exp);
                 }
-                output.push(")".to_string());
+                output.push("]".to_string());
             }
             Value::Nil => output.push("nil".to_string()),
             _ => {
@@ -1259,14 +1337,14 @@ mod tests {
         let tokens = tokenize(&mut vm, "one two three \"four\" 5 6");
         println!("XXX {:?}", tokens);
         assert!(tokens.len() == 8);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "Symbol:three");
         assert!(tokens[4] == "String:\"four\"");
         assert!(tokens[5] == "Int:5");
         assert!(tokens[6] == "Int:6");
-        assert!(tokens[7] == ")");
+        assert!(tokens[7] == "]");
         let tokens = tokenize(&mut vm, "(1 2 3)");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
@@ -1281,20 +1359,20 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize(&mut vm, "#(#\\A 2 3)");
+        let tokens = tokenize(&mut vm, "[#\\A 2 3]");
         assert!(tokens.len() == 5);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Char:#\\A");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
-        assert!(tokens[4] == ")");
-        let tokens = tokenize(&mut vm, "#(#\\  2 3)");
+        assert!(tokens[4] == "]");
+        let tokens = tokenize(&mut vm, "[#\\  2 3]");
         assert!(tokens.len() == 5);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Char:#\\ ");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
-        assert!(tokens[4] == ")");
+        assert!(tokens[4] == "]");
         let tokens = tokenize(&mut vm, "'((1 2 (3)))");
         assert!(tokens.len() == 12);
         assert!(tokens[0] == "(");
@@ -1448,9 +1526,9 @@ mod tests {
         assert!(tokens[9] == "nil");
         assert!(tokens[10] == ")");
 
-        let tokens = tokenize(&mut vm, "#(one 2 3.0 \"four\" #\\B #t nil 3.5 ())");
+        let tokens = tokenize(&mut vm, "[one 2 3.0 \"four\" #\\B #t nil 3.5 ()]");
         assert!(tokens.len() == 11);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Float:3");
@@ -1460,11 +1538,11 @@ mod tests {
         assert!(tokens[7] == "nil");
         assert!(tokens[8] == "Float:3.5");
         assert!(tokens[9] == "nil");
-        assert!(tokens[10] == ")");
+        assert!(tokens[10] == "]");
 
         let tokens = tokenize(&mut vm, "one 2 3.0 \"four\" #\\B #t nil 3.5 ()");
         assert!(tokens.len() == 11);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Float:3");
@@ -1474,7 +1552,7 @@ mod tests {
         assert!(tokens[7] == "nil");
         assert!(tokens[8] == "Float:3.5");
         assert!(tokens[9] == "nil");
-        assert!(tokens[10] == ")");
+        assert!(tokens[10] == "]");
     }
 
     #[test]
@@ -1489,32 +1567,32 @@ mod tests {
         assert!(tokens[4] == ")");
         let tokens = tokenize_wrap(&mut vm, "(1 2 3)");
         assert!(tokens.len() == 7);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Int:1");
         assert!(tokens[3] == "Int:2");
         assert!(tokens[4] == "Int:3");
         assert!(tokens[5] == ")");
-        assert!(tokens[6] == ")");
+        assert!(tokens[6] == "]");
 
         let tokens = tokenize(&mut vm, "1 2 3");
         assert!(tokens.len() == 5);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Int:1");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
-        assert!(tokens[4] == ")");
+        assert!(tokens[4] == "]");
         let tokens = tokenize_wrap(&mut vm, "1 2 3");
         assert!(tokens.len() == 5);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Int:1");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
-        assert!(tokens[4] == ")");
+        assert!(tokens[4] == "]");
 
         let tokens = tokenize(&mut vm, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Int:1");
         assert!(tokens[3] == "Int:2");
@@ -1525,10 +1603,10 @@ mod tests {
         assert!(tokens[8] == "Int:5");
         assert!(tokens[9] == "Int:6");
         assert!(tokens[10] == ")");
-        assert!(tokens[11] == ")");
+        assert!(tokens[11] == "]");
         let tokens = tokenize_wrap(&mut vm, "(1 2 3) (4 5 6)");
         assert!(tokens.len() == 12);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Int:1");
         assert!(tokens[3] == "Int:2");
@@ -1539,7 +1617,7 @@ mod tests {
         assert!(tokens[8] == "Int:5");
         assert!(tokens[9] == "Int:6");
         assert!(tokens[10] == ")");
-        assert!(tokens[11] == ")");
+        assert!(tokens[11] == "]");
 
         let tokens = tokenize(&mut vm, "'(1 2 3)");
         assert!(tokens.len() == 8);
@@ -1553,7 +1631,7 @@ mod tests {
         assert!(tokens[7] == ")");
         let tokens = tokenize_wrap(&mut vm, "'(1 2 3)");
         assert!(tokens.len() == 10);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Symbol:quote");
         assert!(tokens[3] == "(");
@@ -1562,7 +1640,7 @@ mod tests {
         assert!(tokens[6] == "Int:3");
         assert!(tokens[7] == ")");
         assert!(tokens[8] == ")");
-        assert!(tokens[9] == ")");
+        assert!(tokens[9] == "]");
 
         let tokens = tokenize(&mut vm, "nil");
         assert!(tokens.len() == 1);
@@ -1572,14 +1650,14 @@ mod tests {
         assert!(tokens[0] == "nil");
         let tokens = tokenize_wrap(&mut vm, "nil");
         assert!(tokens.len() == 3);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "nil");
-        assert!(tokens[2] == ")");
+        assert!(tokens[2] == "]");
         let tokens = tokenize_wrap(&mut vm, "()");
         assert!(tokens.len() == 3);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "nil");
-        assert!(tokens[2] == ")");
+        assert!(tokens[2] == "]");
     }
 
     #[test]
@@ -1588,7 +1666,7 @@ mod tests {
         let input = r#""on\te\ntwo" two "th\rree" "fo\"u\\r" 5 6 "slash\x2fx\x2F\x3a\x3b""#;
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 9);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "String:\"on\te\ntwo\"");
         assert!(tokens[2] == "Symbol:two");
         assert!(tokens[3] == "String:\"th\rree\"");
@@ -1596,13 +1674,13 @@ mod tests {
         assert!(tokens[5] == "Int:5");
         assert!(tokens[6] == "Int:6");
         assert!(tokens[7] == "String:\"slash/x/:;\"");
-        assert!(tokens[8] == ")");
+        assert!(tokens[8] == "]");
 
         let input = r##"#"_on	e
 two_" two "th\rree" "fo\"u\\r" 5 6 #"_slash/x/:;_""##;
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 9);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(
             tokens[1]
                 == r#"String:"on	e
@@ -1614,33 +1692,33 @@ two""#
         assert!(tokens[5] == "Int:5");
         assert!(tokens[6] == "Int:6");
         assert!(tokens[7] == "String:\"slash/x/:;\"");
-        assert!(tokens[8] == ")");
+        assert!(tokens[8] == "]");
 
         let input =
             "\"\\u{03bb} two \" \"\\x20 \\u{03BB} end\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "String:\"\u{03bb} two \"");
         assert!(tokens[2] == "String:\"  λ end\"");
         assert!(tokens[3] == "String:\"fo\"u\\r\"");
         assert!(tokens[4] == "Int:5");
         assert!(tokens[5] == "Int:6");
         assert!(tokens[6] == "String:\"slash/x/:;\"");
-        assert!(tokens[7] == ")");
+        assert!(tokens[7] == "]");
 
         let input =
             "\"\\u03bb two \" \"\\x20 \\u03BB \nend\" \"fo\\\"u\\\\r\" 5 6 \"slash\\x2fx\\x2F\\x3a\\x3b\"";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "String:\"\u{03bb} two \"");
         assert!(tokens[2] == "String:\"  λ \nend\"");
         assert!(tokens[3] == "String:\"fo\"u\\r\"");
         assert!(tokens[4] == "Int:5");
         assert!(tokens[5] == "Int:6");
         assert!(tokens[6] == "String:\"slash/x/:;\"");
-        assert!(tokens[7] == ")");
+        assert!(tokens[7] == "]");
     }
 
     #[test]
@@ -1649,14 +1727,14 @@ two""#
         let input = "#\\x #\\X #\\x20 #\\u03bb #\\u{03BB} #\\u03bb";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Char:#\\x");
         assert!(tokens[2] == "Char:#\\X");
         assert!(tokens[3] == "Char:#\\ ");
         assert!(tokens[4] == "Char:#\\λ");
         assert!(tokens[5] == "Char:#\\\u{03bb}");
         assert!(tokens[6] == "Char:#\\λ");
-        assert!(tokens[7] == ")");
+        assert!(tokens[7] == "]");
     }
 
     #[test]
@@ -1665,7 +1743,7 @@ two""#
         let input = "2300 23_000 #xFF #xff #x0f #xF #b0000_0000 #b1111_1111 #b11111111 #b11111111_11111111 #o07 #o17";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 14);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Int:2300");
         assert!(tokens[2] == "Int:23000");
         assert!(tokens[3] == "Int:255");
@@ -1678,7 +1756,7 @@ two""#
         assert!(tokens[10] == "Int:65535");
         assert!(tokens[11] == "Int:7");
         assert!(tokens[12] == "Int:15");
-        assert!(tokens[13] == ")");
+        assert!(tokens[13] == "]");
         let input = "#xFG";
         tokenize_err(&mut vm, input);
         let input = "#b1112";
@@ -1693,7 +1771,7 @@ two""#
         let input = "2300.0 23_000.0 23e10 23e+5 23e-4 23e-+5 23e-5e+4 23.123 0.23.123";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 11);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "Float:2300");
         assert!(tokens[2] == "Float:23000");
         assert!(tokens[3] == "Float:230000000000");
@@ -1703,7 +1781,7 @@ two""#
         assert!(tokens[7] == "Symbol:23e-5e+4");
         assert!(tokens[8] == "Float:23.123");
         assert!(tokens[9] == "Symbol:0.23.123");
-        assert!(tokens[10] == ")");
+        assert!(tokens[10] == "]");
     }
 
     #[test]
@@ -1711,7 +1789,6 @@ two""#
         let mut vm = build_def_vm();
         let input = "#! Doc string! !#";
         let tokens = tokenize(&mut vm, input);
-        println!("XXXX tokens {:?}", tokens);
         assert!(tokens.len() == 4);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:doc-string");
@@ -1719,7 +1796,6 @@ two""#
         assert!(tokens[3] == ")");
         let input = "#!Doc string!!#";
         let tokens = tokenize(&mut vm, input);
-        println!("XXXX tokens {:?}", tokens);
         assert!(tokens.len() == 4);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:doc-string");
@@ -1730,9 +1806,8 @@ two""#
          !#\
          (defn fnx () (prn x))";
         let tokens = tokenize(&mut vm, input);
-        println!("XXXX tokens {:?}", tokens);
         assert!(tokens.len() == 15);
-        assert!(tokens[0] == "#(");
+        assert!(tokens[0] == "[");
         assert!(tokens[1] == "(");
         assert!(tokens[2] == "Symbol:doc-string");
         assert!(
@@ -1743,6 +1818,6 @@ two""#
         );
         assert!(tokens[12] == ")");
         assert!(tokens[13] == ")");
-        assert!(tokens[14] == ")");
+        assert!(tokens[14] == "]");
     }
 }
