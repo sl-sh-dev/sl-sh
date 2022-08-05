@@ -2,9 +2,13 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
 use std::borrow::Cow;
+use std::cell::Ref;
+use std::collections::HashMap;
 
 use std::convert::{TryFrom, TryInto};
 use std::env;
+use std::ops::Deref;
+use std::str::FromStr;
 
 pub fn param_eval_optional(
     environment: &mut Environment,
@@ -277,6 +281,14 @@ where
     }
 }
 
+pub struct ErrorStrings {}
+
+impl ErrorStrings {
+    pub fn mismatched_type(fn_name: &str, expected: &str, got: &str) -> String {
+        format!("{fn_name}: mismatched type input, expected {expected}, got {got}.")
+    }
+}
+
 pub trait TryIntoExpression<T>: Sized
 where
     Self: ToString + TryInto<T>,
@@ -291,9 +303,10 @@ where
         let t = self.try_into();
         match t {
             Ok(t) => Ok(t),
-            Err(_) => Err(LispError::new(format!(
-                "{}: mismatched type input, expected {}, got {}.",
-                fn_name, hr_dest_type, hr_src_type,
+            Err(_) => Err(LispError::new(ErrorStrings::mismatched_type(
+                fn_name,
+                &hr_dest_type,
+                &hr_src_type,
             ))),
         }
     }
@@ -327,6 +340,8 @@ impl TryFrom<Expression> for String {
     fn try_from(value: Expression) -> Result<Self, Self::Error> {
         match &value.get().data {
             ExpEnum::String(cow, _) => Ok(cow.to_string()),
+            ExpEnum::Symbol(sym, _) => Ok(sym.to_string()),
+            ExpEnum::Char(ch) => Ok(ch.to_string()),
             _ => Err(LispError::new(
                 "Can only convert String from ExpEnum::String.",
             )),
@@ -364,6 +379,31 @@ impl TryIntoExpression<bool> for Expression {
         ExpEnum::True.to_string() + " or " + &ExpEnum::False.to_string()
     }
 }
+
+//impl<'a> TryFrom<&'a Expression> for &'a mut HashMap<&'static str, Expression> {
+//    type Error = LispError;
+//
+//    fn try_from(exp: &'a Expression) -> Result<Self, Self::Error> {
+//        match exp.copy() {
+//            ExpEnum::HashMap(ref mut inner_map) => {
+//                inner_map.clear();
+//                Ok(&mut inner_map)
+//            }
+//            _ => Err(LispError::new("meow")),
+//        }
+//    }
+//}
+
+// idea here is in functions like builtins_hashmap::hash_haskey,
+// could we use a rust arg like ToString<Expression> to automatically
+// force errors when we expect an argument that is a Symbol/String/Char
+// and thus has a valid &str ref.
+//impl ToString for Expression {
+//    fn to_string(&self) -> String {
+//        match self {
+//        }
+//    }
+//}
 
 impl From<f64> for Expression {
     fn from(num: f64) -> Self {
@@ -417,6 +457,16 @@ impl TryIntoExpression<i64> for Expression {
     fn human_readable_dest_type(&self) -> String {
         ExpEnum::Int(Default::default()).to_string()
     }
+}
+
+#[macro_export]
+macro_rules! try_inner_exp_enum {
+    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
+        match $expression {
+            $( $pattern )|+ $( if $guard )? => $eval,
+            _ => return Err(LispError::new($err))
+        }
+    };
 }
 
 #[cfg(test)]
