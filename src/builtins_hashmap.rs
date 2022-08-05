@@ -7,7 +7,7 @@ use crate::environment::*;
 use crate::eval::*;
 use crate::interner::*;
 use crate::types::*;
-use crate::LispResult;
+use crate::{try_inner_exp_enum, ErrorStrings, LispResult};
 
 #[allow(clippy::ptr_arg)]
 pub(crate) fn cow_to_ref(environment: &mut Environment, input: &Cow<'static, str>) -> &'static str {
@@ -250,6 +250,7 @@ fn hash_haskey(to_map: Expression, to_val: Expression) -> LispResult<Expression>
     }
     let map_d = to_map.get();
     if let ExpEnum::HashMap(map) = &map_d.data {
+        let key = to_val.display_type();
         match &to_val.get().data {
             ExpEnum::Symbol(sym, _) => {
                 return Ok(do_has(map, sym));
@@ -261,7 +262,10 @@ fn hash_haskey(to_map: Expression, to_val: Expression) -> LispResult<Expression>
                 return Ok(do_has(map, ch));
             }
             _ => {
-                let msg = format!("hash-haskey key can only be a symbol or string {:?}", key);
+                let msg = format!(
+                    "hash-haskey key can only be a symbol, string, or char, received {:?}",
+                    key
+                );
                 return Err(LispError::new(msg));
             }
         }
@@ -296,22 +300,77 @@ fn builtin_hash_keys(
     ))
 }
 
-fn builtin_hash_clear(
-    environment: &mut Environment,
-    args: &mut dyn Iterator<Item = Expression>,
-) -> Result<Expression, LispError> {
-    if let Some(map) = args.next() {
-        if args.next().is_none() {
-            let map = eval(environment, map)?;
-            let mut map_d = map.get_mut();
-            if let ExpEnum::HashMap(inner_map) = &mut map_d.data {
-                inner_map.clear();
-                return Ok(map.clone());
-            }
-        }
-    }
-    Err(LispError::new("hash-clear! takes a hashmap and clears it"))
+// current best idea is to put a try_from IN the generated function
+// so you'd inject the code hash_clear into the desired match statement:
+//impl TryFrom<Expression> for Expression {
+//    type Error = LispError;
+
+//    fn try_from(exp: Expression) -> Result<Self, Self::Error> {
+//        match exp.copy() {
+//            ExpEnum::HashMap(ref mut inner_map) => {
+//                hash_clear(inner_map.clear())?;
+//                Ok(exp.clone())
+//            }
+//            _ => Err(LispError::new("meow")),
+//        }
+//    }
+//}
+// what if you just made a custom tryfrom since it's going in the function anyway?
+fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
+    inner_map.clear();
+    Ok(())
 }
+
+/// Usage: (hash-clear! hashmap)
+///
+/// Clears a hashmap.  This is a destructive form!
+///
+/// Section: hashmap
+///
+/// Example:
+/// (def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
+/// (test::assert-equal 4 (length (hash-keys tst-hash)))
+/// (test::assert-true (hash-haskey tst-hash :key1))
+/// (test::assert-true (hash-haskey tst-hash 'key2))
+/// (test::assert-true (hash-haskey tst-hash \"key3\"))
+/// (test::assert-true (hash-haskey tst-hash #\\S))
+/// (hash-clear! tst-hash)
+/// (test::assert-equal 0 (length (hash-keys tst-hash)))
+/// (test::assert-false (hash-haskey tst-hash :key1))
+/// (test::assert-false (hash-haskey tst-hash 'key2))
+/// (test::assert-false (hash-haskey tst-hash \"key3\"))
+/// (test::assert-false (hash-haskey tst-hash #\\S))
+#[sl_sh_fn(fn_name = "hash-clear!")]
+fn hash_clear(exp: Expression) -> LispResult<Expression> {
+    let mut map_d = exp.get_mut();
+    try_inner_exp_enum!(
+        map_d.data,
+        ExpEnum::HashMap(ref mut inner_map),
+        {
+            // programmatically inserting the target function here is workable.
+            // for multi-arg functions we'd have to programmatically nest these
+            // enums, and that could probably be further simplified by helper
+            // functions, this could also change the way all of this works,
+            // gets sticky if you say, DO return something, so maybe
+            // we'll have to distinguish between when we accept an arg
+            // and mutate it, or simply read it, and return another value.
+            my_hash_clear(inner_map);
+            return Ok(exp.clone());
+        },
+        ErrorStrings::mismatched_type(
+            "hash-clear",
+            &ExpEnum::HashMap(Default::default()).to_string(),
+            &exp.display_type()
+        )
+    );
+}
+
+//fn my_hash_clear<'a>(
+//    inner_map: &'a mut HashMap<&'static str, Expression>,
+//) -> &'a mut HashMap<&'static str, Expression> {
+//    inner_map.clear();
+//    inner_map
+//}
 
 pub fn add_hash_builtins<S: BuildHasher>(
     interner: &mut Interner,
@@ -444,30 +503,5 @@ Example:
 ",
         ),
     );
-    data.insert(
-        interner.intern("hash-clear!"),
-        Expression::make_function(
-            builtin_hash_clear,
-            "Usage: (hash-clear! hashmap)
-
-Clears a hashmap.  This is a destructive form!
-
-Section: hashmap
-
-Example:
-(def tst-hash (make-hash '((:key1 . \"val one\")(key2 . \"val two\")(\"key3\" . \"val three\")(#\\S . \"val S\"))))
-(test::assert-equal 4 (length (hash-keys tst-hash)))
-(test::assert-true (hash-haskey tst-hash :key1))
-(test::assert-true (hash-haskey tst-hash 'key2))
-(test::assert-true (hash-haskey tst-hash \"key3\"))
-(test::assert-true (hash-haskey tst-hash #\\S))
-(hash-clear! tst-hash)
-(test::assert-equal 0 (length (hash-keys tst-hash)))
-(test::assert-false (hash-haskey tst-hash :key1))
-(test::assert-false (hash-haskey tst-hash 'key2))
-(test::assert-false (hash-haskey tst-hash \"key3\"))
-(test::assert-false (hash-haskey tst-hash #\\S))
-",
-        ),
-    );
+    intern_hash_clear(interner, data);
 }
