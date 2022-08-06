@@ -57,8 +57,8 @@ fn build_sl_sh_expression_type() -> Type {
 
 /// return the function names the macro will create. Given a base name, "base"
 /// return (base, builtin_base, arg_parse_base) tuple of Idents
-fn get_fn_names(item_fn: &syn::ItemFn) -> (Ident, Ident, Ident, Ident) {
-    let sig_ident = &item_fn.sig.ident;
+fn get_fn_names(original_item_fn: &syn::ItemFn) -> (Ident, Ident, Ident, Ident) {
+    let sig_ident = &original_item_fn.sig.ident;
     let name = sig_ident.to_string();
     let original_fn_name = Ident::new(&name, Span::call_site());
     let builtin_name = "builtin_".to_string() + &name;
@@ -71,7 +71,13 @@ fn get_fn_names(item_fn: &syn::ItemFn) -> (Ident, Ident, Ident, Ident) {
 }
 
 /// given the length of the rust native args list, create two lists of argument names
-/// and crate::ExpEnum types for generating the builtin function signature.
+/// and crate::Expression types for generating the builtin function signature.
+/// This always amounts to something like:
+/// builtin_<fn-name>(arg_0: crate::Expression, arg_1: crate::Expression, ...)
+/// The point is, this generated builtin function should have the exact same
+/// number of arguments as the function we're wrapping. In the future if var args
+/// or optionals are supported that can be portrayed on the Rust side as Optional<T>'s
+/// for any optional arguments, and Vec<T>'s for any var args.
 fn generate_builtin_arg_list(len: usize) -> (Vec<Ident>, Vec<Type>) {
     let mut fn_args = vec![];
     let mut fn_types = vec![];
@@ -160,8 +166,8 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
 }
 
 /// parse the return type of the rust function
-fn get_return_type(item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
-    let return_type = match &item_fn.sig.output {
+fn get_return_type(original_item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static str>)> {
+    let return_type = match &original_item_fn.sig.output {
         ReturnType::Default => {
             unimplemented!("Functions with attribute must return a value.");
         }
@@ -169,12 +175,12 @@ fn get_return_type(item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static 
     };
 
     if let Some(inner_type) = get_inner_type(&return_type) {
-        let wrapper = is_valid_inner_type(&return_type)?;
+        let wrapper = is_valid_wrapping_type(&return_type)?;
         match inner_type {
             GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
             _ => {
                 return Err(syn::Error::new(
-                    item_fn.span(),
+                    original_item_fn.span(),
                     format!(
                         "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
                         &POSSIBLE_RESULT_TYPES
@@ -189,9 +195,9 @@ fn get_return_type(item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<&'static 
 
 /// Pull out every #doc attribute on the target fn for the proc macro attribute.
 /// Ignore any other attributes and only Err if there are no #doc attributes.
-fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
+fn get_documentation_for_fn(original_item_fn: &syn::ItemFn) -> MacroResult<String> {
     let mut docs = "".to_string();
-    for attr in &item_fn.attrs {
+    for attr in &original_item_fn.attrs {
         for path_segment in attr.path.segments.iter() {
             if &path_segment.ident.to_string() == "doc" {
                 if let Ok(Meta::NameValue(pair)) = attr.parse_meta() {
@@ -205,7 +211,7 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     }
     if docs.is_empty() {
         Err(syn::Error::new(
-            item_fn.span(),
+            original_item_fn.span(),
             "Functions with this attribute included must have documentation.",
         ))
     } else {
@@ -213,7 +219,7 @@ fn get_documentation_for_fn(item_fn: &syn::ItemFn) -> MacroResult<String> {
     }
 }
 
-fn is_valid_inner_type(ty: &Type) -> MacroResult<&'static str> {
+fn is_valid_wrapping_type(ty: &Type) -> MacroResult<&'static str> {
     return if let Type::Path(ref type_path) = ty {
         if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
             let path_segment = &type_path.path.segments.first().unwrap();
@@ -258,10 +264,10 @@ fn get_inner_type(ty: &Type) -> Option<&GenericArgument> {
 }
 
 fn generate_assertions_code_for_type_conversions(
-    item_fn: &syn::ItemFn,
+    original_item_fn: &syn::ItemFn,
     return_type: &syn::Type,
 ) -> MacroResult<Vec<TokenStream2>> {
-    let inputs = &item_fn.sig.inputs;
+    let inputs = &original_item_fn.sig.inputs;
     let input_types = get_input_types(inputs);
     let mut conversion_assertions_code = vec![];
     for input_type in input_types {
@@ -281,13 +287,13 @@ fn generate_assertions_code_for_type_conversions(
 }
 
 fn get_attribute_value_with_key(
-    item_fn: &syn::ItemFn,
+    original_item_fn: &syn::ItemFn,
     key: &str,
     values: &[(String, String)],
 ) -> MacroResult<Option<String>> {
     if values.is_empty() {
         Err(syn::Error::new(
-            item_fn.span(),
+            original_item_fn.span(),
             "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
         ))
     } else {
@@ -333,15 +339,15 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
 
 fn generate_builtin_fn(
     args_len: usize,
-    item_fn: &syn::ItemFn,
+    original_item_fn: &syn::ItemFn,
     fn_name: String,
     fn_name_attr: syn::Ident,
     builtin_name: syn::Ident,
     original_fn_name: syn::Ident,
 ) -> MacroResult<TokenStream> {
-    let (return_type, wrapper) = get_return_type(item_fn)?;
+    let (return_type, wrapper) = get_return_type(original_item_fn)?;
     let conversions_assertions_code =
-        generate_assertions_code_for_type_conversions(item_fn, &return_type)?;
+        generate_assertions_code_for_type_conversions(original_item_fn, &return_type)?;
     let (fn_args, fn_types) = generate_builtin_arg_list(args_len);
     let tokens = if let Some(_wrapper) = wrapper {
         quote! {
@@ -372,7 +378,7 @@ fn generate_builtin_fn(
 }
 
 fn parse_attributes(
-    item_fn: &syn::ItemFn,
+    original_item_fn: &syn::ItemFn,
     attr_args: syn::AttributeArgs,
 ) -> MacroResult<(String, Ident, bool)> {
     let vals = attr_args
@@ -380,17 +386,17 @@ fn parse_attributes(
         .map(get_attribute_name_value)
         .collect::<MacroResult<Vec<(String, String)>>>()?;
     let fn_name_attr = "fn_name".to_string();
-    let fn_name = get_attribute_value_with_key(item_fn, &fn_name_attr, vals.as_slice())?
+    let fn_name = get_attribute_value_with_key(original_item_fn, &fn_name_attr, vals.as_slice())?
         .ok_or_else(|| {
-            syn::Error::new(
-                item_fn.span(),
-                "sl_sh_fn requires name-value pair, 'fn_name'",
-            )
-        })?;
+        syn::Error::new(
+            original_item_fn.span(),
+            "sl_sh_fn requires name-value pair, 'fn_name'",
+        )
+    })?;
     let fn_name_attr = Ident::new(&fn_name_attr, Span::call_site());
 
     let eval_values = if let Some(value) =
-        get_attribute_value_with_key(item_fn, "eval_values", vals.as_slice())?
+        get_attribute_value_with_key(original_item_fn, "eval_values", vals.as_slice())?
     {
         value == "true"
     } else {
@@ -400,17 +406,17 @@ fn parse_attributes(
 }
 
 fn generate_sl_sh_fns(
-    item_fn: &syn::ItemFn,
+    original_item_fn: &syn::ItemFn,
     attr_args: syn::AttributeArgs,
 ) -> MacroResult<TokenStream2> {
-    let (fn_name, fn_name_attr, eval_values) = parse_attributes(item_fn, attr_args)?;
-    let doc_comments = get_documentation_for_fn(item_fn)?;
+    let (fn_name, fn_name_attr, eval_values) = parse_attributes(original_item_fn, attr_args)?;
+    let doc_comments = get_documentation_for_fn(original_item_fn)?;
 
-    let args_len = item_fn.sig.inputs.len();
-    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(item_fn);
+    let args_len = original_item_fn.sig.inputs.len();
+    let (original_fn_name, builtin_name, parse_name, intern_name) = get_fn_names(original_item_fn);
     let builtins_fn_code = generate_builtin_fn(
         args_len,
-        item_fn,
+        original_item_fn,
         fn_name.clone(),
         fn_name_attr.clone(),
         builtin_name.clone(),
@@ -479,12 +485,12 @@ pub fn sl_sh_fn(
 
     let tokens = match syn::parse::<syn::Item>(input) {
         Ok(item) => match &item {
-            syn::Item::Fn(item_fn) => {
-                let generated_sl_sh_fns: TokenStream2 = match generate_sl_sh_fns(item_fn, attr_args)
-                {
-                    Ok(fns) => fns,
-                    Err(e) => e.to_compile_error(),
-                };
+            syn::Item::Fn(original_item_fn) => {
+                let generated_sl_sh_fns: TokenStream2 =
+                    match generate_sl_sh_fns(original_item_fn, attr_args) {
+                        Ok(fns) => fns,
+                        Err(e) => e.to_compile_error(),
+                    };
                 let original_fn_code = item.into_token_stream();
                 quote! {
                     #original_fn_code
@@ -504,7 +510,27 @@ pub fn sl_sh_fn(
 }
 
 //TODO
-//  - functions that do not return anything... enhance get_return_type
+//  - functions that return optional.
+//  - functions that return values.
 //  - support Option-al arguments... enhance get_input_types
+//      - builtins_file.rs
+//          + builtin_get_temp_file
+//          + builtin_with_temp_dir
+//      - builtins_hashmap.rs
+//          + builtin_hash_get
 //  - variadic functions
-//  - support functions that return LispResult<T> by default, not just an primitive
+//      - builtins.rs
+//          + builtin_apply
+//          + builtin_unwind_protect
+//      - builtins_types.rs
+//          + builtin_to_symbol
+//  - support functions that need futher manipulation with Environment... make make a version
+//  of TryIntoExpression that takes environment?
+//      - builtins_hashmap.rs
+//          + builtin_make_hash
+//          + builtin_hash_set
+// - macro needs to know if a function turns a LispResult<()> so it can know to return Ok(())
+// - should all macros just use the try_inner_exp_enum pattern?
+// - what about a ToString coercion for ExpEnum::Char/String/Symbol for rust functions that require them
+//  to turn into Strings.
+// - given i only need to implement TryInto and TryIntoExpression
