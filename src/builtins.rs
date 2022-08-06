@@ -2295,7 +2295,7 @@ Example:
             builtin_meta_add_tags,
             "Usage: (meta-add-tags expression tag*)
 
-Adds multiple meta tags to an expression (see meta-add-tag).  It will work with 
+Adds multiple meta tags to an expression.  It will work with
 symbols or vectors or lists of symbols (or any combination).
 This is intended for helping with structs and interfaces in lisp, you probably
 do not want to use it.
