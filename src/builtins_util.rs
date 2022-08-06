@@ -552,4 +552,57 @@ mod test {
             //ExpEnum::Undefined => {}
         }
     }
+
+    #[test]
+    fn int2float_test() {
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(11)));
+        let result = arg_translate_int_2_float(myint0, myint1).unwrap();
+        let res_d = &result.get().data;
+        match res_d {
+            ExpEnum::Float(f) => {
+                assert_eq!(18.0, *f);
+            }
+            _ => {
+                panic!("Not a float!")
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum ArgType {
+        Exp(Expression),
+        Opt(Option<Expression>),
+        VarArgs(Vec<Expression>),
+    }
+
+    fn arg_translate_int_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
+        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Exp(exp), exp, "err");
+        arg_unwrap_int_2_float(exp_0, exp_1).map(Into::into)
+    }
+
+    fn arg_unwrap_int_2_float(exp_0: Expression, exp_1: Expression) -> crate::LispResult<f64> {
+        Ok({
+            let float = try_inner_exp_enum!(
+                exp_0.get().data,
+                ExpEnum::Int(int_0),
+                {
+                    let float = try_inner_exp_enum!(
+                        exp_1.get().data,
+                        ExpEnum::Int(int_1),
+                        { int_2_float(int_0, int_1) },
+                        "Not an int_1!"
+                    );
+                    float
+                },
+                "Not an int_0!"
+            );
+            float
+        })
+    }
+
+    fn int_2_float(my_int: i64, my_o_int: i64) -> f64 {
+        (my_int + my_o_int) as f64
+    }
 }
