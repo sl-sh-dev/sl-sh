@@ -459,6 +459,19 @@ impl TryIntoExpression<i64> for Expression {
     }
 }
 
+//impl<T: TryFrom> TryFrom<Option<Expression>> for Option<T> {
+
+//impl<T: TryIntoExpression<T>> TryIntoExpression<Option<T>> for Option<T> {
+//    type Error = LispError;
+//
+//    fn human_readable_dest_type(&self) -> String {
+//        match self {
+//            None => "None".to_string(),
+//            Some(x) => "Optional( ".to_string() + &x.human_readable_dest_type() + " )",
+//        }
+//    }
+//}
+
 #[macro_export]
 macro_rules! try_inner_exp_enum {
     ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {

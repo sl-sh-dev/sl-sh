@@ -74,29 +74,3 @@ fn main() -> Result<(), LispError> {
     }
     Ok(())
 }
-
-#[macro_export]
-macro_rules! try_inner_exp_enum {
-    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
-        match $expression {
-            $( $pattern )|+ $( if $guard )? => $eval,
-            _ => return Err(LispError::new($err))
-        }
-    };
-}
-use std::collections::HashMap;
-fn hash_clear(exp: sl_sh::Expression) -> sl_sh::LispResult<sl_sh::Expression> {
-    let mut map_d = exp.get_mut();
-    let thing = &mut map_d.data;
-    try_inner_exp_enum!(
-        &mut map_d.data,
-        sl_sh::ExpEnum::HashMap(inner_map),
-        {
-            inner_map.clear();
-            return Ok(exp.clone());
-        },
-        "meow"
-    );
-}
-
-//fn my_hash_clear<'a>(
