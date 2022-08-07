@@ -163,18 +163,58 @@ impl Vm {
         first_reg: u16,
         num_args: u16,
     ) -> VMResult<()> {
-        let map = self.heap.get_map(handle);
-        if num_args != 1 {
-            return Err(VMError::new_vm("A map takes one argument."));
+        match num_args {
+            1 => {
+                let map = self.heap.get_map(handle);
+                let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
+                    *val
+                } else {
+                    Value::Nil
+                };
+                let res_reg = self.stack_top + first_reg as usize;
+                self.stack[res_reg] = res;
+                Ok(())
+            }
+            2 => {
+                let map = self.heap.get_map(handle);
+                let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
+                    *val
+                } else {
+                    registers[first_reg as usize + 2]
+                };
+                let res_reg = self.stack_top + first_reg as usize;
+                self.stack[res_reg] = res;
+                Ok(())
+            }
+            3 => {
+                let eqi = self.intern("=");
+                let map = self.heap.get_map_mut(handle)?;
+                let key = registers[first_reg as usize + 1];
+                if matches!(key, Value::Undefined) {
+                    return Err(VMError::new_vm("Key is undefined."));
+                }
+                let eq = registers[first_reg as usize + 2];
+                let val = registers[first_reg as usize + 3];
+                if let Value::Keyword(i) = eq {
+                    if i == eqi {
+                        let slot = map.entry(key);
+                        slot.or_insert(val);
+                        let res_reg = self.stack_top + first_reg as usize;
+                        self.stack[res_reg] = val;
+                        Ok(())
+                    } else {
+                        Err(VMError::new_vm(
+                            "Map invalid second argument (expected :=).",
+                        ))
+                    }
+                } else {
+                    Err(VMError::new_vm(
+                        "Map invalid second argument (expected :=).",
+                    ))
+                }
+            }
+            _ => Err(VMError::new_vm("Map wrong number of arguments.")),
         }
-        let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
-            *val
-        } else {
-            Value::Nil
-        };
-        let res_reg = self.stack_top + first_reg as usize;
-        self.stack[res_reg] = res;
-        Ok(())
     }
 
     fn call_vector(
