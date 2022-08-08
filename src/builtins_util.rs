@@ -682,4 +682,66 @@ mod test {
             my_int as f64
         }
     }
+
+    #[test]
+    fn ints_2float_test() {
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::VarArgs(vec![
+            Expression::alloc_data(ExpEnum::Int(11)),
+            Expression::alloc_data(ExpEnum::Int(2)),
+        ]);
+        let result = arg_translate_ints_2_float(myint0, myint1).unwrap();
+        let res_d = &result.get().data;
+        match res_d {
+            ExpEnum::Float(f) => {
+                assert_eq!(20.0, *f);
+            }
+            _ => {
+                panic!("Not a float!")
+            }
+        }
+    }
+
+    fn arg_translate_ints_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
+        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::VarArgs(exp), exp, "err");
+        arg_unwrap_ints_2_float(exp_0, exp_1).map(Into::into)
+    }
+
+    fn arg_unwrap_ints_2_float(
+        exp_0: Expression,
+        exp_1: Vec<Expression>,
+    ) -> crate::LispResult<f64> {
+        Ok({
+            let float = try_inner_exp_enum!(
+                exp_0.get().data,
+                ExpEnum::Int(int_0),
+                {
+                    ints_2_float(
+                        int_0,
+                        exp_1
+                            .iter()
+                            .map(|exp_1| {
+                                let int = try_inner_exp_enum!(
+                                    exp_1.get().data,
+                                    ExpEnum::Int(int_1),
+                                    { int_1 },
+                                    "Not an int_1!"
+                                );
+                                Ok(int)
+                            })
+                            .collect::<crate::LispResult<Vec<i64>>>()?,
+                    )
+                },
+                "Not an int_0!"
+            );
+            float
+        })
+    }
+
+    fn ints_2_float(my_int: i64, my_o_ints: Vec<i64>) -> f64 {
+        my_o_ints
+            .iter()
+            .fold(my_int as f64, |sum, val| sum + *val as f64)
+    }
 }
