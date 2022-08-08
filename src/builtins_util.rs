@@ -553,22 +553,6 @@ mod test {
         }
     }
 
-    #[test]
-    fn int2float_test() {
-        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
-        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(11)));
-        let result = arg_translate_int_2_float(myint0, myint1).unwrap();
-        let res_d = &result.get().data;
-        match res_d {
-            ExpEnum::Float(f) => {
-                assert_eq!(18.0, *f);
-            }
-            _ => {
-                panic!("Not a float!")
-            }
-        }
-    }
-
     #[derive(Debug, Clone)]
     pub enum ArgType {
         Exp(Expression),
@@ -604,5 +588,98 @@ mod test {
 
     fn int_2_float(my_int: i64, my_o_int: i64) -> f64 {
         (my_int + my_o_int) as f64
+    }
+
+    #[test]
+    fn int2float_test() {
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(11)));
+        let result = arg_translate_int_2_float(myint0, myint1).unwrap();
+        let res_d = &result.get().data;
+        match res_d {
+            ExpEnum::Float(f) => {
+                assert_eq!(18.0, *f);
+            }
+            _ => {
+                panic!("Not a float!")
+            }
+        }
+    }
+
+    #[test]
+    fn optional_int2float_test() {
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::Opt(Some(Expression::alloc_data(ExpEnum::Int(11))));
+        let result = arg_translate_optional_int_2_float(myint0, myint1).unwrap();
+        let res_d = &result.get().data;
+        match res_d {
+            ExpEnum::Float(f) => {
+                assert_eq!(18.0, *f);
+            }
+            _ => {
+                panic!("Not a float!")
+            }
+        }
+
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::Opt(None);
+        let result = arg_translate_optional_int_2_float(myint0, myint1).unwrap();
+        let res_d = &result.get().data;
+        match res_d {
+            ExpEnum::Float(f) => {
+                assert_eq!(7.0, *f);
+            }
+            _ => {
+                panic!("Not a float!")
+            }
+        }
+    }
+
+    fn arg_translate_optional_int_2_float(
+        arg_0: ArgType,
+        arg_1: ArgType,
+    ) -> crate::LispResult<Expression> {
+        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Opt(exp), exp, "err");
+        arg_unwrap_optional_int_2_float(exp_0, exp_1).map(Into::into)
+    }
+
+    fn arg_unwrap_optional_int_2_float(
+        exp_0: Expression,
+        exp_1: Option<Expression>,
+    ) -> crate::LispResult<f64> {
+        Ok({
+            let float = try_inner_exp_enum!(
+                exp_0.get().data,
+                ExpEnum::Int(int_0),
+                {
+                    optional_int_2_float(
+                        int_0,
+                        exp_1.map_or_else(
+                            || Ok(None),
+                            |exp_1| {
+                                let float = try_inner_exp_enum!(
+                                    exp_1.get().data,
+                                    ExpEnum::Int(int_1),
+                                    { Ok(Some(int_1)) },
+                                    "Not an int_1!"
+                                );
+                                float
+                            },
+                        )?,
+                    )
+                },
+                "Not an int_0!"
+            );
+            float
+        })
+    }
+
+    fn optional_int_2_float(my_int: i64, my_o_int: Option<i64>) -> f64 {
+        if let Some(my_o_int) = my_o_int {
+            (my_int + my_o_int) as f64
+        } else {
+            my_int as f64
+        }
     }
 }
