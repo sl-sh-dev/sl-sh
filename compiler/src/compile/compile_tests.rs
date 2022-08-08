@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::test_utils::{assert_vals, exec, prn, read_test};
+    use crate::test_utils::{assert_vals, exec, read_test};
+    use builtins::print::prn;
     use slvm::Vm;
 
     #[test]

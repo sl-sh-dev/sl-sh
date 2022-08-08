@@ -1,6 +1,4 @@
-use slvm::value::*;
-use slvm::vm::*;
-use slvm::Interned;
+use slvm::{Interned, VMError, VMResult, Value, Vm};
 
 fn is_sym(vm: &Vm, name: &str, intern: Interned) -> bool {
     if let Some(i) = vm.get_if_interned(name) {
@@ -160,5 +158,41 @@ pub fn pretty_value(vm: &Vm, val: Value) -> String {
         Value::CharClusterLong(_) => "Char".to_string(),
         Value::String(h) => vm.get_string(*h).to_string(),
         _ => display_value(vm, val),
+    }
+}
+
+pub fn pr(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        print!("{}", pretty_value(vm, *v));
+    }
+    Ok(Value::Nil)
+}
+
+pub fn prn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    for v in registers {
+        print!("{}", pretty_value(vm, *v));
+    }
+    println!();
+    Ok(Value::Nil)
+}
+
+pub fn dasm(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    if registers.len() != 1 {
+        return Err(VMError::new_compile(
+            "dasm: wrong number of args, expected one",
+        ));
+    }
+    match registers[0].unref(vm) {
+        Value::Lambda(handle) => {
+            let l = vm.get_lambda(handle);
+            l.disassemble_chunk(vm, 0)?;
+            Ok(Value::Nil)
+        }
+        Value::Closure(handle) => {
+            let (l, _) = vm.get_closure(handle);
+            l.disassemble_chunk(vm, 0)?;
+            Ok(Value::Nil)
+        }
+        _ => Err(VMError::new_vm("DASM: Not a callable.")),
     }
 }

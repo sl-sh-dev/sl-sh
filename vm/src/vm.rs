@@ -856,12 +856,14 @@ mod tests {
         chunk.encode2(CAR, 0, 2, Some(line)).unwrap();
         chunk.encode2(CDR, 3, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let chunk = Arc::new(chunk);
-        vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
-        assert!(result == 3);
-        assert!(vm.stack[3].is_nil());
+        let mut chunk = Arc::new(chunk);
+        assert!(
+            vm.execute(chunk.clone()).is_err(),
+            "XAR on Nil is an error."
+        );
 
+        // Previous error stashed a clone of chunk so make a new one.
+        Arc::make_mut(&mut chunk);
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();
         chunk.encode2(CONST, 2, 4, Some(line)).unwrap();
@@ -870,12 +872,11 @@ mod tests {
         chunk.encode2(CDR, 0, 2, Some(line)).unwrap();
         chunk.encode2(CAR, 3, 2, Some(line)).unwrap();
         chunk.encode0(RET, Some(line))?;
-        let chunk = Arc::new(chunk);
-        vm.execute(chunk.clone())?;
-        let result = vm.stack[0].get_int()?;
-        assert!(result == 4);
-        assert!(vm.stack[3].is_nil());
+        let mut chunk = Arc::new(chunk);
+        assert!(vm.execute(chunk.clone()).is_err(), "Can not XDR Nil");
 
+        // Previous error stashed a clone of chunk so make a new one.
+        Arc::make_mut(&mut chunk);
         // Test a list with elements.
         let mut chunk = Arc::try_unwrap(chunk).unwrap();
         chunk.code.clear();

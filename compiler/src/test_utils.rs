@@ -1,4 +1,3 @@
-use crate::print::pretty_value;
 use crate::{compile, CompileEnvironment, CompileState, ReadError, Reader};
 use slvm::*;
 use std::sync::Arc;
@@ -63,12 +62,4 @@ pub fn assert_vals(vm: &Vm, val1: Value, val2: Value) {
         println!("Debug {:?} / {:?}", val1, val2);
     }
     assert!(res);
-}
-
-pub fn prn(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
-    for v in registers {
-        print!("{}", pretty_value(vm, *v));
-    }
-    println!();
-    Ok(Value::Nil)
 }

@@ -667,12 +667,8 @@ impl Vm {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
-                        Value::Pair(handle) => {
-                            let (car, _) = self.heap.get_pair(handle);
-                            self.set_register(registers, dest as usize, car);
-                        }
-                        Value::List(_, _) => {
-                            let (car, _) = op.get_pair(self).expect("List value not a list?");
+                        Value::Pair(_) | Value::List(_, _) => {
+                            let (car, _) = op.get_pair(self).expect("Pair not a pair?");
                             self.set_register(registers, dest as usize, car);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),
@@ -691,12 +687,8 @@ impl Vm {
                     let (dest, op) = decode2!(chunk.code, &mut self.ip, wide);
                     let op = get_reg_unref!(registers, op, self);
                     match op {
-                        Value::Pair(handle) => {
-                            let (_, cdr) = self.heap.get_pair(handle);
-                            self.set_register(registers, dest as usize, cdr);
-                        }
-                        Value::List(_, _) => {
-                            let (_, cdr) = op.get_pair(self).expect("List value not a list?");
+                        Value::Pair(_) | Value::List(_, _) => {
+                            let (_, cdr) = op.get_pair(self).expect("Pair not a pair?");
                             self.set_register(registers, dest as usize, cdr);
                         }
                         Value::Nil => self.set_register(registers, dest as usize, Value::Nil),

@@ -15,6 +15,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "builtins"
+version = "0.1.0"
+dependencies = [
+ "slvm",
+]
+
+[[package]]
 name = "bytecount"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -168,6 +175,7 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 name = "sl-compiler"
 version = "0.1.0"
 dependencies = [
+ "builtins",
  "chrono",
  "slvm",
  "unicode-segmentation",
@@ -204,6 +212,7 @@ dependencies = [
 name = "slosh"
 version = "0.1.0"
 dependencies = [
+ "builtins",
  "sl-compiler",
  "sl-liner",
  "slvm",

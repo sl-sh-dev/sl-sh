@@ -135,10 +135,6 @@ impl Vm {
                 let (car, _) = self.get_pair_mut(*handle)?;
                 *car = val;
             }
-            Value::Nil => {
-                let pair = self.alloc_pair(val, Value::Nil);
-                self.set_register(registers, pair_reg as usize, pair);
-            }
             Value::List(_, _) => return Err(VMError::new_vm("XAR: Pair is read only.")),
             _ => return Err(VMError::new_vm("XAR: Not a pair/conscell.")),
         }
@@ -153,10 +149,6 @@ impl Vm {
             Value::Pair(handle) => {
                 let (_, cdr) = self.get_pair_mut(*handle)?;
                 *cdr = val;
-            }
-            Value::Nil => {
-                let pair = self.alloc_pair(Value::Nil, val);
-                self.set_register(registers, pair_reg as usize, pair);
             }
             Value::List(_, _) => return Err(VMError::new_vm("XDR: Pair is read only.")),
             _ => return Err(VMError::new_vm("XDR: Not a pair/conscell.")),

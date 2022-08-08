@@ -4,4 +4,5 @@ members = [
     "slosh",
     "compiler",
     "vm",
+    "builtins",
 ]
