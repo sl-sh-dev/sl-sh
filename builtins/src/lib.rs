@@ -12,7 +12,7 @@ pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     let key = match registers[1] {
         Value::Keyword(key) => key,
         Value::Symbol(key) => key,
-        _ => return Err(VMError::new_vm("get-prop: key must be a symbol")),
+        _ => return Err(VMError::new_vm("get-prop: key must be a keywork or symbol")),
     };
     match registers[0] {
         Value::Global(idx) => Ok(vm.get_global_property(idx, key).unwrap_or(Value::Nil)),
@@ -43,7 +43,7 @@ pub fn set_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     let key = match registers[1] {
         Value::Keyword(key) => key,
         Value::Symbol(key) => key,
-        _ => return Err(VMError::new_vm("set-prop: key must be a symbol")),
+        _ => return Err(VMError::new_vm("set-prop: key must be a keyword or symbol")),
     };
     if let Value::Global(idx) = registers[0] {
         vm.set_global_property(idx, key, registers[2]);

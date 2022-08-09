@@ -90,7 +90,7 @@ impl<'vm> Iterator for Reader<'vm> {
 }
 
 fn is_whitespace(ch: &str) -> bool {
-    matches!(ch, " " | "\t" | "\n")
+    matches!(ch, " " | "\t" | "\n" | ",")
 }
 
 fn char_to_hex_num(ch: &str) -> Result<u8, ReadError> {
@@ -123,7 +123,7 @@ fn end_symbol(ch: &str, read_table_term: &HashMap<&'static str, Value>) -> bool 
     } else {
         matches!(
             ch,
-            "(" | ")" | "#" | "\"" | "," | "'" | "`" | "[" | "]" | "{" | "}" | "\\"
+            "(" | ")" | "#" | "\"" | "~" | "'" | "`" | "[" | "]" | "{" | "}" | "\\"
         )
     }
 }
@@ -1064,7 +1064,7 @@ impl<'vm> Reader<'vm> {
                         return Err(err);
                     }
                 },
-                "," if in_back_quote => {
+                "~" if in_back_quote => {
                     let sym = if peek_ch == "@" {
                         self.chars().next();
                         Value::Symbol(self.vm.intern("unquote-splice"))
@@ -1089,10 +1089,13 @@ impl<'vm> Reader<'vm> {
                         }
                     }
                 }
-                "," => {
+                "~" => {
                     return Err(ReadError {
                         reason: "Unquote outside of a back-quote".to_string(),
                     })
+                }
+                "\\" => {
+                    return Ok(Some(self.do_char(buffer, &read_table_term)?));
                 }
                 "#" => {
                     self.chars().next();
@@ -1108,9 +1111,6 @@ impl<'vm> Reader<'vm> {
                                 }
                                 Err(e) => return Err(e),
                             };
-                        }
-                        "\\" => {
-                            return Ok(Some(self.do_char(buffer, &read_table_term)?));
                         }
                         "<" => {
                             let reason = format!(
@@ -1335,7 +1335,6 @@ mod tests {
     fn test_tokenize() {
         let mut vm = build_def_vm();
         let tokens = tokenize(&mut vm, "one two three \"four\" 5 6");
-        println!("XXX {:?}", tokens);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
@@ -1345,6 +1344,18 @@ mod tests {
         assert!(tokens[5] == "Int:5");
         assert!(tokens[6] == "Int:6");
         assert!(tokens[7] == "]");
+
+        let tokens = tokenize(&mut vm, "one, two,three ,,,, \"four\" 5 , 6,");
+        assert!(tokens.len() == 8);
+        assert!(tokens[0] == "[");
+        assert!(tokens[1] == "Symbol:one");
+        assert!(tokens[2] == "Symbol:two");
+        assert!(tokens[3] == "Symbol:three");
+        assert!(tokens[4] == "String:\"four\"");
+        assert!(tokens[5] == "Int:5");
+        assert!(tokens[6] == "Int:6");
+        assert!(tokens[7] == "]");
+
         let tokens = tokenize(&mut vm, "(1 2 3)");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "(");
@@ -1359,17 +1370,17 @@ mod tests {
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == ")");
-        let tokens = tokenize(&mut vm, "[#\\A 2 3]");
+        let tokens = tokenize(&mut vm, "[\\A 2 3]");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Char:#\\A");
+        assert!(tokens[1] == "Char:\\A");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == "]");
-        let tokens = tokenize(&mut vm, "[#\\  2 3]");
+        let tokens = tokenize(&mut vm, "[\\  2 3]");
         assert!(tokens.len() == 5);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Char:#\\ ");
+        assert!(tokens[1] == "Char:\\ ");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Int:3");
         assert!(tokens[4] == "]");
@@ -1428,9 +1439,9 @@ mod tests {
         assert!(tokens[5] == "Int:3");
         assert!(tokens[6] == ")");
         assert!(tokens[7] == ")");
-        tokenize_err(&mut vm, "'(1 2 ,3)");
-        tokenize_err(&mut vm, "'(1 2 ,@3)");
-        let tokens = tokenize(&mut vm, "`(1 2 ,3)");
+        tokenize_err(&mut vm, "'(1 2 ~3)");
+        tokenize_err(&mut vm, "'(1 2 ~@3)");
+        let tokens = tokenize(&mut vm, "`(1 2 ~3)");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
@@ -1443,7 +1454,7 @@ mod tests {
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
-        let tokens = tokenize(&mut vm, "`(1 2 ,@3)");
+        let tokens = tokenize(&mut vm, "`(1 2 ~@3)");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
@@ -1456,7 +1467,7 @@ mod tests {
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
-        let tokens = tokenize(&mut vm, "`(1 2 ,.3)");
+        let tokens = tokenize(&mut vm, "`(1 2 ~.3)");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
@@ -1469,7 +1480,7 @@ mod tests {
         assert!(tokens[8] == ")");
         assert!(tokens[9] == ")");
         assert!(tokens[10] == ")");
-        let tokens = tokenize(&mut vm, "`(1 `2 ,@3)");
+        let tokens = tokenize(&mut vm, "`(1 `2 ~@3)");
         assert!(tokens.len() == 14);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
@@ -1485,7 +1496,7 @@ mod tests {
         assert!(tokens[11] == ")");
         assert!(tokens[12] == ")");
         assert!(tokens[13] == ")");
-        let tokens = tokenize(&mut vm, "`(1 `(2 ,x) ,@3)");
+        let tokens = tokenize(&mut vm, "`(1 `(2 ~x) ~@3)");
         assert!(tokens.len() == 20);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:back-quote");
@@ -1512,42 +1523,42 @@ mod tests {
     #[test]
     fn test_types() {
         let mut vm = build_def_vm();
-        let tokens = tokenize(&mut vm, "(one 2 3.0 \"four\" #\\B #t nil 3.5 ())");
+        let tokens = tokenize(&mut vm, "(one 2 3.0 \"four\" \\B #t nil 3.5 ())");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "(");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[5] == "Char:\\B");
         assert!(tokens[6] == "True:true");
         assert!(tokens[7] == "nil");
         assert!(tokens[8] == "Float:3.5");
         assert!(tokens[9] == "nil");
         assert!(tokens[10] == ")");
 
-        let tokens = tokenize(&mut vm, "[one 2 3.0 \"four\" #\\B #t nil 3.5 ()]");
+        let tokens = tokenize(&mut vm, "[one 2 3.0 \"four\" \\B #t nil 3.5 ()]");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[5] == "Char:\\B");
         assert!(tokens[6] == "True:true");
         assert!(tokens[7] == "nil");
         assert!(tokens[8] == "Float:3.5");
         assert!(tokens[9] == "nil");
         assert!(tokens[10] == "]");
 
-        let tokens = tokenize(&mut vm, "one 2 3.0 \"four\" #\\B #t nil 3.5 ()");
+        let tokens = tokenize(&mut vm, "one 2 3.0 \"four\" \\B #t nil 3.5 ()");
         assert!(tokens.len() == 11);
         assert!(tokens[0] == "[");
         assert!(tokens[1] == "Symbol:one");
         assert!(tokens[2] == "Int:2");
         assert!(tokens[3] == "Float:3");
         assert!(tokens[4] == "String:\"four\"");
-        assert!(tokens[5] == "Char:#\\B");
+        assert!(tokens[5] == "Char:\\B");
         assert!(tokens[6] == "True:true");
         assert!(tokens[7] == "nil");
         assert!(tokens[8] == "Float:3.5");
@@ -1724,16 +1735,16 @@ two""#
     #[test]
     fn test_tok_chars() {
         let mut vm = build_def_vm();
-        let input = "#\\x #\\X #\\x20 #\\u03bb #\\u{03BB} #\\u03bb";
+        let input = "\\x \\X \\x20 \\u03bb \\u{03BB} \\u03bb";
         let tokens = tokenize(&mut vm, input);
         assert!(tokens.len() == 8);
         assert!(tokens[0] == "[");
-        assert!(tokens[1] == "Char:#\\x");
-        assert!(tokens[2] == "Char:#\\X");
-        assert!(tokens[3] == "Char:#\\ ");
-        assert!(tokens[4] == "Char:#\\λ");
-        assert!(tokens[5] == "Char:#\\\u{03bb}");
-        assert!(tokens[6] == "Char:#\\λ");
+        assert!(tokens[1] == "Char:\\x");
+        assert!(tokens[2] == "Char:\\X");
+        assert!(tokens[3] == "Char:\\ ");
+        assert!(tokens[4] == "Char:\\λ");
+        assert!(tokens[5] == "Char:\\\u{03bb}");
+        assert!(tokens[6] == "Char:\\λ");
         assert!(tokens[7] == "]");
     }
 

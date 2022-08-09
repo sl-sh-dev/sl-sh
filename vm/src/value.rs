@@ -359,9 +359,9 @@ impl Value {
             Value::Symbol(i) => vm.get_interned(*i).to_string(),
             Value::Keyword(i) => format!(":{}", vm.get_interned(*i)),
             Value::StringConst(i) => format!("\"{}\"", vm.get_interned(*i)),
-            Value::CodePoint(ch) => format!("#\\{}", ch),
+            Value::CodePoint(ch) => format!("\\{}", ch),
             Value::CharCluster(l, c) => {
-                format!("#\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
+                format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
             Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
             Value::Builtin(_) => "#<Function>".to_string(),

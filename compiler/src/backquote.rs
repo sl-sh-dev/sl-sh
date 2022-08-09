@@ -363,46 +363,46 @@ mod tests {
     #[test]
     fn test_backquote() -> VMResult<()> {
         let mut vm = Vm::new();
-        let result = exec(&mut vm, "(do (def x 3) `(1 2 ,x))")?;
+        let result = exec(&mut vm, "(do (def x 3) `(1 2 ~x))")?;
         let expected = read_test(&mut vm, "(1 2 3)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (x 3) `(1 2 ,x))")?;
+        let result = exec(&mut vm, "(let (x 3) `(1 2 ~x))")?;
         let expected = read_test(&mut vm, "(1 2 3)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (x 3) `(1 2 (x y ,x) ,x))")?;
+        let result = exec(&mut vm, "(let (x 3) `(1 2 (x y ~x) ~x))")?;
         let expected =
             read_test(&mut vm, "(1 2 (x y 3) 3)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (x 3) `,x)")?;
+        let result = exec(&mut vm, "(let (x 3) `~x)")?;
         let expected = read_test(&mut vm, "3").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (z '(1 2 3)) `(,@z 4 5 6))")?;
+        let result = exec(&mut vm, "(let (z '(1 2 3)) `(~@z 4 5 6))")?;
         let expected =
             read_test(&mut vm, "(1 2 3 4 5 6)").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (y 'x) `,y)")?;
+        let result = exec(&mut vm, "(let (y 'x) `~y)")?;
         let expected = read_test(&mut vm, "x").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
-        let result = exec(&mut vm, "(let (y 'x) ``,,y)")?;
-        let expected = read_test(&mut vm, "`,x").map_err(|e| VMError::new("read", e.reason))?;
+        let result = exec(&mut vm, "(let (y 'x) ``~~y)")?;
+        let expected = read_test(&mut vm, "`~x").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(let (x \"xxx\") `,x)")?;
+        let result = exec(&mut vm, "(let (x \"xxx\") `~x)")?;
         let expected = read_test(&mut vm, "\"xxx\"").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "(do (def x \"xxx\") `,x)")?;
+        let result = exec(&mut vm, "(do (def x \"xxx\") `~x)")?;
         let expected = read_test(&mut vm, "\"xxx\"").map_err(|e| VMError::new("read", e.reason))?;
         //println!("XXXX {} {}", result.display_value(&vm), expected.display_value(&vm));
         //println!("XXXX {:?} {:?}", result, expected);
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 
-        let result = exec(&mut vm, "`,5")?;
+        let result = exec(&mut vm, "`~5")?;
         let expected = read_test(&mut vm, "5").map_err(|e| VMError::new("read", e.reason))?;
         assert!(vm.is_equal_pair(expected, result)?.is_true());
 

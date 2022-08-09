@@ -122,20 +122,20 @@ mod tests {
         let expected = read_test(&mut vm, "5");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let (x 10 y (+ x 10)) (set! x 5) `(,x ,y))");
+        let result = exec(&mut vm, "(let (x 10 y (+ x 10)) (set! x 5) `(~x ~y))");
         let expected = read_test(&mut vm, "(5 20)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(,x ,y)))",
+            "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(~x ~y)))",
         );
         let expected = read_test(&mut vm, "(15 20)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(,x ,y)))",
+            "(do (def x 5) (let (x 10 y (+ x 10)) (set! x 15) `(~x ~y)))",
         );
         let expected = read_test(&mut vm, "(15 20)");
         assert_vals(&vm, expected, result);
