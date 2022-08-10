@@ -6,12 +6,13 @@ use crate::heap::*;
 use crate::interner::*;
 use crate::value::*;
 
-pub mod cons;
+mod cons;
 pub mod print;
-pub mod storage;
+mod storage;
 #[macro_use]
 pub mod macros;
-pub mod exec_loop;
+mod call_collection;
+mod exec_loop;
 
 const STACK_CAP: usize = 1024;
 
@@ -154,123 +155,6 @@ impl Vm {
         };
         self.callframe_id += 1;
         frame
-    }
-
-    fn call_map(
-        &mut self,
-        handle: Handle,
-        registers: &mut [Value],
-        first_reg: u16,
-        num_args: u16,
-    ) -> VMResult<()> {
-        match num_args {
-            1 => {
-                let map = self.heap.get_map(handle);
-                let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
-                    *val
-                } else {
-                    Value::Nil
-                };
-                let res_reg = self.stack_top + first_reg as usize;
-                self.stack[res_reg] = res;
-                Ok(())
-            }
-            2 => {
-                let map = self.heap.get_map(handle);
-                let res = if let Some(val) = map.get(&registers[first_reg as usize + 1]) {
-                    *val
-                } else {
-                    registers[first_reg as usize + 2]
-                };
-                let res_reg = self.stack_top + first_reg as usize;
-                self.stack[res_reg] = res;
-                Ok(())
-            }
-            3 => {
-                let eqi = self.intern("=");
-                let map = self.heap.get_map_mut(handle)?;
-                let key = registers[first_reg as usize + 1];
-                if matches!(key, Value::Undefined) {
-                    return Err(VMError::new_vm("Key is undefined."));
-                }
-                let eq = registers[first_reg as usize + 2];
-                let val = registers[first_reg as usize + 3];
-                if let Value::Keyword(i) = eq {
-                    if i == eqi {
-                        let slot = map.entry(key);
-                        slot.or_insert(val);
-                        let res_reg = self.stack_top + first_reg as usize;
-                        self.stack[res_reg] = val;
-                        Ok(())
-                    } else {
-                        Err(VMError::new_vm(
-                            "Map invalid second argument (expected :=).",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_vm(
-                        "Map invalid second argument (expected :=).",
-                    ))
-                }
-            }
-            _ => Err(VMError::new_vm("Map wrong number of arguments.")),
-        }
-    }
-
-    fn call_vector(
-        &mut self,
-        handle: Handle,
-        registers: &mut [Value],
-        first_reg: u16,
-        num_args: u16,
-    ) -> VMResult<()> {
-        match num_args {
-            1 => {
-                let v = self.heap.get_vector(handle);
-                let idx = registers[first_reg as usize + 1].get_int()?;
-                let res = if idx >= 0 {
-                    if let Some(val) = v.get(idx as usize) {
-                        *val
-                    } else {
-                        return Err(VMError::new_vm("Vector, index out of bounds."));
-                    }
-                } else {
-                    return Err(VMError::new_vm("A vector requires a positive index."));
-                };
-                let res_reg = self.stack_top + first_reg as usize;
-                self.stack[res_reg] = res;
-                Ok(())
-            }
-            3 => {
-                let eqi = self.intern("=");
-                let v = self.heap.get_vector_mut(handle)?;
-                let idx = registers[first_reg as usize + 1].get_int()?;
-                if idx < 0 {
-                    return Err(VMError::new_vm("A vector requires a positive index."));
-                }
-                let eq = registers[first_reg as usize + 2];
-                let val = registers[first_reg as usize + 3];
-                if let Value::Keyword(i) = eq {
-                    if i == eqi {
-                        if let Some(slot) = v.get_mut(idx as usize) {
-                            *slot = val;
-                            Ok(())
-                        } else {
-                            Err(VMError::new_vm("Vector, index out of bounds."))
-                        }
-                    } else {
-                        Err(VMError::new_vm(
-                            "Vector invalid second argument (expected :=).",
-                        ))
-                    }
-                } else {
-                    Err(VMError::new_vm(
-                        "Vector invalid second argument (expected :=).",
-                    ))
-                }
-            }
-            _ => Err(VMError::new_vm("Vector wrong number of arguments.")),
-        }
     }
 
     fn make_call(
@@ -441,6 +325,11 @@ impl Vm {
             }
             Value::Vector(handle) => {
                 self.call_vector(handle, registers, first_reg, num_args)
+                    .map_err(|e| (e, chunk.clone()))?;
+                Ok(chunk)
+            }
+            Value::Pair(_) | Value::List(_, _) => {
+                self.call_list(lambda, registers, first_reg, num_args)
                     .map_err(|e| (e, chunk.clone()))?;
                 Ok(chunk)
             }

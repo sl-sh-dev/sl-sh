@@ -253,7 +253,7 @@ impl Specials {
             while_: vm.intern_static("while"),
             doc_string: vm.intern_static("doc-string"),
 
-            rest: vm.intern_static("&rest"),
+            rest: vm.intern_static("&"),
         }
     }
 }

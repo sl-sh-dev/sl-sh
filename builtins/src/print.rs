@@ -59,8 +59,8 @@ fn list_out(vm: &Vm, res: &mut String, lst: Value) {
             first = false;
         }
         match cdr {
-            Value::Pair(h) => {
-                let (car, ncdr) = vm.get_pair(h);
+            Value::Pair(_) | Value::List(_, _) => {
+                let (car, ncdr) = cdr.get_pair(vm).expect("pair/list not a pair/list");
                 res.push_str(&display_value(vm, car));
                 cdr = ncdr;
             }
@@ -118,8 +118,8 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
             res.push('}');
             res
         }
-        Value::Pair(h) => {
-            let (car, cdr) = vm.get_pair(*h);
+        Value::Pair(_) | Value::List(_, _) => {
+            let (car, cdr) = val.get_pair(vm).expect("pair/list not a pair/list");
             let mut res = String::new();
             if quotey(vm, car, &mut res) {
                 if let Some((cadr, Value::Nil)) = cdr.get_pair(vm) {
@@ -132,14 +132,6 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
                 list_out(vm, &mut res, val);
                 res.push(')');
             }
-            res
-        }
-        Value::List(h, start) => {
-            let v = vm.get_vector(*h);
-            let mut res = String::new();
-            res.push('(');
-            list_out_iter(vm, &mut res, &mut v[*start as usize..].iter().copied());
-            res.push(')');
             res
         }
         Value::String(h) => format!("\"{}\"", vm.get_string(*h)),
