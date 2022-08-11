@@ -1,7 +1,7 @@
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::cell::Ref;
 use std::collections::HashMap;
 
@@ -380,31 +380,6 @@ impl TryIntoExpression<bool> for Expression {
     }
 }
 
-//impl<'a> TryFrom<&'a Expression> for &'a mut HashMap<&'static str, Expression> {
-//    type Error = LispError;
-//
-//    fn try_from(exp: &'a Expression) -> Result<Self, Self::Error> {
-//        match exp.copy() {
-//            ExpEnum::HashMap(ref mut inner_map) => {
-//                inner_map.clear();
-//                Ok(&mut inner_map)
-//            }
-//            _ => Err(LispError::new("meow")),
-//        }
-//    }
-//}
-
-// idea here is in functions like builtins_hashmap::hash_haskey,
-// could we use a rust arg like ToString<Expression> to automatically
-// force errors when we expect an argument that is a Symbol/String/Char
-// and thus has a valid &str ref.
-//impl ToString for Expression {
-//    fn to_string(&self) -> String {
-//        match self {
-//        }
-//    }
-//}
-
 impl From<f64> for Expression {
     fn from(num: f64) -> Self {
         Expression::alloc_data(ExpEnum::Float(num))
@@ -458,19 +433,6 @@ impl TryIntoExpression<i64> for Expression {
         ExpEnum::Int(Default::default()).to_string()
     }
 }
-
-//impl<T: TryFrom> TryFrom<Option<Expression>> for Option<T> {
-
-//impl<T: TryIntoExpression<T>> TryIntoExpression<Option<T>> for Option<T> {
-//    type Error = LispError;
-//
-//    fn human_readable_dest_type(&self) -> String {
-//        match self {
-//            None => "None".to_string(),
-//            Some(x) => "Optional( ".to_string() + &x.human_readable_dest_type() + " )",
-//        }
-//    }
-//}
 
 #[macro_export]
 macro_rules! try_inner_exp_enum {
@@ -588,6 +550,32 @@ mod test {
 
     fn int_2_float(my_int: i64, my_o_int: i64) -> f64 {
         (my_int + my_o_int) as f64
+    }
+
+    #[test]
+    fn int2float_negative_test() {
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Float(7.0)));
+        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(11)));
+        let result = arg_translate_int_2_float(myint0, myint1);
+        match result {
+            Ok(_) => {
+                panic!("result should not be ok!");
+            }
+            Err(e) => {
+                assert_eq!(e.reason, "Not an int_0!");
+            }
+        }
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::Int(7)));
+        let myint1 = ArgType::Exp(Expression::alloc_data(ExpEnum::Float(11.0)));
+        let result = arg_translate_int_2_float(myint0, myint1);
+        match result {
+            Ok(_) => {
+                panic!("result should not be ok!");
+            }
+            Err(e) => {
+                assert_eq!(e.reason, "Not an int_1!");
+            }
+        }
     }
 
     #[test]
