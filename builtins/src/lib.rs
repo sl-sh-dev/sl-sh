@@ -2,6 +2,7 @@ use slvm::{VMError, VMResult, Value, Vm};
 
 pub mod collections;
 pub mod print;
+pub mod string;
 
 pub fn get_prop(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     if registers.len() != 2 {

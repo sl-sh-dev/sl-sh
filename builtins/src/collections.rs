@@ -75,3 +75,95 @@ pub fn make_hash(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
     }
     Ok(vm.alloc_map(map))
 }
+
+pub fn hash_set(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), Some(key), Some(val), None) =
+        (i.next(), i.next(), i.next(), i.next())
+    {
+        let map = vm.get_map_mut(*map_handle)?;
+        map.insert(*key, *val);
+        Ok(Value::Map(*map_handle))
+    } else {
+        Err(VMError::new_vm(
+            "takes three arguments (hash-map key value)".to_string(),
+        ))
+    }
+}
+
+pub fn hash_remove(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
+        let map = vm.get_map_mut(*map_handle)?;
+        if let Some(old) = map.remove(key) {
+            Ok(old)
+        } else {
+            Ok(Value::Nil)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "takes three arguments (hash-map key value)".to_string(),
+        ))
+    }
+}
+
+pub fn hash_get(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), Some(key), default, None) =
+        (i.next(), i.next(), i.next(), i.next())
+    {
+        let map = vm.get_map(*map_handle);
+        if let Some(val) = map.get(key) {
+            Ok(*val)
+        } else if let Some(val) = default {
+            Ok(*val)
+        } else {
+            Ok(Value::Nil)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "takes two or three arguments (hash-map key default?)".to_string(),
+        ))
+    }
+}
+
+pub fn hash_hashkey(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), Some(key), None) = (i.next(), i.next(), i.next()) {
+        let map = vm.get_map(*map_handle);
+        if map.contains_key(key) {
+            Ok(Value::True)
+        } else {
+            Ok(Value::False)
+        }
+    } else {
+        Err(VMError::new_vm(
+            "takes two arguments (hash-map key)".to_string(),
+        ))
+    }
+}
+
+pub fn hash_keys(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
+        let map = vm.get_map(*map_handle);
+        let mut keys = Vec::with_capacity(map.len());
+        for key in map.keys() {
+            keys.push(*key);
+        }
+        Ok(vm.alloc_vector(keys))
+    } else {
+        Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
+    }
+}
+
+pub fn hash_clear(vm: &mut Vm, registers: &[Value]) -> VMResult<Value> {
+    let mut i = registers.iter();
+    if let (Some(Value::Map(map_handle)), None) = (i.next(), i.next()) {
+        let map = vm.get_map_mut(*map_handle)?;
+        map.clear();
+        Ok(Value::Map(*map_handle))
+    } else {
+        Err(VMError::new_vm("takes one argument (hash-map)".to_string()))
+    }
+}

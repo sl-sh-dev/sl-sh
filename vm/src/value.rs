@@ -181,11 +181,7 @@ impl Value {
     }
 
     pub fn is_indirect(&self) -> bool {
-        matches!(
-            self,
-            //Value::Reference(_) | Value::Binding(_) | Value::Global(_)
-            Value::Value(_) | Value::Global(_)
-        )
+        matches!(self, Value::Value(_) | Value::Global(_))
     }
 
     pub fn is_nil(&self) -> bool {
@@ -239,6 +235,15 @@ impl Value {
             Value::UInt(i) => Ok(*i as f64),
             Value::Float(f) => Ok(f.0),
             _ => Err(VMError::new_value(format!("Not a float: {:?}", self))),
+        }
+    }
+
+    pub fn get_string<'vm>(&self, vm: &'vm Vm) -> VMResult<&'vm str> {
+        match &self {
+            Value::String(h) => Ok(vm.get_string(*h)),
+            Value::StringConst(i) => Ok(vm.get_interned(*i)),
+            // TODO- handle chars/codepoints...
+            _ => Err(VMError::new_value(format!("Not a string: {:?}", self))),
         }
     }
 
@@ -363,7 +368,7 @@ impl Value {
             Value::CharCluster(l, c) => {
                 format!("\\{}", String::from_utf8_lossy(&c[0..*l as usize]))
             }
-            Value::CharClusterLong(_) => "Char".to_string(), // XXX TODO- move this to Object?
+            Value::CharClusterLong(h) => format!("\\{}", vm.get_string(*h)),
             Value::Builtin(_) => "#<Function>".to_string(),
             Value::Global(_) => self.unref(vm).display_value(vm),
             Value::Nil => "nil".to_string(),
