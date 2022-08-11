@@ -1,14 +1,10 @@
 use crate::environment::*;
 use crate::eval::*;
 use crate::types::*;
-use std::borrow::{Borrow, Cow};
-use std::cell::Ref;
-use std::collections::HashMap;
+use std::borrow::Cow;
 
 use std::convert::{TryFrom, TryInto};
 use std::env;
-use std::ops::Deref;
-use std::str::FromStr;
 
 pub fn param_eval_optional(
     environment: &mut Environment,
@@ -630,34 +626,6 @@ mod test {
         let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
         let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Opt(exp), exp, "err");
         arg_unwrap_optional_int_2_float(exp_0, exp_1).map(Into::into)
-    }
-
-    fn arg_unwrap_optional_int_2_float2(
-        exp_0: Expression,
-        exp_1: Option<Expression>,
-    ) -> crate::LispResult<f64> {
-        Ok({
-            let float = try_inner_exp_enum!(
-                exp_0.get().data,
-                ExpEnum::Int(int_0),
-                {
-                    match exp_1 {
-                        None => optional_int_2_float(int_0, None),
-                        Some(exp_1) => {
-                            let float = try_inner_exp_enum!(
-                                exp_1.get().data,
-                                ExpEnum::Int(int_1),
-                                { optional_int_2_float(int_0, Some(int_1)) },
-                                "Not an int_1!"
-                            );
-                            float
-                        }
-                    }
-                },
-                "Not an int_0!"
-            );
-            float
-        })
     }
 
     fn arg_unwrap_optional_int_2_float(
