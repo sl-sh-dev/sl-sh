@@ -341,6 +341,7 @@ fn my_hash_clear(inner_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
 /// (test::assert-false (hash-haskey tst-hash \"key3\"))
 /// (test::assert-false (hash-haskey tst-hash #\\S))
 #[sl_sh_fn(fn_name = "hash-clear!")]
+#[allow(clippy::needless_return)] //TODO remove me on new implementation
 fn hash_clear(exp: Expression) -> LispResult<Expression> {
     let mut map_d = exp.get_mut();
     try_inner_exp_enum!(
@@ -354,7 +355,7 @@ fn hash_clear(exp: Expression) -> LispResult<Expression> {
             // gets sticky if you say, DO return something, so maybe
             // we'll have to distinguish between when we accept an arg
             // and mutate it, or simply read it, and return another value.
-            my_hash_clear(inner_map);
+            my_hash_clear(inner_map)?;
             return Ok(exp.clone());
         },
         ErrorStrings::mismatched_type(

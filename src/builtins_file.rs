@@ -775,8 +775,9 @@ fn builtin_temp_dir() -> LispResult<Expression> {
         let path = Expression::alloc_data(ExpEnum::String(path.to_string().into(), None));
         Ok(path)
     } else {
-        let msg = format!("temp-dir: unable to provide temporary directory");
-        Err(LispError::new(msg))
+        Err(LispError::new(
+            "temp-dir: unable to provide temporary directory".to_string(),
+        ))
     }
 }
 
