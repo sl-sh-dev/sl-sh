@@ -431,6 +431,16 @@ impl TryIntoExpression<i64> for Expression {
 }
 
 #[macro_export]
+macro_rules! try_exp_enum {
+    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
+        match $expression {
+            $( $pattern )|+ $( if $guard )? => Ok($eval),
+            _ => Err(LispError::new($err))
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! try_inner_exp_enum {
     ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?, $eval:expr, $err:expr) => {
         match $expression {
@@ -547,29 +557,21 @@ mod test {
     }
 
     fn arg_translate_clear_hash_map(arg_0: &ArgType) -> crate::LispResult<()> {
-        Ok({
-            let ret = try_inner_exp_enum!(
-                arg_0,
-                ArgType::Exp(exp),
-                arg_unwrap_clear_hash_map(exp),
-                "err"
-            );
-            return ret;
-        })
+        try_exp_enum!(
+            arg_0,
+            ArgType::Exp(exp),
+            arg_unwrap_clear_hash_map(exp)?,
+            "err"
+        )
     }
 
     fn arg_unwrap_clear_hash_map(exp_0: &Expression) -> crate::LispResult<()> {
-        Ok({
-            let float = try_inner_exp_enum!(
-                exp_0.get_mut().data,
-                ExpEnum::HashMap(ref mut hash_map),
-                {
-                    clear_hash_map(hash_map)?;
-                },
-                "Not an int_0!"
-            );
-            float
-        })
+        try_exp_enum!(
+            exp_0.get_mut().data,
+            ExpEnum::HashMap(ref mut hash_map),
+            clear_hash_map(hash_map)?,
+            "Not an int_0!"
+        )
     }
 
     fn clear_hash_map<K, V>(hash_map: &mut HashMap<K, V>) -> LispResult<()> {
@@ -620,9 +622,19 @@ mod test {
     }
 
     fn arg_translate_int_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
-        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
-        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Exp(exp), exp, "err");
-        arg_unwrap_int_2_float(exp_0, exp_1).map(Into::into)
+        try_exp_enum!(
+            arg_0,
+            ArgType::Exp(exp_0),
+            {
+                try_exp_enum!(
+                    arg_1,
+                    ArgType::Exp(exp_1),
+                    { arg_unwrap_int_2_float(exp_0, exp_1).map(Into::into) }?,
+                    "err"
+                )
+            }?,
+            "err exp_0"
+        )
     }
 
     fn arg_unwrap_int_2_float(exp_0: Expression, exp_1: Expression) -> crate::LispResult<f64> {
