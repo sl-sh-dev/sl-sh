@@ -733,21 +733,19 @@ mod test {
                 exp_0.get().data,
                 ExpEnum::Int(int_0),
                 {
-                    ints_2_float(
-                        int_0,
-                        exp_1
-                            .iter()
-                            .map(|exp_1| {
-                                let int = try_inner_exp_enum!(
-                                    exp_1.get().data,
-                                    ExpEnum::Int(int_1),
-                                    { int_1 },
-                                    "Not an int_1!"
-                                );
-                                Ok(int)
-                            })
-                            .collect::<crate::LispResult<Vec<i64>>>()?,
-                    )
+                    let iter = exp_1
+                        .iter()
+                        .map(|exp_1| {
+                            let int = try_inner_exp_enum!(
+                                exp_1.get().data,
+                                ExpEnum::Int(int_1),
+                                { int_1 },
+                                "Not an int_1!"
+                            );
+                            Ok(int)
+                        })
+                        .collect::<crate::LispResult<Vec<i64>>>()?;
+                    ints_2_float(int_0, iter)
                 },
                 "Not an int_0!"
             );
