@@ -443,6 +443,8 @@ macro_rules! try_inner_exp_enum {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::LispResult;
+    use std::collections::HashMap;
     use std::convert::TryFrom;
     use std::convert::TryInto;
 
@@ -518,25 +520,51 @@ mod test {
         VarArgs(Vec<Expression>),
     }
 
-    fn arg_translate_int_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
-        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
-        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Exp(exp), exp, "err");
-        arg_unwrap_int_2_float(exp_0, exp_1).map(Into::into)
+    static K0: &'static str = "key0";
+    static K1: &'static str = "key1";
+
+    #[test]
+    fn with_some_hashmaps_test() -> LispResult<()> {
+        let mut hash_map = HashMap::new();
+        hash_map.insert(K0, Expression::alloc_data(ExpEnum::Int(7)));
+        hash_map.insert(K1, Expression::alloc_data(ExpEnum::Int(11)));
+        let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::HashMap(hash_map)));
+        arg_translate_clear_hash_map(&myint0).unwrap();
+        try_inner_exp_enum!(
+            myint0,
+            ArgType::Exp(exp),
+            {
+                try_inner_exp_enum!(
+                    &exp.get().data,
+                    ExpEnum::HashMap(hm),
+                    assert!(hm.is_empty()),
+                    "should be a hashmap"
+                );
+            },
+            "err"
+        );
+        Ok(())
     }
 
-    fn arg_unwrap_int_2_float(exp_0: Expression, exp_1: Expression) -> crate::LispResult<f64> {
+    fn arg_translate_clear_hash_map(arg_0: &ArgType) -> crate::LispResult<()> {
+        Ok({
+            let ret = try_inner_exp_enum!(
+                arg_0,
+                ArgType::Exp(exp),
+                arg_unwrap_clear_hash_map(exp),
+                "err"
+            );
+            return ret;
+        })
+    }
+
+    fn arg_unwrap_clear_hash_map(exp_0: &Expression) -> crate::LispResult<()> {
         Ok({
             let float = try_inner_exp_enum!(
-                exp_0.get().data,
-                ExpEnum::Int(int_0),
+                exp_0.get_mut().data,
+                ExpEnum::HashMap(ref mut hash_map),
                 {
-                    let float = try_inner_exp_enum!(
-                        exp_1.get().data,
-                        ExpEnum::Int(int_1),
-                        { int_2_float(int_0, int_1) },
-                        "Not an int_1!"
-                    );
-                    float
+                    clear_hash_map(hash_map)?;
                 },
                 "Not an int_0!"
             );
@@ -544,8 +572,9 @@ mod test {
         })
     }
 
-    fn int_2_float(my_int: i64, my_o_int: i64) -> f64 {
-        (my_int + my_o_int) as f64
+    fn clear_hash_map<K, V>(hash_map: &mut HashMap<K, V>) -> LispResult<()> {
+        hash_map.clear();
+        Ok(())
     }
 
     #[test]
@@ -588,6 +617,36 @@ mod test {
                 panic!("Not a float!")
             }
         }
+    }
+
+    fn arg_translate_int_2_float(arg_0: ArgType, arg_1: ArgType) -> crate::LispResult<Expression> {
+        let exp_0 = try_inner_exp_enum!(arg_0, ArgType::Exp(exp), exp, "err");
+        let exp_1 = try_inner_exp_enum!(arg_1, ArgType::Exp(exp), exp, "err");
+        arg_unwrap_int_2_float(exp_0, exp_1).map(Into::into)
+    }
+
+    fn arg_unwrap_int_2_float(exp_0: Expression, exp_1: Expression) -> crate::LispResult<f64> {
+        Ok({
+            let float = try_inner_exp_enum!(
+                exp_0.get().data,
+                ExpEnum::Int(int_0),
+                {
+                    let float = try_inner_exp_enum!(
+                        exp_1.get().data,
+                        ExpEnum::Int(int_1),
+                        { int_2_float(int_0, int_1) },
+                        "Not an int_1!"
+                    );
+                    float
+                },
+                "Not an int_0!"
+            );
+            float
+        })
+    }
+
+    fn int_2_float(my_int: i64, my_o_int: i64) -> f64 {
+        (my_int + my_o_int) as f64
     }
 
     #[test]
