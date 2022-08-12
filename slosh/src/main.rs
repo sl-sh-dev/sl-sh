@@ -12,7 +12,7 @@ use sl_compiler::compile::*;
 use sl_compiler::reader::*;
 use sl_compiler::state::*;
 
-use builtins::collections::{make_hash, vec_slice, vec_to_list};
+use builtins::collections::{make_hash, setup_vecs};
 use builtins::print::{dasm, display_value, pr, prn};
 use builtins::{get_prop, set_prop, sizeof_heap_object, sizeof_value};
 use sl_liner::{Context, Prompt};
@@ -132,8 +132,6 @@ fn main() {
     vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
     vm.set_global("dasm", Value::Builtin(CallFunc { func: dasm }));
     vm.set_global("load", Value::Builtin(CallFunc { func: load }));
-    vm.set_global("vec-slice", Value::Builtin(CallFunc { func: vec_slice }));
-    vm.set_global("vec->list", Value::Builtin(CallFunc { func: vec_to_list }));
     vm.set_global("make-hash", Value::Builtin(CallFunc { func: make_hash }));
     vm.set_global("get-prop", Value::Builtin(CallFunc { func: get_prop }));
     vm.set_global("set-prop", Value::Builtin(CallFunc { func: set_prop }));
@@ -148,6 +146,7 @@ fn main() {
         "sizeof-value",
         Value::Builtin(CallFunc { func: sizeof_value }),
     );
+    setup_vecs(&mut vm);
     let mut env = CompileEnvironment::new(&mut vm);
     loop {
         let res = match con.read_line(Prompt::from("slosh> "), None) {
