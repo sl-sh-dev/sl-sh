@@ -98,6 +98,55 @@ impl Vm {
                         registers[dest as usize + i] = registers[src as usize + i];
                     }
                 }
+                LDSC => {
+                    let (dest, len, src) = decode3!(chunk.code, &mut self.ip, wide);
+                    if len > 0 {
+                        let len = len as usize;
+                        let dest = dest as usize;
+                        let val = get_reg_unref!(registers, src, self);
+                        let mut iter = val.iter(self);
+                        for i in 0..len as usize {
+                            if let Some(item) = iter.next() {
+                                registers[dest + i] = item;
+                            } else {
+                                registers[dest + i] = Value::Undefined;
+                            }
+                        }
+                    }
+                }
+                LDSCR => {
+                    let (dest, len, src) = decode3!(chunk.code, &mut self.ip, wide);
+                    if len > 0 {
+                        let len = len as usize;
+                        let dest = dest as usize;
+                        let val = get_reg_unref!(registers, src, self);
+                        let mut iter = val.iter(self);
+                        for i in 0..len - 1 {
+                            if let Some(item) = iter.next() {
+                                registers[dest + i] = item;
+                            } else {
+                                registers[dest + i] = Value::Undefined;
+                            }
+                        }
+                        let rest: Vec<Value> = iter.collect();
+                        if rest.is_empty() {
+                            registers[dest + (len - 1)] = Value::Undefined;
+                        } else {
+                            registers[dest + (len - 1)] = self.alloc_list_ro(rest);
+                        }
+                    }
+                }
+                COPY => {
+                    let (_dest, _src) = decode2!(chunk.code, &mut self.ip, wide);
+                    // XXX Deep copy src to dest
+                }
+                FRZ => {
+                    let target = decode1!(chunk.code, &mut self.ip, wide);
+                    let target = get_reg_unref!(registers, target, self);
+                    if let Some(_handle) = target.get_handle() {
+                        // XXX mark handle read only
+                    }
+                }
                 SET => {
                     let (dest, src) = decode2!(chunk.code, &mut self.ip, wide);
                     let val = get_reg_unref!(registers, src, self);

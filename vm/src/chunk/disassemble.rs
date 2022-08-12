@@ -294,6 +294,40 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            LDSC => {
+                print!("LDSC({:#04x})   \t", LDSC);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            LDSCR => {
+                print!("LDSCR({:#04x})  \t", LDSCR);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            COPY => {
+                print!("COPY({:#04x})   \t", COPY);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
+            FRZ => {
+                print!("FRZ({:#04x})    \t", FRZ);
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             CALL => {
                 print!("CALL({:#04x})   \t", CALL);
                 disassemble_operand!(code, true, wide);

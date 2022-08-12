@@ -24,9 +24,13 @@ pub const REGI: OpCode = STACK_BASE + 14; // REGI A B - R(A) = Int(B)
 pub const REGU: OpCode = STACK_BASE + 15; // REGU A B - R(A) = UInt(B)
 pub const CLOSE: OpCode = STACK_BASE + 16; // CLOSE A B - R(A) = closure derived from lambda in R(B)
 pub const BMOV: OpCode = STACK_BASE + 17; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
+pub const LDSC: OpCode = STACK_BASE + 18; // LDSC A B C - R(A)..R(A+B) = destructured list or vec in R(C) (ignore leftover values)
+pub const LDSCR: OpCode = STACK_BASE + 19; // LDSCR A B C - R(A)..R(A+B) = destructured list or vec in R(C) (R(A+B) gets all leftover values)
+pub const COPY: OpCode = STACK_BASE + 20; // COPY A B - R(A) = deep copy of R(B)
+pub const FRZ: OpCode = STACK_BASE + 21; // FRZ A - R(A) if a heap object will be made read only
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 18;
+const FLOW_BASE: OpCode = STACK_BASE + 22;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
