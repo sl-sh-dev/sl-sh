@@ -574,8 +574,61 @@ mod test {
         )
     }
 
-    fn clear_hash_map<K, V>(hash_map: &mut HashMap<K, V>) -> LispResult<()> {
+    fn clear_hash_map(hash_map: &mut HashMap<&str, Expression>) -> LispResult<()> {
         hash_map.clear();
+        Ok(())
+    }
+
+    #[test]
+    fn with_some_optional_hashmaps_test() -> LispResult<()> {
+        let mut hash_map = HashMap::new();
+        hash_map.insert(K0, Expression::alloc_data(ExpEnum::Int(7)));
+        hash_map.insert(K1, Expression::alloc_data(ExpEnum::Int(11)));
+        let myint0 = ArgType::Opt(Some(Expression::alloc_data(ExpEnum::HashMap(hash_map))));
+        arg_translate_clear_hash_map_optional(&myint0).unwrap();
+        try_inner_exp_enum!(
+            myint0,
+            ArgType::Opt(exp),
+            {
+                try_inner_exp_enum!(
+                    &exp.unwrap().get().data,
+                    ExpEnum::HashMap(hm),
+                    assert!(hm.is_empty()),
+                    "should be a hashmap"
+                );
+            },
+            "first parse failed"
+        );
+        Ok(())
+    }
+
+    fn arg_translate_clear_hash_map_optional(arg_0: &ArgType) -> crate::LispResult<()> {
+        try_exp_enum!(
+            arg_0,
+            ArgType::Opt(exp),
+            arg_unwrap_clear_hash_map_optional(exp)?,
+            "Was not parseable as an option"
+        )
+    }
+
+    fn arg_unwrap_clear_hash_map_optional(exp_0: &Option<Expression>) -> crate::LispResult<()> {
+        match exp_0 {
+            None => Ok(clear_hash_map_optional(None)?),
+            Some(exp_0) => {
+                try_exp_enum!(
+                    exp_0.get_mut().data,
+                    ExpEnum::HashMap(ref mut hash_map),
+                    clear_hash_map_optional(Some(hash_map))?,
+                    "Not an int_0!"
+                )
+            }
+        }
+    }
+
+    fn clear_hash_map_optional(hash_map: Option<&mut HashMap<&str, Expression>>) -> LispResult<()> {
+        if let Some(hash_map) = hash_map {
+            hash_map.clear();
+        }
         Ok(())
     }
 
