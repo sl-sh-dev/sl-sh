@@ -7,14 +7,15 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, FnArg, GenericArgument, Ident, Lit, Meta,
-    NestedMeta, Path, PathArguments, PathSegment, ReturnType, Type, TypePath,
+    parse_macro_input, AngleBracketedGenericArguments, FnArg, Ident, Lit, Meta, NestedMeta,
+    PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 extern crate static_assertions;
 
 type MacroResult<T> = Result<T, syn::Error>;
 
 const POSSIBLE_RESULT_TYPES: [&str; 1] = ["LispResult"];
+const POSSIBLE_ARG_TYPES: [&str; 2] = ["Option", "Vec"];
 
 /// parse and return the rust types of the function parameters
 fn get_input_types(inputs: &Punctuated<FnArg, Comma>) -> Vec<Type> {
@@ -48,7 +49,7 @@ fn build_sl_sh_expression_type() -> Type {
     pun_seq.push(exp_enum_path_segment);
     Type::Path(TypePath {
         qself: None,
-        path: Path {
+        path: syn::Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -102,7 +103,7 @@ fn wrap_with_try_into_expression(ty: Type) -> Type {
         ident: Ident::new("builtins_util", Span::call_site()),
         arguments: PathArguments::None,
     };
-    let generic_argument = GenericArgument::Type(ty);
+    let generic_argument = syn::GenericArgument::Type(ty);
     let mut generic_pun_seq = Punctuated::new();
     generic_pun_seq.push(generic_argument);
     let generic_argument = AngleBracketedGenericArguments {
@@ -121,7 +122,7 @@ fn wrap_with_try_into_expression(ty: Type) -> Type {
     pun_seq.push(try_into_expression_path_segment);
     Type::Path(TypePath {
         qself: None,
-        path: Path {
+        path: syn::Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -139,7 +140,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
         ident: Ident::new("convert", Span::call_site()),
         arguments: PathArguments::None,
     };
-    let generic_argument = GenericArgument::Type(ty);
+    let generic_argument = syn::GenericArgument::Type(ty);
     let mut generic_pun_seq = Punctuated::new();
     generic_pun_seq.push(generic_argument);
     let generic_argument = AngleBracketedGenericArguments {
@@ -158,7 +159,7 @@ fn wrap_with_std_convert(ty: Type, convert_trait: &str) -> Type {
     pun_seq.push(trait_path_segment);
     Type::Path(TypePath {
         qself: None,
-        path: Path {
+        path: syn::Path {
             leading_colon: None,
             segments: pun_seq,
         },
@@ -174,10 +175,10 @@ fn get_return_type(original_item_fn: &syn::ItemFn) -> MacroResult<(Type, Option<
         ReturnType::Type(_ra_arrow, ty) => *ty.clone(),
     };
 
-    if let Some(inner_type) = get_inner_type(&return_type) {
-        let wrapper = is_valid_wrapping_type(&return_type)?;
+    if let Some((inner_type, type_path)) = get_generic_argument_from_type(&return_type) {
+        let wrapper = is_valid_generic_type(type_path, POSSIBLE_RESULT_TYPES.as_slice())?;
         match inner_type {
-            GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
+            syn::GenericArgument::Type(ty) => Ok((ty.clone(), Some(wrapper))),
             _ => {
                 return Err(syn::Error::new(
                     original_item_fn.span(),
@@ -219,48 +220,51 @@ fn get_documentation_for_fn(original_item_fn: &syn::ItemFn) -> MacroResult<Strin
     }
 }
 
-fn is_valid_wrapping_type(ty: &Type) -> MacroResult<&'static str> {
-    return if let Type::Path(ref type_path) = ty {
-        if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
-            let path_segment = &type_path.path.segments.first().unwrap();
-            let ident = &path_segment.ident;
-            for type_name in &POSSIBLE_RESULT_TYPES {
-                if ident == type_name {
-                    return Ok(type_name);
-                }
+fn is_valid_generic_type<'a>(
+    type_path: &TypePath,
+    possible_types: &'a [&str],
+) -> MacroResult<&'a str> {
+    if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
+        let path_segment = &type_path.path.segments.first().unwrap();
+        let ident = &path_segment.ident;
+        for type_name in possible_types {
+            if ident == type_name {
+                return Ok(type_name);
             }
         }
-        Err(syn::Error::new(
-            ty.span(),
+    }
+    Err(syn::Error::new(
+            type_path.span(),
             format!(
                 "Functions of with generic arguments of type {:?} must contain Types, see syn::GenericArgument.",
-                &POSSIBLE_RESULT_TYPES
+                possible_types
             ),
         ))
-    } else {
-        Err(syn::Error::new(
-            ty.span(),
-            format!(
-                "Expected type with one of generic arguments type {:?}.",
-                &POSSIBLE_RESULT_TYPES
-            ),
-        ))
-    };
 }
 
-fn get_inner_type(ty: &Type) -> Option<&GenericArgument> {
-    if let Type::Path(ref type_path) = ty {
-        if type_path.path.segments.len() == 1 {
-            let path_segment = &type_path.path.segments.first()?;
-            if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
-                if args.args.len() == 1 {
-                    let ty = args.args.first()?;
-                    return Some(ty);
-                }
+fn get_generic_argument_from_type_path(
+    type_path: &syn::TypePath,
+) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
+    if type_path.path.segments.len() == 1 {
+        let path_segment = &type_path.path.segments.first()?;
+        if let PathArguments::AngleBracketed(args) = &path_segment.arguments {
+            if args.args.len() == 1 {
+                let ty = args.args.first()?;
+                return Some((ty, type_path));
             }
         }
     }
     None
+}
+
+fn get_generic_argument_from_type(
+    ty: &syn::Type,
+) -> Option<(&syn::GenericArgument, &syn::TypePath)> {
+    if let Type::Path(ref type_path) = ty {
+        get_generic_argument_from_type_path(type_path)
+    } else {
+        None
+    }
 }
 
 fn generate_assertions_code_for_type_conversions(
@@ -474,6 +478,131 @@ fn generate_sl_sh_fns(
         }
     };
     Ok(tokens)
+}
+
+enum ArgVal {
+    Value,
+    Optional,
+    Vec,
+}
+
+enum ArgPassingStyle {
+    Move,
+    Reference(Option<syn::Lifetime>),
+    MutReference(Option<syn::Lifetime>),
+}
+
+struct Arg {
+    val: ArgVal,
+    passing_style: ArgPassingStyle,
+}
+
+fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
+    if let Some((_generic, type_path)) = get_generic_argument_from_type_path(type_path) {
+        let wrapper = is_valid_generic_type(&type_path, POSSIBLE_ARG_TYPES.as_slice())?;
+        if wrapper == "Option" {
+            Ok(ArgVal::Optional)
+        } else if wrapper == "Vec" {
+            Ok(ArgVal::Vec)
+        } else {
+            return Err(syn::Error::new(
+                type_path.span(),
+                "Received generic argument this macro is not programmed to handle!",
+            ));
+        }
+    } else {
+        Ok(ArgVal::Value)
+    }
+}
+
+fn play_with_args(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
+    let mut parsed_args = vec![];
+    for fn_arg in original_item_fn.sig.inputs.iter() {
+        match fn_arg {
+            FnArg::Receiver(_) => {
+                return Err(syn::Error::new(
+                    original_item_fn.span(),
+                    "Associated functions that take the self argument are not supported.",
+                ))
+            }
+            FnArg::Typed(ty) => match &*ty.ty {
+                Type::Path(ty) => {
+                    let val = get_arg_val(ty)?;
+                    parsed_args.push(Arg {
+                        val,
+                        passing_style: ArgPassingStyle::Move,
+                    });
+                }
+                Type::Reference(ty_ref) => {
+                    match &*ty_ref.elem {
+                        Type::Path(ty) => {
+                            let val = get_arg_val(ty)?;
+                            let lifetime = ty_ref.lifetime.clone();
+                            let passing_style = if ty_ref.mutability.is_some() {
+                                ArgPassingStyle::MutReference(lifetime)
+                            } else {
+                                ArgPassingStyle::Reference(lifetime)
+                            };
+                            parsed_args.push(Arg { val, passing_style });
+                        }
+                        _ => {
+                            return Err(syn::Error::new(
+                                original_item_fn.span(),
+                                &format!(
+                                    "Only references/arguments of type path and reference are supported.: {:?})), ",
+                                    ty.to_token_stream()
+                                ),
+                            ))
+                        }
+                    }
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        original_item_fn.span(),
+                        &format!(
+                            "Only references/arguments of type path and reference are supported.: {:?})), ",
+                            ty.to_token_stream()
+                        ),
+                    ))
+                }
+            },
+        }
+    }
+    Ok(parsed_args)
+}
+
+#[proc_macro_attribute]
+pub fn sl_sh_fn2(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let _attr_args = parse_macro_input!(attr as syn::AttributeArgs);
+
+    let tokens = match syn::parse::<syn::Item>(input) {
+        Ok(item) => match &item {
+            syn::Item::Fn(original_item_fn) => {
+                let code = match play_with_args(original_item_fn) {
+                    Ok(_fns) => {
+                        quote! {}
+                    }
+                    Err(e) => e.to_compile_error(),
+                };
+                let original_fn_code = item.into_token_stream();
+                quote! {
+                    #code
+
+                    #original_fn_code
+                }
+            }
+            _ => syn::Error::new(item.span(), "This attribute only supports functions.")
+                .to_compile_error(),
+        },
+        Err(e) => {
+            syn::Error::new(e.span(), "Failed to parse proc_macro_attribute.").to_compile_error()
+        }
+    };
+
+    proc_macro::TokenStream::from(tokens)
 }
 
 #[proc_macro_attribute]
