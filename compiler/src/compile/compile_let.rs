@@ -337,4 +337,38 @@ mod tests {
         exec_compile_error(&mut vm, "(let (x_undef y_undef) (set! x 5) x)");
         exec_compile_error(&mut vm, "(let (x_undef 10 y_undef) (set! x 5) x)");
     }
+
+    #[test]
+    fn test_let_destructure() {
+        let mut vm = Vm::new();
+        vm.set_global("prn", Value::Builtin(CallFunc { func: prn }));
+
+        let result = exec(&mut vm, "(let ([a b % c d] '(1 2)) (list a b c d))");
+        let expected = read_test(&mut vm, "(1 2 nil nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a b % c %= :none d] '(1 2)) (list a b c d))");
+        let expected = read_test(&mut vm, "(1 2 :none nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d] '(1 [2])) (list a b c d))");
+        let expected = read_test(&mut vm, "(1 2 :none nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2])) (list a b c d rest))");
+        let expected = read_test(&mut vm, "(1 2 :none nil nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3)) (list a b c d rest))");
+        let expected = read_test(&mut vm, "(1 2 :none 3 nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))");
+        let expected = read_test(&mut vm, "(1 2 :none 3 (4))");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d %= \"d\" & rest] '(1 [2 3])) (list a b c d rest))");
+        let expected = read_test(&mut vm, "(1 2 3 \"d\" nil)");
+        assert_vals(&vm, expected, result);
+    }
 }
