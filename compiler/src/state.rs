@@ -108,6 +108,13 @@ impl Symbols {
         self.data.borrow_mut().syms.clear();
     }
 
+    pub fn reserve_reg(&mut self) -> usize {
+        let mut data = self.data.borrow_mut();
+        let count = data.count;
+        data.count += 1;
+        count
+    }
+
     pub fn insert(&mut self, key: Interned) -> usize {
         let mut data = self.data.borrow_mut();
         let count = data.count;

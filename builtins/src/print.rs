@@ -100,9 +100,9 @@ pub fn display_value(vm: &Vm, val: Value) -> String {
         Value::Vector(h) => {
             let v = vm.get_vector(*h);
             let mut res = String::new();
-            res.push_str("#(");
+            res.push('[');
             list_out_iter(vm, &mut res, &mut v.iter().copied());
-            res.push(')');
+            res.push(']');
             res
         }
         Value::Map(handle) => {

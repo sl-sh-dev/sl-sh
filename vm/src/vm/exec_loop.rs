@@ -130,7 +130,7 @@ impl Vm {
                         }
                         let rest: Vec<Value> = iter.collect();
                         if rest.is_empty() {
-                            registers[dest + (len - 1)] = Value::Undefined;
+                            registers[dest + (len - 1)] = Value::Nil;
                         } else {
                             registers[dest + (len - 1)] = self.alloc_list_ro(rest);
                         }
