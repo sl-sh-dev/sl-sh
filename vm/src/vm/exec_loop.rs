@@ -104,13 +104,18 @@ impl Vm {
                         let len = len as usize;
                         let dest = dest as usize;
                         let val = get_reg_unref!(registers, src, self);
-                        let mut iter = val.iter(self);
-                        for i in 0..len as usize {
-                            if let Some(item) = iter.next() {
-                                registers[dest + i] = item;
-                            } else {
-                                registers[dest + i] = Value::Undefined;
+                        match val {
+                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) => {
+                                let mut iter = val.iter(self);
+                                for i in 0..len as usize {
+                                    if let Some(item) = iter.next() {
+                                        registers[dest + i] = item;
+                                    } else {
+                                        registers[dest + i] = Value::Undefined;
+                                    }
+                                }
                             }
+                            _ => return Err((VMError::new_vm("not a sequence"), chunk)),
                         }
                     }
                 }
@@ -120,19 +125,46 @@ impl Vm {
                         let len = len as usize;
                         let dest = dest as usize;
                         let val = get_reg_unref!(registers, src, self);
-                        let mut iter = val.iter(self);
-                        for i in 0..len - 1 {
-                            if let Some(item) = iter.next() {
-                                registers[dest + i] = item;
-                            } else {
-                                registers[dest + i] = Value::Undefined;
+                        match val {
+                            Value::Vector(_) | Value::Pair(_) | Value::List(_, _) => {
+                                let mut iter = val.iter(self);
+                                for i in 0..len - 1 {
+                                    if let Some(item) = iter.next() {
+                                        registers[dest + i] = item;
+                                    } else {
+                                        registers[dest + i] = Value::Undefined;
+                                    }
+                                }
+                                let rest: Vec<Value> = iter.collect();
+                                if rest.is_empty() {
+                                    registers[dest + (len - 1)] = Value::Nil;
+                                } else {
+                                    registers[dest + (len - 1)] = self.alloc_list_ro(rest);
+                                }
                             }
+                            _ => return Err((VMError::new_vm("not a sequence"), chunk)),
                         }
-                        let rest: Vec<Value> = iter.collect();
-                        if rest.is_empty() {
-                            registers[dest + (len - 1)] = Value::Nil;
-                        } else {
-                            registers[dest + (len - 1)] = self.alloc_list_ro(rest);
+                    }
+                }
+                MDSC => {
+                    let (dest, len, src) = decode3!(chunk.code, &mut self.ip, wide);
+                    if len > 0 {
+                        let len = len as usize;
+                        let dest = dest as usize;
+                        let val = get_reg_unref!(registers, src, self);
+                        match val {
+                            Value::Map(handle) => {
+                                let map = self.get_map(handle);
+                                for i in 0..len as usize {
+                                    let key = get_reg_unref!(registers, dest + i, self);
+                                    if let Some(item) = map.get(&key) {
+                                        registers[dest + i] = *item;
+                                    } else {
+                                        registers[dest + i] = Value::Undefined;
+                                    }
+                                }
+                            }
+                            _ => return Err((VMError::new_vm("not a map"), chunk)),
                         }
                     }
                 }

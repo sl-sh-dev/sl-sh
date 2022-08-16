@@ -314,6 +314,16 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            MDSC => {
+                print!("MDSC({:#04x})   \t", MDSC);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_operand!(code, true, wide);
+                println!();
+                Ok(false)
+            }
             COPY => {
                 print!("COPY({:#04x})   \t", COPY);
                 disassemble_operand!(code, true, wide);

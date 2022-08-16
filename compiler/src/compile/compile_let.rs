@@ -347,27 +347,45 @@ mod tests {
         let expected = read_test(&mut vm, "(1 2 nil nil)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a b % c %= :none d] '(1 2)) (list a b c d))");
+        let result = exec(
+            &mut vm,
+            "(let ([a b % c %= :none d] '(1 2)) (list a b c d))",
+        );
         let expected = read_test(&mut vm, "(1 2 :none nil)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d] '(1 [2])) (list a b c d))");
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c %= :none] % d] '(1 [2])) (list a b c d))",
+        );
         let expected = read_test(&mut vm, "(1 2 :none nil)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2])) (list a b c d rest))");
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c %= :none] % d & rest] '(1 [2])) (list a b c d rest))",
+        );
         let expected = read_test(&mut vm, "(1 2 :none nil nil)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3)) (list a b c d rest))");
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3)) (list a b c d rest))",
+        );
         let expected = read_test(&mut vm, "(1 2 :none 3 nil)");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))");
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))",
+        );
         let expected = read_test(&mut vm, "(1 2 :none 3 (4))");
         assert_vals(&vm, expected, result);
 
-        let result = exec(&mut vm, "(let ([a [b % c %= :none] % d %= \"d\" & rest] '(1 [2 3])) (list a b c d rest))");
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c %= :none] % d %= \"d\" & rest] '(1 [2 3])) (list a b c d rest))",
+        );
         let expected = read_test(&mut vm, "(1 2 3 \"d\" nil)");
         assert_vals(&vm, expected, result);
     }

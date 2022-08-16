@@ -26,11 +26,12 @@ pub const CLOSE: OpCode = STACK_BASE + 16; // CLOSE A B - R(A) = closure derived
 pub const BMOV: OpCode = STACK_BASE + 17; // BMOV A B C - R(A)..R(A+C) = R(B)..R(B+C) does not respect closed over values
 pub const LDSC: OpCode = STACK_BASE + 18; // LDSC A B C - R(A)..R(A+B) = destructured list or vec in R(C) (ignore leftover values)
 pub const LDSCR: OpCode = STACK_BASE + 19; // LDSCR A B C - R(A)..R(A+B) = destructured list or vec in R(C) (R(A+B) gets all leftover values)
-pub const COPY: OpCode = STACK_BASE + 20; // COPY A B - R(A) = deep copy of R(B)
-pub const FRZ: OpCode = STACK_BASE + 21; // FRZ A - R(A) if a heap object will be made read only
+pub const MDSC: OpCode = STACK_BASE + 20; // MDSC A B C - R(A)..R(A+B) = destructured map in R(C) (ignore leftover values), R(A..) start with keys
+pub const COPY: OpCode = STACK_BASE + 21; // COPY A B - R(A) = deep copy of R(B)
+pub const FRZ: OpCode = STACK_BASE + 22; // FRZ A - R(A) if a heap object will be made read only
 
 // Flow control
-const FLOW_BASE: OpCode = STACK_BASE + 22;
+const FLOW_BASE: OpCode = STACK_BASE + 23;
 // CALL A B C - Call fn R(A) with B args with R(C) as first reg/param
 pub const CALL: OpCode = FLOW_BASE;
 // TCALL A B - Tail Call fn R(A) with B args with existing stack/regs
