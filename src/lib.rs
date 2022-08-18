@@ -480,18 +480,21 @@ fn generate_sl_sh_fns(
     Ok(tokens)
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum ArgVal {
     Value,
     Optional,
     Vec,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum ArgPassingStyle {
     Move,
-    Reference(Option<syn::Lifetime>),
-    MutReference(Option<syn::Lifetime>),
+    Reference,    //(Option<syn::Lifetime>),
+    MutReference, //(Option<syn::Lifetime>),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 struct Arg {
     val: ArgVal,
     passing_style: ArgPassingStyle,
@@ -515,7 +518,7 @@ fn get_arg_val(type_path: &syn::TypePath) -> MacroResult<ArgVal> {
     }
 }
 
-fn play_with_args(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
+fn parse_src_function_arguments(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
     let mut parsed_args = vec![];
     for fn_arg in original_item_fn.sig.inputs.iter() {
         match fn_arg {
@@ -537,11 +540,13 @@ fn play_with_args(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
                     match &*ty_ref.elem {
                         Type::Path(ty) => {
                             let val = get_arg_val(ty)?;
-                            let lifetime = ty_ref.lifetime.clone();
+                            //let lifetime = ty_ref.lifetime.clone();
                             let passing_style = if ty_ref.mutability.is_some() {
-                                ArgPassingStyle::MutReference(lifetime)
+                                //ArgPassingStyle::MutReference(lifetime)
+                                ArgPassingStyle::MutReference
                             } else {
-                                ArgPassingStyle::Reference(lifetime)
+                                //ArgPassingStyle::Reference(lifetime)
+                                ArgPassingStyle::Reference
                             };
                             parsed_args.push(Arg { val, passing_style });
                         }
@@ -571,6 +576,45 @@ fn play_with_args(original_item_fn: &syn::ItemFn) -> MacroResult<Vec<Arg>> {
     Ok(parsed_args)
 }
 
+fn are_args_valid(original_item_fn: &syn::ItemFn, args: &[Arg]) -> MacroResult<()> {
+    if args.is_empty() || args.len() == 1 {
+        Ok(())
+    } else {
+        let mut found_opt = false;
+        let mut found_value = false;
+        for (i, arg) in args.iter().rev().enumerate() {
+            match (i, arg.val, found_opt, found_value) {
+                (i, ArgVal::Vec, _, _) if i > 0 => {
+                    return Err(syn::Error::new(
+                        original_item_fn.span(),
+                        "Only one Vec argument is supported and it must be the last argument.",
+                    ));
+                }
+                (_, ArgVal::Optional, _, true) => {
+                    return Err(syn::Error::new(
+                        original_item_fn.span(),
+                        "Optional argument(s) must be placed last.",
+                    ));
+                }
+                (_, ArgVal::Optional, _, _) => {
+                    found_opt = true;
+                }
+                (_, ArgVal::Value, _, _) => {
+                    found_value = true;
+                }
+                (_, _, _, _) => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+fn generate_sl_sh_fn2(original_item_fn: &syn::ItemFn) -> MacroResult<TokenStream2> {
+    let args = parse_src_function_arguments(original_item_fn)?;
+    are_args_valid(original_item_fn, args.as_slice())?;
+    Ok(quote!())
+}
+
 #[proc_macro_attribute]
 pub fn sl_sh_fn2(
     attr: proc_macro::TokenStream,
@@ -581,15 +625,13 @@ pub fn sl_sh_fn2(
     let tokens = match syn::parse::<syn::Item>(input) {
         Ok(item) => match &item {
             syn::Item::Fn(original_item_fn) => {
-                let code = match play_with_args(original_item_fn) {
-                    Ok(_fns) => {
-                        quote! {}
-                    }
+                let generated_code = match generate_sl_sh_fn2(original_item_fn) {
+                    Ok(generated_code) => generated_code,
                     Err(e) => e.to_compile_error(),
                 };
                 let original_fn_code = item.into_token_stream();
                 quote! {
-                    #code
+                    #generated_code
 
                     #original_fn_code
                 }
@@ -617,7 +659,7 @@ pub fn sl_sh_fn(
             syn::Item::Fn(original_item_fn) => {
                 let generated_sl_sh_fns: TokenStream2 =
                     match generate_sl_sh_fns(original_item_fn, attr_args) {
-                        Ok(fns) => fns,
+                        Ok(generated_code) => generated_code,
                         Err(e) => e.to_compile_error(),
                     };
                 let original_fn_code = item.into_token_stream();
@@ -636,6 +678,202 @@ pub fn sl_sh_fn(
     };
 
     proc_macro::TokenStream::from(tokens)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn are_args_valid(args: &[Arg]) -> bool {
+        if args.is_empty() || args.len() == 1 {
+            true
+        } else {
+            let mut found_opt = false;
+            let mut found_value = false;
+            for (i, arg) in args.iter().rev().enumerate() {
+                match (i, arg.val, found_opt, found_value) {
+                    (i, ArgVal::Vec, _, _) if i > 0 => {
+                        // vec can only be last argument
+                        return false;
+                    }
+                    (_, ArgVal::Optional, _, true) => {
+                        // optionals all must be last
+                        return false;
+                    }
+                    (_, ArgVal::Optional, _, _) => {
+                        found_opt = true;
+                    }
+                    (_, ArgVal::Value, _, _) => {
+                        found_value = true;
+                    }
+                    (_, _, _, _) => {}
+                }
+            }
+            true
+        }
+    }
+
+    #[test]
+    fn test_args() {
+        let args = vec![];
+        assert!(are_args_valid(args.as_slice()));
+        // values are always valid
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::MutReference,
+            },
+        ];
+        assert!(are_args_valid(args.as_slice()));
+
+        // vec must be last argument
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(are_args_valid(args.as_slice()));
+
+        // vec must be last argument
+        let args = vec![
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(!are_args_valid(args.as_slice()));
+
+        // opt must be last argument
+        let args = vec![
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(!are_args_valid(args.as_slice()));
+
+        // opt must be last argument(s)
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(are_args_valid(args.as_slice()));
+
+        // opt must be last argument(s), unless it's one vec in the last slot
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(are_args_valid(args.as_slice()));
+
+        // vec must always be last
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+        ];
+        assert!(!are_args_valid(args.as_slice()));
+
+        // opt must always be last argument(s)
+        let args = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+        ];
+        assert!(!are_args_valid(args.as_slice()));
+
+        // opt must always be last argument(s)
+        let args = vec![
+            Arg {
+                val: ArgVal::Optional,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+        ];
+        assert!(!are_args_valid(args.as_slice()));
+    }
 }
 
 //TODO
