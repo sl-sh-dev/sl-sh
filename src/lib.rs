@@ -490,8 +490,8 @@ enum ArgVal {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum ArgPassingStyle {
     Move,
-    Reference,    //(Option<syn::Lifetime>),
-    MutReference, //(Option<syn::Lifetime>),
+    Reference,
+    MutReference,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
