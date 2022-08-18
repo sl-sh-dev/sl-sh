@@ -534,29 +534,15 @@ mod test {
     static K1: &'static str = "key1";
 
     #[test]
-    fn with_some_hashmaps_test() -> LispResult<()> {
+    fn with_some_hashmaps_test() {
         let mut hash_map = HashMap::new();
         hash_map.insert(K0, Expression::alloc_data(ExpEnum::Int(7)));
         hash_map.insert(K1, Expression::alloc_data(ExpEnum::Int(11)));
         let myint0 = ArgType::Exp(Expression::alloc_data(ExpEnum::HashMap(hash_map)));
-        arg_translate_clear_hash_map(&myint0).unwrap();
-        try_inner_exp_enum!(
-            myint0,
-            ArgType::Exp(exp),
-            {
-                try_inner_exp_enum!(
-                    &exp.get().data,
-                    ExpEnum::HashMap(hm),
-                    assert!(hm.is_empty()),
-                    "should be a hashmap"
-                );
-            },
-            "err"
-        );
-        Ok(())
+        arg_translate_clear_hash_map(myint0).unwrap();
     }
 
-    fn arg_translate_clear_hash_map(arg_0: &ArgType) -> crate::LispResult<()> {
+    fn arg_translate_clear_hash_map(arg_0: ArgType) -> crate::LispResult<()> {
         try_exp_enum!(
             arg_0,
             ArgType::Exp(exp),
@@ -565,7 +551,7 @@ mod test {
         )
     }
 
-    fn arg_unwrap_clear_hash_map(exp_0: &Expression) -> crate::LispResult<()> {
+    fn arg_unwrap_clear_hash_map(exp_0: Expression) -> crate::LispResult<()> {
         try_exp_enum!(
             exp_0.get_mut().data,
             ExpEnum::HashMap(ref mut hash_map),
@@ -580,29 +566,15 @@ mod test {
     }
 
     #[test]
-    fn with_some_optional_hashmaps_test() -> LispResult<()> {
+    fn with_some_optional_hashmaps_test() {
         let mut hash_map = HashMap::new();
         hash_map.insert(K0, Expression::alloc_data(ExpEnum::Int(7)));
         hash_map.insert(K1, Expression::alloc_data(ExpEnum::Int(11)));
         let myint0 = ArgType::Opt(Some(Expression::alloc_data(ExpEnum::HashMap(hash_map))));
-        arg_translate_clear_hash_map_optional(&myint0).unwrap();
-        try_inner_exp_enum!(
-            myint0,
-            ArgType::Opt(exp),
-            {
-                try_inner_exp_enum!(
-                    &exp.unwrap().get().data,
-                    ExpEnum::HashMap(hm),
-                    assert!(hm.is_empty()),
-                    "should be a hashmap"
-                );
-            },
-            "first parse failed"
-        );
-        Ok(())
+        arg_translate_clear_hash_map_optional(myint0).unwrap();
     }
 
-    fn arg_translate_clear_hash_map_optional(arg_0: &ArgType) -> crate::LispResult<()> {
+    fn arg_translate_clear_hash_map_optional(arg_0: ArgType) -> crate::LispResult<()> {
         try_exp_enum!(
             arg_0,
             ArgType::Opt(exp),
@@ -611,7 +583,7 @@ mod test {
         )
     }
 
-    fn arg_unwrap_clear_hash_map_optional(exp_0: &Option<Expression>) -> crate::LispResult<()> {
+    fn arg_unwrap_clear_hash_map_optional(exp_0: Option<Expression>) -> crate::LispResult<()> {
         match exp_0 {
             None => Ok(clear_hash_map_optional(None)?),
             Some(exp_0) => {
@@ -846,5 +818,194 @@ mod test {
         my_o_ints
             .iter()
             .fold(my_int as f64, |sum, val| sum + *val as f64)
+    }
+
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    enum ArgVal {
+        Value,
+        Optional,
+        Vec,
+    }
+
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    enum ArgPassingStyle {
+        Move,
+        Reference,
+        MutReference,
+    }
+
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    struct Arg {
+        val: ArgVal,
+        passing_style: ArgPassingStyle,
+    }
+
+    #[test]
+    fn test_parse_int_to_float() {
+        let mut exps: Vec<Expression> = vec![];
+        exps.push(8i64.into());
+        let float = parse_int_to_float(exps).unwrap();
+        let float: f64 = float.try_into().unwrap();
+        assert!(8.0 == float);
+        //exps.push(Expression::alloc_data(ExpEnum::));
+
+        // in my macro, i am going to have to take lists of Expressions and match them to
+        // ArgTypes of a generated function. Because the compiler checked, we know these
+        // Expressions have to conform to a known spec. This means,
+        //
+        // 1. we need a concept of num_required_args, that way we know what our const param is
+    }
+
+    fn has_optional_params(params: &[Arg]) -> bool {
+        for p in params {
+            match p.val {
+                ArgVal::Value => {}
+                ArgVal::Optional => {
+                    return true;
+                }
+                ArgVal::Vec => {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn num_required_args(params: &[Arg]) -> usize {
+        params.iter().fold(0, |accum, nxt| {
+            if nxt.val == ArgVal::Value {
+                accum + 1
+            } else {
+                accum
+            }
+        })
+    }
+
+    fn get_args_optional_aware(
+        params: Vec<Arg>,
+        args: Vec<Expression>,
+        required_args: usize,
+    ) -> LispResult<Vec<ArgType>> {
+        let mut parsed_args = vec![];
+        // args.len() > required args,  this means we have more arguments than required.
+        // this means after going through the first required_args in args, the remaining
+        // variables must correspond to some optional or vector args in the output
+        for (i, exp) in args.into_iter().enumerate() {
+            if i + 1 <= required_args {
+                parsed_args.push(ArgType::Exp(exp))
+            } else {
+                if let Some(param) = params.get(required_args - 1 + i) {
+                    // idea is to start checking to see which params passed the ones we already
+                    // consumed because they're required...
+                    //match param.val {
+                    //
+                    //}
+                } else {
+                }
+            }
+        }
+        //match (
+        //    args.len() < required_args,
+        //    args.len() == required_args,
+        //    args.len() > required_args,
+        //) {}
+        Ok(parsed_args)
+    }
+
+    fn get_args(params: Vec<Arg>, args: Vec<Expression>) -> LispResult<Vec<ArgType>> {
+        let mut parsed_args = vec![];
+        let required_args = num_required_args(params.as_slice());
+        let has_optional = has_optional_params(params.as_slice());
+        let has_optional_str = if has_optional { "at least " } else { "" };
+        match (
+            has_optional,
+            args.len() < required_args,
+            args.len() == required_args,
+            args.len() > required_args,
+        ) {
+            (true, _, _, _) => {
+                return get_args_optional_aware(params, args, required_args);
+            }
+            (_, true, _, _) => {
+                return Err(LispError::new(format!(
+                    "{} not given enough arguments, expected {}{}, got {}.",
+                    "int_to_float",
+                    has_optional_str,
+                    required_args,
+                    args.len()
+                )));
+            }
+            (_, _, true, _) => {
+                for exp in args {
+                    parsed_args.push(ArgType::Exp(exp))
+                }
+            }
+            (_, _, _, true) => {
+                return Err(LispError::new(format!(
+                    "{} given too many arguments, expected {}, got {}.",
+                    "int_to_float",
+                    required_args,
+                    args.len()
+                )));
+            }
+            (false, false, false, false) => {
+                // unreachable!
+            }
+        }
+        Ok(parsed_args)
+    }
+
+    fn parse_int_to_float(
+        args: Vec<crate::types::Expression>,
+    ) -> crate::LispResult<crate::types::Expression> {
+        // full impl would actually have arguments:
+        // ===
+        //  fn parse_int_to_float(
+        //      environment: &mut crate::environment::Environment,
+        //      args: &mut dyn Iterator<Item = crate::types::Expression>,
+        //  ) -> crate::LispResult<crate::types::Expression> {
+        // ===
+        // let args = crate::builtins_util::make_args(environment, args)?;
+        let fn_name = "int->float";
+        const required_args_len: usize = 1usize;
+        let params = vec![Arg {
+            val: ArgVal::Value,
+            passing_style: ArgPassingStyle::Move,
+        }];
+        let args = get_args(params, args)?;
+        if args.len() >= required_args_len {
+            match args.try_into() {
+                Ok(params) => {
+                    //let params: &[Expression] = params;
+                    let params: [ArgType; required_args_len] = params;
+                    println!("{:?}", params);
+                    more_builtin_int_to_float.call_expand_args(params)
+                }
+                Err(e) => Err(LispError::new("Meow")),
+            }
+        } else if args.len() > required_args_len {
+            Err(LispError::new("Some Error"))
+        } else {
+            Err(LispError::new("Some other error"))
+        }
+    }
+
+    fn more_builtin_int_to_float(arg: ArgType) -> LispResult<Expression> {
+        try_exp_enum!(
+            arg,
+            ArgType::Exp(arg),
+            { builtin_int_to_float(arg).map(Into::into) }?,
+            "err"
+        )
+    }
+    fn builtin_int_to_float(
+        arg_0: crate::Expression,
+    ) -> crate::LispResult<crate::types::Expression> {
+        let result = int_to_float(arg_0.try_into_for("sl-sh")?);
+        Ok(result.into())
+    }
+
+    fn int_to_float(int: i64) -> f64 {
+        int as f64
     }
 }
