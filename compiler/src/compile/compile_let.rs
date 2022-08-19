@@ -4,25 +4,11 @@ use std::rc::Rc;
 use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
-use slvm::Interned;
 
+use crate::compile::destructure::{do_destructure, setup_dbg, setup_destructures, setup_optionals};
 use crate::compile::util::get_args_iter;
 use crate::state::*;
 use crate::{compile, CompileEnvironment};
-
-fn setup_dbg(state: &mut CompileState, reg: usize, scratch: Interned, name: Interned) {
-    if let Some(dbg_args) = state.chunk.dbg_args.as_mut() {
-        if dbg_args.len() < reg - 1 {
-            dbg_args.resize(reg - 1, scratch);
-        }
-        if reg < dbg_args.len() {
-            // This register will have multiple names, maybe concat them or something.
-            dbg_args[reg] = name;
-        } else {
-            dbg_args.push(name);
-        }
-    }
-}
 
 fn let_inner(
     env: &mut CompileEnvironment,
@@ -42,10 +28,6 @@ fn let_inner(
     let mut right_exps: Vec<(usize, Value)> = Vec::new();
     let mut destructures = Vec::new();
     let mut all_optionals = Vec::new();
-    let scratch = env.vm_mut().intern("[SCRATCH]");
-    let rest_i = env.vm_mut().intern("&");
-    let opt_i = env.vm_mut().intern("%");
-    let opt_set_i = env.vm_mut().intern("%=");
     env.set_line_val(state, *args);
     let args: Vec<Value> = get_args_iter(env, *args, "let")?.collect();
     let mut args_iter = args.iter();
@@ -54,7 +36,7 @@ fn let_inner(
         match a {
             Value::Symbol(i) => {
                 let reg = symbols.borrow_mut().insert(*i) + 1;
-                setup_dbg(state, reg, scratch, *i);
+                setup_dbg(state, reg, *i);
                 if let Some(r) = args_iter.next() {
                     right_exps.push((reg, *r));
                 } else {
@@ -62,88 +44,14 @@ fn let_inner(
                 }
             }
             Value::Vector(h) => {
-                let vector = env.vm().get_vector(*h);
                 let reg = symbols.borrow_mut().reserve_reg() + 1;
-                setup_dbg(state, reg, scratch, scratch);
+                setup_dbg(state, reg, state.specials.scratch);
                 if let Some(r) = args_iter.next() {
                     right_exps.push((reg, *r));
                 } else {
                     return Err(VMError::new_compile("must have a value"));
                 }
-                let mut stack = vec![(vector, reg)];
-                let mut start_reg = reg + 1;
-                while let Some((vector, reg)) = stack.pop() {
-                    let mut len = vector.len();
-                    let mut rest = false;
-                    let mut opt = false;
-                    let mut opt_set_next = false;
-                    let mut rest_cnt = 0;
-                    let mut opt_comps = Vec::new();
-                    for name in vector {
-                        if opt_set_next {
-                            len -= 1;
-                            opt_set_next = false;
-                            if let Some((reg, _)) = opt_comps.pop() {
-                                opt_comps.push((reg, *name));
-                            }
-                        } else {
-                            match name {
-                                Value::Symbol(i) if *i == rest_i => {
-                                    len -= 1;
-                                    rest = true;
-                                }
-                                Value::Symbol(i) if *i == opt_i => {
-                                    len -= 1;
-                                    opt = true;
-                                }
-                                Value::Symbol(i) if *i == opt_set_i => {
-                                    if opt {
-                                        len -= 1;
-                                        opt_set_next = true;
-                                    } else {
-                                        return Err(VMError::new_compile(
-                                            "%= only valid for optionals (after %)",
-                                        ));
-                                    }
-                                }
-                                Value::Symbol(i) => {
-                                    let reg = symbols.borrow_mut().insert(*i) + 1;
-                                    setup_dbg(state, reg, scratch, *i);
-                                    if rest {
-                                        rest_cnt += 1;
-                                    } else if opt {
-                                        opt_comps.push((reg, Value::Nil));
-                                    }
-                                }
-                                Value::Vector(h) => {
-                                    let vector = env.vm().get_vector(*h);
-                                    let reg = symbols.borrow_mut().reserve_reg() + 1;
-                                    setup_dbg(state, reg, scratch, scratch);
-                                    stack.push((vector, reg));
-                                }
-                                _ => return Err(VMError::new_compile("not a valid destructure")),
-                            }
-                        }
-                        if rest_cnt > 1 {
-                            return Err(VMError::new_compile(
-                                "not a valid destructure (invalid &)",
-                            ));
-                        }
-                    }
-                    if rest && rest_cnt == 0 {
-                        // Allow extras but don't need them.
-                        let reg = symbols.borrow_mut().reserve_reg() + 1;
-                        setup_dbg(state, reg, scratch, scratch);
-                    }
-                    if opt_set_next {
-                        return Err(VMError::new_compile("not a valid destructure (invalid %=)"));
-                    }
-                    destructures.push((start_reg as u16, len as u16, reg as u16, rest));
-                    if !opt_comps.is_empty() {
-                        all_optionals.push(opt_comps);
-                    }
-                    start_reg += len;
-                }
+                do_destructure(env, state, *h, reg, &mut all_optionals, &mut destructures)?;
             }
             _ => return Err(VMError::new_compile("must be a symbol")),
         }
@@ -153,47 +61,8 @@ fn let_inner(
         compile(env, state, val, reg)?;
         free_reg = reg + 1;
     }
-    for (start_reg, len, reg, rest) in destructures {
-        if rest {
-            state.chunk.encode3(
-                LDSCR,
-                start_reg as u16,
-                len as u16,
-                reg as u16,
-                env.own_line(),
-            )?;
-        } else {
-            state.chunk.encode3(
-                LDSC,
-                start_reg as u16,
-                len as u16,
-                reg as u16,
-                env.own_line(),
-            )?;
-        }
-        let temp_max = (start_reg + len) as usize;
-        if temp_max > free_reg {
-            free_reg = temp_max;
-        }
-    }
-    for opt_comps in all_optionals {
-        for (target_reg, default) in opt_comps.into_iter() {
-            state
-                .chunk
-                .encode1(JMPNU, target_reg as u16, env.own_line())?;
-            let encode_offset = state.chunk.code.len();
-            state.chunk.encode_jump_offset(0)?;
-            let start_offset = state.chunk.code.len();
-            compile(env, state, default, free_reg)?;
-            state
-                .chunk
-                .encode2(MOV, target_reg as u16, free_reg as u16, env.own_line())?;
-            state.chunk.reencode_jump_offset(
-                encode_offset,
-                (state.chunk.code.len() - start_offset) as i32,
-            )?;
-        }
-    }
+    setup_destructures(env, state, &mut free_reg, &destructures)?;
+    setup_optionals(env, state, free_reg, &all_optionals)?;
     let last_thing = if cdr.len() > 1 { cdr.len() - 2 } else { 0 };
     for (i, r) in cdr_iter.enumerate() {
         if i == last_thing {
@@ -349,42 +218,56 @@ mod tests {
 
         let result = exec(
             &mut vm,
-            "(let ([a b % c %= :none d] '(1 2)) (list a b c d))",
+            "(let ([a b c] '(1 2 3), [x y z] [4 5 6]) (list a b c x y z))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3 4 5 6)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ([a b % c] '(1 2), [x % y := 10 z := 11] [4 5]) (list a b c x y z))",
+        );
+        let expected = read_test(&mut vm, "(1 2 nil 4 5 11)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ([a b % c := :none d] '(1 2)) (list a b c d))",
         );
         let expected = read_test(&mut vm, "(1 2 :none nil)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(let ([a [b % c %= :none] % d] '(1 [2])) (list a b c d))",
+            "(let ([a [b % c := :none] % d] '(1 [2])) (list a b c d))",
         );
         let expected = read_test(&mut vm, "(1 2 :none nil)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(let ([a [b % c %= :none] % d & rest] '(1 [2])) (list a b c d rest))",
+            "(let ([a [b % c := :none] % d & rest] '(1 [2])) (list a b c d rest))",
         );
         let expected = read_test(&mut vm, "(1 2 :none nil nil)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3)) (list a b c d rest))",
+            "(let ([a [b % c := :none] % d & rest] '(1 [2] 3)) (list a b c d rest))",
         );
         let expected = read_test(&mut vm, "(1 2 :none 3 nil)");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(let ([a [b % c %= :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))",
+            "(let ([a [b % c := :none] % d & rest] '(1 [2] 3 4)) (list a b c d rest))",
         );
         let expected = read_test(&mut vm, "(1 2 :none 3 (4))");
         assert_vals(&vm, expected, result);
 
         let result = exec(
             &mut vm,
-            "(let ([a [b % c %= :none] % d %= \"d\" & rest] '(1 [2 3])) (list a b c d rest))",
+            "(let ([a [b % c := :none] % d := \"d\" & rest] '(1 [2 3])) (list a b c d rest))",
         );
         let expected = read_test(&mut vm, "(1 2 3 \"d\" nil)");
         assert_vals(&vm, expected, result);

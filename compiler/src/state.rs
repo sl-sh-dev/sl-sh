@@ -72,7 +72,8 @@ impl Symbols {
     }
 
     pub fn len(&self) -> usize {
-        self.data.borrow().syms.len()
+        //self.data.borrow().syms.len()
+        self.data.borrow().count
     }
 
     pub fn contains_symbol(&self, key: Interned) -> bool {
@@ -203,6 +204,8 @@ pub struct Specials {
     pub doc_string: Interned,
 
     pub rest: Interned,
+    pub optional: Interned,
+    pub scratch: Interned,
 }
 
 impl Specials {
@@ -261,6 +264,8 @@ impl Specials {
             doc_string: vm.intern_static("doc-string"),
 
             rest: vm.intern_static("&"),
+            optional: vm.intern_static("%"),
+            scratch: vm.intern_static("[SCRATCH]"),
         }
     }
 }

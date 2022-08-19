@@ -22,6 +22,7 @@ mod compile_let;
 mod compile_math;
 mod compile_seq;
 mod compile_store;
+mod destructure;
 mod util;
 
 fn is_macro(env: &CompileEnvironment, val: Value) -> bool {
