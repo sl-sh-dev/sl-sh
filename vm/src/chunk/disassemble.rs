@@ -520,6 +520,26 @@ impl Chunk {
                 println!();
                 Ok(false)
             }
+            JMPRU => {
+                print!("JMPRU({:#04x})  \t", JMPRU);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_jump_offset!(code);
+                println!();
+                Ok(false)
+            }
+            JMPRNU => {
+                print!("JMPRNU({:#04x}) \t", JMPRNU);
+                disassemble_operand!(code, true, wide);
+                print!("\t");
+                disassemble_immediate!(code, wide);
+                print!("\t");
+                disassemble_jump_offset!(code);
+                println!();
+                Ok(false)
+            }
             ADD => {
                 print!("ADD    \t");
                 disassemble_operand!(code, true, wide);

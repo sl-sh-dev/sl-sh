@@ -480,6 +480,38 @@ impl Vm {
                         self.ip = (self.ip as isize + ipoff) as usize;
                     }
                 }
+                JMPRU => {
+                    let (test, len) = decode2!(chunk.code, &mut self.ip, wide);
+                    let ipoff = decode_i24!(chunk.code, &mut self.ip);
+                    if len > 0 {
+                        let test = test as usize;
+                        let len = len as usize;
+                        for i in 0..len as usize {
+                            if get_reg_unref!(registers, test + i, self).is_undef() {
+                                self.ip = (self.ip as isize + ipoff) as usize;
+                                break;
+                            }
+                        }
+                    }
+                }
+                JMPRNU => {
+                    let (test, len) = decode2!(chunk.code, &mut self.ip, wide);
+                    let ipoff = decode_i24!(chunk.code, &mut self.ip);
+                    if len > 0 {
+                        let len = len as usize;
+                        let test = test as usize;
+                        let mut jump = true;
+                        for i in 0..len as usize {
+                            if get_reg_unref!(registers, test + i, self).is_undef() {
+                                jump = false;
+                                break;
+                            }
+                        }
+                        if jump {
+                            self.ip = (self.ip as isize + ipoff) as usize;
+                        }
+                    }
+                }
                 EQ => {
                     let (dest, reg1, reg2) = decode3!(chunk.code, &mut self.ip, wide);
                     let val = self

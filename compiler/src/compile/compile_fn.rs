@@ -1,6 +1,4 @@
-use crate::compile::destructure::{
-    do_destructure, setup_destructures, setup_optionals, DestructType,
-};
+use crate::compile::destructure::{compile_destructures, do_destructure, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
 use crate::{compile, CompileEnvironment, CompileState};
@@ -145,8 +143,13 @@ pub(crate) fn compile_fn(
         )?;
     }
     let mut free_reg = new_state.reserved_regs();
-    setup_destructures(env, &mut new_state, &mut free_reg, &destructures)?;
-    setup_optionals(env, &mut new_state, free_reg, &all_optionals)?;
+    compile_destructures(
+        env,
+        &mut new_state,
+        &mut free_reg,
+        &destructures,
+        &all_optionals,
+    )?;
     let reserved = new_state.reserved_regs();
     let last_thing = cdr.len() - 1;
     for (i, r) in cdr.iter().enumerate() {

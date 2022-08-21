@@ -4,7 +4,7 @@ use slvm::value::*;
 use slvm::{Handle, Interned};
 
 use crate::state::*;
-use crate::{compile, CompileEnvironment};
+use crate::{compile, mkconst, CompileEnvironment};
 
 pub struct Destructure {
     start_reg: u16,
@@ -34,7 +34,7 @@ pub fn setup_dbg(state: &mut CompileState, reg: usize, name: Interned) {
     }
 }
 
-pub fn setup_destructures(
+fn setup_destructures(
     env: &mut CompileEnvironment,
     state: &mut CompileState,
     free_reg: &mut usize,
@@ -77,7 +77,7 @@ pub fn setup_destructures(
     Ok(())
 }
 
-pub fn setup_optionals(
+fn setup_optionals(
     env: &mut CompileEnvironment,
     state: &mut CompileState,
     free_reg: usize,
@@ -100,6 +100,44 @@ pub fn setup_optionals(
                 (state.chunk.code.len() - start_offset) as i32,
             )?;
         }
+    }
+    Ok(())
+}
+
+pub fn compile_destructures(
+    env: &mut CompileEnvironment,
+    state: &mut CompileState,
+    free_reg: &mut usize,
+    destructures: &Vec<Destructure>,
+    all_optionals: &Vec<Vec<(usize, Value)>>,
+) -> VMResult<()> {
+    setup_destructures(env, state, free_reg, destructures)?;
+    setup_optionals(env, state, *free_reg, all_optionals)?;
+    let kw = Value::Keyword(env.vm_mut().intern("destructure"));
+    let err_str = Value::Keyword(env.vm_mut().intern("missing structure"));
+    // For each destructure raise an error if something was missing.
+    for destructure in destructures {
+        state.chunk.encode2(
+            JMPRNU,
+            destructure.start_reg,
+            destructure.len,
+            env.own_line(),
+        )?;
+        let encode_offset = state.chunk.code.len();
+        state.chunk.encode_jump_offset(0)?;
+        let start_offset = state.chunk.code.len();
+        mkconst(env, state, kw, *free_reg)?;
+        mkconst(env, state, err_str, *free_reg + 1)?;
+        state.chunk.encode2(
+            ERR,
+            *free_reg as u16,
+            (*free_reg + 1) as u16,
+            env.own_line(),
+        )?;
+        state.chunk.reencode_jump_offset(
+            encode_offset,
+            (state.chunk.code.len() - start_offset) as i32,
+        )?;
     }
     Ok(())
 }

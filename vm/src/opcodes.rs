@@ -86,8 +86,13 @@ pub const DFRPOP: OpCode = FLOW_BASE + 20;
 // If R(A) is nil then remove error handler.
 pub const ONERR: OpCode = FLOW_BASE + 21;
 
+// JMPRU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is undefined
+pub const JMPRU: OpCode = FLOW_BASE + 22;
+// JMPRNU A B OFFSET - Jump to current IP + OFFSET if any in R(A)..R(A+B) is NOT undefined
+pub const JMPRNU: OpCode = FLOW_BASE + 23;
+
 // Basic math
-const MATH_BASE: OpCode = FLOW_BASE + 22;
+const MATH_BASE: OpCode = FLOW_BASE + 24;
 // ADD A B C - set R(A) = R(B) + R(C)
 pub const ADD: OpCode = MATH_BASE;
 // SUB A B C - set R(A) = R(B) - R(C)

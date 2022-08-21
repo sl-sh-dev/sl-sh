@@ -5,9 +5,7 @@ use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 
-use crate::compile::destructure::{
-    do_destructure, setup_dbg, setup_destructures, setup_optionals, DestructType,
-};
+use crate::compile::destructure::{compile_destructures, do_destructure, setup_dbg, DestructType};
 use crate::compile::util::get_args_iter;
 use crate::state::*;
 use crate::{compile, CompileEnvironment};
@@ -85,8 +83,7 @@ fn let_inner(
         compile(env, state, val, reg)?;
         free_reg = reg + 1;
     }
-    setup_destructures(env, state, &mut free_reg, &destructures)?;
-    setup_optionals(env, state, free_reg, &all_optionals)?;
+    compile_destructures(env, state, &mut free_reg, &destructures, &all_optionals)?;
     let last_thing = if cdr.len() > 1 { cdr.len() - 2 } else { 0 };
     for (i, r) in cdr_iter.enumerate() {
         if i == last_thing {
@@ -130,7 +127,7 @@ pub(crate) fn compile_let(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{assert_vals, exec, exec_compile_error, read_test};
+    use crate::test_utils::{assert_vals, exec, exec_compile_error, exec_runtime_error, read_test};
     use builtins::print::prn;
     use slvm::Vm;
 
@@ -323,5 +320,27 @@ mod tests {
         );
         let expected = read_test(&mut vm, "(1 2 3 10 11 12)");
         assert_vals(&vm, expected, result);
+
+        exec_runtime_error(&mut vm, "(let ([a b c] '()) nil)");
+        exec_runtime_error(&mut vm, "(let ([a b c] []) nil)");
+        exec_runtime_error(&mut vm, "(let ([a b c] '(1)) nil)");
+        exec_runtime_error(&mut vm, "(let ([a b c] [1]) nil)");
+        exec_runtime_error(&mut vm, "(let ([a b c] '(1 2)) nil)");
+        exec_runtime_error(&mut vm, "(let ([a b c] [1 2]) nil)");
+
+        exec_runtime_error(&mut vm, "(let ({a :a, b :b, c :c} {}) nil)");
+        exec_runtime_error(&mut vm, "(let ({a :a, b :b, c :c} {:a 1}) nil)");
+        exec_runtime_error(&mut vm, "(let ({a :a, b :b, c :c} {:a 1, :b 2}) nil)");
+        exec_runtime_error(&mut vm, "(let ({a :a, b :b, c :c} {:a 1, :c 3}) nil)");
+        exec_runtime_error(&mut vm, "(let ({a :a, b :b, c :c} {:b 2, :c 3}) nil)");
+
+        exec_runtime_error(
+            &mut vm,
+            "(let ([x {a :a, b :b, c :c} y] [10 {:b 2, :c 3} 11]) nil)",
+        );
+        exec_runtime_error(
+            &mut vm,
+            "(let ([x {a :a, b :b, c :c} y] [10 {:a 1 :b 2, :c 3}]) nil)",
+        );
     }
 }
