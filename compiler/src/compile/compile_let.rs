@@ -5,7 +5,9 @@ use slvm::error::*;
 use slvm::opcodes::*;
 use slvm::value::*;
 
-use crate::compile::destructure::{do_destructure, setup_dbg, setup_destructures, setup_optionals};
+use crate::compile::destructure::{
+    do_destructure, setup_dbg, setup_destructures, setup_optionals, DestructType,
+};
 use crate::compile::util::get_args_iter;
 use crate::state::*;
 use crate::{compile, CompileEnvironment};
@@ -51,7 +53,29 @@ fn let_inner(
                 } else {
                     return Err(VMError::new_compile("must have a value"));
                 }
-                do_destructure(env, state, *h, reg, &mut all_optionals, &mut destructures)?;
+                do_destructure(
+                    env,
+                    state,
+                    DestructType::Vector(*h, reg),
+                    &mut all_optionals,
+                    &mut destructures,
+                )?;
+            }
+            Value::Map(h) => {
+                let reg = symbols.borrow_mut().reserve_reg() + 1;
+                setup_dbg(state, reg, state.specials.scratch);
+                if let Some(r) = args_iter.next() {
+                    right_exps.push((reg, *r));
+                } else {
+                    return Err(VMError::new_compile("must have a value"));
+                }
+                do_destructure(
+                    env,
+                    state,
+                    DestructType::Map(*h, reg),
+                    &mut all_optionals,
+                    &mut destructures,
+                )?;
             }
             _ => return Err(VMError::new_compile("must be a symbol")),
         }
@@ -270,6 +294,34 @@ mod tests {
             "(let ([a [b % c := :none] % d := \"d\" & rest] '(1 [2 3])) (list a b c d rest))",
         );
         let expected = read_test(&mut vm, "(1 2 3 \"d\" nil)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ([a [b % c := :none] % d := \"d\" &] '(1 [2 3] 4 5 6 7)) (list a b c d))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3 4)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ({a :one, b 'two, c \"three\"} {:one 1, two 2, \"three\" 3}) (list a b c))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ({a :one, b 'two, c \"three\" [d e] :vec} {:one 1, two 2, \"three\" 3, :vec (4 5)}) (list a b c d e))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3 4 5)");
+        assert_vals(&vm, expected, result);
+
+        let result = exec(
+            &mut vm,
+            "(let ([x y {a :one, b 'two, c \"three\"} z] [10 11 {:one 1, two 2, \"three\" 3} 12]) (list a b c x y z))",
+        );
+        let expected = read_test(&mut vm, "(1 2 3 10 11 12)");
         assert_vals(&vm, expected, result);
     }
 }

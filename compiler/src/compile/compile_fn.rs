@@ -1,15 +1,17 @@
-use crate::compile::destructure::{do_destructure, setup_destructures, setup_optionals};
+use crate::compile::destructure::{
+    do_destructure, setup_destructures, setup_optionals, DestructType,
+};
 use crate::compile::util::get_args_iter;
 use crate::pass1::pass1;
 use crate::{compile, CompileEnvironment, CompileState};
-use slvm::{Handle, VMError, VMResult, Value, CLOSE, CONST, JMPNU, MOV, SRET};
+use slvm::{VMError, VMResult, Value, CLOSE, CONST, JMPNU, MOV, SRET};
 use std::sync::Arc;
 
 fn mk_state(
     env: &mut CompileEnvironment,
     state: &mut CompileState,
     args: Value,
-) -> VMResult<(CompileState, Vec<Value>, Vec<(usize, Handle)>)> {
+) -> VMResult<(CompileState, Vec<Value>, Vec<DestructType>)> {
     let line = env.own_line().unwrap_or(1);
     let mut new_state = CompileState::new_state(
         env.vm_mut(),
@@ -78,24 +80,22 @@ fn mk_state(
                     new_state.chunk.args += 1;
                 }
                 total_args += 1;
-                destructures.push((total_args, handle));
+                destructures.push(DestructType::Vector(handle, total_args));
             }
-            /*Value::Pair(_) | Value::List(_, _) => {
-                env.set_line_val(&mut new_state, a);
-                let mut args_iter = get_args_iter(env, a, "fn")?;
-                opt = true;
-                if let Some(Value::Symbol(i)) = args_iter.next() {
-                    new_state.symbols.borrow_mut().data.borrow_mut().add_sym(i);
-                    if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
-                        dbg_args.push(i);
-                    }
-                    new_state.chunk.opt_args += 1;
-                    if let Some(r) = args_iter.next() {
-                        opt_comps.push(r);
-                    }
-                    // XXX Check to make sure only two elements...
+            Value::Map(handle) => {
+                new_state.symbols.borrow_mut().reserve_reg();
+                if let Some(dbg_args) = new_state.chunk.dbg_args.as_mut() {
+                    dbg_args.push(new_state.specials.scratch);
                 }
-            }*/
+                if opt {
+                    new_state.chunk.opt_args += 1;
+                    opt_comps.push(Value::Nil);
+                } else {
+                    new_state.chunk.args += 1;
+                }
+                total_args += 1;
+                destructures.push(DestructType::Map(handle, total_args));
+            }
             _ => return Err(VMError::new_compile("invalid args, must be symbols")),
         }
     }
@@ -135,12 +135,11 @@ pub(crate) fn compile_fn(
     }
     let mut destructures = Vec::new();
     let mut all_optionals = Vec::new();
-    for (reg, vec_handle) in destructure_patterns {
+    for destruct_type in destructure_patterns {
         do_destructure(
             env,
             &mut new_state,
-            vec_handle,
-            reg,
+            destruct_type,
             &mut all_optionals,
             &mut destructures,
         )?;
