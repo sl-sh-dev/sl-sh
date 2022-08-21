@@ -450,6 +450,33 @@ macro_rules! try_inner_exp_enum {
     };
 }
 
+#[derive(Debug, Clone)]
+pub enum ArgType {
+    Exp(Expression),
+    Opt(Option<Expression>),
+    VarArgs(Vec<Expression>),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ArgVal {
+    Value,
+    Optional,
+    Vec,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ArgPassingStyle {
+    Move,
+    Reference,
+    MutReference,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Arg {
+    pub val: ArgVal,
+    pub passing_style: ArgPassingStyle,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -521,13 +548,6 @@ mod test {
             //ExpEnum::BackQuote => {}
             //ExpEnum::Undefined => {}
         }
-    }
-
-    #[derive(Debug, Clone)]
-    pub enum ArgType {
-        Exp(Expression),
-        Opt(Option<Expression>),
-        VarArgs(Vec<Expression>),
     }
 
     static K0: &'static str = "key0";
@@ -820,26 +840,6 @@ mod test {
             .fold(my_int as f64, |sum, val| sum + *val as f64)
     }
 
-    #[derive(Copy, Clone, Debug, PartialEq)]
-    enum ArgVal {
-        Value,
-        Optional,
-        Vec,
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq)]
-    enum ArgPassingStyle {
-        Move,
-        Reference,
-        MutReference,
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq)]
-    struct Arg {
-        val: ArgVal,
-        passing_style: ArgPassingStyle,
-    }
-
     fn has_optional_params(params: &[Arg]) -> bool {
         for p in params {
             match p.val {
@@ -969,6 +969,76 @@ mod test {
             (false, false, false, false) => {}
         }
         Ok(parsed_args)
+    }
+
+    #[test]
+    fn test_vecs() {
+        let one_vec = vec![Arg {
+            val: ArgVal::Vec,
+            passing_style: ArgPassingStyle::MutReference,
+        }];
+        let args = vec![];
+        let args = get_args("foo", one_vec.clone(), args).unwrap();
+        assert_eq!(1, args.len());
+        try_exp_enum!(
+            args.get(0).unwrap(),
+            ArgType::VarArgs(val),
+            assert!(val.is_empty()),
+            "err"
+        )
+        .unwrap();
+
+        let args = vec![Expression::make_true()];
+        let args = get_args("foo", one_vec.clone(), args).unwrap();
+        assert_eq!(1, args.len());
+        try_exp_enum!(
+            args.get(0).unwrap(),
+            ArgType::VarArgs(val),
+            assert_eq!(1, val.len()),
+            "err"
+        )
+        .unwrap();
+
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let args = get_args("foo", one_vec.clone(), args).unwrap();
+        assert_eq!(1, args.len());
+        try_exp_enum!(
+            args.get(0).unwrap(),
+            ArgType::VarArgs(val),
+            assert_eq!(3, val.len()),
+            "err"
+        )
+        .unwrap();
+
+        let val_vec = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Reference,
+            },
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::MutReference,
+            },
+        ];
+        let args = vec![
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+            Expression::make_true(),
+        ];
+        let args = get_args("foo", val_vec.clone(), args).unwrap();
+        assert_eq!(2, args.len());
+        try_exp_enum!(
+            args.get(1).unwrap(),
+            ArgType::VarArgs(val),
+            assert_eq!(3, val.len()),
+            "err"
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1176,9 +1246,13 @@ mod test {
     fn test_parse_int_to_float() {
         let mut exps: Vec<Expression> = vec![];
         exps.push(8i64.into());
+        exps.push(8i64.into());
+        exps.push(8i64.into());
+        exps.push(8i64.into());
+        exps.push(8i64.into());
         let float = parse_int_to_float(exps).unwrap();
         let float: f64 = float.try_into().unwrap();
-        assert_eq!(8.0, float);
+        assert_eq!(40.0, float);
         // in this macro, we are going to have to take lists of Expressions and match them to
         // ArgTypes of a generated function. Because the compiler checked, we know these
         // Expressions have to conform to a known spec. This means,
@@ -1199,11 +1273,17 @@ mod test {
         // ===
         // let args = crate::builtins_util::make_args(environment, args)?;
         let fn_name = "int->float";
-        const REQUIRED_ARGS_LEN: usize = 1usize;
-        let params = vec![Arg {
-            val: ArgVal::Value,
-            passing_style: ArgPassingStyle::Move,
-        }];
+        const REQUIRED_ARGS_LEN: usize = 2usize;
+        let params = vec![
+            Arg {
+                val: ArgVal::Value,
+                passing_style: ArgPassingStyle::Move,
+            },
+            Arg {
+                val: ArgVal::Vec,
+                passing_style: ArgPassingStyle::Reference,
+            },
+        ];
         let args = get_args(fn_name, params, args)?;
         if args.len() >= REQUIRED_ARGS_LEN {
             match args.try_into() {
@@ -1222,22 +1302,52 @@ mod test {
         }
     }
 
-    fn more_builtin_int_to_float(arg: ArgType) -> LispResult<Expression> {
+    fn more_builtin_int_to_float(arg0: ArgType, arg1: ArgType) -> LispResult<Expression> {
         try_exp_enum!(
-            arg,
-            ArgType::Exp(arg),
-            { builtin_int_to_float(arg).map(Into::into) }?,
+            arg0,
+            ArgType::Exp(arg0),
+            {
+                try_exp_enum!(
+                    arg1,
+                    ArgType::VarArgs(arg1),
+                    //{ builtin_int_to_float(arg0, arg1).map(Into::into) }?,
+                    { builtin_int_to_float(arg0, arg1) }?,
+                    "err"
+                )
+            }?,
             "err"
         )
     }
     fn builtin_int_to_float(
-        arg_0: crate::Expression,
+        exp_0: crate::Expression,
+        exp_1: Vec<crate::Expression>,
     ) -> crate::LispResult<crate::types::Expression> {
-        let result = int_to_float(arg_0.try_into_for("sl-sh")?);
-        Ok(result.into())
+        Ok({
+            let float = try_inner_exp_enum!(
+                exp_0.get().data,
+                ExpEnum::Int(int_0),
+                {
+                    let iter = exp_1
+                        .iter()
+                        .map(|exp_1| {
+                            let int = try_inner_exp_enum!(
+                                exp_1.get().data,
+                                ExpEnum::Int(int_1),
+                                { int_1 },
+                                "Not an int_1!"
+                            );
+                            Ok(int)
+                        })
+                        .collect::<crate::LispResult<Vec<i64>>>()?;
+                    int_to_float(int_0, &iter)
+                },
+                "Not an int_0!"
+            );
+            float.into()
+        })
     }
 
-    fn int_to_float(int: i64) -> f64 {
-        int as f64
+    fn int_to_float(int: i64, ints: &Vec<i64>) -> f64 {
+        ints.iter().fold(int as f64, |sum, next| sum + *next as f64)
     }
 }
